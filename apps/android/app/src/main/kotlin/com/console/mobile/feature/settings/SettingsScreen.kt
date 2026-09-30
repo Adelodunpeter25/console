@@ -14,15 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Lucide
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
-import io.github.lyxnx.compose.ui.tablericons.outline.Folder
-import io.github.lyxnx.compose.ui.tablericons.outline.Trash
-import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
-import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
-import io.github.lyxnx.compose.ui.tablericons.outline.ChartLine
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
+import io.github.lyxnx.compose.ui.tablericons.outline.ChartLine
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
+import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
+import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
@@ -121,6 +120,6 @@ private fun LandingRow(icon: ImageVector, title: String, summary: String, onClic
             Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        Icon(Lucide.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
+        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
     }
 }

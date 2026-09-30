@@ -15,10 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,6 +37,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.filled.Star
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Star
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
@@ -101,7 +101,7 @@ fun PickerRow(
             trailing()
             Spacer(modifier = Modifier.size(8.dp))
         }
-        if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
+        if (selected) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
     }
 }
 
@@ -200,7 +200,7 @@ fun ModelPickerSheet(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                Icons.Filled.Star,
+                                TablerIcons.Outline.Star,
                                 contentDescription = "Favorites",
                                 tint = if (showFavorites) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary,
                                 modifier = Modifier.size(16.dp),
@@ -246,7 +246,7 @@ fun ModelPickerSheet(
             fun starFor(providerId: String, modelId: String) {
                 val isFav = favoriteKey(providerId, modelId) in favorites
                 Icon(
-                    if (isFav) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                    if (isFav) TablerIcons.Filled.Star else TablerIcons.Outline.Star,
                     contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
                     tint = if (isFav) Color(0xFFFACC15) else ConsoleColors.TextMuted,
                     modifier = Modifier.size(18.dp).clickable { toggleFavorite(providerId, modelId) },

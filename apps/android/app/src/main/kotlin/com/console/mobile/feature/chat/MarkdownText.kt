@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -36,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Copy
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -120,8 +120,8 @@ private fun CodeBlock(language: String, code: String) {
                 copied = true
                 scope.launch { delay(1500); copied = false }
             }, modifier = Modifier.padding(0.dp)) {
-                if (copied) Icon(Icons.Filled.Check, contentDescription = "Copied", tint = Color(0xFF34D399))
-                else Icon(Icons.Filled.ContentCopy, contentDescription = "Copy code", tint = ConsoleColors.TextSecondary)
+                if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399))
+                else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy code", tint = ConsoleColors.TextSecondary)
             }
         }
         CodeViewer(

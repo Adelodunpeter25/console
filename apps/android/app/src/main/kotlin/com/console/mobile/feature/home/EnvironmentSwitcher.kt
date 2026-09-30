@@ -13,9 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +36,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowLeft
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import io.github.lyxnx.compose.ui.tablericons.outline.Server
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHost
@@ -51,9 +53,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowLeft
-import io.github.lyxnx.compose.ui.tablericons.outline.Server
 
 /**
  * Port of components/environments/environment-switcher.tsx.
@@ -187,7 +186,7 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                                     Text(urlHost(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 if (isActive) {
-                                    Icon(Icons.Filled.Check, contentDescription = "Active", tint = Color(0xFF34D399))
+                                    Icon(TablerIcons.Outline.Check, contentDescription = "Active", tint = Color(0xFF34D399))
                                 }
                             }
                         }
@@ -202,7 +201,7 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                             ) {
                                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextSecondary)
+                                        Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary)
                                         Text("Add environment", color = ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                                     }
                                 }

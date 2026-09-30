@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -27,6 +25,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import coil3.compose.AsyncImage
 
 /** Decode a base64 attachment payload for Coil (data: URIs don't render). */
@@ -74,7 +74,7 @@ fun ImagePreviewDialog(image: ByteArray, onDismiss: () -> Unit) {
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(36.dp)
                     .clip(CircleShape).background(Color.White.copy(alpha = 0.12f)),
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "Close preview", tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(TablerIcons.Outline.X, contentDescription = "Close preview", tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }

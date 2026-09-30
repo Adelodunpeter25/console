@@ -13,12 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +33,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Eye
+import io.github.lyxnx.compose.ui.tablericons.outline.EyeOff
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.EmptyState
@@ -101,7 +100,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        imageVector = if (showHidden) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                        imageVector = if (showHidden) TablerIcons.Outline.Eye else TablerIcons.Outline.EyeOff,
                         contentDescription = if (showHidden) "Hide hidden files" else "Show hidden files",
                         tint = if (showHidden) ConsoleColors.TextPrimary else ConsoleColors.TextMuted,
                         modifier = Modifier.size(20.dp),
@@ -119,7 +118,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                 }
                 error != null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp))
+                        Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp))
                         Text("Couldn't list that folder", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
                         Text(error ?: "Browse failed.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                         PillButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
@@ -170,7 +169,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                 enabled = currentPath != null && !adding,
                 loading = adding,
                 fullWidth = true,
-                icon = Icons.Filled.Check,
+                icon = TablerIcons.Outline.Check,
             )
         }
     }
@@ -184,7 +183,7 @@ private fun UpOneLevelRow(onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.ArrowUpward, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
+        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
         Text("Up one level", color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
     }
 }

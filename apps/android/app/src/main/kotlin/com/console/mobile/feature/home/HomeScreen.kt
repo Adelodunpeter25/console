@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Message
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -44,6 +40,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Message
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.core.chat.buildGroupedProjectSections
@@ -64,8 +65,6 @@ import com.console.mobile.ui.components.StatusBadge
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.ui.theme.ConsoleColors
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -179,7 +178,7 @@ fun HomeScreen(
                         EmptyState(
                             title = "Couldn't load chats",
                             description = projectState.error ?: "Failed to load chat sessions.",
-                            icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive) },
+                            icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive) },
                         )
                     }
                 }
@@ -189,7 +188,7 @@ fun HomeScreen(
                         EmptyState(
                             title = if (searchQuery.isNotBlank()) "No matching sessions" else "No chat sessions",
                             description = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"." else "Start a new chat or select a project folder to get started.",
-                            icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted) },
+                            icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) },
                         )
                     }
                 }
@@ -232,7 +231,7 @@ fun HomeScreen(
                                         },
                                         modifier = Modifier.size(32.dp),
                                     ) {
-                                        Icon(Icons.Filled.Add, contentDescription = "New chat in ${section.projectName}", tint = ConsoleColors.TextSecondary)
+                                        Icon(TablerIcons.Outline.Plus, contentDescription = "New chat in ${section.projectName}", tint = ConsoleColors.TextSecondary)
                                     }
                                 }
                             }

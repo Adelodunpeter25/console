@@ -3,9 +3,6 @@ package com.console.mobile.feature.chat
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +15,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Lock
+import io.github.lyxnx.compose.ui.tablericons.outline.Robot
+import io.github.lyxnx.compose.ui.tablericons.outline.Shield
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
@@ -77,7 +76,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
         }
         item {
             PickerChip(
-                icon = Icons.Filled.SmartToy,
+                icon = TablerIcons.Outline.Robot,
                 label = modelLabel,
                 provider = view?.sessionProvider,
                 modifier = Modifier.padding(end = 8.dp),
@@ -87,7 +86,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             }
         }
         item {
-            PickerChip(icon = Icons.Filled.Shield, label = modeLabel) { approvalSheet = true }
+            PickerChip(icon = TablerIcons.Outline.Shield, label = modeLabel) { approvalSheet = true }
         }
     }
 

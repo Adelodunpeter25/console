@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.MODEL_ROLES
@@ -192,7 +192,7 @@ private fun RolePickerRow(
         }
         if (ref != null) {
             IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.Close, contentDescription = "Clear ${spec.label}", tint = ConsoleColors.TextMuted, modifier = Modifier.size(16.dp))
+                Icon(TablerIcons.Outline.X, contentDescription = "Clear ${spec.label}", tint = ConsoleColors.TextMuted, modifier = Modifier.size(16.dp))
             }
         }
     }

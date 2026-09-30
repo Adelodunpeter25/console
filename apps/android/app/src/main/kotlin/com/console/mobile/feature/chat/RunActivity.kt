@@ -11,13 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,6 +29,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import com.console.mobile.core.chat.ActivityEvent
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
@@ -111,7 +111,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
             }
             Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = if (isWorking) 6.dp else 0.dp))
             // Collapsed points right (there is more to see), expanded points up.
-            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
         }
         // Always drawn, collapsed or not — one rule closing each run block.
         HorizontalDivider(color = ConsoleColors.BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(vertical = 4.dp))
@@ -195,7 +195,7 @@ fun ToolGroupRow(
             // calls in it are still running.
             if (anyError) {
                 Icon(
-                    Icons.Filled.Warning,
+                    TablerIcons.Outline.AlertTriangle,
                     contentDescription = null,
                     tint = Color(0xFFF87171),
                     modifier = Modifier.size(13.dp),
@@ -208,14 +208,14 @@ fun ToolGroupRow(
                 )
             } else {
                 Icon(
-                    Icons.Filled.Check,
+                    TablerIcons.Outline.Check,
                     contentDescription = null,
                     tint = Color(0xFF34D399),
                     modifier = Modifier.size(13.dp),
                 )
             }
             Icon(
-                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown,
                 contentDescription = null,
                 tint = ConsoleColors.TextMuted,
                 modifier = Modifier.size(13.dp).padding(start = 4.dp),
@@ -243,9 +243,9 @@ private fun CollapsibleThinking(text: String) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         Row(modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
             Text("Thought", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
-            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (expanded && text.isNotEmpty()) {
             Text(text, color = ConsoleColors.TextSecondary, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 18.dp))

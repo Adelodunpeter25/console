@@ -1,27 +1,26 @@
 package com.console.mobile.core.util
 
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.composables.icons.lucide.Brain
-import com.composables.icons.lucide.BookOpen
-import com.composables.icons.lucide.CircleHelp
-import com.composables.icons.lucide.FilePen
-import com.composables.icons.lucide.FilePlus
-import com.composables.icons.lucide.FileText
-import com.composables.icons.lucide.Files
-import com.composables.icons.lucide.FolderSearch
-import com.composables.icons.lucide.Globe
-import com.composables.icons.lucide.ListTodo
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.MessagesSquare
-import com.composables.icons.lucide.Search
-import com.composables.icons.lucide.SquareTerminal
-import com.composables.icons.lucide.Terminal
-import com.composables.icons.lucide.Users
-import com.composables.icons.lucide.Wrench
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Book
+import io.github.lyxnx.compose.ui.tablericons.outline.Brain
+import io.github.lyxnx.compose.ui.tablericons.outline.FilePencil
+import io.github.lyxnx.compose.ui.tablericons.outline.FilePlus
+import io.github.lyxnx.compose.ui.tablericons.outline.FileText
+import io.github.lyxnx.compose.ui.tablericons.outline.Files
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.FolderSearch
+import io.github.lyxnx.compose.ui.tablericons.outline.Globe
+import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
+import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
+import io.github.lyxnx.compose.ui.tablericons.outline.Messages
+import io.github.lyxnx.compose.ui.tablericons.outline.Search
+import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
+import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
+import io.github.lyxnx.compose.ui.tablericons.outline.Tool
+import io.github.lyxnx.compose.ui.tablericons.outline.Users
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -56,23 +55,23 @@ fun getToolLabel(name: String): String = TOOL_LABELS[name] ?: name
 // Mirrors the desktop's `activity_icon` alias handling in
 // apps/desktop/crates/console-ui/src/primitives/mod.rs.
 val TOOL_ICONS: Map<String, ImageVector> = mapOf(
-    "read_file" to Lucide.FileText, "readFile" to Lucide.FileText,
-    "write_file" to Lucide.FilePlus, "writeFile" to Lucide.FilePlus,
-    "batchWrite" to Lucide.Files, "batch_write" to Lucide.Files,
-    "editFile" to Lucide.FilePen, "edit_file" to Lucide.FilePen, "str_replace" to Lucide.FilePen,
-    "bash" to Lucide.Terminal, "shell" to Lucide.Terminal, "command" to Lucide.Terminal,
-    "bashJob" to Lucide.SquareTerminal, "bash_job" to Lucide.SquareTerminal,
-    "grep" to Lucide.Search, "search_files" to Lucide.Search,
-    "glob" to Lucide.FolderSearch, "list_files" to TablerIcons.Outline.FolderOpen,
+    "read_file" to TablerIcons.Outline.FileText, "readFile" to TablerIcons.Outline.FileText,
+    "write_file" to TablerIcons.Outline.FilePlus, "writeFile" to TablerIcons.Outline.FilePlus,
+    "batchWrite" to TablerIcons.Outline.Files, "batch_write" to TablerIcons.Outline.Files,
+    "editFile" to TablerIcons.Outline.FilePencil, "edit_file" to TablerIcons.Outline.FilePencil, "str_replace" to TablerIcons.Outline.FilePencil,
+    "bash" to TablerIcons.Outline.Terminal, "shell" to TablerIcons.Outline.Terminal, "command" to TablerIcons.Outline.Terminal,
+    "bashJob" to TablerIcons.Outline.Terminal2, "bash_job" to TablerIcons.Outline.Terminal2,
+    "grep" to TablerIcons.Outline.Search, "search_files" to TablerIcons.Outline.Search,
+    "glob" to TablerIcons.Outline.FolderSearch, "list_files" to TablerIcons.Outline.FolderOpen,
     "list_dir" to TablerIcons.Outline.FolderOpen, "listDir" to TablerIcons.Outline.FolderOpen, "ls" to TablerIcons.Outline.FolderOpen,
-    "webFetch" to Lucide.Globe, "fetch" to Lucide.Globe,
-    "webSearch" to Lucide.Globe, "web_search" to Lucide.Globe, "browser" to Lucide.Globe,
-    "subagent" to Lucide.Users,
-    "ask" to Lucide.CircleHelp, "askMany" to Lucide.MessagesSquare, "todo" to Lucide.ListTodo,
-    "memory" to Lucide.Brain, "readSkill" to Lucide.BookOpen,
+    "webFetch" to TablerIcons.Outline.Globe, "fetch" to TablerIcons.Outline.Globe,
+    "webSearch" to TablerIcons.Outline.Globe, "web_search" to TablerIcons.Outline.Globe, "browser" to TablerIcons.Outline.Globe,
+    "subagent" to TablerIcons.Outline.Users,
+    "ask" to TablerIcons.Outline.HelpCircle, "askMany" to TablerIcons.Outline.Messages, "todo" to TablerIcons.Outline.ListCheck,
+    "memory" to TablerIcons.Outline.Brain, "readSkill" to TablerIcons.Outline.Book,
 )
 
-fun getToolIcon(name: String): ImageVector = TOOL_ICONS[name] ?: Lucide.Wrench
+fun getToolIcon(name: String): ImageVector = TOOL_ICONS[name] ?: TablerIcons.Outline.Tool
 
 fun formatUnknown(v: Any?): String = when (v) {
     null -> "null"

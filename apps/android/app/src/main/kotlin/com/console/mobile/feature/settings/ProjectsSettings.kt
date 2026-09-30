@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,7 +34,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.ui.components.ConfirmButton
@@ -69,7 +68,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
             actions = {
                 TextButton(onClick = onAddProject) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Add, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(15.dp))
+                        Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(15.dp))
                         Text("Add Folder", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
@@ -86,7 +85,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
             EmptyState(
                 title = "Couldn't load projects",
                 description = projectState.error ?: "Failed to load projects.",
-                icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) },
+                icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) },
             )
         } else if (projectState.projects.isEmpty()) {
             EmptyState(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
@@ -127,7 +126,7 @@ private fun ProjectRow(proj: ProjectInfo, busy: Boolean, onDelete: () -> Unit) {
         }
         IconButton(onClick = onDelete, enabled = !busy, modifier = Modifier.size(32.dp)) {
             if (busy) CircularProgressIndicator(color = ConsoleColors.Destructive, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            else Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = ConsoleColors.Destructive, modifier = Modifier.size(14.dp))
+            else Icon(TablerIcons.Outline.Trash, contentDescription = "Remove", tint = ConsoleColors.Destructive, modifier = Modifier.size(14.dp))
         }
     }
 }

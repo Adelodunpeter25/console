@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +33,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Photo
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.newAttachmentId
@@ -135,7 +135,7 @@ private fun AttachmentCard(attachment: ImageAttachment, onClick: () -> Unit, onR
             )
         } else {
             Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.Image, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
+                Icon(TablerIcons.Outline.Photo, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
             }
         }
         Box(
@@ -144,7 +144,7 @@ private fun AttachmentCard(attachment: ImageAttachment, onClick: () -> Unit, onR
                 .clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Close, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(12.dp))
+            Icon(TablerIcons.Outline.X, contentDescription = "Remove", tint = Color.White, modifier = Modifier.size(12.dp))
         }
     }
 }

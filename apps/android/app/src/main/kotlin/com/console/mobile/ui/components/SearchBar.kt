@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -34,6 +30,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.Search
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 import com.console.mobile.ui.theme.ConsoleColors
 
 /**
@@ -62,7 +62,7 @@ fun ConsoleSearchField(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
+        Icon(TablerIcons.Outline.Search, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -85,7 +85,7 @@ fun ConsoleSearchField(
                     .clickable(onClickLabel = "Clear") { onValueChange("") },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Close, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+                Icon(TablerIcons.Outline.X, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -128,7 +128,7 @@ fun ConsoleSearchBar(
                 modifier = Modifier.size(48.dp),
             ) {
                 IconButton(onClick = onComposePress, enabled = composeEnabled) {
-                    Icon(Icons.Filled.Edit, contentDescription = "New chat", tint = Color.White)
+                    Icon(TablerIcons.Outline.Edit, contentDescription = "New chat", tint = Color.White)
                 }
             }
         }

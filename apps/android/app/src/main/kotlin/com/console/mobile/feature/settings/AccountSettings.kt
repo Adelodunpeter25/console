@@ -14,11 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Login
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -39,6 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Circle
+import io.github.lyxnx.compose.ui.tablericons.outline.Login
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
@@ -87,8 +87,8 @@ fun AccountSettings(onBack: () -> Unit) {
                         val busy = loggingIn == p.name
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (loggedIn) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
-                                else Icon(Icons.Filled.RadioButtonUnchecked, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+                                if (loggedIn) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
+                                else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                                 Column(modifier = Modifier.weight(1f).padding(start = 10.dp).padding(end = 12.dp)) {
                                     Text(p.displayName.ifBlank { p.name }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     Text(if (loggedIn) (status?.email ?: "Connected") else "Not connected", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
@@ -118,7 +118,7 @@ fun AccountSettings(onBack: () -> Unit) {
                                     },
                                     enabled = loggingIn == null,
                                     loading = busy,
-                                    icon = if (loggedIn) Icons.Filled.Refresh else Icons.Filled.Login,
+                                    icon = if (loggedIn) TablerIcons.Outline.Refresh else TablerIcons.Outline.Login,
                                     variant = if (loggedIn) PillButtonVariant.Outline else PillButtonVariant.Filled,
                                 )
                             }

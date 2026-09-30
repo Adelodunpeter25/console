@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +26,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import com.console.mobile.core.util.DiffLineType
 import com.console.mobile.core.util.DiffResult
 import com.console.mobile.core.util.getFileName
@@ -83,7 +83,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextSecondary)
+                        Icon(TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextSecondary)
                         Text("Show ${diff.lines.size - maxCollapsedLines} more lines", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
@@ -92,7 +92,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = false }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.ExpandLess, contentDescription = null, tint = ConsoleColors.TextSecondary)
+                        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary)
                         Text("Show less", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                     }
                 }

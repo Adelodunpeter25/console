@@ -13,10 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -36,6 +32,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TodoItem
 import com.console.mobile.ui.theme.ConsoleColors
@@ -80,7 +80,7 @@ private fun BannerShell(label: String, count: String, detail: String?, onPress: 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C20).copy(alpha = 1f)).border(1.dp, Color(0xFF303036), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            Icon(if (label == "SUBAGENTS") Icons.Filled.SmartToy else Icons.Filled.Check, contentDescription = null, tint = if (running) Color(0xFF38BDF8) else ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
+            Icon(if (label == "SUBAGENTS") TablerIcons.Outline.Robot else TablerIcons.Outline.Check, contentDescription = null, tint = if (running) Color(0xFF38BDF8) else ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
         }
         Text(label, color = Color(0xFFFAFAFA), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
         Box(modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
@@ -92,7 +92,7 @@ private fun BannerShell(label: String, count: String, detail: String?, onPress: 
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
         }
         Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF1C1C20)).border(1.dp, Color(0xFF303036), CircleShape), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.ExpandLess, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(12.dp))
+            Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(12.dp))
         }
     }
 }
@@ -120,7 +120,7 @@ fun TodoBottomSheet(items: List<TodoItem>, completed: Int, total: Int, onDismiss
                                 .border(1.dp, if (done) Color(0xFF22C55E) else if (inProgress) Color(0xFF38BDF8) else Color(0xFF3F3F46), RoundedCornerShape(6.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(12.dp))
+                            if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(12.dp))
                             else if (inProgress) Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
                         }
                         Text(

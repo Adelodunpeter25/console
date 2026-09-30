@@ -15,10 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +41,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Keyboard
+import io.github.lyxnx.compose.ui.tablericons.outline.KeyboardOff
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.store.TerminalStatus
@@ -149,7 +148,7 @@ fun TerminalScreen(onBack: () -> Unit) {
             actions = if (term != null) {
                 {
                     IconButton(onClick = ::killAndRespawn, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Restart shell", tint = ConsoleColors.Destructive, modifier = Modifier.size(18.dp))
+                        Icon(TablerIcons.Outline.Trash, contentDescription = "Restart shell", tint = ConsoleColors.Destructive, modifier = Modifier.size(18.dp))
                     }
                 }
             } else null,
@@ -248,7 +247,7 @@ private fun ExtraKeysBar(onExtraKey: (String) -> Unit) {
     var kbVisible by remember { mutableStateOf(false) }
     Row(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).border(1.dp, ConsoleColors.BorderSubtle).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { if (kbVisible) keyboard?.hide() else keyboard?.show(); kbVisible = !kbVisible }, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(6.dp))) {
-            Icon(if (kbVisible) Icons.Filled.KeyboardHide else Icons.Filled.Keyboard, contentDescription = "Toggle keyboard", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(15.dp))
+            Icon(if (kbVisible) TablerIcons.Outline.KeyboardOff else TablerIcons.Outline.Keyboard, contentDescription = "Toggle keyboard", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(15.dp))
         }
         EXTRA_KEYS.forEach { k ->
             TextButton2(label = k.label, onClick = { onExtraKey(k.bytes) })

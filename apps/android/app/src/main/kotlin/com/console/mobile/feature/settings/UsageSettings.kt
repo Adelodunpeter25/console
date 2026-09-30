@@ -13,11 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,6 +34,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Circle
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.colorForLimit
 import com.console.mobile.core.util.formatWindowLabel
@@ -78,7 +78,7 @@ fun UsageSettings(onBack: () -> Unit) {
             onBack = onBack,
             actions = {
                 IconButton(onClick = { AppContainer.usageRepository.loadAllUsage(force = true) }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(16.dp))
+                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(16.dp))
                 }
             },
         )
@@ -122,8 +122,8 @@ private fun UsageProviderCard(displayName: String, report: UsageReport?, loggedI
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-            if (loggedIn) Icon(Icons.Filled.Check, contentDescription = null, tint = if (isExhausted) Color(0xFFF87171) else Color(0xFF34D399), modifier = Modifier.size(14.dp))
-            else Icon(Icons.Filled.RadioButtonUnchecked, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            if (loggedIn) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = if (isExhausted) Color(0xFFF87171) else Color(0xFF34D399), modifier = Modifier.size(14.dp))
+            else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 Text(displayName, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 var sub = if (loggedIn) (email ?: "Connected") else "Not connected"
@@ -140,7 +140,7 @@ private fun UsageProviderCard(displayName: String, report: UsageReport?, loggedI
             }
         } else if (report == null) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
+                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
                 Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login in Account.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
             }
         } else if (report.limits.isEmpty()) {

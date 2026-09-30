@@ -17,14 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -44,6 +36,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Copy
+import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.SubagentActivityItem
 import com.console.mobile.data.model.SubagentInfo
@@ -77,7 +77,7 @@ fun SubagentsScreen(onBackToChat: () -> Unit, onOpenDetails: (String) -> Unit) {
                 description = "Subagents created by the assistant during this session will stream their activity and summaries here in real time.",
                 icon = {
                     Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF18181C)).border(1.dp, Color(0xFF27272A), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.SmartToy, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(24.dp))
+                        Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(24.dp))
                     }
                 },
             )
@@ -110,13 +110,13 @@ private fun SubagentCard(subagent: SubagentInfo, onClick: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C20)).border(1.dp, Color(0xFF303036), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.SmartToy, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
             }
             Text(subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } }, color = Color(0xFFFAFAFA), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
             Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(color.copy(alpha = 0.12f)).border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 2.dp)) {
                 Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
         }
         if (subagent.prompt.isNotBlank()) {
             Text(subagent.prompt, color = ConsoleColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
@@ -174,8 +174,8 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
                             copied = true
                         } catch (_: Exception) {}
                     }, modifier = Modifier.size(28.dp)) {
-                        if (copied) Icon(Icons.Filled.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
-                        else Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+                        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
+                        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
                     }
                 }
                 Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(14.dp)) {
@@ -185,7 +185,7 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
             // Error.
             if (!subagent.error.isNullOrBlank()) {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF87171).copy(alpha = 0.08f)).border(1.dp, Color(0xFFF87171).copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
+                    Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
                     Text(subagent.error ?: "", color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
                 }
             }
@@ -224,15 +224,15 @@ private fun ActivityGroupCard(group: ActivityGroup) {
     val shape = RoundedCornerShape(12.dp)
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape).background(Color(0xFF141417)).border(1.dp, Color(0xFF27272A), shape)) {
         Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (isRunning) Icon(Icons.Filled.SmartToy, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
-            else if (hasError) Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
-            else Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
+            if (isRunning) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+            else if (hasError) Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
+            else Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
             Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                 Text(group.toolName, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
             }
             Text("${group.activities.size} ${if (group.activities.size == 1) "call" else "calls"}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
             Text(if (isRunning) "Running" else "$done/${group.activities.size}", color = ConsoleColors.TextMuted, fontSize = 10.sp)
-            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (open) {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
@@ -248,9 +248,9 @@ private fun ActivityRowItem(activity: SubagentActivityItem) {
     val running = activity.status == "running"
     val done = activity.status == "completed"
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (running) Icon(Icons.Filled.SmartToy, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
-        else if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
-        else Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
+        if (running) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+        else if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
+        else Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
         Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
             Text(activity.toolName, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
         }

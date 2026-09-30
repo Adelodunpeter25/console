@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import com.console.mobile.ui.theme.ConsoleColors
 
 /** Generic settings row with title / subtitle / chevron. */
@@ -34,6 +34,6 @@ fun SettingsRow(
             if (subtitle != null) Text(subtitle, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         if (trailing != null) trailing()
-        else if (onClick != null) Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
+        else if (onClick != null) Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
     }
 }

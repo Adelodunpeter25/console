@@ -18,13 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +38,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Copy
+import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.argumentPath
 import com.console.mobile.core.util.extractWriteArgs
@@ -144,7 +144,7 @@ fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming:
         }
         if (!isStreaming && !showTyping && textContent.isNullOrEmpty() && thinkingContent.isNullOrEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
                 Text("Done", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
             }
         }
@@ -171,8 +171,8 @@ private fun CopyButton(text: String, context: Context) {
             copied = true
         } catch (_: Exception) {}
     }, modifier = Modifier.size(24.dp)) {
-        if (copied) Icon(Icons.Filled.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(12.dp))
-        else Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(12.dp))
+        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
     }
 }
 
@@ -193,9 +193,9 @@ fun ThinkingBlock(text: String, isStreaming: Boolean) {
             modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f)).clickable { expanded = !expanded }.padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color(0xFFFB923C), modifier = Modifier.size(13.dp))
+            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = Color(0xFFFB923C), modifier = Modifier.size(13.dp))
             Text(if (isStreaming) "Thinking…" else "Thought", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
-            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
         }
         if (expanded) {
             Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.03f)).padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -245,11 +245,11 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
             if (result == null) {
                 CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
             } else if (result.isError) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(13.dp))
             } else {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
             }
-            Icon(if (open) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (open) {
             Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {

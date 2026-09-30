@@ -12,10 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.Message
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
@@ -35,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.Files
+import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
@@ -80,7 +78,7 @@ fun ChatScreen(
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
             ScreenHeader(title = "Chat", onBack = { onBackToHome() })
-            EmptyState(title = "No session selected", description = "Pick a chat from Home to get started.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
+            EmptyState(title = "No session selected", description = "Pick a chat from Home to get started.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
         }
         return
     }
@@ -257,7 +255,7 @@ fun ChatScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 loadingMessages && !hasMessages -> ChatScreenSkeleton()
-                !hasMessages && !isStreaming -> EmptyState(title = "Start the conversation", description = "Ask anything about your project.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
+                !hasMessages && !isStreaming -> EmptyState(title = "Start the conversation", description = "Ask anything about your project.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
                 else -> {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
@@ -291,7 +289,7 @@ fun ChatScreen(
                     containerColor = ConsoleColors.SurfaceElevated,
                     contentColor = ConsoleColors.TextPrimary,
                 ) {
-                    Icon(Icons.Filled.ArrowDownward, contentDescription = "Scroll to bottom")
+                    Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
                 }
             }
         }

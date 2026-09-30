@@ -15,10 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +35,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ChangesRow
 import com.console.mobile.core.util.baseOf
@@ -187,7 +187,7 @@ fun ChangesScreen(onBack: () -> Unit) {
             onBack = onBack,
             actions = {
                 IconButton(onClick = ::refresh, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
+                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
                 }
             },
         )
@@ -218,7 +218,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                             }.padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(if (collapsed.contains(row.name)) Icons.Filled.ChevronRight else Icons.Filled.ExpandLess, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+                            Icon(if (collapsed.contains(row.name)) TablerIcons.Outline.ChevronRight else TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                             Text("${row.name} · ${row.count}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 6.dp))
                             DiffSummaryBadge(addedCount = row.additions, removedCount = row.deletions)
                         }
@@ -233,7 +233,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                                 Text(row.rel, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DiffSummaryBadge(addedCount = row.additions, removedCount = row.deletions)
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+                            Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                         }
                     }
                 }

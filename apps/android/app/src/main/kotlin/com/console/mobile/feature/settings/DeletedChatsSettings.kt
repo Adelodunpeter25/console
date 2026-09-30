@@ -12,12 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Message
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -38,6 +32,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Message
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
+import io.github.lyxnx.compose.ui.tablericons.outline.Restore
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
@@ -94,7 +94,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             }
                         })))
                     }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Restore, contentDescription = "Restore all", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(17.dp))
+                        Icon(TablerIcons.Outline.Restore, contentDescription = "Restore all", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(17.dp))
                     }
                     IconButton(onClick = {
                         confirmAlert("Delete All Chats Permanently", "All ${deleted.size} deleted chats and their entire message history will be permanently removed. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete All", destructive = true, onPress = {
@@ -110,7 +110,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             }
                         })))
                     }, enabled = busyId == null, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete all", tint = ConsoleColors.Destructive, modifier = Modifier.size(17.dp))
+                        Icon(TablerIcons.Outline.Trash, contentDescription = "Delete all", tint = ConsoleColors.Destructive, modifier = Modifier.size(17.dp))
                     }
                 }
             } else null,
@@ -123,9 +123,9 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                 }
             }
         } else if (projectState.error != null && deleted.isEmpty()) {
-            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) })
+            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) })
         } else if (deleted.isEmpty()) {
-            EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(Icons.Filled.Message, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+            EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                 items(deleted, key = { it.id }) { item ->
@@ -162,7 +162,7 @@ private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit
                 onClick = onRestore,
                 enabled = !busy,
                 loading = busy,
-                icon = Icons.Filled.Refresh,
+                icon = TablerIcons.Outline.Refresh,
                 variant = PillButtonVariant.Outline,
                 cornerRadius = 8.dp,
                 horizontalPadding = 12.dp,
@@ -172,7 +172,7 @@ private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit
                 text = "Delete",
                 onClick = onDelete,
                 enabled = !busy,
-                icon = Icons.Filled.Delete,
+                icon = TablerIcons.Outline.Trash,
                 variant = PillButtonVariant.Destructive,
                 cornerRadius = 8.dp,
                 horizontalPadding = 12.dp,

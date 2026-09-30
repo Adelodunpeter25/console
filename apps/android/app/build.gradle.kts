@@ -143,9 +143,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    // Icons: Tabler is the single source. material-icons-extended shipped 8,104
+    // icons to serve the 30 we used, and icons-lucide-android held the
+    // tool-call glyphs — both fully migrated to Tabler.
     implementation("androidx.browser:browser:1.8.0")
-    implementation("com.composables:icons-lucide-android:1.1.0")
     implementation("io.github.lyxnx.compose.ui:tabler-icons-android:3.31.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
 

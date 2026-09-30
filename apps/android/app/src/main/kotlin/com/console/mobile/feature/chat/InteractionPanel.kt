@@ -13,10 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -36,6 +32,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
+import io.github.lyxnx.compose.ui.tablericons.outline.Shield
+import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
+import io.github.lyxnx.compose.ui.tablericons.outline.ShieldX
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.PendingPermission
 import com.console.mobile.core.chat.PendingQuestion
@@ -43,9 +45,6 @@ import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.theme.ConsoleColors
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ShieldCheck
-import io.github.lyxnx.compose.ui.tablericons.outline.ShieldX
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -80,7 +79,7 @@ private fun PermissionPanel(request: PermissionRequest, sessionId: String) {
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Shield, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
+            Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
             Text(
                 buildString {
                     append(if (request.requiresUpgrade) "Upgrade permission required: " else "Permission required: ")
@@ -187,7 +186,7 @@ private fun QuestionPanel(
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.HelpOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(TablerIcons.Outline.HelpCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             Text(request.question, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 10.dp))
             if (total > 1) {
                 Text("$index of $total", color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = com.console.mobile.ui.theme.ConsoleMonoFamily)
@@ -218,7 +217,7 @@ private fun QuestionPanel(
                             contentAlignment = Alignment.Center,
                         ) {
                             if (isSelected) {
-                                if (request.isMultiSelect) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
+                                if (request.isMultiSelect) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
                                 else Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color.Black))
                             }
                         }

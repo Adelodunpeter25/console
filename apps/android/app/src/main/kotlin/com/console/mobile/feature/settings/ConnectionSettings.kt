@@ -14,10 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +37,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.LinkOff
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHost
@@ -100,7 +100,7 @@ fun ConnectionSettings(onBack: () -> Unit) {
                             modifier = Modifier.size(40.dp).clip(CircleShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Filled.Add, contentDescription = "Add environment", tint = ConsoleColors.TextPrimary)
+                            Icon(TablerIcons.Outline.Plus, contentDescription = "Add environment", tint = ConsoleColors.TextPrimary)
                         }
                     }
                 },
@@ -130,7 +130,7 @@ fun ConnectionSettings(onBack: () -> Unit) {
                                     }
                                     Text(urlHost(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
-                                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
+                                Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -144,7 +144,7 @@ fun ConnectionSettings(onBack: () -> Unit) {
                             })))
                         },
                         variant = PillButtonVariant.Destructive,
-                        icon = Icons.Filled.LinkOff,
+                        icon = TablerIcons.Outline.LinkOff,
                         fullWidth = true,
                         cornerRadius = 16.dp,
                         verticalPadding = 12.dp,
