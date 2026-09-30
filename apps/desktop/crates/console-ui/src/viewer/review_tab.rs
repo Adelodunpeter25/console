@@ -290,7 +290,9 @@ impl RenderOnce for ReviewTab {
                                                         ),
                                                         diff_result,
                                                     )
-                                                    .file_path(entry.path.clone()),
+                                                    .file_path(entry.path.clone())
+                                                    .full_height(true)
+                                                    .hide_header(true),
                                                 ),
                                         )
                                     })

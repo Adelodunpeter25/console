@@ -366,19 +366,27 @@ impl ConsoleDesktopApp {
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. }) => {
-                let cwd = project_id
-                    .as_ref()
-                    .and_then(|pid| {
-                        self.projects
-                            .iter()
-                            .find(|p| &p.id == pid)
-                            .map(|p| p.path.clone())
+                // When focused on a tab in the workspace (Diff, Terminal, File), retain the pane's
+                // active session and its cwd so the changes inspector doesn't clear out.
+                let session_id = self.active_session_for_pane(pane_id);
+                let cwd = session_id
+                    .as_deref()
+                    .and_then(|sid| self.session_cwd(sid, project_id.as_deref(), pane_id))
+                    .or_else(|| {
+                        project_id
+                            .as_ref()
+                            .and_then(|pid| {
+                                self.projects
+                                    .iter()
+                                    .find(|p| &p.id == pid)
+                                    .map(|p| p.path.clone())
+                            })
                     })
                     .or_else(|| {
                         self.selected_project_for_pane(pane_id)
                             .map(|p| p.path.clone())
                     });
-                (None, cwd)
+                (session_id, cwd)
             }
             None => (None, None),
         }

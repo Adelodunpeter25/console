@@ -26,6 +26,10 @@ pub struct DiffView {
     /// file's type icon and basename in the header instead of a bare label.
     file_path: Option<String>,
     scroll_handle: ScrollHandle,
+    /// When true, renders all lines without max-height or truncation caps (used in review tabs).
+    full_height: bool,
+    /// When true, suppresses the internal header row (file icon, name, summary) if parent handles it.
+    hide_header: bool,
 }
 
 impl DiffView {
@@ -35,11 +39,23 @@ impl DiffView {
             diff,
             file_path: None,
             scroll_handle: ScrollHandle::new(),
+            full_height: false,
+            hide_header: false,
         }
     }
 
     pub fn file_path(mut self, path: impl Into<String>) -> Self {
         self.file_path = Some(path.into());
+        self
+    }
+
+    pub fn full_height(mut self, full_height: bool) -> Self {
+        self.full_height = full_height;
+        self
+    }
+
+    pub fn hide_header(mut self, hide_header: bool) -> Self {
+        self.hide_header = hide_header;
         self
     }
 }
@@ -72,14 +88,18 @@ impl RenderOnce for DiffView {
                     .child(format!("-{removed}")),
             );
 
-        let lines: Vec<&DiffLine> = self.diff.lines.iter().take(MAX_RENDER_LINES).collect();
-        let truncated = self.diff.lines.len() > MAX_RENDER_LINES;
+        let (lines, truncated) = if self.full_height {
+            (self.diff.lines.iter().collect::<Vec<_>>(), false)
+        } else {
+            (
+                self.diff.lines.iter().take(MAX_RENDER_LINES).collect::<Vec<_>>(),
+                self.diff.lines.len() > MAX_RENDER_LINES,
+            )
+        };
 
         let body = div()
             .id(ElementId::Name(format!("diff-body-{}", self.id).into()))
-            .max_h(px(240.0))
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll_handle)
+            .when(!self.full_height, |el| el.max_h(px(240.0)).overflow_y_scroll().track_scroll(&self.scroll_handle))
             .rounded(px(5.0))
             .bg(theme.inset)
             .py(px(4.0))
@@ -98,39 +118,43 @@ impl RenderOnce for DiffView {
                 )
             });
 
+        let show_header = !self.hide_header;
+
         div()
             .flex()
             .flex_col()
             .gap(px(4.0))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(match &file_path {
-                        Some(path) => div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .min_w_0()
-                            .child(file_type_icon(path, 13.0))
-                            .child(
-                                div()
-                                    .font_family(MONO_FAMILY)
-                                    .text_size(px(10.5))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(theme.text_secondary)
-                                    .truncate()
-                                    .child(base_name(path).to_owned()),
-                            ),
-                        None => div()
-                            .text_size(px(10.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_ghost)
-                            .child("DIFF"),
-                    })
-                    .child(summary),
-            )
+            .when(show_header, |el| {
+                el.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(match &file_path {
+                            Some(path) => div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .min_w_0()
+                                .child(file_type_icon(path, 13.0))
+                                .child(
+                                    div()
+                                        .font_family(MONO_FAMILY)
+                                        .text_size(px(10.5))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.text_secondary)
+                                        .truncate()
+                                        .child(base_name(path).to_owned()),
+                                ),
+                            None => div()
+                                .text_size(px(10.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.text_ghost)
+                                .child("DIFF"),
+                        })
+                        .child(summary),
+                )
+            })
             .child(body)
     }
 }
