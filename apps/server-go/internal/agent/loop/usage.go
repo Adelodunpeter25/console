@@ -95,3 +95,17 @@ func (t *UsageTracker) Snapshot() RunUsage {
 	}
 	return out
 }
+
+// ContextSnapshot is the session's context-window occupancy at a point in
+// time: estimated payload tokens against the run model's window. Estimated
+// with the same heuristic the compaction threshold uses, so the footer ring
+// and the autocompact trigger always agree.
+type ContextSnapshot struct {
+	UsedTokens     int     `json:"usedTokens"`
+	ContextWindow  int     `json:"contextWindow"`
+	PercentUsed    float64 `json:"percentUsed"`
+	ThresholdRatio float64 `json:"thresholdRatio"`
+	ModelID        string  `json:"modelId"`
+	Provider       string  `json:"provider"`
+	Source         string  `json:"source"`
+}

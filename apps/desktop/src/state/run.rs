@@ -848,6 +848,11 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::TurnStart { .. } => {
                 self.set_agent_notice_for_session(run_session_id, None);
             }
+            AgentSessionEvent::ContextUpdate { context } => {
+                self.context_usage
+                    .insert(run_session_id.to_owned(), context);
+                cx.notify();
+            }
             AgentSessionEvent::TurnEnd { .. } => {
                 self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);

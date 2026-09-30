@@ -10,7 +10,7 @@
 
 use std::rc::Rc;
 
-use console_core::{GitBranchInfo, ProjectInfo, UsageReport};
+use console_core::{ContextSnapshot, GitBranchInfo, ProjectInfo, UsageReport};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
@@ -35,6 +35,7 @@ pub struct WorkspaceFooter {
     current_provider: String,
     usage_report: Option<UsageReport>,
     usage_loading: bool,
+    context_snapshot: Option<ContextSnapshot>,
     on_select_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -57,6 +58,7 @@ impl WorkspaceFooter {
         current_provider: String,
         usage_report: Option<UsageReport>,
         usage_loading: bool,
+        context_snapshot: Option<ContextSnapshot>,
         on_select_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
@@ -77,6 +79,7 @@ impl WorkspaceFooter {
             current_provider,
             usage_report,
             usage_loading,
+            context_snapshot,
             on_select_project: Rc::new(on_select_project),
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
@@ -253,6 +256,7 @@ impl RenderOnce for WorkspaceFooter {
         let usage_meter = crate::common::UsageMeter::new(
             self.current_provider,
             self.usage_report,
+            self.context_snapshot,
             self.usage_menu,
             self.usage_loading,
         );

@@ -113,6 +113,38 @@ impl SessionService {
         .await
     }
 
+    /// `GET /api/sessions/:id/context` — estimated context-window
+    /// occupancy for the footer ring. Served from the server's per-session
+    /// cache; use the `contextUpdate` stream frames for live movement.
+    pub async fn get_context(&self, id: &str) -> Result<ContextSnapshot> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/context", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get session context usage")?;
+
+        let body: ApiResponse<ContextSnapshot> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session context response")?;
+        if body.success {
+            body.data.ok_or_else(|| anyhow!("Session context data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get session context".into())
+            ))
+        }
+    }
+
     /// `GET /api/sessions/:id/changes` — session file changes. When
     /// `turn_index` is `None`, returns all turns aggregated; otherwise
     /// scopes to that single turn.

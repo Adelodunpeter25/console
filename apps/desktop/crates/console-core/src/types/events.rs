@@ -136,6 +136,10 @@ pub enum AgentSessionEvent {
         #[serde(rename = "queuedPrompt")]
         queued_prompt: Option<QueuedPrompt>,
     },
+    /// Estimated context-window occupancy after a turn.
+    ContextUpdate {
+        context: super::ContextSnapshot,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

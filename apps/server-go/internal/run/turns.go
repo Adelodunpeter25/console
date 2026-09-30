@@ -400,12 +400,15 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 				// Abort/steer is a user action, not a failure: no error
 				// frame or attention banner (TS parity).
 				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+					s.broadcastContextUsage(sessionID, hub)
 					return context.Canceled
 				}
 				hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 				s.notifyEvent(ctx, sessionID, loop.Event{Kind: loop.EventError, Text: err.Error()})
+				s.broadcastContextUsage(sessionID, hub)
 				return err
 			}
+			s.broadcastContextUsage(sessionID, hub)
 			return nil
 		}
 

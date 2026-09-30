@@ -98,4 +98,31 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
+
+    /// Fetch estimated context-window occupancy for a session into
+    /// `context_usage`. Fire-and-forget; live movement arrives via
+    /// `contextUpdate` stream frames while a run is active.
+    pub fn fetch_context_usage(&mut self, session_id: &str, cx: &mut gpui::Context<Self>) {
+        if session_id.is_empty() {
+            return;
+        }
+        let session_id = session_id.to_owned();
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+
+        cx.spawn(async move |_, cx| {
+            let res = client.sessions.get_context(&session_id).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        if let Ok(snapshot) = res {
+                            this.context_usage.insert(session_id, snapshot);
+                            cx.notify();
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
 }

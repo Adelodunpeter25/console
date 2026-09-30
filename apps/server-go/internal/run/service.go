@@ -65,6 +65,11 @@ type Service struct {
 	scripts   *services.ProjectScriptsService
 	mcp       *mcp.Manager
 	prompts   promptCache
+	// ctxCache holds the last context-window snapshot per session, keyed
+	// by message count so the footer ring never recomputes a walk it
+	// already did. Has its own mutex: read on the request path while a
+	// run holds s.mu is legal.
+	ctxCache contextCache
 	// snapshots holds pre-write file content for whole-file overwrite tools
 	// (write_file, batchWrite), keyed by session then path. Populated just
 	// before such a tool is dispatched and consulted when its result is

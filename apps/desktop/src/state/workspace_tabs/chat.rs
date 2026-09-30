@@ -91,6 +91,7 @@ impl ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             let session_id = this.active_session_for_pane(&pane_id).unwrap_or_default();
                             this.maybe_fetch_usage(&session_id, cx);
+                            this.fetch_context_usage(&session_id, cx);
                         });
                     }
                 }

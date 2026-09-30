@@ -1,7 +1,7 @@
 //! The usage panel: a dropdown showing detailed quota limits for the active
 //! provider. Displays progress bars for each limit, reset times, and status colors.
 
-use console_core::{UsageLimit, UsageReport, UsageUnit};
+use console_core::{ContextSnapshot, UsageLimit, UsageReport, UsageUnit};
 use gpui::{
     App, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
     relative,
@@ -13,14 +13,21 @@ use crate::theme::Theme;
 pub struct UsagePanel {
     provider: String,
     usage_report: Option<UsageReport>,
+    context_snapshot: Option<ContextSnapshot>,
     is_loading: bool,
 }
 
 impl UsagePanel {
-    pub fn new(provider: String, usage_report: Option<UsageReport>, is_loading: bool) -> Self {
+    pub fn new(
+        provider: String,
+        usage_report: Option<UsageReport>,
+        context_snapshot: Option<ContextSnapshot>,
+        is_loading: bool,
+    ) -> Self {
         Self {
             provider,
             usage_report,
+            context_snapshot,
             is_loading,
         }
     }
@@ -80,6 +87,12 @@ impl RenderOnce for UsagePanel {
             return panel.into_any_element();
         }
 
+        // Context occupancy sits above the quota rows: one header line with
+        // used-vs-window plus a linear progress bar.
+        if let Some(snapshot) = &self.context_snapshot {
+            panel = panel.child(render_context_row(snapshot, &theme));
+        }
+
         let Some(report) = &self.usage_report else {
             panel = panel.child(
                 div()
@@ -116,8 +129,47 @@ impl RenderOnce for UsagePanel {
     }
 }
 
-fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {
-    let percent = resolve_used_percent(limit);
+fn render_context_row(snapshot: &ContextSnapshot, theme: &Theme) -> impl IntoElement {
+    let percent = snapshot.percent_used.clamp(0.0, 100.0);
+    let threshold = (snapshot.threshold_ratio * 100.0).clamp(0.0, 100.0);
+
+    let status_color = if percent >= threshold {
+        theme.danger
+    } else if percent >= 50.0 {
+        theme.warning
+    } else {
+        theme.gauge
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(7.0))
+        .pb(px(2.0))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child("Context"),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .text_size(px(12.0))
+                        .text_color(theme.text_secondary)
+                        .child(SharedString::from(snapshot.used_vs_window())),
+                ),
+        )
+        .child(meter_bar(theme, percent, status_color))
+}
+
+fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {    let percent = resolve_used_percent(limit);
 
     let status_color = if percent >= 95.0
         || matches!(limit.status, Some(console_core::UsageStatus::Exhausted))

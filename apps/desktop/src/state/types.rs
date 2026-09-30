@@ -346,6 +346,9 @@ pub struct ConsoleDesktopApp {
         Option<Rc<std::collections::HashMap<String, Option<console_core::types::UsageReport>>>>,
     pub usage_loading: bool,
     pub usage_last_fetched: Option<std::time::SystemTime>,
+    /// Estimated context-window occupancy per session id, fed by the
+    /// `contextUpdate` stream frames and the on-demand context endpoint.
+    pub context_usage: std::collections::HashMap<String, console_core::types::ContextSnapshot>,
     pub environments: Vec<super::environments::Environment>,
     pub active_env_id: Option<String>,
     pub env_probes: std::collections::HashMap<String, console_ui::settings::ProbeState>,

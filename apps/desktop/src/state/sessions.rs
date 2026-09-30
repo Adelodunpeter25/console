@@ -198,6 +198,7 @@ impl ConsoleDesktopApp {
                 }
                 self.persist_workspaces();
                 self.maybe_fetch_usage(&session_id, cx);
+                self.fetch_context_usage(&session_id, cx);
                 cx.notify();
             }
         }
@@ -425,6 +426,7 @@ impl ConsoleDesktopApp {
 
         // Fetch usage data for the current provider
         self.maybe_fetch_usage(&header.id, cx);
+        self.fetch_context_usage(&header.id, cx);
 
         // Tool-call rows render paths relative to the session's working
         // directory; empty when the backend has not reported one yet.

@@ -804,6 +804,11 @@ impl ConsoleDesktopApp {
                     .as_ref()
                     .and_then(|reports| reports.get(&current_provider).cloned().flatten());
 
+                // Estimated context occupancy for the active session
+                let context_snapshot = self
+                    .active_session_for_pane(&pane_id)
+                    .and_then(|sid| self.context_usage.get(&sid).cloned());
+
                 let workspace_footer = WorkspaceFooter::new(
                     self.projects.clone(),
                     pane_project_id.clone(),
@@ -817,6 +822,7 @@ impl ConsoleDesktopApp {
                     current_provider.clone(),
                     usage_report,
                     self.usage_loading,
+                    context_snapshot,
                     {
                         let entity = entity.clone();
                         move |id: String, _w, cx| {

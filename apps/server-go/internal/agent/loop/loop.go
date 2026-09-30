@@ -103,8 +103,10 @@ const (
 	EventSessionEnd EventKind = "sessionEnd"
 	// EventTodoUpdate carries the session todo list ({items, action}).
 	EventTodoUpdate EventKind = "todoUpdate"
+	// EventContextUpdate carries a ContextSnapshot after each turn so the
+	// footer ring moves live without polling.
+	EventContextUpdate EventKind = "contextUpdate"
 )
-
 type Event struct {
 	Kind       EventKind                   `json:"kind"`
 	Text       string                      `json:"text,omitempty"`
@@ -135,6 +137,9 @@ type Event struct {
 	// RunUsage accompanies EventTurnDone with the run's aggregated token
 	// usage (internal accounting; not part of the wire vocabulary).
 	RunUsage *RunUsage `json:"-"`
+	// Context accompanies EventContextUpdate with the session's
+	// context-window snapshot; serialized by the SSE layer only.
+	Context *ContextSnapshot `json:"context,omitempty"`
 }
 
 // streamOf is a thin alias over the generic stream for loop events.

@@ -365,6 +365,7 @@ impl ConsoleDesktopApp {
                         app.update(cx, |this, cx| {
                             let session_id = this.active_session_for_pane("pane-main").unwrap_or_default();
                             this.maybe_fetch_usage(&session_id, cx);
+                            this.fetch_context_usage(&session_id, cx);
                         });
                     }
                 }
@@ -678,6 +679,7 @@ impl ConsoleDesktopApp {
             usage_reports: None,
             usage_loading: false,
             usage_last_fetched: None,
+            context_usage: std::collections::HashMap::new(),
             environments: Vec::new(),
             active_env_id: None,
             env_probes: std::collections::HashMap::new(),

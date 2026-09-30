@@ -97,6 +97,20 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		})
 	})
 
+	// GET /api/sessions/:id/context — estimated context-window occupancy
+	// for the footer ring. Served from the per-session cache when the
+	// message count hasn't moved; recomputed otherwise.
+	app.Get("/api/sessions/:id/context", func(c *fiber.Ctx) error {
+		snap, err := runs.ContextUsage(c.Params("id"))
+		if err != nil {
+			if errors.Is(err, run.ErrNoSession) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Session not found."})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": snap})
+	})
+
 	// POST /api/sessions/:id/abort — cancel the active run and discard any
 	// staged prompt: Stop means stop everything.
 	app.Post("/api/sessions/:id/abort", func(c *fiber.Ctx) error {
@@ -379,6 +393,8 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		return "toolExecutionEnd", fiber.Map{"type": "toolExecutionEnd", "results": nonNilResults(e.Results)}, false
 	case loop.EventTurnEnd:
 		return "turnEnd", fiber.Map{"type": "turnEnd", "turnId": e.Text}, false
+	case loop.EventContextUpdate:
+		return "contextUpdate", fiber.Map{"type": "contextUpdate", "context": e.Context}, false
 	case loop.EventSessionEnd:
 		return "sessionEnd", fiber.Map{"type": "sessionEnd"}, false
 	case loop.EventSessionTitleUpdated:

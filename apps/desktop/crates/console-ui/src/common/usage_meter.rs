@@ -2,7 +2,7 @@
 //! showing the active provider's rate-limit occupancy. Clicking opens
 //! a popover with detailed limit breakdowns.
 
-use console_core::{UsageLimit, UsageReport, UsageUnit};
+use console_core::{ContextSnapshot, UsageLimit, UsageReport, UsageUnit};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, Hsla, InteractiveElement, IntoElement, ParentElement, PathBuilder, RenderOnce, Styled,
@@ -17,6 +17,7 @@ use crate::theme::Theme;
 pub struct UsageMeter {
     provider: String,
     usage_report: Option<UsageReport>,
+    context_snapshot: Option<ContextSnapshot>,
     menu_handle: ContextMenuHandle,
     is_loading: bool,
 }
@@ -25,12 +26,14 @@ impl UsageMeter {
     pub fn new(
         provider: String,
         usage_report: Option<UsageReport>,
+        context_snapshot: Option<ContextSnapshot>,
         menu_handle: ContextMenuHandle,
         is_loading: bool,
     ) -> Self {
         Self {
             provider,
             usage_report,
+            context_snapshot,
             menu_handle,
             is_loading,
         }
@@ -41,12 +44,18 @@ impl RenderOnce for UsageMeter {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
 
-        // Find the primary limit's percent used
+        // The ring shows context-window occupancy when known, falling back
+        // to the primary quota limit otherwise.
         let percent = self
-            .usage_report
+            .context_snapshot
             .as_ref()
-            .and_then(|report| report.limits.first())
-            .map(resolve_used_percent);
+            .map(|snap| snap.percent_used.clamp(0.0, 100.0))
+            .or_else(|| {
+                self.usage_report
+                    .as_ref()
+                    .and_then(|report| report.limits.first())
+                    .map(resolve_used_percent)
+            });
 
         let fill_color = match percent {
             Some(p) if p >= 95.0 => theme.danger,
@@ -75,6 +84,7 @@ impl RenderOnce for UsageMeter {
 
         let provider = self.provider;
         let usage_report = self.usage_report;
+        let context_snapshot = self.context_snapshot;
         let is_loading = self.is_loading;
 
         popover(
@@ -82,8 +92,13 @@ impl RenderOnce for UsageMeter {
             &self.menu_handle,
             MenuAlign::AboveRight,
             move |_handle, _window, _cx| {
-                UsagePanel::new(provider.clone(), usage_report.clone(), is_loading)
-                    .into_any_element()
+                UsagePanel::new(
+                    provider.clone(),
+                    usage_report.clone(),
+                    context_snapshot.clone(),
+                    is_loading,
+                )
+                .into_any_element()
             },
         )
     }
