@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import com.composables.icons.lucide.ChartBar
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Settings2
@@ -22,6 +21,7 @@ import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.Wifi
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ChartLine
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,7 +90,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
         val signedIn = authState.status?.values?.any { it.loggedIn } == true
         LandingRow(icon = Lucide.Wifi, title = "Connection", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Connection) }
         LandingRow(icon = Lucide.User, title = "Account", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Account) }
-        LandingRow(icon = Lucide.ChartBar, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+        LandingRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
         val roles = providerState.modelRoles.count { it.value.isNotBlank() }
         LandingRow(icon = Lucide.Settings2, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
         val n = projectState.projects.size

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.runtime.Composable
@@ -18,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Lock
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
@@ -65,7 +65,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
     LazyRow(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 6.dp, end = 6.dp, bottom = 4.dp)) {
         item {
             PickerChip(
-                icon = if (projectLocked) Icons.Filled.Lock else TablerIcons.Outline.FolderOpen,
+                icon = if (projectLocked) TablerIcons.Outline.Lock else TablerIcons.Outline.FolderOpen,
                 label = selectedProject?.name ?: "Select Folder",
                 modifier = Modifier.padding(end = 8.dp),
             ) {

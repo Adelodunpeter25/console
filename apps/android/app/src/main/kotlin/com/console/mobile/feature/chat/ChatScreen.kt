@@ -16,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
@@ -35,7 +34,9 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
@@ -246,10 +247,10 @@ fun ChatScreen(
                     Icon(TablerIcons.Outline.FolderOpen, contentDescription = "Open file explorer", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Changes) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Difference, contentDescription = "Open changes", tint = Color.White)
+                    Icon(TablerIcons.Outline.BrandGit, contentDescription = "Open changes", tint = Color.White)
                 }
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Terminal) }, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Terminal, contentDescription = "Open terminal", tint = Color.White)
+                    Icon(TablerIcons.Outline.Terminal2, contentDescription = "Open terminal", tint = Color.White)
                 }
             },
         )
