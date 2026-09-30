@@ -77,7 +77,7 @@ fun ChatScreen(
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-            ScreenHeader(title = "Chat", onBack = { onBackToHome() })
+            ScreenHeader(title = "Chat", centerTitle = false, onBack = { onBackToHome() })
             EmptyState(title = "No session selected", description = "Pick a chat from Home to get started.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
         }
         return
@@ -236,6 +236,7 @@ fun ChatScreen(
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
         ScreenHeader(
             title = chatTitle,
+            centerTitle = false,
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()
