@@ -38,9 +38,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -409,15 +411,24 @@ class ChatRepository(
 
     private fun parseQuestion(event: AgentSessionEvent): AskQuestionRequest? {
         val req = event.request as? JsonObject ?: return null
-        fun str(key: String): String? = (req[key] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+        fun str(key: String): String? = (req[key] as? JsonPrimitive)?.contentOrNull
+        fun bool(key: String, default: Boolean): Boolean = (req[key] as? JsonPrimitive)?.booleanOrNull ?: default
         val requestId = str("requestId") ?: return null
         val question = str("question") ?: return null
+        val options = (req["options"] as? JsonArray)?.mapNotNull { element ->
+            (element as? JsonPrimitive)?.contentOrNull
+        }.orEmpty()
         return AskQuestionRequest(
             requestId = requestId,
             question = question,
-            options = emptyList(),
-            isMultiSelect = false,
-            skippable = false,
+            options = options,
+            // Go tags both `isMultiSelect` and `options` omitempty, so an absent
+            // key means false / no options rather than "unknown".
+            isMultiSelect = bool("isMultiSelect", default = false),
+            // `skippable` is *not* omitempty, but the tool input defaults it to
+            // true (askQuestionInput.skippable() in apps/server-go/internal/agent/
+            // tools/ask_tools.go), so default to true when the key is missing.
+            skippable = bool("skippable", default = true),
             batchId = str("batchId"),
         )
     }
