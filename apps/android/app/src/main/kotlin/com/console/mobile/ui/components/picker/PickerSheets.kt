@@ -230,7 +230,16 @@ fun ModelPickerSheet(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             )
             val q = search.trim().lowercase()
-            val loading = activeProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
+            val activeLoading = activeProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
+            // The favourites tab resolves entries against every provider's model
+            // list, so it has to wait on all of them — not just the favourites
+            // request, which finishes long before the models arrive.
+            val anyModelLoading = providerState.loadingProviders ||
+                providerState.providers.any { providerState.loadingModels[it.name] == true }
+            // On the first frame the provider list is still in flight, so no
+            // per-provider flag is set yet. Without this the sheet flashes
+            // "No models available" before the spinner ever appears.
+            val bootstrapping = providerState.providers.isEmpty() && providerState.error == null
 
             // Star button for a row. Filled once starred, outline otherwise.
             @Composable
@@ -247,7 +256,7 @@ fun ModelPickerSheet(
             if (showFavorites) {
                 val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
                 when {
-                    providerState.loadingFavorites && favoriteEntries.isEmpty() -> PickerPlaceholder(spinner = true)
+                    (providerState.loadingFavorites || anyModelLoading) && favoriteEntries.isEmpty() -> PickerPlaceholder(spinner = true)
                     visibleFavorites.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
                     else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                         items(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
@@ -266,7 +275,7 @@ fun ModelPickerSheet(
                 val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
                 val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
                 when {
-                    loading && models.isEmpty() -> PickerPlaceholder(spinner = true)
+                    (activeLoading || bootstrapping) && models.isEmpty() -> PickerPlaceholder(spinner = true)
                     filtered.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
                     else ->
                         // The list must own the remaining sheet height and scroll within it.

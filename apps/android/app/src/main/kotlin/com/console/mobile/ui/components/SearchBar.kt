@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -54,7 +55,9 @@ fun ConsoleSearchField(
 ) {
     Row(
         modifier = modifier.height(48.dp)
-            .clip(CircleShape)
+            // 12dp rather than a full pill: at 48dp tall, CircleShape reads as a
+            // lozenge that does not match the 12-16dp radii used elsewhere.
+            .clip(RoundedCornerShape(12.dp))
             .background(ConsoleColors.Card)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
