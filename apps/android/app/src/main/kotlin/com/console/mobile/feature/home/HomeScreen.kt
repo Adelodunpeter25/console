@@ -65,6 +65,8 @@ import com.console.mobile.ui.components.StatusBadge
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.ui.theme.ConsoleColors
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -209,7 +211,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(Icons.Filled.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+                                    Icon(TablerIcons.Outline.Folder, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
                                     Text(section.projectName, color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                                 }
                                 if (section.projectId != null && section.projectName != "Drafts") {
