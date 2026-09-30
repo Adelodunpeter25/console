@@ -15,7 +15,6 @@ use crate::theme::Theme;
 
 #[derive(IntoElement)]
 pub struct UsageMeter {
-    provider: String,
     usage_report: Option<UsageReport>,
     context_snapshot: Option<ContextSnapshot>,
     menu_handle: ContextMenuHandle,
@@ -24,14 +23,12 @@ pub struct UsageMeter {
 
 impl UsageMeter {
     pub fn new(
-        provider: String,
         usage_report: Option<UsageReport>,
         context_snapshot: Option<ContextSnapshot>,
         menu_handle: ContextMenuHandle,
         is_loading: bool,
     ) -> Self {
         Self {
-            provider,
             usage_report,
             context_snapshot,
             menu_handle,
@@ -82,7 +79,6 @@ impl RenderOnce for UsageMeter {
                 fill_color,
             ));
 
-        let provider = self.provider;
         let usage_report = self.usage_report;
         let context_snapshot = self.context_snapshot;
         let is_loading = self.is_loading;
@@ -92,13 +88,8 @@ impl RenderOnce for UsageMeter {
             &self.menu_handle,
             MenuAlign::AboveRight,
             move |_handle, _window, _cx| {
-                UsagePanel::new(
-                    provider.clone(),
-                    usage_report.clone(),
-                    context_snapshot.clone(),
-                    is_loading,
-                )
-                .into_any_element()
+                UsagePanel::new(usage_report.clone(), context_snapshot.clone(), is_loading)
+                    .into_any_element()
             },
         )
     }

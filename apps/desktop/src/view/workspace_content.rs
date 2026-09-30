@@ -819,7 +819,6 @@ impl ConsoleDesktopApp {
                     pane_project_menu.clone(),
                     pane_branch_menu.clone(),
                     pane_usage_menu.clone(),
-                    current_provider.clone(),
                     usage_report,
                     self.usage_loading,
                     context_snapshot,

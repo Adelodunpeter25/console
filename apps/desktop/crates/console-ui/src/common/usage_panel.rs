@@ -11,7 +11,6 @@ use crate::theme::Theme;
 
 #[derive(Clone, IntoElement)]
 pub struct UsagePanel {
-    provider: String,
     usage_report: Option<UsageReport>,
     context_snapshot: Option<ContextSnapshot>,
     is_loading: bool,
@@ -19,17 +18,75 @@ pub struct UsagePanel {
 
 impl UsagePanel {
     pub fn new(
-        provider: String,
         usage_report: Option<UsageReport>,
         context_snapshot: Option<ContextSnapshot>,
         is_loading: bool,
     ) -> Self {
         Self {
-            provider,
             usage_report,
             context_snapshot,
             is_loading,
         }
+    }
+
+    /// Quota section body: loading / empty states or one row per limit.
+    fn quota_body(&self, theme: &Theme) -> Option<impl IntoElement> {
+        if self.is_loading && self.usage_report.is_none() {
+            return Some(
+                div()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("Loading usage data…")
+                    .into_any_element(),
+            );
+        }
+
+        let Some(report) = &self.usage_report else {
+            return Some(
+                div()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("No quota limits reported for this provider.")
+                    .into_any_element(),
+            );
+        };
+
+        if report.limits.is_empty() {
+            return Some(
+                div()
+                    .py(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child("No active rate limit windows.")
+                    .into_any_element(),
+            );
+        }
+
+        let theme = *theme;
+        let rows = report
+            .limits
+            .iter()
+            .map(move |limit| render_limit_row(limit, &theme).into_any_element())
+            .collect::<Vec<_>>();
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .children(rows)
+                .into_any_element(),
+        )
     }
 }
 
@@ -50,7 +107,7 @@ impl RenderOnce for UsagePanel {
             .gap(px(12.0))
             .text_size(px(12.5));
 
-        // Header
+        // Section 1: context occupancy.
         panel = panel.child(
             div()
                 .flex()
@@ -60,76 +117,51 @@ impl RenderOnce for UsagePanel {
                     div()
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(theme.text)
-                        .child(format!(
-                            "{} Quota Limits",
-                            capitalize_provider(&self.provider)
-                        )),
+                        .child("Context"),
                 )
-                .child(
+                .children(self.context_snapshot.as_ref().map(|snapshot| {
                     div()
-                        .text_size(px(11.0))
-                        .text_color(theme.text_tertiary)
-                        .child("Rate Limits"),
-                ),
+                        .flex_none()
+                        .text_size(px(12.0))
+                        .text_color(theme.text_secondary)
+                        .child(SharedString::from(snapshot.used_vs_window()))
+                })),
         );
 
-        if self.is_loading && self.usage_report.is_none() {
-            panel = panel.child(
-                div()
-                    .py(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child("Loading usage data…"),
-            );
-            return panel.into_any_element();
-        }
-
-        // Context occupancy sits above the quota rows: one header line with
-        // used-vs-window plus a linear progress bar.
         if let Some(snapshot) = &self.context_snapshot {
-            panel = panel.child(render_context_row(snapshot, &theme));
-        }
-
-        let Some(report) = &self.usage_report else {
+            panel = panel.child(render_context_bar(snapshot, &theme));
+        } else {
             panel = panel.child(
                 div()
-                    .py(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
                     .text_size(px(12.0))
                     .text_color(theme.text_tertiary)
-                    .child("No quota limits reported for this provider."),
+                    .child("Context usage unavailable."),
             );
-            return panel.into_any_element();
-        };
-
-        if report.limits.is_empty() {
-            panel = panel.child(
-                div()
-                    .py(px(12.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child("No active rate limit windows."),
-            );
-            return panel.into_any_element();
         }
 
-        for limit in &report.limits {
-            panel = panel.child(render_limit_row(limit, &theme));
-        }
+        // Divider, then section 2: provider quota limits.
+        panel = panel.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(10.0))
+                .pt(px(8.0))
+                .border_t_1()
+                .border_color(theme.border)
+                .child(
+                    div()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.text)
+                        .child("Usage Limits"),
+                )
+                .children(self.quota_body(&theme)),
+        );
 
         panel.into_any_element()
     }
 }
 
-fn render_context_row(snapshot: &ContextSnapshot, theme: &Theme) -> impl IntoElement {
+fn render_context_bar(snapshot: &ContextSnapshot, theme: &Theme) -> impl IntoElement {
     let percent = snapshot.percent_used.clamp(0.0, 100.0);
     let threshold = (snapshot.threshold_ratio * 100.0).clamp(0.0, 100.0);
 
@@ -141,35 +173,11 @@ fn render_context_row(snapshot: &ContextSnapshot, theme: &Theme) -> impl IntoEle
         theme.gauge
     };
 
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(7.0))
-        .pb(px(2.0))
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap(px(8.0))
-                .child(
-                    div()
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(theme.text)
-                        .child("Context"),
-                )
-                .child(
-                    div()
-                        .flex_none()
-                        .text_size(px(12.0))
-                        .text_color(theme.text_secondary)
-                        .child(SharedString::from(snapshot.used_vs_window())),
-                ),
-        )
-        .child(meter_bar(theme, percent, status_color))
+    meter_bar(theme, percent, status_color)
 }
 
-fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {    let percent = resolve_used_percent(limit);
+fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {
+    let percent = resolve_used_percent(limit);
 
     let status_color = if percent >= 95.0
         || matches!(limit.status, Some(console_core::UsageStatus::Exhausted))
@@ -309,24 +317,5 @@ fn format_amount(value: f64, unit: &UsageUnit) -> String {
         UsageUnit::Requests => format!("{:.0}", value),
         UsageUnit::Usd => format!("${:.2}", value),
         _ => format!("{:.0}", value),
-    }
-}
-
-fn capitalize_provider(provider: &str) -> String {
-    match provider.to_ascii_lowercase().as_str() {
-        "claude" => "Claude".to_string(),
-        "antigravity" => "Antigravity".to_string(),
-        "codex" => "OpenAI Codex".to_string(),
-        "openai" => "OpenAI".to_string(),
-        "opencode" => "OpenCode".to_string(),
-        "deepseek" => "DeepSeek".to_string(),
-        "grok" => "Grok".to_string(),
-        other => {
-            let mut chars = other.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        }
     }
 }

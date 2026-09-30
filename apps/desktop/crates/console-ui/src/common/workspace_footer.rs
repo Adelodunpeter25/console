@@ -32,7 +32,6 @@ pub struct WorkspaceFooter {
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
     usage_menu: ContextMenuHandle,
-    current_provider: String,
     usage_report: Option<UsageReport>,
     usage_loading: bool,
     context_snapshot: Option<ContextSnapshot>,
@@ -55,7 +54,6 @@ impl WorkspaceFooter {
         project_menu: ContextMenuHandle,
         branch_menu: ContextMenuHandle,
         usage_menu: ContextMenuHandle,
-        current_provider: String,
         usage_report: Option<UsageReport>,
         usage_loading: bool,
         context_snapshot: Option<ContextSnapshot>,
@@ -76,7 +74,6 @@ impl WorkspaceFooter {
             project_menu,
             branch_menu,
             usage_menu,
-            current_provider,
             usage_report,
             usage_loading,
             context_snapshot,
@@ -254,7 +251,6 @@ impl RenderOnce for WorkspaceFooter {
         };
 
         let usage_meter = crate::common::UsageMeter::new(
-            self.current_provider,
             self.usage_report,
             self.context_snapshot,
             self.usage_menu,
