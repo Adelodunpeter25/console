@@ -27,7 +27,7 @@ android {
         applicationId = "com.console.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
+        versionCode = 3
         versionName = "1.0.1"
 
         ndk {

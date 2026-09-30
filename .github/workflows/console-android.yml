@@ -1,9 +1,15 @@
-# Builds the native Kotlin/Compose Android app (apps/android) debug APK
+# Builds the native Kotlin/Compose Android app (apps/android) release APK
 # manually via workflow_dispatch, then uploads it to a rolling GitHub Release
 # tagged `console-android` (latest always wins), mirroring console-server.yml /
 # console-desktop.yml.
 #
-# Assets: app-debug.apk (unsigned debug build — see apps/android/app/build.gradle.kts).
+# Assets: app-release.apk
+#
+# The release keystore is reconstructed from repo secrets on every run. This
+# must stay a *fixed* key: `assembleDebug` would sign with the ephemeral
+# runner's auto-generated debug keystore, which changes on every job, so no
+# two builds could ever update one another on a device
+# (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
 name: Build console-android
 
 on:
@@ -30,12 +36,30 @@ jobs:
       # legacy "tools" package via sdkmanager, which Google removed from the
       # SDK repository — that step now always fails, so skip it entirely.
       # Gradle resolves any missing compileSdk/build-tools itself on demand.
-      - name: Build debug APK
+      - name: Restore release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p apps/android/keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" \
+            | base64 --decode > apps/android/keystore/console-release.keystore
+          cat > apps/android/key.properties <<EOF
+          storeFile=keystore/console-release.keystore
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+
+      - name: Build release APK
         working-directory: apps/android
-        run: ./gradlew assembleDebug --no-daemon --max-workers=1
+        run: ./gradlew assembleRelease --no-daemon --max-workers=1
 
       - name: Rename APK for release
-        run: cp apps/android/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
+        run: cp apps/android/app/build/outputs/apk/release/app-release.apk app-release.apk
 
       - name: Upload to rolling release
         uses: softprops/action-gh-release@v2
@@ -45,4 +69,4 @@ jobs:
           prerelease: false
           # console-server owns the repo's "latest" pointer; don't flap it.
           make_latest: false
-          files: app-debug.apk
+          files: app-release.apk
