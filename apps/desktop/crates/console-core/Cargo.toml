@@ -52,6 +52,10 @@ name = "mcp_test"
 path = "tests/mcp/mcp_test.rs"
 
 [[test]]
+name = "mcp_server_reply_shape_test"
+path = "tests/mcp/server_reply_shape_test.rs"
+
+[[test]]
 name = "types_test"
 path = "tests/types/types_test.rs"
 

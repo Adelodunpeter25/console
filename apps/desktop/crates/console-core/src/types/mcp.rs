@@ -1,4 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::de::{MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,23 +52,137 @@ pub struct McpToolInfo {
     pub description: Option<String>,
 }
 
+/// One MCP server definition.
+///
+/// Deserialization goes through [`McpServerConfigWire`] because the server
+/// spells three of these fields differently than the save payload does;
+/// serialization stays derived so this type keeps writing the shape the
+/// server accepts.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "McpServerConfigWire")]
 pub struct McpServerConfig {
     pub id: String,
+    /// The server calls this `label`; it is spelled `name` here and in the
+    /// save payload. Either key is accepted on the way in.
     pub name: String,
     pub transport: McpTransportType,
-    #[serde(default)]
     pub url: Option<String>,
-    #[serde(default)]
     pub auth_type: McpAuthType,
-    #[serde(default)]
     pub command: Option<String>,
-    #[serde(default)]
     pub args: Vec<String>,
-    #[serde(default)]
     pub env: Vec<(String, String)>,
-    #[serde(default)]
     pub status: McpConnectionStatus,
-    #[serde(default)]
     pub tools: Vec<McpToolInfo>,
+}
+
+/// The wire shape: every spelling either side might send. Only the fields
+/// that are renamed or reshaped differ from [`McpServerConfig`]; the rest
+/// carry over untouched.
+#[derive(Deserialize)]
+struct McpServerConfigWire {
+    id: String,
+    /// The client's spelling of `label`.
+    #[serde(default)]
+    name: Option<String>,
+    /// The server's spelling of `name`.
+    #[serde(default)]
+    label: Option<String>,
+    transport: McpTransportType,
+    #[serde(default)]
+    url: Option<String>,
+    /// The client's flat auth-type string.
+    #[serde(default)]
+    auth_type: Option<McpAuthType>,
+    /// The server's nested auth object.
+    #[serde(default)]
+    auth: Option<AuthObject>,
+    #[serde(default)]
+    command: Option<String>,
+    #[serde(default)]
+    args: Vec<String>,
+    #[serde(default, deserialize_with = "de_env_pairs")]
+    env: Vec<(String, String)>,
+    #[serde(default)]
+    status: McpConnectionStatus,
+    #[serde(default)]
+    tools: Vec<McpToolInfo>,
+}
+
+/// The server's `auth` member. Only the type is read; `tokenRef` is a server
+/// concern and never round-trips back to the client.
+#[derive(Deserialize)]
+struct AuthObject {
+    #[serde(rename = "type", default)]
+    kind: Option<McpAuthType>,
+}
+
+impl From<McpServerConfigWire> for McpServerConfig {
+    fn from(wire: McpServerConfigWire) -> Self {
+        // An explicit auth spelling wins over the other; they are the same
+        // setting, so a payload carrying both is still unambiguous.
+        let auth_type = wire
+            .auth_type
+            .or_else(|| wire.auth.and_then(|auth| auth.kind))
+            .unwrap_or_default();
+        let name = wire
+            .name
+            .filter(|name| !name.is_empty())
+            .or(wire.label)
+            .unwrap_or_default();
+        Self {
+            id: wire.id,
+            name,
+            transport: wire.transport,
+            url: wire.url,
+            auth_type,
+            command: wire.command,
+            args: wire.args,
+            env: wire.env,
+            status: wire.status,
+            tools: wire.tools,
+        }
+    }
+}
+
+/// Decodes `env` from either shape: the object form the server stores and
+/// returns (`{"KEY":"VAL"}`) or the pair-array form this client serializes
+/// (`[["KEY","VAL"], ...]`). Object key order is preserved so the settings
+/// list renders in a stable order.
+fn de_env_pairs<'de, D>(deserializer: D) -> Result<Vec<(String, String)>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct EnvVisitor;
+
+    impl<'de> Visitor<'de> for EnvVisitor {
+        type Value = Vec<(String, String)>;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("an object of string values or an array of [key, value] pairs")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut pairs = Vec::new();
+            while let Some(pair) = seq.next_element::<(String, String)>()? {
+                pairs.push(pair);
+            }
+            Ok(pairs)
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut pairs = Vec::new();
+            while let Some(pair) = map.next_entry::<String, String>()? {
+                pairs.push(pair);
+            }
+            Ok(pairs)
+        }
+    }
+
+    deserializer.deserialize_any(EnvVisitor)
 }
