@@ -83,7 +83,13 @@ fun mentionAnnotatedString(
             val end = (mention.range.last + 1).coerceIn(at, content.length)
             append(content.substring(cursor, at))
             appendInlineContent("mention-icon-$index", "[icon]")
-            withStyle(SpanStyle(color = MentionAccent, background = MentionAccent.copy(alpha = 0.10f))) {
+            withStyle(
+                SpanStyle(
+                    color = MentionAccent,
+                    background = MentionAccent.copy(alpha = 0.10f),
+                    fontSize = 14.sp,
+                )
+            ) {
                 append(mention.label)
             }
             cursor = end

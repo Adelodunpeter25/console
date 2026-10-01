@@ -84,6 +84,10 @@ fun Composer(
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
     }
+    // Paths inserted from the autocomplete popup. Only these count as
+    // confirmed chips for atomic backspace — freshly typed `@query` text
+    // (even when it parses as a mention) keeps char-by-char deletion.
+    var confirmedPaths by remember(sessionId) { mutableStateOf(setOf<String>()) }
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
     // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
@@ -128,6 +132,11 @@ fun Composer(
         onChange(newText)
     }
 
+    fun applyFileSuggestion(file: com.console.mobile.data.model.FileSearchResult, replaceFrom: Int) {
+        confirmedPaths = confirmedPaths + file.relativePath
+        applySuggestion("@${file.relativePath} ", replaceFrom)
+    }
+
     val pickImages = rememberAttachmentPicker(sessionId)
 
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
@@ -146,9 +155,11 @@ fun Composer(
                 // Chip-atomic backspace: a single delete ending inside a
                 // confirmed mention removes the whole `@path` instead of
                 // one character (which would drop back to plain text).
-                // The in-progress autocomplete query keeps char-by-char.
+                // Freshly typed queries are never confirmed, so typing
+                // keeps char-by-char deletion.
                 val old = fieldValue
-                var consumed = false
+                var nextText = new.text
+                var nextSelection: TextRange? = null
                 if (old.selection.collapsed && new.selection.collapsed &&
                     new.text.length == old.text.length - 1 &&
                     new.selection.start + 1 == old.selection.start
@@ -157,23 +168,22 @@ fun Composer(
                     if (deletedAt >= 0 && deletedAt < old.text.length &&
                         old.text.removeRange(deletedAt, deletedAt + 1) == new.text
                     ) {
-                        val target = parseFileMentions(old.text).firstOrNull { deletedAt in it.range }
-                        val t = trigger
-                        val typing = t is ComposerTrigger.Mention &&
-                            target != null && target.range.first < fieldValue.selection.start &&
-                            target.range.last + 1 > t.start
-                        if (target != null && !typing) {
-                            val removed = old.text.removeRange(target.range.first, target.range.last + 1)
-                            fieldValue = TextFieldValue(text = removed, selection = TextRange(target.range.first))
-                            onChange(removed)
-                            consumed = true
+                        val target = parseFileMentions(old.text)
+                            .firstOrNull { deletedAt in it.range && it.path in confirmedPaths }
+                        if (target != null) {
+                            nextText = old.text.removeRange(target.range.first, target.range.last + 1)
+                            nextSelection = TextRange(target.range.first)
                         }
                     }
                 }
-                if (!consumed) {
-                    fieldValue = new
-                    onChange(new.text)
+                // Prune confirmations whose text is gone.
+                confirmedPaths = confirmedPaths.filter { "@$it" in nextText }.toSet()
+                fieldValue = if (nextSelection != null) {
+                    TextFieldValue(text = nextText, selection = nextSelection)
+                } else {
+                    new
                 }
+                onChange(nextText)
             },
             onVisualLinesChange = { visualLines = it },
             onCoordinatesChange = { fieldCoordinates = it },
@@ -203,7 +213,7 @@ fun Composer(
                         ComposerAutocompletePopup(anchor = anchor) {
                             mentionResults.take(20).forEach { file ->
                                 FileMentionSuggestionRow(file = file) {
-                                    applySuggestion("@${file.relativePath} ", t.start)
+                                    applyFileSuggestion(file, t.start)
                                 }
                             }
                         }
