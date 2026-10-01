@@ -38,6 +38,7 @@ impl RenderOnce for SettingsShell {
             (SettingsTab::Usage, IconName::ChartColumn, "Usage"),
             (SettingsTab::Projects, IconName::Folder, "Projects"),
             (SettingsTab::Models, IconName::Settings2, "Models"),
+            (SettingsTab::Mcp, IconName::Server, "MCP Servers"),
             (
                 SettingsTab::DeletedChats,
                 IconName::TrashBinMinimalistic,

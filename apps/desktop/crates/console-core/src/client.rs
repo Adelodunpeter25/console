@@ -20,6 +20,7 @@ pub struct ConsoleClient {
     pub ports: PortService,
     pub local_forwards: LocalForwardManager,
     pub scripts: ProjectScriptsService,
+    pub mcp: McpService,
 }
 
 impl ConsoleClient {
@@ -42,6 +43,7 @@ impl ConsoleClient {
             ports: PortService::new(transport.clone()),
             local_forwards: LocalForwardManager::new(transport.clone()),
             scripts: ProjectScriptsService::new(transport.clone()),
+            mcp: McpService::new(transport.clone()),
             transport: transport.clone(),
         }
     }

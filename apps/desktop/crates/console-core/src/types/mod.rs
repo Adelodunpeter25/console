@@ -7,6 +7,7 @@ pub mod device;
 pub mod events;
 pub mod fs;
 pub mod git;
+pub mod mcp;
 pub mod model;
 pub mod notification;
 pub mod port;

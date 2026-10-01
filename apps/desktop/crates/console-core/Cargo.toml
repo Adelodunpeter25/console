@@ -48,6 +48,10 @@ name = "ports_test"
 path = "tests/network/ports_test.rs"
 
 [[test]]
+name = "mcp_test"
+path = "tests/mcp/mcp_test.rs"
+
+[[test]]
 name = "types_test"
 path = "tests/types/types_test.rs"
 

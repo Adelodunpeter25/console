@@ -28,6 +28,20 @@ pub struct SettingsWindow {
     keybindings_search: Entity<ComposerInput>,
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
+    // MCP State
+    mcp_servers: Vec<console_core::types::mcp::McpServerConfig>,
+    mcp_is_modal_open: bool,
+    mcp_modal_mode: console_ui::settings::McpModalMode,
+    mcp_selected_transport: console_core::types::mcp::McpTransportType,
+    mcp_selected_auth: console_core::types::mcp::McpAuthType,
+    mcp_name_input: Entity<ComposerInput>,
+    mcp_url_input: Entity<ComposerInput>,
+    mcp_command_input: Entity<ComposerInput>,
+    mcp_args_input: Entity<ComposerInput>,
+    mcp_env_input: Entity<ComposerInput>,
+    mcp_expanded_server_id: Option<String>,
+    mcp_action_error: Option<String>,
+    mcp_is_submitting: bool,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -126,6 +140,32 @@ impl SettingsWindow {
             _ => {}
         }));
 
+        let mcp_name_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("e.g. atlassian, filesystem", cx);
+            input
+        });
+        let mcp_url_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("https://mcp.atlassian.com/v2/mcp", cx);
+            input
+        });
+        let mcp_command_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("npx, uvx, docker, or path to binary", cx);
+            input
+        });
+        let mcp_args_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("-y @modelcontextprotocol/server-filesystem /path/to/folder", cx);
+            input
+        });
+        let mcp_env_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("API_KEY=xyz, DEBUG=true", cx);
+            input
+        });
+
         Self {
             app,
             active_tab: initial_tab,
@@ -146,6 +186,19 @@ impl SettingsWindow {
             keybindings_search,
             model_saving: false,
             model_error: None,
+            mcp_servers: Vec::new(),
+            mcp_is_modal_open: false,
+            mcp_modal_mode: console_ui::settings::McpModalMode::Add,
+            mcp_selected_transport: console_core::types::mcp::McpTransportType::Stdio,
+            mcp_selected_auth: console_core::types::mcp::McpAuthType::None,
+            mcp_name_input,
+            mcp_url_input,
+            mcp_command_input,
+            mcp_args_input,
+            mcp_env_input,
+            mcp_expanded_server_id: None,
+            mcp_action_error: None,
+            mcp_is_submitting: false,
             _subscriptions: subscriptions,
         }
     }
@@ -172,7 +225,26 @@ impl SettingsWindow {
                 });
             }
         }
+        if tab == SettingsTab::Mcp {
+            self.fetch_mcp_servers(cx);
+        }
         cx.notify();
+    }
+
+    pub fn fetch_mcp_servers(&mut self, cx: &mut Context<Self>) {
+        let Some(app_entity) = self.app.upgrade() else { return };
+        let client = app_entity.read(cx).client.clone();
+        cx.spawn(async move |entity, cx| {
+            if let Ok(servers) = client.mcp.list_servers().await {
+                let _ = cx.update(|cx| {
+                    let _ = entity.update(cx, |window, cx| {
+                        window.mcp_servers = servers;
+                        cx.notify();
+                    });
+                });
+            }
+        })
+        .detach();
     }
 }
 
@@ -209,6 +281,11 @@ impl Render for SettingsWindow {
                             app_state.fetch_usage(cx);
                         });
                     }
+                }
+                if tab == SettingsTab::Mcp {
+                    entity.update(cx, |this, cx| {
+                        this.fetch_mcp_servers(cx);
+                    });
                 }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
@@ -577,6 +654,324 @@ impl Render for SettingsWindow {
                     projects: app.projects.clone(),
                     on_add_project,
                     on_remove_project,
+                }
+                .into_any_element()
+            }
+            SettingsTab::Mcp => {
+                let on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let name_input = self.mcp_name_input.clone();
+                    let url_input = self.mcp_url_input.clone();
+                    let command_input = self.mcp_command_input.clone();
+                    let args_input = self.mcp_args_input.clone();
+                    let env_input = self.mcp_env_input.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        name_input.update(cx, |input, cx| input.clear(cx));
+                        url_input.update(cx, |input, cx| input.clear(cx));
+                        command_input.update(cx, |input, cx| input.clear(cx));
+                        args_input.update(cx, |input, cx| input.clear(cx));
+                        env_input.update(cx, |input, cx| input.clear(cx));
+                        entity.update(cx, |this, cx| {
+                            this.mcp_is_modal_open = true;
+                            this.mcp_modal_mode = console_ui::settings::McpModalMode::Add;
+                            this.mcp_selected_transport = console_core::types::mcp::McpTransportType::Stdio;
+                            this.mcp_selected_auth = console_core::types::mcp::McpAuthType::None;
+                            this.mcp_action_error = None;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_open_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let name_input = self.mcp_name_input.clone();
+                    let url_input = self.mcp_url_input.clone();
+                    let command_input = self.mcp_command_input.clone();
+                    let args_input = self.mcp_args_input.clone();
+                    let env_input = self.mcp_env_input.clone();
+                    Rc::new(move |server_id: String, _w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            if let Some(srv) = this.mcp_servers.iter().find(|s| s.id == server_id) {
+                                name_input.update(cx, |input, cx| input.set_content(srv.name.clone(), cx));
+                                url_input.update(cx, |input, cx| input.set_content(srv.url.clone().unwrap_or_default(), cx));
+                                command_input.update(cx, |input, cx| input.set_content(srv.command.clone().unwrap_or_default(), cx));
+                                args_input.update(cx, |input, cx| input.set_content(srv.args.join(" "), cx));
+                                let env_str = srv.env.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", ");
+                                env_input.update(cx, |input, cx| input.set_content(env_str, cx));
+
+                                this.mcp_is_modal_open = true;
+                                this.mcp_modal_mode = console_ui::settings::McpModalMode::Edit(server_id.clone());
+                                this.mcp_selected_transport = srv.transport.clone();
+                                this.mcp_selected_auth = srv.auth_type.clone();
+                                this.mcp_action_error = None;
+                                cx.notify();
+                            }
+                        });
+                    })
+                };
+
+                let on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            this.mcp_is_modal_open = false;
+                            this.mcp_action_error = None;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_select_transport: Rc<dyn Fn(console_core::types::mcp::McpTransportType, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    Rc::new(move |transport, _w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            this.mcp_selected_transport = transport;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_select_auth: Rc<dyn Fn(console_core::types::mcp::McpAuthType, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    Rc::new(move |auth, _w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            this.mcp_selected_auth = auth;
+                            cx.notify();
+                        });
+                    })
+                };
+
+                let on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let app_handle = self.app.clone();
+                    let name_input = self.mcp_name_input.clone();
+                    let url_input = self.mcp_url_input.clone();
+                    let command_input = self.mcp_command_input.clone();
+                    let args_input = self.mcp_args_input.clone();
+                    let env_input = self.mcp_env_input.clone();
+
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        let Some(app) = app_handle.upgrade() else { return };
+                        let client = app.read(cx).client.clone();
+                        let name = name_input.read(cx).content().trim().to_string();
+                        let url = url_input.read(cx).content().trim().to_string();
+                        let cmd = command_input.read(cx).content().trim().to_string();
+                        let args_str = args_input.read(cx).content().trim().to_string();
+                        let env_str = env_input.read(cx).content().trim().to_string();
+
+                        if name.is_empty() {
+                            entity.update(cx, |this, cx| {
+                                this.mcp_action_error = Some("Server name is required".to_string());
+                                cx.notify();
+                            });
+                            return;
+                        }
+
+                        let args = if args_str.is_empty() {
+                            Vec::new()
+                        } else {
+                            args_str.split_whitespace().map(String::from).collect()
+                        };
+
+                        let env = if env_str.is_empty() {
+                            Vec::new()
+                        } else {
+                            env_str.split(',')
+                                .filter_map(|pair| {
+                                    let mut parts = pair.splitn(2, '=');
+                                    let k = parts.next()?.trim().to_string();
+                                    let v = parts.next().unwrap_or("").trim().to_string();
+                                    if k.is_empty() { None } else { Some((k, v)) }
+                                })
+                                .collect()
+                        };
+
+                        let (transport, auth, id) = {
+                            let w = entity.read(cx);
+                            let t = w.mcp_selected_transport.clone();
+                            let a = w.mcp_selected_auth.clone();
+                            let srv_id = match &w.mcp_modal_mode {
+                                console_ui::settings::McpModalMode::Add => {
+                                    name.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_alphanumeric() && c != '-', "")
+                                }
+                                console_ui::settings::McpModalMode::Edit(id) => id.clone(),
+                            };
+                            (t, a, srv_id)
+                        };
+
+                        let server = console_core::types::mcp::McpServerConfig {
+                            id: id.clone(),
+                            name,
+                            transport: transport.clone(),
+                            url: if transport == console_core::types::mcp::McpTransportType::Http { Some(url) } else { None },
+                            auth_type: auth,
+                            command: if transport == console_core::types::mcp::McpTransportType::Stdio { Some(cmd) } else { None },
+                            args,
+                            env,
+                            status: console_core::types::mcp::McpConnectionStatus::Disconnected,
+                            tools: Vec::new(),
+                        };
+
+                        entity.update(cx, |this, cx| {
+                            this.mcp_is_submitting = true;
+                            this.mcp_action_error = None;
+                            cx.notify();
+                        });
+
+                        let entity_clone = entity.clone();
+                        cx.spawn(async move |cx| {
+                            match client.mcp.save_server(&server).await {
+                                Ok(_) => {
+                                    let updated_list = client.mcp.list_servers().await.unwrap_or_default();
+                                    let _ = cx.update(|cx| {
+                                        entity_clone.update(cx, |this, cx| {
+                                            this.mcp_servers = updated_list;
+                                            this.mcp_is_modal_open = false;
+                                            this.mcp_is_submitting = false;
+                                            cx.notify();
+                                        });
+                                    });
+                                }
+                                Err(e) => {
+                                    let _ = cx.update(|cx| {
+                                        entity_clone.update(cx, |this, cx| {
+                                            this.mcp_action_error = Some(format!("Failed to save server: {}", e));
+                                            this.mcp_is_submitting = false;
+                                            cx.notify();
+                                        });
+                                    });
+                                }
+                            }
+                        })
+                        .detach();
+                    })
+                };
+
+                let on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let app_handle = self.app.clone();
+                    Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
+                        let Some(app) = app_handle.upgrade() else { return };
+                        let client = app.read(cx).client.clone();
+                        let entity_clone = entity.clone();
+                        cx.spawn(async move |cx| {
+                            if let Ok(_) = client.mcp.delete_server(&id).await {
+                                let updated_list = client.mcp.list_servers().await.unwrap_or_default();
+                                let _ = cx.update(|cx| {
+                                    entity_clone.update(cx, |this, cx| {
+                                        this.mcp_servers = updated_list;
+                                        cx.notify();
+                                    });
+                                });
+                            }
+                        })
+                        .detach();
+                    })
+                };
+
+                let on_connect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let app_handle = self.app.clone();
+                    Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
+                        let Some(app) = app_handle.upgrade() else { return };
+                        let client = app.read(cx).client.clone();
+                        let entity_clone = entity.clone();
+                        // Optimistically set to Connecting
+                        entity.update(cx, |this, cx| {
+                            if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                s.status = console_core::types::mcp::McpConnectionStatus::Connecting;
+                                cx.notify();
+                            }
+                        });
+                        cx.spawn(async move |cx| {
+                            match client.mcp.connect_server(&id).await {
+                                Ok(updated) => {
+                                    let _ = cx.update(|cx| {
+                                        entity_clone.update(cx, |this, cx| {
+                                            if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                                *s = updated;
+                                                cx.notify();
+                                            }
+                                        });
+                                    });
+                                }
+                                Err(e) => {
+                                    let _ = cx.update(|cx| {
+                                        entity_clone.update(cx, |this, cx| {
+                                            if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                                s.status = console_core::types::mcp::McpConnectionStatus::Error(e.to_string());
+                                                cx.notify();
+                                            }
+                                        });
+                                    });
+                                }
+                            }
+                        })
+                        .detach();
+                    })
+                };
+
+                let on_disconnect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    let app_handle = self.app.clone();
+                    Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
+                        let Some(app) = app_handle.upgrade() else { return };
+                        let client = app.read(cx).client.clone();
+                        let entity_clone = entity.clone();
+                        cx.spawn(async move |cx| {
+                            if let Ok(_) = client.mcp.disconnect_server(&id).await {
+                                let _ = cx.update(|cx| {
+                                    entity_clone.update(cx, |this, cx| {
+                                        if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                            s.status = console_core::types::mcp::McpConnectionStatus::Disconnected;
+                                            cx.notify();
+                                        }
+                                    });
+                                });
+                            }
+                        })
+                        .detach();
+                    })
+                };
+
+                let on_toggle_expand: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let entity = cx.entity().clone();
+                    Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
+                        entity.update(cx, |this, cx| {
+                            if this.mcp_expanded_server_id.as_deref() == Some(&id) {
+                                this.mcp_expanded_server_id = None;
+                            } else {
+                                this.mcp_expanded_server_id = Some(id);
+                            }
+                            cx.notify();
+                        });
+                    })
+                };
+
+                console_ui::settings::McpPage {
+                    servers: self.mcp_servers.clone(),
+                    is_modal_open: self.mcp_is_modal_open,
+                    modal_mode: self.mcp_modal_mode.clone(),
+                    selected_transport: self.mcp_selected_transport.clone(),
+                    selected_auth: self.mcp_selected_auth.clone(),
+                    name_input: Some(self.mcp_name_input.clone()),
+                    url_input: Some(self.mcp_url_input.clone()),
+                    command_input: Some(self.mcp_command_input.clone()),
+                    args_input: Some(self.mcp_args_input.clone()),
+                    env_input: Some(self.mcp_env_input.clone()),
+                    expanded_server_id: self.mcp_expanded_server_id.clone(),
+                    action_error: self.mcp_action_error.clone(),
+                    is_submitting: self.mcp_is_submitting,
+                    on_open_add,
+                    on_open_edit,
+                    on_close_modal,
+                    on_select_transport,
+                    on_select_auth,
+                    on_save,
+                    on_delete,
+                    on_connect,
+                    on_disconnect,
+                    on_toggle_expand,
                 }
                 .into_any_element()
             }
