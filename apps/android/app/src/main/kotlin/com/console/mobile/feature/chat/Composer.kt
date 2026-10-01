@@ -168,10 +168,23 @@ fun Composer(
                     if (deletedAt >= 0 && deletedAt < old.text.length &&
                         old.text.removeRange(deletedAt, deletedAt + 1) == new.text
                     ) {
-                        val target = parseFileMentions(old.text)
+                        val mentions = parseFileMentions(old.text)
+                        // Direct hit: deletion ended inside a confirmed chip.
+                        var target = mentions
                             .firstOrNull { deletedAt in it.range && it.path in confirmedPaths }
-                        if (target != null) {
-                            nextText = old.text.removeRange(target.range.first, target.range.last + 1)
+                        var removeEnd = target?.let { it.range.last + 1 }
+                        // Separator hit: backspace took the whitespace right
+                        // after a confirmed chip (usually the space the
+                        // popup inserted) — take the chip with it so one
+                        // press removes the whole pill, not just the space.
+                        if (target == null && old.text[deletedAt].isWhitespace()) {
+                            target = mentions.firstOrNull {
+                                it.range.last + 1 == deletedAt && it.path in confirmedPaths
+                            }
+                            removeEnd = target?.let { deletedAt + 1 }
+                        }
+                        if (target != null && removeEnd != null) {
+                            nextText = old.text.removeRange(target.range.first, removeEnd)
                             nextSelection = TextRange(target.range.first)
                         }
                     }
