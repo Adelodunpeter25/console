@@ -93,18 +93,43 @@ fun mentionAnnotatedString(
 }
 
 /**
- * Composer styling: each `@path` mention renders as just its filename in the
- * accent pill — the `@` and parent directories are hidden. Length-changing,
- * so cursor offsets are mapped both ways. (An editable field cannot host icon
- * glyphs, so unlike bubbles there is no icon here.)
+ * One collapsed mention in transformed composer text: original `@path`
+ * range plus the transformed slot (icon space) and filename range.
  */
-fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformation { text ->
-    val original = text.text
+internal data class TransformedMention(
+    val oStart: Int,
+    val oEnd: Int,
+    val tSlot: Int,
+    val tStart: Int,
+    val tEnd: Int,
+    val path: String,
+) {
+    val label: String get() = path.substringAfterLast('/')
+}
+
+/** Transformed text plus per-mention segments, shared by the styling transformation and the icon overlay. */
+internal data class MentionVisual(
+    val text: AnnotatedString,
+    val mapping: OffsetMapping,
+    val segments: List<TransformedMention>,
+)
+
+/**
+ * Composer styling: each `@path` mention renders as a reserved icon slot
+ * followed by just its filename in the accent pill — the `@` and parent
+ * directories are hidden. Length-changing, so cursor offsets are mapped both
+ * ways. The slot (a plain space at [TransformedMention.tSlot]) is where the
+ * composer overlays the file icon.
+ */
+internal fun buildMentionVisual(original: String, mentions: List<FileMention>): MentionVisual {
     if (mentions.isEmpty() || original.isEmpty()) {
-        return@VisualTransformation TransformedText(text, OffsetMapping.Identity)
+        return MentionVisual(
+            AnnotatedString(original),
+            OffsetMapping.Identity,
+            emptyList(),
+        )
     }
-    data class Seg(val oStart: Int, val oEnd: Int, val tStart: Int, val tEnd: Int)
-    val segs = ArrayList<Seg>(mentions.size)
+    val segs = ArrayList<TransformedMention>(mentions.size)
     val out = StringBuilder()
     var cursor = 0
     for (m in mentions) {
@@ -112,9 +137,11 @@ fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformat
         val e = (m.range.last + 1).coerceIn(s, original.length)
         if (s < cursor) continue
         out.append(original, cursor, s)
+        val tSlot = out.length
+        out.append(' ')
         val tStart = out.length
         out.append(m.path.substringAfterLast('/'))
-        segs += Seg(s, e, tStart, out.length)
+        segs += TransformedMention(s, e, tSlot, tStart, out.length, m.path)
         cursor = e
     }
     out.append(original, cursor, original.length)
@@ -129,12 +156,14 @@ fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformat
         }
     }
     val mapping = object : OffsetMapping {
+        // The pill is atomic: taps inside it land on an edge, typing never
+        // lands mid-path.
         override fun originalToTransformed(offset: Int): Int {
             for (seg in segs) {
                 when {
-                    offset < seg.oStart -> return offset + (seg.tStart - seg.oStart)
-                    offset == seg.oStart -> return seg.tStart
-                    offset < seg.oEnd -> return seg.tStart
+                    offset < seg.oStart -> return offset + (seg.tSlot - seg.oStart)
+                    offset == seg.oStart -> return seg.tSlot
+                    offset < seg.oEnd -> return seg.tSlot
                     offset == seg.oEnd -> return seg.tEnd
                 }
             }
@@ -145,8 +174,8 @@ fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformat
         override fun transformedToOriginal(offset: Int): Int {
             for (seg in segs) {
                 when {
-                    offset < seg.tStart -> return offset - (seg.tStart - seg.oStart)
-                    offset == seg.tStart -> return seg.oStart
+                    offset < seg.tSlot -> return offset - (seg.tSlot - seg.oStart)
+                    offset == seg.tSlot -> return seg.oStart
                     offset < seg.tEnd -> return seg.oStart
                     offset == seg.tEnd -> return seg.oEnd
                 }
@@ -155,5 +184,13 @@ fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformat
             return offset - (last.tEnd - last.oEnd)
         }
     }
-    TransformedText(styled, mapping)
+    return MentionVisual(styled, mapping, segs)
 }
+
+fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformation { text ->
+    val visual = buildMentionVisual(text.text, mentions)
+    TransformedText(visual.text, visual.mapping)
+}
+
+/** Fixed visual (precomputed for the current buffer) as a transformation. */
+internal fun MentionVisual.asTransformation() = VisualTransformation { TransformedText(text, mapping) }

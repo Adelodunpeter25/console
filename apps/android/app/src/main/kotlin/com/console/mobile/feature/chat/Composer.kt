@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -43,12 +45,14 @@ import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.parseFileMentions
 import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
+import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Send
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * Port of components/chat/composer (composer + composer-input).
@@ -85,16 +89,18 @@ fun Composer(
     // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
     // The in-progress autocomplete query keeps its raw `@query` text — only
     // confirmed mentions (picked from the popup) collapse to filename pills.
-    val mentionTransformation = remember(fieldValue.text, trigger) {
+    val confirmedMentions = remember(fieldValue.text, trigger) {
         val all = parseFileMentions(fieldValue.text)
         val t = trigger
-        val confirmed = if (t is ComposerTrigger.Mention) {
+        if (t is ComposerTrigger.Mention) {
             val cursor = fieldValue.selection.start
             all.filterNot { it.range.first < cursor && it.range.last + 1 > t.start }
         } else {
             all
         }
-        mentionVisualTransformation(confirmed)
+    }
+    val mentionVisual = remember(fieldValue.text, confirmedMentions) {
+        buildMentionVisual(fieldValue.text, confirmedMentions)
     }
 
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
@@ -135,7 +141,7 @@ fun Composer(
             value = value,
             fieldValue = fieldValue,
             visualLines = visualLines,
-            visualTransformation = mentionTransformation,
+            mentionVisual = mentionVisual,
             onFieldValueChange = { new ->
                 fieldValue = new
                 onChange(new.text)
@@ -187,7 +193,7 @@ private fun ComposerInput(
     value: String,
     fieldValue: TextFieldValue,
     visualLines: Int,
-    visualTransformation: androidx.compose.ui.text.input.VisualTransformation,
+    mentionVisual: MentionVisual,
     onFieldValueChange: (TextFieldValue) -> Unit,
     onVisualLinesChange: (Int) -> Unit,
     onCoordinatesChange: (LayoutCoordinates) -> Unit,
@@ -215,32 +221,68 @@ private fun ComposerInput(
         ) {
             androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
         }
-        BasicTextField(
-            value = fieldValue,
-            onValueChange = onFieldValueChange,
+        var mentionLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+        var fieldHeightPx by remember { mutableStateOf(0) }
+        // The editable field cannot host icon glyphs, so mention icons ride
+        // as an overlay on each collapsed mention's reserved slot. Hidden
+        // while the field scrolls internally (layout taller than the box),
+        // where slot coordinates would no longer line up.
+        Box(
             modifier = Modifier
                 .align(Alignment.CenterVertically)
                 .weight(1f)
                 .padding(horizontal = 4.dp)
-                .heightIn(max = 120.dp),
-            textStyle = androidx.compose.ui.text.TextStyle(
-                color = ConsoleColors.TextPrimary,
-                fontSize = 14.sp,
-                lineHeight = 19.sp,
-            ),
-            cursorBrush = SolidColor(ConsoleColors.TextPrimary),
-            visualTransformation = visualTransformation,
-            maxLines = 6,
-            onTextLayout = { onVisualLinesChange(it.lineCount) },
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (value.isEmpty()) {
-                        Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+                .heightIn(max = 120.dp)
+                .onGloballyPositioned { fieldHeightPx = it.size.height }
+                .clipToBounds(),
+        ) {
+            BasicTextField(
+                value = fieldValue,
+                onValueChange = onFieldValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = ConsoleColors.TextPrimary,
+                    fontSize = 14.sp,
+                    lineHeight = 19.sp,
+                ),
+                cursorBrush = SolidColor(ConsoleColors.TextPrimary),
+                visualTransformation = mentionVisual.asTransformation(),
+                maxLines = 6,
+                onTextLayout = {
+                    mentionLayout = it
+                    onVisualLinesChange(it.lineCount)
+                },
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
+                },
+            )
+            val layout = mentionLayout
+            val slots = mentionVisual.segments
+            if (layout != null && slots.isNotEmpty() && layout.size.height <= fieldHeightPx) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                slots.forEach { seg ->
+                    val box = layout.getBoundingBox(seg.tSlot)
+                    val iconPx = with(density) { 12.dp.roundToPx() }
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                androidx.compose.ui.unit.IntOffset(
+                                    box.left.roundToInt(),
+                                    (box.top + (box.height - iconPx) / 2).roundToInt(),
+                                )
+                            }
+                            .size(12.dp),
+                    ) {
+                        FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
+                    }
                 }
-            },
-        )
+            }
+        }
         if (running) {
             // Same 35dp footprint as the send button so the composer doesn't
             // resize mid-send, and destructive red so the control's meaning
