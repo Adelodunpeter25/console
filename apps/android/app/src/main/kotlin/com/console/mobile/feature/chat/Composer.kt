@@ -83,8 +83,18 @@ fun Composer(
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
     // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
-    val mentionTransformation = remember(fieldValue.text) {
-        mentionVisualTransformation(parseFileMentions(fieldValue.text))
+    // The in-progress autocomplete query keeps its raw `@query` text — only
+    // confirmed mentions (picked from the popup) collapse to filename pills.
+    val mentionTransformation = remember(fieldValue.text, trigger) {
+        val all = parseFileMentions(fieldValue.text)
+        val t = trigger
+        val confirmed = if (t is ComposerTrigger.Mention) {
+            val cursor = fieldValue.selection.start
+            all.filterNot { it.range.first < cursor && it.range.last + 1 > t.start }
+        } else {
+            all
+        }
+        mentionVisualTransformation(confirmed)
     }
 
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
