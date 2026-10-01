@@ -68,6 +68,24 @@ impl ConsoleDesktopApp {
             approval_mode: self.pane_approval_mode(&pane_id),
         };
         self.floating_composer.show(snapshot, window, cx);
+
+        // Mirror the docked picker's popover-open handler: fetch the live
+        // model list rather than opening on the static catalog. The docked
+        // picker only ever shows a provider tab (bootstrap resolves Favorites
+        // away at startup); this card keeps Favorites as its default, which
+        // names no provider of its own, so fall back to the selected model's.
+        let provider = match &self.floating_composer.picker_tab {
+            PickerTab::Provider(name) => Some(name.clone()),
+            PickerTab::Favorites => self
+                .floating_composer
+                .selected_model
+                .as_ref()
+                .map(|model| model.provider.clone()),
+        };
+        if let Some(provider) = provider {
+            self.load_models_for_provider(&provider, cx);
+        }
+
         cx.notify();
     }
 
@@ -107,8 +125,17 @@ impl ConsoleDesktopApp {
             cx,
         );
         let attachments = self.attachments_for_pane(FLOATING_KEY);
+        // The picker reads the card's own copies, so the app's catalog has to
+        // be mirrored in each frame — a fetch that lands while the card is
+        // open would otherwise never be seen.
+        let providers = self.providers.clone();
+        let models_by_provider = self.models_by_provider.clone();
+        let favorites = self.favorites.clone();
         let changed = self.floating_composer.set_autocomplete(autocomplete)
-            | self.floating_composer.set_attachments(attachments);
+            | self.floating_composer.set_attachments(attachments)
+            | self
+                .floating_composer
+                .set_model_catalog(providers, models_by_provider, favorites);
         if changed {
             cx.notify();
         }

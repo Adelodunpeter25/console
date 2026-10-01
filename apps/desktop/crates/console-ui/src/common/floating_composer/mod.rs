@@ -398,6 +398,40 @@ impl FloatingComposerState {
         }
     }
 
+    /// Mirror the app's live model catalog into the card.
+    ///
+    /// The card keeps its own copies because it is plain app state rather than
+    /// a view over the app, and [`Self::show`] snapshots them only when it
+    /// opens. Without this the picker keeps rendering that snapshot — the
+    /// static catalog on first open, and whatever was cached at that moment
+    /// afterwards — because `load_models_for_provider` and
+    /// `toggle_model_favorite` write back to the app, never to the card.
+    ///
+    /// Idempotent: the app hands out the same `Rc` until it actually mutates,
+    /// so an unchanged catalog costs three pointer comparisons. Returns whether
+    /// anything changed, so the caller can skip a notify.
+    pub fn set_model_catalog(
+        &mut self,
+        providers: Rc<Vec<ProviderCatalogEntry>>,
+        models_by_provider: Rc<HashMap<String, Vec<Model>>>,
+        favorites: Rc<HashSet<String>>,
+    ) -> bool {
+        let mut changed = false;
+        if !Rc::ptr_eq(&self.providers, &providers) {
+            self.providers = providers;
+            changed = true;
+        }
+        if !Rc::ptr_eq(&self.models_by_provider, &models_by_provider) {
+            self.models_by_provider = models_by_provider;
+            changed = true;
+        }
+        if !Rc::ptr_eq(&self.favorites, &favorites) {
+            self.favorites = favorites;
+            changed = true;
+        }
+        changed
+    }
+
     /// The model picker's tab changed. The card owns the active tab, so it has
     /// to record it — otherwise the list keeps rendering the previous tab and
     /// provider switching looks dead. The search box is cleared on switch to
