@@ -99,6 +99,16 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                 return commitStreamingBuffer(session)
             }
             val normalized = turn.copy(id = turn.id ?: newMessageId(), createdAt = turn.createdAt ?: System.currentTimeMillis())
+            // Attaching to a run this device did not start replays the hub
+            // buffer from ?since=0, which re-delivers turns already present in
+            // the loaded history. Appending them again duplicated the whole
+            // reply, and re-adding their tool calls duplicated the run activity.
+            // The turn id is the join key: the server assigns one per turn and
+            // it survives persistence. The stream buffers still need clearing —
+            // they hold a replayed copy of the same text.
+            if (session.messages.any { it.id != null && it.id == normalized.id }) {
+                return session.copy(streamingText = "", streamingThinking = "")
+            }
             var base = session.copy(messages = session.messages + normalized, streamingText = "", streamingThinking = "")
             val toolCalls = turn.content.filterIsInstance<ToolCallPart>()
             if (toolCalls.isEmpty()) return base

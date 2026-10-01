@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -39,6 +40,26 @@ func (s *sseStream) SendJSON(event string, v any) error {
 	}
 	// Encode appends its own trailing newline; the second one terminates
 	// the SSE frame.
+	if err := s.enc.Encode(v); err != nil {
+		return err
+	}
+	_, err := s.w.WriteString("\n")
+	return err
+}
+
+// SendSeqJSON is SendJSON preceded by an SSE `id:` line carrying the hub
+// sequence number. The run stream needs it: a client that reconnects passes
+// its last id as ?since=, and the hub then replays only newer frames. Without
+// the id there is no resume cursor at all, so every reconnect replays the whole
+// buffer and the client has to dedupe the run's messages and tool calls.
+//
+// The other streams (fs/git/ports/notifications/scripts) have no hub and no
+// sequence, so they stay on SendJSON.
+func (s *sseStream) SendSeqJSON(event string, seq int64, v any) error {
+	prefix := "id: " + strconv.FormatInt(seq, 10) + "\nevent: " + event + "\ndata: "
+	if _, err := s.w.WriteString(prefix); err != nil {
+		return err
+	}
 	if err := s.enc.Encode(v); err != nil {
 		return err
 	}

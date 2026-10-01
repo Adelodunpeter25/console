@@ -353,14 +353,16 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 }
 
 // sendFrame translates one hub event into the TS/desktop wire shape:
-// {"type": <event>, ...payload}. Internal-only kinds (token accounting,
-// raw provider deltas) are dropped; the desktop cannot parse them.
+// {"type": <event>, ...payload}, prefixed with an `id:` line carrying the hub
+// sequence so a reconnecting client can resume from ?since=<seq>. Internal-only
+// kinds (token accounting, raw provider deltas) are dropped; the desktop
+// cannot parse them.
 func sendFrame(sse *sseStream, f run.Frame) error {
 	name, body, drop := wireFrame(f.Event)
 	if drop {
 		return nil
 	}
-	return sse.SendJSON(name, body)
+	return sse.SendSeqJSON(name, f.Seq, body)
 }
 
 // modelStreamPartFrame is the one wire frame emitted per model token, so it
