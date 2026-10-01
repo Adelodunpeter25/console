@@ -46,7 +46,10 @@ import com.console.mobile.ui.components.EdgeScrollIndicator
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Scroll position to restore after older messages are prepended. */
@@ -96,16 +99,34 @@ fun ChatScreen(
     // opening a session.
     LaunchedEffect(sessionId) {
         loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
-        coroutineScope {
-            launch { AppContainer.sessionRepository.loadDetail(sessionId) }
+        // loadDetail used to be fire-and-forget, so the status read after this
+        // block came from the session list rather than from the detail response
+        // and was routinely stale — the attach then never fired on a session
+        // that was in fact running. Awaiting it makes the status below real.
+        val header = coroutineScope {
+            val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
+            detail.await()
         }
         loadingMessages = false
-        val serverStatus = AppContainer.sessionStateHolder.statuses.value[sessionId]
-        if (serverStatus == SessionStatus.Working) {
+        if (header?.status == SessionStatus.Working) {
             AppContainer.chatRepository.attachServerRun(sessionId)
         }
+    }
+
+    // A run can also start after entry — the desktop app, another device, or a
+    // queued prompt — and the chat screen is where its output belongs. Watching
+    // the status (rather than sampling it once) is what makes that show up live.
+    LaunchedEffect(sessionId) {
+        AppContainer.sessionStateHolder.statuses
+            .map { it[sessionId] }
+            .distinctUntilChanged()
+            .collect { status ->
+                if (status == SessionStatus.Working) {
+                    AppContainer.chatRepository.attachServerRun(sessionId)
+                }
+            }
     }
 
     val messages = chat.messages

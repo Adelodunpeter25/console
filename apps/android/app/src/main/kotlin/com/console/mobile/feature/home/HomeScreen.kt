@@ -145,8 +145,11 @@ fun HomeScreen(
                     AppContainer.projectRepository.createSession(cwd = project?.path ?: "", projectId = project?.id, title = "New Chat")
                 }
                 AppContainer.appStateHolder.openChatSession(created.id)
-                AppContainer.sessionRepository.loadDetail(created.id)
                 onOpenChat(created.id)
+                // Navigate first, then load: loadDetail suspends until the fetch
+                // lands, and holding the transition for that round trip showed a
+                // visible stall on every new chat.
+                launch { AppContainer.sessionRepository.loadDetail(created.id) }
             } catch (_: Exception) {
                 confirmAlert("Unable to start chat", "Check the backend connection and try again.")
             } finally {
@@ -222,8 +225,8 @@ fun HomeScreen(
                                                         AppContainer.projectRepository.createSession(cwd = proj?.path ?: "", projectId = section.projectId, title = "New Chat")
                                                     }
                                                     AppContainer.appStateHolder.openChatSession(created.id)
-                                                    AppContainer.sessionRepository.loadDetail(created.id)
                                                     onOpenChat(created.id)
+                                                    launch { AppContainer.sessionRepository.loadDetail(created.id) }
                                                 } catch (_: Exception) {
                                                     confirmAlert("Unable to start chat", "Check the backend connection and try again.")
                                                 }
@@ -256,7 +259,7 @@ fun HomeScreen(
                                         draftPreview = preview,
                                         showDivider = index != section.data.lastIndex,
                                         onClick = {
-                                            scope.launch { withContext(Dispatchers.IO) { AppContainer.sessionRepository.loadDetail(session.id) } }
+                                            scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
                                             AppContainer.appStateHolder.openChatSession(session.id)
                                             onOpenChat(session.id)
                                         },

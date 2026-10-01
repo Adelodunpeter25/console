@@ -158,19 +158,29 @@ class ChatRepository(
     }
 
     fun loadMessages(sessionId: String, messages: List<AgentMessage>) {
-        val current = chats.get(sessionId)
-        if (current.running) return
+        if (messages.isEmpty()) return
         val withIds = ensureMessageIds(messages)
-        chats.update(sessionId) {
-            current.copy(
-                messages = withIds,
-                streamingText = "",
-                streamingThinking = "",
-                activeToolCalls = emptyList(),
-                pendingQuestions = emptyList(),
-                pendingPermissions = emptyList(),
-                runs = reconstructRuns(withIds),
-            )
+        chats.update(sessionId) { current ->
+            // A live stream owns the run state and the streaming buffers, but the
+            // history page still has to land. Bailing out here left the
+            // transcript blank whenever a run was already active on entry, which
+            // is exactly when attach had just set running — a losing race between
+            // the detail fetch and the attach, which both start on entry.
+            if (current.running) {
+                val seen = current.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
+                val fresh = withIds.filterNot { m -> messageKey(m) in seen }
+                if (fresh.isEmpty()) current else current.copy(messages = fresh + current.messages)
+            } else {
+                current.copy(
+                    messages = withIds,
+                    streamingText = "",
+                    streamingThinking = "",
+                    activeToolCalls = emptyList(),
+                    pendingQuestions = emptyList(),
+                    pendingPermissions = emptyList(),
+                    runs = reconstructRuns(withIds),
+                )
+            }
         }
     }
 
@@ -346,7 +356,10 @@ class ChatRepository(
         sessions.setStatus(sessionId, SessionStatus.Working)
         persistence?.setSuppress(true)
         try {
-            // since=0 replays the whole current run buffer.
+            // since=0 replays the whole current run buffer, which is what an
+            // attach wants — a run this device never saw start has no local
+            // cursor. The reducer is idempotent on turn and tool-call id, so the
+            // overlap with the loaded history is dropped rather than duplicated.
             getOrCreate(sessionId, "{}").attach(0, streamClient)
         } catch (_: Exception) {
             finalize(sessionId, false)

@@ -34,6 +34,7 @@ import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.ConfirmDialogHost
 import com.console.mobile.ui.theme.ConsoleColors
+import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavGraph() {
@@ -71,7 +72,7 @@ fun AppNavGraph() {
     LaunchedEffect(pendingChatNav) {
         val id = pendingChatNav ?: return@LaunchedEffect
         AppContainer.appStateHolder.openChatSession(id)
-        AppContainer.sessionRepository.loadDetail(id)
+        launch { AppContainer.sessionRepository.loadDetail(id) }
         pendingChatNav = null
         navController.navigate(RouteChat) { launchSingleTop = true }
     }

@@ -4,7 +4,6 @@ import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionHeader
-import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
 import com.console.mobile.data.store.SessionViewState
@@ -66,17 +65,23 @@ class SessionRepository(
      */
     private val olderInFlight = mutableSetOf<String>()
 
-    /** Newest page for a session. Mobile keeps this small — see [FIRST_PAGE]. */
-    fun loadDetail(sessionId: String, limit: Int = FIRST_PAGE) {
-        scope.launch {
-            try {
-                val detail: SessionDetailResponse = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, null) }
-                applyHeader(sessionId, detail.header)
-                chatRepo.loadMessages(sessionId, detail.messages)
-                chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
-            } catch (e: Exception) {
-                android.util.Log.w("SessionRepository", "loadDetail($sessionId) failed; chat keeps empty state", e)
-            }
+    /**
+     * Newest page for a session, plus the header. Suspends until the fetch
+     * lands and returns the status the server reported, so a caller that has
+     * to decide something from the status (attach to a live run) can read the
+     * value this call produced instead of a stale one from the session list.
+     * Fails soft: a failed fetch returns null and leaves existing state alone.
+     */
+    suspend fun loadDetail(sessionId: String, limit: Int = FIRST_PAGE): SessionHeader? {
+        return try {
+            val detail: SessionDetailResponse = withContext(Dispatchers.IO) { api.getSession(sessionId, limit, null) }
+            applyHeader(sessionId, detail.header)
+            chatRepo.loadMessages(sessionId, detail.messages)
+            chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
+            detail.header
+        } catch (e: Exception) {
+            android.util.Log.w("SessionRepository", "loadDetail($sessionId) failed; chat keeps empty state", e)
+            null
         }
     }
 
