@@ -102,8 +102,14 @@ struct McpServerConfigWire {
     args: Vec<String>,
     #[serde(default, deserialize_with = "de_env_pairs")]
     env: Vec<(String, String)>,
+    /// The status arrives as a bare string on the list endpoint, with any
+    /// message in a separate `error` member; this client serializes `Error`
+    /// as an object. Accept both shapes.
     #[serde(default)]
-    status: McpConnectionStatus,
+    status: Option<StatusShape>,
+    /// The server's status message, present only when status is `error`.
+    #[serde(default)]
+    error: Option<String>,
     #[serde(default)]
     tools: Vec<McpToolInfo>,
 }
@@ -114,6 +120,46 @@ struct McpServerConfigWire {
 struct AuthObject {
     #[serde(rename = "type", default)]
     kind: Option<McpAuthType>,
+}
+
+/// A connection status in either encoding. Checked bare-string-first so the
+/// server's `"connected"` never gets mistaken for an object.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StatusShape {
+    /// `"disconnected"`, `"connecting"`, `"connected"`, `"needs_auth"`,
+    /// `"error"` — what `GET /api/mcp/servers` sends.
+    Bare(String),
+    /// `{"error": "..."}` — this client's encoding of
+    /// [`McpConnectionStatus::Error`].
+    Tagged { error: String },
+}
+
+impl StatusShape {
+    /// Fold the status and the server's separate message into one variant.
+    /// Anything unrecognised becomes an error rather than a decode failure:
+    /// one server in a bad state must not blank the whole list.
+    fn resolve(self, message: Option<String>) -> McpConnectionStatus {
+        let message = message.filter(|message| !message.is_empty());
+        match self {
+            StatusShape::Tagged { error } => McpConnectionStatus::Error(error),
+            StatusShape::Bare(raw) => match raw.as_str() {
+                "disconnected" => McpConnectionStatus::Disconnected,
+                "connecting" => McpConnectionStatus::Connecting,
+                "connected" => McpConnectionStatus::Connected,
+                "needs_auth" => McpConnectionStatus::NeedsAuth,
+                other => McpConnectionStatus::Error(message.unwrap_or_else(|| {
+                    // The server reported `error` with no detail; a bare word
+                    // is not a useful message to show the user.
+                    if other == "error" {
+                        "connection failed".to_string()
+                    } else {
+                        other.to_string()
+                    }
+                })),
+            },
+        }
+    }
 }
 
 impl From<McpServerConfigWire> for McpServerConfig {
@@ -138,7 +184,12 @@ impl From<McpServerConfigWire> for McpServerConfig {
             command: wire.command,
             args: wire.args,
             env: wire.env,
-            status: wire.status,
+            // Absent status means the server never reported one; treat that
+            // as the default rather than an error.
+            status: match wire.status {
+                Some(shape) => shape.resolve(wire.error),
+                None => McpConnectionStatus::default(),
+            },
             tools: wire.tools,
         }
     }

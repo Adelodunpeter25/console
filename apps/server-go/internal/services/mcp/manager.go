@@ -23,18 +23,22 @@ const (
 	connectTimeout = 30 * time.Second
 )
 
-// ServerStatus is the API-facing snapshot of one server.
+// ServerStatus is the API-facing snapshot of one server: the stored config
+// plus its live state.
+//
+// The whole config is embedded rather than copied field by field because the
+// desktop edit form is populated from these list entries. A summary would
+// round-trip a server without its url, env or auth and silently drop them on
+// the next save.
 type ServerStatus struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	Enabled   bool   `json:"enabled"`
-	Transport string `json:"transport"`
-	Status    string `json:"status"`
-	Error     string `json:"error,omitempty"`
+	ServerConfig
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
 	// AuthURL is set while browser sign-in is pending so the UI can offer
 	// it if the automatic browser open failed.
-	AuthURL   string `json:"authUrl,omitempty"`
-	ToolCount int    `json:"toolCount"`
+	AuthURL   string       `json:"authUrl,omitempty"`
+	ToolCount int          `json:"toolCount"`
+	Tools     []RemoteTool `json:"tools,omitempty"`
 }
 
 type serverState struct {
@@ -274,9 +278,11 @@ func (m *Manager) Status() ([]ServerStatus, error) {
 	defer m.mu.Unlock()
 	out := make([]ServerStatus, 0, len(cfgs))
 	for _, c := range cfgs {
-		s := ServerStatus{ID: c.ID, Label: c.Label, Enabled: c.Enabled, Transport: c.Transport, Status: StatusDisconnected}
+		s := ServerStatus{ServerConfig: c, Status: StatusDisconnected}
 		if st := m.states[c.ID]; st != nil {
 			s.Status, s.Error, s.AuthURL, s.ToolCount = st.status, st.err, st.authURL, len(st.tools)
+			// Copied directly: m.mu is already held, so Tools() would deadlock.
+			s.Tools = append([]RemoteTool(nil), st.tools...)
 		}
 		out = append(out, s)
 	}

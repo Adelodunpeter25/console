@@ -43,15 +43,19 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 	// is stored in the credential file and never echoed back.
 	//
 	// The desktop client names two fields differently — `name` for the label
-	// and `auth_type` for the auth type — so both spellings are accepted and
-	// normalized here, at the wire boundary. ServerConfig stays the one
-	// canonical shape that gets stored and returned.
+	// and `auth_type` for the auth type — and omits `enabled` entirely, so
+	// both spellings are accepted and normalized here, at the wire boundary.
+	// ServerConfig stays the one canonical shape that gets stored and
+	// returned.
 	save := func(c *fiber.Ctx) error {
 		var body struct {
 			mcp.ServerConfig
 			Token    string `json:"token"`
 			Name     string `json:"name"`
 			AuthType string `json:"auth_type"`
+			// Shadows ServerConfig.Enabled so an omitted field can be told
+			// apart from an explicit false.
+			Enabled *bool `json:"enabled"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return fail400(c, err)
@@ -62,6 +66,13 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 		}
 		if cfg.Auth == nil && body.AuthType != "" {
 			cfg.Auth = &mcp.AuthConfig{Type: body.AuthType}
+		}
+		// A client with no enable/disable control omits the field; a server
+		// the user just finished configuring should be usable.
+		if body.Enabled != nil {
+			cfg.Enabled = *body.Enabled
+		} else {
+			cfg.Enabled = true
 		}
 		if id := c.Params("id"); id != "" {
 			cfg.ID = id

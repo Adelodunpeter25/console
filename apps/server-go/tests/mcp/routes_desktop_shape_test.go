@@ -1,11 +1,11 @@
 // Wire-format tolerance for MCP server saves.
 //
 // The desktop client serializes its McpServerConfig struct directly, which
-// spells two fields differently from the server's canonical ServerConfig:
-// `name` instead of `label`, and a flat `auth_type` instead of a nested
-// `auth` object. `env` also posts as a pair array (see env_decode_test.go).
-// None of these are real problems with the server the user is describing, so
-// the save must not reject them.
+// spells two fields differently from the server's canonical ServerConfig and
+// omits a third outright: `name` instead of `label`, a flat `auth_type`
+// instead of a nested `auth` object, and no `enabled` flag. `env` also posts
+// as a pair array (see env_decode_test.go). None of these are real problems
+// with the server the user is describing, so the save must not reject them.
 package tests
 
 import (
@@ -19,8 +19,9 @@ import (
 )
 
 // The exact shape the desktop client posts for a saved server: `name`,
-// `auth_type`, and a pair-array `env`. This is the payload that produced
-// "cannot unmarshal array into ... env" and "label must be a non-empty string".
+// `auth_type`, a pair-array `env`, and no `enabled` (its type has no such
+// field). This is the payload that produced "cannot unmarshal array into
+// ... env" and "label must be a non-empty string".
 const desktopServerPayload = `{
   "id": "atlassian",
   "name": "Atlassian",
@@ -29,8 +30,7 @@ const desktopServerPayload = `{
   "auth_type": "static",
   "env": [["TOKEN", "abc"], ["REGION", "eu"]],
   "status": "disconnected",
-  "tools": [],
-  "enabled": true
+  "tools": []
 }`
 
 func TestSaveAcceptsDesktopFieldNames(t *testing.T) {
@@ -65,6 +65,35 @@ func TestSaveAcceptsDesktopFieldNames(t *testing.T) {
 	}
 	if cfg.Env["TOKEN"] != "abc" || cfg.Env["REGION"] != "eu" {
 		t.Fatalf("env not decoded from pair array: %v", cfg.Env)
+	}
+	// The client never sends `enabled`. Left at the zero value the server
+	// stores it disabled and Connect refuses with "is disabled".
+	if !cfg.Enabled {
+		t.Fatal("enabled = false: a payload with no `enabled` field must save usable")
+	}
+}
+
+func TestSaveHonoursAnExplicitlyDisabledServer(t *testing.T) {
+	// Absent means "no opinion", not "override": a client that does send the
+	// flag must still be able to keep a server off.
+	m := newManager(t)
+	app := fiber.New()
+	routes.RegisterMCPRoutes(app, m)
+
+	body := `{"id":"off","name":"Off","transport":"http",
+	  "url":"https://example.com/mcp","enabled":false}`
+	if code, out := do(t, app, "POST", "/api/mcp/servers", body); code != http.StatusOK || out["success"] != true {
+		t.Fatalf("save: %d %v", code, out)
+	}
+	cfg, found, err := m.Config.Get("off")
+	if err != nil || !found {
+		t.Fatalf("not stored: %v found=%v", err, found)
+	}
+	if cfg.Enabled {
+		t.Fatal("explicit enabled=false was overridden")
+	}
+	if err := m.Connect("off"); err == nil {
+		t.Fatal("a disabled server should not connect")
 	}
 }
 

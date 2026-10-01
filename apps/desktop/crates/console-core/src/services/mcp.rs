@@ -1,6 +1,7 @@
-use crate::types::mcp::{McpServerConfig, McpToolInfo};
+use crate::types::mcp::{McpConnectionStatus, McpServerConfig, McpToolInfo};
+use crate::types::ApiResponse;
 use crate::utils::HttpTransport;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 
 #[derive(Clone)]
 pub struct McpService {
@@ -26,7 +27,18 @@ impl McpService {
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!("failed to list MCP servers: {} {}", status, body);
         }
-        resp.json().await.context("failed to decode MCP servers response")
+        let body: ApiResponse<Vec<McpServerConfig>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("failed to decode MCP servers response")?;
+        if !body.success {
+            anyhow::bail!(body
+                .error
+                .unwrap_or_else(|| "failed to list MCP servers".into()));
+        }
+        // An empty list is not an error; the settings page just renders it.
+        Ok(body.data.unwrap_or_default())
     }
 
     pub async fn save_server(&self, server: &McpServerConfig) -> Result<McpServerConfig> {
@@ -44,7 +56,18 @@ impl McpService {
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!("failed to save MCP server: {} {}", status, body);
         }
-        resp.json().await.context("failed to decode MCP server response")
+        let body: ApiResponse<McpServerConfig> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("failed to decode MCP server response")?;
+        if !body.success {
+            anyhow::bail!(body
+                .error
+                .unwrap_or_else(|| "failed to save MCP server".into()));
+        }
+        body.data
+            .ok_or_else(|| anyhow!("MCP server save returned no server"))
     }
 
     pub async fn delete_server(&self, id: &str) -> Result<()> {
@@ -64,7 +87,16 @@ impl McpService {
         Ok(())
     }
 
-    pub async fn connect_server(&self, id: &str) -> Result<McpServerConfig> {
+    /// Connect, then poll until the server settles. The route only
+    /// acknowledges the request (`{"started":true}`) and finishes in the
+    /// background, so a single refresh would leave the chip stuck on
+    /// "connecting" until the settings tab is reopened. Returns the refreshed
+    /// list for the caller to apply.
+    pub async fn connect_server(&self, id: &str) -> Result<Vec<McpServerConfig>> {
+        // Matches the server's own connect timeout.
+        const MAX_ATTEMPTS: usize = 120;
+        const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
         let url = self.transport.url(&format!("/api/mcp/servers/{}/connect", id)).await;
         let resp = self
             .transport
@@ -78,7 +110,30 @@ impl McpService {
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!("failed to connect MCP server: {} {}", status, body);
         }
-        resp.json().await.context("failed to decode connect MCP response")
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("failed to decode connect MCP response")?;
+        if !body.success {
+            anyhow::bail!(body
+                .error
+                .unwrap_or_else(|| "failed to connect MCP server".into()));
+        }
+
+        for _ in 0..MAX_ATTEMPTS {
+            let list = self.list_servers().await?;
+            let still_connecting = list.iter().any(|server| {
+                server.id == id && matches!(server.status, McpConnectionStatus::Connecting)
+            });
+            if !still_connecting {
+                return Ok(list);
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+        // Ran out the timeout window: hand back what was last observed rather
+        // than failing an action the server did accept.
+        self.list_servers().await
     }
 
     pub async fn disconnect_server(&self, id: &str) -> Result<()> {

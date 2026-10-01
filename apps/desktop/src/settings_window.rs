@@ -885,13 +885,14 @@ impl Render for SettingsWindow {
                         });
                         cx.spawn(async move |cx| {
                             match client.mcp.connect_server(&id).await {
-                                Ok(updated) => {
+                                // The service polls until the server leaves
+                                // `connecting`, so this list carries the real
+                                // status rather than the optimistic one.
+                                Ok(updated_list) => {
                                     let _ = cx.update(|cx| {
                                         entity_clone.update(cx, |this, cx| {
-                                            if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
-                                                *s = updated;
-                                                cx.notify();
-                                            }
+                                            this.mcp_servers = updated_list;
+                                            cx.notify();
                                         });
                                     });
                                 }
