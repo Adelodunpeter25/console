@@ -41,15 +41,28 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 
 	// Body: ServerConfig plus an optional "token" (static auth only), which
 	// is stored in the credential file and never echoed back.
+	//
+	// The desktop client names two fields differently — `name` for the label
+	// and `auth_type` for the auth type — so both spellings are accepted and
+	// normalized here, at the wire boundary. ServerConfig stays the one
+	// canonical shape that gets stored and returned.
 	save := func(c *fiber.Ctx) error {
 		var body struct {
 			mcp.ServerConfig
-			Token string `json:"token"`
+			Token    string `json:"token"`
+			Name     string `json:"name"`
+			AuthType string `json:"auth_type"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return fail400(c, err)
 		}
 		cfg := body.ServerConfig
+		if cfg.Label == "" {
+			cfg.Label = body.Name
+		}
+		if cfg.Auth == nil && body.AuthType != "" {
+			cfg.Auth = &mcp.AuthConfig{Type: body.AuthType}
+		}
 		if id := c.Params("id"); id != "" {
 			cfg.ID = id
 		}
