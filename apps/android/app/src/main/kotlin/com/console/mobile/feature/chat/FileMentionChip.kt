@@ -29,8 +29,8 @@ import com.console.mobile.core.util.FileMention
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
-/** Accent for file-mention pills, shared by the suggestion rows, composer styling and bubbles. */
-internal val MentionAccent = Color(0xFF60A5FA)
+/** Accent for file-mention pills, matching the desktop theme accent. */
+internal val MentionAccent = Color(0xFFC85F44)
 
 /**
  * Inline file-mention pill: file-type icon + filename, accent wash.
@@ -58,8 +58,9 @@ fun FileMentionChip(path: String, label: String = path.substringAfterLast('/')) 
 }
 
 /**
- * Annotated bubble text with inline icon + accent spans per mention.
- * Returns the string plus the inline-content map for [Text].
+ * Annotated bubble text: the `@` is replaced by an inline file icon and only
+ * the filename renders (accent pill), while the full `@path` stays in the
+ * underlying string. Returns the string plus the inline-content map for [Text].
  */
 @Composable
 fun mentionAnnotatedString(
@@ -77,12 +78,12 @@ fun mentionAnnotatedString(
     val annotated = buildAnnotatedString {
         var cursor = 0
         mentions.forEachIndexed { index, mention ->
-            val start = mention.range.first.coerceIn(0, content.length)
-            val end = (mention.range.last + 1).coerceIn(start, content.length)
-            append(content.substring(cursor, start))
+            val at = mention.range.first.coerceIn(0, content.length)
+            val end = (mention.range.last + 1).coerceIn(at, content.length)
+            append(content.substring(cursor, at))
             appendInlineContent("mention-icon-$index", "[icon]")
             withStyle(SpanStyle(color = MentionAccent, background = MentionAccent.copy(alpha = 0.10f))) {
-                append(content.substring(start, end))
+                append(mention.label)
             }
             cursor = end
         }
@@ -91,19 +92,68 @@ fun mentionAnnotatedString(
     return annotated to inlineContent
 }
 
-/** Composer styling for mention ranges: accent text on a light wash. Length-preserving. */
+/**
+ * Composer styling: each `@path` mention renders as just its filename in the
+ * accent pill — the `@` and parent directories are hidden. Length-changing,
+ * so cursor offsets are mapped both ways. (An editable field cannot host icon
+ * glyphs, so unlike bubbles there is no icon here.)
+ */
 fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformation { text ->
+    val original = text.text
+    if (mentions.isEmpty() || original.isEmpty()) {
+        return@VisualTransformation TransformedText(text, OffsetMapping.Identity)
+    }
+    data class Seg(val oStart: Int, val oEnd: Int, val tStart: Int, val tEnd: Int)
+    val segs = ArrayList<Seg>(mentions.size)
+    val out = StringBuilder()
+    var cursor = 0
+    for (m in mentions) {
+        val s = m.range.first.coerceIn(0, original.length)
+        val e = (m.range.last + 1).coerceIn(s, original.length)
+        if (s < cursor) continue
+        out.append(original, cursor, s)
+        val tStart = out.length
+        out.append(m.path.substringAfterLast('/'))
+        segs += Seg(s, e, tStart, out.length)
+        cursor = e
+    }
+    out.append(original, cursor, original.length)
     val styled = buildAnnotatedString {
-        append(text.text)
-        mentions.forEach { mention ->
-            val start = mention.range.first.coerceIn(0, text.text.length)
-            val end = (mention.range.last + 1).coerceIn(start, text.text.length)
+        append(out.toString())
+        for (seg in segs) {
             addStyle(
                 SpanStyle(color = MentionAccent, background = MentionAccent.copy(alpha = 0.10f)),
-                start,
-                end,
+                seg.tStart,
+                seg.tEnd,
             )
         }
     }
-    TransformedText(styled, OffsetMapping.Identity)
+    val mapping = object : OffsetMapping {
+        override fun originalToTransformed(offset: Int): Int {
+            for (seg in segs) {
+                when {
+                    offset < seg.oStart -> return offset + (seg.tStart - seg.oStart)
+                    offset == seg.oStart -> return seg.tStart
+                    offset < seg.oEnd -> return seg.tStart
+                    offset == seg.oEnd -> return seg.tEnd
+                }
+            }
+            val last = segs.lastOrNull() ?: return offset
+            return offset + (last.tEnd - last.oEnd)
+        }
+
+        override fun transformedToOriginal(offset: Int): Int {
+            for (seg in segs) {
+                when {
+                    offset < seg.tStart -> return offset - (seg.tStart - seg.oStart)
+                    offset == seg.tStart -> return seg.oStart
+                    offset < seg.tEnd -> return seg.oStart
+                    offset == seg.tEnd -> return seg.oEnd
+                }
+            }
+            val last = segs.lastOrNull() ?: return offset
+            return offset - (last.tEnd - last.oEnd)
+        }
+    }
+    TransformedText(styled, mapping)
 }
