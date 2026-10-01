@@ -4,6 +4,7 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -36,6 +37,45 @@ type AuthConfig struct {
 	TokenRef string `json:"tokenRef,omitempty"`
 }
 
+// EnvMap is a server's environment variables.
+//
+// It decodes from either shape clients send: the object form this package
+// stores on disk and returns (`{"KEY":"VAL"}`), or the pair-array form the
+// desktop client posts (`[["KEY","VAL"], ...]`). Accepting both keeps saving
+// from the desktop from failing with a 400 over a representation difference
+// rather than a real problem. Encoding always produces the object form, so
+// stored configs and API responses stay canonical.
+type EnvMap map[string]string
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (e *EnvMap) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		*e = nil
+		return nil
+	}
+	// Object form — the shape this package writes.
+	if trimmed[0] == '{' {
+		var obj map[string]string
+		if err := json.Unmarshal(trimmed, &obj); err != nil {
+			return err
+		}
+		*e = obj
+		return nil
+	}
+	// Pair-array form.
+	var pairs [][2]string
+	if err := json.Unmarshal(trimmed, &pairs); err != nil {
+		return fmt.Errorf("env must be an object of string values or an array of [key, value] pairs: %w", err)
+	}
+	obj := make(map[string]string, len(pairs))
+	for _, pair := range pairs {
+		obj[pair[0]] = pair[1]
+	}
+	*e = obj
+	return nil
+}
+
 type ServerConfig struct {
 	ID            string            `json:"id"`
 	Label         string            `json:"label"`
@@ -43,7 +83,7 @@ type ServerConfig struct {
 	URL           string            `json:"url,omitempty"`
 	Command       string            `json:"command,omitempty"`
 	Args          []string          `json:"args,omitempty"`
-	Env           map[string]string `json:"env,omitempty"`
+	Env           EnvMap            `json:"env,omitempty"`
 	Auth          *AuthConfig       `json:"auth,omitempty"`
 	TierOverrides map[string]string `json:"tierOverrides,omitempty"`
 	Enabled       bool              `json:"enabled"`
