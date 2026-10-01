@@ -25,8 +25,14 @@ class SessionRepository(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     companion object {
-        /** Newest-page size on open. Mobile viewports are small; start light. */
-        const val FIRST_PAGE = 30
+        /**
+         * Newest-page size on open. Matches the server's default page size
+         * (`parsePageParams`) so the first paint covers the same span of
+         * history the desktop app sees — a smaller window silently omits older
+         * runs, and a run's "Worked for Ns" header only renders when its tool
+         * calls are in the loaded messages.
+         */
+        const val FIRST_PAGE = 50
         /** Older-page size once the user scrolls to the top. */
         const val OLDER_PAGE = 50
     }
