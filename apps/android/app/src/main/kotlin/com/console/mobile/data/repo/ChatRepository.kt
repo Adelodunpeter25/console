@@ -12,6 +12,7 @@ import com.console.mobile.core.chat.isAbortError
 import com.console.mobile.core.chat.newMessageId
 import com.console.mobile.core.chat.toChatSnapshot
 import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
@@ -263,6 +264,7 @@ class ChatRepository(
                     createdAt = System.currentTimeMillis(),
                     content = prompt,
                     attachments = userMessageAttachments,
+                    contextFiles = mentionPaths(prompt),
                 ),
                 input = "",
                 draftUpdatedAt = null,
@@ -286,6 +288,7 @@ class ChatRepository(
             provider = view.sessionProvider,
             approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
             attachments = attachments,
+            contextFiles = mentionPaths(prompt),
         )
         val bodyJson = ConsoleJson.encodeToString(RunPromptDto.serializer(), body)
         val controller = getOrCreate(sessionId, bodyJson)

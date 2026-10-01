@@ -58,6 +58,7 @@ import com.console.mobile.core.util.isFileTargetTool
 import com.console.mobile.core.util.isReadFileTool
 import com.console.mobile.core.util.isSubagentTool
 import com.console.mobile.core.util.isWriteFileTool
+import com.console.mobile.core.util.parseFileMentions
 import com.console.mobile.core.util.parseReadFileOutput
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
@@ -107,7 +108,19 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                     }
                 }
                 if (content.isNotEmpty()) {
-                    Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                    val mentions = remember(content) { parseFileMentions(content) }
+                    if (mentions.isEmpty()) {
+                        Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                    } else {
+                        val (annotated, inlineContent) = mentionAnnotatedString(content, mentions)
+                        Text(
+                            annotated,
+                            inlineContent = inlineContent,
+                            color = ConsoleColors.TextPrimary,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                        )
+                    }
                 }
             }
         }

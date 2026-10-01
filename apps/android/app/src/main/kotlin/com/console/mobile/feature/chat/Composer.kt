@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
+import com.console.mobile.core.util.parseFileMentions
 import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.ui.theme.ConsoleColors
@@ -81,6 +82,10 @@ fun Composer(
     }
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
+    // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
+    val mentionTransformation = remember(fieldValue.text) {
+        mentionVisualTransformation(parseFileMentions(fieldValue.text))
+    }
 
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
     LaunchedEffect(sessionId, trigger is ComposerTrigger.Slash) {
@@ -120,6 +125,7 @@ fun Composer(
             value = value,
             fieldValue = fieldValue,
             visualLines = visualLines,
+            visualTransformation = mentionTransformation,
             onFieldValueChange = { new ->
                 fieldValue = new
                 onChange(new.text)
@@ -171,6 +177,7 @@ private fun ComposerInput(
     value: String,
     fieldValue: TextFieldValue,
     visualLines: Int,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation,
     onFieldValueChange: (TextFieldValue) -> Unit,
     onVisualLinesChange: (Int) -> Unit,
     onCoordinatesChange: (LayoutCoordinates) -> Unit,
@@ -212,6 +219,7 @@ private fun ComposerInput(
                 lineHeight = 19.sp,
             ),
             cursorBrush = SolidColor(ConsoleColors.TextPrimary),
+            visualTransformation = visualTransformation,
             maxLines = 6,
             onTextLayout = { onVisualLinesChange(it.lineCount) },
             decorationBox = { innerTextField ->

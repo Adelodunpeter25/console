@@ -37,6 +37,7 @@ data class RunPromptDto(
     val provider: String? = null,
     val approvalMode: String? = null,
     val attachments: List<ImageAttachment> = emptyList(),
+    val contextFiles: List<String> = emptyList(),
 )
 
 /**

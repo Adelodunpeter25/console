@@ -43,6 +43,7 @@ data class UserMessage(
     override val createdAt: Long? = null,
     val content: String,
     val attachments: List<ImagePart> = emptyList(),
+    val contextFiles: List<String> = emptyList(),
 ) : AgentMessage
 
 @Serializable
