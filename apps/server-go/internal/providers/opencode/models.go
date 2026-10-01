@@ -111,18 +111,29 @@ func modelsForIDs(ids []string) []types.Model {
 // offline fallback and the live discovery path in agreement about which models
 // expose a thinking level.
 func newModel(id string, contextWindow int) types.Model {
+	supportsImages := false
+	if id == "space-bunny-free" {
+		// Known-good capabilities: image input with a 1M window. Floor the
+		// discovered value so an under-report never shrinks it.
+		supportsImages = true
+		if contextWindow < 1_000_000 {
+			contextWindow = 1_000_000
+		}
+	}
 	levels := ThinkingLevelsFor(id)
 	if len(levels) == 0 {
 		return types.Model{
-			ID:            id,
-			Provider:      "opencode",
-			ContextWindow: contextWindow,
+			ID:             id,
+			Provider:       "opencode",
+			ContextWindow:  contextWindow,
+			SupportsImages: supportsImages,
 		}
 	}
 	return types.Model{
 		ID:              id,
 		Provider:        "opencode",
 		ContextWindow:   contextWindow,
+		SupportsImages:  supportsImages,
 		ThinkingLevels:  levels,
 		DefaultThinking: defaultThinkingLevel,
 	}

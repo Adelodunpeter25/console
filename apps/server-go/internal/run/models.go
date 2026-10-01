@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -26,7 +27,7 @@ import (
 func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, hub *Hub) {
 	// Titles use the configured smol role model (TS generateSessionTitle
 	// parity), falling back to the run model.
-	titleModel := roles.ResolveRoleModel(roles.Smol, s.resolveModel(providerID, modelID), s.roleRef(roles.Smol))
+	titleModel := roles.ResolveRoleModel(roles.Smol, s.resolveModel(context.Background(), providerID, modelID), s.roleRef(roles.Smol))
 	title := ""
 	if provider, err := s.Lookup(titleModel.Provider); err == nil {
 		title = titles.Generate(context.Background(), provider, titleModel.ID, prompt)
@@ -44,12 +45,18 @@ func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, h
 	hub.Broadcast(loop.Event{Kind: loop.EventSessionTitleUpdated, Title: title})
 }
 
-// resolveModel returns the catalog entry for a run model, synthesizing a
+// resolveModel returns the catalog entry for a run model, consulting live
+// Antigravity discovery (fetch-once-per-hour cache) before synthesizing a
 // fallback with inferred thinking levels for unknown ids (TS
 // resolveRoleModel parity).
-func (s *Service) resolveModel(providerID, modelID string) types.Model {
+func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) types.Model {
 	if found, ok := providers.FindModel(providerID, modelID); ok {
 		return found
+	}
+	if providerID == "antigravity" {
+		if found, ok := antigravity.ResolveModel(ctx, modelID); ok {
+			return found
+		}
 	}
 	levels, def := roles.InferThinkingLevels(providerID, modelID)
 	return types.Model{

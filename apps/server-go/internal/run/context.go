@@ -4,6 +4,7 @@
 package run
 
 import (
+	"context"
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/compaction"
@@ -30,7 +31,7 @@ type contextCache struct {
 // when the message count moved since the last snapshot. No session (or no
 // model window) yields a zero snapshot, never an error for missing rows —
 // callers map unknown sessions to 404 themselves.
-func (s *Service) ContextUsage(sessionID string) (loop.ContextSnapshot, error) {
+func (s *Service) ContextUsage(ctx context.Context, sessionID string) (loop.ContextSnapshot, error) {
 	loaded, err := s.sessions.Load(sessionID, 0, 0)
 	if err != nil {
 		return loop.ContextSnapshot{}, err
@@ -48,7 +49,7 @@ func (s *Service) ContextUsage(sessionID string) (loop.ContextSnapshot, error) {
 	}
 	s.ctxCache.mu.Unlock()
 
-	model := s.resolveModel(header.Provider, header.ModelID)
+	model := s.resolveModel(ctx, header.Provider, header.ModelID)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
 		Cwd:          header.Cwd,
 		Model:        header.ModelID,
@@ -81,8 +82,8 @@ func (s *Service) ContextUsage(sessionID string) (loop.ContextSnapshot, error) {
 
 // broadcastContextUsage recomputes (or reuses) the snapshot and pushes it to
 // subscribers. Best-effort: a context frame must never fail a turn.
-func (s *Service) broadcastContextUsage(sessionID string, hub *Hub) {
-	snap, err := s.ContextUsage(sessionID)
+func (s *Service) broadcastContextUsage(ctx context.Context, sessionID string, hub *Hub) {
+	snap, err := s.ContextUsage(ctx, sessionID)
 	if err != nil {
 		return
 	}

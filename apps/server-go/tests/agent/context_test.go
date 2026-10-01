@@ -3,6 +3,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -29,7 +30,7 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := svc.ContextUsage(header.ID)
+	first, err := svc.ContextUsage(context.Background(), header.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 	}
 
 	// Same message count: cached copy, identical values.
-	second, err := svc.ContextUsage(header.ID)
+	second, err := svc.ContextUsage(context.Background(), header.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 	if err := sessions.AppendMessage(header.ID, types.AgentMessage{ID: "u2", Role: "user", Data: more}); err != nil {
 		t.Fatal(err)
 	}
-	third, err := svc.ContextUsage(header.ID)
+	third, err := svc.ContextUsage(context.Background(), header.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 func TestContextUsageUnknownSession(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	if _, err := svc.ContextUsage("does-not-exist"); !errors.Is(err, run.ErrNoSession) {
+	if _, err := svc.ContextUsage(context.Background(), "does-not-exist"); !errors.Is(err, run.ErrNoSession) {
 		t.Fatalf("err = %v; want ErrNoSession", err)
 	}
 }

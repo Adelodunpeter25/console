@@ -37,7 +37,7 @@ func ListProviders() []types.ProviderEntry {
 		{
 			Name: "antigravity", DisplayName: "Google Antigravity",
 			Description: "Daily Cloud Code Assist endpoint with Antigravity session envelope",
-			Models:      DefaultAntigravityModels(), AuthMethod: "oauth",
+			Models:      antigravity.Snapshot(), AuthMethod: "oauth",
 		},
 		{
 			Name: "codex", DisplayName: "Codex",
@@ -57,28 +57,11 @@ func ListProviders() []types.ProviderEntry {
 	}
 }
 
-// DefaultAntigravityModels mirrors DEFAULT_ANTIGRAVITY_MODELS: offline
-// seed refreshed from the live list after login.
-func DefaultAntigravityModels() []types.Model {
-	return antigravity.DefaultModels()
-}
-
-// AntigravityModels returns live Antigravity models when logged in, else
-// the static seed. Mirrors fetchModelsForProvider's discover-or-fallback rule.
+// AntigravityModels returns live Antigravity models from the hourly
+// discovery cache, or nil when logged out / undiscovered. There is no
+// static seed: the endpoint is the only source of truth.
 func AntigravityModels(ctx context.Context) []types.Model {
-	cred, err := antigravity.LoadCredential()
-	if err != nil {
-		return DefaultAntigravityModels()
-	}
-	if refreshed, err := antigravity.RefreshIfNeeded(nil, cred); err == nil {
-		cred = refreshed
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if discovered, err := antigravity.FetchModels(ctx, nil, "", cred.AccessToken); err == nil && len(discovered) > 0 {
-		return discovered
-	}
-	return DefaultAntigravityModels()
+	return antigravity.CachedModels(ctx)
 }
 
 // CodexModels returns live Codex models when logged in, else the static
@@ -159,7 +142,9 @@ func SortModelsByFavorites(models []types.Model, favs []types.ModelFavorite) []t
 }
 
 // FindModel looks up a model by provider and id (case-insensitive),
-// mirroring findModelInProvider.
+// mirroring findModelInProvider. For antigravity this covers the
+// live-discovery snapshot served via ListProviders (no fetch — callers
+// needing a cold lookup use antigravity.ResolveModel with a context).
 func FindModel(providerID, modelID string) (types.Model, bool) {
 	for _, entry := range ListProviders() {
 		if entry.Name != providerID {

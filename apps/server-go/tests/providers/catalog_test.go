@@ -55,7 +55,7 @@ func TestCatalogListsOpenCode(t *testing.T) {
 		t.Fatal("opencode must be a catalog provider")
 	}
 	for _, model := range entry.Models {
-		if model.Provider != "opencode" || model.ContextWindow != 200_000 {
+		if model.Provider != "opencode" || model.ContextWindow != 1_000_000 || !model.SupportsImages {
 			t.Fatalf("opencode model: %+v", model)
 		}
 	}
@@ -72,8 +72,12 @@ func TestCatalogListsAntigravity(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("no antigravity entry: %+v", entries)
 	}
-	if entry.AuthMethod != "oauth" || len(entry.Models) != 8 {
+	if entry.AuthMethod != "oauth" {
 		t.Fatalf("antigravity entry: %+v", entry)
+	}
+	// No static seed: without discovery the list is empty (logged out).
+	if len(entry.Models) != 0 {
+		t.Fatalf("antigravity models without discovery: %+v", entry.Models)
 	}
 }
 

@@ -10,43 +10,91 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-// availableModelIDs mirrors AVAILABLE_MODELS.
-var availableModelIDs = []string{
-	"claude-opus-4-6-thinking",
-	"claude-sonnet-4-6",
-	"gemini-3.1-pro-high",
-	"gemini-3.1-pro-low",
-	"gemini-3-flash",
-	"gemini-3-flash-agent",
-	"gemini-3.5-flash-low",
-	"gpt-oss-120b-medium",
+// modelCacheTTL: model releases are infrequent, so an hour keeps the
+// picker, run resolution, and context math fresh without per-request
+// fetches. There is intentionally no static seed — the live endpoint is
+// the only source of truth.
+const modelCacheTTL = time.Hour
+
+var (
+	modelCacheMu sync.Mutex
+	modelCacheAt time.Time
+	modelCache   []types.Model
+)
+
+// DiscoveryBaseURL overrides the models endpoint (tests).
+var DiscoveryBaseURL = ""
+
+// InvalidateModelCache drops the discovery cache (tests; called on logout
+// paths that rotate credentials).
+func InvalidateModelCache() {
+	modelCacheMu.Lock()
+	defer modelCacheMu.Unlock()
+	modelCacheAt = time.Time{}
+	modelCache = nil
 }
 
-// DefaultModels mirrors DEFAULT_ANTIGRAVITY_MODELS: offline seed refreshed
-// from the live list after login.
-func DefaultModels() []types.Model {
-	models := make([]types.Model, 0, len(availableModelIDs))
-	for _, id := range availableModelIDs {
-		contextWindow := 1_048_576
-		switch {
-		case strings.HasPrefix(id, "claude-"):
-			contextWindow = 250_000
-		case strings.HasPrefix(id, "gpt-oss-"):
-			contextWindow = 131_072
-		}
-		model := types.Model{ID: id, Provider: "antigravity", ContextWindow: contextWindow}
-		if strings.HasPrefix(id, "gemini-") || strings.HasPrefix(id, "claude-") {
-			model.ThinkingLevels = GeminiThinkingLevels
-			model.DefaultThinking = "low"
-		}
-		models = append(models, model)
+// Snapshot returns the last discovered list without fetching. Empty until
+// the first successful discovery — logged-out callers see no models.
+func Snapshot() []types.Model {
+	modelCacheMu.Lock()
+	defer modelCacheMu.Unlock()
+	return append([]types.Model(nil), modelCache...)
+}
+
+// CachedModels returns the cached discovery, refreshing when stale or
+// missing. Nil when logged out or when the fetch fails with nothing cached.
+func CachedModels(ctx context.Context) []types.Model {
+	modelCacheMu.Lock()
+	fresh := len(modelCache) > 0 && time.Since(modelCacheAt) < modelCacheTTL
+	if fresh {
+		out := append([]types.Model(nil), modelCache...)
+		modelCacheMu.Unlock()
+		return out
 	}
-	return models
+	modelCacheMu.Unlock()
+
+	cred, err := LoadCredential()
+	if err != nil {
+		return Snapshot()
+	}
+	if refreshed, err := RefreshIfNeeded(nil, cred); err == nil {
+		cred = refreshed
+	}
+	base := DiscoveryBaseURL
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	discovered, err := FetchModels(ctx, nil, base, cred.AccessToken)
+	if err != nil || len(discovered) == 0 {
+		return Snapshot()
+	}
+	modelCacheMu.Lock()
+	modelCache, modelCacheAt = discovered, time.Now()
+	out := append([]types.Model(nil), modelCache...)
+	modelCacheMu.Unlock()
+	return out
+}
+
+// ResolveModel finds id in discovery, fetching once on a cold cache.
+// Case-insensitive like providers.FindModel.
+func ResolveModel(ctx context.Context, id string) (types.Model, bool) {
+	for _, m := range Snapshot() {
+		if strings.EqualFold(m.ID, id) {
+			return m, true
+		}
+	}
+	for _, m := range CachedModels(ctx) {
+		if strings.EqualFold(m.ID, id) {
+			return m, true
+		}
+	}
+	return types.Model{}, false
 }
 
 var discoveryDenylist = map[string]bool{"chat_20706": true, "chat_23310": true}

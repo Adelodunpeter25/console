@@ -313,6 +313,31 @@ func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
 	}
 }
 
+func TestSpaceBunnyCapabilities(t *testing.T) {
+	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// No context_window reported: the known-good floor must apply.
+		_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"other-free","context_window":50000}]}`))
+	}))
+	defer server.Close()
+
+	discovered, err := opencode.FetchModels(t.Context(), server.Client(), server.URL)
+	if err != nil {
+		t.Fatalf("fetch models: %v", err)
+	}
+	byID := map[string]int{}
+	for i, model := range discovered {
+		byID[model.ID] = i
+	}
+	bunny := discovered[byID["space-bunny-free"]]
+	if bunny.ContextWindow != 1_000_000 || !bunny.SupportsImages {
+		t.Fatalf("space bunny: %+v", bunny)
+	}
+	if other := discovered[byID["other-free"]]; other.ContextWindow != 50000 || other.SupportsImages {
+		t.Fatalf("other model must keep endpoint values: %+v", other)
+	}
+}
+
 func TestOpenCodeOmitsThinkingWhenUnset(t *testing.T) {
 	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
 	t.Setenv("OPENCODE_SESSION_ID", "ses_test_unset")

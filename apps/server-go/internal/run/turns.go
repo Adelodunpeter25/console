@@ -239,7 +239,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 
 	// Resolve the run model (catalog hit or synthetic fallback) for
 	// thinking validation and the vision fallback below.
-	model := s.resolveModel(providerID, modelID)
+	model := s.resolveModel(ctx, providerID, modelID)
 	effectiveThinking := dto.Thinking
 	// OpenCode models are cataloged without thinking levels unless their family
 	// has a known effort vocabulary. A session can carry a stale level after
@@ -400,15 +400,15 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 				// Abort/steer is a user action, not a failure: no error
 				// frame or attention banner (TS parity).
 				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
-					s.broadcastContextUsage(sessionID, hub)
+					s.broadcastContextUsage(ctx, sessionID, hub)
 					return context.Canceled
 				}
 				hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 				s.notifyEvent(ctx, sessionID, loop.Event{Kind: loop.EventError, Text: err.Error()})
-				s.broadcastContextUsage(sessionID, hub)
+				s.broadcastContextUsage(ctx, sessionID, hub)
 				return err
 			}
-			s.broadcastContextUsage(sessionID, hub)
+			s.broadcastContextUsage(ctx, sessionID, hub)
 			return nil
 		}
 

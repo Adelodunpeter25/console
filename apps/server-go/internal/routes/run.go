@@ -101,7 +101,7 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 	// for the footer ring. Served from the per-session cache when the
 	// message count hasn't moved; recomputed otherwise.
 	app.Get("/api/sessions/:id/context", func(c *fiber.Ctx) error {
-		snap, err := runs.ContextUsage(c.Params("id"))
+		snap, err := runs.ContextUsage(c.Context(), c.Params("id"))
 		if err != nil {
 			if errors.Is(err, run.ErrNoSession) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Session not found."})
