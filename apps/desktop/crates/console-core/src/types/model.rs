@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -78,6 +78,9 @@ pub struct ProviderCatalogEntry {
     pub name: String,
     pub display_name: String,
     pub description: String,
+    /// A backend with an empty model list may emit `null`; that must decode
+    /// to empty, never fail the whole catalog response.
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub models: Vec<Model>,
     pub auth_method: String,
 }
@@ -86,7 +89,19 @@ pub struct ProviderCatalogEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderModelsResponse {
     pub provider: String,
+    #[serde(default, deserialize_with = "deserialize_null_default")]
     pub models: Vec<Model>,
+}
+
+/// `#[serde(default)]` only covers missing fields — explicit `null` needs a
+/// custom deserializer to land on the default instead of erroring.
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    let opt = Option::<T>::deserialize(deserializer)?;
+    Ok(opt.unwrap_or_default())
 }
 
 /// The provider/model pair a session runs on. Selected in the UI picker and

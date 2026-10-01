@@ -31,6 +31,14 @@ var (
 // DiscoveryBaseURL overrides the models endpoint (tests).
 var DiscoveryBaseURL = ""
 
+// copyModels duplicates the cache contents, never returning nil — a nil
+// slice would serialize as `models: null` and fail the desktop's whole
+// catalog decode, blanking every provider list.
+func copyModels(in []types.Model) []types.Model {
+	out := make([]types.Model, 0, len(in))
+	return append(out, in...)
+}
+
 // InvalidateModelCache drops the discovery cache (tests; called on logout
 // paths that rotate credentials).
 func InvalidateModelCache() {
@@ -40,21 +48,23 @@ func InvalidateModelCache() {
 	modelCache = nil
 }
 
-// Snapshot returns the last discovered list without fetching. Empty until
-// the first successful discovery — logged-out callers see no models.
+// Snapshot returns the last discovered list without fetching. Empty (never
+// nil) until the first successful discovery — logged-out callers see no
+// models.
 func Snapshot() []types.Model {
 	modelCacheMu.Lock()
 	defer modelCacheMu.Unlock()
-	return append([]types.Model(nil), modelCache...)
+	return copyModels(modelCache)
 }
 
 // CachedModels returns the cached discovery, refreshing when stale or
-// missing. Nil when logged out or when the fetch fails with nothing cached.
+// missing. Empty (never nil) when logged out or when the fetch fails with
+// nothing cached.
 func CachedModels(ctx context.Context) []types.Model {
 	modelCacheMu.Lock()
 	fresh := len(modelCache) > 0 && time.Since(modelCacheAt) < modelCacheTTL
 	if fresh {
-		out := append([]types.Model(nil), modelCache...)
+		out := copyModels(modelCache)
 		modelCacheMu.Unlock()
 		return out
 	}
@@ -76,7 +86,7 @@ func CachedModels(ctx context.Context) []types.Model {
 	}
 	modelCacheMu.Lock()
 	modelCache, modelCacheAt = discovered, time.Now()
-	out := append([]types.Model(nil), modelCache...)
+	out := copyModels(modelCache)
 	modelCacheMu.Unlock()
 	return out
 }
@@ -107,7 +117,8 @@ type discoveredAPIModel struct {
 }
 
 // FetchModels lists Antigravity models via /v1internal:fetchAvailableModels.
-// Returns nil slice on failure so callers fall back to the seed.
+// Returns nil slice on failure; callers fall back to the (possibly empty)
+// cache.
 func FetchModels(ctx context.Context, client *http.Client, baseURL, accessToken string) ([]types.Model, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}

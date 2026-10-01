@@ -4,6 +4,7 @@
 package serve
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -75,6 +77,18 @@ func Run() error {
 	// them permanently. The sweep runs once at startup plus once a day.
 	stopSweep := startDeletedChatSweep(runs)
 	defer stopSweep()
+
+	// Warm the Antigravity model cache in the background when logged in, so
+	// the provider catalog serves discovered models (with context windows)
+	// from the first client read instead of an empty list. Best-effort:
+	// boot never waits on it and failures just leave the cache cold.
+	if antigravity.CredentialExists() {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			antigravity.CachedModels(ctx)
+		}()
+	}
 
 	addr := ":3000"
 	if p := os.Getenv("PORT"); p != "" {

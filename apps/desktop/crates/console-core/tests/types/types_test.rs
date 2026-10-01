@@ -177,3 +177,18 @@ fn test_grep_mode_and_case_mode_query_values() {
     assert_eq!(GrepCaseMode::Insensitive.as_query_value(), "insensitive");
     assert_eq!(GrepCaseMode::default(), GrepCaseMode::Smart);
 }
+
+#[test]
+fn test_provider_models_tolerates_null() {
+    // A backend with an empty model list must never blank the whole
+    // provider catalog: null decodes to an empty vec.
+    let json_data = r#"{
+        "name": "antigravity",
+        "displayName": "Google Antigravity",
+        "description": "d",
+        "models": null,
+        "authMethod": "oauth"
+    }"#;
+    let entry: ProviderCatalogEntry = serde_json::from_str(json_data).unwrap();
+    assert!(entry.models.is_empty());
+}

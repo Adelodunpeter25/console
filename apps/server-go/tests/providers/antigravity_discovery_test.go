@@ -4,6 +4,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -121,5 +122,20 @@ func TestAntigravityLoggedOutIsEmpty(t *testing.T) {
 	t.Setenv("ANTIGRAVITY_CREDENTIALS_PATH", filepath.Join(t.TempDir(), "missing.json"))
 	if models := providers.AntigravityModels(context.Background()); len(models) != 0 {
 		t.Fatalf("logged out: %+v", models)
+	}
+}
+
+// An empty cache must serialize as [] not null: the desktop decodes the
+// catalog's models as a plain list, and null used to fail the entire
+// response and blank every provider list.
+func TestAntigravitySnapshotSerializesEmpty(t *testing.T) {
+	antigravity.InvalidateModelCache()
+	t.Cleanup(antigravity.InvalidateModelCache)
+	raw, err := json.Marshal(antigravity.Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "[]" {
+		t.Fatalf("snapshot serializes as %s; want []", raw)
 	}
 }
