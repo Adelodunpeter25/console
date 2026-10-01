@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -46,7 +47,7 @@ fun FileMentionChip(path: String, label: String = path.substringAfterLast('/')) 
             .padding(horizontal = 6.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileIcon(filename = label, sizeDp = 11)
+        FileIcon(filename = label, sizeDp = 11, modifier = Modifier.size(11.dp))
         Text(
             label,
             color = MentionAccent,
@@ -70,9 +71,9 @@ fun mentionAnnotatedString(
     val inlineContent = mentions.mapIndexed { index, mention ->
         val key = "mention-icon-$index"
         key to InlineTextContent(
-            Placeholder(width = 1.1.em, height = 1.em, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter),
+            Placeholder(width = 0.85.em, height = 0.85.em, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter),
         ) {
-            FileIcon(filename = mention.label, sizeDp = 12)
+            FileIcon(filename = mention.label, sizeDp = 12, modifier = Modifier.size(12.dp))
         }
     }.toMap()
     val annotated = buildAnnotatedString {
