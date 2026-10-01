@@ -143,8 +143,37 @@ fun Composer(
             visualLines = visualLines,
             mentionVisual = mentionVisual,
             onFieldValueChange = { new ->
-                fieldValue = new
-                onChange(new.text)
+                // Chip-atomic backspace: a single delete ending inside a
+                // confirmed mention removes the whole `@path` instead of
+                // one character (which would drop back to plain text).
+                // The in-progress autocomplete query keeps char-by-char.
+                val old = fieldValue
+                var consumed = false
+                if (old.selection.collapsed && new.selection.collapsed &&
+                    new.text.length == old.text.length - 1 &&
+                    new.selection.start + 1 == old.selection.start
+                ) {
+                    val deletedAt = new.selection.start
+                    if (deletedAt >= 0 && deletedAt < old.text.length &&
+                        old.text.removeRange(deletedAt, deletedAt + 1) == new.text
+                    ) {
+                        val target = parseFileMentions(old.text).firstOrNull { deletedAt in it.range }
+                        val t = trigger
+                        val typing = t is ComposerTrigger.Mention &&
+                            target != null && target.range.first < fieldValue.selection.start &&
+                            target.range.last + 1 > t.start
+                        if (target != null && !typing) {
+                            val removed = old.text.removeRange(target.range.first, target.range.last + 1)
+                            fieldValue = TextFieldValue(text = removed, selection = TextRange(target.range.first))
+                            onChange(removed)
+                            consumed = true
+                        }
+                    }
+                }
+                if (!consumed) {
+                    fieldValue = new
+                    onChange(new.text)
+                }
             },
             onVisualLinesChange = { visualLines = it },
             onCoordinatesChange = { fieldCoordinates = it },
