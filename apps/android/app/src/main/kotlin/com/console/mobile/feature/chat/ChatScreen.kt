@@ -23,7 +23,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -38,7 +37,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
-import io.github.lyxnx.compose.ui.tablericons.outline.Files
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
@@ -222,19 +221,21 @@ fun ChatScreen(
     }
     val showScrollBottom by remember { derivedStateOf { !following && listState.canScrollForward } }
 
-    // Auto-follow while a run is active. Watches the list's real extent (row
-    // count + the last row's size) so it re-fires as streamed text, tool calls
-    // and run activity grow the bottom row — not just on discrete events. It
-    // is keyed on layout, not the message count, so a pagination prepend that
-    // adds nothing at the bottom doesn't count as growth the user should chase.
-    val runningState by rememberUpdatedState(chat.running || isStreaming)
+    // Stick to the bottom whenever the user is pinned there. Watches the list's
+    // real extent (row count + the last row's size) so it re-fires as streamed
+    // text, tool calls and run activity grow the bottom row — not just on
+    // discrete events. Deliberately not gated on the run being active: when a
+    // run finishes, the streaming footer is swapped for the persisted reply
+    // *after* `running` flips false, and gating on it left that final reply
+    // parked below the viewport. A pagination prepend can't trigger this,
+    // because the user has to be scrolled up (not following) to reach the top.
     LaunchedEffect(listState) {
         snapshotFlow {
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
             Triple(info.totalItemsCount, last?.index, last?.size)
         }.collect {
-            if (following && runningState && !listState.isScrollInProgress) {
+            if (following && !listState.isScrollInProgress) {
                 try { listState.scrollToBottom() } catch (_: Exception) {}
             }
         }
@@ -305,7 +306,7 @@ fun ChatScreen(
             },
             actions = {
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Files) }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.Files, contentDescription = "Open file explorer", tint = Color.White)
+                    Icon(TablerIcons.Outline.Folder, contentDescription = "Open file explorer", tint = Color.White)
                 }
                 Box {
                     IconButton(onClick = { overflowMenu = true }, modifier = Modifier.size(40.dp)) {
