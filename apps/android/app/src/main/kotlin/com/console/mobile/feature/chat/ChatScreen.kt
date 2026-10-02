@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,6 +23,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +62,19 @@ private data class ListAnchor(
     val offset: Int,
     val sizeBefore: Int,
 )
+
+/**
+ * Scrolls to the true end of the list. Jumping to the last item only aligns
+ * its top with the viewport, which leaves a tall or growing last row's bottom
+ * off screen, so ask for an oversized offset that the list clamps at the end.
+ */
+private suspend fun LazyListState.scrollToBottom() {
+    val last = layoutInfo.totalItemsCount - 1
+    if (last < 0) return
+    // One call, so there's no idle gap between "jumped" and "reached the end"
+    // for the drag/settle tracking to misread as the user leaving the bottom.
+    scrollToItem(last, Int.MAX_VALUE)
+}
 
 /**
  * Port of screens/chat/chat-screen.tsx.
@@ -179,39 +196,56 @@ fun ChatScreen(
         onOpenTab(tab)
     }
 
-    // Only the scroll position belongs in derivedStateOf — it's the one thing here
-    // that is snapshot-tracked. displayMessages is a plain local recomputed each
-    // composition, so reading it inside a remembered derived state froze the
-    // thresholds at first composition and hid the button for the whole session.
-    val lastVisibleIndex by remember {
-        derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-    }
     val displaySize = displayMessages.size
-    val showScrollBottom = lastVisibleIndex >= 0 && lastVisibleIndex < displaySize - 1 && displaySize > 2
 
-    // Auto-follow while streaming. Keyed on the latest message's id rather than
-    // the message count: a pagination prepend changes the count without adding
-    // anything new at the bottom, and must not yank the user to the end. Gated on
-    // !showScrollBottom so it stops fighting the user the moment they scroll up
-    // (e.g. to reread earlier tool-call output) instead of yanking them back down
-    // on the next streamed chunk.
-    val latestMessageId = messages.lastOrNull()?.id
-    LaunchedEffect(chat.streamingText.length, chat.streamingThinking.length, latestMessageId, chat.activeToolCalls.size) {
-        if ((chat.running || isStreaming) && !showScrollBottom) {
-            try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {}
+    // Whether the list is pinned to the bottom. An explicit flag rather than
+    // something inferred from the last visible index: the last row is a tall,
+    // growing item (user message + run activity), so "last index visible" says
+    // nothing about whether its bottom is on screen. The user taking over with
+    // a drag turns it off; once scrolling settles it is re-derived from whether
+    // there is anything left below, so scrolling back down resumes following.
+    var following by remember(sessionId) { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        launch {
+            listState.interactionSource.interactions.collect {
+                if (it is DragInteraction.Start) following = false
+            }
+        }
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) following = !listState.canScrollForward
+        }
+    }
+    val showScrollBottom by remember { derivedStateOf { !following && listState.canScrollForward } }
+
+    // Auto-follow while a run is active. Watches the list's real extent (row
+    // count + the last row's size) so it re-fires as streamed text, tool calls
+    // and run activity grow the bottom row — not just on discrete events. It
+    // is keyed on layout, not the message count, so a pagination prepend that
+    // adds nothing at the bottom doesn't count as growth the user should chase.
+    val runningState by rememberUpdatedState(chat.running || isStreaming)
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            Triple(info.totalItemsCount, last?.index, last?.size)
+        }.collect {
+            if (following && runningState && !listState.isScrollInProgress) {
+                try { listState.scrollToBottom() } catch (_: Exception) {}
+            }
         }
     }
 
     // Opening a session lands on the newest page, so the list has to be jumped
-    // to the bottom once that page arrives. The streaming auto-follow above
-    // can't do it: it's gated on an active run, and this case is an idle chat.
+    // to the bottom once that page arrives. The auto-follow above can't do it:
+    // it's gated on an active run, and this case is an idle chat.
     // Keyed on the message count so it fires exactly once per entry — a later
     // prepend or append must not drag the user back down over their scroll.
     var settledInitialPage by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(sessionId, displaySize) {
         if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
         settledInitialPage = true
-        try { listState.scrollToItem(displaySize - 1) } catch (_: Exception) {}
+        following = true
+        try { listState.scrollToBottom() } catch (_: Exception) {}
     }
 
     // --- Older-message pagination -------------------------------------------
@@ -242,6 +276,8 @@ fun ChatScreen(
             offset = listState.firstVisibleItemScrollOffset,
             sizeBefore = displaySize,
         )
+        // Keep auto-follow from racing the anchor restore once the page lands.
+        if (listState.canScrollForward) following = false
         if (!AppContainer.sessionRepository.loadOlder(sessionId)) autoLoadBlocked = true
     }
 
@@ -306,7 +342,10 @@ fun ChatScreen(
             }
             if (showScrollBottom) {
                 androidx.compose.material3.FloatingActionButton(
-                    onClick = { scope.launch { try { listState.animateScrollToItem(maxOf(0, displayMessages.size - 1)) } catch (_: Exception) {} } },
+                    onClick = {
+                        following = true
+                        scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                    },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
                     containerColor = ConsoleColors.SurfaceElevated,
                     contentColor = ConsoleColors.TextPrimary,
@@ -340,7 +379,8 @@ fun ChatScreen(
                     onSend = {
                         keyboardController?.hide()
                         AppContainer.chatRepository.sendMessage(sessionId)
-                        scope.launch { try { listState.animateScrollToItem(maxOf(0, displayMessages.size)) } catch (_: Exception) {} }
+                        following = true
+                        scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
                     },
                     onStop = { AppContainer.chatRepository.abort(sessionId) },
                 )
