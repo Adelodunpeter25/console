@@ -54,6 +54,8 @@ impl RenderOnce for McpPage {
         div()
             .flex()
             .flex_col()
+            .w_full()
+            .min_w_0()
             .gap(px(16.0))
             // Header
             .child(
@@ -61,10 +63,13 @@ impl RenderOnce for McpPage {
                     .flex()
                     .items_center()
                     .justify_between()
+                    .gap(px(12.0))
                     .child(
                         div()
                             .flex()
                             .flex_col()
+                            .flex_1()
+                            .min_w_0()
                             .gap(px(4.0))
                             .child(
                                 div()
@@ -122,6 +127,7 @@ impl RenderOnce for McpPage {
                         .border_color(theme.danger)
                         .text_size(px(12.0))
                         .text_color(theme.danger)
+                        .min_w_0()
                         .child(err),
                 )
             })
@@ -197,7 +203,7 @@ impl McpPage {
         let on_disconnect = self.on_disconnect.clone();
         let on_toggle_expand = self.on_toggle_expand.clone();
 
-        div().flex().flex_col().gap(px(10.0)).children(
+        div().flex().flex_col().min_w_0().gap(px(10.0)).children(
             self.servers.iter().map(|server| {
                 let id = server.id.clone();
                 let is_expanded = expanded_id.as_deref() == Some(&id);
@@ -246,6 +252,7 @@ impl McpPage {
                     .bg(theme.surface)
                     .flex()
                     .flex_col()
+                    .min_w_0()
                     .gap(px(8.0))
                     // Header line
                     .child(
@@ -253,13 +260,18 @@ impl McpPage {
                             .flex()
                             .items_center()
                             .justify_between()
+                            .gap(px(12.0))
                             .child(
                                 div()
                                     .flex()
                                     .items_center()
+                                    .flex_1()
+                                    .min_w_0()
                                     .gap(px(8.0))
                                     .child(
                                         div()
+                                            .min_w_0()
+                                            .truncate()
                                             .text_size(px(14.0))
                                             .font_weight(gpui::FontWeight::SEMIBOLD)
                                             .text_color(theme.text)
@@ -267,6 +279,7 @@ impl McpPage {
                                     )
                                     .child(
                                         div()
+                                            .flex_shrink_0()
                                             .px(px(6.0))
                                             .py(px(1.5))
                                             .rounded(px(4.0))
@@ -281,6 +294,8 @@ impl McpPage {
                                             .px(px(6.0))
                                             .py(px(1.5))
                                             .rounded(px(4.0))
+                                            .min_w_0()
+                                            .truncate()
                                             .bg(status_color.opacity(0.15))
                                             .text_size(px(10.5))
                                             .font_weight(gpui::FontWeight::MEDIUM)
@@ -292,6 +307,7 @@ impl McpPage {
                             .child(
                                 div()
                                     .flex()
+                                    .flex_shrink_0()
                                     .items_center()
                                     .gap(px(6.0))
                                     // Connect / Reconnect / Authorize Button
@@ -385,6 +401,8 @@ impl McpPage {
                     // Target command / URL
                     .child(
                         div()
+                            .min_w_0()
+                            .truncate()
                             .text_size(px(12.0))
                             .font_family(".AppleSystemUIFontMonospaced")
                             .text_color(theme.text_secondary)
@@ -436,6 +454,7 @@ impl McpPage {
                                         div()
                                             .flex()
                                             .flex_col()
+                                            .min_w_0()
                                             .gap(px(4.0))
                                             .p(px(8.0))
                                             .rounded(px(6.0))
@@ -444,9 +463,12 @@ impl McpPage {
                                                 div()
                                                     .flex()
                                                     .flex_col()
+                                                    .min_w_0()
                                                     .gap(px(2.0))
                                                     .child(
                                                         div()
+                                                            .min_w_0()
+                                                            .truncate()
                                                             .text_size(px(11.5))
                                                             .font_weight(gpui::FontWeight::MEDIUM)
                                                             .font_family(".AppleSystemUIFontMonospaced")
@@ -456,6 +478,8 @@ impl McpPage {
                                                     .when_some(t.description.clone(), |el, desc| {
                                                         el.child(
                                                             div()
+                                                                .min_w_0()
+                                                                .truncate()
                                                                 .text_size(px(11.0))
                                                                 .text_color(theme.text_secondary)
                                                                 .child(desc),

@@ -56,6 +56,7 @@ impl RenderOnce for SettingsShell {
             .child(
                 div()
                     .w(px(210.0))
+                    .flex_shrink_0()
                     .h_full()
                     .border_r_1()
                     .border_color(theme.border)
@@ -148,6 +149,7 @@ impl RenderOnce for SettingsShell {
                 div()
                     .id("settings-content-scroll")
                     .flex_1()
+                    .min_w_0()
                     .h_full()
                     .overflow_y_scroll()
                     .pt(px(42.0))
