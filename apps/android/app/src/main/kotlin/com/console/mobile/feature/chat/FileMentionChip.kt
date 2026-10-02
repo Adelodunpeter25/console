@@ -122,12 +122,14 @@ internal data class MentionVisual(
 )
 
 /**
- * Composer styling: each `@path` mention renders as a reserved icon slot
- * followed by just its filename in the accent pill — the `@` and parent
+ * Composer styling: each `@path` mention renders as a reserved icon slot (4 spaces,
+ * ~16dp) followed by just its filename in accent color — the `@` and parent
  * directories are hidden. Length-changing, so cursor offsets are mapped both
- * ways. The slot (a plain space at [TransformedMention.tSlot]) is where the
- * composer overlays the file icon.
+ * ways. The slot at [TransformedMention.tSlot] is where the composer overlays
+ * the file icon inside the pill.
  */
+private const val MENTION_ICON_SLOT = "    "
+
 internal fun buildMentionVisual(original: String, mentions: List<FileMention>): MentionVisual {
     if (mentions.isEmpty() || original.isEmpty()) {
         return MentionVisual(
@@ -145,7 +147,7 @@ internal fun buildMentionVisual(original: String, mentions: List<FileMention>): 
         if (s < cursor) continue
         out.append(original, cursor, s)
         val tSlot = out.length
-        out.append(' ')
+        out.append(MENTION_ICON_SLOT)
         val tStart = out.length
         out.append(m.path.substringAfterLast('/'))
         segs += TransformedMention(s, e, tSlot, tStart, out.length, m.path)
@@ -156,7 +158,10 @@ internal fun buildMentionVisual(original: String, mentions: List<FileMention>): 
         append(out.toString())
         for (seg in segs) {
             addStyle(
-                SpanStyle(color = MentionAccent, background = MentionAccent.copy(alpha = 0.10f)),
+                SpanStyle(
+                    color = MentionAccent,
+                    fontFamily = ConsoleMonoFamily,
+                ),
                 seg.tStart,
                 seg.tEnd,
             )
@@ -182,7 +187,7 @@ internal fun buildMentionVisual(original: String, mentions: List<FileMention>): 
             for (seg in segs) {
                 when {
                     offset < seg.tSlot -> return offset - (seg.tSlot - seg.oStart)
-                    offset == seg.tSlot -> return seg.oStart
+                    offset <= seg.tStart -> return seg.oStart
                     offset < seg.tEnd -> return seg.oStart
                     offset == seg.tEnd -> return seg.oEnd
                 }

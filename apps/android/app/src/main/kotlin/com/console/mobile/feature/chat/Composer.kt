@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -306,6 +308,32 @@ private fun ComposerInput(
                 },
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {
+                        val layout = mentionLayout
+                        val slots = mentionVisual.segments
+                        if (layout != null && slots.isNotEmpty() && layout.size.height <= fieldHeightPx) {
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            slots.forEach { seg ->
+                                if (seg.tEnd <= layout.layoutInput.text.length && seg.tSlot < seg.tEnd) {
+                                    val startBox = layout.getBoundingBox(seg.tSlot)
+                                    val endBox = layout.getBoundingBox((seg.tEnd - 1).coerceAtLeast(seg.tSlot))
+                                    val pillHeight = with(density) { 18.dp.toPx() }
+                                    Box(
+                                        modifier = Modifier
+                                            .offset {
+                                                androidx.compose.ui.unit.IntOffset(
+                                                    (startBox.left - with(density) { 2.dp.toPx() }).roundToInt(),
+                                                    (startBox.top + (startBox.height - pillHeight) / 2).roundToInt(),
+                                                )
+                                            }
+                                            .width(with(density) { (endBox.right - startBox.left + 5.dp.toPx()).toDp() })
+                                            .height(18.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(MentionAccent.copy(alpha = 0.12f))
+                                            .border(1.dp, MentionAccent.copy(alpha = 0.28f), RoundedCornerShape(4.dp)),
+                                    )
+                                }
+                            }
+                        }
                         if (value.isEmpty()) {
                             Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp)
                         }
@@ -318,19 +346,21 @@ private fun ComposerInput(
             if (layout != null && slots.isNotEmpty() && layout.size.height <= fieldHeightPx) {
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 slots.forEach { seg ->
-                    val box = layout.getBoundingBox(seg.tSlot)
-                    val iconPx = with(density) { 12.dp.roundToPx() }
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                androidx.compose.ui.unit.IntOffset(
-                                    box.left.roundToInt(),
-                                    (box.top + (box.height - iconPx) / 2).roundToInt(),
-                                )
-                            }
-                            .size(12.dp),
-                    ) {
-                        FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
+                    if (seg.tEnd <= layout.layoutInput.text.length && seg.tSlot < seg.tEnd) {
+                        val box = layout.getBoundingBox(seg.tSlot)
+                        val iconPx = with(density) { 12.dp.roundToPx() }
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    androidx.compose.ui.unit.IntOffset(
+                                        (box.left + with(density) { 1.dp.toPx() }).roundToInt(),
+                                        (box.top + (box.height - iconPx) / 2).roundToInt(),
+                                    )
+                                }
+                                .size(12.dp),
+                        ) {
+                            FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
+                        }
                     }
                 }
             }
