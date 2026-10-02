@@ -69,6 +69,8 @@ pub struct DeviceViewer {
     error: Option<String>,
     stream_status: Option<String>,
     occluded: bool,
+    was_natively_focused: bool,
+    last_window_focus: Option<FocusHandle>,
     switcher_menu: ContextMenuHandle,
     on_screenshot: Option<ScreenshotHandler>,
     _subscriptions: Vec<Subscription>,
@@ -93,6 +95,8 @@ impl DeviceViewer {
             error: None,
             stream_status: None,
             occluded: false,
+            was_natively_focused: false,
+            last_window_focus: None,
             switcher_menu: ContextMenuHandle::new(cx),
             on_screenshot: None,
             _subscriptions: Vec::new(),
@@ -549,24 +553,42 @@ impl DeviceViewer {
         let Some(host) = &self.host else {
             return;
         };
-        if host.native_focus_within() && !self.focus_handle.is_focused(window) {
+        let natively_focused = host.native_focus_within();
+        let native_became_focused = natively_focused && !self.was_natively_focused;
+        let window_focus = window.focused(cx);
+        let window_focus_changed = window_focus != self.last_window_focus;
+        let viewer_focused = self.focus_handle.is_focused(window);
+
+        if natively_focused && window_focus_changed && window_focus.is_some() && !viewer_focused {
+            // GPUI focus moved elsewhere (e.g. the composer) while the native
+            // surface still holds the keyboard: hand it back.
+            self.reclaim_native_keyboard(cx);
+        } else if native_became_focused && !window_focus_changed && !viewer_focused {
             window.focus(&self.focus_handle, cx);
         }
+
+        self.was_natively_focused = natively_focused;
+        self.last_window_focus = window_focus;
     }
 
     fn native_responder_changed(
         &mut self,
-        _user_gesture: bool,
+        user_gesture: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self
+        let natively_focused = self
             .host
             .as_ref()
-            .is_some_and(|host| host.native_focus_within())
-        {
-            window.focus(&self.focus_handle, cx);
+            .is_some_and(|host| host.native_focus_within());
+        if natively_focused {
+            if user_gesture {
+                window.focus(&self.focus_handle, cx);
+            } else if !self.focus_handle.is_focused(window) && window.focused(cx).is_some() {
+                self.reclaim_native_keyboard(cx);
+            }
         }
+        self.was_natively_focused = natively_focused;
     }
 
     pub fn overlay_open(&self) -> bool {
