@@ -34,6 +34,7 @@ type DeviceAction struct {
 	DurationMs *int     `json:"durationMs"`
 	Text       string   `json:"text"`
 	Key        string   `json:"key"`
+	Appearance string   `json:"appearance"`
 }
 
 type DeviceOpenAppRequest struct {

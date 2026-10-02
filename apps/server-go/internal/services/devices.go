@@ -176,7 +176,11 @@ func (s *DeviceService) Interact(ctx context.Context, platform, id string, a typ
 	case "key":
 		return s.client.Key(ctx, platform, id, a.Key)
 	case "appearance":
-		return fmt.Errorf("%w: appearance toggle", ErrDeviceUnsupported)
+		mode := strings.ToLower(a.Appearance)
+		if mode != "dark" && mode != "light" {
+			return fmt.Errorf("%w: appearance must be dark or light", ErrDeviceBadRequest)
+		}
+		return s.client.SetAppearance(ctx, platform, id, mode)
 	case "":
 		return fmt.Errorf("%w: action is required", ErrDeviceBadRequest)
 	}

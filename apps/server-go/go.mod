@@ -3,7 +3,7 @@ module github.com/Adelodunpeter25/console/apps/server-go
 go 1.25.0
 
 require (
-	github.com/Adelodunpeter25/sim-go v0.0.0-20261002092544-ce24aee0349d
+	github.com/Adelodunpeter25/sim-go v0.0.0-20261002100935-8d2255aa7b31
 	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
 	github.com/fasthttp/websocket v1.5.12

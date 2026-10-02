@@ -67,6 +67,7 @@ pub struct DeviceViewer {
     loading: bool,
     error: Option<String>,
     stream_status: Option<String>,
+    dark_mode: bool,
     occluded: bool,
     switcher_menu: ContextMenuHandle,
     on_screenshot: Option<ScreenshotHandler>,
@@ -90,6 +91,7 @@ impl DeviceViewer {
             loading: false,
             error: None,
             stream_status: None,
+            dark_mode: false,
             occluded: false,
             switcher_menu: ContextMenuHandle::new(cx),
             on_screenshot: None,
@@ -307,6 +309,12 @@ impl DeviceViewer {
         let platform = device.platform_kind().as_str().to_string();
         let id = device.id.clone();
         let action = action.to_string();
+        let appearance = if action == "appearance" {
+            self.dark_mode = !self.dark_mode;
+            Some(if self.dark_mode { "dark" } else { "light" }.to_string())
+        } else {
+            None
+        };
         cx.spawn(async move |_, cx| {
             let result = client
                 .devices
@@ -322,7 +330,7 @@ impl DeviceViewer {
                         duration_ms: None,
                         text: None,
                         key: None,
-                        appearance: None,
+                        appearance,
                     },
                 )
                 .await;
