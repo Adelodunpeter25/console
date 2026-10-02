@@ -163,8 +163,10 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-svg:3.0.0")
 
-    // Markdown (native text rendering via Software Mansion Enriched Markdown)
-    implementation("com.swmansion.enriched.markdown:compose:0.2.0")
+    // Markdown (native Compose UI via mikepenz multiplatform-markdown-renderer).
+    // Pinned to 0.41.0: 0.42.0+ require compileSdk 37 (and a newer AGP).
+    implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.41.0")
+    implementation("com.mikepenz:multiplatform-markdown-renderer-m3-android:0.41.0")
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
     implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
