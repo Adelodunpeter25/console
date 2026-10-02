@@ -14,7 +14,10 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -36,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Files
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
@@ -105,6 +109,7 @@ fun ChatScreen(
 
     val chat: ChatSessionState = chatSessions[sessionId] ?: com.console.mobile.core.chat.createChatSessionState()
     var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
+    var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentSheet by remember { mutableStateOf(false) }
     var subagentSelected by remember { mutableStateOf<String?>(null) }
@@ -302,11 +307,32 @@ fun ChatScreen(
                 IconButton(onClick = { jumpToProjectTab(MobileTab.Files) }, modifier = Modifier.size(40.dp)) {
                     Icon(TablerIcons.Outline.Files, contentDescription = "Open file explorer", tint = Color.White)
                 }
-                IconButton(onClick = { jumpToProjectTab(MobileTab.Changes) }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.BrandGit, contentDescription = "Open changes", tint = Color.White)
-                }
-                IconButton(onClick = { jumpToProjectTab(MobileTab.Terminal) }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.Terminal2, contentDescription = "Open terminal", tint = Color.White)
+                Box {
+                    IconButton(onClick = { overflowMenu = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(TablerIcons.Outline.DotsVertical, contentDescription = "More options", tint = Color.White)
+                    }
+                    DropdownMenu(
+                        expanded = overflowMenu,
+                        onDismissRequest = { overflowMenu = false },
+                        modifier = Modifier.background(ConsoleColors.SurfaceElevated),
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Open diff", color = ConsoleColors.TextPrimary) },
+                            leadingIcon = { Icon(TablerIcons.Outline.BrandGit, contentDescription = null, tint = ConsoleColors.TextPrimary) },
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Changes)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Open terminal", color = ConsoleColors.TextPrimary) },
+                            leadingIcon = { Icon(TablerIcons.Outline.Terminal2, contentDescription = null, tint = ConsoleColors.TextPrimary) },
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Terminal)
+                            },
+                        )
+                    }
                 }
             },
         )
