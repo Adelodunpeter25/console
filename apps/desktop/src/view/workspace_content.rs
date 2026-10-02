@@ -1,6 +1,4 @@
-use console_core::{
-    ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto,
-};
+use console_core::{ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
@@ -8,8 +6,7 @@ use console_ui::{
     queued_prompts_stack, todo_card,
 };
 use gpui::{
-    App, Context, IntoElement, ParentElement, Styled, Window, div,
-    prelude::FluentBuilder, px,
+    App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
@@ -351,7 +348,8 @@ impl ConsoleDesktopApp {
                                 .or_else(|| std::fs::read_to_string(path).ok())
                                 .unwrap_or_else(|| "Loading file content...".to_string());
 
-                            let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
+                            let editor_view =
+                                self.get_or_build_editor_view(path, &content, &theme, cx);
                             let file_viewer = console_ui::FileViewer::new(editor_view);
 
                             let toggle_path = path.clone();
@@ -438,9 +436,7 @@ impl ConsoleDesktopApp {
             session_id, scope, ..
         }) = active_tab
         {
-            let tab_id = active_tab
-                .map(|tab| tab.id())
-                .unwrap_or_default();
+            let tab_id = active_tab.map(|tab| tab.id()).unwrap_or_default();
             let changes = self
                 .changes_review_data
                 .get(&tab_id)
@@ -457,13 +453,15 @@ impl ConsoleDesktopApp {
             let on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut gpui::App)> = {
                 let entity = entity.clone();
                 let tab_id = tab_id_for_collapse;
-                Rc::new(move |path: String, _window: &mut Window, cx: &mut gpui::App| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.toggle_changes_review_collapsed(&tab_id, &path, cx);
-                        });
-                    }
-                })
+                Rc::new(
+                    move |path: String, _window: &mut Window, cx: &mut gpui::App| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_changes_review_collapsed(&tab_id, &path, cx);
+                            });
+                        }
+                    },
+                )
             };
             let tab_id_for_reviewed = tab_id.clone();
             let session_id_for_reviewed = session_id.clone();
@@ -472,7 +470,10 @@ impl ConsoleDesktopApp {
                 let tab_id = tab_id_for_reviewed;
                 let session_id = session_id_for_reviewed;
                 Rc::new(
-                    move |path: String, turn_index: u64, _window: &mut Window, cx: &mut gpui::App| {
+                    move |path: String,
+                          turn_index: u64,
+                          _window: &mut Window,
+                          cx: &mut gpui::App| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.toggle_change_reviewed(
