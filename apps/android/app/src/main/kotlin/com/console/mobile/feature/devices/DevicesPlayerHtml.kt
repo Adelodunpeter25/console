@@ -19,7 +19,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0a0a0b; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-  canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; touch-action: none; -webkit-user-drag: none; }
+  canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; touch-action: none; -webkit-user-drag: none; }
   #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
@@ -70,14 +70,20 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     try {
       decoder = new VideoDecoder({
         output(frame) {
-          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-            canvas.width = frame.displayWidth; canvas.height = frame.displayHeight;
+          const targetW = frame.displayWidth || frame.codedWidth || streamW;
+          const targetH = frame.displayHeight || frame.codedHeight || streamH;
+          if (targetW && targetH && (canvas.width !== targetW || canvas.height !== targetH)) {
+            canvas.width = targetW; canvas.height = targetH;
           }
-          ctx.drawImage(frame, 0, 0);
+          if (canvas.width && canvas.height) {
+            ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+          }
           frame.close();
           if (!gotFrame) { gotFrame = true; setStatus('streaming'); }
         },
         error(e) {
+          const errMsg = e && e.message ? e.message : String(e);
+          console.error('VideoDecoder error:', errMsg);
           closeDecoder();
           send({ type: 'reset' });
         },
@@ -101,7 +107,10 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     if (tag === 2) needKey = false;
     try {
       decoder.decode(new EncodedVideoChunk({ type: tag === 2 ? 'key' : 'delta', timestamp: (seq++) * 1000, data: payload }));
-    } catch (e) {}
+    } catch (e) {
+      const errMsg = e && e.message ? e.message : String(e);
+      console.error('decode chunk error:', errMsg);
+    }
   }
 
   function connect() {

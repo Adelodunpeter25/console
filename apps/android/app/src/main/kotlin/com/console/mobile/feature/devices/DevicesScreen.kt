@@ -1,7 +1,10 @@
 package com.console.mobile.feature.devices
 
 import android.annotation.SuppressLint
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -371,8 +374,6 @@ fun DevicesScreen(
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.mediaPlaybackRequiresUserGesture = false
-                                settings.useWideViewPort = true
-                                settings.loadWithOverviewMode = true
                                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                                 // The page is https (secure context, needed for WebCodecs)
                                 // but the stream socket is usually plain ws:// on a LAN.
@@ -381,6 +382,12 @@ fun DevicesScreen(
                                 addJavascriptInterface(AndroidBridge { s ->
                                     streamStatus = s
                                 }, "AndroidBridge")
+                                webChromeClient = object : WebChromeClient() {
+                                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                                        Log.d("DevicesPlayer", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                                        return true
+                                    }
+                                }
                                 webViewClient = object : WebViewClient() {
                                     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                                         if (request.url.toString() != DEVICES_PLAYER_URL) return null
