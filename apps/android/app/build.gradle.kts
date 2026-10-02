@@ -151,11 +151,8 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-svg:3.0.0")
 
-    // Markdown (BOM/runtime compatibility note applies for 0.39.x)
-    val markdownRenderer = "0.39.2"
-    implementation("com.mikepenz:multiplatform-markdown-renderer:$markdownRenderer")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3:$markdownRenderer")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-code:$markdownRenderer")
+    // Markdown (native text rendering via Software Mansion Enriched Markdown)
+    implementation("com.swmansion.enriched.markdown:compose:0.2.0")
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
     implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
@@ -179,4 +176,13 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+// Enriched Markdown transitively pulls kotlin-stdlib 2.4.0; keep stdlib aligned with the compiler.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
+            useVersion("2.2.21")
+        }
+    }
 }
