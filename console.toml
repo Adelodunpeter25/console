@@ -8,7 +8,7 @@ shortcut = "cmd-shift-r"
 persistent = true
 
 [scripts.dev-mobile]
-label = "Dev Mobile (Native Android)"
+label = "Dev Mobile"
 command = "cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile/.MainActivity"
 shortcut = "cmd-shift-m"
 persistent = false
@@ -26,6 +26,6 @@ shortcut = "cmd-shift-p"
 persistent = false
 
 [scripts.build-android]
-label = "Build Android (Release)"
+label = "Build Android"
 command = "cd apps/android && ./gradlew assembleRelease"
 persistent = false
