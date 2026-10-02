@@ -4,6 +4,8 @@ github.com/Adelodunpeter25/sim-go v0.0.0-20261002100935-8d2255aa7b31 h1:7B592wED
 github.com/Adelodunpeter25/sim-go v0.0.0-20261002100935-8d2255aa7b31/go.mod h1:7aiDUhCjjjF7lJgnH1/pjl4qg6uMPuD4+e7KtIrrZtA=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261002103319-2b6bdf3af33a h1:ss/g7d9UExKltUZ74PQocCIRSj878ibFTVWPjsuNdmk=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261002103319-2b6bdf3af33a/go.mod h1:7aiDUhCjjjF7lJgnH1/pjl4qg6uMPuD4+e7KtIrrZtA=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261002105413-d07eeabced3a h1:kZ1FQCXbE9aSRX88dPOnuBtjSCTfm240egagEjKyDcQ=
+github.com/Adelodunpeter25/sim-go v0.0.0-20261002105413-d07eeabced3a/go.mod h1:7aiDUhCjjjF7lJgnH1/pjl4qg6uMPuD4+e7KtIrrZtA=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/andybalholm/brotli v1.1.1 h1:PR2pgnyFznKEugtsUo0xLdDop5SKXd5Qf5ysW+7XdTA=

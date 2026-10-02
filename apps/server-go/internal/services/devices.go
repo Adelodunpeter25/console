@@ -178,6 +178,18 @@ func (s *DeviceService) Interact(ctx context.Context, platform, id string, a typ
 		return s.client.Key(ctx, platform, id, a.Key)
 	case "appearance":
 		mode := strings.ToLower(a.Appearance)
+		if mode == "" || mode == "toggle" {
+			// Flip the device's real mode; schedule-based Android values
+			// (auto, custom_*) count as light so the toggle goes dark.
+			cur, err := s.client.Appearance(ctx, platform, id)
+			if err != nil {
+				return err
+			}
+			mode = "dark"
+			if cur == "dark" {
+				mode = "light"
+			}
+		}
 		if mode != "dark" && mode != "light" {
 			return fmt.Errorf("%w: appearance must be dark or light", ErrDeviceBadRequest)
 		}
