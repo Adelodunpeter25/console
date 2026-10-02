@@ -14,10 +14,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -50,6 +47,8 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.ui.components.ChatScreenSkeleton
+import com.console.mobile.ui.components.ConsoleDropdownMenu
+import com.console.mobile.ui.components.ConsoleDropdownMenuItem
 import com.console.mobile.ui.components.EdgeScrollIndicator
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
@@ -311,22 +310,18 @@ fun ChatScreen(
                     IconButton(onClick = { overflowMenu = true }, modifier = Modifier.size(40.dp)) {
                         Icon(TablerIcons.Outline.DotsVertical, contentDescription = "More options", tint = Color.White)
                     }
-                    DropdownMenu(
-                        expanded = overflowMenu,
-                        onDismissRequest = { overflowMenu = false },
-                        modifier = Modifier.background(ConsoleColors.SurfaceElevated),
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Open diff", color = ConsoleColors.TextPrimary) },
-                            leadingIcon = { Icon(TablerIcons.Outline.BrandGit, contentDescription = null, tint = ConsoleColors.TextPrimary) },
+                    ConsoleDropdownMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                        ConsoleDropdownMenuItem(
+                            label = "Open diff",
+                            icon = TablerIcons.Outline.BrandGit,
                             onClick = {
                                 overflowMenu = false
                                 jumpToProjectTab(MobileTab.Changes)
                             },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Open terminal", color = ConsoleColors.TextPrimary) },
-                            leadingIcon = { Icon(TablerIcons.Outline.Terminal2, contentDescription = null, tint = ConsoleColors.TextPrimary) },
+                        ConsoleDropdownMenuItem(
+                            label = "Open terminal",
+                            icon = TablerIcons.Outline.Terminal2,
                             onClick = {
                                 overflowMenu = false
                                 jumpToProjectTab(MobileTab.Terminal)
