@@ -47,7 +47,7 @@ func ListProviders() []types.ProviderEntry {
 		{
 			Name: "claude", DisplayName: "Claude",
 			Description: "Anthropic subscription models through the Messages API",
-			Models:      DefaultClaudeModels(), AuthMethod: "oauth",
+			Models:      claude.Snapshot(), AuthMethod: "oauth",
 		},
 		{
 			Name: "opencode", DisplayName: "OpenCode Zen",
@@ -82,28 +82,11 @@ func CodexModels(ctx context.Context) []types.Model {
 	return DefaultCodexModels()
 }
 
-// DefaultClaudeModels mirrors DEFAULT_CLAUDE_MODELS: offline seed
-// refreshed from the live list after login.
-func DefaultClaudeModels() []types.Model {
-	return claude.DefaultModels()
-}
-
-// ClaudeModels returns live Claude models when logged in, else the static
-// seed. Mirrors fetchModelsForProvider's discover-or-fallback rule.
+// ClaudeModels returns live Claude models from the hourly discovery cache,
+// or empty when logged out / undiscovered. There is no static seed: the
+// endpoint is the only source of truth.
 func ClaudeModels(ctx context.Context) []types.Model {
-	cred, err := claude.LoadCredential()
-	if err != nil {
-		return DefaultClaudeModels()
-	}
-	if refreshed, err := claude.RefreshIfNeeded(nil, cred); err == nil {
-		cred = refreshed
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if discovered, err := claude.FetchModels(ctx, nil, "", cred); err == nil && len(discovered) > 0 {
-		return discovered
-	}
-	return DefaultClaudeModels()
+	return claude.CachedModels(ctx)
 }
 
 // DefaultOpenCodeModels returns the single offline fallback model.
@@ -157,6 +140,21 @@ func FindModel(providerID, modelID string) (types.Model, bool) {
 		}
 	}
 	return types.Model{}, false
+}
+
+// ResolveLiveModel finds id in a provider's live-discovery cache, fetching
+// once on a cold cache. Used by run resolution so the compaction threshold
+// and context math track real windows instead of the 128k synthetic
+// fallback. Providers without live discovery miss.
+func ResolveLiveModel(ctx context.Context, providerID, modelID string) (types.Model, bool) {
+	switch providerID {
+	case "antigravity":
+		return antigravity.ResolveModel(ctx, modelID)
+	case "claude":
+		return claude.ResolveModel(ctx, modelID)
+	default:
+		return types.Model{}, false
+	}
 }
 
 // IsCatalogProvider reports whether id is a known catalog provider id

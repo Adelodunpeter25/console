@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 )
 
@@ -262,15 +266,93 @@ func TestClaudeOAuthHelpers(t *testing.T) {
 	}
 }
 
-func TestClaudeModelsSeed(t *testing.T) {
-	seed := claude.DefaultModels()
-	if len(seed) != 4 {
-		t.Fatalf("seed = %+v", seed)
+func TestClaudeDiscoveryMapsWindows(t *testing.T) {
+	claude.InvalidateModelCache()
+	t.Cleanup(claude.InvalidateModelCache)
+	dir := t.TempDir()
+	credPath := filepath.Join(dir, "claude-creds.json")
+	if err := os.WriteFile(credPath, []byte(`{"access_token":"tok","refresh_token":"r","expiresAt":9999999999999}`), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for _, m := range seed {
-		if m.Provider != "claude" || len(m.ThinkingLevels) != 5 || m.DefaultThinking != "low" {
-			t.Fatalf("model = %+v", m)
+	t.Setenv("CLAUDE_CREDENTIALS_PATH", credPath)
+	prev := claude.DiscoveryBaseURL
+	claude.DiscoveryBaseURL = ""
+	t.Cleanup(func() { claude.DiscoveryBaseURL = prev })
+
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if !strings.HasSuffix(r.URL.Path, "/v1/models") {
+			t.Errorf("path: %s", r.URL.Path)
 		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[
+			{"id":"claude-opus-4-6","max_input_tokens":1000000,"capabilities":{"image_input":{"supported":true}}},
+			{"id":"claude-haiku-4-5","max_input_tokens":200000},
+			{"id":"mystery-model"},
+			{"id":"","max_input_tokens":5}
+		]}`)
+	}))
+	defer srv.Close()
+	claude.DiscoveryBaseURL = srv.URL
+
+	models := providers.ClaudeModels(context.Background())
+	byID := map[string]int{}
+	for i, m := range models {
+		byID[m.ID] = i
+	}
+	for id, want := range map[string]int{
+		"claude-opus-4-6": 1000000, "claude-haiku-4-5": 200000, "mystery-model": 200000,
+	} {
+		i, ok := byID[id]
+		if !ok {
+			t.Fatalf("missing %s: %+v", id, models)
+		}
+		if models[i].ContextWindow != want || models[i].Provider != "claude" {
+			t.Fatalf("%s: %+v", id, models[i])
+		}
+	}
+	if !models[byID["claude-opus-4-6"]].SupportsImages {
+		t.Fatalf("images not mapped: %+v", models[byID["claude-opus-4-6"]])
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("hits = %d; want 1", hits.Load())
+	}
+
+	// Second call serves the cache: no second fetch.
+	again := providers.ClaudeModels(context.Background())
+	if len(again) != len(models) || hits.Load() != 1 {
+		t.Fatalf("cache miss: %d models, %d hits", len(again), hits.Load())
+	}
+
+	// Case-insensitive hit with the discovered window.
+	found, ok := claude.ResolveModel(context.Background(), "CLAUDE-OPUS-4-6")
+	if !ok || found.ContextWindow != 1000000 {
+		t.Fatalf("resolve: %+v %v", found, ok)
+	}
+	if _, ok := claude.ResolveModel(context.Background(), "nope"); ok {
+		t.Fatal("unknown id must miss")
+	}
+
+	// Seed path agrees once the snapshot is warm.
+	if found, ok := providers.FindModel("claude", "claude-opus-4-6"); !ok || found.ContextWindow != 1000000 {
+		t.Fatalf("find: %+v %v", found, ok)
+	}
+}
+
+func TestClaudeLoggedOutIsEmpty(t *testing.T) {
+	claude.InvalidateModelCache()
+	t.Cleanup(claude.InvalidateModelCache)
+	t.Setenv("CLAUDE_CREDENTIALS_PATH", filepath.Join(t.TempDir(), "missing.json"))
+	if models := providers.ClaudeModels(context.Background()); len(models) != 0 {
+		t.Fatalf("logged out: %+v", models)
+	}
+	raw, err := json.Marshal(claude.Snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "[]" {
+		t.Fatalf("snapshot serializes as %s; want []", raw)
 	}
 }
 

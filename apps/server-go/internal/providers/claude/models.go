@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -18,26 +20,95 @@ import (
 // shared catalog model type).
 type DiscoveredModel = types.Model
 
-// DefaultModels mirrors DEFAULT_CLAUDE_MODELS: offline seed refreshed from
-// the live list after login. Context windows measured from /v1/models.
-func DefaultModels() []DiscoveredModel {
-	seed := []struct {
-		id string
-		cw int
-	}{
-		{"claude-sonnet-4-5", 1_000_000},
-		{"claude-opus-4-6", 1_000_000},
-		{"claude-sonnet-4-6", 1_000_000},
-		{"claude-haiku-4-5", 200_000},
+// modelCacheTTL: model releases are infrequent, so an hour keeps the
+// picker, run resolution, and context math fresh without per-request
+// fetches. There is intentionally no static seed — the live endpoint is
+// the only source of truth.
+const modelCacheTTL = time.Hour
+
+var (
+	modelCacheMu sync.Mutex
+	modelCacheAt time.Time
+	modelCache   []DiscoveredModel
+)
+
+// DiscoveryBaseURL overrides the models endpoint (tests).
+var DiscoveryBaseURL = ""
+
+// InvalidateModelCache drops the discovery cache (tests; called on logout
+// paths that rotate credentials).
+func InvalidateModelCache() {
+	modelCacheMu.Lock()
+	defer modelCacheMu.Unlock()
+	modelCacheAt = time.Time{}
+	modelCache = nil
+}
+
+// copyModels duplicates the cache contents, never returning nil — a nil
+// slice would serialize as `models: null` and fail the desktop's whole
+// catalog decode, blanking every provider list.
+func copyModels(in []DiscoveredModel) []DiscoveredModel {
+	out := make([]DiscoveredModel, 0, len(in))
+	return append(out, in...)
+}
+
+// Snapshot returns the last discovered list without fetching. Empty (never
+// nil) until the first successful discovery — logged-out callers see no
+// models.
+func Snapshot() []DiscoveredModel {
+	modelCacheMu.Lock()
+	defer modelCacheMu.Unlock()
+	return copyModels(modelCache)
+}
+
+// CachedModels returns the cached discovery, refreshing when stale or
+// missing. Empty (never nil) when logged out or when the fetch fails with
+// nothing cached.
+func CachedModels(ctx context.Context) []DiscoveredModel {
+	modelCacheMu.Lock()
+	fresh := len(modelCache) > 0 && time.Since(modelCacheAt) < modelCacheTTL
+	if fresh {
+		out := copyModels(modelCache)
+		modelCacheMu.Unlock()
+		return out
 	}
-	models := make([]DiscoveredModel, 0, len(seed))
-	for _, s := range seed {
-		models = append(models, DiscoveredModel{
-			ID: s.id, Provider: "claude", ContextWindow: s.cw, SupportsImages: true,
-			ThinkingLevels: ClaudeThinkingLevels, DefaultThinking: "low",
-		})
+	modelCacheMu.Unlock()
+
+	cred, err := LoadCredential()
+	if err != nil {
+		return Snapshot()
 	}
-	return models
+	if refreshed, err := RefreshIfNeeded(nil, cred); err == nil {
+		cred = refreshed
+	}
+	base := DiscoveryBaseURL
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	discovered, err := FetchModels(ctx, nil, base, cred)
+	if err != nil || len(discovered) == 0 {
+		return Snapshot()
+	}
+	modelCacheMu.Lock()
+	modelCache, modelCacheAt = discovered, time.Now()
+	out := copyModels(modelCache)
+	modelCacheMu.Unlock()
+	return out
+}
+
+// ResolveModel finds id in discovery, fetching once on a cold cache.
+// Case-insensitive like providers.FindModel.
+func ResolveModel(ctx context.Context, id string) (DiscoveredModel, bool) {
+	for _, m := range Snapshot() {
+		if strings.EqualFold(m.ID, id) {
+			return m, true
+		}
+	}
+	for _, m := range CachedModels(ctx) {
+		if strings.EqualFold(m.ID, id) {
+			return m, true
+		}
+	}
+	return DiscoveredModel{}, false
 }
 
 // FetchModels lists Claude models with the subscription OAuth token.
@@ -92,6 +163,11 @@ func FetchModels(ctx context.Context, client *http.Client, baseURL string, cred 
 		}
 		if entry.MaxInputTokens != nil && *entry.MaxInputTokens > 0 {
 			model.ContextWindow = *entry.MaxInputTokens
+		}
+		if model.ContextWindow <= 0 {
+			// Floor at the smallest known Claude window so an entry
+			// without metadata never resolves to a zero window.
+			model.ContextWindow = 200_000
 		}
 		if entry.Capabilities != nil && entry.Capabilities.ImageInput != nil &&
 			entry.Capabilities.ImageInput.Supported != nil {

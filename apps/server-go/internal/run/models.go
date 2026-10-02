@@ -15,7 +15,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -46,17 +45,15 @@ func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, h
 }
 
 // resolveModel returns the catalog entry for a run model, consulting live
-// Antigravity discovery (fetch-once-per-hour cache) before synthesizing a
-// fallback with inferred thinking levels for unknown ids (TS
-// resolveRoleModel parity).
+// discovery (fetch-once-per-hour cache) before synthesizing a fallback
+// with inferred thinking levels for unknown ids (TS resolveRoleModel
+// parity).
 func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) types.Model {
 	if found, ok := providers.FindModel(providerID, modelID); ok {
 		return found
 	}
-	if providerID == "antigravity" {
-		if found, ok := antigravity.ResolveModel(ctx, modelID); ok {
-			return found
-		}
+	if found, ok := providers.ResolveLiveModel(ctx, providerID, modelID); ok {
+		return found
 	}
 	levels, def := roles.InferThinkingLevels(providerID, modelID)
 	return types.Model{
