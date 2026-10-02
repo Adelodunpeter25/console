@@ -14,6 +14,7 @@ fn test_mcp_config_serialization() {
         args: vec![],
         env: vec![],
         status: McpConnectionStatus::Connected,
+        auth_url: None,
         tools: vec![McpToolInfo {
             name: "jira_search".to_string(),
             description: Some("Search Jira issues".to_string()),
@@ -43,6 +44,7 @@ fn test_mcp_stdio_config() {
         args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
         env: vec![("ROOT_DIR".to_string(), "/tmp".to_string())],
         status: McpConnectionStatus::Disconnected,
+        auth_url: None,
         tools: vec![],
     };
 

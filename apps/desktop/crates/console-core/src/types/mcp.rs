@@ -72,6 +72,7 @@ pub struct McpServerConfig {
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
     pub status: McpConnectionStatus,
+    pub auth_url: Option<String>,
     pub tools: Vec<McpToolInfo>,
 }
 
@@ -110,6 +111,8 @@ struct McpServerConfigWire {
     /// The server's status message, present only when status is `error`.
     #[serde(default)]
     error: Option<String>,
+    #[serde(default, rename = "authUrl")]
+    auth_url: Option<String>,
     #[serde(default)]
     tools: Vec<McpToolInfo>,
 }
@@ -190,6 +193,7 @@ impl From<McpServerConfigWire> for McpServerConfig {
                 Some(shape) => shape.resolve(wire.error),
                 None => McpConnectionStatus::default(),
             },
+            auth_url: wire.auth_url,
             tools: wire.tools,
         }
     }

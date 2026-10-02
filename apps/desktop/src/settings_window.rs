@@ -809,6 +809,7 @@ impl Render for SettingsWindow {
                             args,
                             env,
                             status: console_core::types::mcp::McpConnectionStatus::Disconnected,
+                            auth_url: None,
                             tools: Vec::new(),
                         };
 
@@ -889,7 +890,21 @@ impl Render for SettingsWindow {
                                 // `connecting`, so this list carries the real
                                 // status rather than the optimistic one.
                                 Ok(updated_list) => {
+                                    let auth_url = updated_list
+                                        .iter()
+                                        .find(|s| s.id == id)
+                                        .and_then(|s| {
+                                            if matches!(s.status, console_core::types::mcp::McpConnectionStatus::NeedsAuth) {
+                                                s.auth_url.clone()
+                                            } else {
+                                                None
+                                            }
+                                        });
+
                                     let _ = cx.update(|cx| {
+                                        if let Some(url) = auth_url {
+                                            cx.open_url(&url);
+                                        }
                                         entity_clone.update(cx, |this, cx| {
                                             this.mcp_servers = updated_list;
                                             cx.notify();
