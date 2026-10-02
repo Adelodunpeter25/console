@@ -60,6 +60,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Installs side by side with the release app (com.console.mobile).
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            // Sign with the fixed release key when available so CI debug APKs can
+            // update each other (the runner's auto-generated debug key changes per job).
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
