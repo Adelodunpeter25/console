@@ -31,19 +31,16 @@ pub enum PrimaryTab {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum AuxiliaryTab {
-    Browser,
     Subagents,
     Devices,
 }
 
 impl AuxiliaryTab {
-    /// Auxiliary tabs currently available to users, including Devices now
-    /// that the hub-stream viewer surface is implemented.
-    pub const ALL: [Self; 3] = [Self::Browser, Self::Subagents, Self::Devices];
+    /// Auxiliary tabs currently available to users in the right sidebar.
+    pub const ALL: [Self; 2] = [Self::Subagents, Self::Devices];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Browser => "Browser",
             Self::Subagents => "Subagents",
             Self::Devices => "Devices",
         }
@@ -78,7 +75,6 @@ pub struct RightSidebar {
     selected_path: Option<String>,
     bottom_split: Option<RightSidebarBottomSplit>,
     subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
-    browser_view: Option<AnyElement>,
     device_view: Option<AnyElement>,
     open_auxiliary_tabs: Vec<AuxiliaryTab>,
     add_tab_menu: ContextMenuHandle,
@@ -141,7 +137,6 @@ impl RightSidebar {
             add_tab_menu,
             bottom_split: None,
             subagent_markdown_views: None,
-            browser_view: None,
             device_view: None,
             on_select_tab,
             on_open_auxiliary_tab,
@@ -170,11 +165,6 @@ impl RightSidebar {
         self
     }
 
-    pub fn with_browser_view(mut self, browser_view: Option<AnyElement>) -> Self {
-        self.browser_view = browser_view;
-        self
-    }
-
     pub fn with_device_view(mut self, device_view: Option<AnyElement>) -> Self {
         self.device_view = device_view;
         self
@@ -191,9 +181,11 @@ impl RenderOnce for RightSidebar {
         let open_auxiliary = self.open_auxiliary_tabs.clone();
         let on_refresh = self.on_refresh;
         let on_resize = self.on_begin_resize;
-        let changes_count =
-            console_core::types::filter_changes_for_scope(&self.session_changes, self.changes_scope)
-                .len();
+        let changes_count = console_core::types::filter_changes_for_scope(
+            &self.session_changes,
+            self.changes_scope,
+        )
+        .len();
 
         div()
             .id("right-sidebar-shell")
@@ -328,10 +320,6 @@ impl RenderOnce for RightSidebar {
                     ));
                 for auxiliary in &open_auxiliary {
                     let (id, tab) = match auxiliary {
-                        AuxiliaryTab::Browser => (
-                            "tab-browser",
-                            InspectorTab::Auxiliary(AuxiliaryTab::Browser),
-                        ),
                         AuxiliaryTab::Subagents => (
                             "tab-subagents",
                             InspectorTab::Auxiliary(AuxiliaryTab::Subagents),
@@ -422,20 +410,6 @@ impl RenderOnce for RightSidebar {
                             self.on_view_all_changes,
                         )
                         .into_any_element(),
-                        InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {
-                            if let Some(browser) = self.browser_view {
-                                browser
-                            } else {
-                                div()
-                                    .size_full()
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .text_color(theme.text_tertiary)
-                                    .child("Browser unavailable")
-                                    .into_any_element()
-                            }
-                        }
                         InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => {
                             let mut list = SubagentListView::new(
                                 self.subagents,

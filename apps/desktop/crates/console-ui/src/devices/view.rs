@@ -797,20 +797,23 @@ impl DeviceViewer {
             .selected()
             .is_some_and(|d| d.platform_kind() == console_core::DevicePlatform::Ios);
         div()
-            .id("device-floating-controls-wrapper")
-            .absolute()
-            .bottom(px(16.0))
-            .left_0()
-            .right_0()
+            .id("device-right-rail-container")
+            .flex_none()
+            .h_full()
             .flex()
-            .justify_center()
             .items_center()
+            .justify_center()
+            .px(px(6.0))
+            .bg(theme.canvas)
+            .border_l_1()
+            .border_color(theme.border)
             .child(
                 div()
-                    .id("device-floating-controls")
-                    .px(px(10.0))
-                    .py(px(5.0))
+                    .id("device-right-rail")
+                    .px(px(4.0))
+                    .py(px(8.0))
                     .flex()
+                    .flex_col()
                     .items_center()
                     .gap(px(6.0))
                     .rounded_full()
@@ -877,14 +880,14 @@ impl DeviceViewer {
             )
     }
 
-    fn render_video_area(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
+    fn render_video_area(&self, theme: Theme) -> AnyElement {
         let host = self.host.clone();
         let occluded = self.occluded;
         let has_device = self.selected_id.is_some();
-        let booted = self.selected().is_some_and(|d| d.state.is_booted());
         div()
             .flex_1()
-            .min_h_0()
+            .min_w_0()
+            .h_full()
             .relative()
             .bg(theme.canvas)
             .child(
@@ -940,9 +943,6 @@ impl DeviceViewer {
                         .child("Device hidden while menu is open"),
                 )
             })
-            .when(has_device && booted && !occluded, |el| {
-                el.child(self.render_hardware_rail(theme, cx))
-            })
             .into_any_element()
     }
 
@@ -973,6 +973,8 @@ impl Focusable for DeviceViewer {
 impl Render for DeviceViewer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
+        let has_device = self.selected_id.is_some();
+        let booted = self.selected().is_some_and(|d| d.state.is_booted());
         self.reconcile_focus(window, cx);
         div()
             .id("device-viewer")
@@ -985,7 +987,18 @@ impl Render for DeviceViewer {
             .when_some(self.render_diagnostics(theme), |el, banner| {
                 el.child(banner)
             })
-            .child(self.render_video_area(theme, cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .bg(theme.canvas)
+                    .child(self.render_video_area(theme))
+                    .when(has_device && booted, |el| {
+                        el.child(self.render_hardware_rail(theme, cx))
+                    }),
+            )
     }
 }
 

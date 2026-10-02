@@ -138,7 +138,8 @@ pub struct ConsoleDesktopApp {
     /// through past prompts, so the chips that were staged before stepping
     /// back are parked here and restored when they step forward onto the
     /// uncommitted draft again. Keyed by pane; removed once navigation ends.
-    pub(crate) history_draft_attachments: std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub(crate) history_draft_attachments:
+        std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
     /// Run-derived interactive and display state. All of these are keyed by
     /// session id (not pane id) so a run's permission prompt, question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
@@ -202,7 +203,6 @@ pub struct ConsoleDesktopApp {
     pub active_project_shortcuts: std::collections::HashMap<String, String>,
     pub inspector_active_tab: console_ui::InspectorTab,
     pub inspector_open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
-    pub browser_view: Option<gpui::Entity<console_ui::BrowserView>>,
     pub device_view: Option<gpui::Entity<console_ui::DeviceViewer>>,
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,

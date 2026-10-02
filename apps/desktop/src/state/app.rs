@@ -4,6 +4,8 @@
 //! domain handlers live in sibling modules (`projects`, `attachments`,
 //! `errors`, `sessions`, `layout`, `run`) as additional `impl` blocks.
 
+use crate::persistence;
+use crate::types::WorkspacePaneState;
 use console_core::{AgentMessage, ApprovalMode, ConsoleClient, WorkspaceNode};
 use console_ui::common::input::PromptHistoryEntry;
 use console_ui::markdown::render::TranscriptSelection;
@@ -16,8 +18,6 @@ use console_ui::{
 use gpui::{AppContext, Context, ListAlignment, ListState, Window, px};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::persistence;
-use crate::types::WorkspacePaneState;
 
 /// User prompts in a session, used to populate the composer's up-arrow
 /// history. Shared by `sessions` and `run`. Each entry pairs the prompt text
@@ -363,7 +363,9 @@ impl ConsoleDesktopApp {
                 if open {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            let session_id = this.active_session_for_pane("pane-main").unwrap_or_default();
+                            let session_id = this
+                                .active_session_for_pane("pane-main")
+                                .unwrap_or_default();
                             this.maybe_fetch_usage(&session_id, cx);
                             this.fetch_context_usage(&session_id, cx);
                         });
@@ -439,7 +441,12 @@ impl ConsoleDesktopApp {
                         // Deep-copy only at the submit boundary; the Rc
                         // keeps per-frame renders cheap.
                         let attachments = (*this.attachments_for_pane("pane-main")).clone();
-                        this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
+                        this.submit_prompt_with_context(
+                            prompt.clone(),
+                            attachments,
+                            context_files,
+                            cx,
+                        );
                     }
                     ComposerEvent::SubmitSteer(prompt, context_files) => {
                         this.active_pane_id = Some("pane-main".to_string());
@@ -623,7 +630,6 @@ impl ConsoleDesktopApp {
             active_project_shortcuts: std::collections::HashMap::new(),
             inspector_active_tab: console_ui::InspectorTab::default(),
             inspector_open_auxiliary_tabs: layout.open_auxiliary_tabs(),
-            browser_view: None,
             device_view: None,
             forwarded_ports_by_project: std::collections::HashMap::new(),
             ports_menu_handle: console_ui::ContextMenuHandle::new(cx),

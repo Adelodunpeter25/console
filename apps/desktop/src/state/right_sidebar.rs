@@ -12,13 +12,6 @@ use super::{
 
 impl ConsoleDesktopApp {
     fn sync_inspector_webviews(&self, cx: &mut Context<Self>) {
-        let is_browser = self.right_sidebar_visible
-            && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Browser);
-        if let Some(ref browser) = self.browser_view {
-            browser.update(cx, |view, cx| {
-                view.sync_native_state(is_browser, false, cx);
-            });
-        }
         let is_device = self.right_sidebar_visible
             && self.inspector_active_tab == InspectorTab::Auxiliary(AuxiliaryTab::Devices);
         if let Some(ref device) = self.device_view {
@@ -373,14 +366,12 @@ impl ConsoleDesktopApp {
                     .as_deref()
                     .and_then(|sid| self.session_cwd(sid, project_id.as_deref(), pane_id))
                     .or_else(|| {
-                        project_id
-                            .as_ref()
-                            .and_then(|pid| {
-                                self.projects
-                                    .iter()
-                                    .find(|p| &p.id == pid)
-                                    .map(|p| p.path.clone())
-                            })
+                        project_id.as_ref().and_then(|pid| {
+                            self.projects
+                                .iter()
+                                .find(|p| &p.id == pid)
+                                .map(|p| p.path.clone())
+                        })
                     })
                     .or_else(|| {
                         self.selected_project_for_pane(pane_id)
@@ -401,11 +392,6 @@ impl ConsoleDesktopApp {
     }
 
     pub fn close_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
-        if tab == AuxiliaryTab::Browser {
-            if let Some(browser) = self.browser_view.take() {
-                browser.update(cx, |view, cx| view.close(cx));
-            }
-        }
         if tab == AuxiliaryTab::Devices {
             if let Some(device) = self.device_view.take() {
                 device.update(cx, |view, cx| view.close(cx));
@@ -437,25 +423,10 @@ impl ConsoleDesktopApp {
                 self.fetch_inspector_git_changes(cx);
                 self.fetch_inspector_session_changes(cx);
             }
-            InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {}
             InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => self.fetch_inspector_subagents(cx),
             InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {}
         }
         cx.notify();
-    }
-
-    pub fn browser_view_for_inspector(
-        &mut self,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Entity<console_ui::BrowserView> {
-        if let Some(ref view) = self.browser_view {
-            view.clone()
-        } else {
-            let view = cx.new(|cx| console_ui::BrowserView::new(window, cx));
-            self.browser_view = Some(view.clone());
-            view
-        }
     }
 
     pub fn device_view_for_inspector(
@@ -812,8 +783,8 @@ impl ConsoleDesktopApp {
         };
 
         let client = self.client.clone();
-        cx.spawn(
-            async move |entity, cx| match client.sessions.get_changes(&session_id, None).await {
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.get_changes(&session_id, None).await {
                 Ok(changes) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -827,8 +798,8 @@ impl ConsoleDesktopApp {
                 Err(err) => {
                     log::warn!("Failed to fetch inspector session changes: {}", err);
                 }
-            },
-        )
+            }
+        })
         .detach();
     }
 

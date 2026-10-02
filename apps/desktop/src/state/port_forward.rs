@@ -20,10 +20,8 @@ impl ConsoleDesktopApp {
                         while let Some(Ok(ports)) = stream.next().await {
                             // Server reports remote ports; expose each one as a
                             // real localhost URL owned by LocalForwardManager.
-                            let remotes: Vec<u16> =
-                                ports.iter().map(|port| port.port).collect();
-                            let locals =
-                                client.local_forwards.ensure(&remotes).await;
+                            let remotes: Vec<u16> = ports.iter().map(|port| port.port).collect();
+                            let locals = client.local_forwards.ensure(&remotes).await;
                             let mapped: Vec<console_core::ForwardedPort> = locals
                                 .into_iter()
                                 .map(|forward| console_core::ForwardedPort {
@@ -157,27 +155,13 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Open a forwarded port URL directly inside the embedded browser.
+    /// Open a forwarded port URL directly inside a workspace browser tab.
     pub fn open_port_in_browser(
         &mut self,
         url: String,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
-        self.right_sidebar_visible = true;
-        if !self
-            .inspector_open_auxiliary_tabs
-            .contains(&console_ui::AuxiliaryTab::Browser)
-        {
-            self.inspector_open_auxiliary_tabs
-                .push(console_ui::AuxiliaryTab::Browser);
-        }
-        self.inspector_active_tab =
-            console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser);
-        let browser = self.browser_view_for_inspector(window, cx);
-        browser.update(cx, |view, cx| {
-            view.navigate_to_url(url, cx);
-        });
-        cx.notify();
+        self.open_browser_tab_with_url(Some(url), true, window, cx);
     }
 }

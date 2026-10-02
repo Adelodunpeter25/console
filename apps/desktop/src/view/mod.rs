@@ -1018,8 +1018,8 @@ impl Render for ConsoleDesktopApp {
                         let script_log_ids: Vec<String> = active_term_state
                             .map(|state| state.script_logs.clone())
                             .unwrap_or_default();
-                        let active_script_log_id: Option<String> = active_term_state
-                            .and_then(|state| state.active_script_log.clone());
+                        let active_script_log_id: Option<String> =
+                            active_term_state.and_then(|state| state.active_script_log.clone());
                         let active_script_running = active_script_log_id
                             .as_ref()
                             .and_then(|id| {
@@ -1046,32 +1046,43 @@ impl Render for ConsoleDesktopApp {
                                 script_id: Some(id.clone()),
                             })
                             .collect();
-                        tabs.extend(active_term_state.map(|state| {
-                            state
-                                .terminals
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, (_, entity))| {
-                                    let dynamic_title = entity.read(cx).title().map(|t| t.to_string());
-                                    TerminalTabInfo {
-                                        id: idx,
-                                        title: dynamic_title
-                                            .filter(|t| !t.is_empty())
-                                            .unwrap_or_else(|| format!("Terminal {}", idx + 1)),
-                                        script_id: None,
-                                    }
+                        tabs.extend(
+                            active_term_state
+                                .map(|state| {
+                                    state
+                                        .terminals
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(idx, (_, entity))| {
+                                            let dynamic_title =
+                                                entity.read(cx).title().map(|t| t.to_string());
+                                            TerminalTabInfo {
+                                                id: idx,
+                                                title: dynamic_title
+                                                    .filter(|t| !t.is_empty())
+                                                    .unwrap_or_else(|| {
+                                                        format!("Terminal {}", idx + 1)
+                                                    }),
+                                                script_id: None,
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()
                                 })
-                                .collect::<Vec<_>>()
-                        }).unwrap_or_default());
+                                .unwrap_or_default(),
+                        );
 
                         let active_idx = if let Some(active_id) = active_script_log_id.as_ref() {
-                            script_log_ids.iter().position(|id| id == active_id).unwrap_or(0)
+                            script_log_ids
+                                .iter()
+                                .position(|id| id == active_id)
+                                .unwrap_or(0)
                         } else {
                             script_log_ids.len()
                                 + active_term_state.map(|s| s.active_idx).unwrap_or(0)
                         };
 
-                        let terminal_element = if let Some(active_id) = active_script_log_id.clone() {
+                        let terminal_element = if let Some(active_id) = active_script_log_id.clone()
+                        {
                             let script_state = scripts_project_id_for_tabs
                                 .as_ref()
                                 .and_then(|pid| self.project_scripts_by_project.get(pid));
@@ -1080,12 +1091,11 @@ impl Render for ConsoleDesktopApp {
                                 .cloned()
                                 .unwrap_or_else(|| active_id.clone());
                             let command = script_state
-                                .and_then(|state| {
-                                    state.scripts.iter().find(|s| s.id == active_id)
-                                })
+                                .and_then(|state| state.scripts.iter().find(|s| s.id == active_id))
                                 .map(|s| s.command.clone())
                                 .unwrap_or_default();
-                            let run_view = script_state.and_then(|state| state.runs.get(&active_id));
+                            let run_view =
+                                script_state.and_then(|state| state.runs.get(&active_id));
                             let status = run_view.and_then(|v| v.run.as_ref().map(|r| r.status));
                             let exit_code =
                                 run_view.and_then(|v| v.run.as_ref().and_then(|r| r.exit_code));
@@ -1093,9 +1103,8 @@ impl Render for ConsoleDesktopApp {
                             let output = run_view.map(|v| v.output.clone()).unwrap_or_default();
 
                             let view = if !output.is_empty() {
-                                let lines: Rc<Vec<String>> = Rc::new(
-                                    output.lines().map(|line| line.to_string()).collect(),
-                                );
+                                let lines: Rc<Vec<String>> =
+                                    Rc::new(output.lines().map(|line| line.to_string()).collect());
                                 let count = lines.len().max(1);
                                 let key = format!("log:{}", active_id);
                                 let prev_count = self
@@ -1246,9 +1255,7 @@ impl Render for ConsoleDesktopApp {
                                             gpui::ListState::new(
                                                 count,
                                                 gpui::ListAlignment::Top,
-                                                gpui::px(
-                                                    console_ui::ESTIMATED_LOG_ROW_HEIGHT,
-                                                ),
+                                                gpui::px(console_ui::ESTIMATED_LOG_ROW_HEIGHT),
                                             )
                                         });
                                     if list_state.item_count() != count {
@@ -1260,17 +1267,13 @@ impl Render for ConsoleDesktopApp {
                                         .entry(key.clone())
                                         .or_default()
                                         .clone();
-                                    let scrollbar_state =
-                                        self.viewer_scrollbar_state(&key);
+                                    let scrollbar_state = self.viewer_scrollbar_state(&key);
                                     if prev_count != Some(count) {
                                         // New or changed content: reveal the
                                         // tail unless the user is mid-select,
                                         // so live logs follow without yanking
                                         // an active selection.
-                                        let selecting = !selection
-                                            .selection
-                                            .borrow()
-                                            .is_empty();
+                                        let selecting = !selection.selection.borrow().is_empty();
                                         if !selecting {
                                             list_state.scroll_to_end();
                                         }
@@ -1329,26 +1332,6 @@ impl Render for ConsoleDesktopApp {
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
-                        let browser_visible = self.right_sidebar_visible
-                            && self.inspector_active_tab
-                                == console_ui::InspectorTab::Auxiliary(
-                                    console_ui::AuxiliaryTab::Browser,
-                                );
-                        let browser_element = if browser_visible {
-                            let browser = self.browser_view_for_inspector(window, cx);
-                            let is_overlay_open = self.any_palette_open(cx);
-                            browser.update(cx, |view, cx| {
-                                view.sync_native_state(true, is_overlay_open, cx);
-                            });
-                            Some(browser.into_any_element())
-                        } else {
-                            if let Some(ref browser) = self.browser_view {
-                                browser.update(cx, |view, cx| {
-                                    view.sync_native_state(false, false, cx);
-                                });
-                            }
-                            None
-                        };
                         let device_visible = self.right_sidebar_visible
                             && self.inspector_active_tab
                                 == console_ui::InspectorTab::Auxiliary(
@@ -1399,7 +1382,6 @@ impl Render for ConsoleDesktopApp {
                                 on_begin_right_sidebar_resize,
                             )
                             .with_bottom_split(Some(bottom_split))
-                            .with_browser_view(browser_element)
                             .with_device_view(device_element)
                             .subagent_markdown_views(self.subagent_markdown_views.clone()),
                         )
@@ -1423,8 +1405,9 @@ impl Render for ConsoleDesktopApp {
             .child(self.tab_palette.clone())
             .child(self.quick_open_palette.clone())
             .child(self.project_browse_palette.clone())
-            .when_some(self.floating_composer_view(window, cx), |el, card| el.child(card))
+            .when_some(self.floating_composer_view(window, cx), |el, card| {
+                el.child(card)
+            })
             .child(self.global_search_panel.clone())
-
     }
 }
