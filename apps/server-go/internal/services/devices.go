@@ -105,6 +105,7 @@ func (s *DeviceService) Diagnostics(ctx context.Context) types.DeviceDiagnostics
 
 // Boot validates the platform, then boots in the background: Android waits
 // for boot_completed (minutes), so callers poll List instead of blocking.
+// Devices are slimmed as part of boot to keep the simulator lightweight.
 func (s *DeviceService) Boot(platform, id string) error {
 	if _, err := s.client.Driver(platform); err != nil {
 		return fmt.Errorf("%w: %v", ErrDeviceInvalidPlatform, err)
@@ -112,7 +113,7 @@ func (s *DeviceService) Boot(platform, id string) error {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), deviceBootTimeout)
 		defer cancel()
-		if err := s.client.Boot(ctx, platform, id); err != nil {
+		if err := s.client.BootWith(ctx, platform, id, sdk.BootOptions{Slim: true}); err != nil {
 			slog.Warn("device boot failed", "platform", platform, "id", id, "error", err)
 		}
 	}()
