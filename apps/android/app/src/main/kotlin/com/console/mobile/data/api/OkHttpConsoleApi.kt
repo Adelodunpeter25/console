@@ -6,6 +6,9 @@ import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
 import com.console.mobile.data.model.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
+import com.console.mobile.data.model.DeviceActionRequest
+import com.console.mobile.data.model.DeviceDescriptor
+import com.console.mobile.data.model.DeviceDiagnostics
 import com.console.mobile.data.model.FileSearchResponse
 import com.console.mobile.data.model.FileSearchResult
 import com.console.mobile.data.model.FsTreeEntry
@@ -332,6 +335,32 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }.toString()
         val raw = http.patch("/api/settings", body)
         return http.unwrap(raw, ConsoleSettings.serializer(), "save model roles")
+    }
+
+    override suspend fun getDevices(): List<DeviceDescriptor> {
+        val raw = http.get("/api/devices")
+        return http.unwrap(raw, ListSerializer(DeviceDescriptor.serializer()), "load devices")
+    }
+
+    override suspend fun getDeviceDiagnostics(): DeviceDiagnostics {
+        val raw = http.get("/api/devices/diagnostics")
+        return http.unwrap(raw, DeviceDiagnostics.serializer(), "load device diagnostics")
+    }
+
+    override suspend fun bootDevice(id: String, platform: String) {
+        val raw = http.post("/api/devices/${enc(id)}/boot?platform=${enc(platform)}", "{}")
+        ensureOk(raw, "boot device")
+    }
+
+    override suspend fun shutdownDevice(id: String, platform: String) {
+        val raw = http.post("/api/devices/${enc(id)}/shutdown?platform=${enc(platform)}", "{}")
+        ensureOk(raw, "shutdown device")
+    }
+
+    override suspend fun interactDevice(id: String, platform: String, action: DeviceActionRequest) {
+        val body = http.encodeBody(DeviceActionRequest.serializer(), action)
+        val raw = http.post("/api/devices/${enc(id)}/interact?platform=${enc(platform)}", body)
+        ensureOk(raw, "interact with device")
     }
 
     private fun ensureOk(raw: String, action: String) {

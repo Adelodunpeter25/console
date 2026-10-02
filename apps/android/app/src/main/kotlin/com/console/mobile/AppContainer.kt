@@ -148,6 +148,9 @@ object AppContainer {
     lateinit var environmentsRepository: EnvironmentsRepository
         private set
 
+    lateinit var deviceRepository: com.console.mobile.data.repo.DeviceRepository
+        private set
+
     fun initialize(context: Context) {
         val app = context.applicationContext
         appContext = app
@@ -250,6 +253,10 @@ object AppContainer {
         authRepository = AuthRepository(
             api = consoleApi,
             authState = authStateHolder,
+        )
+        deviceRepository = com.console.mobile.data.repo.DeviceRepository(
+            api = consoleApi,
+            apiClient = consoleApiClient,
         )
         environmentsRepository = EnvironmentsRepository(
             preferencesStore = preferencesStore,

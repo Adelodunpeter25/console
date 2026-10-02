@@ -87,6 +87,12 @@ interface ConsoleApi {
     suspend fun getSettings(): ConsoleSettings
     /** PATCH /api/settings — a null reference clears the role. */
     suspend fun updateModelRoles(roles: Map<String, String?>): ConsoleSettings
+    // devices
+    suspend fun getDevices(): List<com.console.mobile.data.model.DeviceDescriptor>
+    suspend fun getDeviceDiagnostics(): com.console.mobile.data.model.DeviceDiagnostics
+    suspend fun bootDevice(id: String, platform: String)
+    suspend fun shutdownDevice(id: String, platform: String)
+    suspend fun interactDevice(id: String, platform: String, action: com.console.mobile.data.model.DeviceActionRequest)
 }
 
 @kotlinx.serialization.Serializable
