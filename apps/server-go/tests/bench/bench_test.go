@@ -243,3 +243,22 @@ func TestBenchOnProgressAfterEveryRun(t *testing.T) {
 		t.Fatalf("progress: %v %v", err, seen)
 	}
 }
+
+func TestAddEnvFlagsRecordsHarnessVars(t *testing.T) {
+	flags := map[string]string{"CONSOLE_HARNESS_KEEP": "cli"}
+	bench.AddEnvFlags(flags, []string{
+		"CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1",
+		"CONSOLE_HARNESS_KEEP=env",
+		"CONSOLE_HARNESS_EMPTY=",
+		"PATH=/bin",
+	})
+	want := map[string]string{"CONSOLE_HARNESS_SPARSE_LINE_NUMBERS": "1", "CONSOLE_HARNESS_KEEP": "cli"}
+	if len(flags) != len(want) {
+		t.Fatalf("flags = %v, want %v", flags, want)
+	}
+	for k, v := range want {
+		if flags[k] != v {
+			t.Fatalf("flags[%s] = %q, want %q", k, flags[k], v)
+		}
+	}
+}

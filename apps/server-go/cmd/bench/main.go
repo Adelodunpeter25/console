@@ -79,6 +79,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	bench.AddEnvFlags(flags, os.Environ())
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
