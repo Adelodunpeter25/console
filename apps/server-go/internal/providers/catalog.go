@@ -17,20 +17,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-// DefaultCodexModels mirrors DEFAULT_CODEX_MODELS: offline seed refreshed
-// from the live list after login.
-func DefaultCodexModels() []types.Model {
-	ids := []string{"gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4-mini"}
-	models := make([]types.Model, 0, len(ids))
-	for _, id := range ids {
-		models = append(models, types.Model{
-			ID: id, Provider: "codex", ContextWindow: 272_000, SupportsImages: true,
-			ThinkingLevels: codex.CodexThinkingLevels, DefaultThinking: "low",
-		})
-	}
-	return models
-}
-
 // ListProviders returns catalog entries for implemented providers.
 func ListProviders() []types.ProviderEntry {
 	return []types.ProviderEntry{
@@ -42,7 +28,7 @@ func ListProviders() []types.ProviderEntry {
 		{
 			Name: "codex", DisplayName: "Codex",
 			Description: "ChatGPT subscription models through the Codex Responses API",
-			Models:      DefaultCodexModels(), AuthMethod: "oauth",
+			Models:      codex.Snapshot(), AuthMethod: "oauth",
 		},
 		{
 			Name: "claude", DisplayName: "Claude",
@@ -64,22 +50,11 @@ func AntigravityModels(ctx context.Context) []types.Model {
 	return antigravity.CachedModels(ctx)
 }
 
-// CodexModels returns live Codex models when logged in, else the static
-// seed. Mirrors fetchModelsForProvider's discover-or-fallback rule.
+// CodexModels returns live Codex models from the hourly discovery cache,
+// or empty when logged out / undiscovered. There is no static seed: the
+// endpoint is the only source of truth.
 func CodexModels(ctx context.Context) []types.Model {
-	cred, err := codex.LoadCredential()
-	if err != nil {
-		return DefaultCodexModels()
-	}
-	if refreshed, err := codex.RefreshIfNeeded(nil, cred); err == nil {
-		cred = refreshed
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if discovered, err := codex.FetchModels(ctx, nil, "", cred); err == nil && len(discovered) > 0 {
-		return discovered
-	}
-	return DefaultCodexModels()
+	return codex.CachedModels(ctx)
 }
 
 // ClaudeModels returns live Claude models from the hourly discovery cache,
@@ -152,6 +127,8 @@ func ResolveLiveModel(ctx context.Context, providerID, modelID string) (types.Mo
 		return antigravity.ResolveModel(ctx, modelID)
 	case "claude":
 		return claude.ResolveModel(ctx, modelID)
+	case "codex":
+		return codex.ResolveModel(ctx, modelID)
 	default:
 		return types.Model{}, false
 	}

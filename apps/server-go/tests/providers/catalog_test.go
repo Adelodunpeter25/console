@@ -27,13 +27,12 @@ func TestCatalogListsCodex(t *testing.T) {
 	if codexEntry == nil {
 		t.Fatalf("no codex entry: %+v", entries)
 	}
-	if len(codexEntry.Models) != 4 || codexEntry.AuthMethod != "oauth" {
+	if codexEntry.AuthMethod != "oauth" {
 		t.Fatalf("codex entry: %+v", codexEntry)
 	}
-	for _, m := range codexEntry.Models {
-		if m.ContextWindow != 272_000 || !m.SupportsImages || m.DefaultThinking != "low" {
-			t.Fatalf("seed model: %+v", m)
-		}
+	// No static seed: without discovery the list is empty (logged out).
+	if len(codexEntry.Models) != 0 {
+		t.Fatalf("codex models without discovery: %+v", codexEntry.Models)
 	}
 }
 
@@ -86,13 +85,22 @@ func TestCatalogModelsFallbackLoggedOut(t *testing.T) {
 	t.Setenv("CODEX_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
 	t.Setenv("OPENAI_CODEX_OAUTH_TOKEN", "")
 	models := providers.CodexModels(context.Background())
-	if len(models) != 4 {
+	if len(models) != 0 {
 		t.Fatalf("logged-out models: %+v", models)
 	}
 }
 
+func codexFavFixture() []types.Model {
+	return []types.Model{
+		{ID: "gpt-5.6-terra", Provider: "codex"},
+		{ID: "gpt-5.6-luna", Provider: "codex"},
+		{ID: "gpt-5.5", Provider: "codex"},
+		{ID: "gpt-5.4-mini", Provider: "codex"},
+	}
+}
+
 func TestSortModelsByFavorites(t *testing.T) {
-	models := providers.DefaultCodexModels()
+	models := codexFavFixture()
 	sorted := providers.SortModelsByFavorites(models, nil)
 	if len(sorted) != 4 || sorted[0].ID != "gpt-5.6-terra" {
 		t.Fatalf("no-fav order: %+v", sorted)
@@ -122,7 +130,7 @@ func TestCatalogFavoritesEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sorted := providers.SortModelsByFavorites(providers.DefaultCodexModels(), list)
+	sorted := providers.SortModelsByFavorites(codexFavFixture(), list)
 	if sorted[0].ID != "gpt-5.4-mini" {
 		t.Fatalf("stored fav first: %+v", sorted)
 	}

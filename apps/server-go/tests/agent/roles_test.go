@@ -61,8 +61,8 @@ func TestResolveRoleModel(t *testing.T) {
 		t.Fatalf("empty ref must fall back: %+v", got)
 	}
 	got := roles.ResolveRoleModel("smol", fallback, "codex/gpt-5.5")
-	if got.ID != "gpt-5.5" || got.Provider != "codex" || got.ContextWindow != 272_000 {
-		t.Fatalf("catalog hit: %+v", got)
+	if got.ID != "gpt-5.5" || got.Provider != "codex" || got.ContextWindow != 128_000 || len(got.ThinkingLevels) != 7 {
+		t.Fatalf("synthetic (no seed): %+v", got)
 	}
 	got = roles.ResolveRoleModel("vision", fallback, "gpt-5.4-mini")
 	if got.ID != "gpt-5.4-mini" || got.Provider != "codex" {
@@ -96,9 +96,9 @@ func TestValidateLevel(t *testing.T) {
 }
 
 func TestFindModel(t *testing.T) {
-	found, ok := providers.FindModel("codex", "GPT-5.6-LUNA")
-	if !ok || found.ID != "gpt-5.6-luna" {
-		t.Fatalf("case-insensitive: %+v %v", found, ok)
+	// No static seeds: without live discovery every id misses.
+	if _, ok := providers.FindModel("codex", "GPT-5.6-LUNA"); ok {
+		t.Fatal("seed hit without discovery")
 	}
 	if _, ok := providers.FindModel("codex", "nope"); ok {
 		t.Fatal("unknown id must miss")
