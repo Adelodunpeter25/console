@@ -35,7 +35,6 @@ import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.ConfirmDialogHost
 import com.console.mobile.ui.theme.ConsoleColors
-import kotlinx.coroutines.launch
 
 @Composable
 fun AppNavGraph() {
@@ -63,18 +62,14 @@ fun AppNavGraph() {
     NotificationPermissionRequest()
 
     val backStackEntry by navController.currentBackStackEntryAsState()
-    var pendingChatNav by remember { mutableStateOf<String?>(null) }
+    val pendingOpen by AppContainer.pendingOpenFromNotification.collectAsStateWithLifecycle()
 
-    // Deep-link from notification → open chat for that session.
-    LaunchedEffect(Unit) {
-        val pending = AppContainer.consumePendingOpenFromNotification()
-        if (pending != null) pendingChatNav = pending
-    }
-    LaunchedEffect(pendingChatNav) {
-        val id = pendingChatNav ?: return@LaunchedEffect
+    // Notification tap → open that session. Keyed on the observed value so it
+    // fires for taps while the app is already running (onNewIntent), not only
+    // on a cold start. ChatScreen loads the session detail on entry itself.
+    LaunchedEffect(pendingOpen) {
+        val id = AppContainer.consumePendingOpenFromNotification() ?: return@LaunchedEffect
         AppContainer.appStateHolder.openChatSession(id)
-        launch { AppContainer.sessionRepository.loadDetail(id) }
-        pendingChatNav = null
         navController.navigate(RouteChat) { launchSingleTop = true }
     }
 

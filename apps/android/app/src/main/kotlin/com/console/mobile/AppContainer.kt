@@ -38,27 +38,28 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 object AppContainer {
-    private val pendingNotificationLock = Any()
-
-    @Volatile
-    private var pendingNotificationId: String? = null
+    // Session a tapped notification wants opened. Observable (not a one-shot
+    // read at startup) so a tap while the app is already running — delivered
+    // via onNewIntent — is picked up by the nav graph, not just cold starts.
+    private val _pendingOpenFromNotification = MutableStateFlow<String?>(null)
+    val pendingOpenFromNotification: StateFlow<String?> = _pendingOpenFromNotification.asStateFlow()
 
     fun setPendingOpenFromNotification(id: String?) {
         val v = id?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        synchronized(pendingNotificationLock) { pendingNotificationId = v }
+        _pendingOpenFromNotification.value = v
     }
 
     fun consumePendingOpenFromNotification(): String? =
-        synchronized(pendingNotificationLock) {
-            val v = pendingNotificationId
-            pendingNotificationId = null
-            v
-        }
+        _pendingOpenFromNotification.getAndUpdate { null }
 
     lateinit var appContext: Context
         private set
