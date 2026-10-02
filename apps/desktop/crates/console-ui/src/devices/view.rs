@@ -192,15 +192,15 @@ impl DeviceViewer {
                         this.base_url = (!trimmed.is_empty()).then_some(trimmed);
                         match result {
                             Ok(devices) => {
-                                if this.selected_id.is_none() {
-                                    this.selected_id = devices
-                                        .iter()
-                                        .find(|d| d.state == DeviceState::Booted)
-                                        .or(devices.first())
-                                        .map(|d| d.id.clone());
+                                if let Some(selected) = &this.selected_id {
+                                    if !devices.iter().any(|d| &d.id == selected) {
+                                        this.selected_id = None;
+                                    }
                                 }
                                 this.devices = Rc::new(devices);
-                                this.start_selected_stream(cx);
+                                if this.selected_id.is_some() {
+                                    this.start_selected_stream(cx);
+                                }
                             }
                             Err(err) => {
                                 this.error = Some(err.to_string());
@@ -564,7 +564,7 @@ impl DeviceViewer {
         self.switcher_menu.is_open()
     }
 
-    fn rail_button(
+    fn toolbar_button(
         &self,
         id: &'static str,
         icon: IconName,
@@ -577,7 +577,7 @@ impl DeviceViewer {
         let tooltip_str = tooltip.into();
         let base = div()
             .id(id)
-            .size(px(30.0))
+            .size(px(28.0))
             .rounded(px(6.0))
             .flex_none()
             .flex()
@@ -585,10 +585,42 @@ impl DeviceViewer {
             .justify_center()
             .cursor_default();
         if !enabled {
-            return base.child(app_icon(icon, 14.0, theme.text_ghost));
+            return base.child(app_icon(icon, 13.0, theme.text_ghost));
         }
         base.hover(|element| element.bg(theme.overlay))
-            .child(app_icon(icon, 14.0, theme.text_secondary))
+            .child(app_icon(icon, 13.0, theme.text_secondary))
+            .tooltip(Tooltip::text(tooltip_str))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                on_click(this, window, cx);
+            }))
+    }
+
+    fn floating_control_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        enabled: bool,
+        tooltip: impl Into<SharedString>,
+        theme: Theme,
+        on_click: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
+        let tooltip_str = tooltip.into();
+        let base = div()
+            .id(id)
+            .size(px(32.0))
+            .rounded_full()
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer();
+        if !enabled {
+            return base.child(app_icon(icon, 15.0, theme.text_ghost));
+        }
+        base.hover(|element| element.bg(theme.overlay))
+            .active(|element| element.bg(theme.border))
+            .child(app_icon(icon, 15.0, theme.text))
             .tooltip(Tooltip::text(tooltip_str))
             .on_click(cx.listener(move |this, _, window, cx| {
                 on_click(this, window, cx);
@@ -636,16 +668,18 @@ impl DeviceViewer {
                             .text_color(theme.text)
                             .child(selected_label),
                     )
-                    .child(
-                        div()
-                            .text_size(px(10.0))
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .rounded_full()
-                            .bg(theme.overlay)
-                            .text_color(theme.text_secondary)
-                            .child(status),
-                    )
+                    .when_some(status, |el, s| {
+                        el.child(
+                            div()
+                                .text_size(px(10.0))
+                                .px(px(6.0))
+                                .py(px(2.0))
+                                .rounded_full()
+                                .bg(theme.overlay)
+                                .text_color(theme.text_secondary)
+                                .child(s),
+                        )
+                    })
                     .child(app_icon(IconName::ChevronDown, 12.0, theme.text_tertiary)),
                 "device-switcher-menu",
                 &menu,
@@ -679,34 +713,35 @@ impl DeviceViewer {
             .into_any_element()
     }
 
-    fn status_text(&self) -> String {
+    fn status_text(&self) -> Option<String> {
         if self.loading {
-            return "Loading".to_string();
+            return Some("Loading".to_string());
         }
         if self.booting_id.as_ref() == self.selected_id.as_ref() && self.booting_id.is_some() {
-            return "Booting".to_string();
+            return Some("Booting".to_string());
         }
         if let Some(device) = self.selected() {
             if device.state == DeviceState::Booting || Some(&device.id) == self.booting_id.as_ref()
             {
-                return "Booting".to_string();
+                return Some("Booting".to_string());
             }
             if device.state.is_booted() {
-                return self
-                    .stream_status
-                    .clone()
-                    .map(|s| {
-                        if s == "streaming" {
-                            "Ready".to_string()
-                        } else {
-                            s
-                        }
-                    })
-                    .unwrap_or_else(|| "Ready".to_string());
+                return Some(
+                    self.stream_status
+                        .clone()
+                        .map(|s| {
+                            if s == "streaming" {
+                                "Ready".to_string()
+                            } else {
+                                s
+                            }
+                        })
+                        .unwrap_or_else(|| "Ready".to_string()),
+                );
             }
-            return device.state.label().to_string();
+            return Some(device.state.label().to_string());
         }
-        "No device".to_string()
+        None
     }
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> gpui::Div {
@@ -724,7 +759,7 @@ impl DeviceViewer {
             .border_color(theme.border)
             .bg(theme.surface)
             .child(self.render_switcher(cx))
-            .child(self.rail_button(
+            .child(self.toolbar_button(
                 "device-refresh",
                 IconName::RotateCw,
                 true,
@@ -733,7 +768,7 @@ impl DeviceViewer {
                 |this, window, cx| this.refresh(window, cx),
                 cx,
             ))
-            .child(self.rail_button(
+            .child(self.toolbar_button(
                 "device-power",
                 IconName::Play,
                 has_device && !booted,
@@ -742,9 +777,9 @@ impl DeviceViewer {
                 |this, window, cx| this.boot_selected(window, cx),
                 cx,
             ))
-            .child(self.rail_button(
+            .child(self.toolbar_button(
                 "device-screenshot",
-                IconName::Eye,
+                IconName::Camera,
                 booted,
                 "Send screenshot to composer",
                 theme,
@@ -753,85 +788,100 @@ impl DeviceViewer {
             ))
     }
 
-    fn render_hardware_rail(&self, cx: &mut Context<Self>) -> gpui::Div {
-        let theme = Theme::current(cx);
-        let booted = self.selected().is_some_and(|d| d.state.is_booted());
+    fn render_hardware_rail(
+        &self,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui::Stateful<gpui::Div> {
         let is_ios = self
             .selected()
             .is_some_and(|d| d.platform_kind() == console_core::DevicePlatform::Ios);
         div()
-            .flex_none()
-            .px(px(8.0))
-            .py(px(6.0))
+            .id("device-floating-controls-wrapper")
+            .absolute()
+            .bottom(px(16.0))
+            .left_0()
+            .right_0()
             .flex()
-            .items_center()
             .justify_center()
-            .gap(px(4.0))
-            .border_t_1()
-            .border_color(theme.border)
-            .bg(theme.surface)
-            .child(self.rail_button(
-                "device-home",
-                IconName::Smartphone,
-                booted,
-                "Home",
-                theme,
-                |this, _, cx| this.send_action("home", cx),
-                cx,
-            ))
-            .when(!is_ios, |el| {
-                el.child(self.rail_button(
-                    "device-back",
-                    IconName::ArrowLeft,
-                    booted,
-                    "Back",
-                    theme,
-                    |this, _, cx| this.send_action("back", cx),
-                    cx,
-                ))
-            })
-            .child(self.rail_button(
-                "device-volume-up",
-                IconName::VolumeLoud,
-                booted,
-                "Volume up",
-                theme,
-                |this, _, cx| this.send_action("volume_up", cx),
-                cx,
-            ))
-            .child(self.rail_button(
-                "device-volume-down",
-                IconName::VolumeLoud,
-                booted,
-                "Volume down",
-                theme,
-                |this, _, cx| this.send_action("volume_down", cx),
-                cx,
-            ))
-            .child(self.rail_button(
-                "device-power-btn",
-                IconName::Stop,
-                booted,
-                "Power",
-                theme,
-                |this, _, cx| this.send_action("power", cx),
-                cx,
-            ))
-            .child(self.rail_button(
-                "device-appearance",
-                IconName::Moon,
-                booted,
-                "Toggle dark / light",
-                theme,
-                |this, _, cx| this.send_action("appearance", cx),
-                cx,
-            ))
+            .items_center()
+            .child(
+                div()
+                    .id("device-floating-controls")
+                    .px(px(10.0))
+                    .py(px(5.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .rounded_full()
+                    .bg(theme.raised)
+                    .border_1()
+                    .border_color(theme.border)
+                    .shadow_lg()
+                    .child(self.floating_control_button(
+                        "device-home",
+                        IconName::Circle,
+                        true,
+                        "Home",
+                        theme,
+                        |this, _, cx| this.send_action("home", cx),
+                        cx,
+                    ))
+                    .when(!is_ios, |el| {
+                        el.child(self.floating_control_button(
+                            "device-back",
+                            IconName::ChevronLeft,
+                            true,
+                            "Back",
+                            theme,
+                            |this, _, cx| this.send_action("back", cx),
+                            cx,
+                        ))
+                    })
+                    .child(self.floating_control_button(
+                        "device-volume-up",
+                        IconName::VolumeLoud,
+                        true,
+                        "Volume up",
+                        theme,
+                        |this, _, cx| this.send_action("volume_up", cx),
+                        cx,
+                    ))
+                    .child(self.floating_control_button(
+                        "device-volume-down",
+                        IconName::VolumeLow,
+                        true,
+                        "Volume down",
+                        theme,
+                        |this, _, cx| this.send_action("volume_down", cx),
+                        cx,
+                    ))
+                    .child(self.floating_control_button(
+                        "device-power-btn",
+                        IconName::Lock,
+                        true,
+                        "Lock / Power",
+                        theme,
+                        |this, _, cx| this.send_action("power", cx),
+                        cx,
+                    ))
+                    .child(self.floating_control_button(
+                        "device-appearance",
+                        IconName::Appearance,
+                        true,
+                        "Toggle dark / light",
+                        theme,
+                        |this, _, cx| this.send_action("appearance", cx),
+                        cx,
+                    )),
+            )
     }
 
-    fn render_video_area(&self, theme: Theme) -> AnyElement {
+    fn render_video_area(&self, theme: Theme, cx: &mut Context<Self>) -> AnyElement {
         let host = self.host.clone();
         let occluded = self.occluded;
         let has_device = self.selected_id.is_some();
+        let booted = self.selected().is_some_and(|d| d.state.is_booted());
         div()
             .flex_1()
             .min_h_0()
@@ -890,6 +940,9 @@ impl DeviceViewer {
                         .child("Device hidden while menu is open"),
                 )
             })
+            .when(has_device && booted && !occluded, |el| {
+                el.child(self.render_hardware_rail(theme, cx))
+            })
             .into_any_element()
     }
 
@@ -932,8 +985,7 @@ impl Render for DeviceViewer {
             .when_some(self.render_diagnostics(theme), |el, banner| {
                 el.child(banner)
             })
-            .child(self.render_video_area(theme))
-            .child(self.render_hardware_rail(cx))
+            .child(self.render_video_area(theme, cx))
     }
 }
 
