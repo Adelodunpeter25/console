@@ -65,6 +65,7 @@ type Service struct {
 	scripts   *services.ProjectScriptsService
 	mcp       *mcp.Manager
 	prompts   promptCache
+	groups    toolGroups
 	// ctxCache holds the last context-window snapshot per session, keyed
 	// by message count so the footer ring never recomputes a walk it
 	// already did. Has its own mutex: read on the request path while a

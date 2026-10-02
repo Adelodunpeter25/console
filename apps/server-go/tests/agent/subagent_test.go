@@ -166,3 +166,74 @@ func TestSubagentInheritsModel(t *testing.T) {
 		t.Fatalf("nested model = %q, want claude-haiku-4-5", p.model)
 	}
 }
+
+type toolNameCapture struct {
+	names []string
+	descs map[string]string
+}
+
+func (c *toolNameCapture) RunTurn(ctx context.Context, req loop.TurnRequest, s *stream.Stream[loop.Event]) error {
+	c.names = c.names[:0]
+	c.descs = map[string]string{}
+	for _, d := range req.Tools {
+		c.names = append(c.names, d.Name)
+		c.descs[d.Name] = d.Description
+	}
+	s.Push(loop.Event{Kind: loop.EventText, Text: "ok"})
+	s.Complete()
+	return nil
+}
+
+func TestSubagentToolSourceAndNestedTools(t *testing.T) {
+	extra := tools.NewTool("mcp__srv__get_x", "lazily loaded", tools.TierRead,
+		func(ctx context.Context, in struct{}) (any, error) { return "x", nil })
+	staleLoader := tools.NewTool("loadTools", "parent-bound", tools.TierRead,
+		func(ctx context.Context, in struct{}) (any, error) { return "parent", nil })
+	freshLoader := tools.NewTool("loadTools", "nested-bound", tools.TierRead,
+		func(ctx context.Context, in struct{}) (any, error) { return "nested", nil })
+	parent := tools.NewRegistry(tools.DefaultTools()...)
+	parent.Add(staleLoader, extra)
+
+	p := &toolNameCapture{}
+	tool := loop.NewSubagentTool(&loop.SubagentContext{
+		Provider:   p,
+		Model:      "m",
+		ToolSource: parent.Tools,
+		NestedTools: func(r *tools.Registry) {
+			r.Add(freshLoader)
+		},
+	})
+	if _, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go")); err != nil {
+		t.Fatal(err)
+	}
+	has := func(name string) bool {
+		for _, n := range p.names {
+			if n == name {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("mcp__srv__get_x") || !has("loadTools") || has("subagent") {
+		t.Fatalf("nested tools: %v", p.names)
+	}
+	if p.descs["loadTools"] != "nested-bound" {
+		t.Fatalf("loadTools must be re-bound to the nested registry, got %q", p.descs["loadTools"])
+	}
+}
+
+func TestRegistryToolsOrder(t *testing.T) {
+	a := tools.NewTool("b_tool", "", tools.TierRead, func(ctx context.Context, in struct{}) (any, error) { return nil, nil })
+	b := tools.NewTool("a_tool", "", tools.TierRead, func(ctx context.Context, in struct{}) (any, error) { return nil, nil })
+	late := tools.NewTool("0_late", "", tools.TierRead, func(ctx context.Context, in struct{}) (any, error) { return nil, nil })
+	r := tools.NewRegistry(a, b)
+	r.Add(late)
+	got := []string{}
+	for _, tl := range r.Tools() {
+		got = append(got, tl.Name())
+	}
+	defs := r.Definitions()
+	if strings.Join(got, ",") != "a_tool,b_tool,0_late" || len(defs) != 3 || defs[2].Name != "0_late" {
+		t.Fatalf("order: %v", got)
+	}
+}

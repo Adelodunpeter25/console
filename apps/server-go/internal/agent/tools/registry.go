@@ -59,6 +59,29 @@ func (r *Registry) Names() []string {
 	return names
 }
 
+// Tools returns every registered tool in Definitions order (base tools by
+// name, then lazily added tools in insertion order).
+func (r *Registry) Tools() []Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	isAdded := make(map[string]bool, len(r.added))
+	for _, name := range r.added {
+		isAdded[name] = true
+	}
+	base := make([]string, 0, len(r.tools))
+	for name := range r.tools {
+		if !isAdded[name] {
+			base = append(base, name)
+		}
+	}
+	sort.Strings(base)
+	out := make([]Tool, 0, len(r.tools))
+	for _, name := range append(base, r.added...) {
+		out = append(out, r.tools[name])
+	}
+	return out
+}
+
 // Definition is the provider-facing tool descriptor.
 type Definition struct {
 	Name        string         `json:"name"`

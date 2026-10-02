@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"log/slog"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -329,22 +330,46 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
 	usage := &loop.UsageTracker{}
+	setup := prompt.Setup
+	mcpManager := s.mcpManager()
+	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
+		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
+	}
+	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
-		Provider:     provider,
-		Model:        modelID,
-		Tools:        toolList,
+		Provider: provider,
+		Model:    modelID,
+		Tools:    toolList,
+		// Subagents start from the parent's current tools, so MCP groups the
+		// parent already loaded carry over, and get their own loadTools.
+		ToolSource: func() []tools.Tool { return registry.Tools() },
+		NestedTools: func(nested *tools.Registry) {
+			if mcpManager != nil {
+				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
+					nested.Add(lt)
+				}
+			}
+		},
 		SystemPrompt: prompt.StableSystem,
-		Setup:        prompt.Setup,
+		Setup:        setup,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
-	registry := tools.NewRegistry(toolList...)
+	registry = tools.NewRegistry(toolList...)
 	// MCP servers load lazily: only a small loadTools entry is in the list
 	// until the model asks for a group, which then appends that server's
-	// tools (visible from the next turn via agent.ToolDefs).
-	if m := s.mcpManager(); m != nil {
-		if lt := mcp.NewLoadToolsTool(m, registry); lt != nil {
+	// tools (visible from the next turn via agent.ToolDefs). Groups loaded
+	// earlier in this session are restored up front, in load order.
+	if mcpManager != nil {
+		if lt := mcp.NewLoadToolsTool(mcpManager, registry, mcp.LoadToolsOptions{
+			OnLoad: func(group string) { s.groups.add(sessionID, group) },
+		}); lt != nil {
 			registry.Add(lt)
+			for _, group := range s.groups.list(sessionID) {
+				if _, _, err := mcp.LoadGroup(ctx, mcpManager, registry, group); err != nil {
+					slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
+				}
+			}
 		}
 	}
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
@@ -358,7 +383,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent.Usage = usage
 	agent.ToolDefs = registry.Definitions
 	agent.SystemPrompt = prompt.StableSystem
-	agent.Setup = prompt.Setup
+	agent.Setup = setup
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort

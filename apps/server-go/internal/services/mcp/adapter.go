@@ -148,14 +148,108 @@ func renderResult(res *sdk.CallToolResult) []map[string]any {
 }
 
 type loadToolsInput struct {
-	Group string `json:"group" jsonschema:"description=Tool group to load, e.g. mcp:atlassian."`
+	Group string `json:"group" jsonschema:"description=Tool group to load, e.g. mcp:<server-id>."`
+}
+
+// maxGroupToolNames caps how many tool names a group line previews.
+const maxGroupToolNames = 8
+
+// LoadToolsOptions tunes NewLoadToolsTool.
+type LoadToolsOptions struct {
+	// OnLoad is called with the group id after a group loads successfully,
+	// so the caller can remember it (e.g. per session) and restore it later.
+	OnLoad func(group string)
+}
+
+// GroupID is the loadTools group name for a server.
+func GroupID(serverID string) string { return groupPrefix + serverID }
+
+// LoadGroup connects the server behind group and appends its tools to
+// registry. It returns the server config and the adapters that were added.
+func LoadGroup(ctx context.Context, m *Manager, registry *tools.Registry, group string) (ServerConfig, []tools.Tool, error) {
+	id := strings.TrimPrefix(strings.TrimSpace(group), groupPrefix)
+	cfg, ok, err := m.Config.Get(id)
+	if err != nil {
+		return ServerConfig{}, nil, err
+	}
+	if !ok || !cfg.Enabled || !strings.HasPrefix(strings.TrimSpace(group), groupPrefix) {
+		return ServerConfig{}, nil, fmt.Errorf("unknown tool group %q", group)
+	}
+	if err := m.Ensure(ctx, cfg.ID); err != nil {
+		return cfg, nil, fmt.Errorf("could not connect to %s: %w", cfg.Label, err)
+	}
+	remote := m.Tools(cfg.ID)
+	adapters := make([]tools.Tool, 0, len(remote))
+	for _, rt := range remote {
+		adapters = append(adapters, NewAdapter(m, cfg, rt))
+	}
+	registry.Add(adapters...)
+	return cfg, adapters, nil
+}
+
+// groupLine describes one group: its label, plus a preview of tool names
+// when the server is already connected (unconnected servers show only the
+// label; their tools are unknown until first load).
+func groupLine(m *Manager, cfg ServerConfig) string {
+	line := fmt.Sprintf("- %s: %s", GroupID(cfg.ID), cfg.Label)
+	remote := m.Tools(cfg.ID)
+	if len(remote) == 0 {
+		return line
+	}
+	names := make([]string, 0, maxGroupToolNames)
+	for i, rt := range remote {
+		if i == maxGroupToolNames {
+			break
+		}
+		names = append(names, rt.Name)
+	}
+	more := ""
+	if len(remote) > maxGroupToolNames {
+		more = ", …"
+	}
+	return fmt.Sprintf("%s (%d tools: %s%s)", line, len(remote), strings.Join(names, ", "), more)
 }
 
 // NewLoadToolsTool builds the lazy loader. Calling it connects the server
 // (opening the browser for OAuth servers on first use) and appends its tools
 // to registry; they appear in the model's tool list from the next turn on.
-// It returns nil when no enabled servers are configured.
-func NewLoadToolsTool(m *Manager, registry *tools.Registry) tools.Tool {
+// The description is built once here, so it stays byte-identical for the
+// whole run. It returns nil when no enabled servers are configured.
+func NewLoadToolsTool(m *Manager, registry *tools.Registry, opts ...LoadToolsOptions) tools.Tool {
+	var opt LoadToolsOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	enabled := EnabledServers(m)
+	if len(enabled) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	b.WriteString("Load an external tool group so its tools become callable on the next step. Available groups:")
+	for _, s := range enabled {
+		b.WriteString("\n" + groupLine(m, s))
+	}
+	return tools.NewTool("loadTools", b.String(), tools.TierRead,
+		func(ctx context.Context, in loadToolsInput) (any, error) {
+			cfg, adapters, err := LoadGroup(ctx, m, registry, in.Group)
+			if err != nil {
+				return nil, tools.NewToolError("%s", capitalize(err.Error()))
+			}
+			if opt.OnLoad != nil {
+				opt.OnLoad(GroupID(cfg.ID))
+			}
+			lines := make([]string, 0, len(adapters))
+			for _, ad := range adapters {
+				lines = append(lines, fmt.Sprintf("- %s: %s", ad.Name(), firstLine(ad.Description())))
+			}
+			return []map[string]any{{"type": "text", "text": fmt.Sprintf(
+				"Loaded %d tools from %s. They are callable from your next step:\n%s",
+				len(adapters), cfg.Label, strings.Join(lines, "\n"))}}, nil
+		})
+}
+
+// EnabledServers lists enabled server configs (nil on error).
+func EnabledServers(m *Manager) []ServerConfig {
 	servers, err := m.Config.List()
 	if err != nil {
 		return nil
@@ -166,39 +260,14 @@ func NewLoadToolsTool(m *Manager, registry *tools.Registry) tools.Tool {
 			enabled = append(enabled, s)
 		}
 	}
-	if len(enabled) == 0 {
-		return nil
+	return enabled
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
 	}
-	var b strings.Builder
-	b.WriteString("Load an external tool group so its tools become callable on the next step. Available groups:")
-	byGroup := map[string]ServerConfig{}
-	for _, s := range enabled {
-		byGroup[groupPrefix+s.ID] = s
-		fmt.Fprintf(&b, "\n- %s%s: %s", groupPrefix, s.ID, s.Label)
-	}
-	return tools.NewTool("loadTools", b.String(), tools.TierRead,
-		func(ctx context.Context, in loadToolsInput) (any, error) {
-			cfg, ok := byGroup[strings.TrimSpace(in.Group)]
-			if !ok {
-				return nil, tools.NewToolError("Unknown tool group %q.", in.Group)
-			}
-			if err := m.Ensure(ctx, cfg.ID); err != nil {
-				return nil, tools.NewToolError("Could not connect to %s: %v", cfg.Label, err)
-			}
-			remote := m.Tools(cfg.ID)
-			adapters := make([]tools.Tool, 0, len(remote))
-			var lines []string
-			for _, rt := range remote {
-				ad := NewAdapter(m, cfg, rt)
-				adapters = append(adapters, ad)
-				desc := firstLine(rt.Description)
-				lines = append(lines, fmt.Sprintf("- %s: %s", ad.Name(), desc))
-			}
-			registry.Add(adapters...)
-			return []map[string]any{{"type": "text", "text": fmt.Sprintf(
-				"Loaded %d tools from %s. They are callable from your next step:\n%s",
-				len(adapters), cfg.Label, strings.Join(lines, "\n"))}}, nil
-		})
+	return strings.ToUpper(s[:1]) + s[1:] + "."
 }
 
 func firstLine(s string) string {

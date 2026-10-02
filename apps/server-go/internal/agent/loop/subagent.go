@@ -21,8 +21,15 @@ type SubagentContext struct {
 	Provider Provider
 	// Model is the parent's model ID; the nested run reuses it (providers
 	// such as Claude reject requests with an empty model).
-	Model        string
-	Tools        []tools.Tool
+	Model string
+	Tools []tools.Tool
+	// ToolSource, when set, overrides Tools with the parent's tools as they
+	// are when the subagent starts, so groups the parent loaded mid-run
+	// (e.g. MCP servers) carry over.
+	ToolSource func() []tools.Tool
+	// NestedTools, when set, receives the subagent's own registry and may
+	// add tools bound to it (e.g. a loadTools that loads into the subagent).
+	NestedTools  func(registry *tools.Registry)
 	SystemPrompt string
 	// Setup is the parent's per-session setup, sent as a leading message.
 	Setup    string
@@ -122,14 +129,22 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 		Name: name, Role: role, Prompt: prompt, MaxTurns: 10,
 	})
 
-	nested := make([]tools.Tool, 0, len(c.Tools))
-	for _, t := range c.Tools {
-		if t.Name() == "subagent" {
+	source := c.Tools
+	if c.ToolSource != nil {
+		source = c.ToolSource()
+	}
+	nested := make([]tools.Tool, 0, len(source))
+	for _, t := range source {
+		// No recursion; loadTools is re-bound to the nested registry below.
+		if t.Name() == "subagent" || (c.NestedTools != nil && t.Name() == "loadTools") {
 			continue
 		}
 		nested = append(nested, t)
 	}
 	registry := tools.NewRegistry(nested...)
+	if c.NestedTools != nil {
+		c.NestedTools(registry)
+	}
 	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
@@ -138,6 +153,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	if c.Usage != nil {
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()
 	}
+	agent.ToolDefs = registry.Definitions
 	events, err := agent.Run(ctx, randomSubSession(), prompt, registry.Definitions())
 	if err != nil {
 		emit(EventSubagentEnd, SubagentEndInfo{SubagentID: subagentID, Status: "error", Error: err.Error()})
