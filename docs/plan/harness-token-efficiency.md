@@ -1,7 +1,7 @@
 # Harness Token Efficiency
 
-Status: **in progress** (paused 2026-09-24). Phase 1 done, Task 3.0 done,
-`sparse_line_numbers` measured once. See "Next steps" under Results log.
+Status: **in progress** (paused 2026-10-02). Phase 1 done, Task 3.0 done,
+`sparse_line_numbers` A/B done (keep off). See "Next steps" under Results log.
 
 ## Goal
 
@@ -537,12 +537,22 @@ One task per commit, each with a single-line message, for example:
 | 2026-09-24 | read cap 300 lines (bca9d973) | 24 | 19/24 | 15.5 | $0.085 | more reads and turns; different code than baseline |
 | 2026-09-24 | `sparse_line_numbers` (6b064876) | 24 | 19/24 | 13.5 | $0.091 | read output ~19% smaller per call; one runaway run (06 run 2: 69 turns, $0.36) skews cost; subagent fixed |
 
+| 2026-10-02 | baseline-v2 (b808921b) | 36 (3/task) | 32/36 | 11 | $0.0458 | total $2.46; cache read 94%; read_file 3,311 B/call, 26.5% of tokens; editFile 65 calls / 9 errors |
+| 2026-10-02 | `sparse_line_numbers` v2 (2cbf9bf4) | 36 (3/task) | 34/36 | 11 | $0.0465 | total $2.33 (−5%, within noise); read_file 2,934 B/call (−11%), 22.7% of tokens; editFile 76 calls / **18 errors** (2x) |
+
+**Sparse line numbers decision (2026-10-02): keep off by default.** The two
+v2 runs are a fair A/B: same harness code (commits between them only touch
+model catalogs and devices) and 3 runs per task. Read output shrinks 11% and
+`read_file` drops from 26.5% to 22.7% of tokens, but `editFile` errors double
+(9 → 18), so cost per passed task is flat (+1%). The success gain comes from
+task 09, which was already flaky. Per-task swings (e.g. 12 −53%, 08 +32%) are
+noise. The flag stays available via `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1`.
+Results now record active `CONSOLE_HARNESS_*` vars in `flags`.
+
 ### Next steps (resume here)
-- The three rows above ran on different commits and only 2 runs per task,
-  so run-to-run noise (often 2x per task) is bigger than the effects. They
-  are not a fair A/B.
-- Redo the A/B on one commit with `--runs 3`: flag off vs
-  `CONSOLE_HARNESS_SPARSE_LINE_NUMBERS=1`, using `--prev` to compare.
-- Env-var flags are not recorded in the results `flags` field; consider
-  saving active `CONSOLE_HARNESS_*` vars in the results file.
-- Then continue with Phase 2 (cache layout).
+- Phase 2 (cache layout): split the system prompt into a stable part and a
+  per-session part, then add explicit Claude cache breakpoints. This doesn't
+  change what the model sees, so it carries little quality risk.
+- Use `bench/results/baseline-v2.json` as the baseline (3 runs per task).
+- The usage guard is off by default; don't pass `--max-usage-pct` unless you
+  want it on. Use `--yes` to skip the cost prompt.
