@@ -609,7 +609,7 @@ impl DeviceViewer {
         let base = div()
             .id(id)
             .size(px(32.0))
-            .rounded_full()
+            .rounded(px(6.0))
             .flex_none()
             .flex()
             .items_center()
@@ -816,14 +816,14 @@ impl DeviceViewer {
                     .flex_col()
                     .items_center()
                     .gap(px(6.0))
-                    .rounded_full()
+                    .rounded(px(10.0))
                     .bg(theme.raised)
                     .border_1()
                     .border_color(theme.border)
                     .shadow_lg()
                     .child(self.floating_control_button(
                         "device-home",
-                        IconName::Circle,
+                        IconName::Home,
                         true,
                         "Home",
                         theme,
