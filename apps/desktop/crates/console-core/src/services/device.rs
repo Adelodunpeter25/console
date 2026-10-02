@@ -1,9 +1,9 @@
 //! Device simulator service: discovery, lifecycle, and interaction.
 //!
-//! Thin HTTP client over the server `/api/devices` routes (mirrors
-//! `apps/server/api/src/routes/devices.ts`). Live screen streaming is owned
-//! by the `expo-device-hub` proxy, not this service (see the device-simulator
-//! service spec); this only covers the REST control plane.
+//! Thin HTTP client over the server `/api/devices` routes (backed by the
+//! sim-go SDK in `apps/server-go/internal/routes/devices.go`). Live screen
+//! streaming and touch input go over the `/api/devices/:id/stream` websocket
+//! owned by the device player; this only covers the REST control plane.
 
 use crate::types::{
     ApiResponse, DeviceActionRequest, DeviceDescriptor, DeviceDiagnostics, DeviceOpenAppRequest,
@@ -86,8 +86,7 @@ impl DeviceService {
 
     /// List discovered simulators, emulators, and physical devices.
     pub async fn list(&self) -> Result<Vec<DeviceDescriptor>> {
-        let devices: Option<Vec<DeviceDescriptor>> = self.get("/api/devices").await.ok();
-        Ok(devices.unwrap_or_default())
+        self.get("/api/devices").await
     }
 
     /// Run the platform-tools diagnostic check (Xcode, Android SDK, disk).
@@ -98,24 +97,20 @@ impl DeviceService {
     /// Boot a simulator or emulator by id.
     pub async fn boot(&self, id: &str, platform: &str) -> Result<()> {
         let endpoint = format!("/api/devices/{}/boot?platform={}", id, platform);
-        let _: Option<serde_json::Value> = self.post(&endpoint, None).await.ok().flatten();
+        let _: serde_json::Value = self.post(&endpoint, None).await?;
         Ok(())
     }
 
     /// Power off a device by id.
     pub async fn shutdown(&self, id: &str, platform: &str) -> Result<()> {
         let endpoint = format!("/api/devices/{}/shutdown?platform={}", id, platform);
-        let _: Option<serde_json::Value> = self.post(&endpoint, None).await.ok().flatten();
+        let _: serde_json::Value = self.post(&endpoint, None).await?;
         Ok(())
     }
 
     /// Power off all running simulators, emulators, and streaming helpers.
     pub async fn shutdown_all(&self) -> Result<()> {
-        let _: Option<serde_json::Value> = self
-            .post("/api/devices/shutdown-all", None)
-            .await
-            .ok()
-            .flatten();
+        let _: serde_json::Value = self.post("/api/devices/shutdown-all", None).await?;
         Ok(())
     }
 
@@ -125,7 +120,7 @@ impl DeviceService {
         let payload = serde_json::to_value(DeviceOpenAppRequest {
             app: app.to_string(),
         })?;
-        let _: Option<serde_json::Value> = self.post(&endpoint, Some(payload)).await.ok().flatten();
+        let _: serde_json::Value = self.post(&endpoint, Some(payload)).await?;
         Ok(())
     }
 
@@ -138,7 +133,7 @@ impl DeviceService {
     ) -> Result<()> {
         let endpoint = format!("/api/devices/{}/interact?platform={}", id, platform);
         let payload = serde_json::to_value(action)?;
-        let _: Option<serde_json::Value> = self.post(&endpoint, Some(payload)).await.ok().flatten();
+        let _: serde_json::Value = self.post(&endpoint, Some(payload)).await?;
         Ok(())
     }
 

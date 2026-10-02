@@ -264,22 +264,13 @@ impl DeviceViewer {
             self.stream_status = Some("not connected".to_string());
             return;
         };
-        let platform = device.platform_kind().as_str().to_string();
-        let stream_url = format!(
-            "{}/api/devices/{}/stream?platform={}",
-            base, device.id, platform
-        );
-        let screenshot_url = format!(
-            "{}/api/devices/{}/screenshot?platform={}",
-            base, device.id, platform
-        );
-        let config = PlayerConfig {
-            platform,
-            stream_url: Some(stream_url),
-            control_url: None,
-            screenshot_url,
-            codec: Some("avc1.42E01E".to_string()),
-        };
+        // Only booted devices can stream; the server 404s otherwise.
+        if !device.state.is_booted() {
+            host.evaluate_script(PlayerConfig::stop_script());
+            self.stream_status = None;
+            return;
+        }
+        let config = PlayerConfig::for_device(&base, &device.id, device.platform_kind().as_str());
         host.set_visible(true);
         host.evaluate_script(&config.start_script());
         self.stream_status = Some("connecting".to_string());
@@ -295,102 +286,29 @@ impl DeviceViewer {
                         .map(|s| s.to_string());
                     cx.notify();
                 }
-                Some("tap") => {
-                    let x = value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let y = value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    self.send_tap(x, y, cx);
-                }
-                Some("swipe") => {
-                    let start_x = value.get("startX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let start_y = value.get("startY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let end_x = value.get("endX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let end_y = value.get("endY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let duration_ms = value.get("durationMs").and_then(|v| v.as_u64()).map(|d| d as u32);
-                    self.send_swipe(start_x, start_y, end_x, end_y, duration_ms, cx);
-                }
                 _ => {}
             }
         }
-    }
-
-    fn send_swipe(
-        &mut self,
-        start_x: f32,
-        start_y: f32,
-        end_x: f32,
-        end_y: f32,
-        duration_ms: Option<u32>,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(device) = self.selected() else {
-            return;
-        };
-        let client = self.client.clone();
-        let platform = device.platform_kind().as_str().to_string();
-        let id = device.id.clone();
-        cx.spawn(async move |_, _| {
-            let _ = client
-                .devices
-                .interact(
-                    &id,
-                    &platform,
-                    DeviceActionRequest {
-                        action: "swipe".to_string(),
-                        x: Some(start_x),
-                        y: Some(start_y),
-                        end_x: Some(end_x),
-                        end_y: Some(end_y),
-                        duration_ms,
-                        text: None,
-                        key: None,
-                        appearance: None,
-                    },
-                )
-                .await;
-        })
-        .detach();
-    }
-
-    fn send_tap(&mut self, x: f32, y: f32, cx: &mut Context<Self>) {
-        let Some(device) = self.selected() else {
-            return;
-        };
-        let client = self.client.clone();
-        let platform = device.platform_kind().as_str().to_string();
-        let id = device.id.clone();
-        cx.spawn(async move |_, _| {
-            let _ = client
-                .devices
-                .interact(
-                    &id,
-                    &platform,
-                    DeviceActionRequest {
-                        action: "tap".to_string(),
-                        x: Some(x),
-                        y: Some(y),
-                        end_x: None,
-                        end_y: None,
-                        duration_ms: None,
-                        text: None,
-                        key: None,
-                        appearance: None,
-                    },
-                )
-                .await;
-        })
-        .detach();
     }
 
     fn send_action(&mut self, action: &str, cx: &mut Context<Self>) {
         let Some(device) = self.selected() else {
             return;
         };
+        // Hardware buttons ride the live stream socket when it is up.
+        if action != "appearance" && self.stream_status.as_deref() == Some("streaming") {
+            if let Some(host) = self.host.clone() {
+                host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
+                return;
+            }
+        }
         let client = self.client.clone();
+        let view = cx.entity().downgrade();
         let platform = device.platform_kind().as_str().to_string();
         let id = device.id.clone();
         let action = action.to_string();
-        cx.spawn(async move |_, _| {
-            let _ = client
+        cx.spawn(async move |_, cx| {
+            let result = client
                 .devices
                 .interact(
                     &id,
@@ -408,6 +326,16 @@ impl DeviceViewer {
                     },
                 )
                 .await;
+            if let Err(err) = result {
+                cx.update(|cx| {
+                    if let Some(view) = view.upgrade() {
+                        view.update(cx, |this, cx| {
+                            this.error = Some(err.to_string());
+                            cx.notify();
+                        });
+                    }
+                });
+            }
         })
         .detach();
     }
@@ -423,11 +351,16 @@ impl DeviceViewer {
         let platform = device.platform_kind().as_str().to_string();
         let id = device.id.clone();
         cx.spawn(async move |_, cx| {
-            let _ = client.devices.boot(&id, &platform).await;
+            let result = client.devices.boot(&id, &platform).await;
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
-                        this.booting_id = None;
+                        if let Err(err) = result {
+                            this.booting_id = None;
+                            this.error = Some(err.to_string());
+                            cx.notify();
+                            return;
+                        }
                         this.refresh_boot(cx);
                     });
                 }
@@ -436,26 +369,68 @@ impl DeviceViewer {
         .detach();
     }
 
+    /// Poll the device list until the booting device reports booted (the
+    /// server boots in the background; Android can take minutes).
     fn refresh_boot(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
         let view = cx.entity().downgrade();
+        let target = self.booting_id.clone();
         cx.spawn(async move |_, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(1500))
-                .await;
-            let base_url = client.base_url().await;
-            let result = client.devices.list().await;
-            cx.update(|cx| {
-                if let Some(view) = view.upgrade() {
+            for _ in 0..100 {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(3000))
+                    .await;
+                let base_url = client.base_url().await;
+                let result = client.devices.list().await;
+                let done = cx.update(|cx| {
+                    let Some(view) = view.upgrade() else {
+                        return true;
+                    };
                     view.update(cx, |this, cx| {
                         // Keep the stream origin in sync in case the backend
                         // changed while booting.
                         let trimmed = base_url.trim_end_matches('/').to_string();
                         this.base_url = (!trimmed.is_empty()).then_some(trimmed);
-                        if let Ok(devices) = result {
-                            this.devices = Rc::new(devices);
+                        let Ok(devices) = result else {
+                            return false;
+                        };
+                        // An AVD gets a new serial id once it is running;
+                        // follow it by name.
+                        let booted = target.as_ref().and_then(|id| {
+                            let name = this
+                                .devices
+                                .iter()
+                                .find(|d| &d.id == id)
+                                .map(|d| d.name.clone());
+                            devices.iter().find(|d| {
+                                d.state.is_booted()
+                                    && (&d.id == id || Some(&d.name) == name.as_ref())
+                            })
+                        });
+                        let finished = target.is_none() || booted.is_some();
+                        if let Some(device) = booted {
+                            if this.selected_id == target {
+                                this.selected_id = Some(device.id.clone());
+                            }
+                        }
+                        this.devices = Rc::new(devices);
+                        if finished {
+                            this.booting_id = None;
                             this.start_selected_stream(cx);
                         }
+                        cx.notify();
+                        finished
+                    })
+                });
+                if done {
+                    return;
+                }
+            }
+            cx.update(|cx| {
+                if let Some(view) = view.upgrade() {
+                    view.update(cx, |this, cx| {
+                        this.booting_id = None;
+                        this.error = Some("Timed out waiting for the device to boot".to_string());
                         cx.notify();
                     });
                 }
@@ -473,11 +448,14 @@ impl DeviceViewer {
         let platform = device.platform_kind().as_str().to_string();
         let id = device.id.clone();
         cx.spawn(async move |_, cx| {
-            let _ = client.devices.shutdown(&id, &platform).await;
+            let shutdown = client.devices.shutdown(&id, &platform).await;
             let result = client.devices.list().await;
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
+                        if let Err(err) = shutdown {
+                            this.error = Some(err.to_string());
+                        }
                         if let Ok(devices) = result {
                             this.devices = Rc::new(devices);
                             this.start_selected_stream(cx);
