@@ -64,6 +64,7 @@ pub struct DeviceViewer {
     selected_id: Option<String>,
     pending: DeviceViewerPending,
     booting_id: Option<String>,
+    shutting_down_id: Option<String>,
     loading: bool,
     error: Option<String>,
     stream_status: Option<String>,
@@ -87,6 +88,7 @@ impl DeviceViewer {
                 select: Rc::new(RefCell::new(None)),
             },
             booting_id: None,
+            shutting_down_id: None,
             loading: false,
             error: None,
             stream_status: None,
@@ -445,6 +447,12 @@ impl DeviceViewer {
         let Some(device) = self.selected() else {
             return;
         };
+        self.shutting_down_id = Some(device.id.clone());
+        if let Some(host) = &self.host {
+            host.evaluate_script(PlayerConfig::stop_script());
+        }
+        self.stream_status = None;
+        cx.notify();
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device.platform_kind().as_str().to_string();
@@ -455,6 +463,7 @@ impl DeviceViewer {
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
                     view.update(cx, |this, cx| {
+                        this.shutting_down_id = None;
                         if let Err(err) = shutdown {
                             this.error = Some(err.to_string());
                         }
@@ -720,6 +729,11 @@ impl DeviceViewer {
         if self.booting_id.as_ref() == self.selected_id.as_ref() && self.booting_id.is_some() {
             return Some("Booting".to_string());
         }
+        if self.shutting_down_id.as_ref() == self.selected_id.as_ref()
+            && self.shutting_down_id.is_some()
+        {
+            return Some("Stopping".to_string());
+        }
         if let Some(device) = self.selected() {
             if device.state == DeviceState::Booting || Some(&device.id) == self.booting_id.as_ref()
             {
@@ -748,6 +762,10 @@ impl DeviceViewer {
         let theme = Theme::current(cx);
         let has_device = self.selected().is_some();
         let booted = self.selected().is_some_and(|d| d.state.is_booted());
+        let is_booting =
+            self.booting_id.as_ref() == self.selected_id.as_ref() && self.booting_id.is_some();
+        let is_stopping = self.shutting_down_id.as_ref() == self.selected_id.as_ref()
+            && self.shutting_down_id.is_some();
         div()
             .flex_none()
             .px(px(8.0))
@@ -771,16 +789,25 @@ impl DeviceViewer {
             .child(self.toolbar_button(
                 "device-power",
                 IconName::Play,
-                has_device && !booted,
+                has_device && !booted && !is_booting && !is_stopping,
                 "Boot device",
                 theme,
                 |this, window, cx| this.boot_selected(window, cx),
                 cx,
             ))
             .child(self.toolbar_button(
+                "device-stop",
+                IconName::Stop,
+                booted && !is_stopping,
+                "Shut down simulator",
+                theme,
+                |this, window, cx| this.shutdown_selected(window, cx),
+                cx,
+            ))
+            .child(self.toolbar_button(
                 "device-screenshot",
                 IconName::Camera,
-                booted,
+                booted && !is_stopping,
                 "Send screenshot to composer",
                 theme,
                 |this, window, cx| this.capture_screenshot(window, cx),
