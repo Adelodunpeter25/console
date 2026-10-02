@@ -167,6 +167,8 @@ dependencies {
     // Pinned to 0.41.0: 0.42.0+ require compileSdk 37 (and a newer AGP).
     implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.41.0")
     implementation("com.mikepenz:multiplatform-markdown-renderer-m3-android:0.41.0")
+    // Syntax-highlighted code fences with a language header + copy button.
+    implementation("com.mikepenz:multiplatform-markdown-renderer-code-android:0.41.0")
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
     implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
