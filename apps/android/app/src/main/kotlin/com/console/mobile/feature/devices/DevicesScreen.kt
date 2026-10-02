@@ -2,8 +2,11 @@ package com.console.mobile.feature.devices
 
 import android.annotation.SuppressLint
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +69,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.Volume
 import io.github.lyxnx.compose.ui.tablericons.outline.Volume2
+import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -102,6 +106,9 @@ fun DevicesScreen(
     var isBooting by remember { mutableStateOf(false) }
     var isStopping by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    // The player page defines window.__consoleDevice only once it has loaded;
+    // calling start() before then is a silent no-op, so wait for this.
+    var pageReady by remember { mutableStateOf(false) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -132,8 +139,9 @@ fun DevicesScreen(
     }
 
     // Stream start / stop sync with WebView
-    LaunchedEffect(selectedDevice?.id, selectedDevice?.state, webViewRef) {
+    LaunchedEffect(selectedDevice?.id, selectedDevice?.state, webViewRef, pageReady) {
         val wv = webViewRef ?: return@LaunchedEffect
+        if (!pageReady) return@LaunchedEffect
         val dev = selectedDevice
         if (dev != null && dev.isBooted) {
             val streamUrl = repo.getStreamUrl(dev.id, dev.platform)
@@ -366,16 +374,36 @@ fun DevicesScreen(
                                 settings.useWideViewPort = true
                                 settings.loadWithOverviewMode = true
                                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                                // The page is https (secure context, needed for WebCodecs)
+                                // but the stream socket is usually plain ws:// on a LAN.
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 setBackgroundColor(0xFF0A0A0B.toInt())
                                 addJavascriptInterface(AndroidBridge { s ->
                                     streamStatus = s
                                 }, "AndroidBridge")
-                                loadDataWithBaseURL(repo.serverBaseUrl, DEVICES_PLAYER_HTML, "text/html", "utf-8", null)
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                                        if (request.url.toString() != DEVICES_PLAYER_URL) return null
+                                        return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(DEVICES_PLAYER_HTML.toByteArray()))
+                                    }
+
+                                    override fun onPageFinished(view: WebView, url: String?) {
+                                        if (url == DEVICES_PLAYER_URL) pageReady = true
+                                    }
+                                }
+                                loadUrl(DEVICES_PLAYER_URL)
                                 webViewRef = this
                             }
                         },
+                        onRelease = { wv ->
+                            wv.destroy()
+                            if (webViewRef === wv) webViewRef = null
+                            pageReady = false
+                            streamStatus = "idle"
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
+                    StreamStatusOverlay(device = dev, status = streamStatus, isBooting = isBooting)
                 }
 
                 // Right Hardware Controls Rail (when booted)
@@ -454,9 +482,29 @@ fun DevicesScreen(
     DisposableEffect(Unit) {
         onDispose {
             webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.stop()", null)
-            webViewRef?.destroy()
-            webViewRef = null
         }
+    }
+}
+
+/** Human-readable stream state, so a dead stream isn't just a blank panel. */
+@Composable
+private fun StreamStatusOverlay(device: DeviceDescriptor, status: String, isBooting: Boolean) {
+    val message = when {
+        isBooting -> "Booting ${device.displayName}…"
+        !device.isBooted -> "${device.displayName} is not running. Tap play to boot it."
+        status == "streaming" -> null
+        status == "idle" || status == "ready" || status == "connecting" -> "Connecting…"
+        status == "waiting for video" -> "Waiting for video…"
+        status == "disconnected" -> "Stream disconnected. Retrying…"
+        else -> status
+    } ?: return
+    val isError = status == "disconnected" || status.contains("unavailable") || status.contains("error")
+    Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = message,
+            color = if (isError) ConsoleColors.Destructive else ConsoleColors.TextSecondary,
+            fontSize = 13.sp,
+        )
     }
 }
 

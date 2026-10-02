@@ -1,6 +1,13 @@
 package com.console.mobile.feature.devices
 
 /**
+ * Virtual https origin the player page is served from (intercepted in the
+ * WebViewClient, never hits the network). WebCodecs only exists in secure
+ * contexts, and the server's own http:// address isn't one.
+ */
+internal const val DEVICES_PLAYER_URL = "https://appassets.androidplatform.net/devices/player.html"
+
+/**
  * WebCodecs H.264 canvas player for sim-go stream WebSocket.
  * Identical contract to the desktop player; posts status to window.AndroidBridge.
  */
