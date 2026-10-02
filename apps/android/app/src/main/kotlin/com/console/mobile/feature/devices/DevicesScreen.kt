@@ -52,6 +52,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.data.model.DeviceActionRequest
 import com.console.mobile.data.model.DeviceDescriptor
 import com.console.mobile.ui.components.EmptyState
+import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
@@ -89,6 +90,7 @@ private class AndroidBridge(private val onStatus: (String) -> Unit) {
 @Composable
 fun DevicesScreen(
     modifier: Modifier = Modifier,
+    onBack: (() -> Unit)? = null,
 ) {
     val repo = AppContainer.deviceRepository
     val devices by repo.devices.collectAsStateWithLifecycle()
@@ -151,6 +153,7 @@ fun DevicesScreen(
             .fillMaxSize()
             .background(ConsoleColors.Background),
     ) {
+        ScreenHeader(title = "Devices", onBack = onBack)
         // Top Toolbar
         Row(
             modifier = Modifier

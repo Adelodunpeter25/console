@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Files
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
@@ -317,6 +318,14 @@ fun ChatScreen(
                             onClick = {
                                 overflowMenu = false
                                 jumpToProjectTab(MobileTab.Changes)
+                            },
+                        )
+                        ConsoleDropdownMenuItem(
+                            label = "Open devices",
+                            icon = TablerIcons.Outline.DeviceMobile,
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Devices)
                             },
                         )
                         ConsoleDropdownMenuItem(

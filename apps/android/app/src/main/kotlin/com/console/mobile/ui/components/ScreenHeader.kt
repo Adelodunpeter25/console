@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +26,9 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Settings
 
+/** Standard header row height: a 40dp control plus 10dp above and below. */
+val ScreenHeaderHeight = 60.dp
+
 /**
  * Port of components/layout/screen-header.tsx.
  * Title (22sp bold) + optional subtitle, back button, settings + headerActions.
@@ -43,8 +48,11 @@ fun ScreenHeader(
     actions: (@Composable RowScope.() -> Unit)? = null,
     centerTitle: Boolean = true,
 ) {
+    // Fixed height so the back button and title sit at the same spot on every
+    // screen. Sizing from content made headers with a subtitle taller than ones
+    // without, which pushed their (centered) back button lower.
     Row(
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().height(ScreenHeaderHeight).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {

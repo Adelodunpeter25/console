@@ -24,6 +24,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.notification.NotificationPermissionRequest
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
+import com.console.mobile.feature.devices.DevicesScreen
 import com.console.mobile.feature.files.FilesScreen
 import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
@@ -112,6 +113,7 @@ fun AppNavGraph() {
                             com.console.mobile.data.store.MobileTab.Files -> navController.navigate(RouteFiles) { launchSingleTop = true }
                             com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
                             com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
+                            com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
                             com.console.mobile.data.store.MobileTab.Subagents -> navController.navigate(RouteSubagents) { launchSingleTop = true }
                             else -> {}
                         }
@@ -153,6 +155,12 @@ fun AppNavGraph() {
                         com.console.mobile.data.store.MobileTab.Chat -> navController.navigate(RouteChat) { launchSingleTop = true }
                         else -> navController.navigate(RouteHome) { launchSingleTop = true }
                     }
+                })
+            }
+            composable<RouteDevices> {
+                DevicesScreen(onBack = {
+                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
+                    navController.navigate(RouteChat) { launchSingleTop = true }
                 })
             }
             composable<RouteSettings> {

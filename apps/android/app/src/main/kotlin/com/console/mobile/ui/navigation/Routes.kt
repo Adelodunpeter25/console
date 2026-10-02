@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 @Serializable object RouteChat
 @Serializable object RouteTerminal
 @Serializable object RouteFiles
+@Serializable object RouteDevices
 @Serializable object RouteChanges
 @Serializable object RouteSubagents
 @Serializable data class RouteSubagentDetails(val subagentId: String)
