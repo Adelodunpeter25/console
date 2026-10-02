@@ -179,14 +179,14 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
                     }
                 }
                 Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                    MarkdownText(content = subagent.summary ?: "")
+                    MarkdownText(content = subagent.summary)
                 }
             }
             // Error.
             if (!subagent.error.isNullOrBlank()) {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF87171).copy(alpha = 0.08f)).border(1.dp, Color(0xFFF87171).copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
-                    Text(subagent.error ?: "", color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
+                    Text(subagent.error, color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
                 }
             }
             // Activity groups.

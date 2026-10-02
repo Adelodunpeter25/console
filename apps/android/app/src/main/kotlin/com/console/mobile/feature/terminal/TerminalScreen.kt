@@ -137,7 +137,7 @@ fun TerminalScreen(onBack: () -> Unit) {
         spawnError != null -> "Failed to start terminal: $spawnError"
         project == null -> if (projectState.projects.isEmpty()) "No projects yet — add a project first." else null
         term?.status == TerminalStatus.Exited -> "Session ended."
-        term?.status == TerminalStatus.Error -> "Session error: ${term?.error ?: "unknown"}"
+        term?.status == TerminalStatus.Error -> "Session error: ${term.error ?: "unknown"}"
         else -> null
     }
 
@@ -157,7 +157,7 @@ fun TerminalScreen(onBack: () -> Unit) {
             Text(statusBanner, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp))
         }
         when {
-            needsProjectPick && project == null -> ProjectPicker(
+            needsProjectPick -> ProjectPicker(
                 projects = projectState.projects,
                 onSelect = { AppContainer.appStateHolder.setSelectedProjectId(it) },
             )

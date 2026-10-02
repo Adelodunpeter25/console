@@ -91,7 +91,7 @@ fun AccountSettings(onBack: () -> Unit) {
                                 else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                                 Column(modifier = Modifier.weight(1f).padding(start = 10.dp).padding(end = 12.dp)) {
                                     Text(p.displayName.ifBlank { p.name }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(if (loggedIn) (status?.email ?: "Connected") else "Not connected", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                    Text(if (loggedIn) (status.email ?: "Connected") else "Not connected", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 val label = when {
                                     busy -> "Wait"

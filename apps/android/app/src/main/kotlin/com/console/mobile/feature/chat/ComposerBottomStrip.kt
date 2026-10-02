@@ -51,7 +51,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
     }
 
     val selectedProject = projects.firstOrNull { p ->
-        (view?.sessionCwd?.isNotEmpty() == true && (p.path == view.sessionCwd || view.sessionCwd.startsWith(p.path + "/"))) || p.id == null
+        view?.sessionCwd?.isNotEmpty() == true && (p.path == view.sessionCwd || view.sessionCwd.startsWith(p.path + "/"))
     } ?: projects.firstOrNull { it.path == view?.sessionCwd }
     val modelLabel = view?.sessionModelId?.ifBlank { null }?.let { formatModelName(it) } ?: "Default Model"
     val modeLabel = when (ApprovalMode.fromValue(view?.approvalMode ?: "")) {

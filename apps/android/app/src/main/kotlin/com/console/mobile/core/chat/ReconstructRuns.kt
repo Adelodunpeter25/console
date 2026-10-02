@@ -25,7 +25,7 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
             }
             current = RunActivityState(runId = "reconstructed-${runIndex++}", startedAt = msg.createdAt, status = RunStatus.Completed)
         } else if (current != null) {
-            var cur = current!!
+            var cur = current
             when (msg) {
                 is AssistantMessage -> {
                     if (msg.content.any { it is ToolCallPart }) {
@@ -41,7 +41,6 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
                     }
                 }
                 is ToolResultMessage -> for (r in msg.results) pending[r.toolCallId] = r
-                else -> {}
             }
         }
     }

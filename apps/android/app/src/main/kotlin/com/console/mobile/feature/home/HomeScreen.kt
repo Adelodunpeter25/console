@@ -248,7 +248,7 @@ fun HomeScreen(
                                 section.data.forEachIndexed { index, session ->
                                     val draft = chatSessions[session.id]
                                     val isDraft = draft != null && isDraftSession(draft)
-                                    val preview = if (isDraft && draft != null) draftPreview(draft) else null
+                                    val preview = if (isDraft) draftPreview(draft) else null
                                     val status: SessionStatus? = session.status ?: sessionStatuses[session.id]
                                     SessionRow(
                                         session = session,

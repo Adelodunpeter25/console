@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
+// security-crypto is deprecated upstream with no drop-in replacement; swapping it out
+// would make existing stored tokens unreadable and sign everyone out.
+@Suppress("DEPRECATION")
 class TokenStore(context: Context) {
     private val prefs: SharedPreferences by lazy {
         try {

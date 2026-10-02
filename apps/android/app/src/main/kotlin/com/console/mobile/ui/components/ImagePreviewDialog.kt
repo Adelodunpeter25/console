@@ -47,7 +47,7 @@ fun attachmentBytes(data: String): ByteArray? {
 fun ImagePreviewDialog(image: ByteArray, onDismiss: () -> Unit) {
     var scale by remember(image) { mutableStateOf(1f) }
     var offset by remember(image) { mutableStateOf(Offset.Zero) }
-    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+    val transformState = rememberTransformableState { _, zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 5f)
         offset = if (scale > 1f) offset + panChange else Offset.Zero
     }

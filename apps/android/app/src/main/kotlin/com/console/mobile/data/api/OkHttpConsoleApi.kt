@@ -368,7 +368,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             val root = ConsoleJson.parseToJsonElement(raw) as? JsonObject
             val success = (root?.get("success") as? JsonPrimitive)?.booleanOrNull
             if (success == false) {
-                throw ApiException((root?.get("error") as? JsonPrimitive)?.contentOrNull ?: "Failed to $action")
+                throw ApiException((root.get("error") as? JsonPrimitive)?.contentOrNull ?: "Failed to $action")
             }
         } catch (e: ApiException) {
             throw e

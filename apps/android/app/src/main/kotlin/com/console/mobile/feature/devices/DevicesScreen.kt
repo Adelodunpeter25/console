@@ -83,10 +83,10 @@ private class AndroidBridge(private val onStatus: (String) -> Unit) {
     @JavascriptInterface
     fun postMessage(json: String) {
         try {
-            val root = kotlinx.serialization.json.Json.parseToJsonElement(json)
-            val type = (root as? kotlinx.serialization.json.JsonObject)?.get("type")?.toString()?.trim('"')
+            val root = kotlinx.serialization.json.Json.parseToJsonElement(json) as? kotlinx.serialization.json.JsonObject ?: return
+            val type = root["type"]?.toString()?.trim('"')
             if (type == "status") {
-                val status = (root as? kotlinx.serialization.json.JsonObject)?.get("status")?.toString()?.trim('"') ?: ""
+                val status = root["status"]?.toString()?.trim('"') ?: ""
                 onStatus(status)
             }
         } catch (_: Exception) {}

@@ -8,7 +8,7 @@ fun formatMessageTime(dateInput: Any?): String {
     if (dateInput == null) return ""
     val ms = when (dateInput) {
         is Number -> dateInput.toLong()
-        is String -> dateInput.toLongOrNull() ?: try { Date.parse(dateInput) } catch (_: Exception) { return "" }
+        is String -> dateInput.toLongOrNull() ?: try { java.time.OffsetDateTime.parse(dateInput).toInstant().toEpochMilli() } catch (_: Exception) { return "" }
         else -> return ""
     }
     return try {

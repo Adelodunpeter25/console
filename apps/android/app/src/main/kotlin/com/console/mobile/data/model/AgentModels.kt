@@ -1,5 +1,6 @@
 package com.console.mobile.data.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonClassDiscriminator
@@ -29,6 +30,7 @@ data class ImagePart(
     val mimeType: String,
 ) : MessageContent
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 @JsonClassDiscriminator("role")
 sealed interface AgentMessage {

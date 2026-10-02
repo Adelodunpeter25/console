@@ -136,7 +136,7 @@ fun buildGroupedProjectSections(
         }
 
         val resolvedId = project?.id ?: session.projectId
-        val groupKey = if (resolvedId != null) "project-$resolvedId" else (folderName(session.cwd).ifBlank { "draft" }).lowercase()
+        val groupKey = "project-$resolvedId"
         val rawName = project?.name ?: folderName(session.cwd).ifBlank { "Drafts" }
         val groupName = formatProjectTitle(rawName)
 
