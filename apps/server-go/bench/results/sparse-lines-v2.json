@@ -1,0 +1,2149 @@
+{
+  "provider": "claude",
+  "model": "claude-haiku-4-5",
+  "commit": "2cbf9bf41d0bb65f1e0f7b95d61e9515e69c1455",
+  "flags": {
+    "CONSOLE_HARNESS_SPARSE_LINE_NUMBERS": "1"
+  },
+  "started": "2026-10-02T13:22:21.737171Z",
+  "priceKnown": true,
+  "runs": [
+    {
+      "task": "01-q-cache-breakpoint",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 11,
+        "input": 10,
+        "cacheRead": 126168,
+        "cacheWrite": 26420,
+        "output": 1987,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.055586800000000006,
+      "tools": {
+        "glob": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 213
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 5765
+        },
+        "list_dir": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 980
+        },
+        "read_file": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 27569
+        }
+      },
+      "sources": {
+        "history:assistant": 2276,
+        "history:summaries": 0,
+        "history:toolCallArgs": 2456,
+        "history:user": 176,
+        "results:glob": 656,
+        "results:grep": 18796,
+        "results:list_dir": 2196,
+        "results:read_file": 28625,
+        "system:approval-mode": 1012,
+        "system:commands": 1991,
+        "system:critical": 440,
+        "system:identity": 429,
+        "system:repo-rules": 6677,
+        "system:skills": 3740,
+        "system:skills-guide": 627,
+        "system:tools": 726,
+        "system:workspace-tree": 3300,
+        "system:workstation": 891,
+        "tools": 56606
+      },
+      "wallMs": 27031
+    },
+    {
+      "task": "01-q-cache-breakpoint",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 16,
+        "input": 0,
+        "cacheRead": 410588,
+        "cacheWrite": 43066,
+        "output": 6289,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.1263363,
+      "tools": {
+        "bash": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 5813
+        },
+        "glob": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 11047
+        },
+        "grep": {
+          "calls": 5,
+          "errors": 0,
+          "resultBytes": 15009
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 311
+        },
+        "read_file": {
+          "calls": 9,
+          "errors": 0,
+          "resultBytes": 44078
+        },
+        "write_file": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 146
+        }
+      },
+      "sources": {
+        "history:assistant": 4737,
+        "history:summaries": 0,
+        "history:toolCallArgs": 18925,
+        "history:user": 256,
+        "results:bash": 7219,
+        "results:glob": 52315,
+        "results:grep": 66607,
+        "results:list_dir": 928,
+        "results:read_file": 115697,
+        "results:write_file": 177,
+        "system:approval-mode": 1472,
+        "system:commands": 2896,
+        "system:critical": 640,
+        "system:identity": 624,
+        "system:repo-rules": 9712,
+        "system:skills": 5440,
+        "system:skills-guide": 912,
+        "system:tools": 1056,
+        "system:workspace-tree": 4800,
+        "system:workstation": 1296,
+        "tools": 82336
+      },
+      "wallMs": 67687
+    },
+    {
+      "task": "01-q-cache-breakpoint",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 7,
+        "input": 0,
+        "cacheRead": 83413,
+        "cacheWrite": 17707,
+        "output": 1433,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.03764005,
+      "tools": {
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 15493
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 322
+        },
+        "read_file": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 14289
+        }
+      },
+      "sources": {
+        "history:assistant": 910,
+        "history:summaries": 0,
+        "history:toolCallArgs": 1065,
+        "history:user": 112,
+        "results:grep": 28603,
+        "results:list_dir": 357,
+        "results:read_file": 9609,
+        "system:approval-mode": 644,
+        "system:commands": 1267,
+        "system:critical": 280,
+        "system:identity": 273,
+        "system:repo-rules": 4249,
+        "system:skills": 2380,
+        "system:skills-guide": 399,
+        "system:tools": 462,
+        "system:workspace-tree": 2100,
+        "system:workstation": 567,
+        "tools": 36022
+      },
+      "wallMs": 19694
+    },
+    {
+      "task": "02-q-subagent-turns",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 2,
+        "input": 0,
+        "cacheRead": 11338,
+        "cacheWrite": 6965,
+        "output": 623,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.01295505,
+      "tools": {
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 4790
+        }
+      },
+      "sources": {
+        "history:assistant": 370,
+        "history:summaries": 0,
+        "history:toolCallArgs": 51,
+        "history:user": 28,
+        "results:grep": 1669,
+        "system:approval-mode": 184,
+        "system:commands": 362,
+        "system:critical": 80,
+        "system:identity": 78,
+        "system:repo-rules": 1214,
+        "system:skills": 680,
+        "system:skills-guide": 114,
+        "system:tools": 132,
+        "system:workspace-tree": 600,
+        "system:workstation": 162,
+        "tools": 10292
+      },
+      "wallMs": 8460
+    },
+    {
+      "task": "02-q-subagent-turns",
+      "run": 2,
+      "success": false,
+      "usage": {
+        "turns": 1,
+        "input": 0,
+        "cacheRead": 5669,
+        "cacheWrite": 2381,
+        "output": 470,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.00589315,
+      "tools": {},
+      "sources": {
+        "history:assistant": 0,
+        "history:summaries": 0,
+        "history:toolCallArgs": 0,
+        "history:user": 14,
+        "system:approval-mode": 92,
+        "system:commands": 181,
+        "system:critical": 40,
+        "system:identity": 39,
+        "system:repo-rules": 607,
+        "system:skills": 340,
+        "system:skills-guide": 57,
+        "system:tools": 66,
+        "system:workspace-tree": 300,
+        "system:workstation": 81,
+        "tools": 5146
+      },
+      "wallMs": 6267,
+      "answer": "I don't have explicit information about the default maximum number of turns a subagent reports in the setup materials provided to me. The `subagent` tool definition shows the available parameters (prompt, name, and role), but doesn't document a configurable max-turns setting or its default value.\n\nThis would be defined in the subagent implementation itself, which I'd need to look up in the codebase. Would you like me to search the codebase for the subagent implementation to find this information?"
+    },
+    {
+      "task": "02-q-subagent-turns",
+      "run": 3,
+      "success": false,
+      "usage": {
+        "turns": 1,
+        "input": 0,
+        "cacheRead": 5669,
+        "cacheWrite": 2378,
+        "output": 554,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.0063094,
+      "tools": {},
+      "sources": {
+        "history:assistant": 0,
+        "history:summaries": 0,
+        "history:toolCallArgs": 0,
+        "history:user": 14,
+        "system:approval-mode": 92,
+        "system:commands": 181,
+        "system:critical": 40,
+        "system:identity": 39,
+        "system:repo-rules": 607,
+        "system:skills": 340,
+        "system:skills-guide": 57,
+        "system:tools": 66,
+        "system:workspace-tree": 300,
+        "system:workstation": 81,
+        "tools": 5146
+      },
+      "wallMs": 7156,
+      "answer": "I don't have documentation about a default max turns setting for subagents in the available tool definitions or setup context provided to me. The subagent tool parameters I can see are:\n\n- `prompt` (required)\n- `name` (required)\n- `role` (optional)\n\nThere's no `max_turns` parameter visible in the tool schema, and the default behavior isn't documented in the information I have access to.\n\nTo find this information, you could:\n1. Check the tool's official documentation\n2. Look at the agent implementation source code\n3. Test a subagent call and observe the behavior\n4. Ask the tool or system documentation directly\n\nIs there a specific subagent task you're trying to accomplish? I can help you work with it regardless of the max turns limit."
+    },
+    {
+      "task": "03-q-dump-env",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 6,
+        "input": 0,
+        "cacheRead": 52736,
+        "cacheWrite": 9433,
+        "output": 1289,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.02350985,
+      "tools": {
+        "bash": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1444
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 4585
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 3691
+        }
+      },
+      "sources": {
+        "history:assistant": 1193,
+        "history:summaries": 0,
+        "history:toolCallArgs": 608,
+        "history:user": 120,
+        "results:bash": 2495,
+        "results:grep": 5202,
+        "results:read_file": 3014,
+        "system:approval-mode": 552,
+        "system:commands": 1086,
+        "system:critical": 240,
+        "system:identity": 234,
+        "system:repo-rules": 3642,
+        "system:skills": 2040,
+        "system:skills-guide": 342,
+        "system:tools": 396,
+        "system:workspace-tree": 1800,
+        "system:workstation": 486,
+        "tools": 30876
+      },
+      "wallMs": 18971
+    },
+    {
+      "task": "03-q-dump-env",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 9,
+        "input": 0,
+        "cacheRead": 95294,
+        "cacheWrite": 11514,
+        "output": 1635,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.032096900000000005,
+      "tools": {
+        "bash": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 6731
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2845
+        },
+        "list_dir": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 593
+        },
+        "read_file": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2143
+        }
+      },
+      "sources": {
+        "history:assistant": 2081,
+        "history:summaries": 0,
+        "history:toolCallArgs": 2027,
+        "history:user": 180,
+        "results:bash": 11957,
+        "results:grep": 6909,
+        "results:list_dir": 1116,
+        "results:read_file": 2445,
+        "system:approval-mode": 828,
+        "system:commands": 1629,
+        "system:critical": 360,
+        "system:identity": 351,
+        "system:repo-rules": 5463,
+        "system:skills": 3060,
+        "system:skills-guide": 513,
+        "system:tools": 594,
+        "system:workspace-tree": 2700,
+        "system:workstation": 729,
+        "tools": 46314
+      },
+      "wallMs": 21795
+    },
+    {
+      "task": "03-q-dump-env",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 5,
+        "input": 0,
+        "cacheRead": 39284,
+        "cacheWrite": 7824,
+        "output": 1018,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.0187984,
+      "tools": {
+        "bash": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 2298
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 3691
+        }
+      },
+      "sources": {
+        "history:assistant": 706,
+        "history:summaries": 0,
+        "history:toolCallArgs": 485,
+        "history:user": 100,
+        "results:bash": 2446,
+        "results:read_file": 2522,
+        "system:approval-mode": 460,
+        "system:commands": 905,
+        "system:critical": 200,
+        "system:identity": 195,
+        "system:repo-rules": 3035,
+        "system:skills": 1700,
+        "system:skills-guide": 285,
+        "system:tools": 330,
+        "system:workspace-tree": 1500,
+        "system:workstation": 405,
+        "tools": 25730
+      },
+      "wallMs": 13015
+    },
+    {
+      "task": "04-edit-truncated-field",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 15,
+        "input": 0,
+        "cacheRead": 189243,
+        "cacheWrite": 13629,
+        "output": 2893,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.05042555,
+      "tools": {
+        "bash": {
+          "calls": 5,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 2521
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 3,
+          "errorsBy": {
+            "invalid_args": 3
+          },
+          "resultBytes": 1104
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 531
+        },
+        "read_file": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 10115
+        }
+      },
+      "sources": {
+        "history:assistant": 3187,
+        "history:summaries": 0,
+        "history:toolCallArgs": 11017,
+        "history:user": 285,
+        "results:bash": 5383,
+        "results:editFile": 3004,
+        "results:grep": 2684,
+        "results:read_file": 41289,
+        "system:approval-mode": 1380,
+        "system:commands": 2715,
+        "system:critical": 600,
+        "system:identity": 585,
+        "system:repo-rules": 9105,
+        "system:skills": 5100,
+        "system:skills-guide": 855,
+        "system:tools": 990,
+        "system:workspace-tree": 4500,
+        "system:workstation": 1215,
+        "tools": 77190
+      },
+      "wallMs": 53695
+    },
+    {
+      "task": "04-edit-truncated-field",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 11,
+        "input": 0,
+        "cacheRead": 131570,
+        "cacheWrite": 19764,
+        "output": 2010,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.047912,
+      "tools": {
+        "bash": {
+          "calls": 6,
+          "errors": 0,
+          "resultBytes": 24275
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 181
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2772
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 2344
+        }
+      },
+      "sources": {
+        "history:assistant": 2222,
+        "history:summaries": 0,
+        "history:toolCallArgs": 4766,
+        "history:user": 209,
+        "results:bash": 25514,
+        "results:editFile": 490,
+        "results:grep": 8586,
+        "results:read_file": 6092,
+        "system:approval-mode": 1012,
+        "system:commands": 1991,
+        "system:critical": 440,
+        "system:identity": 429,
+        "system:repo-rules": 6677,
+        "system:skills": 3740,
+        "system:skills-guide": 627,
+        "system:tools": 726,
+        "system:workspace-tree": 3300,
+        "system:workstation": 891,
+        "tools": 56606
+      },
+      "wallMs": 46525
+    },
+    {
+      "task": "04-edit-truncated-field",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 10,
+        "input": 0,
+        "cacheRead": 115937,
+        "cacheWrite": 12961,
+        "output": 1930,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.03744495,
+      "tools": {
+        "bash": {
+          "calls": 3,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 2975
+        },
+        "editFile": {
+          "calls": 2,
+          "errors": 1,
+          "errorsBy": {
+            "invalid_args": 1
+          },
+          "resultBytes": 502
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1308
+        },
+        "read_file": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 10115
+        }
+      },
+      "sources": {
+        "history:assistant": 1147,
+        "history:summaries": 0,
+        "history:toolCallArgs": 4337,
+        "history:user": 190,
+        "results:bash": 8520,
+        "results:editFile": 750,
+        "results:grep": 3192,
+        "results:read_file": 20558,
+        "system:approval-mode": 920,
+        "system:commands": 1810,
+        "system:critical": 400,
+        "system:identity": 390,
+        "system:repo-rules": 6070,
+        "system:skills": 3400,
+        "system:skills-guide": 570,
+        "system:tools": 660,
+        "system:workspace-tree": 3000,
+        "system:workstation": 810,
+        "tools": 51460
+      },
+      "wallMs": 30439
+    },
+    {
+      "task": "05-edit-task-label",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 11,
+        "input": 0,
+        "cacheRead": 108963,
+        "cacheWrite": 9951,
+        "output": 2085,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.03376005,
+      "tools": {
+        "bash": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 500
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 173
+        },
+        "list_dir": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 1180
+        },
+        "read_file": {
+          "calls": 6,
+          "errors": 0,
+          "resultBytes": 5158
+        }
+      },
+      "sources": {
+        "history:assistant": 2275,
+        "history:summaries": 0,
+        "history:toolCallArgs": 4290,
+        "history:user": 176,
+        "results:bash": 368,
+        "results:editFile": 268,
+        "results:list_dir": 3746,
+        "results:read_file": 11884,
+        "system:approval-mode": 1012,
+        "system:commands": 1991,
+        "system:critical": 440,
+        "system:identity": 429,
+        "system:repo-rules": 6677,
+        "system:skills": 3740,
+        "system:skills-guide": 627,
+        "system:tools": 726,
+        "system:workspace-tree": 3300,
+        "system:workstation": 891,
+        "tools": 56606
+      },
+      "wallMs": 40718
+    },
+    {
+      "task": "05-edit-task-label",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 42,
+        "input": 0,
+        "cacheRead": 1072899,
+        "cacheWrite": 34893,
+        "output": 8857,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.19519115000000004,
+      "tools": {
+        "bash": {
+          "calls": 13,
+          "errors": 3,
+          "errorsBy": {
+            "env": 3
+          },
+          "resultBytes": 7970
+        },
+        "editFile": {
+          "calls": 6,
+          "errors": 0,
+          "resultBytes": 1043
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 2332
+        },
+        "list_dir": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 1136
+        },
+        "read_file": {
+          "calls": 13,
+          "errors": 0,
+          "resultBytes": 33170
+        },
+        "todo": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 1528
+        }
+      },
+      "sources": {
+        "history:assistant": 35869,
+        "history:summaries": 0,
+        "history:toolCallArgs": 87488,
+        "history:user": 672,
+        "results:bash": 16541,
+        "results:editFile": 9249,
+        "results:grep": 29804,
+        "results:list_dir": 16356,
+        "results:read_file": 385084,
+        "results:todo": 11976,
+        "system:approval-mode": 3864,
+        "system:commands": 7602,
+        "system:critical": 1680,
+        "system:identity": 1638,
+        "system:repo-rules": 25494,
+        "system:skills": 14280,
+        "system:skills-guide": 2394,
+        "system:tools": 2772,
+        "system:workspace-tree": 12600,
+        "system:workstation": 3402,
+        "tools": 216132
+      },
+      "wallMs": 140130
+    },
+    {
+      "task": "05-edit-task-label",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 20,
+        "input": 0,
+        "cacheRead": 384929,
+        "cacheWrite": 27493,
+        "output": 3250,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.08910915,
+      "tools": {
+        "bash": {
+          "calls": 9,
+          "errors": 0,
+          "resultBytes": 9570
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 173
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 163
+        },
+        "read_file": {
+          "calls": 8,
+          "errors": 0,
+          "resultBytes": 33639
+        }
+      },
+      "sources": {
+        "history:assistant": 5694,
+        "history:summaries": 0,
+        "history:toolCallArgs": 10896,
+        "history:user": 320,
+        "results:bash": 38437,
+        "results:editFile": 469,
+        "results:list_dir": 1088,
+        "results:read_file": 138599,
+        "system:approval-mode": 1840,
+        "system:commands": 3620,
+        "system:critical": 800,
+        "system:identity": 780,
+        "system:repo-rules": 12140,
+        "system:skills": 6800,
+        "system:skills-guide": 1140,
+        "system:tools": 1320,
+        "system:workspace-tree": 6000,
+        "system:workstation": 1620,
+        "tools": 102920
+      },
+      "wallMs": 75395
+    },
+    {
+      "task": "06-edit-network-class",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 27,
+        "input": 0,
+        "cacheRead": 492435,
+        "cacheWrite": 23343,
+        "output": 7225,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.11454725,
+      "tools": {
+        "bash": {
+          "calls": 12,
+          "errors": 0,
+          "resultBytes": 7801
+        },
+        "editFile": {
+          "calls": 5,
+          "errors": 2,
+          "errorsBy": {
+            "invalid_args": 2
+          },
+          "resultBytes": 1179
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 2974
+        },
+        "read_file": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 15664
+        }
+      },
+      "sources": {
+        "history:assistant": 16416,
+        "history:summaries": 0,
+        "history:toolCallArgs": 72799,
+        "history:user": 540,
+        "results:bash": 45319,
+        "results:editFile": 6559,
+        "results:grep": 23731,
+        "results:read_file": 92727,
+        "system:approval-mode": 2484,
+        "system:commands": 4887,
+        "system:critical": 1080,
+        "system:identity": 1053,
+        "system:repo-rules": 16389,
+        "system:skills": 9180,
+        "system:skills-guide": 1539,
+        "system:tools": 1782,
+        "system:workspace-tree": 8100,
+        "system:workstation": 2187,
+        "tools": 138942
+      },
+      "wallMs": 107879
+    },
+    {
+      "task": "06-edit-network-class",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 24,
+        "input": 0,
+        "cacheRead": 399276,
+        "cacheWrite": 28278,
+        "output": 5054,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.10054510000000001,
+      "tools": {
+        "bash": {
+          "calls": 12,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 25944
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 1,
+          "errorsBy": {
+            "invalid_args": 1
+          },
+          "resultBytes": 861
+        },
+        "grep": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 2975
+        },
+        "read_file": {
+          "calls": 5,
+          "errors": 0,
+          "resultBytes": 12934
+        }
+      },
+      "sources": {
+        "history:assistant": 8530,
+        "history:summaries": 0,
+        "history:toolCallArgs": 41780,
+        "history:user": 480,
+        "results:bash": 34558,
+        "results:editFile": 4726,
+        "results:grep": 21398,
+        "results:read_file": 83071,
+        "system:approval-mode": 2208,
+        "system:commands": 4344,
+        "system:critical": 960,
+        "system:identity": 936,
+        "system:repo-rules": 14568,
+        "system:skills": 8160,
+        "system:skills-guide": 1368,
+        "system:tools": 1584,
+        "system:workspace-tree": 7200,
+        "system:workstation": 1944,
+        "tools": 123504
+      },
+      "wallMs": 93451
+    },
+    {
+      "task": "06-edit-network-class",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 15,
+        "input": 0,
+        "cacheRead": 203448,
+        "cacheWrite": 15621,
+        "output": 3436,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.057051050000000006,
+      "tools": {
+        "bash": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 4614
+        },
+        "editFile": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 366
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 754
+        },
+        "read_file": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 11675
+        }
+      },
+      "sources": {
+        "history:assistant": 5379,
+        "history:summaries": 0,
+        "history:toolCallArgs": 13820,
+        "history:user": 300,
+        "results:bash": 17746,
+        "results:editFile": 1065,
+        "results:grep": 3510,
+        "results:read_file": 38549,
+        "system:approval-mode": 1380,
+        "system:commands": 2715,
+        "system:critical": 600,
+        "system:identity": 585,
+        "system:repo-rules": 9105,
+        "system:skills": 5100,
+        "system:skills-guide": 855,
+        "system:tools": 990,
+        "system:workspace-tree": 4500,
+        "system:workstation": 1215,
+        "tools": 77190
+      },
+      "wallMs": 54805
+    },
+    {
+      "task": "07-fix-dump-names",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 12,
+        "input": 0,
+        "cacheRead": 122412,
+        "cacheWrite": 11081,
+        "output": 2436,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.03827245,
+      "tools": {
+        "bash": {
+          "calls": 7,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 3655
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 197
+        },
+        "read_file": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 4582
+        }
+      },
+      "sources": {
+        "history:assistant": 4186,
+        "history:summaries": 0,
+        "history:toolCallArgs": 3958,
+        "history:user": 144,
+        "results:bash": 6694,
+        "results:editFile": 225,
+        "results:read_file": 12812,
+        "system:approval-mode": 1104,
+        "system:commands": 2172,
+        "system:critical": 480,
+        "system:identity": 468,
+        "system:repo-rules": 7284,
+        "system:skills": 4080,
+        "system:skills-guide": 684,
+        "system:tools": 792,
+        "system:workspace-tree": 3600,
+        "system:workstation": 972,
+        "tools": 61752
+      },
+      "wallMs": 38919
+    },
+    {
+      "task": "07-fix-dump-names",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 12,
+        "input": 0,
+        "cacheRead": 114811,
+        "cacheWrite": 9924,
+        "output": 1752,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.0326461,
+      "tools": {
+        "bash": {
+          "calls": 8,
+          "errors": 3,
+          "errorsBy": {
+            "env": 3
+          },
+          "resultBytes": 3892
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 197
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 3691
+        }
+      },
+      "sources": {
+        "history:assistant": 2296,
+        "history:summaries": 0,
+        "history:toolCallArgs": 2713,
+        "history:user": 144,
+        "results:bash": 9218,
+        "results:editFile": 225,
+        "results:read_file": 7243,
+        "system:approval-mode": 1104,
+        "system:commands": 2172,
+        "system:critical": 480,
+        "system:identity": 468,
+        "system:repo-rules": 7284,
+        "system:skills": 4080,
+        "system:skills-guide": 684,
+        "system:tools": 792,
+        "system:workspace-tree": 3600,
+        "system:workstation": 972,
+        "tools": 61752
+      },
+      "wallMs": 36655
+    },
+    {
+      "task": "07-fix-dump-names",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 10,
+        "input": 0,
+        "cacheRead": 120750,
+        "cacheWrite": 13416,
+        "output": 2114,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.039415,
+      "tools": {
+        "bash": {
+          "calls": 6,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 9797
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 197
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 3691
+        }
+      },
+      "sources": {
+        "history:assistant": 2447,
+        "history:summaries": 0,
+        "history:toolCallArgs": 3239,
+        "history:user": 120,
+        "results:bash": 24822,
+        "results:editFile": 225,
+        "results:read_file": 7243,
+        "system:approval-mode": 920,
+        "system:commands": 1810,
+        "system:critical": 400,
+        "system:identity": 390,
+        "system:repo-rules": 6070,
+        "system:skills": 3400,
+        "system:skills-guide": 570,
+        "system:tools": 660,
+        "system:workspace-tree": 3000,
+        "system:workstation": 810,
+        "tools": 51460
+      },
+      "wallMs": 35333
+    },
+    {
+      "task": "08-fix-cold-miss",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 31,
+        "input": 0,
+        "cacheRead": 590382,
+        "cacheWrite": 34096,
+        "output": 6874,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.13602820000000002,
+      "tools": {
+        "bash": {
+          "calls": 15,
+          "errors": 2,
+          "errorsBy": {
+            "env": 2
+          },
+          "resultBytes": 25328
+        },
+        "editFile": {
+          "calls": 6,
+          "errors": 0,
+          "resultBytes": 1065
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2562
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 164
+        },
+        "read_file": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 21806
+        }
+      },
+      "sources": {
+        "history:assistant": 20937,
+        "history:summaries": 0,
+        "history:toolCallArgs": 52974,
+        "history:user": 279,
+        "results:bash": 46139,
+        "results:editFile": 7392,
+        "results:grep": 23841,
+        "results:list_dir": 1600,
+        "results:read_file": 140063,
+        "system:approval-mode": 2852,
+        "system:commands": 5611,
+        "system:critical": 1240,
+        "system:identity": 1209,
+        "system:repo-rules": 18817,
+        "system:skills": 10540,
+        "system:skills-guide": 1767,
+        "system:tools": 2046,
+        "system:workspace-tree": 9300,
+        "system:workstation": 2511,
+        "tools": 159526
+      },
+      "wallMs": 116357
+    },
+    {
+      "task": "08-fix-cold-miss",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 24,
+        "input": 0,
+        "cacheRead": 361490,
+        "cacheWrite": 18593,
+        "output": 4697,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.08287525,
+      "tools": {
+        "bash": {
+          "calls": 14,
+          "errors": 5,
+          "errorsBy": {
+            "env": 4,
+            "timeout": 1
+          },
+          "resultBytes": 6322
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 1,
+          "errorsBy": {
+            "invalid_args": 1
+          },
+          "resultBytes": 551
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2559
+        },
+        "read_file": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 11227
+        }
+      },
+      "sources": {
+        "history:assistant": 11759,
+        "history:summaries": 0,
+        "history:toolCallArgs": 21403,
+        "history:user": 216,
+        "results:bash": 24234,
+        "results:editFile": 2310,
+        "results:grep": 16758,
+        "results:read_file": 66884,
+        "system:approval-mode": 2208,
+        "system:commands": 4344,
+        "system:critical": 960,
+        "system:identity": 936,
+        "system:repo-rules": 14568,
+        "system:skills": 8160,
+        "system:skills-guide": 1368,
+        "system:tools": 1584,
+        "system:workspace-tree": 7200,
+        "system:workstation": 1944,
+        "tools": 123504
+      },
+      "wallMs": 134313
+    },
+    {
+      "task": "08-fix-cold-miss",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 62,
+        "input": 0,
+        "cacheRead": 2005243,
+        "cacheWrite": 43425,
+        "output": 9838,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.30399555000000006,
+      "tools": {
+        "bash": {
+          "calls": 50,
+          "errors": 11,
+          "errorsBy": {
+            "env": 10,
+            "timeout": 1
+          },
+          "resultBytes": 51324
+        },
+        "editFile": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 564
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1028
+        },
+        "read_file": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 11457
+        }
+      },
+      "sources": {
+        "history:assistant": 67482,
+        "history:summaries": 0,
+        "history:toolCallArgs": 92913,
+        "history:user": 558,
+        "results:bash": 750468,
+        "results:editFile": 6840,
+        "results:grep": 20496,
+        "results:read_file": 220589,
+        "system:approval-mode": 5704,
+        "system:commands": 11222,
+        "system:critical": 2480,
+        "system:identity": 2418,
+        "system:repo-rules": 37634,
+        "system:skills": 21080,
+        "system:skills-guide": 3534,
+        "system:tools": 4092,
+        "system:workspace-tree": 18600,
+        "system:workstation": 5022,
+        "tools": 319052
+      },
+      "wallMs": 290201
+    },
+    {
+      "task": "09-multi-quota-class",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 31,
+        "input": 0,
+        "cacheRead": 645742,
+        "cacheWrite": 37248,
+        "output": 9895,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.1606092,
+      "tools": {
+        "bash": {
+          "calls": 15,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 24425
+        },
+        "editFile": {
+          "calls": 7,
+          "errors": 5,
+          "errorsBy": {
+            "aborted": 1,
+            "invalid_args": 4
+          },
+          "resultBytes": 1965
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 328
+        },
+        "read_file": {
+          "calls": 7,
+          "errors": 0,
+          "resultBytes": 26466
+        }
+      },
+      "sources": {
+        "history:assistant": 12097,
+        "history:summaries": 0,
+        "history:toolCallArgs": 108911,
+        "history:user": 744,
+        "results:bash": 49048,
+        "results:editFile": 9799,
+        "results:list_dir": 3416,
+        "results:read_file": 191067,
+        "system:approval-mode": 2852,
+        "system:commands": 5611,
+        "system:critical": 1240,
+        "system:identity": 1209,
+        "system:repo-rules": 18817,
+        "system:skills": 10540,
+        "system:skills-guide": 1767,
+        "system:tools": 2046,
+        "system:workspace-tree": 9300,
+        "system:workstation": 2511,
+        "tools": 159526
+      },
+      "wallMs": 118044
+    },
+    {
+      "task": "09-multi-quota-class",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 25,
+        "input": 0,
+        "cacheRead": 413282,
+        "cacheWrite": 23967,
+        "output": 5731,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.09994195000000002,
+      "tools": {
+        "bash": {
+          "calls": 11,
+          "errors": 2,
+          "errorsBy": {
+            "env": 1,
+            "timeout": 1
+          },
+          "resultBytes": 12305
+        },
+        "editFile": {
+          "calls": 5,
+          "errors": 2,
+          "errorsBy": {
+            "invalid_args": 2
+          },
+          "resultBytes": 1179
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 6105
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 278
+        },
+        "read_file": {
+          "calls": 6,
+          "errors": 0,
+          "resultBytes": 14701
+        }
+      },
+      "sources": {
+        "history:assistant": 6452,
+        "history:summaries": 0,
+        "history:toolCallArgs": 53386,
+        "history:user": 600,
+        "results:bash": 32853,
+        "results:editFile": 5150,
+        "results:grep": 44457,
+        "results:list_dir": 1995,
+        "results:read_file": 72293,
+        "system:approval-mode": 2300,
+        "system:commands": 4525,
+        "system:critical": 1000,
+        "system:identity": 975,
+        "system:repo-rules": 15175,
+        "system:skills": 8500,
+        "system:skills-guide": 1425,
+        "system:tools": 1650,
+        "system:workspace-tree": 7500,
+        "system:workstation": 2025,
+        "tools": 128650
+      },
+      "wallMs": 96945
+    },
+    {
+      "task": "09-multi-quota-class",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 21,
+        "input": 0,
+        "cacheRead": 305135,
+        "cacheWrite": 19506,
+        "output": 5388,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.081836,
+      "tools": {
+        "bash": {
+          "calls": 8,
+          "errors": 0,
+          "resultBytes": 2209
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 1,
+          "errorsBy": {
+            "invalid_args": 1
+          },
+          "resultBytes": 869
+        },
+        "grep": {
+          "calls": 3,
+          "errors": 0,
+          "resultBytes": 7144
+        },
+        "list_dir": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 329
+        },
+        "read_file": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 12017
+        }
+      },
+      "sources": {
+        "history:assistant": 5214,
+        "history:summaries": 0,
+        "history:toolCallArgs": 27885,
+        "history:user": 504,
+        "results:bash": 8507,
+        "results:editFile": 2209,
+        "results:grep": 41220,
+        "results:list_dir": 1722,
+        "results:read_file": 40867,
+        "system:approval-mode": 1932,
+        "system:commands": 3801,
+        "system:critical": 840,
+        "system:identity": 819,
+        "system:repo-rules": 12747,
+        "system:skills": 7140,
+        "system:skills-guide": 1197,
+        "system:tools": 1386,
+        "system:workspace-tree": 6300,
+        "system:workstation": 1701,
+        "tools": 108066
+      },
+      "wallMs": 82188
+    },
+    {
+      "task": "10-multi-rename-field",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 16,
+        "input": 0,
+        "cacheRead": 221846,
+        "cacheWrite": 14539,
+        "output": 3530,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.05800835000000001,
+      "tools": {
+        "bash": {
+          "calls": 6,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 1889
+        },
+        "editFile": {
+          "calls": 7,
+          "errors": 2,
+          "errorsBy": {
+            "invalid_args": 2
+          },
+          "resultBytes": 1562
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 762
+        },
+        "read_file": {
+          "calls": 5,
+          "errors": 0,
+          "resultBytes": 9499
+        }
+      },
+      "sources": {
+        "history:assistant": 4580,
+        "history:summaries": 0,
+        "history:toolCallArgs": 16173,
+        "history:user": 304,
+        "results:bash": 2731,
+        "results:editFile": 6391,
+        "results:grep": 4125,
+        "results:read_file": 45744,
+        "system:approval-mode": 1472,
+        "system:commands": 2896,
+        "system:critical": 640,
+        "system:identity": 624,
+        "system:repo-rules": 9712,
+        "system:skills": 5440,
+        "system:skills-guide": 912,
+        "system:tools": 1056,
+        "system:workspace-tree": 4800,
+        "system:workstation": 1296,
+        "tools": 82336
+      },
+      "wallMs": 88088
+    },
+    {
+      "task": "10-multi-rename-field",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 9,
+        "input": 0,
+        "cacheRead": 103749,
+        "cacheWrite": 12114,
+        "output": 2503,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.0380324,
+      "tools": {
+        "bash": {
+          "calls": 4,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 1573
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 749
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 996
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 7910
+        }
+      },
+      "sources": {
+        "history:assistant": 1464,
+        "history:summaries": 0,
+        "history:toolCallArgs": 5594,
+        "history:user": 171,
+        "results:bash": 1420,
+        "results:editFile": 1651,
+        "results:grep": 2824,
+        "results:read_file": 19901,
+        "system:approval-mode": 828,
+        "system:commands": 1629,
+        "system:critical": 360,
+        "system:identity": 351,
+        "system:repo-rules": 5463,
+        "system:skills": 3060,
+        "system:skills-guide": 513,
+        "system:tools": 594,
+        "system:workspace-tree": 2700,
+        "system:workstation": 729,
+        "tools": 46314
+      },
+      "wallMs": 41471
+    },
+    {
+      "task": "10-multi-rename-field",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 15,
+        "input": 0,
+        "cacheRead": 185663,
+        "cacheWrite": 12927,
+        "output": 2763,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.04854005,
+      "tools": {
+        "bash": {
+          "calls": 7,
+          "errors": 2,
+          "errorsBy": {
+            "env": 2
+          },
+          "resultBytes": 2642
+        },
+        "editFile": {
+          "calls": 4,
+          "errors": 0,
+          "resultBytes": 753
+        },
+        "grep": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 999
+        },
+        "read_file": {
+          "calls": 2,
+          "errors": 0,
+          "resultBytes": 7912
+        }
+      },
+      "sources": {
+        "history:assistant": 3484,
+        "history:summaries": 0,
+        "history:toolCallArgs": 8394,
+        "history:user": 285,
+        "results:bash": 3789,
+        "results:editFile": 2766,
+        "results:grep": 4956,
+        "results:read_file": 35537,
+        "system:approval-mode": 1380,
+        "system:commands": 2715,
+        "system:critical": 600,
+        "system:identity": 585,
+        "system:repo-rules": 9105,
+        "system:skills": 5100,
+        "system:skills-guide": 855,
+        "system:tools": 990,
+        "system:workspace-tree": 4500,
+        "system:workstation": 1215,
+        "tools": 77190
+      },
+      "wallMs": 58625
+    },
+    {
+      "task": "11-long-output-build",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 6,
+        "input": 0,
+        "cacheRead": 47582,
+        "cacheWrite": 6549,
+        "output": 908,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.017484450000000002,
+      "tools": {
+        "bash": {
+          "calls": 3,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 693
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 186
+        },
+        "read_file": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1525
+        }
+      },
+      "sources": {
+        "history:assistant": 924,
+        "history:summaries": 0,
+        "history:toolCallArgs": 639,
+        "history:user": 84,
+        "results:bash": 772,
+        "results:editFile": 216,
+        "results:read_file": 2172,
+        "system:approval-mode": 552,
+        "system:commands": 1086,
+        "system:critical": 240,
+        "system:identity": 234,
+        "system:repo-rules": 3642,
+        "system:skills": 2040,
+        "system:skills-guide": 342,
+        "system:tools": 396,
+        "system:workspace-tree": 1800,
+        "system:workstation": 486,
+        "tools": 30876
+      },
+      "wallMs": 51151
+    },
+    {
+      "task": "11-long-output-build",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 6,
+        "input": 0,
+        "cacheRead": 47856,
+        "cacheWrite": 6640,
+        "output": 978,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.017975599999999998,
+      "tools": {
+        "bash": {
+          "calls": 3,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 677
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 186
+        },
+        "read_file": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1525
+        }
+      },
+      "sources": {
+        "history:assistant": 1018,
+        "history:summaries": 0,
+        "history:toolCallArgs": 790,
+        "history:user": 84,
+        "results:bash": 786,
+        "results:editFile": 216,
+        "results:read_file": 2172,
+        "system:approval-mode": 552,
+        "system:commands": 1086,
+        "system:critical": 240,
+        "system:identity": 234,
+        "system:repo-rules": 3642,
+        "system:skills": 2040,
+        "system:skills-guide": 342,
+        "system:tools": 396,
+        "system:workspace-tree": 1800,
+        "system:workstation": 486,
+        "tools": 30876
+      },
+      "wallMs": 43067
+    },
+    {
+      "task": "11-long-output-build",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 6,
+        "input": 0,
+        "cacheRead": 47682,
+        "cacheWrite": 6593,
+        "output": 941,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0
+      },
+      "costUsd": 0.01771445,
+      "tools": {
+        "bash": {
+          "calls": 3,
+          "errors": 1,
+          "errorsBy": {
+            "env": 1
+          },
+          "resultBytes": 682
+        },
+        "editFile": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 186
+        },
+        "read_file": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1525
+        }
+      },
+      "sources": {
+        "history:assistant": 870,
+        "history:summaries": 0,
+        "history:toolCallArgs": 791,
+        "history:user": 84,
+        "results:bash": 788,
+        "results:editFile": 216,
+        "results:read_file": 2172,
+        "system:approval-mode": 552,
+        "system:commands": 1086,
+        "system:critical": 240,
+        "system:identity": 234,
+        "system:repo-rules": 3642,
+        "system:skills": 2040,
+        "system:skills-guide": 342,
+        "system:tools": 396,
+        "system:workspace-tree": 1800,
+        "system:workstation": 486,
+        "tools": 30876
+      },
+      "wallMs": 36370
+    },
+    {
+      "task": "12-subagent-dump-callers",
+      "run": 1,
+      "success": true,
+      "usage": {
+        "turns": 2,
+        "input": 0,
+        "cacheRead": 11338,
+        "cacheWrite": 5498,
+        "output": 531,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0,
+        "subagents": {
+          "turns": 5,
+          "input": 10,
+          "cacheRead": 35273,
+          "cacheWrite": 16536,
+          "output": 2028,
+          "reasoning": 0,
+          "coldMisses": 0,
+          "unreportedTurns": 0
+        }
+      },
+      "costUsd": 0.045008599999999996,
+      "tools": {
+        "subagent": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 2063
+        }
+      },
+      "sources": {
+        "history:assistant": 73,
+        "history:summaries": 0,
+        "history:toolCallArgs": 189,
+        "history:user": 42,
+        "results:subagent": 707,
+        "system:approval-mode": 184,
+        "system:commands": 362,
+        "system:critical": 80,
+        "system:identity": 78,
+        "system:repo-rules": 1214,
+        "system:skills": 680,
+        "system:skills-guide": 114,
+        "system:tools": 132,
+        "system:workspace-tree": 600,
+        "system:workstation": 162,
+        "tools": 10292
+      },
+      "wallMs": 22292
+    },
+    {
+      "task": "12-subagent-dump-callers",
+      "run": 2,
+      "success": true,
+      "usage": {
+        "turns": 2,
+        "input": 0,
+        "cacheRead": 11338,
+        "cacheWrite": 5393,
+        "output": 503,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0,
+        "subagents": {
+          "turns": 4,
+          "input": 0,
+          "cacheRead": 30402,
+          "cacheWrite": 9007,
+          "output": 1351,
+          "reasoning": 0,
+          "coldMisses": 0,
+          "unreportedTurns": 0
+        }
+      },
+      "costUsd": 0.031444,
+      "tools": {
+        "subagent": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1695
+        }
+      },
+      "sources": {
+        "history:assistant": 66,
+        "history:summaries": 0,
+        "history:toolCallArgs": 185,
+        "history:user": 42,
+        "results:subagent": 584,
+        "system:approval-mode": 184,
+        "system:commands": 362,
+        "system:critical": 80,
+        "system:identity": 78,
+        "system:repo-rules": 1214,
+        "system:skills": 680,
+        "system:skills-guide": 114,
+        "system:tools": 132,
+        "system:workspace-tree": 600,
+        "system:workstation": 162,
+        "tools": 10292
+      },
+      "wallMs": 18653
+    },
+    {
+      "task": "12-subagent-dump-callers",
+      "run": 3,
+      "success": true,
+      "usage": {
+        "turns": 2,
+        "input": 0,
+        "cacheRead": 11338,
+        "cacheWrite": 5352,
+        "output": 399,
+        "reasoning": 0,
+        "coldMisses": 0,
+        "unreportedTurns": 0,
+        "subagents": {
+          "turns": 7,
+          "input": 0,
+          "cacheRead": 63684,
+          "cacheWrite": 8994,
+          "output": 1394,
+          "reasoning": 0,
+          "coldMisses": 0,
+          "unreportedTurns": 0
+        }
+      },
+      "costUsd": 0.0343997,
+      "tools": {
+        "subagent": {
+          "calls": 1,
+          "errors": 0,
+          "resultBytes": 1621
+        }
+      },
+      "sources": {
+        "history:assistant": 55,
+        "history:summaries": 0,
+        "history:toolCallArgs": 123,
+        "history:user": 42,
+        "results:subagent": 564,
+        "system:approval-mode": 184,
+        "system:commands": 362,
+        "system:critical": 80,
+        "system:identity": 78,
+        "system:repo-rules": 1214,
+        "system:skills": 680,
+        "system:skills-guide": 114,
+        "system:tools": 132,
+        "system:workspace-tree": 600,
+        "system:workstation": 162,
+        "tools": 10292
+      },
+      "wallMs": 20203
+    }
+  ]
+}
