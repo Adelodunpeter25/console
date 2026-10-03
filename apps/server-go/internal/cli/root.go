@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/commands"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
 // Execute runs the CLI. One deliberate flag divergence from the old TS CLI:
@@ -103,6 +104,31 @@ func Execute() {
 		Short: "Save provider API keys for the daemon (restart to apply)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return commands.EnvCommand()
+		},
+	})
+
+	// Hidden third role of the multi-call binary. git does NOT reach this:
+	// it invokes `!CONSOLE_GIT_CREDENTIAL_HELPER=1 <console>` with no
+	// subcommand, which cmd/console/main.go dispatches before the serve
+	// branch (that ordering is load-bearing — see main.go). This cobra
+	// command exists so the helper can be driven by hand for debugging:
+	//
+	//   printf 'protocol=https\nhost=github.com\n\n' \
+	//     | console git-credential-helper get
+	//
+	// Run (not RunE) plus os.Exit keeps stdout free of anything but the
+	// credential protocol.
+	root.AddCommand(&cobra.Command{
+		Use:    github.HelperSubcommand,
+		Short:  "git credential helper (internal)",
+		Hidden: true,
+		Args:   cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			op := ""
+			if len(args) == 1 {
+				op = args[0]
+			}
+			os.Exit(github.RunCredentialHelper(op, os.Stdin, os.Stdout))
 		},
 	})
 

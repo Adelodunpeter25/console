@@ -38,8 +38,8 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   nice-to-have for fresh installs only — Accounts is the path that always works.
 - v1 connection method: *personal access token*. Secure paste field in
   Accounts; server validates via `GET api.github.com/user` and stores it in
-  `~/.console/github-creds.json`. Paste-once-and-done — no OAuth App to own,
-  no browser round-trip, and it works for SSO/enterprise repos too.
+  `<console storage>/github-creds.json`. Paste-once-and-done — no OAuth App to
+  own, no browser round-trip, and it works for SSO/enterprise repos too.
 - Device flow (*Connect with GitHub*: `POST /api/auth/github/device/start`,
   big `user_code`, "Approve on GitHub" button opening `verification_uri`,
   poll `device/status` until approved) is deferred polish for later — same
@@ -50,84 +50,143 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   itself lives in the new-project dialog (see §5, last step), not here.
 
 ## 3 Server Design
-- New `internal/providers/github/` package mirroring the claude/codex structure
-  (`oauth.go` + `constants.go`): PAT accept/validate/store (validate via `GET
-  api.github.com/user`), token stored at `~/.console/github-creds.json` via
-  the existing `providers/shared` credential helpers, file mode 0600.
-  Device-flow start/poll (`POST https://github.com/login/device/code`,
-  `POST .../login/oauth/access_token` with `grant_type=device_code`) slots
-  into the same package later.
+
+> **Status: steps 1–4 implemented.** Notes below marked *(as built)* record
+> decisions that differ from the original draft, and the traps worth knowing
+> before extending this.
+
+- New `internal/providers/github/` package: `credentials.go` (file
+  read/write/clear, cached `username` + `scopes`), `pat.go` (validate via
+  `GET api.github.com/user`), `helper.go` (the git credential-helper
+  protocol). Device-flow start/poll slots into the same package later.
 - New `auth.AuthService` surface + routes under `/api/auth/github/*`
-  (in `apps/server-go/internal/routes/auth.go`, `registerAuthRoutes`):
-  `pat` (accept + validate + store a pasted fine-grained PAT), `status`
-  (validate cached token against `api.github.com/user`, return `@username` +
-  scopes, fold into `GetStatus`), `logout` (delete file). `device/start` +
-  `device/status` (poll result, with expiry/denied mapping) arrive with device
-  flow later.
-- Credential injection via a **git credential-helper script**, not
-  `GIT_ASKPASS` alone: a helper is consulted before any prompt in both TTY
-  and non-TTY contexts, so it covers the PTY shells as well as agent-spawned
-  git. The helper (small shell script shipped with the server, path resolved
-  at runtime) reads the creds file and answers
-  `username=x-access-token / password=<token>` for `github.com` hosts only.
-- Wiring points:
-  - `runGit` env (`apps/server-go/internal/services/git_service.go`, plus
-    `BashJobManager.Start` env for agent-run shell commands): add `GIT_CONFIG_COUNT=1`,
-    `GIT_CONFIG_KEY_0=credential.helper`,
-    `GIT_CONFIG_VALUE_0=!<helper-path>` so agent git calls authenticate
-    without touching global `~/.gitconfig`.
-  - `PtyManager.Spawn` env (`apps/server-go/internal/services/pty_manager.go`): same three vars, so every interactive
-    terminal inherits working git auth.
-  - *(Optional — skip if you only use HTTPS URLs, no SSH setup needed)* `url."https://github.com/".insteadOf git@github.com:` via the same
-    `GIT_CONFIG_*` channel so a pasted `git@github.com:org/repo` SSH-style URL also works over HTTPS with the same PAT. No SSH keys, `~/.ssh`, or `ssh-agent` needed — purely an HTTPS rewrite. Safe to omit.
-- Boot behavior: helpers read the creds file at invocation time (not daemon
-  start), so a VPS reboot or `console restart` keeps working with no re-login.
-  Missing file → helper exits silently → git behaves exactly as today.
-- Token hygiene: never log the token, never include it in clone URLs, never
-  return it to clients (status returns username/scopes only), never pass it
-  on the PTY command line. Refresh is N/A (device-flow user tokens don't
-  expire unless revoked); `status` detects revocation and reports
-  not-connected.
+  (`apps/server-go/internal/routes/auth.go`, `RegisterAuthRoutes` — now
+  exported so route tests can build an app, mirroring `RegisterMCPRoutes`):
+  `POST /github/pat` (accept + validate + store), `GET /github/status`,
+  `POST /github/logout`. `AuthStatus` gains a `github` row.
+- Credential injection via a **git credential helper**, not `GIT_ASKPASS`:
+  a helper is consulted before any prompt in both TTY and non-TTY contexts,
+  so it covers PTY shells as well as agent-spawned git.
+- *(as built)* **The helper is a mode of the existing `console` binary, not a
+  shipped shell script.** `git` runs the helper path as a subprocess, and a
+  shell script would have to parse `github-creds.json` — needing `jq`, which a
+  fresh VPS may not have. `cmd/console/main.go` dispatches on
+  `CONSOLE_GIT_CREDENTIAL_HELPER=1` (set inline by the config value) and calls
+  `github.RunCredentialHelper`.
+  ⚠️ **That check must stay first in `main.go`.** The daemon runs under
+  `CONSOLE_SERVE=1` and git inherits it, so checking serve mode first would
+  boot a second server instead of answering. A hidden cobra subcommand is *not*
+  sufficient on its own — cobra is only reached after the serve branch.
+  `console git-credential-helper get` still exists for manual debugging.
+- *(as built)* **Injection happens once, into the server's own environment**
+  (`internal/gitconfig.Configure`, called first in `serve.Run`), not per call
+  site. `runGit`, the agent bash tool (both sync and background, via
+  `tools.mergedEnv`), and `PtyManager.Spawn` all already inherit
+  `os.Environ()`, so this covers them plus any future call site.
+  ⚠️ **It must run before the first PTY spawn**: `PtyManager.baseEnv()` caches
+  `os.Environ()` in a `sync.Once`, so a later `Setenv` silently misses every
+  terminal.
+- `GIT_CONFIG_COUNT=3`: `credential.helper` = `!CONSOLE_GIT_CREDENTIAL_HELPER=1 <exe>`,
+  plus `url."https://github.com/".insteadOf` for both `git@github.com:` and
+  `ssh://git@github.com/`. The `insteadOf` rewrite is **not optional** — agents
+  emit SSH remotes by default, which would otherwise fail
+  `Permission denied (publickey)` and defeat the point. Nothing global is
+  written.
+- *(as built)* **Auth status is local-only.** `username`/`scopes` are cached in
+  the credential file at accept time, so `GET /api/auth/status` makes no
+  network call and cannot stall the Claude/Codex/Antigravity rows. Consequence:
+  a revoked token still reports connected until re-login or disconnect; the
+  symptom is a git auth failure, not a status change.
+- *(as built)* **Scopes are advisory.** Classic PATs return `X-OAuth-Scopes`;
+  fine-grained PATs return no such header, so an empty list is normal and never
+  a validation failure. A `403` is reported as rate-limiting, never as a bad
+  token — telling the user to re-paste a working token would not help.
+- *(as built)* Credential path resolves through `utils.GitHubCredentialsPath()`
+  (`CONSOLE_STORAGE_DIR` / `CONSOLE_ENV` aware), not the providers'
+  `shared.CredentialPath` which pins `~/.console`. `SaveCredential` re-asserts
+  the directory mode because `~/.console` is created by other subsystems under
+  the process umask (typically 0755).
+- Helper answers `username=x-access-token / password=<token>` for `github.com`
+  **only**, matched exactly (no suffix match, so `github.com.evil.test` gets
+  nothing), and only for `https`. `store`/`erase` are acknowledged no-ops so a
+  git command in a terminal cannot overwrite or drop the token.
+- Boot behavior: the helper reads the creds file at invocation time, so a VPS
+  reboot or `console restart` keeps working with no re-login. Missing file →
+  helper stays silent → git behaves exactly as today.
+- Token hygiene: never logged, never in clone URLs, never returned to clients
+  (responses carry username/scopes only), never on a command line. The token
+  file is 0600.
 
 ## 4 Client Changes (desktop + Android)
 - Accounts GitHub item (connect / re-login / disconnect) — existing installs
   connect here, never via reinstall. v1 uses the PAT screen; device-flow UI
   plugs into the same item later.
+- ⚠️ *(as built)* **The row must be hardcoded, not catalog-driven.** Both
+  Accounts screens render `providers.filter(authMethod != "none")` from
+  `ListProviders()` (`providers/catalog.go`), so a `github` catalog entry would
+  leak into every model picker via `FindModel`. Render it as a sibling row
+  below the provider list, with its own status type
+  (`{connected, username, scopes}`) rather than `CodexAuthStatus`.
+- ⚠️ *(as built)* **There is no `logout` route for any provider today, and
+  neither client has a disconnect affordance** — "Disconnect with confirm" is
+  net-new UI on both, not a pattern to copy.
 - Desktop (`apps/desktop`, Rust/GPUI): GitHub row on `AccountsPage`
   (`crates/console-ui/src/settings/accounts_page.rs`); new `console-core`
   service for `/api/auth/github/{pat,status,logout}` alongside the existing
-  auth service (`device/*` calls arrive with device flow later). The server's
-  extended auth status must also be added to the hand-mirrored
-  `AuthStatusResponse` in `crates/console-core/src/types/`.
-- Android (`apps/android`, native Kotlin/Compose): GitHub row in settings +
-  PAT screen with secure text entry through the existing `data/api` client;
-  submitted once, never persisted client-side — the v1 connection path. Mirror
-  the new auth-status field in the Kotlin models too.
-- Disconnect with confirm; re-login reuses the PAT screen in v1.
+  auth service. Add the `github` field to the hand-mirrored
+  `AuthStatusResponse` in `crates/console-core/src/types/auth.rs`.
+- Android (`apps/android`, native Kotlin/Compose): GitHub row in
+  `feature/settings/AccountSettings.kt` + PAT screen with secure text entry
+  through the existing `data/api` client; submitted once, never persisted
+  client-side. Mirror the field in `data/model/AuthShim.kt`.
 - Onboarding card (fresh installs only, code display + approve button +
   polling + Skip): deferred with device flow.
 
 ## 5 Implementation Steps
-- 1: server provider module — PAT accept/validate/store, creds file
-  read/write/validate/delete, username lookup. (Device start/poll exchange
-  slots in later.)
-- 2: `auth.AuthService` + `/api/auth/github/{pat,status,logout}` routes
-  (`routes/auth.go`) + `GetStatus` extension,
-  with unit tests for state/expiry/error mapping. (`device/*` routes arrive
-  with device flow.)
-- 3: credential-helper script + `GIT_CONFIG_*` wiring in `runGit`'s env and
-  `PtyManager.Spawn`; verify both agent git and PTY git pick it
-  up, and that missing-creds behaves as today.
-- 4: SSH-URL rewrite via the same channel; test `git@github.com:org/repo`
-  clone over HTTPS.
-- 5: desktop `AccountsPage` + Android settings GitHub item + PAT screen (v1);
+- 1 ✅ server provider module — `internal/providers/github/{credentials,pat,helper}.go`
+  (PAT accept/validate/store, file read/write/clear, username lookup).
+  Tests: `tests/providers/github_test.go`.
+- 2 ✅ `auth.AuthService` + `/api/auth/github/{pat,status,logout}` routes +
+  offline `GetStatus` extension. Tests: `tests/api/github_auth_test.go`.
+- 3 ✅ credential-helper mode in `cmd/console` + `internal/gitconfig`
+  injection at the top of `serve.Run`.
+- 4 ✅ SSH→HTTPS `insteadOf` rewrite on the same channel.
+  Tests: `tests/services/gitconfig_test.go` — drives a real `git` and a real
+  purpose-built `console` binary, including the `CONSOLE_SERVE=1` ordering case.
+- 5 ⬜ desktop `AccountsPage` + Android settings GitHub item + PAT screen (v1);
   device-flow UI (status polling + onboarding card) later.
-- 6: docs: onboarding copy, token scope note, revocation/re-login path.
-- 7 (last): new-project/clone dialog — see
+- 6 ⬜ docs: onboarding copy, token scope note, revocation/re-login path.
+- 7 ⬜ (last) new-project/clone dialog — see
   `docs/plan/new-project-dialog-plan.md`. Consumes the credential status and
   clone operation from this plan (steps 1–4); do it after they land.
 
+### Server test commands
+```
+cd apps/server-go
+go test ./tests/providers/ -run GitHub -v
+go test ./tests/api/      -run GitHub -v
+go test ./tests/services/ -run GitConfig -v
+```
+
 ## 6 Verification
+
+Automated (server, steps 1–4):
+- `tests/providers/github_test.go` — file mode 0600 / dir 0700, path override,
+  idempotent clear, PAT success + error mapping (401 / 403 / 5xx / no-login /
+  unreachable / blank), fine-grained PAT with no scope header, helper host
+  matching incl. `github.com.evil.test`, protocol handling, silence without a
+  token, `store`/`erase` no-ops.
+- `tests/api/github_auth_test.go` — PAT stores + reports username, invalid
+  token 400 and not stored, unreachable GitHub 502, a failed attempt keeps the
+  working token, status, logout (idempotent), `GetStatus` includes `github`
+  and never serializes the token.
+- `tests/services/gitconfig_test.go` — the three `GIT_CONFIG_*` triples, real
+  `git` resolving the helper, `insteadOf` rewriting `git@` and `ssh://` forms
+  while leaving HTTPS and non-GitHub remotes alone, and end-to-end
+  `git credential fill` against a real `console` binary — including under
+  `CONSOLE_SERVE=1` to prove the helper wins over serve mode.
+
+Manual, after step 5 lands:
 - Fresh VPS: `install.sh` + `console start`, no keys on box. Accounts →
   paste PAT → `git clone <private-https-url>` succeeds in the
   mobile terminal tab AND via an agent run in the same session.
@@ -136,11 +195,11 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 - `git push` from the terminal tab works without any prompt.
 - Pasted SSH remote (`git@github.com:org/private.git`) clones over HTTPS.
 - Restart daemon / reboot box: git still works, no re-login.
-- Revoke token on github.com → status shows not-connected; re-login recovers.
-- Skip path (once the onboarding card exists): onboarding Skip → public clone works, private clone fails with
-  stock git auth error (no crash, no leak in output).
-- (Device-flow onboarding variant arrives with device flow later.)
-- Confirm token appears nowhere in server logs, terminal scrollback, or
+- Revoke token on github.com → git operations fail auth → re-login recovers.
+  *(Status stays "connected" until then by design — status is local-only.)*
+- Skip path (once the onboarding card exists): onboarding Skip → public clone
+  works, private clone fails with stock git auth error (no crash, no leak).
+- Confirm the token appears nowhere in server logs, terminal scrollback, or
   network responses to the client.
 
 ## 7 Out of Scope
@@ -158,9 +217,16 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 
 ## 8 Open Questions
 - Who owns the shared GitHub OAuth App (client ID baked into the server like
-  the existing provider constants, e.g. `apps/server-go/internal/providers/claude/constants.go`)? Only matters when device flow is built (deferred) —
-  the v1 PAT path needs no App. Device flow needs no client secret, but the App
-  needs a home account/org. Alternative: bring-your-own client ID via env.
+  the existing provider constants, e.g.
+  `apps/server-go/internal/providers/claude/constants.go`)? Only matters when
+  device flow is built (deferred) — the v1 PAT path needs no App. Device flow
+  needs no client secret, but the App needs a home account/org. Alternative:
+  bring-your-own client ID via env.
 - Fine-grained PAT vs classic `repo` scope for the paste option — recommend
-  fine-grained with repository access, validate `X-OAuth-Scopes`/permissions
-  on submit.
+  fine-grained with repository access. *(Resolved in implementation: scopes are
+  stored and displayed but never used to accept or reject a token, because
+  fine-grained PATs report no scopes at all. Validation is "does this token
+  authenticate", nothing more.)*
+- Device flow needs a way to revoke: `POST /github/logout` deletes the local
+  file only, so a device-flow token would also want a GitHub-side revocation
+  call.

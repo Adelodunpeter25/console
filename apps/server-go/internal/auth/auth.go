@@ -9,15 +9,19 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
 // pendingTTL mirrors the TS 10-minute OAuth state expiry.
@@ -35,13 +39,28 @@ type CodexAuthStatus struct {
 	Email    string `json:"email,omitempty"`
 }
 
+// GitHubAuthStatus reports GitHub git-credential state. Unlike the LLM
+// providers this is not a session: it exists so `git` can reach private
+// repositories. Username and Scopes are the values cached in the credential
+// file when the token was accepted, so reading this never touches the
+// network and a GitHub outage cannot stall GET /api/auth/status.
+//
+// A revoked token still reports Connected until the next re-login or
+// disconnect; the symptom is a git auth failure, not a status change.
+type GitHubAuthStatus struct {
+	Connected bool     `json:"connected"`
+	Username  string   `json:"username,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+}
+
 // AuthStatus mirrors AuthStatusResponse. Non-codex providers report
 // loggedIn:false until their Go ports land.
 type AuthStatus struct {
-	Antigravity CodexAuthStatus `json:"antigravity"`
-	Codex       CodexAuthStatus `json:"codex"`
-	Devin       CodexAuthStatus `json:"devin"`
-	Claude      CodexAuthStatus `json:"claude"`
+	Antigravity CodexAuthStatus  `json:"antigravity"`
+	Codex       CodexAuthStatus  `json:"codex"`
+	Devin       CodexAuthStatus  `json:"devin"`
+	Claude      CodexAuthStatus  `json:"claude"`
+	GitHub      GitHubAuthStatus `json:"github"`
 }
 
 // LoginURL is the response for POST /api/auth/login/url.
@@ -68,6 +87,8 @@ type AuthService struct {
 	Exchange func(code, verifier, redirectURI string) (codex.OAuthCredential, error)
 	// ExchangeClaude swaps an authorization code for Claude credentials.
 	ExchangeClaude func(code, state, verifier, redirectURI string) (claude.OAuthCredential, error)
+	// ValidatePAT verifies a pasted GitHub token (overridable in tests).
+	ValidatePAT func(ctx context.Context, client *http.Client, token string) (string, []string, error)
 }
 
 func NewAuthService() *AuthService {
@@ -106,7 +127,50 @@ func (s *AuthService) GetStatus() AuthStatus {
 	} else if antigravity.CredentialExists() {
 		status.Antigravity = CodexAuthStatus{LoggedIn: true}
 	}
+	status.GitHub = GitHubStatus()
 	return status
+}
+
+// GitHubStatus reports the cached GitHub credential. Deliberately local-only:
+// this is called from GetStatus, which every client polls, so it must never
+// block on api.github.com.
+func GitHubStatus() GitHubAuthStatus {
+	cred, err := github.LoadCredential()
+	if err != nil || strings.TrimSpace(cred.Token) == "" {
+		return GitHubAuthStatus{}
+	}
+	return GitHubAuthStatus{
+		Connected: true,
+		Username:  cred.Username,
+		Scopes:    cred.Scopes,
+	}
+}
+
+// ValidateGitHubPAT swaps a pasted personal access token for stored
+// credentials. The token is verified against api.github.com/user before it is
+// written, so a bad token never replaces a working one. Overridable in tests.
+func (s *AuthService) ValidateGitHubPAT(ctx context.Context, token string) (GitHubAuthStatus, error) {
+	validate := s.ValidatePAT
+	if validate == nil {
+		validate = github.ValidatePAT
+	}
+	login, scopes, err := validate(ctx, nil, token)
+	if err != nil {
+		return GitHubAuthStatus{}, err
+	}
+	if err := github.SaveCredential(github.Credential{
+		Token:    token,
+		Username: login,
+		Scopes:   scopes,
+	}); err != nil {
+		return GitHubAuthStatus{}, err
+	}
+	return GitHubStatus(), nil
+}
+
+// DisconnectGitHub removes the stored GitHub credential. Idempotent.
+func (s *AuthService) DisconnectGitHub() error {
+	return github.ClearCredential()
 }
 
 // GetLoginURL starts a Codex PKCE login, storing the verifier by state.

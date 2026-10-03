@@ -66,6 +66,19 @@ func GlobalDBPath() string {
 	return filepath.Join(ConsoleStorageDir(), "console-global.db")
 }
 
+// GitHubCredentialsPath is the GitHub git-credential file
+// (<storage>/github-creds.json, dir 0700 / file 0600). Unlike the
+// providers/shared.CredentialPath helpers, which pin ~/.console regardless
+// of mode, this resolves through ConsoleStorageDir so dev installs and
+// CONSOLE_STORAGE_DIR overrides keep their credentials separate.
+// GITHUB_CREDENTIALS_PATH wins outright (tests, unusual deployments).
+func GitHubCredentialsPath() string {
+	if override := os.Getenv("GITHUB_CREDENTIALS_PATH"); override != "" {
+		return override
+	}
+	return filepath.Join(ConsoleStorageDir(), "github-creds.json")
+}
+
 // WorktreesDir is the central root for session worktrees
 // ($HOME/console/worktrees/<id>). Centralized here — like ConsoleStorageDir —
 // so dev and prod differ: CONSOLE_WORKTREES_DIR wins when set, otherwise

@@ -4,14 +4,19 @@
 package routes
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
-func registerAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
+// RegisterAuthRoutes wires the /api/auth routes onto an app. Exported so
+// route tests can build a Fiber app with only these routes, mirroring
+// RegisterMCPRoutes.
+func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 	h := app.Group("/api/auth")
 
 	h.Get("/status", func(c *fiber.Ctx) error {
@@ -111,5 +116,55 @@ func registerAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 			out = trimmed
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"provider": req.Provider, "projectId": out}})
+	})
+
+	registerGitHubAuthRoutes(h, authSvc)
+}
+
+// registerGitHubAuthRoutes wires the GitHub git-credential endpoints. These
+// are separate from the OAuth provider routes above: a personal access token
+// is not a chat session, and no GitHub OAuth App is involved.
+//
+// The token itself never crosses this boundary — the response carries only
+// the cached username and scopes.
+func registerGitHubAuthRoutes(h fiber.Router, authSvc *auth.AuthService) {
+	h.Post("/github/pat", func(c *fiber.Ctx) error {
+		var req struct {
+			Token string `json:"token"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if strings.TrimSpace(req.Token) == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "A GitHub token is required."})
+		}
+		status, err := authSvc.ValidateGitHubPAT(c.Context(), req.Token)
+		if err != nil {
+			// Distinguish "your token is wrong" (400, fix the input) from
+			// "GitHub is unreachable" (502, retry later). ErrInvalidToken is
+			// checked with errors.Is; the unreachable case is matched on the
+			// sentinel error rather than its message so the wording can change
+			// without silently flipping the status code.
+			switch {
+			case errors.Is(err, github.ErrInvalidToken):
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
+			case errors.Is(err, github.ErrUnreachable):
+				return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"success": false, "error": err.Error()})
+			default:
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
+			}
+		}
+		return c.JSON(fiber.Map{"success": true, "data": status})
+	})
+
+	h.Get("/github/status", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"success": true, "data": auth.GitHubStatus()})
+	})
+
+	h.Post("/github/logout", func(c *fiber.Ctx) error {
+		if err := authSvc.DisconnectGitHub(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"disconnected": true}})
 	})
 }

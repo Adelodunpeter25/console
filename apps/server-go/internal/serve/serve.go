@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/gitconfig"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
@@ -53,6 +54,15 @@ func startDeletedChatSweep(runs *run.Service) func() {
 func Run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
+	// Teach git about the GitHub credential helper before anything can spawn:
+	// PtyManager caches os.Environ() in a sync.Once on first use, so a
+	// Setenv after the first terminal spawn would silently miss every shell.
+	// Best-effort — a server without git auth is still perfectly usable, so a
+	// failure here is logged rather than fatal.
+	if err := gitconfig.Configure(); err != nil {
+		slog.Warn("git credential helper not configured", "error", err)
+	}
 
 	manager, err := db.Open(db.OpenOptions{})
 	if err != nil {
