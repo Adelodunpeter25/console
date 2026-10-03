@@ -885,42 +885,164 @@ impl Render for SettingsWindow {
                             }
                         });
                         cx.spawn(async move |cx| {
-                            match client.mcp.connect_server(&id).await {
-                                // The service polls until the server leaves
-                                // `connecting`, so this list carries the real
-                                // status rather than the optimistic one.
-                                Ok(updated_list) => {
-                                    let auth_url = updated_list
-                                        .iter()
-                                        .find(|s| s.id == id)
-                                        .and_then(|s| {
-                                            if matches!(s.status, console_core::types::mcp::McpConnectionStatus::NeedsAuth) {
-                                                s.auth_url.clone()
-                                            } else {
-                                                None
-                                            }
-                                        });
+                            use std::io::{Read, Write};
 
-                                    let _ = cx.update(|cx| {
-                                        if let Some(url) = auth_url {
-                                            cx.open_url(&url);
-                                        }
-                                        entity_clone.update(cx, |this, cx| {
-                                            this.mcp_servers = updated_list;
+                            // Client-owned loopback, bound before connect
+                            // so the redirect URI is known up front. Falls
+                            // back to server loopback when the bind fails.
+                            let listener =
+                                std::net::TcpListener::bind(("127.0.0.1", 0)).ok();
+                            let redirect_uri: Option<String> = listener
+                                .as_ref()
+                                .and_then(|l| l.local_addr().ok())
+                                .map(|a| {
+                                    format!("http://127.0.0.1:{}/callback", a.port())
+                                });
+                            if let Err(e) = client
+                                .mcp
+                                .start_connect(&id, redirect_uri.as_deref())
+                                .await
+                            {
+                                let _ = cx.update(|cx| {
+                                    entity_clone.update(cx, |this, cx| {
+                                        if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                            s.status = console_core::types::mcp::McpConnectionStatus::Error(e.to_string());
                                             cx.notify();
-                                        });
+                                        }
                                     });
-                                }
-                                Err(e) => {
-                                    let _ = cx.update(|cx| {
-                                        entity_clone.update(cx, |this, cx| {
-                                            if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
-                                                s.status = console_core::types::mcp::McpConnectionStatus::Error(e.to_string());
-                                                cx.notify();
+                                });
+                                return;
+                            }
+                            // Poll until the server leaves `connecting` —
+                            // connected, failed, or waiting on the browser.
+                            let mut auth_url: Option<String> = None;
+                            let mut done = false;
+                            for _ in 0..240 {
+                                match client.mcp.list_servers().await {
+                                    Ok(list) => {
+                                        let terminal = list.iter().find(|s| s.id == id).map(|s| {
+                                            match &s.status {
+                                                console_core::types::mcp::McpConnectionStatus::NeedsAuth => {
+                                                    auth_url = s.auth_url.clone();
+                                                    true
+                                                }
+                                                console_core::types::mcp::McpConnectionStatus::Connecting => false,
+                                                _ => {
+                                                    done = true;
+                                                    true
+                                                }
                                             }
                                         });
-                                    });
+                                        let _ = cx.update(|cx| {
+                                            entity_clone.update(cx, |this, cx| {
+                                                this.mcp_servers = list;
+                                                cx.notify();
+                                            });
+                                        });
+                                        if terminal == Some(true) {
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        let _ = cx.update(|cx| {
+                                            entity_clone.update(cx, |this, cx| {
+                                                if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                                    s.status = console_core::types::mcp::McpConnectionStatus::Error(e.to_string());
+                                                    cx.notify();
+                                                }
+                                            });
+                                        });
+                                        return;
+                                    }
                                 }
+                                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                            }
+                            if done {
+                                return;
+                            }
+                            let Some(auth_url) = auth_url else {
+                                return;
+                            };
+                            // Without a client redirect the server owns the
+                            // loopback: just open the URL and let the
+                            // server-side flow finish on its own box.
+                            if listener.is_none() {
+                                let _ = cx.update(|cx| {
+                                    cx.open_url(&auth_url);
+                                });
+                                return;
+                            }
+                            let _ = cx.update(|cx| {
+                                cx.open_url(&auth_url);
+                            });
+                            // Serve our own loopback, then forward the
+                            // captured code+state into the pending server
+                            // flow.
+                            let forwarded = match listener {
+                                Some(listener) => {
+                                    let captured = tokio::task::spawn_blocking(move || {
+                                        serve_mcp_callback_once(listener)
+                                    })
+                                    .await
+                                    .ok()
+                                    .flatten();
+                                    match captured {
+                                        Some((state, code, err_msg)) => {
+                                            client
+                                                .mcp
+                                                .forward_oauth_callback(
+                                                    &id,
+                                                    &state,
+                                                    code.as_deref(),
+                                                    err_msg.as_deref(),
+                                                    None,
+                                                )
+                                                .await
+                                                .is_ok()
+                                        }
+                                        None => false,
+                                    }
+                                }
+                                None => false,
+                            };
+                            if !forwarded {
+                                let _ = cx.update(|cx| {
+                                    entity_clone.update(cx, |this, cx| {
+                                        if let Some(s) = this.mcp_servers.iter_mut().find(|s| s.id == id) {
+                                            s.status = console_core::types::mcp::McpConnectionStatus::Error(
+                                                "browser sign-in timed out".to_string(),
+                                            );
+                                            cx.notify();
+                                        }
+                                    });
+                                });
+                                return;
+                            }
+                            // The exchange runs server-side now; poll for
+                            // the terminal state.
+                            for _ in 0..360 {
+                                match client.mcp.list_servers().await {
+                                    Ok(list) => {
+                                        let terminal = list.iter().find(|s| s.id == id).map(|s| {
+                                            !matches!(
+                                                s.status,
+                                                console_core::types::mcp::McpConnectionStatus::Connecting
+                                                    | console_core::types::mcp::McpConnectionStatus::NeedsAuth
+                                            )
+                                        });
+                                        let _ = cx.update(|cx| {
+                                            entity_clone.update(cx, |this, cx| {
+                                                this.mcp_servers = list;
+                                                cx.notify();
+                                            });
+                                        });
+                                        if terminal == Some(true) {
+                                            break;
+                                        }
+                                    }
+                                    Err(_) => break,
+                                }
+                                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                             }
                         })
                         .detach();
@@ -1045,4 +1167,90 @@ impl Render for SettingsWindow {
             .child(SettingsShell::new(active_tab, on_select_tab, content))
             .into_any_element()
     }
+}
+
+/// Serves a single OAuth callback on an already-bound loopback listener and
+/// returns (state, code, provider-error). Blocking with the server's 5-minute
+/// auth window; meant for `spawn_blocking`. Mirrors the provider-login
+/// listener in `state/auth.rs`.
+fn serve_mcp_callback_once(
+    listener: std::net::TcpListener,
+) -> Option<(String, Option<String>, Option<String>)> {
+    use std::io::{Read, Write};
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(300);
+    while std::time::Instant::now() < deadline {
+        let (mut stream, _) = match listener.accept() {
+            Ok(pair) => pair,
+            Err(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                continue;
+            }
+        };
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(4)));
+        let mut buf = [0u8; 4096];
+        let n = stream.read(&mut buf).unwrap_or(0);
+        if n == 0 {
+            continue;
+        }
+        let request = String::from_utf8_lossy(&buf[..n]);
+        if request.contains("GET /favicon.ico") {
+            let response =
+                "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes());
+            continue;
+        }
+        let mut code = None;
+        let mut state = None;
+        let mut err_msg = None;
+        for line in request.lines() {
+            if line.starts_with("GET ") {
+                if let Some(path_and_query) = line.split_whitespace().nth(1) {
+                    if let Some(query) = path_and_query.split('?').nth(1) {
+                        for part in query.split('&') {
+                            let mut kv = part.splitn(2, '=');
+                            match (kv.next(), kv.next()) {
+                                (Some("code"), Some(v)) => {
+                                    code = Some(
+                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
+                                    )
+                                }
+                                (Some("state"), Some(v)) => {
+                                    state = Some(
+                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
+                                    )
+                                }
+                                (Some("error"), Some(v)) => {
+                                    err_msg = Some(
+                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
+                                    )
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        let ok = state.is_some() && (code.is_some() || err_msg.is_some());
+        let html = if ok {
+            "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#18181b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:90vh;'><div style='text-align:center;padding:32px;background:#27272a;border-radius:12px;border:1px solid #3f3f46;'><h2 style='margin:0 0 8px 0;color:#22c55e;'>Authentication successful!</h2><p style='margin:0;color:#a1a1aa;'>You can close this tab and return to Console.</p></div></body></html>"
+        } else {
+            "<!DOCTYPE html><html><body style='font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#18181b;color:#f4f4f5;display:flex;align-items:center;justify-content:center;height:90vh;'><div style='text-align:center;padding:32px;background:#27272a;border-radius:12px;border:1px solid #3f3f46;'><h2 style='margin:0 0 8px 0;color:#ef4444;'>Sign-in failed</h2><p style='margin:0;color:#a1a1aa;'>Return to Console and try again.</p></div></body></html>"
+        };
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            html.len(),
+            html
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        if let Some(s) = state {
+            if code.is_some() || err_msg.is_some() {
+                return Some((s, code, err_msg));
+            }
+        }
+    }
+    None
 }
