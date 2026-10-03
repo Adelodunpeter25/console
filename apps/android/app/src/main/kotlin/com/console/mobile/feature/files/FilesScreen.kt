@@ -53,7 +53,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
-import com.console.mobile.feature.chat.MarkdownText
+import com.console.mobile.feature.chat.markdown.MarkdownText
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.EmptyState

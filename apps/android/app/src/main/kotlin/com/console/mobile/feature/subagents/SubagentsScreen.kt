@@ -47,7 +47,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.SubagentActivityItem
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.feature.chat.MarkdownText
+import com.console.mobile.feature.chat.markdown.MarkdownText
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors

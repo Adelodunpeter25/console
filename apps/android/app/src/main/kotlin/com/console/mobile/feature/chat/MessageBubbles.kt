@@ -1,4 +1,5 @@
 package com.console.mobile.feature.chat
+import com.console.mobile.feature.chat.markdown.MarkdownText
 
 import android.content.ClipData
 import android.content.ClipboardManager

@@ -1,4 +1,4 @@
-package com.console.mobile.feature.chat
+package com.console.mobile.feature.chat.markdown
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
