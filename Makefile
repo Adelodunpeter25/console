@@ -24,7 +24,7 @@ dev-console: build-server
 ##   Installs debug APK and launches the app on Android emulator/device
 ##   Requires Android SDK and emulator running or device connected via adb
 dev-mobile:
-	cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile/.MainActivity
+	cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile.dev/com.console.mobile.MainActivity
 
 ## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)
 dev-desktop:
