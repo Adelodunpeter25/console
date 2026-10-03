@@ -30,6 +30,11 @@ type callbackResult struct {
 	code, state, iss, errMsg string
 }
 
+type waiterEntry struct {
+	ch   chan callbackResult
+	done bool
+}
+
 // OAuthCoordinator owns the loopback callback listener shared by all servers.
 type OAuthCoordinator struct {
 	// OpenBrowser opens the authorization URL; defaults to OpenBrowser.
@@ -38,11 +43,11 @@ type OAuthCoordinator struct {
 	mu      sync.Mutex
 	ln      net.Listener
 	srv     *http.Server
-	waiters map[string]chan callbackResult
+	waiters map[string]*waiterEntry
 }
 
 func NewOAuthCoordinator() *OAuthCoordinator {
-	return &OAuthCoordinator{OpenBrowser: OpenBrowser, waiters: map[string]chan callbackResult{}}
+	return &OAuthCoordinator{OpenBrowser: OpenBrowser, waiters: map[string]*waiterEntry{}}
 }
 
 // redirectURI lazily starts the loopback listener and returns its callback URL.
@@ -67,9 +72,9 @@ func (o *OAuthCoordinator) handleCallback(w http.ResponseWriter, r *http.Request
 	q := r.URL.Query()
 	state := q.Get("state")
 	o.mu.Lock()
-	ch, ok := o.waiters[state]
+	entry, ok := o.waiters[state]
 	o.mu.Unlock()
-	if !ok {
+	if !ok || entry.done {
 		http.Error(w, "Unknown or expired authorization request.", http.StatusBadRequest)
 		return
 	}
@@ -82,8 +87,11 @@ func (o *OAuthCoordinator) handleCallback(w http.ResponseWriter, r *http.Request
 	} else if res.code == "" {
 		res.errMsg = "authorization response had no code"
 	}
+	o.mu.Lock()
+	entry.done = true
+	o.mu.Unlock()
 	select {
-	case ch <- res:
+	case entry.ch <- res:
 	default:
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -92,6 +100,28 @@ func (o *OAuthCoordinator) handleCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 	fmt.Fprint(w, "<html><body style=\"font-family:sans-serif\"><h3>Signed in</h3><p>You can close this tab and return to Console.</p></body></html>")
+}
+
+// ResolveWaiter delivers an out-of-band callback result (mobile client
+// loopback) to the pending server-initiated flow, exactly as the
+// server-side loopback listener would. State keys the waiter; a terminal
+// error completes the flow with failure instead of waiting out the timeout.
+func (o *OAuthCoordinator) ResolveWaiter(state, code, errMsg, iss string) bool {
+	o.mu.Lock()
+	entry, ok := o.waiters[state]
+	fresh := ok && entry != nil && !entry.done
+	if fresh {
+		entry.done = true
+	}
+	o.mu.Unlock()
+	if !fresh {
+		return false
+	}
+	select {
+	case entry.ch <- callbackResult{code: code, state: state, errMsg: errMsg, iss: iss}:
+	default:
+	}
+	return true
 }
 
 // Close stops the callback listener.
@@ -104,7 +134,16 @@ func (o *OAuthCoordinator) Close() {
 	}
 }
 
+// fetcher waits for the OAuth callback for one connect attempt, reporting
+// the pending URL through onURL. The server box auto-opens the browser
+// only when the redirect comes back to it (server-owned loopback); for a
+// client-supplied redirect the client opens the URL itself and forwards the
+// result via ResolveWaiter.
 func (o *OAuthCoordinator) fetcher(onURL func(string)) auth.AuthorizationCodeFetcher {
+	return o.fetcherForRedirect(onURL, "")
+}
+
+func (o *OAuthCoordinator) fetcherForRedirect(onURL func(string), redirectURL string) auth.AuthorizationCodeFetcher {
 	return func(ctx context.Context, args *auth.AuthorizationArgs) (*auth.AuthorizationResult, error) {
 		u, err := url.Parse(args.URL)
 		if err != nil {
@@ -113,7 +152,7 @@ func (o *OAuthCoordinator) fetcher(onURL func(string)) auth.AuthorizationCodeFet
 		state := u.Query().Get("state")
 		ch := make(chan callbackResult, 1)
 		o.mu.Lock()
-		o.waiters[state] = ch
+		o.waiters[state] = &waiterEntry{ch: ch}
 		o.mu.Unlock()
 		defer func() {
 			o.mu.Lock()
@@ -124,10 +163,12 @@ func (o *OAuthCoordinator) fetcher(onURL func(string)) auth.AuthorizationCodeFet
 		if onURL != nil {
 			onURL(args.URL)
 		}
-		if err := o.OpenBrowser(args.URL); err != nil {
-			// Not fatal: the URL is exposed through the server status so the
-			// user can open it by hand.
-			slog.Warn("mcp oauth: could not open browser", "error", err)
+		if redirectURL == "" {
+			if err := o.OpenBrowser(args.URL); err != nil {
+				// Not fatal: the URL is exposed through the server status so the
+				// user can open it by hand.
+				slog.Warn("mcp oauth: could not open browser", "error", err)
+			}
 		}
 		select {
 		case res := <-ch:
@@ -145,11 +186,16 @@ func (o *OAuthCoordinator) fetcher(onURL func(string)) auth.AuthorizationCodeFet
 
 // NewHandler builds the SDK OAuth handler for one server. Tokens are loaded
 // from and saved to the credential store; onURL reports the pending
-// authorization URL.
-func (o *OAuthCoordinator) NewHandler(cfg ServerConfig, creds *CredentialStore, onURL func(string)) (auth.OAuthHandler, error) {
-	redirect, err := o.redirectURI()
-	if err != nil {
-		return nil, err
+// authorization URL. redirectURL overrides the callback origin (mobile
+// loopback); empty keeps the server-owned loopback.
+func (o *OAuthCoordinator) NewHandler(cfg ServerConfig, creds *CredentialStore, onURL func(string), redirectURL string) (auth.OAuthHandler, error) {
+	redirect := redirectURL
+	if redirect == "" {
+		var err error
+		redirect, err = o.redirectURI()
+		if err != nil {
+			return nil, err
+		}
 	}
 	ref := cfg.Auth.TokenRef
 	hc := auth.AuthorizationCodeHandlerConfig{
@@ -164,7 +210,7 @@ func (o *OAuthCoordinator) NewHandler(cfg ServerConfig, creds *CredentialStore, 
 		},
 		RedirectURL:              redirect,
 		RequestRefreshToken:      true,
-		AuthorizationCodeFetcher: o.fetcher(onURL),
+		AuthorizationCodeFetcher: o.fetcherForRedirect(onURL, redirectURL),
 		NewTokenSource: func(ctx context.Context, c *oauth2.Config, tok *oauth2.Token) (oauth2.TokenSource, error) {
 			persist := &persistingSource{inner: c.TokenSource(ctx, tok), ref: ref, creds: creds,
 				clientID: c.ClientID, clientSecret: c.ClientSecret, tokenURL: c.Endpoint.TokenURL}

@@ -48,6 +48,9 @@ type serverState struct {
 	client  *Client
 	tools   []RemoteTool
 	cancel  context.CancelFunc
+	// redirectURL carries the client-supplied OAuth callback origin for
+	// this connect attempt; empty means the server-owned loopback.
+	redirectURL string
 	// ready is closed when the current connect attempt finishes.
 	ready chan struct{}
 }
@@ -70,7 +73,7 @@ func NewManager(cfg *ConfigStore, creds *CredentialStore, oauth *OAuthCoordinato
 
 // Connect starts connecting in the background and returns immediately.
 // Progress is visible through Status; Ensure waits for the outcome.
-func (m *Manager) Connect(id string) error {
+func (m *Manager) Connect(id string, redirectURL ...string) error {
 	cfg, ok, err := m.Config.Get(id)
 	if err != nil {
 		return err
@@ -87,7 +90,11 @@ func (m *Manager) Connect(id string) error {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	st := &serverState{status: StatusConnecting, cancel: cancel, ready: make(chan struct{})}
+	var redirect string
+	if len(redirectURL) > 0 {
+		redirect = redirectURL[0]
+	}
+	st := &serverState{status: StatusConnecting, cancel: cancel, ready: make(chan struct{}), redirectURL: redirect}
 	m.states[id] = st
 	m.mu.Unlock()
 	go m.run(ctx, cfg, st)
@@ -120,7 +127,7 @@ func (m *Manager) run(ctx context.Context, cfg ServerConfig, st *serverState) {
 	if usesOAuth {
 		h, herr := m.OAuth.NewHandler(cfg, m.Credentials, func(u string) {
 			m.update(st, func(s *serverState) { s.status, s.authURL = StatusNeedsAuth, u })
-		})
+		}, st.redirectURL)
 		if herr != nil {
 			m.fail(st, herr)
 			return

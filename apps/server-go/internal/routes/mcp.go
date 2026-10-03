@@ -3,6 +3,7 @@ package routes
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -118,10 +119,47 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 	// Connect starts in the background: for OAuth servers this opens the
 	// browser; poll GET /servers for status / authUrl.
 	h.Post("/servers/:id/connect", func(c *fiber.Ctx) error {
-		if err := m.Connect(c.Params("id")); err != nil {
+		var body struct {
+			RedirectURI string `json:"redirectUri"`
+		}
+		// Body is optional: desktop sends none and keeps server-loopback.
+		if len(c.Body()) > 0 {
+			if err := c.BodyParser(&body); err != nil {
+				return fail400(c, fmt.Errorf("invalid request body"))
+			}
+		}
+		if body.RedirectURI != "" {
+			u, err := url.Parse(body.RedirectURI)
+			if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+				return fail400(c, fmt.Errorf("redirectUri must be an http(s) URL"))
+			}
+			if u.Scheme == "http" && u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1" {
+				return fail400(c, fmt.Errorf("redirectUri must target localhost for local loopback auth"))
+			}
+		}
+		if err := m.Connect(c.Params("id"), body.RedirectURI); err != nil {
 			return fail400(c, err)
 		}
 		return ok(c, fiber.Map{"started": true}, fiber.StatusAccepted)
+	})
+
+	// POST /servers/:id/oauth/callback — the mobile client forwards the
+	// code+state it captured on its own loopback listener into the pending
+	// server-initiated flow, mirroring the server's loopback handler.
+	h.Post("/servers/:id/oauth/callback", func(c *fiber.Ctx) error {
+		var body struct {
+			State string `json:"state"`
+			Code  string `json:"code"`
+			Error string `json:"error"`
+			Iss   string `json:"iss"`
+		}
+		if err := c.BodyParser(&body); err != nil || body.State == "" {
+			return fail400(c, fmt.Errorf("state is required"))
+		}
+		if !m.OAuth.ResolveWaiter(body.State, body.Code, body.Error, body.Iss) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"success": false, "error": "unknown or stale state"})
+		}
+		return ok(c, fiber.Map{"forwarded": true})
 	})
 
 	h.Post("/servers/:id/disconnect", func(c *fiber.Ctx) error {
