@@ -1,4 +1,4 @@
-package com.console.mobile.feature.settings
+package com.console.mobile.feature.settings.mcp
 
 import android.app.Activity
 import android.content.Context
