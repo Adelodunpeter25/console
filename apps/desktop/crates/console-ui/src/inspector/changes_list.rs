@@ -267,7 +267,8 @@ impl RenderOnce for ChangesListView {
                                                     .flex_1()
                                                     .child(
                                                         div()
-                                                            .flex_none()
+                                                            .truncate()
+                                                            .min_w_0()
                                                             .text_size(px(12.0))
                                                             .text_color(if is_selected {
                                                                 theme.text
