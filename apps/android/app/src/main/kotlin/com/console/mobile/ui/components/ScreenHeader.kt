@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowLeft
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Settings
 
 /** Standard header row height: a 40dp control plus 10dp above and below. */
@@ -63,7 +63,7 @@ fun ScreenHeader(
                 modifier = Modifier.padding(end = 12.dp).size(40.dp),
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(TablerIcons.Outline.ArrowNarrowLeft, contentDescription = "Back", tint = ConsoleColors.TextPrimary)
+                    Icon(TablerIcons.Outline.ChevronLeft, contentDescription = "Back", tint = ConsoleColors.TextPrimary)
                 }
             }
         }
