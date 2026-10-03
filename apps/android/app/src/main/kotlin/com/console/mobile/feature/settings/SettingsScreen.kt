@@ -34,6 +34,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
 import io.github.lyxnx.compose.ui.tablericons.outline.ChartLine
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
@@ -41,7 +42,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 
-enum class SettingsSection { Connection, Account, Usage, Models, Projects, DeletedChats }
+enum class SettingsSection { Connection, Account, Usage, Models, Projects, DeletedChats, Mcp }
 
 /**
  * Port of screens/settings/settings-screen.tsx.
@@ -68,6 +69,7 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
             SettingsSection.Models -> ModelsSettings(onBack = { section = null })
             SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
+            SettingsSection.Mcp -> McpSettings(onBack = { section = null })
             SettingsSection.DeletedChats -> DeletedChatsSettings(onBack = { section = null })
         }
     }
@@ -96,6 +98,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
         LandingRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
         val d = projectState.deletedSessions.size
         LandingRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+        LandingRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
     }
 }
 
