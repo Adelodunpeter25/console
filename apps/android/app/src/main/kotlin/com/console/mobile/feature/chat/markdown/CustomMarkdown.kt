@@ -14,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,8 +53,9 @@ import kotlinx.coroutines.launch
 fun CustomMarkdown(content: String, modifier: Modifier = Modifier, streaming: Boolean = false) {
     if (content.isBlank()) return
     SelectionContainer(modifier = modifier) {
+        val blocks = remember(content) { parseBlocks(content) }
         Column(modifier = Modifier.fillMaxWidth()) {
-            parseBlocks(content).forEach { block ->
+            blocks.forEach { block ->
                 when (block) {
                     is MdBlock.Code -> CodeBlock(language = block.language, code = block.code)
                     is MdBlock.Heading -> Text(
@@ -135,91 +137,120 @@ private fun CodeBlock(language: String, code: String) {
 
 @Composable
 private fun InlineText(text: String, size: androidx.compose.ui.unit.TextUnit, color: Color, lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified) {
-    Text(buildInline(text, color), fontSize = size, lineHeight = lineHeight, modifier = Modifier.fillMaxWidth())
+    val annotated = remember(text, color) { buildInline(text, color) }
+    Text(annotated, fontSize = size, lineHeight = lineHeight, modifier = Modifier.fillMaxWidth())
 }
 
-private fun buildInline(src: String, base: Color): AnnotatedString {
+// Shared span styles: allocated once instead of per span.
+private val CODE_SPAN = SpanStyle(color = Color(0xFFFDBA74), fontFamily = ConsoleMonoFamily, fontSize = 13.sp, background = Color.White.copy(alpha = 0.08f))
+private val BOLD_SPAN = SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)
+private val STRIKE_SPAN = SpanStyle(textDecoration = TextDecoration.LineThrough)
+private val ITALIC_SPAN = SpanStyle(fontStyle = FontStyle.Italic)
+private val LINK_SPAN = SpanStyle(color = Color(0xFF7DD3FC), textDecoration = TextDecoration.Underline)
+private val RAW_CODE_SPAN = SpanStyle(fontFamily = FontFamily.Monospace)
+
+private fun isInlineMarker(c: Char) = c == '`' || c == '*' || c == '~' || c == '['
+
+private fun buildInline(src: String, base: Color): AnnotatedString = buildAnnotatedString {
     // Order: inline code, bold, italic, strike, links.
-    val out = buildAnnotatedString {
-        var i = 0
-        pushStyle(SpanStyle(color = base))
-        while (i < src.length) {
-            when {
-                src.startsWith("`", i) -> {
-                    val end = src.indexOf("`", i + 1)
-                    if (end == -1) { append(src.substring(i)); break }
-                    pushStyle(SpanStyle(color = Color(0xFFFDBA74), fontFamily = ConsoleMonoFamily, fontSize = 13.sp, background = Color.White.copy(alpha = 0.08f)))
-                    append(src.substring(i + 1, end))
+    pushStyle(SpanStyle(color = base))
+    var i = 0
+    val n = src.length
+    while (i < n) {
+        when (src[i]) {
+            '`' -> {
+                val end = src.indexOf('`', i + 1)
+                if (end == -1) { append(src, i, n); break }
+                pushStyle(CODE_SPAN)
+                append(src, i + 1, end)
+                pop()
+                i = end + 1
+            }
+            '*' -> if (i + 1 < n && src[i + 1] == '*') {
+                val end = src.indexOf("**", i + 2)
+                if (end == -1) { append(src, i, n); break }
+                pushStyle(BOLD_SPAN)
+                appendInlineRaw(src, i + 2, end)
+                pop()
+                i = end + 2
+            } else {
+                val end = src.indexOf('*', i + 1)
+                if (end == -1) { append(src, i, n); break }
+                pushStyle(ITALIC_SPAN)
+                append(src, i + 1, end)
+                pop()
+                i = end + 1
+            }
+            '~' -> if (i + 1 < n && src[i + 1] == '~') {
+                val end = src.indexOf("~~", i + 2)
+                if (end == -1) { append(src, i, n); break }
+                pushStyle(STRIKE_SPAN)
+                append(src, i + 2, end)
+                pop()
+                i = end + 2
+            } else {
+                append('~'); i++
+            }
+            '[' -> {
+                val mid = src.indexOf("](", i)
+                val end = if (mid != -1) src.indexOf(')', mid) else -1
+                if (mid == -1 || end == -1) { append('['); i++ }
+                else {
+                    pushStyle(LINK_SPAN)
+                    append(src, i + 1, mid)
                     pop()
                     i = end + 1
                 }
-                src.startsWith("**", i) -> {
-                    val end = src.indexOf("**", i + 2)
-                    if (end == -1) { append(src.substring(i)); break }
-                    pushStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White))
-                    appendInlineRaw(src.substring(i + 2, end))
-                    pop()
-                    i = end + 2
-                }
-                src.startsWith("~~", i) -> {
-                    val end = src.indexOf("~~", i + 2)
-                    if (end == -1) { append(src.substring(i)); break }
-                    pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                    append(src.substring(i + 2, end))
-                    pop()
-                    i = end + 2
-                }
-                src.startsWith("*", i) && !src.startsWith("**", i) -> {
-                    val end = src.indexOf("*", i + 1)
-                    if (end == -1) { append(src.substring(i)); break }
-                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                    append(src.substring(i + 1, end))
-                    pop()
-                    i = end + 1
-                }
-                src.startsWith("[", i) -> {
-                    val mid = src.indexOf("](", i)
-                    val end = if (mid != -1) src.indexOf(")", mid) else -1
-                    if (mid == -1 || end == -1) { append(src[i]); i++ }
-                    else {
-                        pushStyle(SpanStyle(color = Color(0xFF7DD3FC), textDecoration = TextDecoration.Underline))
-                        append(src.substring(i + 1, mid))
-                        pop()
-                        i = end + 1
-                    }
-                }
-                else -> { append(src[i]); i++ }
+            }
+            else -> {
+                // Append the whole plain-text run up to the next marker in one call.
+                var j = i + 1
+                while (j < n && !isInlineMarker(src[j])) j++
+                append(src, i, j)
+                i = j
             }
         }
-        pop()
     }
-    return out
+    pop()
 }
 
-private fun androidx.compose.ui.text.AnnotatedString.Builder.appendInlineRaw(s: String) {
-    // Nested emphasis inside bold — reuse code-span handling only.
-    var i = 0
-    while (i < s.length) {
-        if (s[i] == '`') {
-            val end = s.indexOf('`', i + 1)
-            if (end == -1) { append(s.substring(i)); break }
-            pushStyle(SpanStyle(fontFamily = FontFamily.Monospace))
-            append(s.substring(i + 1, end))
+// Nested emphasis inside bold — reuse code-span handling only. Works on src[start, end).
+private fun AnnotatedString.Builder.appendInlineRaw(src: String, start: Int, end: Int) {
+    var i = start
+    while (i < end) {
+        if (src[i] == '`') {
+            val close = src.indexOf('`', i + 1)
+            if (close == -1 || close >= end) { append(src, i, end); break }
+            pushStyle(RAW_CODE_SPAN)
+            append(src, i + 1, close)
             pop()
-            i = end + 1
-        } else { append(s[i]); i++ }
+            i = close + 1
+        } else {
+            var j = i + 1
+            while (j < end && src[j] != '`') j++
+            append(src, i, j)
+            i = j
+        }
     }
 }
 
+// @Immutable: blocks are never mutated after parsing, so Compose can skip
+// unchanged blocks (List<String> alone would be treated as unstable).
+@Immutable
 private sealed interface MdBlock {
-    data class Code(val language: String, val code: String) : MdBlock
-    data class Heading(val level: Int, val text: String) : MdBlock
-    data class Quote(val text: String) : MdBlock
+    @Immutable data class Code(val language: String, val code: String) : MdBlock
+    @Immutable data class Heading(val level: Int, val text: String) : MdBlock
+    @Immutable data class Quote(val text: String) : MdBlock
     data object Rule : MdBlock
-    data class Bullets(val items: List<String>) : MdBlock
-    data class Ordered(val items: List<String>) : MdBlock
-    data class Paragraph(val text: String) : MdBlock
+    @Immutable data class Bullets(val items: List<String>) : MdBlock
+    @Immutable data class Ordered(val items: List<String>) : MdBlock
+    @Immutable data class Paragraph(val text: String) : MdBlock
 }
+
+// Compiled once instead of on every line / loop check.
+private val BULLET_RE = Regex("^\\s*[-*+] ")
+private val ORDERED_RE = Regex("^\\s*\\d+[.)] ")
+private val ORDERED_PREFIX_RE = Regex("^\\d+[.)]\\s*")
 
 private fun parseBlocks(src: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
@@ -239,7 +270,7 @@ private fun parseBlocks(src: String): List<MdBlock> {
             val lang = trimmed.removePrefix("```").trim()
             val code = StringBuilder()
             i++
-            while (i < lines.size && !lines[i].trim().startsWith("```")) {
+            while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
                 code.appendLine(lines[i]); i++
             }
             blocks.add(MdBlock.Code(lang, code.toString()))
@@ -258,28 +289,28 @@ private fun parseBlocks(src: String): List<MdBlock> {
         if (trimmed.startsWith(">")) {
             flushPara()
             val q = StringBuilder()
-            while (i < lines.size && lines[i].trim().startsWith(">")) {
+            while (i < lines.size && lines[i].trimStart().startsWith(">")) {
                 q.append(lines[i].trim().removePrefix(">").trim()); q.append("\n"); i++
             }
             blocks.add(MdBlock.Quote(q.toString().trim()))
             continue
         }
-        val bulletMatch = Regex("^\\s*[-*+] ").containsMatchIn(line)
+        val bulletMatch = BULLET_RE.containsMatchIn(line)
         if (bulletMatch) {
             flushPara()
             val items = mutableListOf<String>()
-            while (i < lines.size && Regex("^\\s*[-*+] ").containsMatchIn(lines[i])) {
+            while (i < lines.size && BULLET_RE.containsMatchIn(lines[i])) {
                 items.add(lines[i].trim().drop(2).trim()); i++
             }
             blocks.add(MdBlock.Bullets(items))
             continue
         }
-        val orderedMatch = Regex("^\\s*\\d+[.)] ").containsMatchIn(line)
+        val orderedMatch = ORDERED_RE.containsMatchIn(line)
         if (orderedMatch) {
             flushPara()
             val items = mutableListOf<String>()
-            while (i < lines.size && Regex("^\\s*\\d+[.)] ").containsMatchIn(lines[i])) {
-                items.add(lines[i].trim().replaceFirst(Regex("^\\d+[.)]\\s*"), "")); i++
+            while (i < lines.size && ORDERED_RE.containsMatchIn(lines[i])) {
+                items.add(lines[i].trim().replaceFirst(ORDERED_PREFIX_RE, "")); i++
             }
             blocks.add(MdBlock.Ordered(items))
             continue
