@@ -83,7 +83,7 @@ fun CustomMarkdown(content: String, modifier: Modifier = Modifier, streaming: Bo
                     is MdBlock.Ordered -> Column(modifier = Modifier.padding(vertical = 2.dp)) {
                         block.items.forEachIndexed { i, item ->
                             Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                                Text("${i + 1}.  ", color = ConsoleColors.TextSecondary, fontSize = 14.sp)
+                                Text("${block.start + i}.  ", color = ConsoleColors.TextSecondary, fontSize = 14.sp)
                                 InlineText(item, 14.sp, ConsoleColors.TextPrimary)
                             }
                         }
@@ -243,7 +243,7 @@ private sealed interface MdBlock {
     @Immutable data class Quote(val text: String) : MdBlock
     data object Rule : MdBlock
     @Immutable data class Bullets(val items: List<String>) : MdBlock
-    @Immutable data class Ordered(val items: List<String>) : MdBlock
+    @Immutable data class Ordered(val start: Int, val items: List<String>) : MdBlock
     @Immutable data class Paragraph(val text: String) : MdBlock
 }
 
@@ -251,6 +251,38 @@ private sealed interface MdBlock {
 private val BULLET_RE = Regex("^\\s*[-*+] ")
 private val ORDERED_RE = Regex("^\\s*\\d+[.)] ")
 private val ORDERED_PREFIX_RE = Regex("^\\d+[.)]\\s*")
+
+private class Fence(val char: Char, val length: Int, val indent: Int, val info: String)
+
+/**
+ * CommonMark opening fence: a run of 3+ backticks or tildes. A backtick fence's
+ * info string may not contain backticks, so a one-line ```code``` is not a fence.
+ */
+private fun openingFence(line: String): Fence? {
+    val indent = line.length - line.trimStart().length
+    val rest = line.substring(indent)
+    val c = rest.firstOrNull() ?: return null
+    if (c != '`' && c != '~') return null
+    val len = rest.takeWhile { it == c }.length
+    if (len < 3) return null
+    val info = rest.substring(len).trim()
+    if (c == '`' && info.contains('`')) return null
+    return Fence(c, len, indent, info.substringBefore(' '))
+}
+
+/** Closing fence: same char, at least as long as the opener, nothing else on the line. */
+private fun isClosingFence(line: String, fence: Fence): Boolean {
+    val rest = line.trim()
+    if (rest.length < fence.length) return false
+    return rest.all { it == fence.char }
+}
+
+/** Remove up to [n] leading spaces (the fence's own indentation, e.g. inside a list item). */
+private fun stripIndent(line: String, n: Int): String {
+    var k = 0
+    while (k < n && k < line.length && line[k] == ' ') k++
+    return line.substring(k)
+}
 
 private fun parseBlocks(src: String): List<MdBlock> {
     val blocks = mutableListOf<MdBlock>()
@@ -265,16 +297,16 @@ private fun parseBlocks(src: String): List<MdBlock> {
     while (i < lines.size) {
         val line = lines[i]
         val trimmed = line.trim()
-        if (trimmed.startsWith("```")) {
+        val fence = openingFence(line)
+        if (fence != null) {
             flushPara()
-            val lang = trimmed.removePrefix("```").trim()
             val code = StringBuilder()
             i++
-            while (i < lines.size && !lines[i].trimStart().startsWith("```")) {
-                code.appendLine(lines[i]); i++
+            while (i < lines.size && !isClosingFence(lines[i], fence)) {
+                code.appendLine(stripIndent(lines[i], fence.indent)); i++
             }
-            blocks.add(MdBlock.Code(lang, code.toString()))
-            i++
+            blocks.add(MdBlock.Code(fence.info, code.toString()))
+            i++ // skip the closing fence (no-op past the end while streaming)
             continue
         }
         if (trimmed.startsWith("#")) {
@@ -308,11 +340,12 @@ private fun parseBlocks(src: String): List<MdBlock> {
         val orderedMatch = ORDERED_RE.containsMatchIn(line)
         if (orderedMatch) {
             flushPara()
+            val start = line.trimStart().takeWhile { it.isDigit() }.toIntOrNull() ?: 1
             val items = mutableListOf<String>()
             while (i < lines.size && ORDERED_RE.containsMatchIn(lines[i])) {
                 items.add(lines[i].trim().replaceFirst(ORDERED_PREFIX_RE, "")); i++
             }
-            blocks.add(MdBlock.Ordered(items))
+            blocks.add(MdBlock.Ordered(start, items))
             continue
         }
         if (trimmed.isEmpty()) { flushPara(); i++; continue }
