@@ -13,7 +13,7 @@ data class AppState(
     val selectedSessionId: String? = null,
     val selectedSubagentId: String? = null,
     val backendUrl: String? = null,
-    val pendingConnectionSection: Boolean = false,
+    val pendingServersSection: Boolean = false,
 )
 
 class AppStateHolder(initial: AppState = AppState()) {
@@ -30,7 +30,7 @@ class AppStateHolder(initial: AppState = AppState()) {
     fun setSelectedSessionId(id: String?) { _state.value = _state.value.copy(selectedSessionId = id) }
     fun setSelectedSubagentId(id: String?) { _state.value = _state.value.copy(selectedSubagentId = id) }
     fun setBackendUrl(url: String?) { _state.value = _state.value.copy(backendUrl = url) }
-    fun setPendingConnectionSection(pending: Boolean) { _state.value = _state.value.copy(pendingConnectionSection = pending) }
+    fun setPendingServersSection(pending: Boolean) { _state.value = _state.value.copy(pendingServersSection = pending) }
 
     fun openChatSession(sessionId: String) {
         val cur = _state.value

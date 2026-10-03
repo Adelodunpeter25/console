@@ -912,7 +912,7 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.open_settings_tab(
-                                            console_ui::settings::SettingsTab::Connection,
+                                            console_ui::settings::SettingsTab::Servers,
                                             window,
                                             cx,
                                         );

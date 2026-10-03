@@ -42,7 +42,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 
-enum class SettingsSection { Connection, Account, Usage, Models, Projects, DeletedChats, Mcp }
+enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
 
 /**
  * Port of screens/settings/settings-screen.tsx.
@@ -53,19 +53,19 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
     var section by remember { mutableStateOf<SettingsSection?>(null) }
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
 
-    // Env switcher "Add" flow jumps straight into Connection.
-    LaunchedEffect(appState.pendingConnectionSection) {
-        if (appState.pendingConnectionSection) {
-            section = SettingsSection.Connection
-            AppContainer.appStateHolder.setPendingConnectionSection(false)
+    // Env switcher "Add" flow jumps straight into Servers.
+    LaunchedEffect(appState.pendingServersSection) {
+        if (appState.pendingServersSection) {
+            section = SettingsSection.Servers
+            AppContainer.appStateHolder.setPendingServersSection(false)
         }
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
         when (val s = section) {
             null -> SettingsLanding(onBack = onBackToHome, onOpen = { section = it })
-            SettingsSection.Connection -> ConnectionSettings(onBack = { section = null })
-            SettingsSection.Account -> AccountSettings(onBack = { section = null })
+            SettingsSection.Servers -> ServersSettings(onBack = { section = null })
+            SettingsSection.Providers -> ProvidersSettings(onBack = { section = null })
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
             SettingsSection.Models -> ModelsSettings(onBack = { section = null })
             SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
@@ -89,8 +89,8 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     ScreenHeader(title = "Settings", onBack = { onBack() })
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
         val signedIn = authState.status?.values?.any { it.loggedIn } == true
-        LandingRow(icon = TablerIcons.Outline.Wifi, title = "Connection", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Connection) }
-        LandingRow(icon = TablerIcons.Outline.UserCircle, title = "Account", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Account) }
+        LandingRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
+        LandingRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
         LandingRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
         val roles = providerState.modelRoles.count { it.value.isNotBlank() }
         LandingRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }

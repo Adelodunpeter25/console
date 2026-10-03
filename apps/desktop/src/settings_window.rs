@@ -1,8 +1,8 @@
 use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    AccountsPage, ConnectionPage, DeletedChatsPage, KeybindingsPage, ModelsPage, ProbeState,
-    ProjectsPage, SettingsShell, SettingsTab, UsagePage,
+    DeletedChatsPage, KeybindingsPage, ModelsPage, ProbeState, ProjectsPage, ProvidersPage,
+    ServersPage, SettingsShell, SettingsTab, UsagePage,
 };
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
@@ -234,7 +234,7 @@ impl Render for SettingsWindow {
         };
 
         let content = match active_tab {
-            SettingsTab::Accounts => {
+            SettingsTab::Providers => {
                 let on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
                     Rc::new(move |provider: String, _w: &mut Window, cx: &mut App| {
@@ -246,7 +246,7 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                AccountsPage {
+                ProvidersPage {
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
@@ -254,7 +254,7 @@ impl Render for SettingsWindow {
                 }
                 .into_any_element()
             }
-            SettingsTab::Connection => {
+            SettingsTab::Servers => {
                 let on_activate: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
                     Rc::new(move |env_id: String, _w: &mut Window, cx: &mut App| {
@@ -420,7 +420,7 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                ConnectionPage {
+                ServersPage {
                     environments: app.environment_rows(),
                     is_adding: self.is_adding_env,
                     is_editing: self.editing_env_id.is_some(),

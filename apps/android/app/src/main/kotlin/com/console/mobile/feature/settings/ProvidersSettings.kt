@@ -50,11 +50,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Port of screens/settings/account-settings.tsx.
+ * Port of screens/settings/account-settings.tsx. Named ProvidersSettings: this
+ * screen is about AI provider credentials, one per row.
  * Provider list with login/re-login via OAuth Custom Tab (getLoginUrl → submitCallback).
  */
 @Composable
-fun AccountSettings(onBack: () -> Unit) {
+fun ProvidersSettings(onBack: () -> Unit) {
     val context = LocalContext.current
     val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()

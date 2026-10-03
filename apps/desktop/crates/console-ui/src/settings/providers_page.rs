@@ -8,14 +8,14 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 #[derive(IntoElement)]
-pub struct AccountsPage {
+pub struct ProvidersPage {
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
-impl RenderOnce for AccountsPage {
+impl RenderOnce for ProvidersPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_login = self.on_login.clone();
@@ -36,7 +36,7 @@ impl RenderOnce for AccountsPage {
                             .text_size(px(16.0))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(theme.text)
-                            .child("AI Accounts & Providers"),
+                            .child("AI Providers"),
                     )
                     .child(
                         div()

@@ -63,7 +63,7 @@ import java.util.concurrent.TimeUnit
  * List → inline add/edit form (same screen, like Expo). Probe dots via GET /api/projects.
  */
 @Composable
-fun ConnectionSettings(onBack: () -> Unit) {
+fun ServersSettings(onBack: () -> Unit) {
     val envState by AppContainer.environmentsStateHolder.state.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<String?>(null) } // null=list, "__create__"=create, else env id
     var probes by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }

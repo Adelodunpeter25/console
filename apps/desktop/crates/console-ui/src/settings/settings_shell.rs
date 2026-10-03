@@ -33,8 +33,8 @@ impl RenderOnce for SettingsShell {
         let theme = Theme::current(cx);
         let on_select = self.on_select_tab.clone();
         let tabs = [
-            (SettingsTab::Accounts, IconName::User, "Accounts"),
-            (SettingsTab::Connection, IconName::Server, "Connection"),
+            (SettingsTab::Providers, IconName::User, "Providers"),
+            (SettingsTab::Servers, IconName::Server, "Servers"),
             (SettingsTab::Usage, IconName::ChartColumn, "Usage"),
             (SettingsTab::Projects, IconName::Folder, "Projects"),
             (SettingsTab::Models, IconName::Settings2, "Models"),

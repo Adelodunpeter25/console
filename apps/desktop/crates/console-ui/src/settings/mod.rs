@@ -1,22 +1,22 @@
 //! Shared settings view-models and UI components.
 
-pub mod accounts_page;
-pub mod connection_page;
 pub mod deleted_chats_page;
 pub mod keybindings_page;
 pub mod mcp_page;
 pub mod models_page;
 pub mod projects_page;
+pub mod providers_page;
+pub mod servers_page;
 pub mod settings_shell;
 pub mod usage_page;
 
-pub use accounts_page::*;
-pub use connection_page::*;
 pub use deleted_chats_page::*;
 pub use keybindings_page::*;
 pub use mcp_page::*;
 pub use models_page::*;
 pub use projects_page::*;
+pub use providers_page::*;
+pub use servers_page::*;
 pub use settings_shell::*;
 pub use usage_page::*;
 
@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SettingsTab {
     #[default]
-    Accounts,
-    Connection,
+    Providers,
+    Servers,
     Usage,
     Projects,
     Models,
@@ -39,8 +39,8 @@ pub enum SettingsTab {
 impl SettingsTab {
     pub fn title(&self) -> &'static str {
         match self {
-            Self::Accounts => "Accounts",
-            Self::Connection => "Connection",
+            Self::Providers => "Providers",
+            Self::Servers => "Servers",
             Self::Usage => "Usage",
             Self::Projects => "Projects",
             Self::Models => "Models",
@@ -61,7 +61,7 @@ pub enum ProbeState {
     Failed,
 }
 
-/// A single environment item in the connection page.
+/// A single environment item in the servers page.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EnvironmentRow {
     pub id: String,

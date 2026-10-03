@@ -10,7 +10,7 @@ use gpui::{
 use std::rc::Rc;
 
 #[derive(IntoElement)]
-pub struct ConnectionPage {
+pub struct ServersPage {
     pub environments: Vec<EnvironmentRow>,
     pub is_adding: bool,
     pub is_editing: bool,
@@ -26,7 +26,7 @@ pub struct ConnectionPage {
     pub on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
-impl RenderOnce for ConnectionPage {
+impl RenderOnce for ServersPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_activate = self.on_activate.clone();

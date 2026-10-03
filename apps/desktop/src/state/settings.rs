@@ -85,7 +85,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_settings_tab(console_ui::settings::SettingsTab::Accounts, window, cx);
+        self.open_settings_tab(console_ui::settings::SettingsTab::Providers, window, cx);
     }
 
     pub fn open_settings_tab(
