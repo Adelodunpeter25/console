@@ -38,11 +38,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Server
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.McpAuthConfig
-import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.feature.settings.mcp.McpEditorForm
 import com.console.mobile.feature.settings.mcp.McpOAuthLauncher
 import com.console.mobile.feature.settings.mcp.McpServerCard
+import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
@@ -146,19 +145,14 @@ fun McpSettings(onBack: () -> Unit) {
 
 @Composable
 private fun McpEmptyState(onAdd: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = Modifier.fillMaxWidth().clip(shape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, shape).padding(horizontal = 20.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(TablerIcons.Outline.Server, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(36.dp))
-        Text("No MCP servers configured", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp))
-        Text(
-            "Add local stdio commands or remote HTTP servers to equip the harness with dynamic tools.",
-            color = ConsoleColors.TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
-        )
-        PillButton(text = "Add your first MCP server", onClick = onAdd)
-    }
+    EmptyState(
+        title = "No MCP servers configured",
+        description = "Add local stdio commands or remote HTTP servers to equip the harness with dynamic tools.",
+        icon = {
+            Icon(TablerIcons.Outline.Server, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(36.dp))
+        },
+        action = {
+            PillButton(text = "Add your first MCP server", onClick = onAdd)
+        },
+    )
 }
