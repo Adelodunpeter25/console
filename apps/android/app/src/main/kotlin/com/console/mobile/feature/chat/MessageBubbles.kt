@@ -1,5 +1,5 @@
 package com.console.mobile.feature.chat
-import com.console.mobile.feature.chat.markdown.MarkdownText
+import com.console.mobile.feature.chat.markdown.CustomMarkdown
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -154,7 +154,7 @@ fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming:
             ThinkingBlock(text = thinkingContent, isStreaming = isStreaming)
         }
         if (!textContent.isNullOrEmpty()) {
-            MarkdownText(content = textContent, streaming = isStreaming)
+            CustomMarkdown(content = textContent, streaming = isStreaming)
         }
         if (!isStreaming && !showTyping && textContent.isNullOrEmpty() && thinkingContent.isNullOrEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -281,7 +281,7 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
                         ReadFileResult(detail, filePath)
                     } else if (isSubagentTool(call.name)) {
                         Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                        MarkdownText(content = detail, modifier = Modifier.padding(horizontal = 12.dp))
+                        CustomMarkdown(content = detail, modifier = Modifier.padding(horizontal = 12.dp))
                     } else {
                         Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {

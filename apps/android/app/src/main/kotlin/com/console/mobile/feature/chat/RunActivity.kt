@@ -1,5 +1,5 @@
 package com.console.mobile.feature.chat
-import com.console.mobile.feature.chat.markdown.MarkdownText
+import com.console.mobile.feature.chat.markdown.CustomMarkdown
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -121,7 +121,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
             groups.forEach { g ->
                 when (g) {
                     is RenderGroup.Thinking -> CollapsibleThinking(text = g.text)
-                    is RenderGroup.Text -> MarkdownText(content = g.text, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                    is RenderGroup.Text -> CustomMarkdown(content = g.text, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
                     is RenderGroup.Tools -> {
                         val byId = g.results.associateBy { it.toolCallId }
                         if (g.calls.size == 1) {

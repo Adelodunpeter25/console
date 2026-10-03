@@ -47,7 +47,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.SubagentActivityItem
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.feature.chat.markdown.MarkdownText
+import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
@@ -179,7 +179,7 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
                     }
                 }
                 Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                    MarkdownText(content = subagent.summary)
+                    CustomMarkdown(content = subagent.summary)
                 }
             }
             // Error.

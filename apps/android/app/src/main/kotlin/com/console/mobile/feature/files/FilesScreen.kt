@@ -53,7 +53,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
-import com.console.mobile.feature.chat.markdown.MarkdownText
+import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.EmptyState
@@ -72,7 +72,7 @@ import kotlinx.coroutines.withContext
 /**
  * Port of screens/files/files-screen.tsx + FileTreeBrowser + FileTreeRows.
  * Project-scoped lazy tree, server FFF search (350ms debounce), preview pane
- * (markdown → MarkdownText, text → mono scroll, gate → block card).
+ * (markdown → CustomMarkdown, text → mono scroll, gate → block card).
  */
 @Composable
 fun FilesScreen(onBack: () -> Unit) {
@@ -213,7 +213,7 @@ fun FilesScreen(onBack: () -> Unit) {
                         val content = fileContent ?: ""
                         if (isMarkdownPath(sel)) {
                             Column(modifier = Modifier.fillMaxSize().verticalScroll2().padding(4.dp)) {
-                                MarkdownText(content = content)
+                                CustomMarkdown(content = content)
                             }
                         } else {
                             CodePreview(content = content, path = sel)
