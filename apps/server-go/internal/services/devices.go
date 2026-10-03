@@ -103,12 +103,22 @@ func (s *DeviceService) Diagnostics(ctx context.Context) types.DeviceDiagnostics
 	return out
 }
 
+// defaultAndroidRAMMB is the emulator RAM console requests unless the
+// operator overrides it via SIM_GO_ANDROID_RAM_MB (read live by sim-go at
+// boot; its own fallback is 4096).
+const defaultAndroidRAMMB = "6144"
+
 // Boot validates the platform, then boots in the background: Android waits
 // for boot_completed (minutes), so callers poll List instead of blocking.
 // Devices are slimmed as part of boot to keep the simulator lightweight.
 func (s *DeviceService) Boot(platform, id string) error {
 	if _, err := s.client.Driver(platform); err != nil {
 		return fmt.Errorf("%w: %v", ErrDeviceInvalidPlatform, err)
+	}
+	if platform == "android" {
+		if _, ok := os.LookupEnv("SIM_GO_ANDROID_RAM_MB"); !ok {
+			os.Setenv("SIM_GO_ANDROID_RAM_MB", defaultAndroidRAMMB)
+		}
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), deviceBootTimeout)
