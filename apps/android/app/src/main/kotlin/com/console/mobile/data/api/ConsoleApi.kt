@@ -11,6 +11,9 @@ import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.GitBranchesResponse
 import com.console.mobile.data.model.GitDiffResponse
 import com.console.mobile.data.model.GitStatusSummary
+import com.console.mobile.data.model.McpOAuthCallbackPayload
+import com.console.mobile.data.model.McpSavePayload
+import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
@@ -80,6 +83,14 @@ interface ConsoleApi {
     // usage
     suspend fun getProviderUsage(providerId: String): UsageReport?
     suspend fun getAllUsage(): Map<String, UsageReport?>
+    // mcp
+    suspend fun listMcpServers(): List<McpServerEntry>
+    suspend fun saveMcpServer(payload: McpSavePayload): McpServerEntry
+    suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerEntry
+    suspend fun deleteMcpServer(id: String)
+    suspend fun connectMcpServer(id: String, redirectUri: String?)
+    suspend fun disconnectMcpServer(id: String)
+    suspend fun forwardMcpOAuthCallback(id: String, payload: McpOAuthCallbackPayload)
     // favorites
     suspend fun listFavorites(): List<ModelFavorite>
     suspend fun setFavorite(favorite: ModelFavorite, isFavorite: Boolean)

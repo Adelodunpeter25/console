@@ -15,6 +15,9 @@ import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.GitBranchesResponse
 import com.console.mobile.data.model.GitDiffResponse
 import com.console.mobile.data.model.GitStatusSummary
+import com.console.mobile.data.model.McpOAuthCallbackPayload
+import com.console.mobile.data.model.McpSavePayload
+import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
@@ -335,6 +338,50 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }.toString()
         val raw = http.patch("/api/settings", body)
         return http.unwrap(raw, ConsoleSettings.serializer(), "save model roles")
+    }
+
+    // mcp
+    override suspend fun listMcpServers(): List<McpServerEntry> {
+        val raw = http.get("/api/mcp/servers")
+        return http.unwrap(raw, ListSerializer(McpServerEntry.serializer()), "list MCP servers")
+    }
+
+    override suspend fun saveMcpServer(payload: McpSavePayload): McpServerEntry {
+        val raw = http.post("/api/mcp/servers", http.encodeBody(McpSavePayload.serializer(), payload))
+        return http.unwrap(raw, McpServerEntry.serializer(), "save MCP server")
+    }
+
+    override suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerEntry {
+        val raw = http.put("/api/mcp/servers/${enc(id)}", http.encodeBody(McpSavePayload.serializer(), payload))
+        return http.unwrap(raw, McpServerEntry.serializer(), "update MCP server")
+    }
+
+    override suspend fun deleteMcpServer(id: String) {
+        val raw = http.delete("/api/mcp/servers/${enc(id)}")
+        ensureOk(raw, "delete MCP server")
+    }
+
+    override suspend fun connectMcpServer(id: String, redirectUri: String?) {
+        val body = if (redirectUri != null) {
+            buildJsonObject { put("redirectUri", redirectUri) }.toString()
+        } else {
+            null
+        }
+        val raw = http.post("/api/mcp/servers/${enc(id)}/connect", body)
+        ensureOk(raw, "connect MCP server")
+    }
+
+    override suspend fun disconnectMcpServer(id: String) {
+        val raw = http.post("/api/mcp/servers/${enc(id)}/disconnect")
+        ensureOk(raw, "disconnect MCP server")
+    }
+
+    override suspend fun forwardMcpOAuthCallback(id: String, payload: McpOAuthCallbackPayload) {
+        val raw = http.post(
+            "/api/mcp/servers/${enc(id)}/oauth/callback",
+            http.encodeBody(McpOAuthCallbackPayload.serializer(), payload),
+        )
+        ensureOk(raw, "forward MCP OAuth callback")
     }
 
     override suspend fun getDevices(): List<DeviceDescriptor> {

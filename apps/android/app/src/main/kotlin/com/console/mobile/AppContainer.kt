@@ -15,6 +15,7 @@ import com.console.mobile.data.repo.EnvironmentsRepository
 import com.console.mobile.data.repo.AssistRepository
 import com.console.mobile.data.repo.FsRepository
 import com.console.mobile.data.repo.GitRepository
+import com.console.mobile.data.repo.McpRepository
 import com.console.mobile.data.repo.NotificationRepository
 import com.console.mobile.data.repo.ProjectRepository
 import com.console.mobile.data.repo.ProviderRepository
@@ -26,6 +27,7 @@ import com.console.mobile.data.store.AuthStateHolder
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.EnvironmentsStateHolder
 import com.console.mobile.data.store.FsStateHolder
+import com.console.mobile.data.store.McpStateHolder
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.data.store.ProjectStateHolder
 import com.console.mobile.data.store.ProviderStateHolder
@@ -106,6 +108,9 @@ object AppContainer {
     lateinit var usageStateHolder: UsageStateHolder
         private set
 
+    lateinit var mcpStateHolder: McpStateHolder
+        private set
+
     lateinit var terminalStateHolder: TerminalStateHolder
         private set
 
@@ -132,6 +137,9 @@ object AppContainer {
         private set
 
     lateinit var usageRepository: UsageRepository
+        private set
+
+    lateinit var mcpRepository: McpRepository
         private set
 
     lateinit var gitRepository: GitRepository
@@ -196,6 +204,7 @@ object AppContainer {
         authStateHolder = AuthStateHolder()
         fsStateHolder = FsStateHolder()
         usageStateHolder = UsageStateHolder()
+        mcpStateHolder = McpStateHolder()
         terminalStateHolder = TerminalStateHolder()
         environmentsStateHolder = EnvironmentsStateHolder()
 
@@ -220,6 +229,10 @@ object AppContainer {
         usageRepository = UsageRepository(
             api = consoleApi,
             usageState = usageStateHolder,
+        )
+        mcpRepository = McpRepository(
+            api = consoleApi,
+            mcpState = mcpStateHolder,
         )
         gitRepository = GitRepository(
             api = consoleApi,

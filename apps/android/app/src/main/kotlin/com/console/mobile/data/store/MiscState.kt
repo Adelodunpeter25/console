@@ -1,6 +1,7 @@
 package com.console.mobile.data.store
 
 import com.console.mobile.data.model.FsTreeEntry
+import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.ProviderAuthStatus
 import com.console.mobile.data.model.TerminalSpawnedEvent
 import com.console.mobile.data.model.UsageReport
@@ -65,6 +66,21 @@ class UsageStateHolder(initial: UsageState = UsageState()) {
             else s.copy(reports = emptyMap(), loadingByProvider = emptyMap(), lastFetchedAt = null)
         }
     }
+}
+
+data class McpState(
+    val servers: List<McpServerEntry> = emptyList(),
+    val loading: Boolean = false,
+    val busyServerIds: Set<String> = emptySet(),
+    val error: String? = null,
+)
+
+class McpStateHolder(initial: McpState = McpState()) {
+    private val _state = MutableStateFlow(initial)
+    val state: StateFlow<McpState> = _state.asStateFlow()
+    fun set(v: McpState) { _state.value = v }
+    fun patch(fn: (McpState) -> McpState) { _state.value = fn(_state.value) }
+    fun entry(id: String): McpServerEntry? = _state.value.servers.firstOrNull { it.id == id }
 }
 
 enum class TerminalStatus { Spawning, Running, Exited, Error }
