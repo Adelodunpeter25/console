@@ -33,8 +33,9 @@ type pendingLogin struct {
 	expiresAt   time.Time
 }
 
-// CodexAuthStatus mirrors ProviderAuthStatus for the codex key.
-type CodexAuthStatus struct {
+// ProviderAuthStatus is the per-provider login state. Shared by every
+// provider key in AuthStatus — they all report the same two fields.
+type ProviderAuthStatus struct {
 	LoggedIn bool   `json:"loggedIn"`
 	Email    string `json:"email,omitempty"`
 }
@@ -56,11 +57,11 @@ type GitHubAuthStatus struct {
 // AuthStatus mirrors AuthStatusResponse. Non-codex providers report
 // loggedIn:false until their Go ports land.
 type AuthStatus struct {
-	Antigravity CodexAuthStatus  `json:"antigravity"`
-	Codex       CodexAuthStatus  `json:"codex"`
-	Devin       CodexAuthStatus  `json:"devin"`
-	Claude      CodexAuthStatus  `json:"claude"`
-	GitHub      GitHubAuthStatus `json:"github"`
+	Antigravity ProviderAuthStatus `json:"antigravity"`
+	Codex       ProviderAuthStatus `json:"codex"`
+	Devin       ProviderAuthStatus `json:"devin"`
+	Claude      ProviderAuthStatus `json:"claude"`
+	GitHub      GitHubAuthStatus   `json:"github"`
 }
 
 // LoginURL is the response for POST /api/auth/login/url.
@@ -113,19 +114,19 @@ func (s *AuthService) exchangeClaude(code, state, verifier, redirectURI string) 
 func (s *AuthService) GetStatus() AuthStatus {
 	status := AuthStatus{}
 	if cred, err := codex.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Codex = CodexAuthStatus{LoggedIn: true, Email: cred.Email}
+		status.Codex = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
 	} else if codex.CredentialExists() {
-		status.Codex = CodexAuthStatus{LoggedIn: true}
+		status.Codex = ProviderAuthStatus{LoggedIn: true}
 	}
 	if cred, err := claude.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Claude = CodexAuthStatus{LoggedIn: true, Email: cred.Email}
+		status.Claude = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
 	} else if claude.CredentialExists() {
-		status.Claude = CodexAuthStatus{LoggedIn: true}
+		status.Claude = ProviderAuthStatus{LoggedIn: true}
 	}
 	if cred, err := antigravity.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Antigravity = CodexAuthStatus{LoggedIn: true, Email: cred.Email}
+		status.Antigravity = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
 	} else if antigravity.CredentialExists() {
-		status.Antigravity = CodexAuthStatus{LoggedIn: true}
+		status.Antigravity = ProviderAuthStatus{LoggedIn: true}
 	}
 	status.GitHub = GitHubStatus()
 	return status
