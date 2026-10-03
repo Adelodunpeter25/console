@@ -73,7 +73,7 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   fresh VPS may not have. `cmd/console/main.go` dispatches on
   `CONSOLE_GIT_CREDENTIAL_HELPER=1` (set inline by the config value) and calls
   `github.RunCredentialHelper`.
-  ⚠️ **That check must stay first in `main.go`.** The daemon runs under
+  **That check must stay first in `main.go`.** The daemon runs under
   `CONSOLE_SERVE=1` and git inherits it, so checking serve mode first would
   boot a second server instead of answering. A hidden cobra subcommand is *not*
   sufficient on its own — cobra is only reached after the serve branch.
@@ -83,7 +83,7 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
   site. `runGit`, the agent bash tool (both sync and background, via
   `tools.mergedEnv`), and `PtyManager.Spawn` all already inherit
   `os.Environ()`, so this covers them plus any future call site.
-  ⚠️ **It must run before the first PTY spawn**: `PtyManager.baseEnv()` caches
+  **It must run before the first PTY spawn**: `PtyManager.baseEnv()` caches
   `os.Environ()` in a `sync.Once`, so a later `Setenv` silently misses every
   terminal.
 - `GIT_CONFIG_COUNT=3`: `credential.helper` = `!CONSOLE_GIT_CREDENTIAL_HELPER=1 <exe>`,
@@ -121,15 +121,13 @@ with zero SSH keys or `gh auth` setup on the box. One optional, skippable
 - Accounts GitHub item (connect / re-login / disconnect) — existing installs
   connect here, never via reinstall. v1 uses the PAT screen; device-flow UI
   plugs into the same item later.
-- ⚠️ *(as built)* **The row must be hardcoded, not catalog-driven.** Both
+- *(as built)* **The row must be hardcoded, not catalog-driven.** Both
   Accounts screens render `providers.filter(authMethod != "none")` from
   `ListProviders()` (`providers/catalog.go`), so a `github` catalog entry would
   leak into every model picker via `FindModel`. Render it as a sibling row
   below the provider list, with its own status type
-  (`{connected, username, scopes}`) rather than `CodexAuthStatus`.
-- ⚠️ *(as built)* **There is no `logout` route for any provider today, and
-  neither client has a disconnect affordance** — "Disconnect with confirm" is
-  net-new UI on both, not a pattern to copy.
+  (`{connected, username, scopes}`) rather than the shared
+  `ProviderAuthStatus`, which only carries `loggedIn` + `email`.
 - Desktop (`apps/desktop`, Rust/GPUI): GitHub row on `AccountsPage`
   (`crates/console-ui/src/settings/accounts_page.rs`); new `console-core`
   service for `/api/auth/github/{pat,status,logout}` alongside the existing
