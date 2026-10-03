@@ -3,6 +3,7 @@ mod assets;
 mod keybindings;
 mod persistence;
 mod picker;
+mod settings;
 mod settings_window;
 mod state;
 mod types;
