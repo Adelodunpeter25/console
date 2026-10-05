@@ -40,12 +40,19 @@ const IPC_SHIM_JS: &str = r#"(function() {
 /// State shared between the handlers and the host. All CEF UI-thread
 /// callbacks run on the main thread, so `Rc`/`Cell` suffice.
 pub(super) struct Shared {
-    nav: NavCallbacks,
-    on_title: Option<Box<dyn Fn(String)>>,
-    on_ipc: Option<Box<dyn Fn(String)>>,
-    on_new_window_url: Option<Box<dyn Fn(String)>>,
-    init_script: Option<String>,
-    progress: Cell<f64>,
+    pub(super) nav: NavCallbacks,
+    pub(super) on_title: Option<Box<dyn Fn(String)>>,
+    pub(super) on_ipc: Option<Box<dyn Fn(String)>>,
+    pub(super) on_new_window_url: Option<Box<dyn Fn(String)>>,
+    pub(super) init_script: Option<String>,
+    pub(super) progress: Cell<f64>,
+    /// Set when the host starts tearing down: callbacks must not run page
+    /// script anymore (the browser may be half-closed).
+    pub(super) closing: Cell<bool>,
+    /// The native child view, filled in by `create` once CEF hands it over.
+    /// Detached in `on_before_close`, when CEF is done with it — never
+    /// earlier, so CEF's async teardown never meets a view we pulled away.
+    pub(super) native_view: Cell<Option<objc2::rc::Retained<objc2_app_kit::NSView>>>,
 }
 
 /// The navigation subset of [`HostCallbacks`]. Responder tracking stays with
@@ -217,6 +224,13 @@ wrap_load_handler! {
                 .unwrap_or_default();
             log::debug!("CEF: load finished ({url})");
             self.shared.progress.set(1.0);
+            // Never run page script during teardown: the browser may be
+            // half-closed and V8 re-entrancy there corrupts CEF state
+            // (observed as delayed retain crashes in the message pump).
+            if self.shared.closing.get() {
+                (self.shared.nav.on_finish)();
+                return;
+            }
             // The page's own scripts run before this handler, but every
             // `window.ipc` call site in our pages is either guarded
             // (`inspector.js`, `player.rs`) or runs post-load
@@ -274,6 +288,15 @@ wrap_life_span_handler! {
     }
 
     impl LifeSpanHandler {
+        fn on_before_close(&self, _browser: Option<&mut Browser>) {
+            // CEF is done with the browser: now (and only now) detach the
+            // native view. Detaching earlier races CEF's async teardown.
+            if let Some(view) = self.shared.native_view.take() {
+                view.removeFromSuperview();
+                log::debug!("CEF: native view detached on before-close");
+            }
+        }
+
         fn on_before_popup(
             &self,
             _browser: Option<&mut Browser>,
@@ -322,6 +345,8 @@ pub(super) fn build_client(
         on_new_window_url,
         init_script,
         progress: Cell::new(0.0),
+        closing: Cell::new(false),
+        native_view: Cell::new(None),
     });
     ClientBundle {
         client: ConsoleClient::new(shared.clone()),

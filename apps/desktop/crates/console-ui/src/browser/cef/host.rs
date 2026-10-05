@@ -153,6 +153,7 @@ impl WebviewHost {
         let responder_observer = cef_view
             .window()
             .map(|window| ResponderObserver::new(window, on_responder_change));
+        bundle.shared.native_view.set(Some(cef_view.clone()));
         let this = Self {
             browser,
             shared: bundle.shared.clone(),
@@ -377,13 +378,15 @@ impl WebviewHost {
 
 impl Drop for WebviewHost {
     fn drop(&mut self) {
+        // Flag teardown first so racing load callbacks skip page script.
+        // Then ask CEF to close; the native view is detached later in
+        // `on_before_close`, when CEF is done with it. The leaked retain
+        // below guards against CEF touching the view after our drop while
+        // its async close is still in flight.
+        self.shared.closing.set(true);
         if let Some(host) = self.browser.host() {
             host.close_browser(1);
         }
-        self.cef_view.removeFromSuperview();
-        // Intentionally leak one retain of the CEF view: CEF destroys it
-        // asynchronously while closing, so releasing here could free it
-        // while CEF still references it.
         let leaked = self.cef_view.clone();
         std::mem::forget(leaked);
     }
