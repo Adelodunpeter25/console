@@ -4,7 +4,7 @@ import com.console.mobile.data.model.FsTreeEntry
 import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.ProviderAuthStatus
 import com.console.mobile.data.model.TerminalSpawnedEvent
-import com.console.mobile.data.model.UsageReport
+import console.v1.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

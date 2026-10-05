@@ -27,7 +27,7 @@ import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TodoItem
-import com.console.mobile.data.model.UsageReport
+import console.v1.UsageReport
 
 fun getRunStreamPath(sessionId: String, since: Long? = null): String {
     val base = "/api/sessions/$sessionId/run/stream"

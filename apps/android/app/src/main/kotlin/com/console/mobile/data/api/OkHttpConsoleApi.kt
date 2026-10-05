@@ -24,6 +24,7 @@ import console.v1.ConsoleSettings
 import console.v1.ModelFavorite
 import console.v1.ProjectInfo
 import console.v1.SetFavoriteRequest
+import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.model.ProviderCatalogEntry
@@ -34,7 +35,6 @@ import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TodoItem
 import com.console.mobile.data.model.UpdateSessionDto
-import com.console.mobile.data.model.UsageReport
 import java.net.URLEncoder
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
@@ -59,6 +59,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val setFavoriteAdapter = wireMoshi.adapter(SetFavoriteRequest::class.java)
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
+    private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -317,12 +318,20 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getProviderUsage(providerId: String): UsageReport? {
         val raw = http.get("/api/providers/${enc(providerId)}/usage")
-        return http.unwrap(raw, UsageReport.serializer().nullable, "get usage for $providerId")
+        // Nullable: a logged-out provider comes back as JSON null.
+        val element = http.unwrap(raw, JsonElement.serializer(), "get usage for $providerId")
+        if (element is JsonNull) return null
+        return usageReportAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to get usage for $providerId")
     }
 
     override suspend fun getAllUsage(): Map<String, UsageReport?> {
         val raw = http.get("/api/usage")
-        return http.unwrap(raw, MapSerializer(String.serializer(), UsageReport.serializer().nullable), "get all usage")
+        val obj = http.unwrap(raw, JsonObject.serializer(), "get all usage")
+        return obj.mapValues { (_, value) ->
+            if (value is JsonNull) null
+            else usageReportAdapter.fromJson(value.toString())
+        }
     }
 
     override suspend fun listFavorites(): List<ModelFavorite> {

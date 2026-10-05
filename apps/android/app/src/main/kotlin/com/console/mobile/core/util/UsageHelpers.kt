@@ -1,6 +1,6 @@
 package com.console.mobile.core.util
 
-import com.console.mobile.data.model.UsageLimit
+import console.v1.UsageLimit
 import com.console.mobile.data.model.resolveUsedFraction
 
 fun formatResetsAt(resetsAt: Long?, nowMs: Long = System.currentTimeMillis()): String? {
@@ -19,7 +19,7 @@ fun formatResetsAt(resetsAt: Long?, nowMs: Long = System.currentTimeMillis()): S
 
 fun formatWindowLabel(limit: UsageLimit, nowMs: Long = System.currentTimeMillis()): String {
     val windowLabel = limit.window?.label ?: limit.window?.id ?: "Quota"
-    val resets = formatResetsAt(limit.window?.resetsAt, nowMs)
+    val resets = formatResetsAt(limit.window?.resets_at, nowMs)
     return if (resets != null) "$windowLabel · $resets" else windowLabel
 }
 
@@ -32,8 +32,8 @@ fun usageStatusColor(status: String?): String = when (status) {
 
 fun statusForLimit(limit: UsageLimit): String? {
     if (!limit.status.isNullOrEmpty() && limit.status != "unknown") return limit.status
-    val used = limit.amount.usedFraction
-        ?: limit.amount.used?.let { it / 100.0 }
+    val used = limit.amount?.used_fraction
+        ?: limit.amount?.used?.let { it / 100.0 }
         ?: resolveUsedFraction(limit)
         ?: return limit.status
     return when {
@@ -46,13 +46,13 @@ fun statusForLimit(limit: UsageLimit): String? {
 fun colorForLimit(limit: UsageLimit): String = usageStatusColor(statusForLimit(limit))
 
 fun getUsedPercent(limit: UsageLimit): Int? {
-    if (limit.amount.usedFraction != null) return Math.round(limit.amount.usedFraction * 100).toInt()
-    if (limit.amount.used != null) return Math.round(limit.amount.used).toInt()
+    limit.amount?.used_fraction?.let { return Math.round(it * 100).toInt() }
+    limit.amount?.used?.let { return Math.round(it).toInt() }
     return null
 }
 
 fun getBarPercent(limit: UsageLimit): Double {
-    if (limit.amount.usedFraction != null) return limit.amount.usedFraction.coerceIn(0.0, 1.0) * 100
-    if (limit.amount.remainingFraction != null) return (1 - limit.amount.remainingFraction).coerceIn(0.0, 1.0) * 100
+    limit.amount?.used_fraction?.let { return it.coerceIn(0.0, 1.0) * 100 }
+    limit.amount?.remaining_fraction?.let { return (1 - it).coerceIn(0.0, 1.0) * 100 }
     return 0.0
 }

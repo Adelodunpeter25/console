@@ -45,8 +45,8 @@ import com.console.mobile.core.util.formatWindowLabel
 import com.console.mobile.core.util.getBarPercent
 import com.console.mobile.core.util.getUsedPercent
 import com.console.mobile.core.util.statusForLimit
-import com.console.mobile.data.model.UsageLimit
-import com.console.mobile.data.model.UsageReport
+import console.v1.UsageLimit
+import console.v1.UsageReport
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 
@@ -154,7 +154,7 @@ private fun UsageProviderCard(displayName: String, report: UsageReport?, loggedI
 @Composable
 private fun UsageLimitRow(limit: UsageLimit) {
     val usedPct = getUsedPercent(limit)
-    val remainingPct = limit.amount.remainingFraction?.let { Math.round(it * 1000) / 10.0 }
+    val remainingPct = limit.amount?.remaining_fraction?.let { Math.round(it * 1000) / 10.0 }
     val barPct = getBarPercent(limit).toFloat() / 100f
     val color = parseUsageColor(colorForLimit(limit))
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
@@ -162,8 +162,8 @@ private fun UsageLimitRow(limit: UsageLimit) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(limit.label, color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 var sub = formatWindowLabel(limit)
-                if (!limit.scope.tier.isNullOrBlank()) sub = "${limit.scope.tier} · $sub"
-                if (!limit.scope.modelId.isNullOrBlank()) sub = "$sub · ${limit.scope.modelId}"
+                if (!limit.scope?.tier.isNullOrBlank()) sub = "${limit.scope?.tier} · $sub"
+                if (!limit.scope?.model_id.isNullOrBlank()) sub = "$sub · ${limit.scope?.model_id}"
                 Text(sub, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -176,8 +176,8 @@ private fun UsageLimitRow(limit: UsageLimit) {
                     },
                     color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                 )
-                if (limit.amount.remaining != null && limit.amount.remainingFraction != null) {
-                    Text("${String.format("%.1f", limit.amount.remaining)}% remaining", color = ConsoleColors.TextSecondary, fontSize = 11.sp)
+                if (limit.amount?.remaining != null && limit.amount?.remaining_fraction != null) {
+                    Text("${String.format("%.1f", limit.amount?.remaining)}% remaining", color = ConsoleColors.TextSecondary, fontSize = 11.sp)
                 }
             }
         }

@@ -1,7 +1,7 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
-import com.console.mobile.data.model.UsageReport
+import console.v1.UsageReport
 import com.console.mobile.data.store.UsageStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
