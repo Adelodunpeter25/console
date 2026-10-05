@@ -65,12 +65,10 @@ pub struct Model {
     pub default_thinking_level: Option<ThinkingLevel>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelFavorite {
-    pub provider: String,
-    pub model_id: String,
-}
+// Canonical wire type from the shared protobuf schema (proto/console/v1).
+// prost field names match the old hand-written struct, so call sites are
+// unchanged. serde impls come from pbjson (protojson naming).
+pub use console_proto::ModelFavorite;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -18,3 +18,7 @@ protoc-bin-vendored = { workspace = true }
 [[test]]
 name = "version_json_test"
 path = "tests/version_json_test.rs"
+
+[[test]]
+name = "favorites_json_test"
+path = "tests/favorites_json_test.rs"

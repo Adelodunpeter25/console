@@ -10,10 +10,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = manifest
         .join("../../../..")
         .join("proto");
-    let common = proto_root.join("console/v1/common.proto");
+    let protos = [
+        proto_root.join("console/v1/common.proto"),
+        proto_root.join("console/v1/favorites.proto"),
+    ];
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed={}", common.display());
+    for proto in &protos {
+        println!("cargo:rerun-if-changed={}", proto.display());
+    }
     println!("cargo:rerun-if-changed={}", proto_root.join("console/v1").display());
 
     let out = PathBuf::from(std::env::var("OUT_DIR")?);
@@ -21,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut prost_config = prost_build::Config::new();
     prost_config.file_descriptor_set_path(&descriptor_file);
-    prost_config.compile_protos(&[&common], &[&proto_root])?;
+    prost_config.compile_protos(&protos, &[&proto_root])?;
 
     let descriptors = std::fs::read(&descriptor_file)?;
     pbjson_build::Builder::new()

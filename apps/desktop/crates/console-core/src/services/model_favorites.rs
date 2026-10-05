@@ -1,16 +1,7 @@
 use anyhow::{Context, Result, anyhow};
-use serde::Serialize;
 
 use crate::types::{ApiResponse, ModelFavorite};
 use crate::utils::HttpTransport;
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SetModelFavoriteDto {
-    provider: String,
-    model_id: String,
-    favorite: bool,
-}
 
 #[derive(Clone)]
 pub struct ModelFavoriteService {
@@ -51,10 +42,12 @@ impl ModelFavoriteService {
 
     pub async fn set(&self, favorite: ModelFavorite, is_favorite: bool) -> Result<()> {
         let url = self.transport.url("/api/model-favorites").await;
-        let payload = SetModelFavoriteDto {
+        // Canonical wire type (proto/console/v1): serializes to the same
+        // {"provider","modelId","favorite"} bytes as the old DTO.
+        let payload = console_proto::SetFavoriteRequest {
             provider: favorite.provider,
             model_id: favorite.model_id,
-            favorite: is_favorite,
+            favorite: Some(is_favorite),
         };
         let response = self
             .transport

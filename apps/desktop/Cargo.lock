@@ -1297,6 +1297,7 @@ name = "console-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "console-proto",
  "eventsource-stream",
  "futures-util",
  "log",
