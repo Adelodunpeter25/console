@@ -12,7 +12,7 @@ import (
 // ApiVersion is the current wire version. Bump on any migrated domain.
 const ApiVersion uint32 = 1
 
-func registerVersionRoutes(app *fiber.App) {
+func RegisterVersionRoutes(app *fiber.App) {
 	app.Get("/api/version", func(c *fiber.Ctx) error {
 		msg := &consolev1.GetApiVersionResponse{ApiVersion: ApiVersion}
 		buf, err := protojson.Marshal(msg)

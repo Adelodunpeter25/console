@@ -48,7 +48,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
 	})
-	registerVersionRoutes(app)
+	RegisterVersionRoutes(app)
 
 	registerFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	registerPortRoutes(app, cfg.Ports)
