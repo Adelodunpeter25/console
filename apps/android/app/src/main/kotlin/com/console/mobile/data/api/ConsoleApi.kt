@@ -4,7 +4,7 @@ import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
-import com.console.mobile.data.model.ConsoleSettings
+import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.FileSearchResponse
 import com.console.mobile.data.model.FsTreeEntry

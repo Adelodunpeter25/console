@@ -4,7 +4,6 @@ import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
-import com.console.mobile.data.model.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.DeviceActionRequest
 import com.console.mobile.data.model.DeviceDescriptor
@@ -21,6 +20,7 @@ import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.Model
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.ConsoleSettings
 import console.v1.ModelFavorite
 import console.v1.SetFavoriteRequest
 import com.console.mobile.data.model.OAuthCallbackDto
@@ -57,6 +57,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
     private val favoriteAdapter = wireMoshi.adapter(ModelFavorite::class.java)
     private val setFavoriteAdapter = wireMoshi.adapter(SetFavoriteRequest::class.java)
+    private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -339,21 +340,26 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getSettings(): ConsoleSettings {
         val raw = http.get("/api/settings")
-        return http.unwrap(raw, ConsoleSettings.serializer(), "load settings")
+        // Envelope stays kotlinx; only the data payload is a Wire type.
+        val data = http.unwrap(raw, JsonObject.serializer(), "load settings")
+        return settingsAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to load settings")
     }
 
     override suspend fun updateModelRoles(roles: Map<String, String?>): ConsoleSettings {
+        // Request stays hand-built: a null reference clears the role, so it
+        // must be sent as JSON null rather than dropped from the patch.
         val body = buildJsonObject {
             putJsonObject("modelRoles") {
                 for ((role, ref) in roles) {
-                    // A null reference clears the role, so it must be sent as
-                    // JSON null rather than dropped from the patch.
                     if (ref == null) put(role, JsonNull) else put(role, ref)
                 }
             }
         }.toString()
         val raw = http.patch("/api/settings", body)
-        return http.unwrap(raw, ConsoleSettings.serializer(), "save model roles")
+        val data = http.unwrap(raw, JsonObject.serializer(), "save model roles")
+        return settingsAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to save model roles")
     }
 
     // mcp

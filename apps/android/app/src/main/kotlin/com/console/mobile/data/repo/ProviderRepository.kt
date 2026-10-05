@@ -5,6 +5,7 @@ import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.favoriteKey
+import com.console.mobile.data.model.toRefMap
 import console.v1.ModelFavorite
 import com.console.mobile.data.store.ProviderStateHolder
 import kotlinx.coroutines.CoroutineScope
@@ -66,7 +67,7 @@ class ProviderRepository(
             providerState.setLoadingRoles(true)
             try {
                 val settings = withContext(Dispatchers.IO) { api.getSettings() }
-                providerState.setModelRoles(settings.modelRoles.toRefMap())
+                providerState.setModelRoles(settings.model_roles?.toRefMap() ?: emptyMap())
             } catch (e: Exception) {
                 providerState.setLoadingRoles(false)
                 providerState.setRolesError(e.message ?: "Failed to load settings")
@@ -79,7 +80,7 @@ class ProviderRepository(
         providerState.setSavingRoles(true)
         return try {
             val settings = withContext(Dispatchers.IO) { api.updateModelRoles(roles) }
-            providerState.setModelRoles(settings.modelRoles.toRefMap())
+            providerState.setModelRoles(settings.model_roles?.toRefMap() ?: emptyMap())
             providerState.setSavingRoles(false)
             true
         } catch (e: Exception) {
