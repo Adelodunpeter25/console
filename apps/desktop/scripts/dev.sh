@@ -12,6 +12,7 @@ DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RUN_APP=true
 WATCH_MODE=true
+WITH_CEF=false
 EXTRA_ARGS=()
 
 for arg in "$@"; do
@@ -19,12 +20,19 @@ for arg in "$@"; do
         RUN_APP=false
     elif [[ "$arg" == "--no-watch" ]]; then
         WATCH_MODE=false
+    elif [[ "$arg" == "--cef" ]]; then
+        # Chromium browser backend: forwarded to build.sh (bundle assembly)
+        # and kept on watch-mode rebuilds below so the feature never drops.
+        WITH_CEF=true
     else
         EXTRA_ARGS+=("$arg")
     fi
 done
 
 build_dev_bundle() {
+    if [[ "$WITH_CEF" == true ]]; then
+        EXTRA_ARGS+=("--cef")
+    fi
     if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
         "$SCRIPT_DIR/build.sh" \
             --mode dev \
@@ -80,11 +88,15 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
     "$SCRIPT_DIR/reload.sh"
 
     # cargo watch with --postpone so it waits for file changes instead of immediately rebuilding
+    WATCH_BUILD="build -p console-app"
+    if [[ "$WITH_CEF" == true ]]; then
+        WATCH_BUILD="$WATCH_BUILD --features cef-browser"
+    fi
     cargo watch \
         --postpone \
         -w "$DESKTOP_DIR/src" \
         -w "$DESKTOP_DIR/crates" \
-        -x "build -p console-app" \
+        -x "$WATCH_BUILD" \
         -s "$SCRIPT_DIR/reload.sh"
 else
     echo "==> Launching Console Dev ($APP_PATH)..."
