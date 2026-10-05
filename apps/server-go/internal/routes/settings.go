@@ -1,4 +1,12 @@
 // Settings routes (/api/settings). Port of apps/server/api/src/routes/settings.ts.
+//
+// Second domain on the shared protobuf schema. Response payloads are built
+// from console.v1 generated types and encoded with protojson; the
+// {success, data} envelope is unchanged and response bytes are identical.
+//
+// The PATCH request body is intentionally hand-rolled (see
+// proto/console/v1/settings.proto): null clears a role while a missing key
+// leaves it untouched, which no proto3 map value can express.
 package routes
 
 import (
@@ -7,12 +15,39 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func registerSettingsRoutes(app *fiber.App, settings *services.SettingsService) {
+// settingsToProto converts the service result to the canonical wire type.
+// Empty roles become "" and are omitted by protojson, so only set roles
+// appear — exactly like the old map encoding. The message is always
+// populated, so an empty mapping still encodes as {"modelRoles":{}}.
+func settingsToProto(s services.Settings) *consolev1.ConsoleSettings {
+	return &consolev1.ConsoleSettings{ModelRoles: &consolev1.ModelRoleMapping{
+		Vision: strptrOrNil(s.ModelRoles["vision"]),
+		Smol:   strptrOrNil(s.ModelRoles["smol"]),
+	}}
+}
+
+func strptrOrNil(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func sendSettings(c *fiber.Ctx, s services.Settings) error {
+	raw, err := protoMarshal.Marshal(settingsToProto(s))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+	}
+	return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+}
+
+func RegisterSettingsRoutes(app *fiber.App, settings *services.SettingsService) {
 	app.Get("/api/settings", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"success": true, "data": settings.Load()})
+		return sendSettings(c, settings.Load())
 	})
 
 	app.Patch("/api/settings", func(c *fiber.Ctx) error {
@@ -43,6 +78,6 @@ func registerSettingsRoutes(app *fiber.App, settings *services.SettingsService) 
 		if err != nil {
 			return fail400(c, err)
 		}
-		return c.JSON(fiber.Map{"success": true, "data": result})
+		return sendSettings(c, result)
 	})
 }

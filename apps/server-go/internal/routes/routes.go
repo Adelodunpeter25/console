@@ -52,7 +52,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	registerPortRoutes(app, cfg.Ports)
-	registerSettingsRoutes(app, services.NewSettingsService())
+	RegisterSettingsRoutes(app, services.NewSettingsService())
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
 	projects := services.NewProjectService(cfg.DB)

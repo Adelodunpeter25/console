@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Model-role settings (/api/settings). Response payloads only.
+//
+// The PATCH *request* body is intentionally NOT schema'd: a null role value
+// clears the role while a missing key leaves it untouched, and proto3 has
+// no map value type that preserves null-vs-missing (optional is illegal in
+// maps). Request parsing stays hand-rolled in routes/settings.go, and both
+// clients keep building the PATCH body with explicit JSON nulls. Only the
+// response construction moves to generated types.
+//
+// Response bytes are unchanged: optional fields omit when unset, and the
+// message field is always populated server-side, so an empty mapping still
+// encodes as {"modelRoles":{}} exactly as before.
+message ModelRoleMapping {
+  optional string vision = 1;
+  optional string smol = 2;
+}
+
+message ConsoleSettings {
+  ModelRoleMapping model_roles = 1;
+}
