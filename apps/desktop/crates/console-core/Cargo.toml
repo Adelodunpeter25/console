@@ -75,3 +75,7 @@ path = "tests/session/worktree_dto_test.rs"
 [[test]]
 name = "context_usage_test"
 path = "tests/types/context_usage_test.rs"
+
+[[test]]
+name = "patch_body_test"
+path = "tests/settings/patch_body_test.rs"

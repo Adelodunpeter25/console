@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protos = [
         proto_root.join("console/v1/common.proto"),
         proto_root.join("console/v1/favorites.proto"),
+        proto_root.join("console/v1/settings.proto"),
     ];
 
     println!("cargo:rerun-if-changed=build.rs");

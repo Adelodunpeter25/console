@@ -78,10 +78,24 @@ impl SettingsWindow {
                 if let Ok(settings) = client.settings.get().await {
                     cx.update(|cx| {
                         vision_for_load.update(cx, |input, cx| {
-                            input.set_content(settings.model_roles.vision.unwrap_or_default(), cx)
+                            input.set_content(
+                                settings
+                                    .model_roles
+                                    .as_ref()
+                                    .and_then(|roles| roles.vision.clone())
+                                    .unwrap_or_default(),
+                                cx,
+                            )
                         });
                         smol_for_load.update(cx, |input, cx| {
-                            input.set_content(settings.model_roles.smol.unwrap_or_default(), cx)
+                            input.set_content(
+                                settings
+                                    .model_roles
+                                    .as_ref()
+                                    .and_then(|roles| roles.smol.clone())
+                                    .unwrap_or_default(),
+                                cx,
+                            )
                         });
                     });
                 }
@@ -160,10 +174,24 @@ impl SettingsWindow {
         cx: &mut Context<Self>,
     ) {
         self.model_vision_input.update(cx, |input, cx| {
-            input.set_content(settings.model_roles.vision.clone().unwrap_or_default(), cx);
+            input.set_content(
+                settings
+                    .model_roles
+                    .as_ref()
+                    .and_then(|roles| roles.vision.clone())
+                    .unwrap_or_default(),
+                cx,
+            );
         });
         self.model_smol_input.update(cx, |input, cx| {
-            input.set_content(settings.model_roles.smol.clone().unwrap_or_default(), cx);
+            input.set_content(
+                settings
+                    .model_roles
+                    .as_ref()
+                    .and_then(|roles| roles.smol.clone())
+                    .unwrap_or_default(),
+                cx,
+            );
         });
     }
 
@@ -447,12 +475,12 @@ impl Render for SettingsWindow {
                             return;
                         };
                         let settings = console_core::ConsoleSettings {
-                            model_roles: console_core::ModelRoleMapping {
+                            model_roles: Some(console_core::ModelRoleMapping {
                                 vision: Some(vision_input.read(cx).content().trim().to_string())
                                     .filter(|v| !v.is_empty()),
                                 smol: Some(smol_input.read(cx).content().trim().to_string())
                                     .filter(|v| !v.is_empty()),
-                            },
+                            }),
                         };
                         app.update(cx, |app_state, cx| {
                             app_state.save_model_settings(settings, cx)

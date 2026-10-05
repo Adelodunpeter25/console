@@ -32,6 +32,6 @@ pub use project_scripts::ProjectScriptsService;
 pub use provider::ProviderService;
 pub use run::RunService;
 pub use session::SessionService;
-pub use settings::SettingsService;
+pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;
 pub use usage::UsageService;

@@ -1,17 +1,6 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelRoleMapping {
-    #[serde(default)]
-    pub vision: Option<String>,
-    #[serde(default)]
-    pub smol: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ConsoleSettings {
-    #[serde(default)]
-    pub model_roles: ModelRoleMapping,
-}
+// Canonical wire types from the shared protobuf schema
+// (proto/console/v1/settings.proto). prost field names match the old
+// hand-written structs, so construction sites are unchanged; the only
+// difference is that model_roles is optional, matching proto3 message
+// semantics. serde impls come from pbjson (protojson naming).
+pub use console_proto::{ConsoleSettings, ModelRoleMapping};

@@ -1,6 +1,35 @@
 use crate::types::{ApiResponse, ConsoleSettings};
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
+use serde::Serialize;
+
+/// PATCH request body. Request-only: a null role clears it server-side while
+/// a missing key leaves it untouched, so None must serialize as JSON null
+/// (never be omitted) — the opposite of protojson. This mirrors the old
+/// hand-written ConsoleSettings encoding byte-for-byte.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchSettingsBody {
+    pub model_roles: PatchRoleMapping,
+}
+
+#[derive(Serialize)]
+pub struct PatchRoleMapping {
+    pub vision: Option<String>,
+    pub smol: Option<String>,
+}
+
+impl PatchSettingsBody {
+    pub fn from_settings(settings: &ConsoleSettings) -> Self {
+        let roles = settings.model_roles.as_ref();
+        Self {
+            model_roles: PatchRoleMapping {
+                vision: roles.and_then(|r| r.vision.clone()),
+                smol: roles.and_then(|r| r.smol.clone()),
+            },
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct SettingsService {
@@ -44,7 +73,7 @@ impl SettingsService {
             .client()
             .patch(url)
             .headers(self.transport.build_headers().await)
-            .json(settings)
+            .json(&PatchSettingsBody::from_settings(settings))
             .send()
             .await
             .context("Failed to save settings")?;
