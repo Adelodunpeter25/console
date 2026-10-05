@@ -141,11 +141,13 @@ impl CefRuntime {
         }
         let paths = bundle_paths()?;
         if framework_library_path().is_none() {
+            log::debug!("CEF: framework dylib not found next to bundle");
             return None;
         }
         let exe = std::env::current_exe().ok()?;
         let library = LibraryLoader::new(&exe, false);
         if !library.load() {
+            log::warn!("CEF: failed to load the Chromium framework");
             return None;
         }
         let _ = cef::api_hash(cef::sys::CEF_API_VERSION_LAST, 0);
@@ -168,8 +170,10 @@ impl CefRuntime {
             std::ptr::null_mut(),
         );
         if ok != 1 {
+            log::warn!("CEF: cef_initialize failed");
             return None;
         }
+        log::debug!("CEF: runtime initialized");
         Some(Self {
             _args: args,
             _library: library,

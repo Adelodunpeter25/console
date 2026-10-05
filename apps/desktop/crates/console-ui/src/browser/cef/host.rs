@@ -60,6 +60,7 @@ impl WebviewHost {
         callbacks: HostCallbacks,
     ) -> Result<Self, String> {
         if !ensure_initialized() {
+            log::warn!("CEF: runtime unavailable, browser surface not created");
             return Err("CEF is unavailable: the Chromium framework is not bundled with this build.".to_string());
         }
 
@@ -129,7 +130,10 @@ impl WebviewHost {
             None,
             None,
         )
-        .ok_or_else(|| "CEF failed to create the browser.".to_string())?;
+        .ok_or_else(|| {
+            log::warn!("CEF: browser_host_create_browser_sync returned no browser");
+            "CEF failed to create the browser.".to_string()
+        })?;
 
         let host = browser
             .host()
@@ -141,6 +145,9 @@ impl WebviewHost {
         let cef_view: Retained<NSView> =
             unsafe { Retained::retain(raw_view as *mut NSView) }
                 .ok_or_else(|| "CEF browser has no native view.".to_string())?;
+        log::debug!(
+            "CEF: native view {cef_view:p} attached under parent {parent_view:p}"
+        );
         lower_below_scene_overlay(&cef_view);
 
         let responder_observer = cef_view
@@ -156,6 +163,7 @@ impl WebviewHost {
             visible: Cell::new(false),
             _responder_observer: responder_observer,
         };
+        log::debug!("CEF: browser surface created for {initial_url}");
         this.set_visible(false);
         Ok(this)
     }
@@ -164,10 +172,11 @@ impl WebviewHost {
         &self.cef_view
     }
 
-    /// Same coordinate mapping as the wry backend: GPUI `Bounds` are
-    /// physical pixels; the child frame is logical points in a
-    /// bottom-left-origin superview, so divide by the backing scale factor
-    /// and flip y against the superview height.
+    /// Same coordinate mapping as the wry backend: GPUI `Bounds` are already
+    /// logical points (which is why wry passes them through
+    /// `Position::to_logical` unchanged and this method ignores `_scale`),
+    /// so the child frame is those points flipped against the superview
+    /// height, which is bottom-left-origin.
     pub fn sync_bounds(&self, bounds: Bounds<Pixels>, _scale: f32) {
         let left = f32::from(bounds.origin.x).round() as i32;
         let top = f32::from(bounds.origin.y).round() as i32;
@@ -178,26 +187,27 @@ impl WebviewHost {
         }
         self.last_bounds.set(Some((left, top, right, bottom)));
 
-        let Some(window) = self.cef_view.window() else {
-            return;
-        };
-        let scale = window.backingScaleFactor() as f32;
-        if scale <= 0.0 {
+        if self.cef_view.window().is_none() {
             return;
         }
         let Some(superview) = (unsafe { self.cef_view.superview() }) else {
             return;
         };
-        let x = f64::from(left) / f64::from(scale);
-        let y = f64::from(top) / f64::from(scale);
-        let width = f64::from((right - left).max(0)) / f64::from(scale);
-        let height = f64::from((bottom - top).max(0)) / f64::from(scale);
-        let frame_height = superview.frame().size.height;
-        let origin_y = if superview.isFlipped() {
+        let x = f64::from(left);
+        let y = f64::from(top);
+        let width = f64::from((right - left).max(0));
+        let height = f64::from((bottom - top).max(0));
+        let super_frame = superview.frame();
+        let flipped = superview.isFlipped();
+        let origin_y = if flipped {
             y
         } else {
-            frame_height - y - height
+            super_frame.size.height - y - height
         };
+        log::debug!(
+            "CEF: sync_bounds in=({left},{top},{right},{bottom}) superview={superview:p} super_h={} flipped={flipped} -> frame=({x:.1},{origin_y:.1},{width:.1},{height:.1})",
+            super_frame.size.height,
+        );
         self.cef_view.setFrame(NSRect {
             origin: NSPoint { x, y: origin_y },
             size: NSSize { width, height },

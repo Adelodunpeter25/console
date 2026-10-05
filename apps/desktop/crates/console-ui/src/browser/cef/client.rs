@@ -165,6 +165,7 @@ wrap_load_handler! {
             if !is_main_frame(&frame) {
                 return;
             }
+            log::debug!("CEF: load started");
             self.shared.progress.set(0.0);
             (self.shared.nav.on_start)();
         }
@@ -178,6 +179,11 @@ wrap_load_handler! {
             if !is_main_frame(&frame) {
                 return;
             }
+            let url = frame
+                .as_ref()
+                .map(|frame| CefString::from(&frame.url()).to_string())
+                .unwrap_or_default();
+            log::debug!("CEF: load finished ({url})");
             self.shared.progress.set(1.0);
             // The page's own scripts run before this handler, but every
             // `window.ipc` call site in our pages is either guarded
@@ -220,6 +226,10 @@ wrap_load_handler! {
             {
                 return;
             }
+            let failed = failed_url
+                .map(CefString::to_string)
+                .unwrap_or_default();
+            log::warn!("CEF: load error {error_code:?} for {failed}");
             let error = map_load_error(error_code, error_text, failed_url);
             (self.shared.nav.on_error)(error);
         }
