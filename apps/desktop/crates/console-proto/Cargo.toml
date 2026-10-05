@@ -34,3 +34,7 @@ path = "tests/project_json_test.rs"
 [[test]]
 name = "usage_json_test"
 path = "tests/usage_json_test.rs"
+
+[[test]]
+name = "ports_json_test"
+path = "tests/ports_json_test.rs"

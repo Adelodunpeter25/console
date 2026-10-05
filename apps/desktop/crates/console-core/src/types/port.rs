@@ -1,23 +1,7 @@
 //! Forwarded port models for local & remote development servers.
-
-use serde::{Deserialize, Serialize};
-
-/// A development port forwarded by the server for client preview.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ForwardedPort {
-    /// The development server's original port.
-    pub port: u16,
-    /// Fully-qualified URL to open in a browser or WebView.
-    pub url: String,
-    /// Owning workspace project, when the backend attributed it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
-}
-
-/// Request to manually forward a specific port.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ForwardPortRequest {
-    pub port: u16,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "projectId")]
-    pub project_id: Option<String>,
-}
+//!
+//! Canonical wire types from the shared protobuf schema
+//! (proto/console/v1/ports.proto). Ports are int32 on the wire (JSON
+//! numbers, as before); UI layers bridging to u16 socket APIs cast at the
+//! boundary. serde impls come from pbjson (protojson naming).
+pub use console_proto::{ForwardPortRequest, ForwardedPort};

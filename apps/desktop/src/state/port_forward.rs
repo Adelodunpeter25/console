@@ -20,12 +20,13 @@ impl ConsoleDesktopApp {
                         while let Some(Ok(ports)) = stream.next().await {
                             // Server reports remote ports; expose each one as a
                             // real localhost URL owned by LocalForwardManager.
-                            let remotes: Vec<u16> = ports.iter().map(|port| port.port).collect();
+                            let remotes: Vec<u16> =
+                                ports.iter().map(|port| port.port as u16).collect();
                             let locals = client.local_forwards.ensure(&remotes).await;
                             let mapped: Vec<console_core::ForwardedPort> = locals
                                 .into_iter()
                                 .map(|forward| console_core::ForwardedPort {
-                                    port: forward.remote_port,
+                                    port: forward.remote_port as i32,
                                     url: forward.local_url,
                                     project_id: None,
                                 })
@@ -85,12 +86,12 @@ impl ConsoleDesktopApp {
                 Some(pid_clone.as_str())
             };
             if let Ok(ports) = client.ports.list(pid_opt).await {
-                let remotes: Vec<u16> = ports.iter().map(|port| port.port).collect();
+                let remotes: Vec<u16> = ports.iter().map(|port| port.port as u16).collect();
                 let locals = client.local_forwards.ensure(&remotes).await;
                 let mapped: Vec<console_core::ForwardedPort> = locals
                     .into_iter()
                     .map(|forward| console_core::ForwardedPort {
-                        port: forward.remote_port,
+                        port: forward.remote_port as i32,
                         url: forward.local_url,
                         project_id: None,
                     })
@@ -138,7 +139,7 @@ impl ConsoleDesktopApp {
                             {
                                 let items = list
                                     .iter()
-                                    .filter(|p| p.port != port)
+                                    .filter(|p| p.port != port as i32)
                                     .cloned()
                                     .collect::<Vec<_>>();
                                 *list = Rc::new(items);

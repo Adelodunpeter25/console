@@ -108,7 +108,9 @@ impl RenderOnce for PortsPopover {
                             .flex_col()
                             .gap(px(2.0))
                             .children(ports.iter().map(|p| {
-                                let port_num = p.port;
+                                // The popover callback takes u16 socket ports;
+                                // the wire type is i32, cast at the boundary.
+                                let port_num = p.port as u16;
                                 let port_url = p.url.clone();
                                 let on_open = on_open.clone();
                                 let on_unforward = on_unforward.clone();

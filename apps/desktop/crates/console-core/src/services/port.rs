@@ -95,7 +95,7 @@ impl PortService {
     pub async fn forward(&self, port: u16, project_id: Option<&str>) -> Result<ForwardedPort> {
         let url = self.transport.url("/api/ports/forward").await;
         let req = ForwardPortRequest {
-            port,
+            port: port as i32,
             project_id: project_id.map(String::from),
         };
         let response = self

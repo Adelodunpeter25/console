@@ -13,7 +13,9 @@ fn test_forwarded_port_serialization() {
     assert!(json.contains("\"url\":\"http://192.168.1.10:45173/\""));
 
     let decoded: ForwardedPort = serde_json::from_str(&json).expect("deserialize port");
-    assert_eq!(decoded, port);
+    assert_eq!(decoded.port, 5173);
+    assert_eq!(decoded.url, "http://192.168.1.10:45173/");
+    assert_eq!(decoded.project_id, None);
 }
 
 #[test]
