@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Forwarded dev ports (/api/ports list/forward/unforward + the "ports" SSE
+// frames). Fifth domain, closing Phase 1.
+//
+// Zero wire change: int32 ports encode as JSON numbers exactly like before,
+// and the optional project id omits when unset. Two deliberate exceptions:
+// - POST /forward keeps its hand-rolled lenient parsing: it accepts the port
+//   as a JSON number OR string ("8080") for older callers, which no proto
+//   field can express. The *response* is still the canonical type.
+// - GET /:port/tunnel is a raw TCP byte pipe over WebSocket, not a payload.
+//   It is untouched by the schema migration (like PTY bytes).
+message ForwardedPort {
+  int32 port = 1;
+  string url = 2;
+  optional string project_id = 3;
+}
+
+message ForwardPortRequest {
+  int32 port = 1;
+  optional string project_id = 2;
+}
+
+message UnforwardPortResponse {
+  int32 port = 1;
+}

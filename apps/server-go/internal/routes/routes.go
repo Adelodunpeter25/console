@@ -51,7 +51,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterVersionRoutes(app)
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
-	registerPortRoutes(app, cfg.Ports)
+	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	registerFsRoutes(app, services.NewFsService(), cfg.Watch)
 	registerGitRoutes(app, services.NewGitService(), cfg.Watch)

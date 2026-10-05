@@ -1,9 +1,16 @@
 // Port routes (/api/ports/*). Port of apps/server/api/src/routes/ports.ts
 // plus the tunnel WebSocket (port-tunnel.socket.ts): raw TCP over WebSocket
 // binary frames in both directions.
+//
+// Fifth domain on the shared protobuf schema, closing Phase 1. List, stream
+// frames, forward responses, and unforward responses are built from
+// console.v1 generated types with byte-identical output. The forward
+// *request* keeps its lenient number-or-string parsing (see
+// proto/console/v1/ports.proto), and the tunnel endpoint is untouched.
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -13,7 +20,9 @@ import (
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 func hostFromHeader(header string) string {
@@ -28,7 +37,32 @@ func hostFromHeader(header string) string {
 	return header
 }
 
-func registerPortRoutes(app *fiber.App, registry *services.PortRegistry) {
+// clientPortToProto converts a registry row to the canonical wire type.
+func clientPortToProto(p types.ClientPort) *consolev1.ForwardedPort {
+	out := &consolev1.ForwardedPort{Port: int32(p.Port), Url: p.URL}
+	if p.ProjectID != nil {
+		out.ProjectId = p.ProjectID
+	}
+	return out
+}
+
+func portsToProto(list []types.ClientPort) []*consolev1.ForwardedPort {
+	out := make([]*consolev1.ForwardedPort, 0, len(list))
+	for _, p := range list {
+		out = append(out, clientPortToProto(p))
+	}
+	return out
+}
+
+func sendPortList(c *fiber.Ctx, list []types.ClientPort) error {
+	data, err := marshalProtoList(portsToProto(list))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+	}
+	return c.JSON(fiber.Map{"success": true, "data": data})
+}
+
+func RegisterPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 	h := app.Group("/api/ports")
 
 	h.Get("/stream", func(c *fiber.Ctx) error {
@@ -37,13 +71,23 @@ func registerPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 		return streamSSE(c, func(sse *sseStream) {
 			events := registry.Subscribe()
 			defer registry.Unsubscribe(events)
-			_ = sse.Send("ports", mustJSON(registry.Snapshot(host, projectID)))
+			// mustJSON semantics: a marshal failure sends "{}" rather than
+			// dropping the snapshot (proto messages cannot fail to encode
+			// in practice, but the stream must never emit a blank frame).
+			snapshotOf := func() string {
+				snapshot, err := marshalProtoList(portsToProto(registry.Snapshot(host, projectID)))
+				if err != nil {
+					return "{}"
+				}
+				return string(snapshot)
+			}
+			_ = sse.Send("ports", snapshotOf())
 			ticker := time.NewTicker(15 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-events:
-					if err := sse.Send("ports", mustJSON(registry.Snapshot(host, projectID))); err != nil {
+					if err := sse.Send("ports", snapshotOf()); err != nil {
 						return
 					}
 				case <-ticker.C:
@@ -57,7 +101,7 @@ func registerPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 
 	h.Get("/", func(c *fiber.Ctx) error {
 		host := hostFromHeader(c.Get("Host"))
-		return c.JSON(fiber.Map{"success": true, "data": registry.List(host, c.Query("projectId"))})
+		return sendPortList(c, registry.List(host, c.Query("projectId")))
 	})
 
 	h.Post("/forward", func(c *fiber.Ctx) error {
@@ -83,7 +127,11 @@ func registerPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 		if err != nil {
 			return fail400(c, err)
 		}
-		return c.JSON(fiber.Map{"success": true, "data": entry})
+		raw, err := protoMarshal.Marshal(clientPortToProto(entry))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	h.Delete("/:port", func(c *fiber.Ctx) error {
@@ -94,7 +142,11 @@ func registerPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 		if !registry.Remove(port, c.Query("projectId")) {
 			return fail400(c, fmt.Errorf("Port %d is not forwarded.", port))
 		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"port": port}})
+		raw, err := protoMarshal.Marshal(&consolev1.UnforwardPortResponse{Port: int32(port)})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// GET /api/ports/:port/tunnel — raw TCP over WebSocket binary frames.
