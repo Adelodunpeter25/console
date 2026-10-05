@@ -11,6 +11,8 @@ pub mod agent_script;
 pub mod cef;
 pub mod host;
 pub mod inspector;
+#[cfg(target_os = "macos")]
+pub(crate) mod native_utils;
 pub mod view;
 
 pub use actions::{

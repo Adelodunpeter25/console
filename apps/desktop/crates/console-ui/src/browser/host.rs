@@ -112,101 +112,47 @@ impl NativeNavigationError {
     }
 }
 
+/// Callbacks the host invokes on the owning view. The host calls these from
+/// native handlers, so each callback must hop to the GPUI context itself (see
+/// the `Deferred` helper at each call site). Backend-neutral: consumed by
+/// both the wry and CEF hosts.
+pub struct HostCallbacks {
+    pub on_responder_change: Box<dyn Fn(bool)>,
+    pub on_nav_start: Box<dyn Fn()>,
+    pub on_nav_finish: Box<dyn Fn()>,
+    pub on_nav_error: Box<dyn Fn(NativeNavigationError)>,
+}
+
+/// Optional web content and behavior for a new host surface. The wry backend
+/// maps every field 1:1 to a `WebViewBuilder` option; unset fields keep wry
+/// defaults. The CEF backend consumes this same struct.
+pub struct HostContent {
+    pub user_agent: Option<String>,
+    pub initialization_script: Option<String>,
+    pub html: Option<String>,
+    pub allow_navigation: Option<Box<dyn Fn(String) -> bool>>,
+    pub on_ipc: Option<Box<dyn Fn(String)>>,
+    pub on_title: Option<Box<dyn Fn(String)>>,
+    pub on_new_window_url: Option<Box<dyn Fn(String)>>,
+}
+
 #[cfg(target_os = "macos")]
+#[cfg_attr(feature = "cef-browser", allow(dead_code))]
 mod macos_host {
     use std::cell::Cell;
-    use std::ffi::c_void;
-    use std::ptr::null_mut;
 
     use gpui::{Bounds, Pixels, Window};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, ProtocolObject};
-    use objc2::{AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
-    use objc2_app_kit::{NSApplication, NSEventType, NSView, NSWindow};
-    use objc2_foundation::{
-        MainThreadMarker, NSDictionary, NSError, NSKeyValueChangeKey, NSKeyValueObservingOptions,
-        NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSProcessInfo, NSString,
-        ns_string,
-    };
+    use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send};
+    use objc2_app_kit::NSView;
+    use objc2_foundation::{MainThreadMarker, NSError, NSObjectProtocol, NSString};
     use objc2_web_kit::{WKNavigationDelegate, WKWebView};
     use wry::WebViewExtMacOS;
     use wry::dpi::{LogicalPosition, LogicalSize};
 
-    use super::NativeNavigationError;
-
-    fn recent_user_gesture() -> bool {
-        let Some(mtm) = MainThreadMarker::new() else {
-            return false;
-        };
-        let Some(event) = NSApplication::sharedApplication(mtm).currentEvent() else {
-            return false;
-        };
-        let pressed = matches!(
-            event.r#type(),
-            NSEventType::LeftMouseDown
-                | NSEventType::LeftMouseUp
-                | NSEventType::RightMouseDown
-                | NSEventType::OtherMouseDown
-        );
-        pressed && NSProcessInfo::processInfo().systemUptime() - event.timestamp() < 0.5
-    }
-
-    pub(super) struct ResponderObserverIvars {
-        window: Retained<NSWindow>,
-        handler: Box<dyn Fn(bool)>,
-    }
-
-    define_class!(
-        #[unsafe(super(objc2::runtime::NSObject))]
-        #[ivars = ResponderObserverIvars]
-        pub(super) struct ResponderObserver;
-
-        impl ResponderObserver {
-            #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
-            fn observe_value_for_key_path(
-                &self,
-                key_path: Option<&NSString>,
-                _of_object: Option<&AnyObject>,
-                _change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
-                _context: *mut c_void,
-            ) {
-                if key_path.is_some_and(|path| path.isEqualToString(ns_string!("firstResponder"))) {
-                    (self.ivars().handler)(recent_user_gesture());
-                }
-            }
-        }
-
-        unsafe impl NSObjectProtocol for ResponderObserver {}
-    );
-
-    impl ResponderObserver {
-        fn new(window: Retained<NSWindow>, handler: Box<dyn Fn(bool)>) -> Retained<Self> {
-            let observer = Self::alloc().set_ivars(ResponderObserverIvars { window, handler });
-            let observer: Retained<Self> = unsafe { msg_send![super(observer), init] };
-            unsafe {
-                observer
-                    .ivars()
-                    .window
-                    .addObserver_forKeyPath_options_context(
-                        &observer,
-                        ns_string!("firstResponder"),
-                        NSKeyValueObservingOptions::New,
-                        null_mut(),
-                    );
-            }
-            observer
-        }
-    }
-
-    impl Drop for ResponderObserver {
-        fn drop(&mut self) {
-            unsafe {
-                self.ivars()
-                    .window
-                    .removeObserver_forKeyPath(self, ns_string!("firstResponder"));
-            }
-        }
-    }
+    use crate::browser::native_utils::{ResponderObserver, lower_below_scene_overlay};
+    use super::{HostCallbacks, HostContent, NativeNavigationError};
 
     pub(super) struct NavigationDelegateIvars {
         on_start: Box<dyn Fn()>,
@@ -295,33 +241,11 @@ mod macos_host {
         _navigation_delegate: Option<Retained<ConsoleNavigationDelegate>>,
     }
 
-    /// Callbacks the host invokes on the owning view. The host calls these
-    /// from native handlers, so each callback must hop to the GPUI context
-    /// itself (see the `Deferred` helper at each call site).
-    pub struct HostCallbacks {
-        pub on_responder_change: Box<dyn Fn(bool)>,
-        pub on_nav_start: Box<dyn Fn()>,
-        pub on_nav_finish: Box<dyn Fn()>,
-        pub on_nav_error: Box<dyn Fn(NativeNavigationError)>,
-    }
-
-    /// Optional web content and behavior for a new host surface. Every field
-    /// maps 1:1 to a wry `WebViewBuilder` option today; unset fields keep
-    /// wry defaults. The CEF backend will consume this same struct next.
-    pub struct HostContent {
-        pub user_agent: Option<String>,
-        pub initialization_script: Option<String>,
-        pub html: Option<String>,
-        pub allow_navigation: Option<Box<dyn Fn(String) -> bool>>,
-        pub on_ipc: Option<Box<dyn Fn(String)>>,
-        pub on_title: Option<Box<dyn Fn(String)>>,
-        pub on_new_window_url: Option<Box<dyn Fn(String)>>,
-    }
-
     impl WebviewHost {
         /// Backend-neutral surface constructor: builds the native child view
-        /// for `window`, wiring `content` and `callbacks`. Today this always
-        /// builds the wry/WKWebView surface; the CEF backend plugs in here.
+        /// for `window`, wiring `content` and `callbacks`. This is the
+        /// wry/WKWebView backend; the CEF backend plugs into the same
+        /// `create` signature in `browser::cef`.
         pub fn create(
             window: &mut Window,
             content: HostContent,
@@ -620,28 +544,13 @@ mod macos_host {
             }
         }
     }
-
-    fn lower_below_scene_overlay(view: &NSView) {
-        use objc2_app_kit::NSWindowOrderingMode;
-
-        let Some(superview) = (unsafe { view.superview() }) else {
-            return;
-        };
-        for sibling in superview.subviews().iter() {
-            if sibling.class().name() == c"GPUIOverlayView" {
-                superview.addSubview_positioned_relativeTo(
-                    view,
-                    NSWindowOrderingMode::Below,
-                    Some(&sibling),
-                );
-                return;
-            }
-        }
-    }
 }
 
-#[cfg(target_os = "macos")]
-pub use macos_host::{HostCallbacks, HostContent, WebviewHost};
+#[cfg(all(target_os = "macos", feature = "cef-browser"))]
+pub use super::cef::host::WebviewHost;
+
+#[cfg(all(target_os = "macos", not(feature = "cef-browser")))]
+pub use macos_host::WebviewHost;
 
 #[cfg(not(target_os = "macos"))]
 pub struct WebviewHost {

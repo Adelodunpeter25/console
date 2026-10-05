@@ -16,6 +16,14 @@ use console_ui::init_input_keybindings;
 use gpui::App;
 
 fn main() {
+    // CEF helpers re-execute this binary: run the helper entry point and
+    // exit before touching the app. No-op without the `cef-browser` feature
+    // and in unbundled development binaries.
+    #[cfg(all(target_os = "macos", feature = "cef-browser"))]
+    if let Some(code) = console_ui::browser::cef::runtime::run_helper_process() {
+        std::process::exit(code);
+    }
+
     // Route log:: macros to stderr (see scripts/dev.sh: RUST_LOG controls the
     // level, reload.sh captures output to dist/.dev_console.log). Without this
     // every log:: call in the codebase is silently discarded.

@@ -8,6 +8,11 @@ license.workspace = true
 name = "console"
 path = "main.rs"
 
+[features]
+# Enables the Chromium (CEF) browser backend in console-ui. Off by default;
+# enabling it downloads/links the full CEF distribution (cached via CEF_PATH).
+cef-browser = ["console-ui/cef-browser"]
+
 [dependencies]
 gpui = { workspace = true }
 gpui_macros = { workspace = true }

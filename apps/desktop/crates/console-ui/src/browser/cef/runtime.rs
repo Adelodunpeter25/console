@@ -15,12 +15,20 @@
 use std::path::PathBuf;
 
 use cef::{args::Args, library_loader::LibraryLoader, CefString, ImplCommandLine};
+use objc2::rc::Retained;
+use objc2_foundation::NSTimer;
+
+/// How often CEF's work is pumped from the main runloop. Matches the ~10ms
+/// cadence `cefclient` uses for `CefDoMessageLoopWork` without an external
+/// pump.
+const PUMP_INTERVAL_SECS: f64 = 0.01;
 
 /// Initialized CEF runtime. Owns the loaded framework and argv storage;
-/// `Drop` shuts CEF down.
+/// `Drop` stops the pump timer and shuts CEF down.
 pub struct CefRuntime {
     _args: Args,
     _library: LibraryLoader,
+    pump_timer: Option<Retained<NSTimer>>,
 }
 
 /// True when this process was re-executed as a CEF helper (renderer, GPU,
@@ -96,6 +104,7 @@ impl CefRuntime {
         Some(Self {
             _args: args,
             _library: library,
+            pump_timer: None,
         })
     }
 
@@ -108,6 +117,61 @@ impl CefRuntime {
 
 impl Drop for CefRuntime {
     fn drop(&mut self) {
+        if let Some(timer) = self.pump_timer.take() {
+            timer.invalidate();
+        }
         cef::shutdown();
     }
+}
+
+std::thread_local! {
+    /// The live runtime, if CEF initialized on this (main) thread. All CEF
+    /// calls happen on the main thread, so thread-local storage is
+    /// sufficient and avoids `Sync` bounds on the framework handles.
+    static CEF: std::cell::RefCell<Option<CefRuntime>> = std::cell::RefCell::new(None);
+}
+
+/// Pump CEF once if a runtime lives on this thread. Invoked by the
+/// runloop timer installed in `ensure_initialized`; never call in a tight
+/// loop.
+fn pump_global() {
+    CEF.with(|slot| {
+        if let Some(runtime) = slot.borrow().as_ref() {
+            runtime.pump();
+        }
+    });
+}
+
+/// Initialize CEF once on the main thread and install the message-loop pump.
+/// Returns false when CEF is unavailable (helper process or an unbundled
+/// development binary); the caller surfaces a host error in that case. Safe
+/// to call repeatedly.
+pub fn ensure_initialized() -> bool {
+    debug_assert!(
+        objc2_foundation::MainThreadMarker::new().is_some(),
+        "CEF must initialize on the main thread"
+    );
+    CEF.with(|slot| {
+        if slot.borrow().is_some() {
+            return true;
+        }
+        let Some(mut runtime) = CefRuntime::initialize() else {
+            return false;
+        };
+        // GPUI owns the main runloop, so an `NSTimer` is the least invasive
+        // pump driver: no executor involvement, no signature changes. The
+        // block captures nothing, satisfying the timer's sendability
+        // contract, and the timer copies it (released on `invalidate`).
+        let block = block2::RcBlock::new(|_: std::ptr::NonNull<NSTimer>| pump_global());
+        let timer = unsafe {
+            NSTimer::scheduledTimerWithTimeInterval_repeats_block(
+                PUMP_INTERVAL_SECS,
+                true,
+                &block,
+            )
+        };
+        runtime.pump_timer = Some(timer);
+        slot.borrow_mut().replace(runtime);
+        true
+    })
 }

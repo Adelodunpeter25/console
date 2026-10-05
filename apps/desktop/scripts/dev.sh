@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# CEF binary cache: with the `cef-browser` cargo feature, the `cef` crate
+# downloads the Chromium distribution once here instead of once per target
+# directory and build profile. Seeded from a previous build's
+# `target/.../out/cef_macos_*` (must contain `archive.json`).
+export CEF_PATH="${CEF_PATH:-$HOME/.local/share/cef}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 

@@ -1480,6 +1480,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-web-kit",
  "pulldown-cmark",
+ "raw-window-handle",
  "regex",
  "resvg 0.46.0",
  "serde",
