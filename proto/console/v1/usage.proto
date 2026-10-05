@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Quota/usage reports (/api/usage, /api/providers/:id/usage). Fourth domain.
+//
+// Deliberately trimmed from the old provider-mirror shapes: nothing the UIs
+// render was kept unread. Dropped from the wire: report notes/metadata/raw,
+// resetCredits, window durationMs, and scope account/project/org/window/shared
+// (desktop renders none of them; Android reads only tier/modelId).
+//
+// Three more deliberate choices:
+// - unit/status stay plain strings (documented below), not enums: protojson
+//   would rename "ok" to "STATUS_OK" and force all three clients over at
+//   once, while every reader already tolerates unknown values.
+// - int64 timestamps encode as protojson strings, as elsewhere.
+// - The provider->report map can hold JSON null (logged-out provider); the
+//   map itself is not a message (proto3 maps cannot express null values),
+//   so the Go handler encodes each entry individually and both clients keep
+//   decoding Option/nullable reports.
+message UsageWindow {
+  string id = 1;
+  string label = 2;
+  optional int64 resets_at = 3;
+  optional string reset_label = 4;
+}
+
+message UsageAmount {
+  optional double used = 1;
+  optional double limit = 2;
+  optional double remaining = 3;
+  optional double used_fraction = 4;
+  optional double remaining_fraction = 5;
+  // Known values: percent, tokens, requests, usd, minutes, bytes.
+  // Readers must tolerate anything else.
+  string unit = 6;
+}
+
+message UsageScope {
+  string provider = 1;
+  optional string tier = 2;
+  optional string model_id = 3;
+}
+
+message UsageLimit {
+  string id = 1;
+  string label = 2;
+  UsageScope scope = 3;
+  UsageWindow window = 4;
+  UsageAmount amount = 5;
+  // Known values: ok, warning, exhausted. Readers must tolerate anything else.
+  optional string status = 6;
+}
+
+message UsageReport {
+  string provider = 1;
+  int64 fetched_at = 2;
+  repeated UsageLimit limits = 3;
+}

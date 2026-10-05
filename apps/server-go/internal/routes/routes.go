@@ -67,7 +67,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	scriptsSvc := services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports)
 	registerScriptRoutes(app, scriptsSvc)
 	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB))
-	registerUsageRoutes(app, usage.NewService())
+	RegisterUsageRoutes(app, usage.NewService())
 	RegisterAuthRoutes(app, auth.NewAuthService())
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))

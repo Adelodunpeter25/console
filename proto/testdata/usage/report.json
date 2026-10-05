@@ -1,0 +1,1 @@
+{"provider":"claude","fetchedAt":"1700000000000","limits":[{"id":"session","label":"Session","scope":{"provider":"claude","tier":"pro","modelId":"claude-opus-4"},"window":{"id":"session","label":"Session","resetsAt":"1700003600000","resetLabel":"resets in 1h"},"amount":{"used":12.5,"limit":100,"unit":"percent"},"status":"ok"}]}
