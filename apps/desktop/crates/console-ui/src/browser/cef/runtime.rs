@@ -154,6 +154,13 @@ impl CefRuntime {
         let args = Args::new();
         let framework_dir = paths.framework_dir.to_string_lossy().into_owned();
         let helper_exe = paths.helper_exe.to_string_lossy().into_owned();
+        // Isolated profile support: point CEF at a scratch user-data dir so
+        // concurrent instances (e.g. a test build next to the dev app) do
+        // not share the default `~/Library/Application Support/CEF` profile
+        // and its process-singleton lock.
+        let data_dir = std::env::var("CONSOLE_CEF_DATA_DIR").ok().filter(|dir| {
+            std::fs::create_dir_all(dir).is_ok()
+        });
         let settings = cef::Settings {
             // The macOS sandbox needs an endorsed helper plus entitlements;
             // that ships with distribution signing (later). Until then the
@@ -162,6 +169,14 @@ impl CefRuntime {
             framework_dir_path: CefString::from(framework_dir.as_str()),
             browser_subprocess_path: CefString::from(helper_exe.as_str()),
             ..Default::default()
+        };
+        let settings = match data_dir.as_deref() {
+            Some(dir) => cef::Settings {
+                root_cache_path: CefString::from(dir),
+                cache_path: CefString::from(dir),
+                ..settings
+            },
+            None => settings,
         };
         let ok = cef::initialize(
             Some(args.as_main_args()),

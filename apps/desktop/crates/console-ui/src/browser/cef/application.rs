@@ -59,7 +59,10 @@ pub(super) fn conform_ns_application() {
         return;
     }
     if current != NSApplication::class() {
-        log::warn!("CEF: NSApplication is subclassed; skipping CefAppProtocol retrofit");
+        log::warn!(
+            "CEF: NSApplication is subclassed ({}); skipping CefAppProtocol retrofit",
+            current.name().to_string_lossy()
+        );
         return;
     }
     unsafe {
