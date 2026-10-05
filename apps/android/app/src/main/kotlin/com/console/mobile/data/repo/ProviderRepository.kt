@@ -3,9 +3,9 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ModelFavorite
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.favoriteKey
+import console.v1.ModelFavorite
 import com.console.mobile.data.store.ProviderStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,7 +94,7 @@ class ProviderRepository(
             providerState.setLoadingFavorites(true)
             try {
                 val favorites = withContext(Dispatchers.IO) { api.listFavorites() }
-                providerState.setFavorites(favorites.mapTo(mutableSetOf()) { favoriteKey(it.provider, it.modelId) })
+                providerState.setFavorites(favorites.mapTo(mutableSetOf()) { favoriteKey(it.provider, it.model_id) })
             } catch (_: Exception) {
                 providerState.setLoadingFavorites(false)
             }
@@ -111,7 +111,7 @@ class ProviderRepository(
         providerState.setFavorites(if (isFavorite) before + key else before - key)
         try {
             withContext(Dispatchers.IO) {
-                api.setFavorite(ModelFavorite(provider = providerId, modelId = modelId), isFavorite)
+                api.setFavorite(ModelFavorite(provider = providerId, model_id = modelId), isFavorite)
             }
         } catch (_: Exception) {
             providerState.setFavorites(before)

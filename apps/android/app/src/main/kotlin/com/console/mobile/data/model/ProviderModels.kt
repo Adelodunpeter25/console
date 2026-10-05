@@ -30,12 +30,6 @@ data class Model(
     val defaultThinkingLevel: String? = null,
 )
 
-@Serializable
-data class ModelFavorite(
-    val provider: String,
-    val modelId: String,
-)
-
 /** Star key format, matching the desktop's `"{provider}:{model_id}"`. */
 fun favoriteKey(provider: String, modelId: String): String = "$provider:$modelId"
 

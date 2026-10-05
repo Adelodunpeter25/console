@@ -15,7 +15,7 @@ import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ModelFavorite
+import console.v1.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.model.ProjectInfo

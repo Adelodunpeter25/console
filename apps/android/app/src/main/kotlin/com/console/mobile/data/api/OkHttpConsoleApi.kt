@@ -19,7 +19,10 @@ import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ModelFavorite
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.ModelFavorite
+import console.v1.SetFavoriteRequest
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.model.ProjectInfo
@@ -37,6 +40,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -48,6 +52,11 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
+    // Moshi JSON layer for Wire types (shared protobuf schema). kotlinx stays
+    // for the {success, data} envelope and all non-wire types.
+    private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
+    private val favoriteAdapter = wireMoshi.adapter(ModelFavorite::class.java)
+    private val setFavoriteAdapter = wireMoshi.adapter(SetFavoriteRequest::class.java)
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -308,15 +317,22 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun listFavorites(): List<ModelFavorite> {
         val raw = http.get("/api/model-favorites")
-        return http.unwrap(raw, ListSerializer(ModelFavorite.serializer()), "list model favorites")
+        val array = http.unwrap(raw, JsonArray.serializer(), "list model favorites")
+        return array.map { element ->
+            favoriteAdapter.fromJson(element.toString())
+                ?: throw ApiException("Failed to list model favorites")
+        }
     }
 
     override suspend fun setFavorite(favorite: ModelFavorite, isFavorite: Boolean) {
-        val body = buildJsonObject {
-            put("provider", favorite.provider)
-            put("modelId", favorite.modelId)
-            put("favorite", isFavorite)
-        }.toString()
+        // Canonical bytes match the old hand-built object: provider, modelId, favorite.
+        val body = setFavoriteAdapter.toJson(
+            SetFavoriteRequest(
+                provider = favorite.provider,
+                model_id = favorite.model_id,
+                favorite = isFavorite,
+            ),
+        )
         val raw = http.put("/api/model-favorites", body)
         http.unwrap(raw, JsonElement.serializer(), "update model favorite")
     }
