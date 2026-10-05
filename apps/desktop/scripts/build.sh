@@ -11,6 +11,10 @@ BUNDLE_ID=""
 APP_NAME=""
 OUT_DIR="$DESKTOP_DIR/dist"
 TARGET_TRIPLE=""
+WITH_CEF=false
+SIGN_IDENTITY="-"
+MAIN_ENTITLEMENTS=""
+HELPER_ENTITLEMENTS=""
 EXTRA_CARGO_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -45,6 +49,29 @@ while [[ $# -gt 0 ]]; do
         # The binary lands under target/<triple>/, handled in section 2.
         --target)
             TARGET_TRIPLE="$2"
+            shift 2
+            ;;
+        # Chromium (CEF) browser backend: build with the `cef-browser` cargo
+        # feature and assemble the framework + helper apps into the bundle
+        # (section 4b). Requires CEF_PATH pointing at a shared CEF download
+        # (see scripts/dev.sh); dev.sh exports a default.
+        --cef)
+            WITH_CEF=true
+            EXTRA_CARGO_ARGS+=("--features" "cef-browser")
+            shift
+            ;;
+        # Signing identity (`-` = ad-hoc, the default). Pass a Developer ID
+        # for distribution together with the entitlements flags below.
+        --sign)
+            SIGN_IDENTITY="$2"
+            shift 2
+            ;;
+        --main-entitlements)
+            MAIN_ENTITLEMENTS="$2"
+            shift 2
+            ;;
+        --helper-entitlements)
+            HELPER_ENTITLEMENTS="$2"
             shift 2
             ;;
         *)
@@ -195,9 +222,104 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
 </plist>
 PLIST
 
-# 5. Ad-hoc codesign
-echo "==> Code-signing bundle (ad-hoc)..."
-codesign --force --deep --sign - "$APP_DIR"
+# 4b. CEF framework + helper apps (only with --cef)
+# Layout mirrors cef-rs `bundle-cef-app` (see `cef::build_util::mac`):
+#   Contents/Frameworks/Chromium Embedded Framework.framework
+#   Contents/Frameworks/<bin> Helper{, (GPU),(Renderer),(Plugin),(Alerts)}.app
+# each helper a full .app whose executable is a copy of our own binary (CEF
+# re-executes it for renderer/GPU/... subprocesses; see runtime.rs).
+if [[ "$WITH_CEF" == true ]]; then
+    echo "==> Assembling CEF framework and helpers..."
+    CEF_DIST="${CEF_PATH:-$HOME/.local/share/cef}"
+    case "$(uname -m)" in
+        x86_64) CEF_ARCH="x86_64" ;;
+        arm64) CEF_ARCH="aarch64" ;;
+        *) echo "Error: unsupported architecture $(uname -m) for CEF" >&2; exit 1 ;;
+    esac
+    # Exactly one CEF version directory must match (unexpanded globs fail the
+    # existence check below, which also keeps this safe under `set -u` on the
+    # system bash 3.2).
+    CEF_CANDIDATES=( "$CEF_DIST"/*/cef_macos_"$CEF_ARCH" )
+    if [[ ${#CEF_CANDIDATES[@]} -ne 1 || ! -e "${CEF_CANDIDATES[0]}" ]]; then
+        echo "Error: expected exactly one CEF distribution at $CEF_DIST/*/cef_macos_$CEF_ARCH" >&2
+        exit 1
+    fi
+    CEF_FW_SRC="${CEF_CANDIDATES[0]}/Chromium Embedded Framework.framework"
+    if [[ ! -d "$CEF_FW_SRC" ]]; then
+        echo "Error: CEF framework missing at $CEF_FW_SRC" >&2
+        exit 1
+    fi
+
+    FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+    mkdir -p "$FRAMEWORKS_DIR"
+    echo "    Copying framework (one-time cost, ~330MB)..."
+    rm -rf "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
+    ditto "$CEF_FW_SRC" "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
+
+    BIN_STEM="$(basename "$MACOS_DIR/console")"
+    HELPER_BASE="$BIN_STEM Helper"
+    for SUFFIX in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
+        HELPER_NAME="$HELPER_BASE$SUFFIX"
+        HELPER_APP="$FRAMEWORKS_DIR/$HELPER_NAME.app"
+        rm -rf "$HELPER_APP"
+        mkdir -p "$HELPER_APP/Contents/MacOS" "$HELPER_APP/Contents/Resources"
+        cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+        chmod +x "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+        SLUG=$(echo "$SUFFIX" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
+        if [[ -n "$SLUG" ]]; then
+            HELPER_ID="$BUNDLE_ID.helper.$SLUG"
+        else
+            HELPER_ID="$BUNDLE_ID.helper"
+        fi
+        cat << PLIST > "$HELPER_APP/Contents/Info.plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>${HELPER_NAME}</string>
+    <key>CFBundleDisplayName</key>
+    <string>${HELPER_NAME}</string>
+    <key>CFBundleIdentifier</key>
+    <string>${HELPER_ID}</string>
+    <key>CFBundleVersion</key>
+    <string>${VERSION}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>${VERSION}</string>
+    <key>CFBundleExecutable</key>
+    <string>${HELPER_NAME}</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+PLIST
+    done
+    echo "    Helpers installed: $HELPER_BASE{, (GPU),(Renderer),(Plugin),(Alerts)}"
+fi
+
+# 5. Code signing, inside-out so nested code is sealed before the container.
+# Ad-hoc (`-`) by default; pass --sign with a Developer ID for distribution.
+echo "==> Code-signing bundle ($SIGN_IDENTITY)..."
+sign() {
+    if [[ -n "$2" ]]; then
+        codesign --force --sign "$SIGN_IDENTITY" --entitlements "$2" "$1"
+    else
+        codesign --force --sign "$SIGN_IDENTITY" "$1"
+    fi
+}
+if [[ "$WITH_CEF" == true ]]; then
+    sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
+    for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
+        sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
+    done
+fi
+sign "$APP_DIR" "$MAIN_ENTITLEMENTS"
 
 echo "========================================="
 echo "==> Done! App bundle created:"

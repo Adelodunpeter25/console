@@ -16,6 +16,14 @@ fi
 
 if [[ -f "$BINARY_SRC" ]]; then
     cp -f "$BINARY_SRC" "$APP_EXEC"
+    # CEF bundles: helpers are copies of our own binary (see build.sh --cef).
+    # Refresh them when the fresh binary is newer so renderer/GPU helpers
+    # never run stale code after a reload.
+    for HELPER_EXEC in "$APP_PATH"/Contents/Frameworks/*.app/Contents/MacOS/*; do
+        if [[ -f "$HELPER_EXEC" && "$BINARY_SRC" -nt "$HELPER_EXEC" ]]; then
+            cp -f "$BINARY_SRC" "$HELPER_EXEC"
+        fi
+    done
     codesign --force --deep --sign - "$APP_PATH" >/dev/null 2>&1 || true
 fi
 

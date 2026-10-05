@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Main-app entitlements for DISTRIBUTION signing (Developer ID + hardened
+  runtime + notarization). Not used for ad-hoc dev signing.
+
+  Usage:
+    bash scripts/build.sh --mode prod --cef --sign "Developer ID Application: ..." \
+        --main-entitlements assets/entitlements/Console.entitlements \
+        --helper-entitlements assets/entitlements/ConsoleHelper.entitlements
+
+  Afterwards: `xcrun notarytool submit <app>.zip ... --wait`, then
+  `xcrun stapler staple <app>`.
+-->
+<plist version="1.0">
+<dict>
+    <!-- V8/Chromium JIT: the page renderer generates executable code. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- Chromium allocates executable memory outside the JIT region. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- The bundled Chromium framework is signed by us; keep library
+         validation enabled (do NOT add disable-library-validation). -->
+</dict>
+</plist>
