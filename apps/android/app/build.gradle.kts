@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.squareup.wire")
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -112,6 +113,18 @@ android {
     // Pin Compose compiler to the Kotlin version via the plugin
 }
 
+// Shared protobuf schema (docs/plan/shared-protobuf-schema.md §3): Wire reads
+// .proto directly; generated Kotlin lands in build/generated/source/wire and
+// is never committed. oneof -> sealed class matches ChatModels' ActivityEvent.
+wire {
+    sourcePath {
+        srcDir("../../../proto")
+    }
+    kotlin {
+        oneofMode = "sealed_class"
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -181,6 +194,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0")
+
+    // Wire protobuf runtime + Moshi JSON layer for wire types (see wire{} above).
+    // kotlinx.serialization stays for persisted and non-wire types.
+    implementation("com.squareup.wire:wire-runtime:7.0.4")
+    implementation("com.squareup.wire:wire-moshi-adapter:7.0.4")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
 
     // WebView for Mermaid/markdown fallbacks
     // (no WebView is used anywhere in the app — MarkdownText uses the mikepenz
