@@ -1,7 +1,7 @@
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use console_core::types::{
-    AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageReport, UsageStatus,
+    AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageLimitExt, UsageReport,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -276,10 +276,10 @@ impl RenderOnce for UsagePage {
                                                 let used_percent = (used_frac * 100.0).clamp(0.0, 100.0);
                                                 let remaining_percent = (100.0 - used_percent).clamp(0.0, 100.0);
 
-                                                let status_color = match limit.status {
-                                                    Some(UsageStatus::Exhausted) => theme.danger,
-                                                    Some(UsageStatus::Warning) => theme.warning,
-                                                    Some(UsageStatus::Ok) => theme.success,
+                                                let status_color = match limit.status.as_deref() {
+                                                    Some("exhausted") => theme.danger,
+                                                    Some("warning") => theme.warning,
+                                                    Some("ok") => theme.success,
                                                     _ if used_percent >= 90.0 => theme.danger,
                                                     _ if used_percent >= 50.0 => theme.warning,
                                                     _ => theme.success,
@@ -297,7 +297,10 @@ impl RenderOnce for UsagePage {
                                                     }
                                                 });
 
-                                                let tier_label = limit.scope.tier.clone();
+                                                let tier_label = limit
+                                                    .scope
+                                                    .as_ref()
+                                                    .and_then(|scope| scope.tier.clone());
 
                                                 div()
                                                     .flex()

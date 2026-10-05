@@ -2,7 +2,7 @@
 //! showing the active provider's rate-limit occupancy. Clicking opens
 //! a popover with detailed limit breakdowns.
 
-use console_core::{ContextSnapshot, UsageLimit, UsageReport, UsageUnit};
+use console_core::{ContextSnapshot, UsageLimit, UsageReport};
 use gpui::prelude::FluentBuilder;
 use gpui::{
     App, Hsla, InteractiveElement, IntoElement, ParentElement, PathBuilder, RenderOnce, Styled,
@@ -168,7 +168,9 @@ fn circular_progress_gauge(percent: Option<f64>, track: Hsla, fill: Hsla) -> imp
 }
 
 fn resolve_used_percent(limit: &UsageLimit) -> f64 {
-    let amount = &limit.amount;
+    let Some(amount) = limit.amount.as_ref() else {
+        return 0.0;
+    };
     if let Some(fraction) = amount.used_fraction {
         return (fraction * 100.0).clamp(0.0, 100.0);
     }
@@ -177,7 +179,7 @@ fn resolve_used_percent(limit: &UsageLimit) -> f64 {
             return (used * 100.0 / limit_val).clamp(0.0, 100.0);
         }
     }
-    if amount.unit == UsageUnit::Percent {
+    if amount.unit == "percent" {
         if let Some(used) = amount.used {
             return used.clamp(0.0, 100.0);
         }

@@ -1,7 +1,7 @@
 //! The usage panel: a dropdown showing detailed quota limits for the active
 //! provider. Displays progress bars for each limit, reset times, and status colors.
 
-use console_core::{ContextSnapshot, UsageLimit, UsageReport, UsageUnit};
+use console_core::{ContextSnapshot, UsageLimit, UsageLimitExt, UsageReport};
 use gpui::{
     App, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
     relative,
@@ -179,11 +179,9 @@ fn render_context_bar(snapshot: &ContextSnapshot, theme: &Theme) -> impl IntoEle
 fn render_limit_row(limit: &UsageLimit, theme: &Theme) -> impl IntoElement {
     let percent = resolve_used_percent(limit);
 
-    let status_color = if percent >= 95.0
-        || matches!(limit.status, Some(console_core::UsageStatus::Exhausted))
-    {
+    let status_color = if percent >= 95.0 || limit.status.as_deref() == Some("exhausted") {
         theme.danger
-    } else if percent >= 80.0 || matches!(limit.status, Some(console_core::UsageStatus::Warning)) {
+    } else if percent >= 80.0 || limit.status.as_deref() == Some("warning") {
         theme.warning
     } else {
         theme.gauge
@@ -257,7 +255,9 @@ fn meter_bar(theme: &Theme, percent: f64, fill_color: gpui::Hsla) -> Div {
 }
 
 fn resolve_used_percent(limit: &UsageLimit) -> f64 {
-    let amount = &limit.amount;
+    let Some(amount) = limit.amount.as_ref() else {
+        return 0.0;
+    };
     if let Some(fraction) = amount.used_fraction {
         return (fraction * 100.0).clamp(0.0, 100.0);
     }
@@ -266,7 +266,7 @@ fn resolve_used_percent(limit: &UsageLimit) -> f64 {
             return (used * 100.0 / limit_val).clamp(0.0, 100.0);
         }
     }
-    if amount.unit == UsageUnit::Percent {
+    if amount.unit == "percent" {
         if let Some(used) = amount.used {
             return used.clamp(0.0, 100.0);
         }
@@ -278,25 +278,27 @@ fn resolve_used_percent(limit: &UsageLimit) -> f64 {
 }
 
 fn format_usage_value(limit: &UsageLimit, percent: f64) -> String {
-    let amount = &limit.amount;
+    let Some(amount) = limit.amount.as_ref() else {
+        return format!("{:.0}%", percent);
+    };
     match (amount.used, amount.limit) {
-        (Some(used), Some(limit_val)) if amount.unit != UsageUnit::Percent => {
+        (Some(used), Some(limit_val)) if amount.unit != "percent" => {
             format!(
                 "{}/{}",
                 format_amount(used, &amount.unit),
                 format_amount(limit_val, &amount.unit)
             )
         }
-        (Some(used), None) if amount.unit != UsageUnit::Percent => {
+        (Some(used), None) if amount.unit != "percent" => {
             format!("{} used", format_amount(used, &amount.unit))
         }
         _ => format!("{:.0}%", percent),
     }
 }
 
-fn format_amount(value: f64, unit: &UsageUnit) -> String {
+fn format_amount(value: f64, unit: &str) -> String {
     match unit {
-        UsageUnit::Minutes => {
+        "minutes" => {
             let hours = value / 60.0;
             if hours >= 1.0 {
                 format!("{:.1}h", hours)
@@ -304,7 +306,7 @@ fn format_amount(value: f64, unit: &UsageUnit) -> String {
                 format!("{:.0}m", value)
             }
         }
-        UsageUnit::Tokens => {
+        "tokens" => {
             if value >= 1_000_000.0 {
                 format!("{:.1}M", value / 1_000_000.0)
             } else if value >= 1_000.0 {
@@ -313,9 +315,9 @@ fn format_amount(value: f64, unit: &UsageUnit) -> String {
                 format!("{:.0}", value)
             }
         }
-        UsageUnit::Percent => format!("{:.0}%", value),
-        UsageUnit::Requests => format!("{:.0}", value),
-        UsageUnit::Usd => format!("${:.2}", value),
+        "percent" => format!("{:.0}%", value),
+        "requests" => format!("{:.0}", value),
+        "usd" => format!("${:.2}", value),
         _ => format!("{:.0}", value),
     }
 }
