@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/console-core",
+    "crates/console-proto",
     "crates/console-ui",
     "src",
 ]
@@ -18,6 +19,7 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["fo
 
 # Internal workspace crates
 console-core = { path = "crates/console-core" }
+console-proto = { path = "crates/console-proto" }
 console-ui = { path = "crates/console-ui" }
 
 # Editor & Syntax
@@ -34,6 +36,11 @@ gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "
 # Serialization & Networking
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+prost = "0.14"
+prost-build = "0.14"
+pbjson = "0.9"
+pbjson-build = "0.9"
+protoc-bin-vendored = "3.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 futures-util = "0.3"
 tokio = { version = "1.0", features = ["full"] }

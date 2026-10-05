@@ -1,0 +1,20 @@
+[package]
+name = "console-proto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+prost = { workspace = true }
+pbjson = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+pbjson-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[[test]]
+name = "version_json_test"
+path = "tests/version_json_test.rs"
