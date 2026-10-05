@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Project workspaces (/api/projects). Third domain on the shared schema.
+//
+// First wire-CHANGING migration: int64 timestamps encode as JSON strings
+// under protojson ("1700000000000" instead of 1700000000000), so all three
+// clients move in the same step. No version bump yet — the API version gate
+// lands once Phase 1 is fully migrated.
+//
+// List responses stay a bare JSON array inside the {success, data} envelope,
+// matching the old shape element-for-element apart from the timestamps.
+// Delete responses keep {"id","deleted"}; note key ORDER changes (protojson
+// emits in field-number order, encoding/json sorted map keys), which is
+// irrelevant to object parsers but recorded here for fixture authors.
+message ProjectInfo {
+  string id = 1;
+  string name = 2;
+  string path = 3;
+  int64 created_at = 4;
+  int64 updated_at = 5;
+}
+
+message CreateProjectRequest {
+  string path = 1;
+}
+
+message DeleteProjectResponse {
+  string id = 1;
+  bool deleted = 2;
+}

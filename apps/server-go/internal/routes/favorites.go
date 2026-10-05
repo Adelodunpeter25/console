@@ -14,15 +14,11 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"google.golang.org/protobuf/encoding/protojson"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
-
-var protoMarshal = protojson.MarshalOptions{}
-var protoUnmarshal = protojson.UnmarshalOptions{DiscardUnknown: true}
 
 // favoritesToProto converts service rows to the canonical wire type.
 func favoritesToProto(list []types.ModelFavorite) []*consolev1.ModelFavorite {
