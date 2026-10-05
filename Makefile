@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check proto help
 
 # Where `console upgrade` and this target install the binary (matches
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
@@ -75,6 +75,19 @@ build-android:
 ## check: Vet the Go server
 check:
 	go -C apps/server-go vet ./...
+
+## proto: Regenerate Go protobuf types from proto/ (buf preferred, protoc fallback)
+proto:
+	@if command -v buf >/dev/null 2>&1; then \
+		buf generate; \
+	else \
+		echo "buf not found, falling back to protoc..."; \
+		GOBIN=$$(go env GOPATH)/bin; \
+		mkdir -p apps/server-go/internal/gen; \
+		(ls $$GOBIN/protoc-gen-go >/dev/null 2>&1 || go -C apps/server-go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12); \
+		export PATH="$$GOBIN:$$PATH"; \
+		protoc -I proto --go_out=apps/server-go/internal/gen --go_opt=paths=source_relative proto/console/v1/common.proto; \
+	fi
 
 ## help: Show this help message
 help:

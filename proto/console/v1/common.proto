@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Shared error envelope. Replaces fiber.Map{"success":..,"error":..}
+// on migrated endpoints. Success responses use the domain XxxResponse;
+// failures use Error with a machine-readable code.
+message Error {
+  string code = 1;
+  string message = 2;
+}
+
+// API version gate (see docs/plan/shared-protobuf-schema.md §6).
+// GET /api/version returns GetApiVersionResponse. Clients compare
+// api_version against the version they generated against and show an
+// "update server" notice on mismatch instead of mis-parsing.
+message GetApiVersionRequest {}
+
+message GetApiVersionResponse {
+  uint32 api_version = 1;
+}

@@ -1,0 +1,5 @@
+version: v1
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.12
+    out: apps/server-go/internal/gen
+    opt: paths=source_relative

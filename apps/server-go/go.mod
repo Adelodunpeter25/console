@@ -14,6 +14,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/valyala/fasthttp v1.58.0
 	golang.org/x/oauth2 v0.36.0
+	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.38.0
 )
 
@@ -29,7 +30,6 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
-	google.golang.org/protobuf v1.36.12 // indirect
 )
 
 require (
