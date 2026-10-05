@@ -18,7 +18,7 @@ use gpui::{
 };
 
 use super::player::{PLAYER_HTML, PlayerConfig};
-use crate::browser::host::WebviewHost;
+use crate::browser::host::{HostCallbacks, HostContent, WebviewHost};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{
     ContextMenuHandle, IconName, MenuAlign, MenuItem, app_icon, dropdown_menu,
@@ -122,8 +122,6 @@ impl DeviceViewer {
 
     #[cfg(target_os = "macos")]
     fn build_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        use wry::dpi::{LogicalPosition, LogicalSize};
-
         let deferred = Deferred {
             executor: cx.foreground_executor().clone(),
             cx: cx.to_async(),
@@ -150,28 +148,29 @@ impl DeviceViewer {
             })
         };
 
-        let built = wry::WebViewBuilder::new()
-            .with_bounds(wry::Rect {
-                position: LogicalPosition::new(0.0, 0.0).into(),
-                size: LogicalSize::new(0.0, 0.0).into(),
-            })
-            .with_visible(false)
-            .with_focused(false)
-            .with_accept_first_mouse(true)
-            .with_devtools(true)
-            .with_html(PLAYER_HTML)
-            .with_ipc_handler(move |request: wry::http::Request<String>| {
-                let body = request.body().clone();
+        let content = HostContent {
+            user_agent: None,
+            initialization_script: None,
+            html: Some(PLAYER_HTML.to_owned()),
+            allow_navigation: None,
+            on_ipc: Some(Box::new(move |body| {
                 on_ipc.update(move |this, cx| this.player_event(body, cx));
-            })
-            .build_as_child(window);
-
-        match built {
-            Ok(webview) => {
-                self.host = Some(Rc::new(WebviewHost::new(webview, on_responder_change)));
+            })),
+            on_title: None,
+            on_new_window_url: None,
+        };
+        let callbacks = HostCallbacks {
+            on_responder_change,
+            on_nav_start: Box::new(|| {}),
+            on_nav_finish: Box::new(|| {}),
+            on_nav_error: Box::new(|_| {}),
+        };
+        match WebviewHost::create(window, content, callbacks) {
+            Ok(host) => {
+                self.host = Some(Rc::new(host));
             }
             Err(error) => {
-                self.host_error = Some(error.to_string());
+                self.host_error = Some(error);
             }
         }
     }

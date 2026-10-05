@@ -118,7 +118,7 @@ mod macos_host {
     use std::ffi::c_void;
     use std::ptr::null_mut;
 
-    use gpui::{Bounds, Pixels};
+    use gpui::{Bounds, Pixels, Window};
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, ProtocolObject};
     use objc2::{AnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
@@ -295,18 +295,88 @@ mod macos_host {
         _navigation_delegate: Option<Retained<ConsoleNavigationDelegate>>,
     }
 
+    /// Callbacks the host invokes on the owning view. The host calls these
+    /// from native handlers, so each callback must hop to the GPUI context
+    /// itself (see the `Deferred` helper at each call site).
+    pub struct HostCallbacks {
+        pub on_responder_change: Box<dyn Fn(bool)>,
+        pub on_nav_start: Box<dyn Fn()>,
+        pub on_nav_finish: Box<dyn Fn()>,
+        pub on_nav_error: Box<dyn Fn(NativeNavigationError)>,
+    }
+
+    /// Optional web content and behavior for a new host surface. Every field
+    /// maps 1:1 to a wry `WebViewBuilder` option today; unset fields keep
+    /// wry defaults. The CEF backend will consume this same struct next.
+    pub struct HostContent {
+        pub user_agent: Option<String>,
+        pub initialization_script: Option<String>,
+        pub html: Option<String>,
+        pub allow_navigation: Option<Box<dyn Fn(String) -> bool>>,
+        pub on_ipc: Option<Box<dyn Fn(String)>>,
+        pub on_title: Option<Box<dyn Fn(String)>>,
+        pub on_new_window_url: Option<Box<dyn Fn(String)>>,
+    }
+
     impl WebviewHost {
-        pub fn new(webview: wry::WebView, on_responder_change: Box<dyn Fn(bool)>) -> Self {
-            Self::with_navigation_callbacks(
-                webview,
-                on_responder_change,
-                Box::new(|| {}),
-                Box::new(|| {}),
-                Box::new(|_| {}),
-            )
+        /// Backend-neutral surface constructor: builds the native child view
+        /// for `window`, wiring `content` and `callbacks`. Today this always
+        /// builds the wry/WKWebView surface; the CEF backend plugs in here.
+        pub fn create(
+            window: &mut Window,
+            content: HostContent,
+            callbacks: HostCallbacks,
+        ) -> Result<Self, String> {
+            let mut builder = wry::WebViewBuilder::new()
+                .with_bounds(wry::Rect {
+                    position: LogicalPosition::new(0.0, 0.0).into(),
+                    size: LogicalSize::new(0.0, 0.0).into(),
+                })
+                .with_visible(false)
+                .with_focused(false)
+                .with_accept_first_mouse(true)
+                .with_devtools(true);
+            if let Some(user_agent) = content.user_agent {
+                builder = builder.with_user_agent(user_agent);
+            }
+            if let Some(script) = content.initialization_script {
+                builder = builder.with_initialization_script(script);
+            }
+            if let Some(html) = content.html {
+                builder = builder.with_html(html);
+            }
+            if let Some(allow_navigation) = content.allow_navigation {
+                builder =
+                    builder.with_navigation_handler(move |url| allow_navigation(url));
+            }
+            if let Some(on_ipc) = content.on_ipc {
+                builder = builder.with_ipc_handler(move |request: wry::http::Request<String>| {
+                    on_ipc(request.body().clone());
+                });
+            }
+            if let Some(on_title) = content.on_title {
+                builder = builder
+                    .with_document_title_changed_handler(move |title| on_title(title));
+            }
+            if let Some(on_new_window_url) = content.on_new_window_url {
+                builder = builder.with_new_window_req_handler(move |url, _features| {
+                    on_new_window_url(url);
+                    wry::NewWindowResponse::Deny
+                });
+            }
+            match builder.build_as_child(window) {
+                Ok(webview) => Ok(Self::with_navigation_callbacks(
+                    webview,
+                    callbacks.on_responder_change,
+                    callbacks.on_nav_start,
+                    callbacks.on_nav_finish,
+                    callbacks.on_nav_error,
+                )),
+                Err(error) => Err(error.to_string()),
+            }
         }
 
-        pub fn with_navigation_callbacks(
+        fn with_navigation_callbacks(
             webview: wry::WebView,
             on_responder_change: Box<dyn Fn(bool)>,
             on_nav_start: Box<dyn Fn()>,
@@ -571,7 +641,7 @@ mod macos_host {
 }
 
 #[cfg(target_os = "macos")]
-pub use macos_host::WebviewHost;
+pub use macos_host::{HostCallbacks, HostContent, WebviewHost};
 
 #[cfg(not(target_os = "macos"))]
 pub struct WebviewHost {

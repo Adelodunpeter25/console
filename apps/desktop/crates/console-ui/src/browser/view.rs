@@ -26,7 +26,7 @@ use super::address::{
     url_host,
 };
 use super::agent_script::{cap_result, wrap_script};
-use super::host::{NativeNavigationError, WebviewHost};
+use super::host::{HostCallbacks, HostContent, NativeNavigationError, WebviewHost};
 use super::inspector::{BrowserElementInspection, INSPECTOR_SCRIPT, InspectorIpcMessage};
 use crate::common::input::{ComposerEvent, ComposerInput};
 use crate::primitives::tooltip::Tooltip;
@@ -188,8 +188,6 @@ impl BrowserView {
 
     #[cfg(target_os = "macos")]
     fn build_webview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        use wry::dpi::{LogicalPosition, LogicalSize};
-
         let deferred = Deferred {
             executor: cx.foreground_executor().clone(),
             cx: cx.to_async(),
@@ -273,43 +271,33 @@ impl BrowserView {
 
         let on_ipc = deferred.clone();
 
-        let built = wry::WebViewBuilder::new()
-            .with_bounds(wry::Rect {
-                position: LogicalPosition::new(0.0, 0.0).into(),
-                size: LogicalSize::new(0.0, 0.0).into(),
-            })
-            .with_visible(false)
-            .with_focused(false)
-            .with_accept_first_mouse(true)
-            .with_devtools(true)
-            .with_user_agent(USER_AGENT)
-            .with_initialization_script(INSPECTOR_SCRIPT)
-            .with_ipc_handler(move |request: wry::http::Request<String>| {
-                let body = request.body().clone();
+        let content = HostContent {
+            user_agent: Some(USER_AGENT.to_owned()),
+            initialization_script: Some(INSPECTOR_SCRIPT.to_owned()),
+            html: None,
+            allow_navigation: Some(Box::new(|_| true)),
+            on_ipc: Some(Box::new(move |body| {
                 on_ipc.update(move |this, cx| this.handle_ipc_message(body, cx));
-            })
-            .with_navigation_handler(|_| true)
-            .with_document_title_changed_handler(move |title| {
+            })),
+            on_title: Some(Box::new(move |title| {
                 on_title.update(move |this, cx| this.title_changed(title, cx));
-            })
-            .with_new_window_req_handler(move |url, _features| {
+            })),
+            on_new_window_url: Some(Box::new(move |url| {
                 on_new_window.update(move |this, cx| this.navigate_to_url(url, cx));
-                wry::NewWindowResponse::Deny
-            })
-            .build_as_child(window);
-
-        match built {
-            Ok(webview) => {
-                self.host = Some(Rc::new(WebviewHost::with_navigation_callbacks(
-                    webview,
-                    on_responder_change,
-                    on_nav_start,
-                    on_nav_finish,
-                    on_nav_error,
-                )));
+            })),
+        };
+        let callbacks = HostCallbacks {
+            on_responder_change,
+            on_nav_start,
+            on_nav_finish,
+            on_nav_error,
+        };
+        match WebviewHost::create(window, content, callbacks) {
+            Ok(host) => {
+                self.host = Some(Rc::new(host));
             }
             Err(error) => {
-                self.host_error = Some(error.to_string());
+                self.host_error = Some(error);
             }
         }
     }
