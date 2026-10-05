@@ -86,7 +86,7 @@ proto:
 		mkdir -p apps/server-go/internal/gen; \
 		(ls $$GOBIN/protoc-gen-go >/dev/null 2>&1 || go -C apps/server-go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12); \
 		export PATH="$$GOBIN:$$PATH"; \
-		protoc -I proto --go_out=apps/server-go/internal/gen --go_opt=paths=source_relative proto/console/v1/common.proto; \
+		protoc -I proto --go_out=apps/server-go/internal/gen --go_opt=paths=source_relative $$(find proto/console/v1 -name '*.proto'); \
 	fi
 
 ## help: Show this help message

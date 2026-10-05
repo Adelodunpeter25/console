@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Model favorites (/api/model-favorites). First domain migrated to the
+// shared schema: flat message, no oneof, so protojson output is
+// byte-identical to today's hand-shaped JSON. The {success, data} envelope
+// is unchanged in this step; only the payload construction moves to
+// generated types.
+message ModelFavorite {
+  string provider = 1;
+  string model_id = 2;
+}
+
+message ListFavoritesResponse {
+  repeated ModelFavorite favorites = 1;
+}
+
+// favorite is optional: unset (missing key) must stay distinct from false,
+// matching today's `Favorite *bool` nil check in routes/favorites.go.
+message SetFavoriteRequest {
+  string provider = 1;
+  string model_id = 2;
+  optional bool favorite = 3;
+}
+
+message SetFavoriteResponse {
+  string provider = 1;
+  string model_id = 2;
+  bool favorite = 3;
+}
