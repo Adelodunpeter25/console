@@ -39,7 +39,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader

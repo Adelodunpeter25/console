@@ -47,7 +47,7 @@ import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.data.model.favoriteKey
 import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.theme.ConsoleColors

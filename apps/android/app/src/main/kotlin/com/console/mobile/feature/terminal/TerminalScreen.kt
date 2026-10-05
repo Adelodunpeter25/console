@@ -45,7 +45,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Keyboard
 import io.github.lyxnx.compose.ui.tablericons.outline.KeyboardOff
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.data.store.TerminalStatus
 import com.console.mobile.feature.terminal.native.NativeTerminalView
 import com.console.mobile.ui.components.EmptyState

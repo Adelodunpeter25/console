@@ -1,7 +1,7 @@
 package com.console.mobile.core.chat
 
 import com.console.mobile.core.util.folderName
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 

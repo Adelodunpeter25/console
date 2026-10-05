@@ -22,10 +22,10 @@ import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.ConsoleSettings
 import console.v1.ModelFavorite
+import console.v1.ProjectInfo
 import console.v1.SetFavoriteRequest
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
-import com.console.mobile.data.model.ProjectInfo
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionFileChange
@@ -58,6 +58,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val favoriteAdapter = wireMoshi.adapter(ModelFavorite::class.java)
     private val setFavoriteAdapter = wireMoshi.adapter(SetFavoriteRequest::class.java)
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
+    private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -141,13 +142,21 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getProjects(): List<ProjectInfo> {
         val raw = http.get("/api/projects")
-        return http.unwrapOrRaw(raw, ListSerializer(ProjectInfo.serializer()), "list projects")
+        // Envelope-or-raw stays kotlinx; only the payload items are Wire types.
+        val element = http.unwrapOrRaw(raw, JsonElement.serializer(), "list projects")
+        val array = element as? JsonArray ?: throw ApiException("Failed to list projects")
+        return array.map { item ->
+            projectAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to list projects")
+        }
     }
 
     override suspend fun addProject(path: String): ProjectInfo {
         val body = buildJsonObject { put("path", path) }.toString()
         val raw = http.post("/api/projects", body)
-        return http.unwrapOrRaw(raw, ProjectInfo.serializer(), "add project")
+        val element = http.unwrapOrRaw(raw, JsonElement.serializer(), "add project")
+        return projectAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to add project")
     }
 
     override suspend fun deleteProject(projectId: String) {

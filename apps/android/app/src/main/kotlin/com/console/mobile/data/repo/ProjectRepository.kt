@@ -2,7 +2,7 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.CreateSessionDto
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto

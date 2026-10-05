@@ -132,8 +132,9 @@ data class FileSearchResult(
 @Serializable
 data class FileSearchResponse(val root: String, val query: String, val items: List<FileSearchResult> = emptyList())
 
-@Serializable
-data class ProjectInfo(val id: String, val name: String, val path: String, val createdAt: Long, val updatedAt: Long)
+// ProjectInfo moved to the shared protobuf schema (console.v1 from
+// proto/console/v1): timestamps now arrive as protojson strings, so the
+// hand-written data class with Long timestamps was deleted.
 
 @Serializable
 data class ProviderAuthStatus(

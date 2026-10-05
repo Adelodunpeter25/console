@@ -18,7 +18,7 @@ import com.console.mobile.data.model.Model
 import console.v1.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse

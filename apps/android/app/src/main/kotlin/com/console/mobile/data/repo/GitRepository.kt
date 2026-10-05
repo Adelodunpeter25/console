@@ -5,7 +5,7 @@ import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.GitBranchesResponse
 import com.console.mobile.data.model.GitStatusSummary
-import com.console.mobile.data.model.ProjectInfo
+import console.v1.ProjectInfo
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
