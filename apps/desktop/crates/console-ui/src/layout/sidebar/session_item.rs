@@ -1,4 +1,4 @@
-use console_core::{ProjectInfo, SessionHeader};
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader};
 use gpui::{
     App, AppContext, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, actions, div,

@@ -2,6 +2,7 @@ mod workspace_content;
 
 use std::rc::Rc;
 
+use console_core::ProjectInfoExt;
 use console_ui::workspace::{
     ContentRenderer, WorkspaceDrag, WorkspaceDropAction, WorkspacePane, cancel_workspace_drags,
 };

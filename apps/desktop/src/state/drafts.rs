@@ -1,4 +1,5 @@
 use console_ui::{ComposerMention, DraftSummary};
+use console_core::ProjectInfoExt;
 use gpui::Context;
 use std::collections::HashSet;
 use std::time::Duration;

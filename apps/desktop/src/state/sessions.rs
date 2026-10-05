@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, ProjectInfo, SelectedModel, SessionHeader, UpdateSessionDto};
+use console_core::{ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader, UpdateSessionDto};
 use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
 use gpui::{Context, Window};
 

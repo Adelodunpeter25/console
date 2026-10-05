@@ -9,7 +9,7 @@ pub use session_item::{
     render_sidebar_session_item,
 };
 
-use console_core::{ProjectInfo, SessionHeader};
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader};
 use gpui::{
     App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
     ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, list,
