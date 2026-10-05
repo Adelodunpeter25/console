@@ -152,6 +152,10 @@ impl CefRuntime {
         }
         let _ = cef::api_hash(cef::sys::CEF_API_VERSION_LAST, 0);
         let args = Args::new();
+        // Inject CefAppProtocol conformance after the framework is loaded
+        // (the protocol object only exists then) and before CefInitialize.
+        // Works for GPUI's NSApplication subclass via method injection.
+        super::application::conform_ns_application();
         let framework_dir = paths.framework_dir.to_string_lossy().into_owned();
         let helper_exe = paths.helper_exe.to_string_lossy().into_owned();
         // Isolated profile support: point CEF at a scratch user-data dir so
@@ -243,9 +247,8 @@ pub fn ensure_initialized() -> bool {
         if slot.borrow().is_some() {
             return true;
         }
-        // Retrofit before CefInitialize (which is inside `initialize`): CEF
-        // requires CefAppProtocol conformance for event handling.
-        super::application::conform_ns_application();
+        // `conform_ns_application` runs inside `initialize`, after the
+        // framework load and before `CefInitialize` (see above).
         let Some(mut runtime) = CefRuntime::initialize() else {
             return false;
         };
