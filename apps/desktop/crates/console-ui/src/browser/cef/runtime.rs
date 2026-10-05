@@ -228,6 +228,9 @@ pub fn ensure_initialized() -> bool {
         if slot.borrow().is_some() {
             return true;
         }
+        // Retrofit before CefInitialize (which is inside `initialize`): CEF
+        // requires CefAppProtocol conformance for event handling.
+        super::application::conform_ns_application();
         let Some(mut runtime) = CefRuntime::initialize() else {
             return false;
         };

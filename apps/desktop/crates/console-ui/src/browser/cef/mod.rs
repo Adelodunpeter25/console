@@ -4,6 +4,8 @@
 //! wry/WKWebView with zero CEF download or link cost.
 
 #[cfg(target_os = "macos")]
+pub mod application;
+#[cfg(target_os = "macos")]
 pub mod client;
 #[cfg(target_os = "macos")]
 pub mod host;
