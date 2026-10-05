@@ -41,5 +41,12 @@ export CONSOLE_ENV=dev
 # Keep stdout/stderr in a log file (was /dev/null, which swallowed every
 # log:: line). Tail it with: tail -f "$DESKTOP_DIR/dist/.dev_console.log"
 LOG_FILE="$DESKTOP_DIR/dist/.dev_console.log"
-"$APP_EXEC" >>"$LOG_FILE" 2>&1 &
+# --use-mock-keychain: Chromium encrypts cookies/passwords with a key from
+# the login keychain ("Chromium Safe Storage"). Dev binaries are ad-hoc
+# signed and rebuilt constantly (6 distinct helper copies), so the keychain
+# never learns a stable identity and prompts on every launch. The mock
+# keychain keeps encryption in memory: no prompts, sites start logged-out
+# each launch. Production bundles (Developer ID signed) use the real
+# keychain and prompt at most once.
+"$APP_EXEC" --use-mock-keychain >>"$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"

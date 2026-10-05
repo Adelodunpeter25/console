@@ -102,5 +102,7 @@ else
     echo "==> Launching Console Dev ($APP_PATH)..."
     export CONSOLE_ENV=dev
     export RUST_LOG="${RUST_LOG:-warn,console_ui=debug,console_core=debug,console_app=debug}"
-    exec "$APP_EXEC"
+    # See reload.sh: mock keychain avoids repeated login-keychain prompts
+    # for ad-hoc-signed dev binaries.
+    exec "$APP_EXEC" --use-mock-keychain
 fi
