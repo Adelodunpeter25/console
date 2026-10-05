@@ -15,7 +15,7 @@ impl FsService {
     /// Browse directories for the ⌘O project palette. Always includes hidden
     /// (dotfile) folders — project roots like `.config/nvim` or `.dotfiles`
     /// must be navigable, and there is intentionally no visibility toggle.
-    pub async fn browse(&self, path: Option<&str>) -> Result<BrowseDirectoryResponse> {
+    pub async fn browse(&self, path: Option<&str>) -> Result<FsBrowseResult> {
         let mut url = self.transport.url("/api/fs/browse").await;
         // Always show hidden: the palette filters locally and must reach dotfolders.
         let mut params = vec!["hidden=true".to_string()];
@@ -34,7 +34,7 @@ impl FsService {
             .await
             .context("Failed to browse directory")?;
 
-        let body: ApiResponse<BrowseDirectoryResponse> = self
+        let body: ApiResponse<FsBrowseResult> = self
             .transport
             .decode_json(resp)
             .await
@@ -95,7 +95,7 @@ impl FsService {
         &self,
         path: Option<&str>,
         depth: Option<usize>,
-    ) -> Result<DirectoryTreeResponse> {
+    ) -> Result<FsDirectoryTree> {
         let mut url = self.transport.url("/api/fs/tree").await;
         let mut params = Vec::new();
         if let Some(p) = path {
@@ -118,7 +118,7 @@ impl FsService {
             .await
             .context("Failed to get directory tree")?;
 
-        let body: ApiResponse<DirectoryTreeResponse> = self
+        let body: ApiResponse<FsDirectoryTree> = self
             .transport
             .decode_json(resp)
             .await
@@ -134,7 +134,7 @@ impl FsService {
         }
     }
 
-    pub async fn read_file(&self, path: &str) -> Result<FileContentResponse> {
+    pub async fn read_file(&self, path: &str) -> Result<FsFileContent> {
         let url = format!(
             "{}/api/fs/file?path={}",
             self.transport.url("").await,
@@ -149,7 +149,7 @@ impl FsService {
             .await
             .context("Failed to read file")?;
 
-        let body: ApiResponse<FileContentResponse> = self
+        let body: ApiResponse<FsFileContent> = self
             .transport
             .decode_json(resp)
             .await
@@ -166,7 +166,7 @@ impl FsService {
 
     pub async fn write_file(&self, path: &str, content: &str) -> Result<()> {
         let url = self.transport.url("/api/fs/file").await;
-        let payload = WriteFileDto {
+        let payload = WriteFileRequest {
             path: path.to_string(),
             content: content.to_string(),
         };
@@ -198,7 +198,7 @@ impl FsService {
     pub async fn watch_events(
         &self,
         path: &str,
-    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<serde_json::Value>> + Send>>>
+    ) -> Result<std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<FsChangeEvent>> + Send>>>
     {
         use eventsource_stream::Eventsource;
         use futures_util::StreamExt;

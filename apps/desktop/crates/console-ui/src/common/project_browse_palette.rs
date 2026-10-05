@@ -14,7 +14,7 @@
 
 use std::rc::Rc;
 
-use console_core::{ConsoleClient, FsEntry};
+use console_core::{ConsoleClient, FsTreeEntry};
 use gpui::{App, AppContext, Context, Entity, IntoElement, Render, Window};
 
 use crate::CommandPaletteModal;
@@ -192,7 +192,7 @@ fn select_folder_entry(
 fn entries_from_browse(
     current_path: String,
     parent_path: Option<String>,
-    entries: Vec<FsEntry>,
+    entries: Vec<FsTreeEntry>,
     modal: &Entity<CommandPaletteModal>,
     on_select_project: &Option<Rc<dyn Fn(String, &mut Window, &mut App)>>,
 ) -> Vec<PaletteEntry> {
@@ -221,7 +221,7 @@ fn entries_from_browse(
     // "Use this folder" (row 1) is the only way to add the project.
     // Cap the listing so huge home directories stay snappy in the palette.
     const MAX_DIRS: usize = 200;
-    let mut dirs: Vec<FsEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
+    let mut dirs: Vec<FsTreeEntry> = entries.into_iter().filter(|e| e.is_dir).collect();
     dirs.sort_by(|a, b| {
         a.name
             .to_ascii_lowercase()

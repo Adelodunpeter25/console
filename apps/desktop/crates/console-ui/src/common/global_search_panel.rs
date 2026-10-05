@@ -94,7 +94,7 @@ pub struct GlobalSearchPanel {
     has_searched: bool,
     loading: bool,
     search_generation: u64,
-    on_open_match: Option<Rc<dyn Fn(&str, u64, &mut Window, &mut App)>>,
+    on_open_match: Option<Rc<dyn Fn(&str, u32, &mut Window, &mut App)>>,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -126,7 +126,7 @@ impl GlobalSearchPanel {
     /// (joined with root by the caller if needed) and 1-based line number.
     pub fn set_on_open_match(
         &mut self,
-        callback: impl Fn(&str, u64, &mut Window, &mut App) + 'static,
+        callback: impl Fn(&str, u32, &mut Window, &mut App) + 'static,
         _cx: &mut Context<Self>,
     ) {
         self.on_open_match = Some(Rc::new(callback));
@@ -218,10 +218,10 @@ impl GlobalSearchPanel {
                 this.has_searched = true;
                 match result {
                     Ok(res) => {
-                        this.total_matched = res.total_matched;
+                        this.total_matched = res.total_matched as usize;
                         let groups = group_matches(res.matches);
                         this.matched_files = if res.filtered_files > 0 {
-                            res.filtered_files
+                            res.filtered_files as usize
                         } else {
                             groups.len()
                         };
@@ -347,8 +347,8 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
     let mut segments: Vec<gpui::AnyElement> = Vec::new();
     let mut cursor = 0usize;
     for range in &m.match_ranges {
-        let start = range.start.min(clean_content.len());
-        let end = range.end.min(clean_content.len());
+        let start = (range.start as usize).min(clean_content.len());
+        let end = (range.end as usize).min(clean_content.len());
         if start < cursor || start > end {
             continue;
         }

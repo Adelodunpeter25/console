@@ -1,20 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+use console_proto::FileSearchResult;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlashCommandInfo {
     pub name: String,
     pub description: String,
     pub builtin: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FileSearchResult {
-    pub relative_path: String,
-    pub absolute_path: String,
-    pub is_dir: bool,
-    pub score: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
