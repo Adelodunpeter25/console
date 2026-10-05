@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Project script definitions and runs (/api/projects/:id/scripts/*).
+// Sixth domain, desktop + server only (mobile has no scripts client).
+//
+// Status values and output streams stay plain strings (running/succeeded/
+// failed/stopped, stdout/stderr), matching the usage-domain decision:
+// proto enums would rename them and force every reader over at once, while
+// every reader already tolerates the closed vocabulary. Timestamps were
+// always ISO strings; exit codes stay JSON numbers.
+//
+// Two deliberate trims from the old shapes: the exit signal (unread by every
+// client) is gone, and an unset shortcut encodes as "" rather than null —
+// proto3 cannot emit null, and "" keeps older clients parsing (the desktop
+// normalizes it back to unset; the shortcut matcher already ignored it).
+message ProjectScript {
+  string id = 1;
+  string label = 2;
+  string command = 3;
+  // Empty means no shortcut (never omitted, never null).
+  optional string shortcut = 4;
+  bool persistent = 5;
+}
+
+message ProjectScriptsResult {
+  string project_id = 1;
+  repeated ProjectScript scripts = 2;
+  // "console.toml" when parsed from file, "missing" when absent.
+  string source = 3;
+}
+
+message ScriptRun {
+  string run_id = 1;
+  string project_id = 2;
+  string script_id = 3;
+  string label = 4;
+  bool persistent = 5;
+  string status = 6;
+  string started_at = 7;
+  optional string ended_at = 8;
+  optional int32 exit_code = 9;
+  string stdout = 10;
+  string stderr = 11;
+}
+
+message ScriptStatusEvent {
+  string status = 1;
+}
+
+message ScriptOutputEvent {
+  string stream = 1;
+  string text = 2;
+}
+
+message ScriptExitEvent {
+  string status = 1;
+  optional int32 exit_code = 2;
+}
+
+// Live stream frames. The SSE event name (status/output/exit) is derived
+// from the set variant; the data payload is the protojson object, so frames
+// change from {"type":"status",...} to {"status":{...}}.
+message ScriptRunEvent {
+  oneof event {
+    ScriptStatusEvent status = 1;
+    ScriptOutputEvent output = 2;
+    ScriptExitEvent exit = 3;
+  }
+}
+
+message StopScriptRunResponse {
+  bool stopped = 1;
+}

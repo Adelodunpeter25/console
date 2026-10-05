@@ -1,0 +1,1 @@
+{"projectId":"p1","scripts":[{"id":"dev","label":"Dev server","command":"bun dev","shortcut":"","persistent":true}],"source":"console.toml"}
