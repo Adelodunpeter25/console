@@ -31,12 +31,6 @@ type FsChangeEvent struct {
 	EventPath   string `json:"eventPath,omitempty"`
 }
 
-type FilePreviewBlock struct {
-	Kind    string `json:"kind"`
-	Title   string `json:"title"`
-	Message string `json:"message"`
-}
-
 // GrepMatchRange is a half-open byte range within GrepMatch.LineContent,
 // used by the UI to bold the matched substring in place.
 type GrepMatchRange struct {

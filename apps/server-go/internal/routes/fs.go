@@ -1,8 +1,16 @@
 // File browser & operations routes (/api/fs/*). Port of
 // apps/server/api/src/routes/fs.ts.
+//
+// Seventh domain on the shared protobuf schema. All JSON payloads are built
+// from console.v1 generated types; the {success, data} envelope, SSE framing,
+// ETag/304 behavior, and raw-bytes endpoints are unchanged. Trimmed shapes
+// (see proto/console/v1/fs.proto): entry git status, Rust-only modified_at
+// and is_binary, and window duration never crossed populated and are gone;
+// grep counts narrow to uint32 so they stay JSON numbers.
 package routes
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,16 +18,67 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.FsWatchService) {
+func fsTreeEntryToProto(e types.FsTreeEntry) *consolev1.FsTreeEntry {
+	out := &consolev1.FsTreeEntry{Name: e.Name, Path: e.Path, IsDir: e.IsDir}
+	if e.Size != nil {
+		out.Size = func() *uint64 { v := uint64(*e.Size); return &v }()
+	}
+	for _, c := range e.Children {
+		out.Children = append(out.Children, fsTreeEntryToProto(c))
+	}
+	return out
+}
+
+func fsEntriesToProto(list []types.FsTreeEntry) []*consolev1.FsTreeEntry {
+	out := make([]*consolev1.FsTreeEntry, 0, len(list))
+	for _, e := range list {
+		out = append(out, fsTreeEntryToProto(e))
+	}
+	return out
+}
+
+func grepResultToProto(r types.GrepResult) *consolev1.GrepResult {
+	out := &consolev1.GrepResult{
+		TotalMatched: uint32(r.TotalMatched), FilteredFiles: uint32(r.FilteredFiles),
+		NextCursor: r.NextCursor, HasMore: r.HasMore,
+	}
+	if r.RegexError != "" {
+		out.RegexError = &r.RegexError
+	}
+	for _, m := range r.Matches {
+		match := &consolev1.GrepMatch{
+			RelPath: m.RelPath, LineNumber: uint32(m.LineNumber), LineContent: m.LineContent,
+		}
+		for _, rng := range m.MatchRanges {
+			match.MatchRanges = append(match.MatchRanges, &consolev1.GrepMatchRange{
+				Start: uint32(rng.Start), End: uint32(rng.End),
+			})
+		}
+		out.Matches = append(out.Matches, match)
+	}
+	return out
+}
+
+func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.FsWatchService) {
 	h := app.Group("/api/fs")
 
 	ok := func(c *fiber.Ctx, data any) error {
 		return c.JSON(fiber.Map{"success": true, "data": data})
+	}
+	okProto := func(c *fiber.Ctx, msg proto.Message) error {
+		raw, err := protoMarshal.Marshal(msg)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return ok(c, json.RawMessage(raw))
 	}
 	fail := func(c *fiber.Ctx, status int, err error) error {
 		resp := fiber.Map{"success": false, "error": err.Error()}
@@ -39,7 +98,11 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, result)
+		msg := &consolev1.FsBrowseResult{CurrentPath: result.CurrentPath, Entries: fsEntriesToProto(result.Entries)}
+		if result.ParentPath != nil {
+			msg.ParentPath = result.ParentPath
+		}
+		return okProto(c, msg)
 	})
 
 	// GET /api/fs/search
@@ -54,7 +117,18 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, items)
+		out := make([]*consolev1.FileSearchResult, 0, len(items))
+		for _, item := range items {
+			out = append(out, &consolev1.FileSearchResult{
+				RelativePath: item.RelativePath, AbsolutePath: item.AbsolutePath,
+				IsDir: item.IsDir, Score: item.Score,
+			})
+		}
+		data, err := marshalProtoList(out)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return ok(c, data)
 	})
 
 	// GET /api/fs/grep — content search for the global search panel
@@ -94,7 +168,7 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			}
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, result)
+		return okProto(c, grepResultToProto(result))
 	})
 
 	// GET /api/fs/entries
@@ -113,7 +187,11 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, entries)
+		data, err := marshalProtoList(fsEntriesToProto(entries))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return ok(c, data)
 	})
 
 	// GET /api/fs/tree
@@ -130,7 +208,7 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, fiber.Map{"path": dirPath, "treeFormatted": tree})
+		return okProto(c, &consolev1.FsDirectoryTree{Path: dirPath, TreeFormatted: tree})
 	})
 
 	// GET /api/fs/file/raw — raw bytes for image/SVG preview with ETag/304.
@@ -174,23 +252,20 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		}
 		c.Set("ETag", etag)
 		c.Set("Cache-Control", "private, max-age=5")
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"path": filePath, "content": result.Content}})
+		return okProto(c, &consolev1.FsFileContent{Path: filePath, Content: result.Content})
 	})
 
 	// POST /api/fs/file
 	h.Post("/file", func(c *fiber.Ctx) error {
-		var body struct {
-			Path    string `json:"path"`
-			Content string `json:"content"`
-		}
-		if err := c.BodyParser(&body); err != nil || body.Path == "" {
+		var body consolev1.WriteFileRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil || body.Path == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Field 'path' is required."))
 		}
 		msg, err := fs.WriteFileContent(body.Path, body.Content)
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, fiber.Map{"path": body.Path, "message": msg})
+		return okProto(c, &consolev1.FileWriteResponse{Path: body.Path, Message: msg})
 	})
 
 	// DELETE /api/fs/file
@@ -202,21 +277,19 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if _, err := fs.DeleteFile(filePath); err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, fiber.Map{"path": filePath, "deleted": true})
+		return okProto(c, &consolev1.FileDeleteResponse{Path: filePath, Deleted: true})
 	})
 
 	// POST /api/fs/dir
 	h.Post("/dir", func(c *fiber.Ctx) error {
-		var body struct {
-			Path string `json:"path"`
-		}
-		if err := c.BodyParser(&body); err != nil || body.Path == "" {
+		var body consolev1.CreateDirRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil || body.Path == "" {
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Field 'path' is required."))
 		}
 		if _, err := fs.CreateDirectory(body.Path); err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, fiber.Map{"path": body.Path, "created": true})
+		return okProto(c, &consolev1.DirCreateResponse{Path: body.Path, Created: true})
 	})
 
 	// DELETE /api/fs/dir
@@ -228,7 +301,7 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if _, err := fs.DeleteDirectory(dirPath); err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		return ok(c, fiber.Map{"path": dirPath, "deleted": true})
+		return okProto(c, &consolev1.DirDeleteResponse{Path: dirPath, Deleted: true})
 	})
 
 	// GET /api/fs/watch — SSE stream of debounced fsChange events.
@@ -248,7 +321,15 @@ func registerFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			for {
 				select {
 				case evt := <-events:
-					if err := sse.Send("fsChange", mustJSON(evt)); err != nil {
+					msg := &consolev1.FsChangeEvent{Type: evt.Type, ProjectPath: evt.ProjectPath}
+					if evt.EventPath != "" {
+						msg.EventPath = &evt.EventPath
+					}
+					raw, err := protoMarshal.Marshal(msg)
+					if err != nil {
+						return
+					}
+					if err := sse.Send("fsChange", string(raw)); err != nil {
 						return
 					}
 				case <-ticker.C:
@@ -282,7 +363,7 @@ func asErr(err error, target **services.PreviewBlocked) bool {
 
 func previewStatus(err error) int {
 	var blocked *services.PreviewBlocked
-	if errorsAs(err, &blocked) {
+	if ok := errorsAs(err, &blocked); ok {
 		return blocked.Status
 	}
 	return fiber.StatusBadRequest

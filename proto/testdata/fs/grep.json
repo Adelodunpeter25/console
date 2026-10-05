@@ -1,0 +1,1 @@
+{"matches":[{"relPath":"src/a.go","lineNumber":12,"lineContent":"foo bar","matchRanges":[{"start":4,"end":7}]}],"totalMatched":3,"filteredFiles":1,"nextCursor":200,"hasMore":true}

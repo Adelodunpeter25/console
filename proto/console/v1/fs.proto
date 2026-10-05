@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Filesystem browser and operations (/api/fs/*). Seventh domain;
+// desktop + server + mobile where each is used.
+//
+// Trimmed from the old provider-mirror shapes, per audit:
+// - size stays (mobile's preview cap reads it) but as uint64, so it
+//   encodes as a protojson string; entry git status, Rust-only modified_at
+//   and is_binary never crossed the wire populated and are gone.
+// - grep/line counts are uint32 (no file has 4B lines), so they stay JSON
+//   numbers with zero wire change.
+// - grep modes, case modes, and paging knobs travel as URL query strings,
+//   never JSON bodies: they stay hand-written client enums, documented here
+//   for parity. Known grep modes: regex (default), plain, fuzzy. Known case
+//   modes: smart (default), sensitive, insensitive.
+// - tree responses stay a pre-rendered string; the tree structure never
+//   crosses the wire. file/raw bytes and ETag/304 caching are transport,
+//   not schema.
+// - the exit-signal-style freebies are out: server FilePreviewBlock was
+//   defined but never sent (mobile builds its own client-side); unifying
+//   preview authority is a later behavior change, not this migration.
+message FsTreeEntry {
+  string name = 1;
+  string path = 2;
+  bool is_dir = 3;
+  optional uint64 size = 4;
+  repeated FsTreeEntry children = 5;
+}
+
+message FsBrowseResult {
+  string current_path = 1;
+  optional string parent_path = 2;
+  repeated FsTreeEntry entries = 3;
+}
+
+message FsDirectoryTree {
+  string path = 1;
+  string tree_formatted = 2;
+}
+
+message FileSearchResult {
+  string relative_path = 1;
+  string absolute_path = 2;
+  bool is_dir = 3;
+  double score = 4;
+}
+
+message FsFileContent {
+  string path = 1;
+  string content = 2;
+}
+
+message WriteFileRequest {
+  string path = 1;
+  string content = 2;
+}
+
+message FileWriteResponse {
+  string path = 1;
+  string message = 2;
+}
+
+message FileDeleteResponse {
+  string path = 1;
+  bool deleted = 2;
+}
+
+message CreateDirRequest {
+  string path = 1;
+}
+
+message DirCreateResponse {
+  string path = 1;
+  bool created = 2;
+}
+
+message DirDeleteResponse {
+  string path = 1;
+  bool deleted = 2;
+}
+
+// Debounced watch-stream frames (desktop-only consumer). The SSE event name
+// stays "fsChange"; the type field is kept so payload bytes are unchanged.
+message FsChangeEvent {
+  string type = 1;
+  string project_path = 2;
+  optional string event_path = 3;
+}
+
+message GrepMatchRange {
+  uint32 start = 1;
+  uint32 end = 2;
+}
+
+message GrepMatch {
+  string rel_path = 1;
+  uint32 line_number = 2;
+  string line_content = 3;
+  repeated GrepMatchRange match_ranges = 4;
+}
+
+message GrepResult {
+  repeated GrepMatch matches = 1;
+  uint32 total_matched = 2;
+  uint32 filtered_files = 3;
+  uint32 next_cursor = 4;
+  bool has_more = 5;
+  optional string regex_error = 6;
+}
