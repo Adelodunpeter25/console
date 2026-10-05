@@ -14,7 +14,7 @@
 
 use std::path::PathBuf;
 
-use cef::{args::Args, library_loader::LibraryLoader, CefString, ImplCommandLine};
+use cef::{args::Args, library_loader::LibraryLoader, CefString};
 use objc2::rc::Retained;
 use objc2_foundation::NSTimer;
 
@@ -32,22 +32,42 @@ pub struct CefRuntime {
 }
 
 /// True when this process was re-executed as a CEF helper (renderer, GPU,
-/// ...). CEF marks helpers with a `--type=...` switch.
+/// ...). Detected by scanning argv for CEF's `--type=...` switch directly:
+/// this must not call any CEF API, because the framework is not loaded yet
+/// at process entry (`command_line_create` would jump through a null
+/// function pointer and segfault).
 pub fn is_helper_process() -> bool {
-    let args = Args::new();
-    args.as_cmd_line()
-        .is_some_and(|cmd| cmd.has_switch(Some(&CefString::from("type"))) == 1)
+    std::env::args()
+        .skip(1)
+        .any(|arg| arg == "--type" || arg.starts_with("--type="))
 }
 
 /// Run the CEF helper entry point. Returns `Some(exit_code)` when this
 /// process is a helper; the caller (`main`) must exit with that code without
-/// initializing the app. Returns `None` in the browser process.
+/// initializing the app. Returns `None` in the browser process. A helper
+/// that cannot load the framework reports exit code 1 instead of falling
+/// through into a second app instance.
 pub fn run_helper_process() -> Option<i32> {
     if !is_helper_process() {
         return None;
     }
-    let args = Args::new();
+    let exe = std::env::current_exe().ok()?;
+    // Helpers live at `Frameworks/<name>.app/Contents/MacOS/<name>`, so the
+    // framework resolves three levels up (mirrors `LibraryLoader`'s helper
+    // layout). Pre-check before constructing it: the constructor panics on a
+    // missing path.
+    let framework_dylib = exe
+        .parent()?
+        .join("../../../Chromium Embedded Framework.framework/Chromium Embedded Framework");
+    if !framework_dylib.is_file() {
+        return Some(1);
+    }
+    let library = LibraryLoader::new(&exe, true);
+    if !library.load() {
+        return Some(1);
+    }
     let _ = cef::api_hash(cef::sys::CEF_API_VERSION_LAST, 0);
+    let args = Args::new();
     Some(cef::execute_process(
         Some(args.as_main_args()),
         None,
@@ -55,27 +75,72 @@ pub fn run_helper_process() -> Option<i32> {
     ))
 }
 
+/// Bundle locations CEF needs, derived from the running executable. All
+/// paths follow the layout `scripts/build.sh --cef` assembles:
+/// `<App>.app/Contents/{MacOS/console, Frameworks/...}`.
+pub struct BundlePaths {
+    /// `.../Frameworks/Chromium Embedded Framework.framework`.
+    pub framework_dir: PathBuf,
+    /// `.../Frameworks/console Helper.app/Contents/MacOS/console Helper`:
+    /// our own binary, re-executed by CEF for subprocesses. The helper base
+    /// name tracks the binary stem (not the display name) so dev and prod
+    /// bundles resolve identically.
+    pub helper_exe: PathBuf,
+}
+
+/// Resolve bundle locations for a bundled browser process. `None` when this
+/// binary is not inside an app bundle (development `cargo run`).
+fn bundle_paths() -> Option<BundlePaths> {
+    let exe = std::env::current_exe().ok()?;
+    let macos_dir = exe.parent()?;
+    let frameworks = macos_dir.join("../Frameworks").canonicalize().ok()?;
+    let framework_dir = frameworks.join("Chromium Embedded Framework.framework");
+    if !framework_dir.is_dir() {
+        return None;
+    }
+    let stem = exe
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .filter(|stem| !stem.is_empty())?;
+    let helper_name = format!("{stem} Helper");
+    let helper_exe = frameworks
+        .join(format!("{helper_name}.app/Contents/MacOS/{helper_name}"))
+        .canonicalize()
+        .ok()
+        .filter(|path| path.is_file())?;
+    Some(BundlePaths {
+        framework_dir,
+        helper_exe,
+    })
+}
+
 /// Location of the framework dylib for a bundled browser process, mirroring
 /// `LibraryLoader`'s `<exe>/../Frameworks` resolution. `None` when this
 /// binary is not inside an app bundle (development `cargo run`).
 fn framework_library_path() -> Option<PathBuf> {
-    let dir = std::env::current_exe().ok()?;
-    let dir = dir.parent()?;
-    dir.join("../Frameworks")
-        .join("Chromium Embedded Framework.framework/Chromium Embedded Framework")
+    let paths = bundle_paths()?;
+    let library = paths
+        .framework_dir
+        .join("Chromium Embedded Framework")
         .canonicalize()
-        .ok()
-        .filter(|path| path.is_file())
+        .ok()?;
+    library.is_file().then_some(library)
 }
 
 impl CefRuntime {
     /// Initialize CEF in the browser process. Must be called on the main
     /// thread before creating any browser. Returns `None` for helper
     /// processes and for unbundled development binaries. No `App` handler is
-    /// passed yet; the one owning `BrowserProcessHandler` arrives with
-    /// browser creation (later slice).
+    /// passed: the message loop is pumped by the `NSTimer` installed in
+    /// `ensure_initialized`, which is the documented `CefDoMessageLoopWork`
+    /// integration (an `external_message_pump` handler would be a later
+    /// efficiency tuning, not a correctness need).
     pub fn initialize() -> Option<Self> {
-        if is_helper_process() || framework_library_path().is_none() {
+        if is_helper_process() {
+            return None;
+        }
+        let paths = bundle_paths()?;
+        if framework_library_path().is_none() {
             return None;
         }
         let exe = std::env::current_exe().ok()?;
@@ -85,11 +150,15 @@ impl CefRuntime {
         }
         let _ = cef::api_hash(cef::sys::CEF_API_VERSION_LAST, 0);
         let args = Args::new();
+        let framework_dir = paths.framework_dir.to_string_lossy().into_owned();
+        let helper_exe = paths.helper_exe.to_string_lossy().into_owned();
         let settings = cef::Settings {
             // The macOS sandbox needs an endorsed helper plus entitlements;
-            // that ships with helper packaging (later slice). Until then the
+            // that ships with distribution signing (later). Until then the
             // browser process runs unsandboxed, like our dev builds.
             no_sandbox: 1,
+            framework_dir_path: CefString::from(framework_dir.as_str()),
+            browser_subprocess_path: CefString::from(helper_exe.as_str()),
             ..Default::default()
         };
         let ok = cef::initialize(
