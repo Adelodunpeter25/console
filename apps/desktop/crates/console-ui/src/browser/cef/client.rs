@@ -11,12 +11,14 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use cef::{
-    Browser, BrowserSettings, CefString, Client, DictionaryValue, DisplayHandler, Errorcode, Frame,
-    ImplBrowser, ImplClient, ImplDisplayHandler, ImplFrame, ImplLifeSpanHandler, ImplLoadHandler,
-    LifeSpanHandler, LoadHandler, LogSeverity, PopupFeatures, WindowInfo, WindowOpenDisposition,
-    WrapClient, WrapDisplayHandler, WrapLifeSpanHandler, WrapLoadHandler,
+    Browser, BrowserSettings, CefString, Client, ContextMenuHandler, ContextMenuParams,
+    DictionaryValue, DisplayHandler, Errorcode, Frame, ImplBrowser, ImplClient,
+    ImplContextMenuHandler, ImplDisplayHandler, ImplFrame, ImplLifeSpanHandler, ImplLoadHandler,
+    ImplMenuModel, LifeSpanHandler, LoadHandler, LogSeverity, MenuModel, PopupFeatures, WindowInfo,
+    WindowOpenDisposition, WrapClient, WrapContextMenuHandler, WrapDisplayHandler,
+    WrapLifeSpanHandler, WrapLoadHandler,
 };
-use cef::{wrap_client, wrap_display_handler, wrap_life_span_handler, wrap_load_handler};
+use cef::{wrap_client, wrap_context_menu_handler, wrap_display_handler, wrap_life_span_handler, wrap_load_handler};
 use cef::rc::Rc as CefRc;
 
 use crate::browser::host::NativeNavigationError;
@@ -93,6 +95,10 @@ wrap_client! {
     }
 
     impl Client {
+        fn context_menu_handler(&self) -> Option<ContextMenuHandler> {
+            Some(ConsoleContextMenuHandler::new(self.shared.clone()))
+        }
+
         fn display_handler(&self) -> Option<DisplayHandler> {
             Some(ConsoleDisplayHandler::new(self.shared.clone()))
         }
@@ -103,6 +109,32 @@ wrap_client! {
 
         fn load_handler(&self) -> Option<LoadHandler> {
             Some(ConsoleLoadHandler::new(self.shared.clone()))
+        }
+    }
+}
+
+wrap_context_menu_handler! {
+    struct ConsoleContextMenuHandler {
+        shared: SharedRef,
+    }
+
+    impl ContextMenuHandler {
+        fn on_before_context_menu(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _params: Option<&mut ContextMenuParams>,
+            model: Option<&mut MenuModel>,
+        ) {
+            // Interim: suppress the native context menu. Showing it crashes
+            // inside CEF on right-click (unrecognized selector on a dead
+            // object during menu handling); clearing the model avoids the
+            // native menu path entirely. A custom menu is a later slice.
+            let _ = &self.shared;
+            if let Some(model) = model {
+                model.clear();
+            }
+            log::debug!("CEF: context menu suppressed");
         }
     }
 }
