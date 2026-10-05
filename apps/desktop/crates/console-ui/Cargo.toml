@@ -4,6 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+# `cef-browser` swaps the embedded browser backend from wry/WKWebView to
+# Chromium via the `cef` crate. Off by default: enabling it downloads and
+# links the full CEF distribution, so default builds stay on wry until the
+# migration lands.
+cef-browser = ["dep:cef"]
+
 [dependencies]
 gpui = { workspace = true }
 gpui_macros = { workspace = true }
@@ -28,6 +35,8 @@ tiny-skia = "0.11.4"
 imagesize = "0.14"
 # Pinned to a rev for reproducible builds (was floating on termy main).
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
+# Optional: only built with `--features cef-browser` (see [features] above).
+cef = { version = "154.4.0", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 wry = { version = "0.56", features = ["devtools"] }

@@ -7,6 +7,8 @@
 mod actions;
 pub mod address;
 pub mod agent_script;
+#[cfg(all(target_os = "macos", feature = "cef-browser"))]
+pub mod cef;
 pub mod host;
 pub mod inspector;
 pub mod view;
