@@ -45,8 +45,17 @@ impl ProjectScriptsService {
             .await
             .context("Failed to parse project scripts")?;
         if body.success {
-            body.data
-                .ok_or_else(|| anyhow!("Project scripts response contained no data"))
+            let mut result = body
+                .data
+                .ok_or_else(|| anyhow!("Project scripts response contained no data"))?;
+            // The wire encodes unset shortcuts as "" (proto3 cannot emit
+            // null); normalize back so downstream None semantics hold.
+            for script in &mut result.scripts {
+                if script.shortcut.as_deref() == Some("") {
+                    script.shortcut = None;
+                }
+            }
+            Ok(result)
         } else {
             Err(anyhow!(body.error.unwrap_or_else(|| {
                 "Failed to fetch project scripts".into()

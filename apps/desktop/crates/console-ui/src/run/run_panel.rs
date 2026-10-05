@@ -7,7 +7,6 @@
 
 use std::rc::Rc;
 
-use console_core::ScriptRunStatus;
 use gpui::{
     App, ElementId, InteractiveElement, IntoElement, ListState, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -73,30 +72,33 @@ pub fn display_script_shortcut(shortcut: &str) -> String {
     format!("{prefix}{key}")
 }
 
-/// One-line status summary for a script row.
-pub fn script_row_status_label(status: Option<ScriptRunStatus>, starting: bool) -> &'static str {
+/// One-line status summary for a script row. Unknown statuses render as
+/// "Unknown" rather than failing: the server owns the vocabulary.
+pub fn script_row_status_label(status: Option<String>, starting: bool) -> &'static str {
     if starting {
         return "Starting…";
     }
-    match status {
+    match status.as_deref() {
         None => "Not run yet",
-        Some(ScriptRunStatus::Running) => "Running…",
-        Some(ScriptRunStatus::Succeeded) => "Succeeded",
-        Some(ScriptRunStatus::Failed) => "Failed",
-        Some(ScriptRunStatus::Stopped) => "Stopped",
+        Some("running") => "Running…",
+        Some("succeeded") => "Succeeded",
+        Some("failed") => "Failed",
+        Some("stopped") => "Stopped",
+        Some(_) => "Unknown",
     }
 }
 
-fn status_dot_color(status: Option<ScriptRunStatus>, starting: bool, theme: &Theme) -> gpui::Hsla {
+fn status_dot_color(status: Option<String>, starting: bool, theme: &Theme) -> gpui::Hsla {
     if starting {
         return theme.success;
     }
-    match status {
+    match status.as_deref() {
         None => theme.text_ghost,
-        Some(ScriptRunStatus::Running) => theme.success,
-        Some(ScriptRunStatus::Succeeded) => theme.text_tertiary,
-        Some(ScriptRunStatus::Failed) => theme.danger,
-        Some(ScriptRunStatus::Stopped) => theme.warning,
+        Some("running") => theme.success,
+        Some("succeeded") => theme.text_tertiary,
+        Some("failed") => theme.danger,
+        Some("stopped") => theme.warning,
+        Some(_) => theme.text_ghost,
     }
 }
 
@@ -107,7 +109,7 @@ pub struct RunScriptRow {
     pub label: String,
     pub command: String,
     pub shortcut: Option<String>,
-    pub status: Option<ScriptRunStatus>,
+    pub status: Option<String>,
     pub exit_code: Option<i32>,
     pub starting: bool,
     pub output: String,
@@ -254,10 +256,11 @@ impl RenderOnce for RunPanel {
             let script_id = row.script_id.clone();
             let expand_id = row.script_id.clone();
             let toggle_id = row.script_id.clone();
-            let is_running = row.status == Some(ScriptRunStatus::Running);
-            let dot = status_dot_color(row.status, row.starting, &theme);
-            let mut status_text = script_row_status_label(row.status, row.starting).to_string();
-            if row.status.is_some_and(|status| status.is_terminal())
+            let is_running = row.status.as_deref() == Some("running");
+            let dot = status_dot_color(row.status.clone(), row.starting, &theme);
+            let mut status_text =
+                script_row_status_label(row.status.clone(), row.starting).to_string();
+            if row.status.as_ref().is_some_and(|status| status != "running")
                 && let Some(code) = row.exit_code
             {
                 status_text = format!("{status_text} ({code})");

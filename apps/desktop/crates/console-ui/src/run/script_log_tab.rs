@@ -1,6 +1,5 @@
 //! Dedicated output tab for a project script.
 
-use console_core::ScriptRunStatus;
 use gpui::{App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px};
 
 use crate::markdown::render::MONO_FAMILY;
@@ -12,7 +11,7 @@ use crate::run::RunOutputView;
 pub struct ScriptLogTab {
     pub label: String,
     pub command: String,
-    pub status: Option<ScriptRunStatus>,
+    pub status: Option<String>,
     pub exit_code: Option<i32>,
     pub starting: bool,
     pub output: String,

@@ -1,7 +1,7 @@
 //! The usage panel: a dropdown showing detailed quota limits for the active
 //! provider. Displays progress bars for each limit, reset times, and status colors.
 
-use console_core::{ContextSnapshot, UsageLimit, UsageLimitExt, UsageReport};
+use console_core::{ContextSnapshot, UsageLimit, UsageReport};
 use gpui::{
     App, Div, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
     relative,

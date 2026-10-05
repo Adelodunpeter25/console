@@ -7,7 +7,8 @@
 use std::collections::{HashMap, HashSet};
 
 use console_core::{
-    ProjectScript, ScriptRun, ScriptRunEvent, ScriptRunStatus, compute_shortcut_state,
+    ProjectScript, ScriptRun, ScriptRunEvent, ScriptRunEventKind, compute_shortcut_state,
+    script_run_is_terminal,
 };
 use console_ui::run::{push_run_output, truncate_run_output_head};
 use gpui::{Context, Keystroke};
@@ -15,7 +16,7 @@ use gpui::{Context, Keystroke};
 use super::ConsoleDesktopApp;
 
 /// Latest known run for one script row, plus its rendered output tail.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct ProjectScriptRunView {
     pub run: Option<ScriptRun>,
     pub output: String,
@@ -23,7 +24,7 @@ pub struct ProjectScriptRunView {
 }
 
 /// Everything the Run tab needs for one project.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct ProjectScriptsPanelState {
     pub scripts: Vec<ProjectScript>,
     /// `"console.toml"` or `"missing"`, straight from the list response.
@@ -194,11 +195,11 @@ impl ConsoleDesktopApp {
                                 // lag the stream's own events. Terminal
                                 // snapshots are server truth and must always
                                 // win over a stale local running view.
-                                let owned = run.status == ScriptRunStatus::Running
+                                let owned = run.status == "running"
                                     && state.runs.get(&run.script_id).is_some_and(|view| {
                                         view.run.as_ref().is_some_and(|current| {
                                             current.run_id == run.run_id
-                                                && current.status == ScriptRunStatus::Running
+                                                && current.status == "running"
                                         })
                                     });
                                 if !owned {
@@ -221,7 +222,7 @@ impl ConsoleDesktopApp {
                                 .filter(|(_, view)| {
                                     view.run
                                         .as_ref()
-                                        .is_some_and(|run| run.status == ScriptRunStatus::Running)
+                                        .is_some_and(|run| run.status == "running")
                                 })
                                 .map(|(script_id, view)| {
                                     (
@@ -309,7 +310,7 @@ impl ConsoleDesktopApp {
             .get(&project_id)
             .and_then(|state| state.runs.get(script_id))
             .and_then(|view| view.run.as_ref())
-            .is_some_and(|run| run.status == ScriptRunStatus::Running);
+            .is_some_and(|run| run.status == "running");
         if running {
             self.stop_project_script(script_id, cx);
         } else {
@@ -331,7 +332,7 @@ impl ConsoleDesktopApp {
                 || view
                     .run
                     .as_ref()
-                    .is_some_and(|run| run.status == ScriptRunStatus::Running))
+                    .is_some_and(|run| run.status == "running"))
         {
             return;
         }
@@ -409,7 +410,7 @@ impl ConsoleDesktopApp {
             .get(&project_id)
             .and_then(|state| state.runs.get(script_id))
             .and_then(|view| view.run.as_ref())
-            .filter(|run| run.status == ScriptRunStatus::Running)
+            .filter(|run| run.status == "running")
             .map(|run| run.run_id.clone());
         let Some(run_id) = run_id else {
             return;
@@ -548,12 +549,15 @@ impl ConsoleDesktopApp {
                     while let Some(item) = stream.next().await {
                         match item {
                             Ok(event) => {
-                                let done = matches!(
-                                    &event,
-                                    ScriptRunEvent::Status { status }
-                                    | ScriptRunEvent::Exit { status, .. }
-                                    if status.is_terminal()
-                                );
+                                let done = match &event.event {
+                                    Some(ScriptRunEventKind::Status(e)) => {
+                                        script_run_is_terminal(&e.status)
+                                    }
+                                    Some(ScriptRunEventKind::Exit(e)) => {
+                                        script_run_is_terminal(&e.status)
+                                    }
+                                    _ => false,
+                                };
                                 let _ = cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
@@ -620,7 +624,7 @@ impl ConsoleDesktopApp {
                                                 state.runs.get_mut(&script_id_owned)
                                             && view.run.as_ref().is_some_and(|run| {
                                                 run.run_id == run_id_owned
-                                                    && run.status == ScriptRunStatus::Running
+                                                    && run.status == "running"
                                             })
                                         {
                                             view.run = None;
@@ -661,10 +665,10 @@ impl ConsoleDesktopApp {
             // from the stream. A terminal snapshot is always server
             // truth — the stream can end without delivering the final
             // event — so it replaces even a stale local running view.
-            let stale = run.status == ScriptRunStatus::Running
+            let stale = run.status == "running"
                 && state.runs.get(script_id).is_some_and(|view| {
                     view.run.as_ref().is_some_and(|current| {
-                        current.run_id == run.run_id && current.status == ScriptRunStatus::Running
+                        current.run_id == run.run_id && current.status == "running"
                     })
                 });
             if !stale {
@@ -700,17 +704,18 @@ impl ConsoleDesktopApp {
         if run.run_id != run_id {
             return;
         }
-        match event {
-            ScriptRunEvent::Status { status } => {
-                run.status = *status;
+        match &event.event {
+            Some(ScriptRunEventKind::Status(e)) => {
+                run.status = e.status.clone();
             }
-            ScriptRunEvent::Output { stream: _, text } => {
-                push_run_output(&mut view.output, text);
+            Some(ScriptRunEventKind::Output(e)) => {
+                push_run_output(&mut view.output, &e.text);
             }
-            ScriptRunEvent::Exit { status, exit_code } => {
-                run.status = *status;
-                run.exit_code = *exit_code;
+            Some(ScriptRunEventKind::Exit(e)) => {
+                run.status = e.status.clone();
+                run.exit_code = e.exit_code;
             }
+            None => {}
         }
     }
 }
