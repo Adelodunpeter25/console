@@ -7,7 +7,11 @@ import com.console.mobile.data.model.AuthStatusShim
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.FileSearchResponse
-import com.console.mobile.data.model.FsTreeEntry
+import console.v1.FileSearchResult
+import console.v1.FsBrowseResult
+import console.v1.FsDirectoryTree
+import console.v1.FsFileContent
+import console.v1.FsTreeEntry
 import com.console.mobile.data.model.GitBranchesResponse
 import com.console.mobile.data.model.GitDiffResponse
 import com.console.mobile.data.model.GitStatusSummary
@@ -55,9 +59,9 @@ interface ConsoleApi {
     suspend fun addProject(path: String): ProjectInfo
     suspend fun deleteProject(projectId: String)
     suspend fun getFsBrowse(path: String?, showHidden: Boolean = false): FsBrowseResult
-    suspend fun getFsTree(path: String?): List<FsTreeEntry>
+    suspend fun getFsTree(path: String?): FsDirectoryTree
     suspend fun getFsEntries(path: String, depth: Int = 1): List<FsTreeEntry>
-    suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<com.console.mobile.data.model.FileSearchResult>
+    suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<FileSearchResult>
     suspend fun readFile(path: String): FsFileContent
     suspend fun writeFile(path: String, content: String)
     suspend fun deleteFile(path: String)
@@ -106,9 +110,5 @@ interface ConsoleApi {
     suspend fun interactDevice(id: String, platform: String, action: com.console.mobile.data.model.DeviceActionRequest)
 }
 
-@kotlinx.serialization.Serializable
-data class FsBrowseResult(val currentPath: String, val parentPath: String?, val entries: List<FsTreeEntry>)
-@kotlinx.serialization.Serializable
-data class FsFileContent(val content: String, val path: String)
 @kotlinx.serialization.Serializable
 data class LoginUrlResult(val authUrl: String, val state: String, val redirectUri: String)

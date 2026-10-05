@@ -45,7 +45,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.parseFileMentions
-import com.console.mobile.data.model.FileSearchResult
+import console.v1.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
@@ -134,9 +134,9 @@ fun Composer(
         onChange(newText)
     }
 
-    fun applyFileSuggestion(file: com.console.mobile.data.model.FileSearchResult, replaceFrom: Int) {
-        confirmedPaths = confirmedPaths + file.relativePath
-        applySuggestion("@${file.relativePath} ", replaceFrom)
+    fun applyFileSuggestion(file: console.v1.FileSearchResult, replaceFrom: Int) {
+        confirmedPaths = confirmedPaths + file.relative_path
+        applySuggestion("@${file.relative_path} ", replaceFrom)
     }
 
     val pickImages = rememberAttachmentPicker(sessionId)

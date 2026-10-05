@@ -1,7 +1,7 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
-import com.console.mobile.data.model.FileSearchResult
+import console.v1.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

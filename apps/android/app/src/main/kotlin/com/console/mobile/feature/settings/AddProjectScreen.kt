@@ -60,7 +60,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
     val scope = rememberCoroutineScope()
     var currentPath by remember { mutableStateOf<String?>(null) }
     var parentPath by remember { mutableStateOf<String?>(null) }
-    var dirs by remember { mutableStateOf<List<com.console.mobile.data.model.FsTreeEntry>>(emptyList()) }
+    var dirs by remember { mutableStateOf<List<console.v1.FsTreeEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
@@ -72,9 +72,9 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
         scope.launch {
             try {
                 val res = withContext(Dispatchers.IO) { AppContainer.fsRepository.browseDirectory(path, hidden) }
-                currentPath = res.currentPath
-                parentPath = res.parentPath
-                dirs = res.entries.filter { it.isDir }
+                currentPath = res.current_path
+                parentPath = res.parent_path
+                dirs = res.entries.filter { it.is_dir }
             } catch (e: Exception) {
                 error = e.message ?: "Couldn't list that folder."
             } finally {

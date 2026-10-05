@@ -121,16 +121,16 @@ data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
 @Serializable
 data class SlashCommandInfo(val name: String, val description: String, val builtin: Boolean)
 
-@Serializable
-data class FileSearchResult(
-    val relativePath: String,
-    val absolutePath: String,
-    val isDir: Boolean = false,
-    val score: Double = 0.0,
+// Items are the shared Wire type (console.v1); the wrapper itself stays
+// hand-written until the assist domain migrates, decoded manually in
+// OkHttpConsoleApi.assistSearchFiles. Deliberately NOT @Serializable:
+// kotlinx cannot serialize Wire types, so manual decoding keeps misuse a
+// compile error instead of a runtime one.
+data class FileSearchResponse(
+    val root: String,
+    val query: String,
+    val items: List<console.v1.FileSearchResult> = emptyList(),
 )
-
-@Serializable
-data class FileSearchResponse(val root: String, val query: String, val items: List<FileSearchResult> = emptyList())
 
 // ProjectInfo moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): timestamps now arrive as protojson strings, so the
@@ -152,15 +152,9 @@ data class SessionDetailResponse(
     val nextCursor: Long? = null,
 )
 
-@Serializable
-data class FsTreeEntry(
-    val name: String,
-    val path: String,
-    val isDir: Boolean,
-    val size: Long? = null,
-    val gitStatus: String? = null,
-    val children: List<FsTreeEntry>? = null,
-)
+// FsTreeEntry moved to the shared protobuf schema (console.v1 from
+// proto/console/v1): sizes now arrive as protojson strings, and the
+// never-populated git status is gone. Unset sizes decode as absent.
 
 @Serializable
 data class GitFileEntry(

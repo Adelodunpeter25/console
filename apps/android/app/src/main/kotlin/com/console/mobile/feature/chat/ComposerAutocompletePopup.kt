@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import com.console.mobile.data.model.FileSearchResult
+import console.v1.FileSearchResult
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
@@ -82,7 +82,7 @@ fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
 /** File-mention suggestion row — icon + filename chip (mirrors desktop's file_mention_chip), full path muted alongside. */
 @Composable
 fun FileMentionSuggestionRow(file: FileSearchResult, onClick: () -> Unit) {
-    val filename = file.relativePath.substringAfterLast('/')
+    val filename = file.relative_path.substringAfterLast('/')
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -98,8 +98,8 @@ fun FileMentionSuggestionRow(file: FileSearchResult, onClick: () -> Unit) {
             FileIcon(filename = filename, sizeDp = 12)
             Text(filename, color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
         }
-        if (file.relativePath != filename) {
-            Text(file.relativePath, color = ConsoleColors.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+        if (file.relative_path != filename) {
+            Text(file.relative_path, color = ConsoleColors.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

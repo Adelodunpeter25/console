@@ -9,8 +9,13 @@ import com.console.mobile.data.model.DeviceActionRequest
 import com.console.mobile.data.model.DeviceDescriptor
 import com.console.mobile.data.model.DeviceDiagnostics
 import com.console.mobile.data.model.FileSearchResponse
-import com.console.mobile.data.model.FileSearchResult
-import com.console.mobile.data.model.FsTreeEntry
+import console.v1.CreateDirRequest
+import console.v1.FileSearchResult
+import console.v1.FsBrowseResult
+import console.v1.FsDirectoryTree
+import console.v1.FsFileContent
+import console.v1.FsTreeEntry
+import console.v1.WriteFileRequest
 import com.console.mobile.data.model.GitBranchesResponse
 import com.console.mobile.data.model.GitDiffResponse
 import com.console.mobile.data.model.GitStatusSummary
@@ -48,6 +53,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
@@ -60,6 +67,13 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
+    private val fsBrowseAdapter = wireMoshi.adapter(FsBrowseResult::class.java)
+    private val fsTreeAdapter = wireMoshi.adapter(FsDirectoryTree::class.java)
+    private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
+    private val fileSearchAdapter = wireMoshi.adapter(FileSearchResult::class.java)
+    private val fsFileContentAdapter = wireMoshi.adapter(FsFileContent::class.java)
+    private val writeFileAdapter = wireMoshi.adapter(WriteFileRequest::class.java)
+    private val createDirAdapter = wireMoshi.adapter(CreateDirRequest::class.java)
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -173,17 +187,27 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                 "hidden" to if (showHidden) "true" else null,
             ),
         )
-        return http.unwrapOrRaw(raw, FsBrowseResultSerializer, "browse fs")
+        // Envelope stays kotlinx; only the data payload is a Wire type.
+        val data = http.unwrapOrRaw(raw, JsonObject.serializer(), "browse fs")
+        return fsBrowseAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to browse fs")
     }
 
-    override suspend fun getFsTree(path: String?): List<FsTreeEntry> {
+    override suspend fun getFsTree(path: String?): FsDirectoryTree {
         val raw = http.get("/api/fs/tree", mapOf("path" to path))
-        return http.unwrapOrRaw(raw, ListSerializer(FsTreeEntry.serializer()), "load fs tree")
+        val data = http.unwrapOrRaw(raw, JsonObject.serializer(), "load fs tree")
+        return fsTreeAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to load fs tree")
     }
 
     override suspend fun getFsEntries(path: String, depth: Int): List<FsTreeEntry> {
         val raw = http.get("/api/fs/entries", mapOf("path" to path, "depth" to depth.toString()))
-        return http.unwrapOrRaw(raw, ListSerializer(FsTreeEntry.serializer()), "load fs entries")
+        val element = http.unwrapOrRaw(raw, JsonElement.serializer(), "load fs entries")
+        val array = element as? JsonArray ?: throw ApiException("Failed to load fs entries")
+        return array.map { item ->
+            fsEntryAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to load fs entries")
+        }
     }
 
     override suspend fun searchFiles(root: String, query: String, limit: Int, includeDirs: Boolean): List<FileSearchResult> {
@@ -192,7 +216,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             mapOf("root" to root, "q" to query, "limit" to limit.toString(), "includeDirs" to includeDirs.toString()),
         )
         return try {
-            http.unwrapOrRaw(raw, ListSerializer(FileSearchResult.serializer()), "search files")
+            val element = http.unwrapOrRaw(raw, JsonElement.serializer(), "search files")
+            val array = element as? JsonArray ?: return emptyList()
+            array.mapNotNull { item -> fileSearchAdapter.fromJson(item.toString()) }
         } catch (_: Exception) {
             emptyList()
         }
@@ -200,14 +226,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun readFile(path: String): FsFileContent {
         val raw = http.get("/api/fs/file", mapOf("path" to path))
-        return http.unwrapOrRaw(raw, FsFileContentSerializer, "read file")
+        val data = http.unwrapOrRaw(raw, JsonObject.serializer(), "read file")
+        return fsFileContentAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to read file")
     }
 
     override suspend fun writeFile(path: String, content: String) {
-        val body = buildJsonObject {
-            put("path", path)
-            put("content", content)
-        }.toString()
+        // Same bytes as the old hand-built object: path, content.
+        val body = writeFileAdapter.toJson(WriteFileRequest(path = path, content = content))
         val raw = http.post("/api/fs/file", body)
         http.unwrapOrRaw(raw, JsonElement.serializer(), "write file")
     }
@@ -218,7 +244,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun createDir(path: String) {
-        val body = buildJsonObject { put("path", path) }.toString()
+        val body = createDirAdapter.toJson(CreateDirRequest(path = path))
         val raw = http.post("/api/fs/dir", body)
         http.unwrapOrRaw(raw, JsonElement.serializer(), "create dir")
     }
@@ -309,7 +335,16 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val params = mutableMapOf("q" to query)
         if (root != null) params["root"] = root
         val raw = http.get(path, params)
-        return http.unwrapOrRaw(raw, FileSearchResponse.serializer(), "assist search")
+        // Wrapper stays hand-written until assist migrates: decode the
+        // envelope manually and only the items via the shared Wire type.
+        val obj = http.unwrapOrRaw(raw, JsonObject.serializer(), "assist search")
+        return FileSearchResponse(
+            root = obj["root"]?.jsonPrimitive?.contentOrNull ?: "",
+            query = obj["query"]?.jsonPrimitive?.contentOrNull ?: "",
+            items = obj["items"]?.jsonArray?.mapNotNull { item ->
+                fileSearchAdapter.fromJson(item.toString())
+            } ?: emptyList(),
+        )
     }
 
     // Same reasoning as the git endpoints: an empty/null usage result must mean
@@ -464,8 +499,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     companion object {
-        private val FsBrowseResultSerializer = FsBrowseResult.serializer()
-        private val FsFileContentSerializer = FsFileContent.serializer()
         private val LoginUrlResultSerializer = LoginUrlResult.serializer()
         private val AuthStatusShimSerializer = AuthStatusShim.serializer()
     }

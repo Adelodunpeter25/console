@@ -1,6 +1,6 @@
 package com.console.mobile.data.store
 
-import com.console.mobile.data.model.FsTreeEntry
+import console.v1.FsTreeEntry
 import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.ProviderAuthStatus
 import com.console.mobile.data.model.TerminalSpawnedEvent

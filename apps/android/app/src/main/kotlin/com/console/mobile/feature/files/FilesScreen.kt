@@ -50,7 +50,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.FsTreeEntry
+import console.v1.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
@@ -129,7 +129,7 @@ fun FilesScreen(onBack: () -> Unit) {
             delay(350)
             try {
                 val res = withContext(Dispatchers.IO) { AppContainer.fsRepository.searchFiles(projectRoot, q, 20, true) }
-                searchResults = res.map { FsTreeEntry(name = it.absolutePath.split("/").lastOrNull() ?: it.relativePath, path = it.absolutePath, isDir = it.isDir) }
+                searchResults = res.map { FsTreeEntry(name = it.absolute_path.split("/").lastOrNull() ?: it.relative_path, path = it.absolute_path, is_dir = it.is_dir) }
             } catch (_: Exception) {
                 searchResults = emptyList()
             } finally {
@@ -301,7 +301,7 @@ fun FilesScreen(onBack: () -> Unit) {
                             TreeKind.Empty -> Text("(empty)", color = ConsoleColors.TextMuted, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (8 + row.depth * 18).dp, top = 2.dp, bottom = 6.dp))
                             TreeKind.Entry -> {
                                 val e = row.entry!!
-                                val isLoadingDir = e.isDir && loadingDirs.contains(e.path)
+                                val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
                                 if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
                                     Row(modifier = Modifier.fillMaxWidth().padding(start = (8 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                         CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
@@ -327,10 +327,10 @@ private data class FlatRow(val key: String, val kind: TreeKind, val entry: FsTre
 private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, children: Map<String, List<FsTreeEntry>>): List<FlatRow> {
     val out = mutableListOf<FlatRow>()
     fun visit(list: List<FsTreeEntry>, depth: Int) {
-        val sorted = list.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
+        val sorted = list.sortedWith(compareBy({ !it.is_dir }, { it.name.lowercase() }))
         for (e in sorted) {
             out.add(FlatRow("row:${e.path}", TreeKind.Entry, e, depth))
-            if (e.isDir && expanded.contains(e.path)) {
+            if (e.is_dir && expanded.contains(e.path)) {
                 val kids = children[e.path]
                 if (kids == null) {
                     out.add(FlatRow("loading:${e.path}", TreeKind.Loading, null, depth + 1))
@@ -353,16 +353,16 @@ private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expa
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(shape)
             .background(if (selected) ConsoleColors.Card else Color.Transparent)
             .border(if (selected) 1.dp else 0.dp, if (selected) ConsoleColors.Border else Color.Transparent, shape)
-            .clickable { if (entry.isDir) onPressDir() else onPressFile() }
+            .clickable { if (entry.is_dir) onPressDir() else onPressFile() }
             .padding(start = (8 + depth * 18).dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (entry.isDir) {
+        if (entry.is_dir) {
             Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
         } else {
             Box(modifier = Modifier.size(12.dp))
         }
-        if (entry.isDir) {
+        if (entry.is_dir) {
             Icon(
                 if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
                 contentDescription = null,

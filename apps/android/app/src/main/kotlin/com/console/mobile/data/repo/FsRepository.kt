@@ -1,10 +1,9 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
-import com.console.mobile.data.api.FsBrowseResult
-import com.console.mobile.data.api.FsFileContent
-import com.console.mobile.data.model.FileSearchResult
-import com.console.mobile.data.model.FsTreeEntry
+import console.v1.FileSearchResult
+import console.v1.FsBrowseResult
+import console.v1.FsFileContent
 import com.console.mobile.data.store.FsStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +21,7 @@ class FsRepository(
             val res = api.getFsBrowse(path, showHidden)
             fsState.patch {
                 it.copy(
-                    browsePath = res.currentPath,
+                    browsePath = res.current_path,
                     browseEntries = res.entries,
                     browsing = false,
                 )
@@ -34,12 +33,11 @@ class FsRepository(
         }
     }
 
-    suspend fun getDirectoryTree(path: String?): List<FsTreeEntry> = withContext(Dispatchers.IO) {
+    suspend fun getDirectoryTree(path: String?): String = withContext(Dispatchers.IO) {
         val res = api.getFsTree(path)
-        val formatted = res.joinToString("\n") { formatTreeEntry(it) }
         val key = path ?: ""
-        fsState.patch { it.copy(treesByPath = it.treesByPath + (key to formatted)) }
-        res
+        fsState.patch { it.copy(treesByPath = it.treesByPath + (key to res.tree_formatted)) }
+        res.tree_formatted
     }
 
     suspend fun readFile(path: String): FsFileContent = withContext(Dispatchers.IO) {
@@ -104,11 +102,5 @@ class FsRepository(
         } catch (_: Exception) {
             emptyList()
         }
-    }
-
-    private fun formatTreeEntry(entry: FsTreeEntry, depth: Int = 0): String {
-        val indent = "  ".repeat(depth)
-        val suffix = if (entry.isDir) "/" else ""
-        return "$indent${entry.name}$suffix"
     }
 }
