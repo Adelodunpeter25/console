@@ -108,7 +108,12 @@ impl WebviewHost {
         };
         let window_info =
             WindowInfo {
-                runtime_style: RuntimeStyle::DEFAULT,
+                // ALLOY, not DEFAULT (Chrome): the Chrome runtime manages
+                // child bounds through the Views framework and overrides the
+                // host's `setFrame`, leaving the view floating at its initial
+                // bounds. Alloy leaves the native view fully host-managed,
+                // which `sync_bounds` requires.
+                runtime_style: RuntimeStyle::ALLOY,
                 ..Default::default()
             }
             .set_as_child(
