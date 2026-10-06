@@ -42,6 +42,9 @@ impl SessionHeaderExt for SessionHeader {
 pub struct SessionDetailResponse {
     #[serde(alias = "session")]
     pub header: SessionHeader,
+    /// Decoded from the canonical wire messages; unparseable rows are
+    /// skipped, matching the old untagged leniency for forward growth.
+    #[serde(deserialize_with = "deserialize_messages")]
     pub messages: Vec<AgentMessage>,
     /// Whether older messages exist before the oldest row in `messages`.
     #[serde(default)]
@@ -49,6 +52,18 @@ pub struct SessionDetailResponse {
     /// Rowid cursor for the next older batch; null when at the start of history.
     #[serde(default)]
     pub next_cursor: Option<i64>,
+}
+
+fn deserialize_messages<'de, D>(deserializer: D) -> Result<Vec<AgentMessage>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let wire: Vec<console_proto::AgentMessage> =
+        serde::Deserialize::deserialize(deserializer)?;
+    Ok(wire
+        .into_iter()
+        .filter_map(AgentMessage::from_proto)
+        .collect())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

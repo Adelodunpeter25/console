@@ -1,6 +1,21 @@
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
+// Canonical wire types from the shared protobuf schema
+// (proto/console/v1/message.proto). These hand-written message types are the
+// transcript RENDER models: the UI constructs them optimistically, mutates
+// them while streaming, and matches on them everywhere. They decode from the
+// wire through from_proto constructors below — never derive wire serde.
+// Annotations exist only for replay markup server-side and are dropped here;
+// the desktop never reads them.
+pub use console_proto::{
+    AgentMessage as ProtoAgentMessage, AgentAssistantMessage as ProtoAssistantMessage,
+    AssistantContentPart as ProtoContentPart, ImageAttachment as ProtoImageAttachment,
+    ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
+};
+pub use console_proto::agent_message::Message as ProtoMessageEvent;
+pub use console_proto::assistant_content_part::Part as ProtoPartEvent;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageAttachment {
@@ -52,6 +67,90 @@ pub struct AssistantMessage {
     pub content: Vec<AssistantContentPart>,
     pub stop_reason: Option<String>,
     pub created_at: Option<i64>,
+}
+
+/// Decode helpers from the canonical wire shape into the render models.
+fn decode_json_bytes(bytes: &[u8]) -> serde_json::Value {
+    serde_json::from_slice(bytes).unwrap_or(serde_json::Value::Null)
+}
+
+fn opt_string(s: String) -> Option<String> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+impl AgentMessage {
+    pub fn from_proto(msg: ProtoAgentMessage) -> Option<Self> {
+        match msg.message? {
+            ProtoMessageEvent::User(u) => Some(AgentMessage::User {
+                id: msg.id.clone(),
+                content: u.content.clone(),
+                attachments: if u.attachments.is_empty() {
+                    None
+                } else {
+                    Some(
+                        u.attachments
+                            .iter()
+                            .map(|a| ImageAttachment {
+                                data: a.data.clone(),
+                                mime_type: a.mime_type.clone(),
+                            })
+                            .collect(),
+                    )
+                },
+                context_files: if u.context_files.is_empty() {
+                    None
+                } else {
+                    Some(u.context_files.clone())
+                },
+                created_at: msg.created_at,
+            }),
+            ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
+                id: opt_string(a.id.clone()),
+                content: a.content.iter().filter_map(content_part_from_proto).collect(),
+                stop_reason: opt_string(a.stop_reason.clone()),
+                created_at: msg.created_at,
+            }),
+            ProtoMessageEvent::ToolResult(t) => Some(AgentMessage::ToolResult {
+                results: t
+                    .results
+                    .iter()
+                    .map(|r| ToolResult {
+                        tool_call_id: r.tool_call_id.clone(),
+                        tool_name: r.tool_name.clone(),
+                        content: decode_json_bytes(&r.content),
+                        is_error: r.is_error,
+                    })
+                    .collect(),
+                created_at: msg.created_at,
+            }),
+        }
+    }
+}
+
+fn content_part_from_proto(part: &ProtoContentPart) -> Option<AssistantContentPart> {
+    match part.part.as_ref()? {
+        ProtoPartEvent::Text(t) => Some(AssistantContentPart::Text {
+            text: t.text.clone(),
+            thought_signature: t.thought_signature.clone(),
+        }),
+        ProtoPartEvent::Thinking(t) => Some(AssistantContentPart::Thinking { text: t.text.clone() }),
+        ProtoPartEvent::ToolCall(c) => Some(AssistantContentPart::ToolCall {
+            call: ToolCall {
+                id: c.id.clone(),
+                name: c.name.clone(),
+                arguments: decode_json_bytes(&c.arguments),
+                thought_signature: c.thought_signature.clone(),
+            },
+        }),
+        ProtoPartEvent::Image(i) => Some(AssistantContentPart::Image {
+            data: i.data.clone(),
+            mime_type: i.mime_type.clone(),
+        }),
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -56,6 +56,10 @@ name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 
 [[test]]
+name = "message_json_test"
+path = "tests/message_json_test.rs"
+
+[[test]]
 name = "fs_json_test"
 path = "tests/fs_json_test.rs"
 

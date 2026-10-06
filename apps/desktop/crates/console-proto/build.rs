@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/favorites.proto"),
         proto_root.join("console/v1/fs.proto"),
         proto_root.join("console/v1/git.proto"),
+        proto_root.join("console/v1/message.proto"),
         proto_root.join("console/v1/ports.proto"),
         proto_root.join("console/v1/project.proto"),
         proto_root.join("console/v1/scripts.proto"),

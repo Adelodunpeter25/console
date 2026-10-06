@@ -61,6 +61,10 @@ name = "types_test"
 path = "tests/types/types_test.rs"
 
 [[test]]
+name = "message_convert_test"
+path = "tests/types/message_convert_test.rs"
+
+[[test]]
 name = "file_kind_test"
 path = "tests/types/file_kind_test.rs"
 
