@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Sessions (Phase 3, first slice: todos). Session headers, messages, and
+// content parts follow in later slices of this file.
+//
+// Todo statuses stay plain strings — pending, in_progress, completed —
+// matched literally on all three sides; no enum, no trimming needed.
+message TodoItem {
+  int32 id = 1;
+  string content = 2;
+  string status = 3;
+}

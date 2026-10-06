@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -268,7 +269,17 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(fiber.Map{"success": true, "data": todos})
+		items := make([]*consolev1.TodoItem, 0, len(todos))
+		for _, item := range todos {
+			items = append(items, &consolev1.TodoItem{
+				Id: int32(item.ID), Content: item.Content, Status: item.Status,
+			})
+		}
+		data, err := marshalProtoList(items)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// GET /api/sessions/:id/changes — session file changes with optional turn filter.
