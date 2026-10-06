@@ -527,11 +527,17 @@ impl BrowserView {
     /// removed from the inspector. The entity may be retained elsewhere, so
     /// clearing state here is what makes reopening a fresh browser session.
     pub fn close(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = self.host.clone() {
+        // Take the host instead of cloning it, and drop it on the next tick.
+        // Destroying the native surface inline re-enters Chromium (CEF) while
+        // GPUI is still tearing this entity down; with CEF's NSApplication
+        // conformance that takes the whole app window down with the tab.
+        // `about:blank` is gone too: navigating during teardown fires load
+        // callbacks on a half-dead tab.
+        if let Some(host) = self.host.take() {
             host.stop();
-            host.load_url("about:blank");
             host.set_visible(false);
             host.focus_parent();
+            cx.defer(move |_cx| drop(host));
         }
         self.navigation_requested = false;
         self.current_url = None;

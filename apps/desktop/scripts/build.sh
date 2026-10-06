@@ -258,18 +258,48 @@ if [[ "$WITH_CEF" == true ]]; then
 
     BIN_STEM="$(basename "$MACOS_DIR/console")"
     HELPER_BASE="$BIN_STEM Helper"
+    # CEF re-executes our own binary for every one of the five helpers, so
+    # copying it five times duplicates a ~300MB debug binary (~1.5GB per dev
+    # bundle). Dev bundles therefore share ONE signed helper executable via
+    # hardlinks. Two codesign constraints shape this:
+    #   * codesign replaces the file (severing hardlinks), so the shared inode
+    #     must be signed first, and each helper bundle must declare the same
+    #     CFBundleIdentifier that the inode was signed with.
+    #   * helper bundles are therefore not re-signed one by one below.
+    # Release builds keep real per-helper copies and per-helper identifiers so
+    # each one can be signed and notarized for distribution.
+    if [[ "$IS_RELEASE" == true || "$MODE" == "prod" ]]; then
+        HELPER_LINK=false
+        HELPER_SEED=""
+    else
+        HELPER_LINK=true
+        HELPER_ID="$BUNDLE_ID.helper"
+        HELPER_SEED="$FRAMEWORKS_DIR/.helper-seed"
+        rm -f "$HELPER_SEED"
+        cp "$MACOS_DIR/console" "$HELPER_SEED"
+        codesign --force --sign "$SIGN_IDENTITY" --identifier "$HELPER_ID" "$HELPER_SEED"
+    fi
     for SUFFIX in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
         HELPER_NAME="$HELPER_BASE$SUFFIX"
         HELPER_APP="$FRAMEWORKS_DIR/$HELPER_NAME.app"
         rm -rf "$HELPER_APP"
         mkdir -p "$HELPER_APP/Contents/MacOS" "$HELPER_APP/Contents/Resources"
-        cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
-        chmod +x "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
-        SLUG=$(echo "$SUFFIX" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
-        if [[ -n "$SLUG" ]]; then
-            HELPER_ID="$BUNDLE_ID.helper.$SLUG"
+        if [[ "$HELPER_LINK" == true ]]; then
+            ln "$HELPER_SEED" "$HELPER_APP/Contents/MacOS/$HELPER_NAME" 2>/dev/null \
+                || cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
         else
-            HELPER_ID="$BUNDLE_ID.helper"
+            cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+        fi
+        chmod +x "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+        if [[ "$HELPER_LINK" == true ]]; then
+            HELPER_BUNDLE_ID="$HELPER_ID"
+        else
+            SLUG=$(echo "$SUFFIX" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
+            if [[ -n "$SLUG" ]]; then
+                HELPER_BUNDLE_ID="$BUNDLE_ID.helper.$SLUG"
+            else
+                HELPER_BUNDLE_ID="$BUNDLE_ID.helper"
+            fi
         fi
         cat << PLIST > "$HELPER_APP/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -285,7 +315,7 @@ if [[ "$WITH_CEF" == true ]]; then
     <key>CFBundleDisplayName</key>
     <string>${HELPER_NAME}</string>
     <key>CFBundleIdentifier</key>
-    <string>${HELPER_ID}</string>
+    <string>${HELPER_BUNDLE_ID}</string>
     <key>CFBundleVersion</key>
     <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
@@ -300,6 +330,11 @@ if [[ "$WITH_CEF" == true ]]; then
 </plist>
 PLIST
     done
+    if [[ "$HELPER_LINK" == true ]]; then
+        # The seed is only the source of the hardlinks; it must not ship (or
+        # be sealed by the container signature below).
+        rm -f "$HELPER_SEED"
+    fi
     echo "    Helpers installed: $HELPER_BASE{, (GPU),(Renderer),(Plugin),(Alerts)}"
 fi
 
@@ -315,9 +350,16 @@ sign() {
 }
 if [[ "$WITH_CEF" == true ]]; then
     sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
-    for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
-        sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
-    done
+    if [[ "$HELPER_LINK" == true ]]; then
+        # Dev helpers share one executable signed with the helper identifier
+        # (see section 4b). Re-signing each helper would replace that file and
+        # restore the five full copies this is avoiding.
+        echo "    Helper executable is shared and pre-signed; skipping per-helper signing."
+    else
+        for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
+            sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
+        done
+    fi
 fi
 sign "$APP_DIR" "$MAIN_ENTITLEMENTS"
 

@@ -385,7 +385,10 @@ impl Drop for WebviewHost {
         // its async close is still in flight.
         self.shared.closing.set(true);
         if let Some(host) = self.browser.host() {
-            host.close_browser(1);
+            // Graceful close (0), not force (1): force tears the browser down
+            // synchronously from inside this drop, re-entering CEF mid-GPUI
+            // teardown and taking the app window with it.
+            host.close_browser(0);
         }
         let leaked = self.cef_view.clone();
         std::mem::forget(leaked);
