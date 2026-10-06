@@ -175,7 +175,12 @@ impl WebviewHost {
             cef_view,
             parent_view,
             last_bounds: Cell::new(None),
-            visible: Cell::new(false),
+            // CEF hands us a child view that starts out shown, so the flag must
+            // start `true`: it makes the `set_visible(false)` below really hide
+            // it. With `false`, `set_visible`'s "already in that state" guard
+            // skipped the hide, so a view created for a background tab sat on
+            // screen (800x600, over the chat) until its first show/hide flip.
+            visible: Cell::new(true),
             _responder_observer: responder_observer,
         };
         log::debug!("CEF: browser surface created for {initial_url}");
