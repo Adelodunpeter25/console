@@ -5,7 +5,7 @@ import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.data.model.TodoItem
+import console.v1.TodoItem
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import kotlinx.serialization.Serializable

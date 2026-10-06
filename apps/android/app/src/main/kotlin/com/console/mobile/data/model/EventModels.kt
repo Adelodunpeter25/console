@@ -86,7 +86,9 @@ data class AgentSessionEvent(
     val request: JsonElement? = null,
     val result: ToolResult? = null,
     val results: List<ToolResult>? = null,
-    val items: List<TodoItem>? = null,
+    // Wire TodoItems arrive here as raw JSON (Phase 4 will schema the
+    // event frames); decoded with Moshi in ChatEvents.
+    val items: List<JsonElement>? = null,
     val action: String? = null,
     val summary: String? = null,
     val originalMessageCount: Int? = null,

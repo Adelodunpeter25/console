@@ -28,7 +28,7 @@ import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.SubagentInfo
 import com.console.mobile.data.model.TextPart
-import com.console.mobile.data.model.TodoItem
+import console.v1.TodoItem
 import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.model.encodeBase64
 import com.console.mobile.data.store.ChatStateHolder

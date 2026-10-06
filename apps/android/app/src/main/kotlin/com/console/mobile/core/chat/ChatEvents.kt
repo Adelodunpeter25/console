@@ -9,7 +9,13 @@ import com.console.mobile.data.model.ToolCallPart
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.model.ToolResultMessage
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.TodoItem
 import java.util.UUID
+
+private val todoJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(TodoItem::class.java)
+
 
 fun newMessageId(): String = try {
     UUID.randomUUID().toString()
@@ -171,7 +177,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
         }
         "permissionRequest" -> session // structured payload handled at store layer; keep reducer total
         "askQuestion" -> session
-        "todoUpdate" -> session.copy(todoItems = event.items?.map { com.console.mobile.data.model.TodoItem(it.id, it.content, it.status) } ?: emptyList())
+        "todoUpdate" -> session.copy(todoItems = event.items?.mapNotNull { runCatching { todoJson.fromJson(it.toString()) }.getOrNull() } ?: emptyList())
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
             val msg = event.error?.message ?: "Unknown agent error"

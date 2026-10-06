@@ -39,7 +39,7 @@ import com.console.mobile.data.model.SessionFileChange
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.data.model.TodoItem
+import console.v1.TodoItem
 import com.console.mobile.data.model.UpdateSessionDto
 import java.net.URLEncoder
 import kotlinx.serialization.builtins.ListSerializer
@@ -68,6 +68,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
+    private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
     private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
     private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
     private val gitBranchesAdapter = wireMoshi.adapter(GitBranchesResponse::class.java)
@@ -125,7 +126,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getTodos(id: String): List<TodoItem> {
         val raw = http.get("/api/sessions/${enc(id)}/todos")
-        return http.unwrap(raw, ListSerializer(TodoItem.serializer()), "get session todos")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get session todos")
+        val array = element as? JsonArray ?: throw ApiException("Failed to get session todos")
+        return array.map { item ->
+            todoAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to get session todos")
+        }
     }
 
     override suspend fun getSubagents(id: String): List<SubagentInfo> {

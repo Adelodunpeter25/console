@@ -37,7 +37,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.data.model.TodoItem
+import console.v1.TodoItem
 import com.console.mobile.ui.theme.ConsoleColors
 
 fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {

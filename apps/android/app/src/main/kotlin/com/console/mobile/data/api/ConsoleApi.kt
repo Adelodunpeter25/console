@@ -30,7 +30,7 @@ import com.console.mobile.data.model.SessionFileChange
 import com.console.mobile.data.model.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.SubagentInfo
-import com.console.mobile.data.model.TodoItem
+import console.v1.TodoItem
 import console.v1.UsageReport
 
 fun getRunStreamPath(sessionId: String, since: Long? = null): String {

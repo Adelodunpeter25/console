@@ -2,8 +2,8 @@ package com.console.mobile.data.model
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-data class TodoItem(val id: Int, val content: String, val status: String)
+// TodoItem moved to the shared protobuf schema (console.v1 from
+// proto/console/v1): ids narrow to int32 and stay JSON numbers.
 
 object TodoStatus {
     const val PENDING = "pending"
