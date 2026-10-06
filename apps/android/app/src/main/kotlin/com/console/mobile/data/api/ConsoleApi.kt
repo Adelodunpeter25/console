@@ -50,6 +50,8 @@ interface ConsoleApi {
     suspend fun getTodos(id: String): List<TodoItem>
     suspend fun getSubagents(id: String): List<SubagentInfo>
     suspend fun getChanges(id: String): List<SessionFileChange>
+    suspend fun getChangeDiff(id: String, path: String, turnIndex: Int): String?
+    suspend fun markChangeReviewed(id: String, path: String, turnIndex: Int, reviewed: Boolean)
     // run
     suspend fun abortRun(sessionId: String)
     suspend fun answerQuestion(sessionId: String, payload: AnswerQuestionDto)

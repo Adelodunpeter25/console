@@ -57,6 +57,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
@@ -193,6 +194,26 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
                 ?: throw ApiException("Failed to get session changes")
         }
     }
+
+    override suspend fun getChangeDiff(id: String, path: String, turnIndex: Int): String? {
+        val raw = http.get(
+            "/api/sessions/${enc(id)}/changes/diff",
+            mapOf("path" to path, "turnIndex" to turnIndex.toString()),
+        )
+        val element = http.unwrap(raw, JsonElement.serializer(), "load change diff")
+        return (element as? JsonObject)?.get("diffText")?.jsonPrimitive?.contentOrNull
+    }
+
+    override suspend fun markChangeReviewed(id: String, path: String, turnIndex: Int, reviewed: Boolean) {
+        val body = buildJsonObject {
+            put("path", path)
+            put("turnIndex", turnIndex)
+            put("reviewed", reviewed)
+        }.toString()
+        http.post("/api/sessions/${enc(id)}/changes/reviewed", body)
+    }
+
+
 
     override suspend fun abortRun(sessionId: String) {
         val raw = http.post("/api/sessions/${enc(sessionId)}/abort")

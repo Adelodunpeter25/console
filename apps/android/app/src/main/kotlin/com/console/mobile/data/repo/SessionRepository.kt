@@ -114,6 +114,38 @@ class SessionRepository(
         return true
     }
 
+    /** Load a session's file changes into state. Empty when none. */
+    fun loadSessionChanges(sessionId: String) {
+        scope.launch {
+            try {
+                val changes = withContext(Dispatchers.IO) { api.getChanges(sessionId) }
+                sessions.setSessionChanges(sessionId, changes)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Toggle a change's reviewed flag with an optimistic update + revert. */
+    fun toggleChangeReviewed(sessionId: String, path: String, turnIndex: Int, reviewed: Boolean) {
+        scope.launch {
+            sessions.patchReviewed(sessionId, path, turnIndex, reviewed)
+            try {
+                withContext(Dispatchers.IO) { api.markChangeReviewed(sessionId, path, turnIndex, reviewed) }
+            } catch (_: Exception) {
+                sessions.patchReviewed(sessionId, path, turnIndex, !reviewed)
+            }
+        }
+    }
+
+    suspend fun loadChangeDiff(sessionId: String, path: String, turnIndex: Int): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                api.getChangeDiff(sessionId, path, turnIndex)
+            } catch (_: Exception) {
+                null
+            }
+        }
+
     fun refreshHeader(sessionId: String) {
         scope.launch {
             try {
