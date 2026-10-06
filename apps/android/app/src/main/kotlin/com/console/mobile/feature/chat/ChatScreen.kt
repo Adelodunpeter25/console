@@ -131,7 +131,7 @@ fun ChatScreen(
             detail.await()
         }
         loadingMessages = false
-        if (header?.status == SessionStatus.Working) {
+        if (header?.status == "working") {
             AppContainer.chatRepository.attachServerRun(sessionId)
         }
     }

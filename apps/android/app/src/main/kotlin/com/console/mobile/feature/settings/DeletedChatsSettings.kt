@@ -41,7 +41,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
@@ -153,7 +153,7 @@ private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit
     val shape = RoundedCornerShape(12.dp)
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, shape).padding(14.dp)) {
         Text(item.title.ifBlank { "Untitled Chat" }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        val ts = item.deletedAt ?: item.updatedAt
+        val ts = item.deleted_at ?: item.updated_at
         Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.weight(1f))

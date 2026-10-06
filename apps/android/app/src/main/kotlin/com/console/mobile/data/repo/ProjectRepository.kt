@@ -3,7 +3,7 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.CreateSessionDto
 import console.v1.ProjectInfo
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.data.store.AppStateHolder
@@ -62,8 +62,8 @@ class ProjectRepository(
             try {
                 val list = withContext(Dispatchers.IO) { api.getSessions() }
                 projectState.setSessions(list)
-                sessionState.setStatusesSeed(list.mapNotNull { h ->
-                    h.status?.let { h.id to it }
+                sessionState.setStatusesSeed(list.map { h ->
+                    h.id to com.console.mobile.data.model.SessionStatus.fromValue(h.status)
                 }.toMap())
             } catch (e: Exception) {
                 projectState.patchSessionsLoading(false)
@@ -99,7 +99,7 @@ class ProjectRepository(
         )
         withContext(Dispatchers.Main.immediate) {
             projectState.prependSession(created)
-            sessionState.setStatus(created.id, created.status ?: SessionStatus.Idle)
+            sessionState.setStatus(created.id, com.console.mobile.data.model.SessionStatus.fromValue(created.status))
         }
         created
     }
@@ -146,7 +146,7 @@ class ProjectRepository(
             try {
                 val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, 1, null) }
                 projectState.patchSession(sessionId, detail.header)
-                detail.header.status?.let { sessionState.setStatus(sessionId, it) }
+                sessionState.setStatus(sessionId, SessionStatus.fromValue(detail.header.status))
             } catch (_: Exception) {
             }
         }

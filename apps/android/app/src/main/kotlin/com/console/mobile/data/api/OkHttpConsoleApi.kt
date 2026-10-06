@@ -1,6 +1,7 @@
 package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
+import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
@@ -36,7 +37,7 @@ import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionFileChange
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
 import com.console.mobile.data.model.SubagentInfo
 import console.v1.TodoItem
@@ -56,6 +57,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
@@ -68,6 +70,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
+    private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
     private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
     private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
     private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
@@ -88,7 +91,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         if (projectId != null) params["projectId"] = projectId
         if (onlyDeleted) params["onlyDeleted"] = "true"
         val raw = http.get("/api/sessions", params)
-        return http.unwrap(raw, ListSerializer(SessionHeader.serializer()), "list sessions")
+        val element = http.unwrap(raw, JsonElement.serializer(), "list sessions")
+        val array = element as? JsonArray ?: throw ApiException("Failed to list sessions")
+        return array.map { item ->
+            sessionAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to list sessions")
+        }
     }
 
     override suspend fun getSession(id: String, limit: Int?, before: Long?): SessionDetailResponse {
@@ -96,17 +104,38 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         if (limit != null) params["limit"] = limit.toString()
         if (before != null) params["before"] = before.toString()
         val raw = http.get("/api/sessions/${enc(id)}", params)
-        return http.unwrap(raw, SessionDetailResponse.serializer(), "load session")
+        // Mixed envelope until messages migrate: Moshi header plus hand
+        // AgentMessage list plus scalars, decoded field by field.
+        val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
+        val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
+            ?: throw ApiException("Failed to load session")
+        val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
+            try {
+                ConsoleJson.decodeFromString(AgentMessage.serializer(), item.toString())
+            } catch (_: Exception) {
+                null
+            }
+        } ?: emptyList()
+        return SessionDetailResponse(
+            header = header,
+            messages = messages,
+            hasMore = obj["hasMore"]?.jsonPrimitive?.booleanOrNull ?: false,
+            nextCursor = obj["nextCursor"]?.jsonPrimitive?.longOrNull,
+        )
     }
 
     override suspend fun createSession(payload: CreateSessionDto): SessionHeader {
         val raw = http.post("/api/sessions", http.encodeBody(CreateSessionDto.serializer(), payload))
-        return http.unwrap(raw, SessionHeader.serializer(), "create session")
+        val element = http.unwrap(raw, JsonElement.serializer(), "create session")
+        return sessionAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to create session")
     }
 
     override suspend fun updateSession(id: String, payload: UpdateSessionDto): SessionHeader {
         val raw = http.patch("/api/sessions/${enc(id)}", http.encodeBody(UpdateSessionDto.serializer(), payload))
-        return http.unwrap(raw, SessionHeader.serializer(), "update session")
+        val element = http.unwrap(raw, JsonElement.serializer(), "update session")
+        return sessionAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to update session")
     }
 
     override suspend fun deleteSession(id: String) {

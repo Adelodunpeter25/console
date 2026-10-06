@@ -14,21 +14,11 @@ enum class SessionStatus(val value: String) {
     }
 }
 
-@Serializable
-data class SessionHeader(
-    val id: String,
-    val title: String,
-    val cwd: String,
-    val projectId: String? = null,
-    val modelId: String,
-    val provider: String,
-    val createdAt: Long,
-    val updatedAt: Long,
-    val messageCount: Int? = null,
-    val status: SessionStatus? = null,
-    val approvalMode: String? = null,
-    val deletedAt: Long? = null,
-)
+// SessionHeader moved to the shared protobuf schema (console.v1 from
+// proto/console/v1): timestamps arrive as protojson strings. SessionStatus
+// stays hand-written: UI vocabulary with an Idle fallback, mapped with
+// fromValue at the repository boundary.
+
 
 @Serializable
 data class SessionFileChange(

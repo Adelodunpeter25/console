@@ -3,7 +3,7 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.SessionDetailResponse
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
 import com.console.mobile.data.store.SessionViewState
@@ -48,8 +48,8 @@ class SessionRepository(
             try {
                 val list = withContext(Dispatchers.IO) { api.getSessions(cwd, projectId) }
                 _headers.value = list
-                sessions.setStatusesSeed(list.mapNotNull { h ->
-                    h.status?.let { h.id to it }
+                sessions.setStatusesSeed(list.map { h ->
+                    h.id to com.console.mobile.data.model.SessionStatus.fromValue(h.status)
                 }.toMap())
             } catch (_: Exception) {
             } finally {
@@ -128,13 +128,13 @@ class SessionRepository(
         sessions.setView(
             sessionId,
             SessionViewState(
-                sessionModelId = header.modelId,
+                sessionModelId = header.model_id,
                 sessionProvider = header.provider,
                 sessionCwd = header.cwd,
-                approvalMode = header.approvalMode ?: ApprovalMode.AlwaysAsk.value,
+                approvalMode = header.approval_mode ?: ApprovalMode.AlwaysAsk.value,
             ),
         )
-        header.status?.let { sessions.setStatus(sessionId, it) }
+        sessions.setStatus(sessionId, com.console.mobile.data.model.SessionStatus.fromValue(header.status))
         _headers.value = _headers.value.map { if (it.id == sessionId) header else it }
     }
 }

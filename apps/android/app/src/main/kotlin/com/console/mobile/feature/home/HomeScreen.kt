@@ -53,7 +53,7 @@ import com.console.mobile.core.chat.formatProjectTitle
 import com.console.mobile.core.chat.isDraftSession
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
@@ -109,15 +109,15 @@ fun HomeScreen(
 
     fun projectNameFor(s: SessionHeader): String {
         val proj = projectState.projects.firstOrNull { p ->
-            (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.projectId
+            (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.project_id
         }
         return proj?.name ?: folderName(s.cwd).ifBlank { "General" }.let { formatProjectTitle(it) }
     }
     fun branchFor(s: SessionHeader): String? {
         val proj = projectState.projects.firstOrNull { p ->
-            (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.projectId
+            (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.project_id
         }
-        val key = proj?.id ?: s.projectId ?: return null
+        val key = proj?.id ?: s.project_id ?: return null
         return branches[key]?.ifBlank { null }
     }
 
@@ -249,7 +249,8 @@ fun HomeScreen(
                                     val draft = chatSessions[session.id]
                                     val isDraft = draft != null && isDraftSession(draft)
                                     val preview = if (isDraft) draftPreview(draft) else null
-                                    val status: SessionStatus? = session.status ?: sessionStatuses[session.id]
+                                    val status: SessionStatus? = sessionStatuses[session.id]
+                                        ?: SessionStatus.fromValue(session.status)
                                     SessionRow(
                                         session = session,
                                         projectName = projectNameFor(session),
@@ -408,7 +409,7 @@ private fun SessionRow(
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 StatusBadge(status)
-                val ts = if (session.updatedAt > 0) session.updatedAt else session.createdAt
+                val ts = if (session.updated_at > 0) session.updated_at else session.created_at
                 Text(shortRelative(ts), color = ConsoleColors.TextSecondary, fontSize = 10.sp)
             }
         }

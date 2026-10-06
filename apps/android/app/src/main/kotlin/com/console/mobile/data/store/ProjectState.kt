@@ -1,7 +1,7 @@
 package com.console.mobile.data.store
 
 import console.v1.ProjectInfo
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

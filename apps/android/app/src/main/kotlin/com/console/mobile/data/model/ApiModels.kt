@@ -144,9 +144,11 @@ data class ProviderAuthStatus(
     val configuredProjectId: String? = null,
 )
 
-@Serializable
+// Header is the shared Wire type; messages stay hand-written until the
+// messages slice migrates. Deliberately NOT @Serializable: decoded manually
+// in OkHttpConsoleApi.getSession (envelope + Moshi header + kotlinx messages).
 data class SessionDetailResponse(
-    val header: SessionHeader,
+    val header: console.v1.SessionHeader,
     val messages: List<AgentMessage> = emptyList(),
     val hasMore: Boolean = false,
     val nextCursor: Long? = null,

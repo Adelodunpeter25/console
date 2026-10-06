@@ -2,7 +2,7 @@ package com.console.mobile.core.chat
 
 import com.console.mobile.core.util.folderName
 import console.v1.ProjectInfo
-import com.console.mobile.data.model.SessionHeader
+import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 
 fun isDraftSession(state: ChatSessionState): Boolean =
@@ -34,19 +34,19 @@ fun createEphemeralDraftHeader(
         id = id,
         title = cleanTitle,
         cwd = cwd ?: "",
-        projectId = projectId,
-        modelId = "",
+        project_id = projectId,
+        model_id = "",
         provider = "",
-        createdAt = now,
-        updatedAt = now,
-        messageCount = 0,
-        status = SessionStatus.Idle,
+        created_at = now,
+        updated_at = now,
+        message_count = 0,
+        status = "idle",
     )
 }
 
 fun isDraftHeader(session: SessionHeader, state: ChatSessionState?): Boolean {
     if (state == null) return false
-    return (session.messageCount ?: 0) == 0 && isDraftSession(state)
+    return (session.message_count ?: 0) == 0 && isDraftSession(state)
 }
 
 data class GroupedProjectSection(
@@ -84,7 +84,7 @@ fun buildGroupedProjectSections(
     for ((id, draftState) in draftEntries) {
         val serverHeader = filteredSessions.firstOrNull { it.id == id }
         if (serverHeader != null) {
-            draftHeaders.add(serverHeader.copy(updatedAt = draftState.draftUpdatedAt ?: serverHeader.updatedAt))
+            draftHeaders.add(serverHeader.copy(updated_at = draftState.draftUpdatedAt ?: serverHeader.updated_at))
         } else {
             val fallbackProj = projects.firstOrNull()
             draftHeaders.add(
@@ -99,12 +99,12 @@ fun buildGroupedProjectSections(
     }
 
     val draftSection: GroupedProjectSection? = if (draftHeaders.isNotEmpty()) {
-        draftHeaders.sortByDescending { it.updatedAt }
+        draftHeaders.sortByDescending { it.updated_at }
         GroupedProjectSection(
             projectId = null,
             projectName = "Drafts",
             data = draftHeaders,
-            latestAt = draftHeaders.first().updatedAt,
+            latestAt = draftHeaders.first().updated_at,
         )
     } else null
 
@@ -122,7 +122,7 @@ fun buildGroupedProjectSections(
 
     val byProject = linkedMapOf<String, ProjectGroup>()
     for (session in nonDraftSessions) {
-        if (session.projectId == null) {
+        if (session.project_id == null) {
             val group = byProject.getOrPut("general") {
                 ProjectGroup(null, "General", mutableListOf())
             }
@@ -132,10 +132,10 @@ fun buildGroupedProjectSections(
 
         val project = projects.firstOrNull { p ->
             (session.cwd.isNotEmpty() && (p.path == session.cwd || session.cwd.startsWith("${p.path}/"))) ||
-                p.id == session.projectId
+                p.id == session.project_id
         }
 
-        val resolvedId = project?.id ?: session.projectId
+        val resolvedId = project?.id ?: session.project_id
         val groupKey = "project-$resolvedId"
         val rawName = project?.name ?: folderName(session.cwd).ifBlank { "Drafts" }
         val groupName = formatProjectTitle(rawName)
@@ -148,13 +148,13 @@ fun buildGroupedProjectSections(
 
     val sections = mutableListOf<GroupedProjectSection>()
     for ((_, group) in byProject) {
-        val sorted = group.list.sortedByDescending { it.updatedAt }
+        val sorted = group.list.sortedByDescending { it.updated_at }
         sections.add(
             GroupedProjectSection(
                 projectId = group.projectId,
                 projectName = group.projectName,
                 data = sorted,
-                latestAt = sorted.firstOrNull()?.updatedAt ?: 0L,
+                latestAt = sorted.firstOrNull()?.updated_at ?: 0L,
             ),
         )
     }
