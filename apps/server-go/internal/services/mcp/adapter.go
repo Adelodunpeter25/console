@@ -4,6 +4,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -111,15 +112,32 @@ func (a *adapterTool) Execute(ctx context.Context, arguments json.RawMessage) (a
 	return tools.Envelope{Content: renderResult(res), IsError: res.IsError}, nil
 }
 
-// renderResult flattens MCP content into the harness text-part shape.
+// maxResultImages caps how many image parts survive one tool result. Screenshots
+// are megabytes each, and a result that inlines many of them blows up both the
+// model's context and the session file.
+const maxResultImages = 4
+
+// renderResult flattens MCP content into the harness content-part shape. Text is
+// joined into a single part; images are passed through as native image parts so
+// the provider converters can turn them into real image blocks (Claude) rather
+// than a placeholder. Audio is not a shape the converters accept, so it stays a
+// text note.
 func renderResult(res *sdk.CallToolResult) []map[string]any {
 	var parts []string
+	var out []map[string]any
+	images := 0
+	droppedImages := 0
 	for _, c := range res.Content {
 		switch v := c.(type) {
 		case *sdk.TextContent:
 			parts = append(parts, v.Text)
 		case *sdk.ImageContent:
-			parts = append(parts, fmt.Sprintf("[image %s, %d bytes omitted]", v.MIMEType, len(v.Data)))
+			if images >= maxResultImages {
+				droppedImages++
+				continue
+			}
+			images++
+			out = append(out, imagePart(v))
 		case *sdk.AudioContent:
 			parts = append(parts, "[audio content omitted]")
 		case *sdk.ResourceLink:
@@ -132,19 +150,41 @@ func renderResult(res *sdk.CallToolResult) []map[string]any {
 			}
 		}
 	}
-	if len(parts) == 0 && res.StructuredContent != nil {
+	if len(parts) == 0 && len(out) == 0 && res.StructuredContent != nil {
 		if raw, err := json.Marshal(res.StructuredContent); err == nil {
 			parts = append(parts, string(raw))
 		}
 	}
+	if droppedImages > 0 {
+		parts = append(parts, fmt.Sprintf("[%d more image(s) omitted]", droppedImages))
+	}
 	text := strings.Join(parts, "\n")
-	if text == "" {
-		text = "(no output)"
+	if text != "" || len(out) == 0 {
+		if text == "" {
+			text = "(no output)"
+		}
+		if len(text) > maxResultText {
+			text = text[:maxResultText] + "\n… [truncated]"
+		}
+		out = append([]map[string]any{{"type": "text", "text": text}}, out...)
 	}
-	if len(text) > maxResultText {
-		text = text[:maxResultText] + "\n… [truncated]"
+	return out
+}
+
+// imagePart renders one MCP image as the harness image part shape, matching the
+// browser tool. The SDK gives raw bytes, so it is base64-encoded here; an empty or
+// unusable payload degrades to nothing rather than to a block the provider will
+// reject.
+func imagePart(v *sdk.ImageContent) map[string]any {
+	mimeType := strings.TrimSpace(v.MIMEType)
+	if mimeType == "" {
+		mimeType = "image/png"
 	}
-	return []map[string]any{{"type": "text", "text": text}}
+	return map[string]any{
+		"type":     "image",
+		"data":     base64.StdEncoding.EncodeToString(v.Data),
+		"mimeType": mimeType,
+	}
 }
 
 type loadToolsInput struct {
