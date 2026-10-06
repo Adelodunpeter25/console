@@ -21,7 +21,7 @@ Browser use is done and stays on the desktop (it drives Console's own CEF tabs; 
 
 1. **Always ask by default.** Computer-use tools prompt for approval in every approval mode, including `full-access`. Opting out is an explicit, narrow setting, never the default.
 2. **The approver sees what will happen.** The prompt shows the exact action and a screenshot, not just a tool name and JSON.
-3. **Screen content is untrusted input.** Text on screen can be a prompt injection. Approvals and a tight tool surface are the defence, so the model never gets to approve its own actions (subagents included).
+3. **Screen content is untrusted input.** Text on screen can be a prompt injection. Approvals and a tight tool surface are the defence. (Subagents are deliberately exempt from approval, see section 5.)
 4. **Never saw off the branch you sit on.** Some actions can cut the user's own connection (Tailscale, SSH, Screen Sharing, network settings). These get an extra warning, and possibly a hard block.
 5. **Reuse what exists.** The server already speaks MCP over stdio, has tool tiers and an approval round trip. Build the smallest delta.
 6. **Keep a kill switch.** One click stops the run and disconnects the computer-use server.
@@ -49,7 +49,7 @@ Browser use is done and stays on the desktop (it drives Console's own CEF tabs; 
 
 ### 3.3 Gaps that matter for computer use
 
-1. **Subagents bypass approval.** `agent/loop/subagent.go:148` builds the subagent executor with `permissions.FullAccess`, and subagents inherit the parent's loaded tools. A subagent could call a computer-use tool with no prompt. Must be fixed before shipping.
+1. **Subagents run without approval (decision: keep).** `agent/loop/subagent.go:148` builds the subagent executor with `permissions.FullAccess`, and subagents inherit the parent's loaded tools. So a subagent can call a computer-use tool with no prompt. This is intended and stays as it is (decided 2026-10-06); the "always ask" setting below applies to the main agent only.
 2. **No "always ask" concept.** No tier forces a prompt in every mode, and a server's own `readOnlyHint` can downgrade a tool.
 3. **MCP images are dropped.** `services/mcp/adapter.go` (`renderResult`) turns image content into the text `[image ... omitted]`, so the model never sees an MCP screenshot. The built-in browser tool shows the working format: `{"type":"image","data":<base64>,"mimeType":"image/png"}`, which the Claude converter turns into an Anthropic image block.
 4. **Only Claude gets screenshots.** The codex, antigravity and opencode converters replace tool-result images with a placeholder.
@@ -82,7 +82,7 @@ Browser use is done and stays on the desktop (it drives Console's own CEF tabs; 
 Layered, simplest first.
 
 1. **Server-level `requireApproval`** on an MCP server config (new). Tools from that server resolve to prompt in every mode, including `full-access` and `plan-mode`, and ignore `readOnlyHint` and name-prefix tiers. Set `tierOverrides` for the Cua tools anyway (everything `exec` except pure reads like a screenshot, to be decided after Phase 0 shows the tool list).
-2. **Close the subagent bypass.** Subagents use the parent's mode and honour `requireApproval`.
+2. **Subagents stay exempt (decision).** They keep running with full access and are not prompted, so `requireApproval` applies to the main agent's calls only. The approval prompts and Stop button remain the safety net for the main run.
 3. **Better prompts.** Fill the `reason` field with a human summary of the action ("Click 'Remove' at (412, 188) in System Settings") and attach a **screenshot preview**, downscaled and JPEG-encoded. Prefer a small fetch route (`GET /api/sessions/:id/approvals/:requestId/preview`) over inlining base64 in SSE or the 500-event replay ring.
 4. **Shorter timeout** for computer-use approvals (a stale screenshot is misleading; 10 minutes is long).
 5. **Grants (later).** After per-action prompts work: "allow for this session", "allow for N minutes", scoped to an app. Always revocable, always visible in the UI.
@@ -115,9 +115,9 @@ Why: when the server is headless or on another box, the user needs to see the sc
 
 ## 8. How the user invokes it
 
-- `$` is not implemented, and the roadmap reserves it for cross-chat references. **Do not use `$` for tool selection.**
-- The model currently loads MCP groups itself through the `loadTools` meta-tool (`mcp:cua`). Once the server is registered and enabled, "turn off the Tailscale login item" can work with no special syntax.
-- Add a **skill** (`skills/computer-use/SKILL.md`, discovered by `/` autocomplete and the `readSkill` tool) with instructions: always screenshot first, prefer the accessibility tree over pixel coordinates, one action at a time, stop and ask when unsure.
+- **Decided: `/computer-use`.** It is a skill, so it shows up in the `/` autocomplete and works with the existing `readSkill` mechanism. `$` is not implemented and the roadmap reserves it for cross-chat references, so it is not used for tool selection.
+- The model loads MCP groups itself through the `loadTools` meta-tool (`mcp:cua`). Once the server is registered and enabled, the skill tells the model to load that group and how to use it; the user types e.g. `/computer-use turn off the Tailscale login item`.
+- The skill (`skills/computer-use/SKILL.md`) carries the instructions: always screenshot first, prefer the accessibility tree over pixel coordinates, one action at a time, stop and ask when unsure.
 - Optional later: a per-run toggle on the prompt request (`runPromptBody`) and an eager `LoadGroup(mcp:cua)` for sessions that opted in.
 
 ## 9. Implementation phases
@@ -131,7 +131,7 @@ Start small; each phase is independently useful and shippable.
 
 **Phase 1: screenshots reach the model.** Change `renderResult` in `services/mcp/adapter.go` to emit `{"type":"image","data":<base64 string>,"mimeType":...}` for MCP image content (check whether the SDK gives raw bytes or base64). Claude only. Unit tests.
 
-**Phase 2: permissions.** `requireApproval` on the MCP server config (+ REST DTO and settings UI fields), an `AlwaysAsk` check in the executor before `Resolve`, tier overrides for Cua tools, and the subagent fix at `subagent.go:148`. Tests for each mode and for subagents.
+**Phase 2: permissions.** `requireApproval` on the MCP server config (+ REST DTO and settings UI fields), an `AlwaysAsk` check in the executor before `Resolve`, and tier overrides for Cua tools. Subagents are left as they are (exempt). Tests for each approval mode.
 
 **Phase 3: approval UX.** Action summary in `reason`, screenshot preview (fetch route), desktop `PermissionInteractionCard` and Android `PermissionPanel` render it, fix Android `parsePermission`, shorter timeout, Stop button.
 
@@ -150,6 +150,7 @@ Start small; each phase is independently useful and shippable.
 - How should images in session history be retained (screenshots add up)?
 - Is a per-app allow-list worth having in addition to approvals?
 - Should `plan-mode` (currently allow-all, enforced only by the prompt) be tightened as part of this?
+- Known consequence of exempting subagents: any subagent the main agent spawns can use computer-use tools unprompted, so the main agent's prompts are the only gate. Revisit if that ever bites.
 
 ## 11. Verification matrix
 
@@ -158,7 +159,7 @@ Start small; each phase is independently useful and shippable.
 | stdio server connects and lists tools | `POST /api/mcp/servers/:id/connect`, then `GET /api/mcp/servers/:id` |
 | Screenshot reaches Claude | run a chat that asks what is on screen; the answer must describe the screen |
 | Always-ask holds in every mode | unit tests for `always-ask`, `accept-edits`, `plan-mode`, `full-access` |
-| Subagent cannot bypass | unit test: a subagent calling a flagged tool triggers an approval request |
+| Subagents unaffected | a subagent can still call the tool without a prompt (intended) |
 | Approval shows the action and screenshot | manual on desktop and Android |
 | Deny works | denying returns an error result to the model and nothing happens on screen |
 | Stop works | abort mid-task; MCP child is gone, no further actions |
