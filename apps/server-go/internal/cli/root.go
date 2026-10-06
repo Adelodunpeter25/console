@@ -107,6 +107,8 @@ func Execute() {
 		},
 	})
 
+	root.AddCommand(commands.ComputerUseCommand())
+
 	// Hidden third role of the multi-call binary. git does NOT reach this:
 	// it invokes `!CONSOLE_GIT_CREDENTIAL_HELPER=1 <console>` with no
 	// subcommand, which cmd/console/main.go dispatches before the serve
