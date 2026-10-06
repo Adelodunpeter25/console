@@ -459,6 +459,155 @@ func (x *SessionPermanentDeleteResponse) GetPermanentlyDeleted() bool {
 	return false
 }
 
+// Session file changes (Phase 3, fourth slice): review/inspector rows plus
+// the cached diff text. Counts narrow to uint32 so they stay JSON numbers;
+// updated_at encodes as a protojson string. Statuses stay plain strings.
+// The reviewed POST takes hand-built JSON and returns 204, so it needs no
+// messages; the diff payload is just the cached text.
+type SessionFileChange struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	TurnIndex     uint32                 `protobuf:"varint,2,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Additions     uint32                 `protobuf:"varint,4,opt,name=additions,proto3" json:"additions,omitempty"`
+	Deletions     uint32                 `protobuf:"varint,5,opt,name=deletions,proto3" json:"deletions,omitempty"`
+	DiffText      *string                `protobuf:"bytes,6,opt,name=diff_text,json=diffText,proto3,oneof" json:"diff_text,omitempty"`
+	Reviewed      bool                   `protobuf:"varint,7,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionFileChange) Reset() {
+	*x = SessionFileChange{}
+	mi := &file_console_v1_session_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionFileChange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionFileChange) ProtoMessage() {}
+
+func (x *SessionFileChange) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionFileChange.ProtoReflect.Descriptor instead.
+func (*SessionFileChange) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SessionFileChange) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *SessionFileChange) GetTurnIndex() uint32 {
+	if x != nil {
+		return x.TurnIndex
+	}
+	return 0
+}
+
+func (x *SessionFileChange) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SessionFileChange) GetAdditions() uint32 {
+	if x != nil {
+		return x.Additions
+	}
+	return 0
+}
+
+func (x *SessionFileChange) GetDeletions() uint32 {
+	if x != nil {
+		return x.Deletions
+	}
+	return 0
+}
+
+func (x *SessionFileChange) GetDiffText() string {
+	if x != nil && x.DiffText != nil {
+		return *x.DiffText
+	}
+	return ""
+}
+
+func (x *SessionFileChange) GetReviewed() bool {
+	if x != nil {
+		return x.Reviewed
+	}
+	return false
+}
+
+func (x *SessionFileChange) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type SessionFileChangeDiff struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DiffText      string                 `protobuf:"bytes,1,opt,name=diff_text,json=diffText,proto3" json:"diff_text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionFileChangeDiff) Reset() {
+	*x = SessionFileChangeDiff{}
+	mi := &file_console_v1_session_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionFileChangeDiff) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionFileChangeDiff) ProtoMessage() {}
+
+func (x *SessionFileChangeDiff) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionFileChangeDiff.ProtoReflect.Descriptor instead.
+func (*SessionFileChangeDiff) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SessionFileChangeDiff) GetDiffText() string {
+	if x != nil {
+		return x.DiffText
+	}
+	return ""
+}
+
 // Live subagent rows (Phase 3, third slice). Subagent start/activity/end
 // EVENT frames stay hand-shaped until the event stream migrates; only the
 // GET rows move here.
@@ -481,7 +630,7 @@ type SubagentActivityItem struct {
 
 func (x *SubagentActivityItem) Reset() {
 	*x = SubagentActivityItem{}
-	mi := &file_console_v1_session_proto_msgTypes[6]
+	mi := &file_console_v1_session_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -493,7 +642,7 @@ func (x *SubagentActivityItem) String() string {
 func (*SubagentActivityItem) ProtoMessage() {}
 
 func (x *SubagentActivityItem) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[6]
+	mi := &file_console_v1_session_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -506,7 +655,7 @@ func (x *SubagentActivityItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentActivityItem.ProtoReflect.Descriptor instead.
 func (*SubagentActivityItem) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{6}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SubagentActivityItem) GetTurnIndex() int32 {
@@ -579,7 +728,7 @@ type SubagentInfo struct {
 
 func (x *SubagentInfo) Reset() {
 	*x = SubagentInfo{}
-	mi := &file_console_v1_session_proto_msgTypes[7]
+	mi := &file_console_v1_session_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -591,7 +740,7 @@ func (x *SubagentInfo) String() string {
 func (*SubagentInfo) ProtoMessage() {}
 
 func (x *SubagentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[7]
+	mi := &file_console_v1_session_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -604,7 +753,7 @@ func (x *SubagentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentInfo.ProtoReflect.Descriptor instead.
 func (*SubagentInfo) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{7}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SubagentInfo) GetSubagentId() string {
@@ -744,7 +893,22 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\brestored\x18\x02 \x01(\bR\brestored\"a\n" +
 	"\x1eSessionPermanentDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
-	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\xf0\x01\n" +
+	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\x85\x02\n" +
+	"\x11SessionFileChange\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1d\n" +
+	"\n" +
+	"turn_index\x18\x02 \x01(\rR\tturnIndex\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1c\n" +
+	"\tadditions\x18\x04 \x01(\rR\tadditions\x12\x1c\n" +
+	"\tdeletions\x18\x05 \x01(\rR\tdeletions\x12 \n" +
+	"\tdiff_text\x18\x06 \x01(\tH\x00R\bdiffText\x88\x01\x01\x12\x1a\n" +
+	"\breviewed\x18\a \x01(\bR\breviewed\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\x03R\tupdatedAtB\f\n" +
+	"\n" +
+	"_diff_text\"4\n" +
+	"\x15SessionFileChangeDiff\x12\x1b\n" +
+	"\tdiff_text\x18\x01 \x01(\tR\bdiffText\"\xf0\x01\n" +
 	"\x14SubagentActivityItem\x12\x1d\n" +
 	"\n" +
 	"turn_index\x18\x01 \x01(\x05R\tturnIndex\x12 \n" +
@@ -794,7 +958,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -802,12 +966,14 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SessionDeleteResponse)(nil),          // 3: console.v1.SessionDeleteResponse
 	(*SessionRestoreResponse)(nil),         // 4: console.v1.SessionRestoreResponse
 	(*SessionPermanentDeleteResponse)(nil), // 5: console.v1.SessionPermanentDeleteResponse
-	(*SubagentActivityItem)(nil),           // 6: console.v1.SubagentActivityItem
-	(*SubagentInfo)(nil),                   // 7: console.v1.SubagentInfo
+	(*SessionFileChange)(nil),              // 6: console.v1.SessionFileChange
+	(*SessionFileChangeDiff)(nil),          // 7: console.v1.SessionFileChangeDiff
+	(*SubagentActivityItem)(nil),           // 8: console.v1.SubagentActivityItem
+	(*SubagentInfo)(nil),                   // 9: console.v1.SubagentInfo
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1, // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
-	6, // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
+	8, // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -822,14 +988,15 @@ func file_console_v1_session_proto_init() {
 	}
 	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[6].OneofWrappers = []any{}
-	file_console_v1_session_proto_msgTypes[7].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[8].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

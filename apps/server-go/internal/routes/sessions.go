@@ -48,15 +48,38 @@ func subagentToProto(s types.SubagentInfo) *consolev1.SubagentInfo {
 	return out
 }
 
+// sessionFileChangeToProto converts a file-change row to the canonical
+// wire type. Counts narrow to uint32 and stay JSON numbers.
+func sessionFileChangeToProto(c types.SessionFileChange) *consolev1.SessionFileChange {
+	out := &consolev1.SessionFileChange{
+		Path: c.Path, TurnIndex: uint32(c.TurnIndex), Status: c.Status,
+		Additions: uint32(c.Additions), Deletions: uint32(c.Deletions),
+		Reviewed: c.Reviewed, UpdatedAt: c.UpdatedAt,
+	}
+	if c.DiffText != nil {
+		out.DiffText = c.DiffText
+	}
+	return out
+}
+
+func sessionFileChangesToProto(list []types.SessionFileChange) []*consolev1.SessionFileChange {
+	out := make([]*consolev1.SessionFileChange, 0, len(list))
+	for _, c := range list {
+		out = append(out, sessionFileChangeToProto(c))
+	}
+	return out
+}
+
 // sessionHeaderToProto converts a service header to the canonical wire
 // type. Timestamps encode as protojson strings; messageCount is always
 // populated, preserving the old always-present number.
-func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {	out := &consolev1.SessionHeader{
+func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
+	out := &consolev1.SessionHeader{
 		Id: h.ID, Title: h.Title, Cwd: h.Cwd,
 		ModelId: h.ModelID, Provider: h.Provider, ApprovalMode: h.ApprovalMode,
 		CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
 		MessageCount: func() *int32 { v := int32(h.MessageCount); return &v }(),
-		Status: h.Status,
+		Status:       h.Status,
 	}
 	if h.ProjectID != nil {
 		out.ProjectId = h.ProjectID
@@ -208,7 +231,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				if req.Cwd != nil {
 					cwd = *req.Cwd
 				}
-			var projectID *string
+				var projectID *string
 				projectGiven := present["projectId"]
 				if present["projectId"] {
 					// Explicit value (or null) passes through as-is;
@@ -401,7 +424,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(fiber.Map{"success": true, "data": changes})
+		data, err := marshalProtoList(sessionFileChangesToProto(changes))
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// GET /api/sessions/:id/changes/diff — raw diff text for a specific file change.
@@ -421,7 +448,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		for _, change := range changes {
 			if change.Path == path && change.DiffText != nil {
-				return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"diffText": *change.DiffText}})
+				raw, err := protoMarshal.Marshal(&consolev1.SessionFileChangeDiff{DiffText: *change.DiffText})
+				if err != nil {
+					return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+				}
+				return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 			}
 		}
 		return sessionError(c, fiber.StatusNotFound, "file change not found")

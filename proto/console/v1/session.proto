@@ -62,6 +62,26 @@ message SessionPermanentDeleteResponse {
   bool permanently_deleted = 2;
 }
 
+// Session file changes (Phase 3, fourth slice): review/inspector rows plus
+// the cached diff text. Counts narrow to uint32 so they stay JSON numbers;
+// updated_at encodes as a protojson string. Statuses stay plain strings.
+// The reviewed POST takes hand-built JSON and returns 204, so it needs no
+// messages; the diff payload is just the cached text.
+message SessionFileChange {
+  string path = 1;
+  uint32 turn_index = 2;
+  string status = 3;
+  uint32 additions = 4;
+  uint32 deletions = 5;
+  optional string diff_text = 6;
+  bool reviewed = 7;
+  int64 updated_at = 8;
+}
+
+message SessionFileChangeDiff {
+  string diff_text = 1;
+}
+
 // Live subagent rows (Phase 3, third slice). Subagent start/activity/end
 // EVENT frames stay hand-shaped until the event stream migrates; only the
 // GET rows move here.
