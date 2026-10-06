@@ -11,6 +11,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 var (
@@ -28,16 +29,20 @@ func IsGenericTitle(title string) bool {
 	}
 }
 
-// FallbackTitle truncates the prompt to 35 chars like the TS fallback.
+// FallbackTitle truncates the prompt to 35 chars like the TS fallback. The
+// first letter is capitalized so a fallback title matches the generated ones.
 func FallbackTitle(prompt string) string {
 	compact := strings.Join(strings.Fields(prompt), " ")
 	if len([]rune(compact)) > 35 {
-		return string([]rune(compact)[:35]) + "..."
+		return utils.TitleFirst(string([]rune(compact)[:35]) + "...")
 	}
-	return compact
+	return utils.TitleFirst(compact)
 }
 
-// SanitizeTitle single-lines, strips markers/quotes, keeps ≤8 words/80 chars.
+// SanitizeTitle single-lines, strips markers/quotes, keeps ≤8 words/80 chars,
+// and capitalizes the first letter so generated titles read consistently
+// across desktop and mobile. Capitalization runs last so it never lands on a
+// marker or quote the earlier steps strip.
 func SanitizeTitle(value string) string {
 	singleLine := strings.ReplaceAll(value, "\n", " ")
 	singleLine = strings.ReplaceAll(singleLine, "\r", " ")
@@ -51,7 +56,7 @@ func SanitizeTitle(value string) string {
 	if len([]rune(joined)) > 80 {
 		joined = strings.TrimSpace(string([]rune(joined)[:80]))
 	}
-	return joined
+	return utils.TitleFirst(joined)
 }
 
 // Generate asks the provider for a ~six-word title. Returns "" when the

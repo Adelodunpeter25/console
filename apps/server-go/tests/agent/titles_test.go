@@ -24,18 +24,50 @@ func TestTitleHelpers(t *testing.T) {
 	if titles.IsGenericTitle("My project") {
 		t.Fatal("real title must not be generic")
 	}
-	if got := titles.FallbackTitle("  hello   world  "); got != "hello world" {
+	if got := titles.FallbackTitle("  hello   world  "); got != "Hello world" {
 		t.Fatalf("fallback: %q", got)
 	}
 	long := "this is a fairly long prompt that definitely exceeds thirty five characters"
-	if got := titles.FallbackTitle(long); got != "this is a fairly long prompt that d..." {
+	if got := titles.FallbackTitle(long); got != "This is a fairly long prompt that d..." {
 		t.Fatalf("fallback trunc: %q", got)
 	}
 	if got := titles.SanitizeTitle(`"Fix the login bug."`); got != "Fix the login bug" {
 		t.Fatalf("sanitize: %q", got)
 	}
-	if got := titles.SanitizeTitle("one two three four five six seven eight nine ten"); got != "one two three four five six seven eight" {
+	if got := titles.SanitizeTitle("one two three four five six seven eight nine ten"); got != "One two three four five six seven eight" {
 		t.Fatalf("word cap: %q", got)
+	}
+}
+
+// Titles reach the UI from three paths (create, LLM generation, manual
+// rename) and all three must leave the first letter capitalized, since
+// desktop and mobile render the stored value verbatim.
+func TestTitlesCapitalizeFirstLetter(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"fix login bug", "Fix login bug"},
+		{"  spaced out  ", "Spaced out"},
+		{"ALL CAPS", "ALL CAPS"},
+		{"already Fine", "Already Fine"},
+		{"eBay fixes", "EBay fixes"},
+		{"🔥 fix login", "🔥 Fix login"},
+		// SanitizeTitle strips edge quotes and lead markers before
+		// capitalizing, so these land on the first letter itself.
+		{`"quoted title"`, "Quoted title"},
+		{"- dash led", "Dash led"},
+		{"...ellipsis", "...Ellipsis"},
+		// Caseless leading runes are skipped: the first *letter* is
+		// what gets capitalized, not position zero.
+		{"123 numeric", "123 Numeric"},
+		{"v2 api", "V2 api"},
+		{"日本語 title", "日本語 Title"},
+		{"élan vital", "Élan vital"},
+		{"", ""},
+		{"   ", ""},
+	}
+	for _, c := range cases {
+		if got := titles.SanitizeTitle(c.in); got != c.want {
+			t.Errorf("SanitizeTitle(%q) = %q; want %q", c.in, got, c.want)
+		}
 	}
 }
 
@@ -83,7 +115,9 @@ func TestRunTitlesFreshSession(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !titles.IsGenericTitle(loaded.Header.Title) {
-			if loaded.Header.Title != "done" {
+			// The mock streams "done"; generation capitalizes it, so the
+			// stored title is "Done" — the rule holds end to end.
+			if loaded.Header.Title != "Done" {
 				t.Fatalf("title: %q", loaded.Header.Title)
 			}
 			return

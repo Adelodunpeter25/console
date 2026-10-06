@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -32,7 +31,9 @@ const (
 // scratchpad for explicit-null projectId) then writes the index + meta rows.
 func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
 	id := opts.ID
-	title := strings.TrimSpace(opts.Title)
+	// TitleFirst (not TrimSpace) so every stored title — created, generated,
+	// or renamed — reads capitalized on desktop and mobile alike.
+	title := utils.TitleFirst(opts.Title)
 	if title == "" {
 		title = "New Session"
 	}
@@ -348,8 +349,10 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 }
 
 // UpdateTitle sets the session title in the global index and the
-// per-session meta row.
+// per-session meta row. The incoming title is normalized like Create's, so
+// a rename can't reintroduce a lowercase first letter.
 func (s *Service) UpdateTitle(sessionID, title string) error {
+	title = utils.TitleFirst(title)
 	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
