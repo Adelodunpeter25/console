@@ -26,7 +26,7 @@ import console.v1.ProjectInfo
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
-import com.console.mobile.data.model.SessionFileChange
+import console.v1.SessionFileChange
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
 import console.v1.SubagentInfo

@@ -20,12 +20,7 @@ enum class SessionStatus(val value: String) {
 // fromValue at the repository boundary.
 
 
-@Serializable
-data class SessionFileChange(
-    val path: String,
-    val status: String,
-    val additions: Int = 0,
-    val deletions: Int = 0,
-    val turnIndex: Int = 0,
-    val updatedAt: Long = 0,
-)
+// SessionFileChange moved to the shared protobuf schema (console.v1
+// from proto/console/v1): counts narrow to uint32 and stay JSON
+// numbers, updated_at arrives as a protojson string.
+
