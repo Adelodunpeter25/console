@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Git working-tree state (/api/git/*). Eighth domain; desktop + server +
+// mobile, all three of which render the Changes surfaces.
+//
+// Status codes stay plain strings (M/A/D/R/C/U/?/! are git's own open
+// vocabulary), and numstat counts narrow to uint32 so they stay JSON
+// numbers with zero wire change. Empty file/branch lists omit their key
+// (protojson canonical) where the old code sent [].
+message GitFileEntry {
+  string path = 1;
+  string status = 2;
+  bool staged = 3;
+  optional uint32 additions = 4;
+  optional uint32 deletions = 5;
+}
+
+message GitStatusSummary {
+  string branch = 1;
+  bool clean = 2;
+  repeated GitFileEntry files = 3;
+}
+
+message GitDiffResponse {
+  // Empty when the diff covers the whole repo rather than one file.
+  string path = 1;
+  string diff = 2;
+}
+
+message GitBranchInfo {
+  string name = 1;
+  bool current = 2;
+}
+
+message GitBranchesResponse {
+  repeated GitBranchInfo branches = 1;
+  bool is_git_repository = 2;
+}
+
+message GitCheckoutRequest {
+  string path = 1;
+  string branch = 2;
+}
+
+message GitCheckoutResponse {
+  string branch = 1;
+}

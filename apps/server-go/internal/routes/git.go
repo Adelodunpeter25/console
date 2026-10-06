@@ -1,21 +1,52 @@
 // Git routes (/api/git/*). Port of apps/server/api/src/routes/git.ts.
+//
+// Eighth domain on the shared protobuf schema. Status, diff, branches, and
+// checkout payloads are built from console.v1 generated types; the watch
+// stream keeps its snapshot-per-frame behavior with proto bytes. Status
+// codes stay plain strings and numstat counts narrow to uint32, so numbers
+// stay numbers. Canonical omissions apply (false staged/clean, empty lists,
+// empty diff path) where the old code emitted zeros.
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services.FsWatchService) {
+func gitFileEntryToProto(f types.GitFileEntry) *consolev1.GitFileEntry {
+	additions := uint32(f.Additions)
+	deletions := uint32(f.Deletions)
+	return &consolev1.GitFileEntry{
+		Path: f.Path, Status: string(f.Status), Staged: f.Staged,
+		Additions: &additions, Deletions: &deletions,
+	}
+}
+
+func gitSummaryToProto(s types.GitStatusSummary) *consolev1.GitStatusSummary {
+	out := &consolev1.GitStatusSummary{Branch: s.Branch, Clean: s.Clean}
+	for _, f := range s.Files {
+		out.Files = append(out.Files, gitFileEntryToProto(f))
+	}
+	return out
+}
+
+func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services.FsWatchService) {
 	h := app.Group("/api/git")
 
-	ok := func(c *fiber.Ctx, data any) error {
-		return c.JSON(fiber.Map{"success": true, "data": data})
+	okProto := func(c *fiber.Ctx, msg proto.Message) error {
+		raw, err := protoMarshal.Marshal(msg)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	}
 	fail := func(c *fiber.Ctx, err error) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
@@ -27,7 +58,7 @@ func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services
 		if repoPath == "" {
 			return fail(c, fmt.Errorf("Query parameter 'path' is required."))
 		}
-		return ok(c, git.GetGitStatus(repoPath))
+		return okProto(c, gitSummaryToProto(git.GetGitStatus(repoPath)))
 	})
 
 	// GET /api/git/status/watch — SSE snapshots on subscribe + debounced fs changes.
@@ -42,8 +73,11 @@ func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services
 			defer watch.Unsubscribe(events)
 
 			sendStatus := func() {
-				summary := git.GetGitStatus(repoPath)
-				_ = sse.Send("gitStatus", mustJSON(summary))
+				summary, err := protoMarshal.Marshal(gitSummaryToProto(git.GetGitStatus(repoPath)))
+				if err != nil {
+					return
+				}
+				_ = sse.Send("gitStatus", string(summary))
 			}
 			sendStatus()
 
@@ -80,7 +114,7 @@ func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services
 		if err != nil {
 			return fail(c, err)
 		}
-		return ok(c, fiber.Map{"path": filePath, "diff": diff})
+		return okProto(c, &consolev1.GitDiffResponse{Path: filePath, Diff: diff})
 	})
 
 	// GET /api/git/branches
@@ -89,16 +123,18 @@ func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services
 		if repoPath == "" {
 			return fail(c, fmt.Errorf("Query parameter 'path' is required."))
 		}
-		return ok(c, git.ListBranches(repoPath))
+		summary := git.ListBranches(repoPath)
+		out := &consolev1.GitBranchesResponse{IsGitRepository: summary.IsGitRepository}
+		for _, b := range summary.Branches {
+			out.Branches = append(out.Branches, &consolev1.GitBranchInfo{Name: b.Name, Current: b.Current})
+		}
+		return okProto(c, out)
 	})
 
 	// POST /api/git/checkout
 	h.Post("/checkout", func(c *fiber.Ctx) error {
-		var body struct {
-			Path   string `json:"path"`
-			Branch string `json:"branch"`
-		}
-		if err := c.BodyParser(&body); err != nil {
+		var body consolev1.GitCheckoutRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
 			return fail(c, fmt.Errorf("Invalid body."))
 		}
 		if body.Branch == "" {
@@ -110,8 +146,6 @@ func registerGitRoutes(app *fiber.App, git *services.GitService, watch *services
 		if err := git.CheckoutBranch(body.Path, body.Branch); err != nil {
 			return fail(c, err)
 		}
-		return ok(c, fiber.Map{"branch": body.Branch})
+		return okProto(c, &consolev1.GitCheckoutResponse{Branch: body.Branch})
 	})
 }
-
-var _ = types.GitFileStatus("")

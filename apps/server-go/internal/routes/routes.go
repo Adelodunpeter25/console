@@ -54,7 +54,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	RegisterFsRoutes(app, services.NewFsService(), cfg.Watch)
-	registerGitRoutes(app, services.NewGitService(), cfg.Watch)
+	RegisterGitRoutes(app, services.NewGitService(), cfg.Watch)
 	projects := services.NewProjectService(cfg.DB)
 	ptyManager := services.NewPtyManager(cfg.Ports, func(cwd string) string {
 		project, err := projects.GetByDir(cwd)
