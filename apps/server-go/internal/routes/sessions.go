@@ -15,7 +15,7 @@ import (
 
 // Session routes. Response shapes, status codes, and defaults mirror the TS
 // routes/sessions.ts + SessionService so the desktop client works unchanged.
-func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
+func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
 	h := app.Group("/api/sessions")
 
 	// GET /api/sessions — list, optionally filtered by cwd/projectId, with
@@ -120,19 +120,23 @@ func registerSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 					cwd = *req.Cwd
 				}
 			var projectID *string
+				projectGiven := present["projectId"]
 				if present["projectId"] {
 					// Explicit value (or null) passes through as-is;
 					// null/"scratch" become scratch in UpdateCwd.
 					projectID = parseNullableString(c.Body(), "projectId")
 				} else if cwd != "" {
 					// Key absent: infer from cwd like the TS updateSession.
+					// No match means no project, same as TS's
+					// `project ? project.id : null`.
 					if found, err := sessions.ProjectByDir(cwd); err == nil && found != "" {
 						projectID = &found
 					}
+					projectGiven = true
 				} else {
 					projectID = header.ProjectID
 				}
-				if err := sessions.UpdateCwd(id, cwd, projectID); err != nil {
+				if err := sessions.UpdateCwd(id, cwd, projectID, projectGiven); err != nil {
 					return sessionError(c, fiber.StatusInternalServerError, err.Error())
 				}
 			}

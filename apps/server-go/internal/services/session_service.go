@@ -252,8 +252,12 @@ func (s *SessionService) UpdateModel(sessionID, modelID, provider string) error 
 	return s.inner.UpdateModel(sessionID, modelID, provider)
 }
 
-func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string) error {
-	err := s.inner.UpdateCwd(sessionID, cwd, projectID)
+// UpdateCwd moves a session to a new working directory. projectGiven
+// distinguishes an omitted projectId (false — keep the current link) from
+// an explicit null (true with nil — drop to a scratchpad session), matching
+// the TS updateCwd tri-state.
+func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string, projectGiven bool) error {
+	err := s.inner.UpdateCwd(sessionID, cwd, projectID, projectGiven)
 	if err == nil && cwd != "" && manager != nil {
 		// Session moved to another project root: warm that index too.
 		manager.Prewarm(cwd)

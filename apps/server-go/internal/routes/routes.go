@@ -80,7 +80,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	registerMCPRoutes(app, mcpManager)
-	registerSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
+	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
 	fffManager := fff.NewManager()
 	if fffManager.Enabled() {

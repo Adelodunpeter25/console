@@ -83,12 +83,9 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		if project == "" {
 			scratchRoot := filepath.Join(storageDir, "scratch")
 			sessionDir := filepath.Join(scratchRoot, sessionID)
-			if sessionDir != scratchRoot {
-				if rel, err := filepath.Rel(scratchRoot, sessionDir); err == nil &&
-					rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-					if st, err := os.Stat(sessionDir); err == nil && st.IsDir() {
-						_ = os.RemoveAll(sessionDir)
-					}
+			if underDir(scratchRoot, sessionDir) {
+				if st, err := os.Stat(sessionDir); err == nil && st.IsDir() {
+					_ = os.RemoveAll(sessionDir)
 				}
 			}
 		}
@@ -134,6 +131,35 @@ func findSessionDbFile(storageDir, sessionID string) string {
 func statFile(path string) bool {
 	st, err := os.Stat(path)
 	return err == nil && !st.IsDir()
+}
+
+// ensureScratchDir creates the sandboxed working dir a scratchpad session
+// points at, but only when the path actually lives under this store's
+// scratch root — an update must not mkdir an arbitrary client path.
+func (s *Service) ensureScratchDir(cwd string) error {
+	storageDir := s.manager.StorageDir()
+	if cwd == "" || storageDir == ":memory:" {
+		return nil
+	}
+	root := filepath.Join(storageDir, "scratch")
+	if !underDir(root, cwd) {
+		return nil
+	}
+	return os.MkdirAll(cwd, 0o755)
+}
+
+// underDir reports whether path is strictly nested inside root. Rejects
+// root itself plus sibling/parent paths and anything that escapes via
+// "..", so a crafted cwd can't be treated as scratch-owned.
+func underDir(root, path string) bool {
+	if root == "" || path == "" {
+		return false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // WorktreeOf returns the worktree a session owns, or nil when it owns
@@ -204,17 +230,34 @@ func (s *Service) UpdateModel(sessionID, modelID, provider string) error {
 
 // UpdateCwd mirrors the TS updateCwd: meta + index writes, then file
 // relocation when project ownership changes (never clobbers).
-func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string) error {
+//
+// projectGiven separates the three TS cases that a *string alone cannot:
+// absent (false) keeps the current link, an explicit null (true + nil)
+// clears it into a scratchpad, and a value (true) sets it.
+func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, projectGiven bool) error {
 	oldProjectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
 	}
 	target := oldProjectID
-	if newProjectID != nil {
-		target = normalizeProjectID(*newProjectID)
+	if projectGiven {
+		target = ""
+		if newProjectID != nil {
+			target = normalizeProjectID(*newProjectID)
+		}
 	}
 	now := utils.NowMillis()
 	trimmed := strings.TrimSpace(cwd)
+	// A scratchpad session's cwd is its sandboxed dir, which Create makes
+	// on the create path only. Clients that clear the project on an
+	// existing session (the desktop's "No Folder" sends an explicit null)
+	// hand us the path themselves, so make it here too — otherwise every
+	// terminal spawned for that session fails the cwd check in Spawn.
+	if target == "" {
+		if err := s.ensureScratchDir(trimmed); err != nil {
+			return err
+		}
+	}
 	var targetNull sql.NullString
 	if target != "" {
 		targetNull = sql.NullString{String: target, Valid: true}
