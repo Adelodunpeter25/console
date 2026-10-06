@@ -224,3 +224,30 @@ fn extract_marked_ignores_shell_noise() {
     assert_eq!(extract_marked("no markers here", "__M__"), None);
     assert_eq!(extract_marked("__M__only-one", "__M__"), None);
 }
+
+fn step(result: serde_json::Value) -> console_ui::browser::cef::agent_browser::StepResult {
+    console_ui::browser::cef::agent_browser::StepResult {
+        command: vec![],
+        error: None,
+        result,
+    }
+}
+
+#[test]
+fn step_output_covers_each_result_shape() {
+    use serde_json::json;
+    assert_eq!(step(json!({"snapshot": "- link \"A\" [ref=e1]", "origin": "x"})).output(), "- link \"A\" [ref=e1]");
+    assert_eq!(step(json!({"snapshot": {"kind": "full", "tree": "TREE"}})).output(), "TREE");
+    assert_eq!(step(json!({"result": "Wikipedia | www.wikipedia.org"})).output(), "Wikipedia | www.wikipedia.org");
+    assert_eq!(step(json!({"result": 2})).output(), "2");
+    assert_eq!(step(json!({"result": {"a": 1}})).output(), r#"{"a":1}"#);
+    assert_eq!(step(json!({"text": "Hello", "origin": "x"})).output(), "Hello");
+    assert_eq!(step(json!({"path": "/tmp/shot.png"})).output(), "/tmp/shot.png");
+    assert_eq!(step(json!({"clicked": "@e1"})).output(), "Clicked @e1");
+    assert_eq!(step(json!({"filled": "@e35"})).output(), "Filled @e35");
+    assert_eq!(step(json!({"waited": "text", "text": "x"})).output(), "Wait for text satisfied");
+    assert_eq!(step(json!({"waited": "selector", "selector": "#a"})).output(), "Wait for selector satisfied");
+    assert_eq!(step(serde_json::Value::Null).output(), "Done");
+    assert_eq!(step(json!({"lifecycle": {"launched": false}, "origin": "o"})).output(), "Done");
+    assert_eq!(step(json!({"lifecycle": {}, "weird": 1})).output(), r#"{"weird":1}"#);
+}

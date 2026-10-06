@@ -456,6 +456,20 @@ impl BrowserView {
         self
     }
 
+    /// This tab's CDP target id, when the CEF backend is active and the
+    /// browser has reported it. Lets agent-browser address exactly this tab.
+    /// Always `None` on the wry/WKWebView backend.
+    pub fn cdp_target_id(&self) -> Option<String> {
+        #[cfg(all(target_os = "macos", feature = "cef-browser"))]
+        {
+            self.host.as_ref().and_then(|host| host.target_id())
+        }
+        #[cfg(not(all(target_os = "macos", feature = "cef-browser")))]
+        {
+            None
+        }
+    }
+
     /// Tab label shown in the right sidebar tab bar.
     pub fn tab_label(&self) -> Option<String> {
         if let Some(title) = self.page_title.as_deref().filter(|t| !t.trim().is_empty()) {

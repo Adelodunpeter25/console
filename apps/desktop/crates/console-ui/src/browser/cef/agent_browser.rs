@@ -160,6 +160,56 @@ pub struct StepResult {
     pub result: Value,
 }
 
+impl StepResult {
+    /// The step's result as text for the agent: the snapshot tree, the `eval`
+    /// value, page text, a saved file path, or a short confirmation.
+    pub fn output(&self) -> String {
+        let result = &self.result;
+        let text_of = |value: &Value| match value {
+            Value::String(text) => text.clone(),
+            other => other.to_string(),
+        };
+        if let Some(snapshot) = result.get("snapshot") {
+            return match snapshot.get("tree") {
+                Some(tree) => text_of(tree),
+                None => text_of(snapshot),
+            };
+        }
+        if let Some(value) = result.get("result") {
+            return text_of(value);
+        }
+        if let Some(waited) = result.get("waited").and_then(Value::as_str) {
+            return format!("Wait for {waited} satisfied");
+        }
+        for key in ["text", "value", "html", "title", "url", "path"] {
+            if let Some(Value::String(text)) = result.get(key) {
+                return text.clone();
+            }
+        }
+        for (key, verb) in [("clicked", "Clicked"), ("filled", "Filled"), ("typed", "Typed")] {
+            if let Some(target) = result.get(key) {
+                return format!("{verb} {}", text_of(target));
+            }
+        }
+        match result {
+            Value::Null => "Done".to_string(),
+            Value::Object(map) => {
+                let rest: serde_json::Map<String, Value> = map
+                    .iter()
+                    .filter(|(key, _)| !matches!(key.as_str(), "lifecycle" | "origin"))
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect();
+                if rest.is_empty() {
+                    "Done".to_string()
+                } else {
+                    Value::Object(rest).to_string()
+                }
+            }
+            other => text_of(other),
+        }
+    }
+}
+
 /// Why a run produced no usable results.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunError {
