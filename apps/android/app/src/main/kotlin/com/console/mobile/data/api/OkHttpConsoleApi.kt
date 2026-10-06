@@ -31,11 +31,13 @@ import console.v1.GitCheckoutRequest
 import console.v1.GitDiffResponse
 import console.v1.GitStatusSummary
 import console.v1.ProjectInfo
+import console.v1.QueuedPrompt
 import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.model.ProviderCatalogEntry
+import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
 import console.v1.SessionHeader
@@ -74,6 +76,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
     private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
     private val sessionChangeAdapter = wireMoshi.adapter(SessionFileChange::class.java)
+    private val queuedPromptAdapter = wireMoshi.adapter(QueuedPrompt::class.java)
     private val subagentAdapter = wireMoshi.adapter(SubagentInfo::class.java)
     private val messageMoshi = wireMoshi.adapter(console.v1.AgentMessage::class.java)
     private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
@@ -214,6 +217,38 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
 
+
+    override suspend fun getQueuedPrompt(id: String): QueuedPrompt? {
+        val raw = http.get("/api/sessions/${enc(id)}/queue")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get queued prompt")
+        if (element is JsonNull) return null
+        return queuedPromptAdapter.fromJson(element.toString())
+    }
+
+    override suspend fun queuePrompt(id: String, payload: RunPromptDto): QueuedPrompt {
+        val raw = http.post("/api/sessions/${enc(id)}/queue", http.encodeBody(RunPromptDto.serializer(), payload))
+        val element = http.unwrap(raw, JsonElement.serializer(), "queue prompt")
+        return queuedPromptAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to queue prompt")
+    }
+
+    override suspend fun editQueuedPrompt(id: String, payload: RunPromptDto): QueuedPrompt {
+        val raw = http.put("/api/sessions/${enc(id)}/queue", http.encodeBody(RunPromptDto.serializer(), payload))
+        val element = http.unwrap(raw, JsonElement.serializer(), "edit queued prompt")
+        return queuedPromptAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to edit queued prompt")
+    }
+
+    override suspend fun clearQueuedPrompt(id: String): Boolean {
+        val raw = http.delete("/api/sessions/${enc(id)}/queue")
+        val element = http.unwrap(raw, JsonElement.serializer(), "clear queued prompt")
+        return (element as? JsonObject)?.get("deleted")?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
+    override suspend fun steerRun(id: String, payload: RunPromptDto) {
+        val raw = http.post("/api/sessions/${enc(id)}/steer", http.encodeBody(RunPromptDto.serializer(), payload))
+        ensureOk(raw, "steer run")
+    }
 
     override suspend fun abortRun(sessionId: String) {
         val raw = http.post("/api/sessions/${enc(sessionId)}/abort")

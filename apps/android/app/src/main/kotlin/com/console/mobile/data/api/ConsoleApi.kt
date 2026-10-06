@@ -23,6 +23,7 @@ import console.v1.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProjectInfo
+import console.v1.QueuedPrompt
 import com.console.mobile.data.model.ProviderCatalogEntry
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
@@ -52,6 +53,12 @@ interface ConsoleApi {
     suspend fun getChanges(id: String): List<SessionFileChange>
     suspend fun getChangeDiff(id: String, path: String, turnIndex: Int): String?
     suspend fun markChangeReviewed(id: String, path: String, turnIndex: Int, reviewed: Boolean)
+    // queue (staged next-turn prompt; Wire decode, hand request bodies)
+    suspend fun getQueuedPrompt(id: String): QueuedPrompt?
+    suspend fun queuePrompt(id: String, payload: RunPromptDto): QueuedPrompt
+    suspend fun editQueuedPrompt(id: String, payload: RunPromptDto): QueuedPrompt
+    suspend fun clearQueuedPrompt(id: String): Boolean
+    suspend fun steerRun(id: String, payload: RunPromptDto)
     // run
     suspend fun abortRun(sessionId: String)
     suspend fun answerQuestion(sessionId: String, payload: AnswerQuestionDto)

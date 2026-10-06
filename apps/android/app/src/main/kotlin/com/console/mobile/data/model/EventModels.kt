@@ -75,7 +75,10 @@ data class AgentSessionEvent(
     val compactedMessages: List<AgentMessage>? = null,
     val title: String? = null,
     val error: EventError? = null,
-    val queuedPrompt: QueuedPrompt? = null,
+    // Staged next-turn prompt: raw until the event stream migrates (Phase 4
+    // schemas the frames); the payload is console.v1.QueuedPrompt, decoded
+    // with Moshi where the queue screen needs it (see SessionQueueFixtureTest).
+    val queuedPrompt: JsonElement? = null,
     val reason: String? = null,
     // subagent fields (flattened)
     val subagentId: String? = null,

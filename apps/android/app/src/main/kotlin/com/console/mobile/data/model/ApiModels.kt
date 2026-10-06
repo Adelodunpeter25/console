@@ -94,17 +94,9 @@ internal fun decodeBase64(data: String): ByteArray = try {
     ByteArray(0)
 }
 
-@Serializable
-data class QueuedPrompt(
-    val id: String,
-    val sessionId: String,
-    val prompt: String,
-    val attachments: List<ImageAttachment> = emptyList(),
-    val modelId: String? = null,
-    val provider: String? = null,
-    val approvalMode: String? = null,
-    val createdAt: String,
-)
+// QueuedPrompt moved to the shared protobuf schema (console.v1.QueuedPrompt
+// from proto/console/v1): attachments/annotations reuse the message schema,
+// created_at stays the server's RFC3339 string, optionals stay absent.
 
 @Serializable
 data class OAuthLoginUrlDto(val provider: String)
