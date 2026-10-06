@@ -62,5 +62,27 @@ LOG_FILE="$DESKTOP_DIR/dist/.dev_console.log"
 # keychain keeps encryption in memory: no prompts, sites start logged-out
 # each launch. Production bundles (Developer ID signed) use the real
 # keychain and prompt at most once.
+START_LINES=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
 "$APP_EXEC" --use-mock-keychain >>"$LOG_FILE" 2>&1 &
-echo $! > "$PID_FILE"
+APP_PID=$!
+echo $APP_PID > "$PID_FILE"
+
+# CEF builds start Chromium at launch and expose its DevTools (CDP) port.
+# Surface it here (and in dist/.dev_cdp_port) so agent-browser can attach
+# without digging through the log:
+#   agent-browser --cdp "$(cat dist/.dev_cdp_port)" tab list
+CDP_FILE="$DESKTOP_DIR/dist/.dev_cdp_port"
+rm -f "$CDP_FILE"
+if [[ -d "$APP_PATH/Contents/Frameworks/Chromium Embedded Framework.framework" ]]; then
+    for _ in $(seq 1 40); do
+        kill -0 "$APP_PID" 2>/dev/null || break
+        CDP_PORT=$(tail -n +"$((START_LINES + 1))" "$LOG_FILE" 2>/dev/null \
+            | grep -o 'CDP on 127.0.0.1:[0-9]*' | tail -1 | grep -o '[0-9]*$' || true)
+        if [[ -n "$CDP_PORT" ]]; then
+            echo "$CDP_PORT" > "$CDP_FILE"
+            echo "==> Chromium CDP: 127.0.0.1:$CDP_PORT  (agent-browser --cdp $CDP_PORT tab list)"
+            break
+        fi
+        sleep 0.5
+    done
+fi
