@@ -157,7 +157,11 @@ impl BrowserView {
                 .placeholder("Ask AI about this element... (Press Enter to attach)")
         });
 
-        let mut this = Self {
+        // No native browser yet: it is created on the first navigation (see
+        // `render`), so opening a tab does not spin one up just to sit on
+        // about:blank. An idle tab is pure GPUI (start page) until it has a
+        // URL to show.
+        Self {
             focus_handle,
             address,
             host: None,
@@ -181,9 +185,7 @@ impl BrowserView {
             annotation_input,
             script_results: HashMap::new(),
             _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
-        };
-        this.build_webview(window, cx);
-        this
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -1098,6 +1100,17 @@ impl Render for BrowserView {
         self.reconcile_focus(window, cx);
         if self.loading {
             window.request_animation_frame();
+        }
+
+        // First navigation creates the native browser. A tab that never
+        // navigates never gets one, so nothing loads about:blank at open time.
+        if self.navigation_requested && self.host.is_none() && self.host_error.is_none() {
+            if let Some(url) = self.current_url.clone() {
+                self.build_webview(window, cx);
+                if let Some(host) = self.host.clone() {
+                    host.load_url(&url);
+                }
+            }
         }
 
         let body = if let Some(error) = self.host_error.clone() {
