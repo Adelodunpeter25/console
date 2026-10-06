@@ -15,7 +15,9 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -40,7 +42,7 @@ func scratchRouteApp(t *testing.T) (*fiber.App, *services.SessionService, *servi
 	return app, sessions, services.NewProjectService(manager), dir
 }
 
-func patchSession(t *testing.T, app *fiber.App, id, body string) types.SessionHeader {
+func patchSession(t *testing.T, app *fiber.App, id, body string) *consolev1.SessionHeader {
 	t.Helper()
 	req := httptest.NewRequest("PATCH", "/api/sessions/"+id, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -53,13 +55,18 @@ func patchSession(t *testing.T, app *fiber.App, id, body string) types.SessionHe
 		t.Fatalf("PATCH %s = %d: %s", body, resp.StatusCode, raw)
 	}
 	var envelope struct {
-		Success bool                `json:"success"`
-		Data    types.SessionHeader `json:"data"`
+		Success bool            `json:"success"`
+		Data    json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil || !envelope.Success {
 		t.Fatalf("envelope: %s", raw)
 	}
-	return envelope.Data
+	var header consolev1.SessionHeader
+	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := unmarshal.Unmarshal(envelope.Data, &header); err != nil {
+		t.Fatalf("header: %s", envelope.Data)
+	}
+	return &header
 }
 
 func TestPatchSessionExplicitNullClearsProject(t *testing.T) {
@@ -83,8 +90,8 @@ func TestPatchSessionExplicitNullClearsProject(t *testing.T) {
 	// Exactly what the desktop sends for "No Folder": cwd plus explicit null.
 	updated := patchSession(t, app, header.ID,
 		`{"cwd":`+jsonString(target)+`,"projectId":null}`)
-	if updated.ProjectID != nil {
-		t.Fatalf("projectId = %q; want nil", *updated.ProjectID)
+	if updated.ProjectId != nil {
+		t.Fatalf("projectId = %q; want nil", *updated.ProjectId)
 	}
 	if updated.Cwd != target {
 		t.Fatalf("cwd = %q; want %q", updated.Cwd, target)
@@ -110,8 +117,8 @@ func TestPatchSessionOmittedProjectKeepsLink(t *testing.T) {
 
 	// A cwd under a registered project re-infers the same link.
 	updated := patchSession(t, app, header.ID, `{"cwd":`+jsonString(projectDir)+`}`)
-	if updated.ProjectID == nil || *updated.ProjectID != project.ID {
-		t.Fatalf("projectId = %v; want %q", updated.ProjectID, project.ID)
+	if updated.ProjectId == nil || *updated.ProjectId != project.ID {
+		t.Fatalf("projectId = %v; want %q", updated.ProjectId, project.ID)
 	}
 }
 
@@ -134,8 +141,8 @@ func TestPatchSessionNullWithoutCwdKeyClearsProject(t *testing.T) {
 	target := filepath.Join(storageDir, "scratch", header.ID)
 	patchSession(t, app, header.ID, `{"cwd":`+jsonString(target)+`,"projectId":null}`)
 	updated := patchSession(t, app, header.ID, `{"projectId":null}`)
-	if updated.ProjectID != nil {
-		t.Fatalf("projectId = %q; want nil", *updated.ProjectID)
+	if updated.ProjectId != nil {
+		t.Fatalf("projectId = %q; want nil", *updated.ProjectId)
 	}
 	if updated.Cwd != target {
 		t.Fatalf("cwd = %q; want %q", updated.Cwd, target)

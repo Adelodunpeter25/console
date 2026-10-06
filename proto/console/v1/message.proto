@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Conversation messages (Phase 3, core slice). The agent loop owns provider
+// logic on its own structs; this schema is the storage + client contract,
+// converted at the loop boundary (ToProto/FromProto in agent/loop).
+//
+// Shape notes:
+// - The old role/type discriminators become oneofs: {"user":{...}} instead
+//   of {"role":"user",...}. Stored rows keep id/role columns unchanged.
+// - Tool arguments and result content travel as bytes carrying UTF-8 JSON
+//   (plan §4): base64 on the wire, raw JSON in memory on both ends.
+// - Timestamps and the row id are injected on LOAD (DB columns), never
+//   persisted: absent at persist, strings on the wire.
+// - Turn usage (token/cache stats) is loop-internal and unread by every
+//   client: dropped from the schema, live accumulation untouched.
+// - Browser annotations persist structured (replay needs them back intact).
+message ImageAttachment {
+  string data = 1;
+  string mime_type = 2;
+}
+
+message BrowserAnnotationRect {
+  double x = 1;
+  double y = 2;
+  double width = 3;
+  double height = 4;
+}
+
+message BrowserAnnotation {
+  string id = 1;
+  optional string session_id = 2;
+  string url = 3;
+  optional string title = 4;
+  optional string component_name = 5;
+  optional string source_location = 6;
+  string selector = 7;
+  string html_snippet = 8;
+  BrowserAnnotationRect dimensions = 9;
+  optional string role = 10;
+  optional string accessible_name = 11;
+  map<string, string> computed_styles = 12;
+  string user_comment = 13;
+  optional string screenshot_base64 = 14;
+}
+
+message AgentUserMessage {
+  string content = 1;
+  repeated string context_files = 2;
+  repeated ImageAttachment attachments = 3;
+  repeated BrowserAnnotation annotations = 4;
+}
+
+message TextPart {
+  string text = 1;
+  optional string thought_signature = 2;
+}
+
+message ThinkingPart {
+  string text = 1;
+}
+
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  bytes arguments = 3;
+  optional string thought_signature = 4;
+}
+
+message ImagePart {
+  string data = 1;
+  string mime_type = 2;
+}
+
+message AssistantContentPart {
+  oneof part {
+    TextPart text = 1;
+    ThinkingPart thinking = 2;
+    ToolCall tool_call = 3;
+    ImagePart image = 4;
+  }
+}
+
+message AgentAssistantMessage {
+  string id = 1;
+  repeated AssistantContentPart content = 2;
+  string stop_reason = 3;
+}
+
+message ToolResult {
+  string tool_call_id = 1;
+  optional string tool_name = 2;
+  bytes content = 3;
+  optional bool is_error = 4;
+  // Note: the loop's echoed call args are dropped here — they already live
+  // in the assistant turn's toolCall part, and no client reads them.
+}
+
+message AgentToolResultMessage {
+  repeated ToolResult results = 1;
+}
+
+message AgentMessage {
+  oneof message {
+    AgentUserMessage user = 1;
+    AgentAssistantMessage assistant = 2;
+    AgentToolResultMessage tool_result = 3;
+  }
+  // Injected on load from the row; absent in freshly persisted bytes.
+  optional string id = 4;
+  optional int64 created_at = 5;
+}

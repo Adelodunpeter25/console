@@ -213,10 +213,15 @@ func (a *Agent) RunWithHistory(ctx context.Context, sessionID string, history []
 
 func (a *Agent) run(ctx context.Context, sessionID string, history []any, user UserMessage, toolsList []tools.Definition, events *stream.Stream[Event]) {
 	// Persist the user message first (skipped for in-memory subagents).
+	userBytes, err := ToProtoBytes(user)
+	if err != nil {
+		events.Fail(fmt.Errorf("encode user message: %w", err))
+		return
+	}
 	if err := a.persist(sessionID, types.AgentMessage{
 		ID:   newMessageID(),
 		Role: string(RoleUser),
-		Data: messageJSON(user),
+		Data: userBytes,
 	}); err != nil {
 		events.Fail(fmt.Errorf("persist user message: %w", err))
 		return
@@ -264,10 +269,15 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 			}
 		}
 		resultMsg := ToolResultMessage{Role: RoleToolResult, Results: results}
+		resultBytes, err := ToProtoBytes(resultMsg)
+		if err != nil {
+			events.Fail(fmt.Errorf("encode tool results: %w", err))
+			return
+		}
 		if err := a.persist(sessionID, types.AgentMessage{
 			ID:   newMessageID(),
 			Role: string(RoleToolResult),
-			Data: messageJSON(resultMsg),
+			Data: resultBytes,
 		}); err != nil {
 			events.Fail(err)
 			return
@@ -412,10 +422,14 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		assistant.StopReason = StopStop
 	}
 
+	assistantBytes, err := ToProtoBytes(assistant)
+	if err != nil {
+		return assistant, err
+	}
 	if err := a.persist(sessionID, types.AgentMessage{
 		ID:   assistant.ID,
 		Role: string(RoleAssistant),
-		Data: messageJSON(assistant),
+		Data: assistantBytes,
 	}); err != nil {
 		return assistant, err
 	}

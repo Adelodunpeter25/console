@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
@@ -310,16 +311,18 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 // the TS loadSession (msg.createdAt = r.created_at). Non-object payloads
 // pass through untouched.
 //
-// The row id is injected alongside it. The client keys composer history
-// recall off a user message's id so it can re-stage that message's image
-// attachments; the stored payload carries only the role-specific fields, so
-// without this every loaded message would arrive id-less.
+// Timestamps inject as protojson strings and the row id as a string: the
+// canonical shape carries both on the wrapper, absent at persist time. The
+// client keys composer history recall off a user message's id so it can
+// re-stage that message's image attachments; the stored payload carries
+// only the role-specific fields, so without this every loaded message
+// would arrive id-less.
 func withCreatedAt(content string, createdAt int64, id string) json.RawMessage {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(content), &obj); err != nil {
 		return json.RawMessage(content)
 	}
-	obj["createdAt"] = createdAt
+	obj["createdAt"] = strconv.FormatInt(createdAt, 10)
 	if id != "" {
 		obj["id"] = id
 	}

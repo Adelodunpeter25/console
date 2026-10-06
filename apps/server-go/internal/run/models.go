@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/compaction"
@@ -124,12 +123,12 @@ func (s *Service) summarizeCompaction(ctx context.Context, model types.Model, hi
 	return strings.TrimSpace(summary), true
 }
 
-// userMessageRecord wraps a user message for storage (same shape the
-// loop persists it in).
+// userMessageRecord wraps a user message for storage (same canonical shape
+// the loop persists it in).
 func userMessageRecord(user loop.UserMessage) types.AgentMessage {
-	raw, err := json.Marshal(user)
+	raw, err := loop.ToProtoBytes(user)
 	if err != nil {
-		raw = []byte(`{"role":"user","content":"unserializable message"}`)
+		raw = []byte(`{"user":{"content":"unserializable message"}}`)
 	}
 	return types.AgentMessage{
 		ID:   "msg_" + randomHex(16),

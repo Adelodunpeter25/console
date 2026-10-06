@@ -1,0 +1,1 @@
+{"assistant":{"id":"m1","content":[{"text":{"text":"Hi","thoughtSignature":"sig"}},{"thinking":{"text":"hmm"}},{"toolCall":{"id":"c1","name":"read","arguments":"eyJwYXRoIjoiL2EifQ=="}}],"stopReason":"stop"}}

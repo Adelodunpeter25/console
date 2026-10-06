@@ -4,10 +4,10 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
@@ -18,11 +18,17 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 	svc := run.NewService(sessions)
 	header := helpers.CreateRunSession(t, sessions)
 
-	seedUser, _ := json.Marshal(map[string]any{"role": "user", "content": "hello there"})
-	seedAssistant, _ := json.Marshal(map[string]any{
-		"role": "assistant", "id": "m1", "stopReason": "stop",
-		"content": []any{map[string]any{"type": "text", "text": "hi back"}},
+	seedUser, err := loop.ToProtoBytes(loop.UserMessage{Role: loop.RoleUser, Content: "hello there"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedAssistant, err := loop.ToProtoBytes(loop.AssistantMessage{
+		Role: loop.RoleAssistant, ID: "m1", StopReason: loop.StopStop,
+		Content: []any{loop.TextPart{Type: "text", Text: "hi back"}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := sessions.AppendMessages(header.ID, []types.AgentMessage{
 		{ID: "u1", Role: "user", Data: seedUser},
 		{ID: "m1", Role: "assistant", Data: seedAssistant},
@@ -51,7 +57,13 @@ func TestContextUsageEstimateAndCache(t *testing.T) {
 	}
 
 	// New message: recompute, tokens grow.
-	more, _ := json.Marshal(map[string]any{"role": "user", "content": "and another fairly long message here"})
+	more, err := loop.ToProtoBytes(loop.UserMessage{
+		Role:    loop.RoleUser,
+		Content: "and another fairly long message here",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := sessions.AppendMessage(header.ID, types.AgentMessage{ID: "u2", Role: "user", Data: more}); err != nil {
 		t.Fatal(err)
 	}

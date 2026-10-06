@@ -40,8 +40,8 @@ func TestProjectProtoMatchesFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.TrimSpace(string(raw)) != projectFixture(t, "project.json") {
-		t.Fatalf("project bytes drifted:\n got %s\nwant %s", raw, projectFixture(t, "project.json"))
+	if compactJSON(t, raw) != projectFixture(t, "project.json") {
+		t.Fatalf("project bytes drifted:\n got %s\nwant %s", compactJSON(t, raw), projectFixture(t, "project.json"))
 	}
 
 	// Fixtures must stay parseable with unknown-field tolerance.

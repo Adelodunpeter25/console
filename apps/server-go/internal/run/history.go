@@ -1,6 +1,7 @@
 // Stored-history decoding: session DB rows back into loop messages.
-// The loop persists messageJSON(message), so Data carries the same role
-// discriminator the TS AgentMessage union uses.
+// Stored bytes are the canonical proto shape (see agent/loop ToProtoBytes);
+// each row decodes through the loop boundary converters, and unparseable
+// rows are skipped, matching the old role-probe leniency.
 package run
 
 import (
@@ -8,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
 func decodeHistory(stored []json.RawMessage) []any {
@@ -17,27 +17,8 @@ func decodeHistory(stored []json.RawMessage) []any {
 		if len(raw) == 0 {
 			continue
 		}
-		var probe struct {
-			Role string `json:"role"`
-		}
-		if err := json.Unmarshal(raw, &probe); err != nil {
-			continue
-		}
-		switch probe.Role {
-		case string(loop.RoleUser):
-			var user loop.UserMessage
-			if err := json.Unmarshal(raw, &user); err == nil {
-				out = append(out, user)
-			}
-		case string(loop.RoleAssistant):
-			if assistant, ok := decodeAssistant(raw); ok {
-				out = append(out, assistant)
-			}
-		case string(loop.RoleToolResult):
-			var result loop.ToolResultMessage
-			if err := json.Unmarshal(raw, &result); err == nil {
-				out = append(out, result)
-			}
+		if msg, err := loop.MessageFromProtoBytes(raw); err == nil {
+			out = append(out, msg)
 		}
 	}
 	return out
@@ -46,8 +27,12 @@ func decodeHistory(stored []json.RawMessage) []any {
 // decodeAssistantText extracts concatenated non-blank text parts from a
 // stored assistant message (for done-banner previews).
 func decodeAssistantText(raw json.RawMessage) (string, bool) {
-	assistant, ok := decodeAssistant(raw)
-	if !ok || assistant.Role != loop.RoleAssistant {
+	msg, err := loop.MessageFromProtoBytes(raw)
+	if err != nil {
+		return "", false
+	}
+	assistant, ok := msg.(loop.AssistantMessage)
+	if !ok {
 		return "", false
 	}
 	var parts []string
@@ -63,45 +48,10 @@ func decodeAssistantText(raw json.RawMessage) (string, bool) {
 }
 
 func decodeAssistant(raw json.RawMessage) (loop.AssistantMessage, bool) {
-	var envelope struct {
-		Role       loop.MessageRole  `json:"role"`
-		ID         string            `json:"id"`
-		Content    []json.RawMessage `json:"content"`
-		StopReason loop.StopReason   `json:"stopReason"`
-		Usage      *loop.TurnUsage   `json:"usage"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
+	msg, err := loop.MessageFromProtoBytes(raw)
+	if err != nil {
 		return loop.AssistantMessage{}, false
 	}
-	assistant := loop.AssistantMessage{
-		Role: envelope.Role, ID: envelope.ID, StopReason: envelope.StopReason, Usage: envelope.Usage,
-	}
-	for _, part := range envelope.Content {
-		var kind struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(part, &kind); err != nil {
-			continue
-		}
-		switch kind.Type {
-		case "text":
-			var text loop.TextPart
-			if err := json.Unmarshal(part, &text); err == nil {
-				assistant.Content = append(assistant.Content, text)
-			}
-		case "thinking":
-			var thinking loop.ThinkingPart
-			if err := json.Unmarshal(part, &thinking); err == nil {
-				assistant.Content = append(assistant.Content, thinking)
-			}
-		case "toolCall":
-			var call struct {
-				Call tools.ToolCall `json:"call"`
-			}
-			if err := json.Unmarshal(part, &call); err == nil {
-				assistant.Content = append(assistant.Content, loop.ToolCallPart{Type: "toolCall", Call: call.Call})
-			}
-		}
-	}
-	return assistant, true
+	assistant, ok := msg.(loop.AssistantMessage)
+	return assistant, ok
 }

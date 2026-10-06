@@ -3,7 +3,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -132,9 +131,13 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	if len(loaded.Messages) != 4 {
 		t.Fatalf("persisted messages: %d", len(loaded.Messages))
 	}
-	var drained loop.UserMessage
-	if err := json.Unmarshal(loaded.Messages[2], &drained); err != nil {
+	drainedRaw, err := loop.MessageFromProtoBytes(loaded.Messages[2])
+	if err != nil {
 		t.Fatal(err)
+	}
+	drained, ok := drainedRaw.(loop.UserMessage)
+	if !ok {
+		t.Fatalf("drained type = %T", drainedRaw)
 	}
 	if drained.Content != "two" || !reflect.DeepEqual(drained.ContextFiles, []string{"apps/mobile"}) {
 		t.Fatalf("drained user message: %+v", drained)

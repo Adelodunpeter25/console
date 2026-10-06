@@ -422,9 +422,13 @@ func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var persisted loop.UserMessage
-	if err := json.Unmarshal(loaded.Messages[0], &persisted); err != nil {
+	persistedRaw, err := loop.MessageFromProtoBytes(loaded.Messages[0])
+	if err != nil {
 		t.Fatal(err)
+	}
+	persisted, ok := persistedRaw.(loop.UserMessage)
+	if !ok {
+		t.Fatalf("persisted type = %T", persistedRaw)
 	}
 	if persisted.Content != user.Content {
 		t.Fatalf("persisted content = %q, want clean %q", persisted.Content, user.Content)
