@@ -286,27 +286,42 @@ parts matching the browser tool's shape, capped at 4 per result. Correct on its 
 for any MCP server that returns images, but **no longer on the computer-use path** — we
 bypass MCP.
 
-**Phase 2 — dlopen bindings (cgo).** A Go package that loads
-`libcua_driver_sdk.{dylib,so}` and binds the ABI 1.1 symbols: version + compatibility
-check, `create`, `destroy`, `is_available`, `metadata_json`, `list_tools_json`,
-`invoke`, `operation_cancel`, `operation_release`, `buffer_free`, `shutdown`, and the
-session calls. Model it on Waku's 269-line `sdk.rs`. Must load only from an absolute,
-packaged path — never `PATH` or cwd. Also: the vendor dylib for each platform and a
-way to find it.
+**Phase 2 — dlopen bindings (cgo). DONE.** `internal/services/cua/driver.go` loads
+`libcua_driver_sdk.{dylib,so}` and binds all 12 ABI 1.1 entry points. A library missing
+even one symbol is rejected rather than half-used. Only an absolute `CUA_DRIVER_LIB_PATH`
+or a file beside our own binary is considered; a relative override is refused outright.
+Modelled on Waku's 269-line `sdk.rs` and on `internal/fff`, which already does runtime
+dlopen in this repo.
 
-**Phase 3 — driver working against the Go server.** Create the handle in
-`unrestricted`, call `list_tools_json`, and drive one tool end to end. Confirm a
-screenshot comes back as image content and reaches the model. This is the whole feature
-working.
+**Phase 3 — driver working against the Go server. DONE.** Verified against a real
+`libcua_driver_sdk.dylib` built from `libs/cua-driver/rust`:
 
-**Phase 4 — the bundle (macOS).** `Console Computer Use.app` containing the Go server
-binary plus an `Info.plist` with the bundle id and both usage descriptions; codesign;
-launch through `open` so the process inherits the bundle identity. Handle the TCC-reset
-path for development and expose `check_permissions` over Console's API so the desktop can
-show the user what is missing.
+- ABI 1.1.0, driver 0.34.0, contract 0.8.0, MCP protocol 2025-06-18
+- **56 tools advertised**, every one carrying a risk classification
+  (r0: 9, r1: 20, r2: 17, r3: 10 — no r4, nothing unclassified)
+- `get_screen_size` returns `Main display: 1440x900 points @ 2x`
+- `list_apps` enumerates 96 apps, 8 running
+- `get_desktop_state` returns a real 2880x1800 PNG, decoded to raw bytes and converted
+  to a native image part with `mimeType: image/png`
+- Stop refuses a subsequent call with a *known* outcome; Resume restores service
 
-**Phase 5 — tool surface.** Register the Cua tools as Console tools, tiered from Cua's
-own `risk_metadata_json` rather than name prefixes.
+**Phase 4 — the bundle (macOS). NEXT.** `Console Computer Use.app` containing the Go
+server binary plus an `Info.plist` with the bundle id and both usage descriptions;
+codesign; launch through `open` so the process inherits the bundle identity. Handle the
+TCC-reset path for development and expose `check_permissions` over Console's API so the
+desktop can show the user what is missing.
+
+Confirmed necessary by the probe: `health_report` reports
+`❌ bundle_identity: Process has no CFBundleIdentifier`, and `check_permissions` reports
+Accessibility and Screen Recording **not granted**. Metadata and observation calls work
+without a grant, but reliable capture and input do not.
+
+**Phase 5 — tool surface. DONE.** `internal/services/cua/{manager,tools}.go` turn the
+inventory into harness tools (`cua__<name>`), keeping Cua's own input schema so the model
+sees the real argument names. Tiering reads Cua's `risk` object and its `readOnlyHint`
+rather than name prefixes — verified on real data: `kill_app` is r3/exec despite having
+no exec-ish prefix, and `get_window_state` is r3 but reads as a read, so observation does
+not prompt on every screenshot.
 
 **Phase 5a — subagents inherit the parent's mode. DONE.** `subagent.go` took a
 hard-coded `permissions.FullAccess` while inheriting the parent's tools, so a subagent
@@ -379,7 +394,11 @@ Our Stop button must use this wording and must not pretend cancellation is atomi
 |---|---|
 | Bindings load | unit test that a missing/garbage library fails cleanly, no path search |
 | ABI version check | unit test rejecting a mismatched major/minor |
-| Driver reaches the machine | Phase 3: one tool call end to end |
+| Driver reaches the machine | **PASS** — real dylib, `get_screen_size` and `list_apps` return live data |
+| Screenshot decodes to an image part | **PASS** — real 2880x1800 PNG, `mimeType: image/png` |
+| Tool inventory is fully classified | **PASS** — 56/56 tools carry a risk class |
+| Tiering matches Cua's assessment | **PASS** — `kill_app` exec, observations read |
+| Stop is honest | **PASS** — refused start reports a known outcome; Resume restores service |
 | Screenshot reaches Claude | a chat that describes what is on screen |
 | Grant attribution correct | `check_permissions` → `source.attribution == "host"` |
 | Bundle identity | `health_report(include=["bundle_identity"])` matches our bundle id |

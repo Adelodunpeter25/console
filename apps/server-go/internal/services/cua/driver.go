@@ -7,7 +7,7 @@
 package cua
 
 /*
-#cgo LDFLAGS: -ldl
+#cgo linux LDFLAGS: -ldl
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -428,15 +428,48 @@ type ToolResult struct {
 	ErrorCode         string          `json:"error_code,omitempty"`
 }
 
+// Risk is Cua's own assessment of one tool. The class is per tool and per
+// operation: the inventory advertises the strongest shipped enforcement for any
+// typed operation, and the exact call is narrowed at dispatch. Cua's classes do
+// not follow name prefixes — kill_app has no exec-ish prefix but is r3 — so this
+// is what Console's own tiering must read rather than guessing from the name.
+type Risk struct {
+	Class              string `json:"class"`
+	Enforcement        string `json:"enforcement"`
+	OperationSensitive bool   `json:"operation_sensitive"`
+	Version            string `json:"version,omitempty"`
+}
+
+// Annotations are the standard MCP tool hints the driver advertises.
+type Annotations struct {
+	Title           string `json:"title,omitempty"`
+	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool  `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool  `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
+}
+
 // ToolDef is one entry of the driver's advertised inventory.
 type ToolDef struct {
-	Name               string          `json:"name"`
-	Description        string          `json:"description,omitempty"`
-	InputSchema        json.RawMessage `json:"inputSchema,omitempty"`
-	Annotations        json.RawMessage `json:"annotations,omitempty"`
-	RiskClass          string          `json:"risk_class,omitempty"`
-	Enforcement        string          `json:"enforcement,omitempty"`
-	OperationSensitive bool            `json:"operation_sensitive,omitempty"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description,omitempty"`
+	InputSchema  json.RawMessage `json:"inputSchema,omitempty"`
+	Risk         Risk            `json:"risk"`
+	Annotations  Annotations     `json:"annotations"`
+	Capabilities []string        `json:"capabilities,omitempty"`
+}
+
+// RiskClass returns the advertised risk class, or "" when the driver did not
+// classify the tool.
+func (t ToolDef) RiskClass() string { return strings.ToLower(strings.TrimSpace(t.Risk.Class)) }
+
+// ReadOnly reports the driver's readOnlyHint, which is authoritative for
+// observation tools and is why get_window_state is a read rather than a write.
+func (t ToolDef) ReadOnly() bool {
+	if t.Annotations.ReadOnlyHint == nil {
+		return false
+	}
+	return *t.Annotations.ReadOnlyHint
 }
 
 // ToolInventory is the parsed `tools/list` payload.
@@ -514,6 +547,9 @@ func Open(opts Options) (*Driver, error) {
 
 // IsAvailable reports whether the driver still accepts operations.
 func (d *Driver) IsAvailable() (bool, error) {
+	if d == nil {
+		return false, errors.New("cua driver is not open")
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.handle == nil {
@@ -533,6 +569,13 @@ func (d *Driver) IsAvailable() (bool, error) {
 func (d *Driver) Metadata() (json.RawMessage, error) {
 	return d.callJSON(func(handle unsafe.Pointer, out, errBuf *C.CuaDriverBuffer) C.CuaDriverStatus {
 		return C.go_metadata_json(handle, out, errBuf)
+	})
+}
+
+// rawListTools returns the undecoded tools/list payload.
+func (d *Driver) rawListTools() (json.RawMessage, error) {
+	return d.callJSON(func(handle unsafe.Pointer, out, errBuf *C.CuaDriverBuffer) C.CuaDriverStatus {
+		return C.go_list_tools_json(handle, out, errBuf)
 	})
 }
 
@@ -558,6 +601,9 @@ func (d *Driver) ListTools() ([]ToolDef, error) {
 }
 
 func (d *Driver) callJSON(call func(unsafe.Pointer, *C.CuaDriverBuffer, *C.CuaDriverBuffer) C.CuaDriverStatus) (json.RawMessage, error) {
+	if d == nil {
+		return nil, errors.New("cua driver is not open")
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.handle == nil {
@@ -580,6 +626,9 @@ func (d *Driver) callJSON(call func(unsafe.Pointer, *C.CuaDriverBuffer, *C.CuaDr
 // Call invokes one tool by name. cancel is polled while the call is in flight
 // so a Stop interrupts admitted work rather than waiting for it to finish.
 func (d *Driver) Call(ctx context.Context, name string, args map[string]any, cancel func() bool) (*ToolResult, error) {
+	if d == nil {
+		return nil, errors.New("cua driver is not open")
+	}
 	if err := Load(); err != nil {
 		return nil, err
 	}
@@ -701,6 +750,9 @@ func (d *Driver) stopped() bool {
 // Stop refuses new work and cancels anything admitted. An action already in
 // flight may still complete; its outcome is reported as unknown.
 func (d *Driver) Stop() {
+	if d == nil {
+		return
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.cancelled = true
@@ -711,6 +763,9 @@ func (d *Driver) Stop() {
 
 // Resume clears a previous stop so the driver accepts work again.
 func (d *Driver) Resume() {
+	if d == nil {
+		return
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.cancelled = false
@@ -719,6 +774,9 @@ func (d *Driver) Resume() {
 // Shutdown stops admission, drains admitted calls, and finalizes the runtime.
 // It must not race an in-flight Call: callers serialize through the manager.
 func (d *Driver) Shutdown() error {
+	if d == nil {
+		return nil
+	}
 	d.mu.Lock()
 	if d.handle == nil || d.shutdown {
 		d.mu.Unlock()
