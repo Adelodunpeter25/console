@@ -16,15 +16,29 @@ fi
 
 if [[ -f "$BINARY_SRC" ]]; then
     cp -f "$BINARY_SRC" "$APP_EXEC"
-    # CEF bundles: helpers are copies of our own binary (see build.sh --cef).
-    # Refresh them when the fresh binary is newer so renderer/GPU helpers
-    # never run stale code after a reload.
+    # CEF bundles: helpers are our own binary (see build.sh --cef). Dev
+    # bundles share ONE signed executable via hardlinks instead of five
+    # ~300MB copies. Re-signing with --deep would replace each helper file and
+    # sever the links, so sign a single seed with the helper identifier, relink
+    # every helper to it, and sign only the app container.
+    HELPER_EXECS=()
     for HELPER_EXEC in "$APP_PATH"/Contents/Frameworks/*.app/Contents/MacOS/*; do
-        if [[ -f "$HELPER_EXEC" && "$BINARY_SRC" -nt "$HELPER_EXEC" ]]; then
-            cp -f "$BINARY_SRC" "$HELPER_EXEC"
-        fi
+        [[ -f "$HELPER_EXEC" ]] && HELPER_EXECS+=("$HELPER_EXEC")
     done
-    codesign --force --deep --sign - "$APP_PATH" >/dev/null 2>&1 || true
+    if [[ ${#HELPER_EXECS[@]} -gt 0 ]]; then
+        HELPER_PLIST="$(dirname "$(dirname "${HELPER_EXECS[0]}")")/Info.plist"
+        HELPER_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$HELPER_PLIST")"
+        HELPER_SEED="$APP_PATH/Contents/Frameworks/.helper-seed"
+        rm -f "$HELPER_SEED"
+        cp "$BINARY_SRC" "$HELPER_SEED"
+        codesign --force --sign - --identifier "$HELPER_ID" "$HELPER_SEED" >/dev/null 2>&1 || true
+        for HELPER_EXEC in "${HELPER_EXECS[@]}"; do
+            rm -f "$HELPER_EXEC"
+            ln "$HELPER_SEED" "$HELPER_EXEC" 2>/dev/null || cp "$HELPER_SEED" "$HELPER_EXEC"
+        done
+        rm -f "$HELPER_SEED"
+    fi
+    codesign --force --sign - "$APP_PATH" >/dev/null 2>&1 || true
 fi
 
 # Kill previous instance if running
