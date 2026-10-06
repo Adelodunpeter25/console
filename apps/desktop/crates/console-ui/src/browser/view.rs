@@ -76,6 +76,11 @@ pub struct BrowserView {
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
     occluded: bool,
+    /// Whether this view's tab is the visible one in its pane, as last pushed
+    /// by the owner via `sync_native_state`. Every show/hide decision goes
+    /// through it, so a navigation or load event on an inactive tab can never
+    /// re-show the native view above other content (e.g. the chat).
+    surface_visible: bool,
     snapshot: Option<Arc<gpui::RenderImage>>,
     snapshot_pending: bool,
     snapshot_epoch: u64,
@@ -85,6 +90,24 @@ pub struct BrowserView {
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, Result<String, String>>,
     _subscriptions: Vec<Subscription>,
+}
+
+/// Whether a browser tab's native view should be shown.
+///
+/// The native view is a sibling above GPUI's Metal layer, so whenever it is not
+/// hidden it paints over everything GPUI draws, including the chat. It is shown
+/// only when its tab is the visible one (`surface_visible`), it has a page, it
+/// is not in an error state, and it is not covered by an open GPUI overlay
+/// (unless a snapshot of it is already standing in, `snapshot_pending`).
+pub fn should_show_native(
+    surface_visible: bool,
+    has_page: bool,
+    occluded: bool,
+    snapshot_pending: bool,
+    has_error: bool,
+) -> bool {
+    let covered_by_overlay = occluded && !snapshot_pending;
+    surface_visible && has_page && !has_error && !covered_by_overlay
 }
 
 impl BrowserView {
@@ -177,6 +200,7 @@ impl BrowserView {
             was_natively_focused: false,
             last_window_focus: None,
             occluded: false,
+            surface_visible: false,
             snapshot: None,
             snapshot_pending: false,
             snapshot_epoch: 0,
@@ -238,10 +262,10 @@ impl BrowserView {
                     this.navigation_error = None;
                     // A fresh document starts with inspect mode off.
                     this.inspecting = false;
+                    // Re-evaluate visibility from the owner's last sync: a load
+                    // finishing on an inactive tab must not show the native view.
+                    this.apply_native_visibility();
                     if let Some(host) = &this.host {
-                        if !this.occluded {
-                            host.set_visible(true);
-                        }
                         // In-page navigations (link clicks, back/forward)
                         // bypass `navigate_to_url`, so read back the
                         // committed URL instead of echoing the stale one.
@@ -584,15 +608,20 @@ impl BrowserView {
     pub fn navigate_to_url(&mut self, url: String, cx: &mut Context<Self>) {
         if let Some(host) = &self.host {
             host.load_url(&url);
-            host.set_visible(true);
         }
         self.navigation_requested = true;
         self.loading = true;
         self.navigation_error = None;
         self.current_url = Some(url);
         self.address_dirty = false;
+        // Only the active tab's surface may be shown or take keyboard focus;
+        // an agent navigating a background tab must not paint over, or steal
+        // focus from, whatever tab is in front.
+        self.apply_native_visibility();
         self.echo_page_url(cx);
-        self.focus_page(cx);
+        if self.surface_visible {
+            self.focus_page(cx);
+        }
         cx.notify();
     }
 
@@ -626,8 +655,29 @@ impl BrowserView {
         cx.notify();
     }
 
-    /// Per-frame push from the app: whether this surface is the visible right
-    /// panel tab, and whether a GPUI overlay is open above it.
+    /// Whether the native view should be on screen right now. See
+    /// [`should_show_native`].
+    fn should_show(&self) -> bool {
+        should_show_native(
+            self.surface_visible,
+            self.navigation_requested,
+            self.occluded,
+            self.snapshot_pending,
+            self.navigation_error.is_some() || self.host_error.is_some(),
+        )
+    }
+
+    /// Push the current show/hide decision to the native view, if it exists.
+    fn apply_native_visibility(&self) {
+        if let Some(host) = &self.host {
+            host.set_visible(self.should_show());
+        }
+    }
+
+    /// Push from the owner (`sync_workspace_webviews`, and the active tab's
+    /// render): whether this surface is the visible tab in its pane, and
+    /// whether a GPUI overlay is open above it. Event-driven, not per frame, so
+    /// the flag is stored and every later show/hide consults it.
     pub fn sync_native_state(
         &mut self,
         surface_visible: bool,
@@ -636,11 +686,13 @@ impl BrowserView {
     ) {
         let _occlusion_started = occluded && !self.occluded;
         self.occluded = occluded;
+        // Recorded even without a host yet, so a host created later (see
+        // `ensure_host`) starts from the right state.
+        self.surface_visible = surface_visible;
 
         let Some(host) = self.host.clone() else {
             return;
         };
-        let has_page = self.navigation_requested;
 
         if !occluded && (self.snapshot.is_some() || self.snapshot_pending) {
             self.snapshot = None;
@@ -648,8 +700,7 @@ impl BrowserView {
             self.snapshot_epoch += 1;
         }
 
-        let covered_by_snapshot = occluded && !self.snapshot_pending;
-        let show = surface_visible && has_page && !covered_by_snapshot;
+        let show = self.should_show();
         if !show && host.native_focus_within() {
             self.reclaim_native_keyboard(cx);
         }

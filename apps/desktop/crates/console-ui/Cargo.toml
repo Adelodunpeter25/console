@@ -122,3 +122,7 @@ required-features = ["cef-browser"]
 [[test]]
 name = "browser_agent_driver_test"
 path = "tests/browser/agent_driver_test.rs"
+
+[[test]]
+name = "browser_visibility_test"
+path = "tests/browser/visibility_test.rs"
