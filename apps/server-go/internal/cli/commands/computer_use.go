@@ -29,6 +29,7 @@ func ComputerUseCommand() *cobra.Command {
 	root.AddCommand(computerUseStatusCmd())
 	root.AddCommand(computerUsePermissionsCmd())
 	root.AddCommand(computerUseProbeCmd())
+	root.AddCommand(computerUseRunCmd())
 	root.AddCommand(computerUseBundleCmd())
 	root.AddCommand(computerUseResetCmd())
 	return root
@@ -40,13 +41,27 @@ func ComputerUseCommand() *cobra.Command {
 // "caller" means the process is running outside its bundle and borrowing
 // someone else's grant.
 func computerUsePermissionsCmd() *cobra.Command {
-	return &cobra.Command{
+	var out string
+	cmd := &cobra.Command{
 		Use:   "permissions",
 		Short: "Report the live macOS Accessibility and Screen Recording state for this process",
+		Long: `Report the live macOS Accessibility and Screen Recording state for this process.
+
+macOS attributes a grant to the responsible process, not to a binary path. Run
+from a shell, that process is your terminal, so this reports the terminal's
+grants. To check the bundle's own grants, launch it through Launch Services:
+
+  open "/Applications/Console Computer Use.app" --args computer-use permissions --out /tmp/perm.txt`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if runtime.GOOS != "darwin" {
 				return fmt.Errorf("only macOS has permission grants to report; this is %s", runtime.GOOS)
 			}
+			cua.EnsureHostEnv()
+			// Launch Services gives the process no terminal, so output goes to
+			// a file when one is requested.
+			restore := redirectOutput(out)
+			defer restore()
+
 			driver, err := cua.Open(cua.Options{})
 			if err != nil {
 				return err
@@ -59,6 +74,27 @@ func computerUsePermissionsCmd() *cobra.Command {
 			printResult(res)
 			return explainAttribution(res)
 		},
+	}
+	cmd.Flags().StringVar(&out, "out", "", "Write the report to this file instead of stdout")
+	return cmd
+}
+
+// redirectOutput sends stdout and stderr to path when one is given, returning a
+// function that restores them. An empty path is a no-op.
+func redirectOutput(path string) func() {
+	if path == "" {
+		return func() {}
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not open %s: %v\n", path, err)
+		return func() {}
+	}
+	stdout, stderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = file, file
+	return func() {
+		os.Stdout, os.Stderr = stdout, stderr
+		file.Close()
 	}
 }
 
@@ -150,11 +186,14 @@ func computerUseStatusCmd() *cobra.Command {
 // checked end to end without going through a chat. This is the manual
 // equivalent of what /computer-use will do.
 func computerUseProbeCmd() *cobra.Command {
-	var app, query string
+	var app, query, out string
 	cmd := &cobra.Command{
 		Use:   "probe",
 		Short: "Launch an app, read its window, and report what came back",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			cua.EnsureHostEnv()
+			restore := redirectOutput(out)
+			defer restore()
 			if app == "" {
 				app = "com.apple.calculator"
 			}
@@ -198,6 +237,7 @@ func computerUseProbeCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&app, "app", "", "Bundle identifier to launch (default com.apple.calculator)")
 	cmd.Flags().StringVar(&query, "query", "", "Narrow the accessibility read to elements matching this text")
+	cmd.Flags().StringVar(&out, "out", "", "Write the report to this file instead of stdout (needed when launched via open)")
 	return cmd
 }
 
