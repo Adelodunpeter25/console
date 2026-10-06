@@ -37,6 +37,13 @@ fn main() {
 
     let app = gpui_platform::application().with_assets(Assets);
 
+    // Start Chromium now, before the AppKit run loop exists. Doing it from
+    // inside a run-loop callout (first browser tab, or `applicationDidFinishLaunching`)
+    // trips a Chromium message-pump check and crashes. It also makes the CDP
+    // port available without opening a tab first.
+    #[cfg(all(target_os = "macos", feature = "cef-browser"))]
+    console_ui::browser::cef::runtime::init_before_run_loop();
+
     app.run(|cx: &mut App| {
         // Core weights only: the remaining 7 register after first paint
         // (see ConsoleDesktopApp::new) so ~1.7MB of TTF parsing stays off
@@ -68,13 +75,5 @@ fn main() {
         // opened in-session (New Window) are session-only by design.
         window::open_workspace_window(cx, window::WindowLaunchTarget::RestorePersisted);
         cx.activate(true);
-
-        // Dev builds start Chromium now so its CDP port exists without
-        // opening a browser tab first. Deferred past window creation so it
-        // never delays first paint.
-        #[cfg(all(target_os = "macos", feature = "cef-browser"))]
-        cx.defer(|_| {
-            console_ui::browser::cef::runtime::start_eagerly_if_requested();
-        });
     });
 }

@@ -141,40 +141,47 @@ pub fn debug_port() -> Option<u16> {
 }
 
 /// Whether CEF should start at app launch instead of at the first navigating
-/// tab. Without this the CDP port does not exist until someone opens a tab,
-/// which makes attaching agent-browser (or any CDP client) for debugging a
-/// manual chore. On for dev builds (`CONSOLE_ENV=dev`), when a debug port is
-/// pinned, or with `CONSOLE_CEF_EAGER=1`; `CONSOLE_CEF_EAGER=0` forces it off.
-pub fn should_start_eagerly(
-    console_env: Option<&str>,
-    debug_port_env: Option<&str>,
-    eager_env: Option<&str>,
-) -> bool {
-    match eager_env.map(str::trim) {
-        Some("0") | Some("false") => return false,
-        Some("1") | Some("true") => return true,
-        _ => {}
-    }
-    console_env.is_some_and(|env| env.eq_ignore_ascii_case("dev"))
-        || debug_port_env.is_some_and(|port| !port.trim().is_empty())
+/// tab. On by default in CEF builds: starting from inside a run-loop callout
+/// (what the lazy path does) can trip Chromium's run-loop observer check, and
+/// it also means the CDP port does not exist until someone opens a tab.
+/// `CONSOLE_CEF_EAGER=0` (or `false`) turns it off.
+pub fn should_start_eagerly(eager_env: Option<&str>) -> bool {
+    !matches!(eager_env.map(str::trim), Some("0") | Some("false"))
 }
 
-/// Start CEF now when [`should_start_eagerly`] says so (reads the env). Call
-/// on the main thread once the app is running. Returns whether CEF is up.
-pub fn start_eagerly_if_requested() -> bool {
-    let wanted = should_start_eagerly(
-        std::env::var("CONSOLE_ENV").ok().as_deref(),
-        std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref(),
-        std::env::var("CONSOLE_CEF_EAGER").ok().as_deref(),
-    );
-    if !wanted {
+/// Start CEF now, **before** `[NSApp run]`, when [`should_start_eagerly`] says
+/// so. Call it from `main()` after the GPUI application is built and before
+/// `Application::run`, on the main thread.
+///
+/// Why before the loop: Chromium's message pump installs run-loop observers
+/// during `cef::initialize` and counts Entry/Exit activities. Initializing from
+/// inside a run-loop callout makes that loop's Exit arrive with no matching
+/// Entry, and the pump traps (`nesting_level_ != 0`). With no run-loop
+/// invocation active yet, every later iteration is seen from its Entry.
+///
+/// The shared `NSApplication` must be GPUI's `GPUIApplication` subclass (GPUI's
+/// `run` relies on its ivar), so create it through that class first; a plain
+/// `NSApplication` would be created by `conform_ns_application` otherwise.
+pub fn init_before_run_loop() -> bool {
+    if !should_start_eagerly(std::env::var("CONSOLE_CEF_EAGER").ok().as_deref()) {
         return false;
     }
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    let Some(class) = AnyClass::get(c"GPUIApplication") else {
+        log::warn!("CEF: GPUIApplication class not found; CEF will start lazily");
+        return false;
+    };
+    // SAFETY: `sharedApplication` is a class method returning the singleton;
+    // we only need its side effect of creating it as the right subclass.
+    let _app: *mut AnyObject = unsafe { msg_send![class, sharedApplication] };
     let up = ensure_initialized();
     match (up, debug_port()) {
-        (true, Some(port)) => log::info!("CEF: started at launch, CDP on 127.0.0.1:{port}"),
-        (true, None) => log::info!("CEF: started at launch (no debug port)"),
-        (false, _) => log::warn!("CEF: could not start at launch"),
+        (true, Some(port)) => {
+            log::info!("CEF: started before run loop, CDP on 127.0.0.1:{port}")
+        }
+        (true, None) => log::info!("CEF: started before run loop (no debug port)"),
+        (false, _) => log::warn!("CEF: could not start before run loop; will start lazily"),
     }
     up
 }

@@ -23,16 +23,12 @@ fn no_override_picks_a_bindable_loopback_port() {
 }
 
 #[test]
-fn eager_start_is_on_for_dev_or_a_pinned_port_and_can_be_forced() {
+fn eager_start_is_on_by_default_and_can_be_turned_off() {
     use console_ui::browser::cef::runtime::should_start_eagerly as eager;
-    assert!(eager(Some("dev"), None, None));
-    assert!(eager(Some("DEV"), None, None));
-    assert!(eager(None, Some("9333"), None));
-    assert!(eager(None, None, Some("1")));
-    assert!(!eager(None, None, None));
-    assert!(!eager(Some("prod"), None, None));
-    assert!(!eager(Some("prod"), Some(""), None));
-    // An explicit off switch beats everything else.
-    assert!(!eager(Some("dev"), Some("9333"), Some("0")));
-    assert!(!eager(Some("dev"), None, Some("false")));
+    assert!(eager(None));
+    assert!(eager(Some("1")));
+    assert!(eager(Some("true")));
+    assert!(eager(Some("")));
+    assert!(!eager(Some("0")));
+    assert!(!eager(Some(" false ")));
 }
