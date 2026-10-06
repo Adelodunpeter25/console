@@ -3,7 +3,6 @@ package com.console.mobile.data.store
 import console.v1.FsTreeEntry
 import com.console.mobile.data.model.McpServerEntry
 import com.console.mobile.data.model.ProviderAuthStatus
-import com.console.mobile.data.model.TerminalSpawnedEvent
 import console.v1.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

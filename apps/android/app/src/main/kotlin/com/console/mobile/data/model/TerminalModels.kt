@@ -14,34 +14,9 @@ data class TerminalSpawnParams(
     val proto: String? = null,
 )
 
-@Serializable
-data class TerminalSpawnedEvent(
-    val type: String = "spawned",
-    val id: TerminalId,
-    val pid: Int,
-    val shell: String,
-    val cwd: String,
-    val cols: Int,
-    val rows: Int,
-)
-
-@Serializable
-data class TerminalOutputEvent(val type: String = "output", val data: String)
-
-@Serializable
-data class TerminalExitEvent(val type: String = "exit", val code: Int? = null)
-
-@Serializable
-data class TerminalErrorEvent(val type: String = "error", val message: String)
-
-@Serializable
-data class TerminalInputMessage(val type: String = "input", val data: String)
-
-@Serializable
-data class TerminalResizeMessage(val type: String = "resize", val cols: Int, val rows: Int)
-
-@Serializable
-data class TerminalKillMessage(val type: String = "kill")
+// Terminal control frames moved to the shared protobuf schema (console.v1
+// from proto/console/v1): oneof JSON shape, raw PTY bytes and the
+// tag-byte framing untouched. Spawn params stay a URL query builder.
 
 const val OUTPUT_FRAME_TAG: Byte = 0x01
 const val INPUT_FRAME_TAG: Byte = 0x01

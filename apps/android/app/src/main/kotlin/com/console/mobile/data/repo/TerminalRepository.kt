@@ -1,17 +1,16 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApiClient
-import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.INPUT_FRAME_TAG
 import com.console.mobile.data.model.OUTPUT_FRAME_TAG
-import com.console.mobile.data.model.TerminalErrorEvent
-import com.console.mobile.data.model.TerminalExitEvent
-import com.console.mobile.data.model.TerminalKillMessage
-import com.console.mobile.data.model.TerminalOutputEvent
-import com.console.mobile.data.model.TerminalResizeMessage
 import com.console.mobile.data.model.TerminalSpawnParams
-import com.console.mobile.data.model.TerminalSpawnedEvent
 import com.console.mobile.data.model.buildTerminalWsUrl
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.TerminalKill
+import console.v1.TerminalResize
+import console.v1.TerminalServerMessage
+import console.v1.TerminalSpawned
 import com.console.mobile.data.store.TerminalRecord
 import com.console.mobile.data.store.TerminalStateHolder
 import com.console.mobile.data.store.TerminalStatus
@@ -48,7 +47,7 @@ class TerminalRepository(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     private val sinks = ConcurrentHashMap<String, TerminalSink>()
-    private val openingDeferreds = ConcurrentHashMap<String, CompletableDeferred<TerminalSpawnedEvent>>()
+    private val openingDeferreds = ConcurrentHashMap<String, CompletableDeferred<TerminalSpawned>>()
 
     suspend fun openTerminal(
         projectId: String,
@@ -57,14 +56,18 @@ class TerminalRepository(
         rows: Int = 24,
         label: String? = null,
         shell: String? = null,
-    ): TerminalSpawnedEvent {
+    ): TerminalSpawned {
         val cacheKey = "$projectId::$cwd"
         val existing = openingDeferreds[cacheKey]
         // Bounded too: the first caller owns cleanup, but a joiner must not be
         // able to hang forever either.
         if (existing != null) return withTimeout(TERMINAL_OPEN_TIMEOUT_MS) { existing.await() }
 
-        val deferred = CompletableDeferred<TerminalSpawnedEvent>()
+        val deferred = CompletableDeferred<TerminalSpawned>()
+        val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
+        val serverAdapter = wireMoshi.adapter(TerminalServerMessage::class.java)
+        val resizeAdapter = wireMoshi.adapter(TerminalResize::class.java)
+        val killAdapter = wireMoshi.adapter(TerminalKill::class.java)
         openingDeferreds[cacheKey] = deferred
 
         val params = TerminalSpawnParams(
@@ -96,19 +99,11 @@ class TerminalRepository(
             }
 
             override fun resize(cols: Int, rows: Int) {
-                val json = ConsoleJson.encodeToString(
-                    TerminalResizeMessage.serializer(),
-                    TerminalResizeMessage(cols = cols, rows = rows),
-                )
-                ws?.send(json)
+                ws?.send(resizeAdapter.toJson(TerminalResize(cols = cols, rows = rows)))
             }
 
             override fun kill() {
-                val json = ConsoleJson.encodeToString(
-                    TerminalKillMessage.serializer(),
-                    TerminalKillMessage(),
-                )
-                ws?.send(json)
+                ws?.send(killAdapter.toJson(TerminalKill()))
             }
 
             override fun close() {
@@ -123,14 +118,11 @@ class TerminalRepository(
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
-                    // Control JSON frames: spawned, exit, error, output
-                    val root = ConsoleJson.parseToJsonElement(text)
-                    val type = (root as? kotlinx.serialization.json.JsonObject)?.get("type")
-                        ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-
-                    when (type) {
-                        "spawned" -> {
-                            val spawned = ConsoleJson.decodeFromString(TerminalSpawnedEvent.serializer(), text)
+                    // Control frames arrive as the oneof shape ({"spawned":{...}}).
+                    val msg = serverAdapter.fromJson(text) ?: return
+                    when (val event = msg.event) {
+                        is TerminalServerMessage.Event.Spawned -> {
+                            val spawned = event.value
                             assignedId = spawned.id
                             sinks[spawned.id] = sinkRef
                             terminalState.set(
@@ -149,30 +141,31 @@ class TerminalRepository(
                             openingDeferreds.remove(cacheKey)
                             deferred.complete(spawned)
                         }
-                        "exit" -> {
-                            val exit = ConsoleJson.decodeFromString(TerminalExitEvent.serializer(), text)
+                        is TerminalServerMessage.Event.Exit -> {
                             val id = assignedId
                             if (id != null) {
                                 terminalState.patch(id) { it.copy(status = TerminalStatus.Exited) }
                             }
                         }
-                        "error" -> {
-                            val err = ConsoleJson.decodeFromString(TerminalErrorEvent.serializer(), text)
+                        is TerminalServerMessage.Event.Error -> {
+                            val message = event.value.message
                             val id = assignedId
                             if (id != null) {
-                                terminalState.patch(id) { it.copy(status = TerminalStatus.Error, error = err.message) }
+                                terminalState.patch(id) { it.copy(status = TerminalStatus.Error, error = message) }
                             }
                             if (!deferred.isCompleted) {
                                 openingDeferreds.remove(cacheKey)
-                                deferred.completeExceptionally(Exception(err.message))
+                                deferred.completeExceptionally(Exception(message))
                             }
                         }
-                        "output" -> {
-                            val out = ConsoleJson.decodeFromString(TerminalOutputEvent.serializer(), text)
+                        is TerminalServerMessage.Event.Output -> {
                             val id = assignedId
                             if (id != null) {
-                                terminalState.appendOutput(id, out.data)
+                                terminalState.appendOutput(id, event.value.data_)
                             }
+                        }
+                        null -> {
+                            // Unknown control frame; binary output keeps flowing.
                         }
                     }
                 } catch (_: Exception) {
