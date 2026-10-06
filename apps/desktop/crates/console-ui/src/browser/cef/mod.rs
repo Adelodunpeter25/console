@@ -3,6 +3,7 @@
 //! Gated behind the `cef-browser` cargo feature so default builds keep using
 //! wry/WKWebView with zero CEF download or link cost.
 
+pub mod agent_browser;
 #[cfg(target_os = "macos")]
 pub mod application;
 #[cfg(target_os = "macos")]
