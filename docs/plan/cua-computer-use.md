@@ -86,34 +86,29 @@ prompt-injection avenue we had not considered: screen content that says "call
 `policy.rs` layers YAML and Rego policies with managed/user intersection, SHA-256
 pinning and deny-by-default.
 
-### 2.2 Consent is a provider interface — our integration point
+### 2.2 Consent exists but we are not using it
 
-`consent.rs:63`:
+`consent.rs:63` defines `ProtectedConsentProvider`, and `cua-driver-sdk/src/lib.rs:63`
+exposes `DriverAuthorizationHost` for embedding hosts. `ConsentRequest` carries
+`operation`, `risk_class`, `human_summary`, `resource` and a `request_digest`, and
+`ApprovalBroker::approve` (`:190`) enforces digest and expiry. It is a complete approval
+stack.
 
-```rust
-pub trait ProtectedConsentProvider: Send + Sync + 'static {
-    fn provider_id(&self) -> &'static str;
-    async fn request_consent(&self, request: &ConsentRequest) -> Result<ProviderDecision, String>;
-}
-```
+**We are deliberately not building it.** Computer use runs `unrestricted`, which needs no
+callback, so there is nothing to bridge. This drops the whole approval half of
+`computer-use.md` §5: no `requireApproval`, no `AlwaysAsk` hook, no consent bridge, no
+approval preview route, no session grants, no self-lockout guard. Cua still enforces its
+risk model underneath — we just never ask it for a grant.
 
-"Trusted integration contract. The embedding host decides how to obtain authorization.
-Cua never requires the host to render a particular UI."
+The consequence, accepted knowingly: with `unrestricted` and no human in the loop, screen
+content can steer the agent directly. `computer-use.md` §12 already accepts this for the
+plan/bypass end state.
 
-`ConsentRequest` (`:42`) already carries `operation`, `risk_class`, `human_summary`,
-`resource`, `public_session`, `permission_mode`, both policy SHA-256s,
-`expires_unix_ms` (2 min default TTL) and a `request_digest` — everything
-`PermissionInteractionCard` needs, with the human-readable summary already written.
-
-The security is real. `ApprovalBroker::approve` (`:190`) re-checks expiry before *and*
-after the provider returns, recomputes the digest, and rejects a mismatch with
-`DigestMismatch`. A decision for one request cannot be replayed onto another. This maps
-onto Console's existing `POST /api/sessions/:id/approve {requestId, allow}` round trip
-almost one-to-one.
-
-`ProtectedResourceGrants` (`:266`) is the "allow for N minutes" story, already built:
-`ResourceGrant` dies on `idle_ttl` or `absolute_ttl`, revocable per session, per
-resource, or all (`revoke_session` / `revoke_resource` / `revoke_all`).
+Note for the record: the `DriverAuthorizationHost` trait is **only** reachable through the
+SDK. Every CLI path hardcodes `authorization_host: None` (`main.rs:306`, `serve.rs:2658`,
+`sdk_adapter.rs:488`, `private_worker.rs:127`, `mcp_envelope.rs:609`), so an MCP client
+cannot supply one at all. Over MCP the only approval mechanism is `--grant <name>` launch
+grants. This is one of the reasons we chose the C ABI (below).
 
 ### 2.3 Snapshot safety
 
@@ -152,69 +147,96 @@ so there is no new networking and no server-locality assumption.
 ```
  Desktop / Android  ──HTTPS+SSE──>  Console Go server (wherever it runs)
                                           |
-                                          | MCP over stdio, or C ABI 1.1
+                                          | dlopen, C ABI 1.1 (cgo)
                                           v
-                              cua-driver  ──>  the machine it runs on
+                            libcua_driver_sdk  ──>  the machine it runs on
 ```
 
-Two integration routes, in preference order:
+**We dlopen the SDK directly. No MCP layer.**
 
-1. **MCP over stdio to `cua-driver mcp`.** Works today with zero new Go code: the
-   existing MCP manager registers a stdio server from `mcp-servers.json`. Requires the
-   image-passthrough fix (Phase 1) so screenshots reach the model.
-2. **C ABI 1.1 from Go via cgo**, or our own host process that dlopens the SDK and
-   speaks MCP, if we need the session handles and the consent provider that bare MCP
-   cannot express. Waku chose `libloading` from Rust; we would use cgo.
+Waku does the same: `crates/waku-computer-use/src/sdk.rs` is 269 lines of `libloading`
+FFI bindings against the same ABI, and it is the only route that gives us the real API.
 
-Route 1 first. It gets the feature working and it is the baseline we compare against.
+Reasons:
 
-## 4. macOS: the grant owner must be an app bundle
+- **MCP is lossy.** `mcp.ToolName` sanitizes and truncates to 64 chars, and
+  `renderResult` flattens content. Direct we get the exact `ToolResult`:
+  `content`, `structuredContent`, `isError`, `screenshot_frame_valid`, and native `u64`
+  window ids (which overflow 32-bit and must never be truncated).
+- **The session handles are host-only.** `cua_driver_session_create_v1` is "a host API,
+  not an agent tool", and its handle "cannot be reconstructed from a public session ID".
+  Over MCP we would lose `SessionModeCeiling` and per-session authority entirely.
+- **It is less code than the alternative.** ~270 lines of bindings, once.
 
-This is the one genuinely hard platform problem, and `EMBEDDING.md` is explicit about it.
+The MCP image-passthrough fix already landed (`renderResult` in
+`internal/services/mcp/adapter.go`) is still correct and still benefits other MCP servers,
+but it is no longer on the computer-use critical path.
 
-macOS attributes Accessibility and Screen Recording to a *responsible app identity*, not
-an executable path. `libs/cua-driver/README.md`:
+## 4. macOS: the grant owner is a bundle, and a bundle is just a directory
+
+macOS attributes Accessibility and Screen Recording to a *responsible app identity*, not an
+executable path. `libs/cua-driver/README.md`:
 
 > Directly spawning a raw `cua-driver serve` outside `CuaDriver.app` without embedded
 > mode is unsupported: it has no stable bundle identity for TCC attribution. Do not grant
 > permissions to arbitrary binary paths or rely on that configuration in production.
 
-And `EMBEDDING.md:319`, which targets our architecture directly:
+**A bundle is not a language or a package. It is a directory with a plist in it.** Cua's
+own bundle demonstrates this — `_install-rust.sh:157` calls it "the `.app` bundle that
+wraps the bare binary so the TCC auto-relaunch path has a stable bundle id", and
+`_install-local-rust.sh:389` copies the same Rust binary into `Contents/MacOS/`. Identical
+file, one copy bare and one copy bundled.
 
-> `--embedded` does not transfer a GUI app's permissions to the driver; it only keeps the
-> driver inside its **spawner's** TCC responsibility chain. If your product has a GUI app
-> that owns the macOS grants and a separate gateway, daemon, or Node process that spawns
-> MCP servers, registering `cua-driver serve --embedded` with the gateway makes the daemon
-> inherit the gateway's identity, not the app's.
+```
+Console Computer Use.app/
+  Contents/
+    Info.plist          <- CFBundleIdentifier + the two usage descriptions
+    MacOS/
+      console           <- the Go server binary, unchanged
+```
 
-The Go server is a gateway. So:
+So the language inside is irrelevant; TCC keys on the bundle identifier. Our Go server
+binary goes in there as-is. Building it is `mkdir`, write a plist, `codesign`. No Xcode
+project and no Swift.
 
-- Ship a small signed `Console Computer Use.app` (Swift, mirroring
-  `ExampleAgentHarness.swift`). It is the grant owner.
-- It requests both grants **as the host** — the only prompts the user ever sees.
-- It spawns `cua-driver serve --embedded --socket <path>` as a **direct `Process` child**.
-  `ExampleAgentHarness.swift:45` is emphatic: never via `open`/NSWorkspace, "that breaks
-  responsibility inheritance".
-- The Go server connects to that socket, or to an MCP proxy over it
-  (`EMBEDDING.md:325`: "gateways may connect an MCP proxy to the app-owned private socket").
-- Set `CUA_DRIVER_EMBEDDED=1` and `CUA_DRIVER_HOST_BUNDLE_ID`.
+Lifecycle: the server currently starts with `console start`, which re-execs with `setsid`
+as a bare background process with no bundle identity. When computer use is enabled it must
+instead be launched as
+`open Console Computer Use.app/Contents/MacOS/console`, so the process inherits the bundle
+identity. Two consequences to handle:
 
-We do **not** reimplement embedded mode. Stock Cua supports it; Waku wrote a
-`waku_cua_driver_*` shim only to inject cursor support into the SDK, which we get from
-`waku_cua_driver_run_cursor_v1`-equivalent stock entry points.
+- The bundle ships as a directory, not a single binary. Install to `/Applications` or
+  alongside the binary; macOS may quarantine a freshly-written bundle on first launch.
+- Development signing is ad-hoc (`codesign --force --sign -`), which is fine locally.
+  Distribution needs a stable Developer ID, because **re-signing orphans existing TCC
+  grants** (`demo.sh:42`). Once real grants exist, a reset story is needed for dev.
 
-Three operational rules from the reference `demo.sh` that we must honour:
+Verify rather than assume: `check_permissions` returns
+`source.attribution` of `host` / `driver-daemon` / `caller`, and
+`health_report(include=["bundle_identity"])` compares the observed parent bundle id against
+`CUA_DRIVER_HOST_BUNDLE_ID`. Debug with
+`log stream --debug --predicate 'subsystem == "com.apple.TCC" AND eventMessage BEGINSWITH "AttributionChain"'`.
 
-- **Re-signing orphans existing TCC grants** (`demo.sh:42`). Ship a stable, notarized
-  signature. Development needs a deliberate reset story.
-- **macOS caches TCC answers per process** (`EMBEDDING.md:387`). If the grant arrives
-  after the driver child is running, restart the child. A headless `console start` must
-  handle this rather than appearing broken.
-- **Verify at runtime, not by hope.** `health_report(include=["bundle_identity"])` resolves
-  the daemon's real parent and compares it to `CUA_DRIVER_HOST_BUNDLE_ID`;
-  `check_permissions` returns `source.attribution` of `host` / `driver-daemon` / `caller`.
-  A `caller` value means a misconfigured launch. Debug with
-  `log stream --debug --predicate 'subsystem == "com.apple.TCC" AND eventMessage BEGINSWITH "AttributionChain"'`.
+### 4.1 The agent cursor overlay: not shipping it
+
+The macOS overlay is a synthetic second pointer showing where the agent is acting, so you
+can watch it work while your real cursor stays put. It needs AppKit on the main thread:
+`platform-macos/src/cursor/overlay.rs:486` — `run_on_main_thread()` "must be the OS main
+thread... Never returns normally". It is not exported through the public C ABI, which is
+why Waku patched its own `waku_cua_driver_run_cursor_v1()` shim into the SDK.
+
+Without a host-owned AppKit loop, exactly four tools return `facility_unavailable`
+(`platform-macos/src/tools/mod.rs:748`, asserted in `cua-driver-sdk/src/lib.rs:3293`):
+`move_cursor`, `set_agent_cursor_enabled`, `set_agent_cursor_motion`,
+`set_agent_cursor_theme`.
+
+**Decision: not shipping it.** Everything else still works — window and app observation,
+accessibility trees, background click and type without focus steal, per-window
+screenshots, keyboard input, menus, drag, scroll, launch. Only the *visibility* of the
+agent's pointer is lost; you watch via screenshots or VNC instead.
+
+This is what removes the Swift requirement. With no AppKit loop to own, the Go server can
+own the bundle itself.
 
 ### 4.1 Linux and Windows
 
@@ -222,67 +244,88 @@ The same ABI from a plain host process, no bundle, no TCC. Cua ships a portable 
 (Windows/Linux) that starts the overlay thread itself; macOS is the only platform needing
 the AppKit main thread. Our Go side is identical.
 
-## 5. Permission mapping
+## 5. Permission model: `unrestricted`, full stop
 
-Our mode consolidation (`computer-use.md` §12) maps onto Cua cleanly:
+Decision (2026-10-06): computer use runs with full permission. The agent drives the machine
+it runs on with no human in the loop.
 
-| Console | Cua | Behaviour |
-|---|---|---|
-| Plan mode | `bounded` + generated capability manifest | no human in the loop; deny-by-default ceiling |
-| Bypass permissions | `unrestricted` + `CUA_DRIVER_DANGEROUSLY_BYPASS_APPROVALS` | unattended |
+At C ABI creation this means `cua_driver_create_v1` with
+`claude_code_compatibility: false` and startup configuration selecting `unrestricted`
+(`CUA_DRIVER_PERMISSION_MODE=unrestricted` plus
+`CUA_DRIVER_DANGEROUSLY_BYPASS_APPROVALS=1`, which `authorization.rs:1264` requires
+together or it hard-errors).
 
-`bounded` deserves a look for plan mode: it is exactly "scope what the agent may touch
-with no approval prompts", which is what we want and which Cua has natively.
+What still applies underneath, and costs nothing:
 
-Cua's grant requirements surface through `ProtectedConsentProvider`, bridged to Console's
-existing approval round trip. That replaces `requireApproval`, the `AlwaysAsk` hook, the
-self-lockout guard, session grants and the approval-TTL story in `computer-use.md` §5 —
-all of which Cua implements and tests.
+- **Hard invariants.** Including the self-lockout we would otherwise have built ourselves:
+  the driver refuses any tool call whose `pid` is its own process id
+  (`authorization.rs:1178`), and refuses `kill_app` in `standard`.
+- **Policy layers.** YAML/Rego managed and user policy remain binding in every profile
+  (`policy.rs`), deny-by-default.
+- **`Unclassified` fails closed.** A tool Cua has not reviewed is refused, not allowed.
+- **`os_permission_prompt` is `never_agent_controllable`.** Screen content cannot talk the
+  agent into raising a TCC prompt.
+- **`shell_and_network` is `NotExposed`.** Computer use is not a shell escape hatch.
+- **Adapters still gate by mode.** Under `unrestricted`, `browser_unbounded_script`
+  becomes available; `Routine` adapters keep working.
+
+So Cua's risk model still shapes what is possible, we are just not using it to interrupt.
+`bounded` + a generated capability manifest remains the obvious later option if we ever
+want a scoped, unattended mode for plan mode (`computer-use.md` §12) — it needs no human
+in the loop either, which is exactly the property we want.
+
+Tiering for Console's own approval system (`ResolveTier`) should read Cua's
+`risk_metadata_json` rather than infer from tool names. `kill_app` is not `exec` by name; it
+is R3 with a bespoke rule.
 
 ## 6. Phases
 
-**Phase 1 — screenshots reach the model.** `renderResult` in
-`internal/services/mcp/adapter.go:122` turns MCP image content into
-`[image ... omitted]`. Emit `{"type":"image","data":<base64>,"mimeType":...}` instead,
-matching the format the browser tool already produces (`browser_tool.go:118`) and that
-`providers/claude/convert.go:63` already turns into an Anthropic image block. Claude
-only. Unit tests. *This is the unblocking step and is required whichever route we take.*
+**Phase 1 — MCP images reach the model. DONE.** `renderResult` in
+`internal/services/mcp/adapter.go` no longer drops MCP image content; it emits native image
+parts matching the browser tool's shape, capped at 4 per result. Correct on its own merits
+for any MCP server that returns images, but **no longer on the computer-use path** — we
+bypass MCP.
 
-**Phase 2 — driver running by hand, zero code.** Install `cua-driver`, register it in
-`mcp-servers.json`, run a harmless task through a chat, confirm the model can describe
-the screen. Record the real tool list and connect timing.
+**Phase 2 — dlopen bindings (cgo).** A Go package that loads
+`libcua_driver_sdk.{dylib,so}` and binds the ABI 1.1 symbols: version + compatibility
+check, `create`, `destroy`, `is_available`, `metadata_json`, `list_tools_json`,
+`invoke`, `operation_cancel`, `operation_release`, `buffer_free`, `shutdown`, and the
+session calls. Model it on Waku's 269-line `sdk.rs`. Must load only from an absolute,
+packaged path — never `PATH` or cwd. Also: the vendor dylib for each platform and a
+way to find it.
 
-**Phase 3 — signed bundle host (macOS).** The Swift app from §4: grant owner, direct-child
-daemon spawn, private socket, `check_permissions` and `health_report` exposure over
-Console's API. Plus the TCC-reset/re-grant path for development.
+**Phase 3 — driver working against the Go server.** Create the handle in
+`unrestricted`, call `list_tools_json`, and drive one tool end to end. Confirm a
+screenshot comes back as image content and reaches the model. This is the whole feature
+working.
 
-**Phase 4 — consent bridge.** Implement `ProtectedConsentProvider` against Console's
-approval round trip, with the digest check enforced. Verify `source.attribution == host`
-and that `kill_app` is denied under `standard`.
+**Phase 4 — the bundle (macOS).** `Console Computer Use.app` containing the Go server
+binary plus an `Info.plist` with the bundle id and both usage descriptions; codesign;
+launch through `open` so the process inherits the bundle identity. Handle the TCC-reset
+path for development and expose `check_permissions` over Console's API so the desktop can
+show the user what is missing.
 
-**Phase 5 — modes and manifest.** Map Console's modes to `bounded` / `unrestricted`;
-generate the capability manifest; migrate the mode fallback in `run/turns.go:227`.
+**Phase 5 — tool surface.** Register the Cua tools as Console tools, tiered from Cua's
+own `risk_metadata_json` rather than name prefixes.
 
 **Phase 5a — subagents inherit the parent's mode. DONE.** `subagent.go` took a
 hard-coded `permissions.FullAccess` while inheriting the parent's tools, so a subagent
 could act with more authority than the run that spawned it. `SubagentContext` now carries
 `ApprovalMode`, `run/turns.go` passes the run's mode, and an unset mode falls back to
-`always-ask` rather than full-access. Required for any Cua mode: under `bounded` or
-`unrestricted` the whole point is unattended operation, and under `standard` the
-subagent must not quietly escape the parent's prompts.
+`always-ask` rather than full-access. Prerequisite for unattended operation.
 
-**Phase 6 — invocation.** `/computer-use` skill that tells the model to load `mcp:cua` and
-follows the driver's own loop rules. Surface the driver's `SKILL.md` content rather than
-reinventing it.
+**Phase 6 — `/computer-use` invocation.** Decided: the agent has no knowledge of computer
+use until the command is run. The skill loads the Cua tool group and carries the driver's
+own loop rules; prefer Cua's `SKILL.md` content over reinventing it. Note `skill_tool.go`
+discovers skills from `.console/`, `.agent/` or `.agents/` directories in the project tree
+or home — not a repo-root `skills/`.
 
-**Phase 7 — kill switch and preview.** Stop wired to `cua_driver_operation_cancel_v1`,
-worded as the reference hosts do: "completion is unknown; inspect fresh state before
-retrying". Approval preview that reuses the observation already in the `get_window_state`
-result, never a second capture — a re-capture can invalidate the agent's snapshot tokens.
+**Phase 7 — kill switch.** Stop wired to `cua_driver_operation_cancel_v1`, worded as the
+reference hosts do (§7). No approval preview needed — there are no approvals.
 
-**Phase 8 — exposure.** Deferred by decision. Two candidates: the driver's tools one per
-tool, or Waku's `js` REPL pattern that collapses them into two tools with a persistent
-kernel. Decide with real numbers from Phases 1–2.
+**Phase 8 — composer visibility.** Deferred by decision. Seeing where the agent is acting
+inside the Console composer, rather than on the desktop, is a later idea and is not the
+Cua cursor overlay.
 
 ## 7. Stop / cancellation semantics
 
@@ -304,28 +347,42 @@ Our Stop button must use this wording and must not pretend cancellation is atomi
 - The tool surface is larger than the ~60 in Waku's skill excerpt: 20 desktop methods
   (`cua-driver-sdk/src/lib.rs:661`), plus sessions, browser, page, recording, history,
   config.
+- **We do not use MCP.** Waku's agent-facing surface is a C ABI host
+  (`crates/waku-computer-use`), and the MCP in `WakuComputerUse.swift` is only internal
+  plumbing between their JS REPL and the driver.
+- **No approvals.** Full permission by decision, so `computer-use.md` §5's approval design
+  is superseded: no `requireApproval`, no `AlwaysAsk` hook, no consent bridge, no preview
+  route, no grants UI.
+- **No cursor overlay.** Not shipping it, which removes the AppKit requirement and with it
+  the need for Swift anywhere.
+- **A bundle is not a language.** It is a directory with an `Info.plist`; the Go server
+  binary goes inside it as-is. Cua's own `CuaDriver.app` wraps the same Rust binary that
+  also exists bare on disk.
 
 ## 9. Open questions
 
-- Do we need the C ABI at all, or is MCP over stdio plus the consent bridge enough? The
-  session handles (`cua_driver_session_create_v1`) are host-only and may be unreachable
-  from MCP, which would cost us `SessionModeCeiling`.
+- How do we vendor `libcua_driver_sdk` per platform, and how does the server find it? It
+  must be an absolute packaged path next to the binary, never `PATH`.
 - How do we ship a stable signature and a TCC-reset story for development?
-- Does the 2-minute MCP call timeout in `adapter.go:20` suffice, or do driver actions need
-  a longer ceiling? `SKILL.md:43` implies batching is not available yet.
+- Does the driver's own call timeout suffice, or do actions need a longer ceiling than
+  anything we impose? `SKILL.md:43` implies batching is not available yet.
 - How should screenshots be retained in session history? They add up.
 - `/computer-use` invocation via skill (decided in `computer-use.md` §8) — confirm the
   skills directory, since `skill_tool.go` discovers `.console/`, `.agent/` or `.agents/`.
+- Does `cua-driver` still ship a prebuilt SDK dylib, or must we build it from the Rust
+  workspace? `_install-rust.sh` installs a bundle around a binary; the `.so`/`.dylib` we
+  dlopen may come from a different artifact.
 
 ## 10. Verification
 
 | Check | How |
 |---|---|
-| Screenshot reaches Claude | Phase 1 unit test; then a chat that describes the screen |
-| stdio server runs | `POST /api/mcp/servers/:id/connect`, then `GET /api/mcp/servers/:id` |
+| Bindings load | unit test that a missing/garbage library fails cleanly, no path search |
+| ABI version check | unit test rejecting a mismatched major/minor |
+| Driver reaches the machine | Phase 3: one tool call end to end |
+| Screenshot reaches Claude | a chat that describes what is on screen |
 | Grant attribution correct | `check_permissions` → `source.attribution == "host"` |
-| Daemon child of the bundle | `health_report(include=["bundle_identity"])` passes |
-| Consent bridge | unit tests: accept, decline, digest mismatch, expiry |
-| `kill_app` denied in standard | integration check |
-| Mode mapping | unit tests for `bounded` / `unrestricted` startup validation |
+| Bundle identity | `health_report(include=["bundle_identity"])` matches our bundle id |
+| Tiering | unit test that `kill_app` is not classified by name prefix |
 | Stop is honest | abort mid-action; message says completion unknown, no silent retry |
+| Invocation is gated | without `/computer-use`, the model has no computer-use tool |
