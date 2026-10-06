@@ -108,3 +108,8 @@ path = "tests/browser/agent_script_test.rs"
 name = "browser_cef_target_id_test"
 path = "tests/browser/cef_target_id_test.rs"
 required-features = ["cef-browser"]
+
+[[test]]
+name = "browser_cef_debug_port_test"
+path = "tests/browser/cef_debug_port_test.rs"
+required-features = ["cef-browser"]

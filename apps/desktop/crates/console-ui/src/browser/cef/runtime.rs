@@ -13,6 +13,7 @@
 //! fall back to wry in that case; CEF activates only inside a real bundle.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 use cef::{args::Args, library_loader::LibraryLoader, CefString};
 use objc2::rc::Retained;
@@ -127,6 +128,33 @@ fn framework_library_path() -> Option<PathBuf> {
     library.is_file().then_some(library)
 }
 
+/// The CDP port handed to CEF, `0` until [`CefRuntime::initialize`] set one.
+static DEBUG_PORT: AtomicU16 = AtomicU16::new(0);
+
+/// The loopback port CEF serves the DevTools protocol on, once CEF has been
+/// initialized. `None` before that, or if no port could be reserved.
+pub fn debug_port() -> Option<u16> {
+    match DEBUG_PORT.load(Ordering::Relaxed) {
+        0 => None,
+        port => Some(port),
+    }
+}
+
+/// Pick the CDP port: a valid `override_port` (1024-65535) wins, otherwise a
+/// currently-free port on 127.0.0.1. `None` if neither is available.
+pub fn resolve_debug_port(override_port: Option<&str>) -> Option<u16> {
+    if let Some(port) = override_port
+        .and_then(|raw| raw.trim().parse::<u16>().ok())
+        .filter(|port| *port >= 1024)
+    {
+        return Some(port);
+    }
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).ok()?;
+    let port = listener.local_addr().ok()?.port();
+    drop(listener);
+    (port >= 1024).then_some(port)
+}
+
 impl CefRuntime {
     /// Initialize CEF in the browser process. Must be called on the main
     /// thread before creating any browser. Returns `None` for helper
@@ -165,19 +193,20 @@ impl CefRuntime {
         let data_dir = std::env::var("CONSOLE_CEF_DATA_DIR").ok().filter(|dir| {
             std::fs::create_dir_all(dir).is_ok()
         });
-        // Opt-in CDP endpoint (127.0.0.1 only) so agent-browser can attach to
-        // this embedded Chromium. Unset/invalid leaves remote debugging off.
-        let debug_port = std::env::var("CONSOLE_CEF_DEBUG_PORT")
-            .ok()
-            .and_then(|port| port.parse::<i32>().ok())
-            .filter(|port| (1024..=65535).contains(port))
-            .unwrap_or(0);
+        // CDP endpoint (127.0.0.1 only) so agent-browser can attach to this
+        // embedded Chromium. Ephemeral by default so a dev build and a test
+        // build never fight over a port; `CONSOLE_CEF_DEBUG_PORT` pins one.
+        let debug_port = resolve_debug_port(std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref());
+        if let Some(port) = debug_port {
+            DEBUG_PORT.store(port, Ordering::Relaxed);
+            log::debug!("CEF: remote debugging on 127.0.0.1:{port}");
+        }
         let settings = cef::Settings {
             // The macOS sandbox needs an endorsed helper plus entitlements;
             // that ships with distribution signing (later). Until then the
             // browser process runs unsandboxed, like our dev builds.
             no_sandbox: 1,
-            remote_debugging_port: debug_port,
+            remote_debugging_port: debug_port.map_or(0, i32::from),
             framework_dir_path: CefString::from(framework_dir.as_str()),
             browser_subprocess_path: CefString::from(helper_exe.as_str()),
             ..Default::default()
