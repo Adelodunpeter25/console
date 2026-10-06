@@ -68,5 +68,13 @@ fn main() {
         // opened in-session (New Window) are session-only by design.
         window::open_workspace_window(cx, window::WindowLaunchTarget::RestorePersisted);
         cx.activate(true);
+
+        // Dev builds start Chromium now so its CDP port exists without
+        // opening a browser tab first. Deferred past window creation so it
+        // never delays first paint.
+        #[cfg(all(target_os = "macos", feature = "cef-browser"))]
+        cx.defer(|_| {
+            console_ui::browser::cef::runtime::start_eagerly_if_requested();
+        });
     });
 }
