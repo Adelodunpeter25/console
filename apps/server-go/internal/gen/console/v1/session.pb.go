@@ -459,6 +459,245 @@ func (x *SessionPermanentDeleteResponse) GetPermanentlyDeleted() bool {
 	return false
 }
 
+// Live subagent rows (Phase 3, third slice). Subagent start/activity/end
+// EVENT frames stay hand-shaped until the event stream migrates; only the
+// GET rows move here.
+//
+// Counts narrow to int32 so they stay JSON numbers; timestamps encode as
+// protojson strings. Activity args cross as raw JSON bytes (base64), like
+// tool call arguments.
+type SubagentActivityItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TurnIndex     int32                  `protobuf:"varint,1,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Summary       *string                `protobuf:"bytes,4,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
+	Args          []byte                 `protobuf:"bytes,5,opt,name=args,proto3" json:"args,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Error         *string                `protobuf:"bytes,7,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubagentActivityItem) Reset() {
+	*x = SubagentActivityItem{}
+	mi := &file_console_v1_session_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubagentActivityItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubagentActivityItem) ProtoMessage() {}
+
+func (x *SubagentActivityItem) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubagentActivityItem.ProtoReflect.Descriptor instead.
+func (*SubagentActivityItem) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SubagentActivityItem) GetTurnIndex() int32 {
+	if x != nil {
+		return x.TurnIndex
+	}
+	return 0
+}
+
+func (x *SubagentActivityItem) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *SubagentActivityItem) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *SubagentActivityItem) GetSummary() string {
+	if x != nil && x.Summary != nil {
+		return *x.Summary
+	}
+	return ""
+}
+
+func (x *SubagentActivityItem) GetArgs() []byte {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *SubagentActivityItem) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SubagentActivityItem) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+type SubagentInfo struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	SubagentId       string                  `protobuf:"bytes,1,opt,name=subagent_id,json=subagentId,proto3" json:"subagent_id,omitempty"`
+	ParentToolCallId string                  `protobuf:"bytes,2,opt,name=parent_tool_call_id,json=parentToolCallId,proto3" json:"parent_tool_call_id,omitempty"`
+	Name             string                  `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Role             string                  `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt           string                  `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	MaxTurns         int32                   `protobuf:"varint,6,opt,name=max_turns,json=maxTurns,proto3" json:"max_turns,omitempty"`
+	CurrentTurn      int32                   `protobuf:"varint,7,opt,name=current_turn,json=currentTurn,proto3" json:"current_turn,omitempty"`
+	Status           string                  `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	Summary          *string                 `protobuf:"bytes,9,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
+	Error            *string                 `protobuf:"bytes,10,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	Activities       []*SubagentActivityItem `protobuf:"bytes,11,rep,name=activities,proto3" json:"activities,omitempty"`
+	CreatedAt        int64                   `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        int64                   `protobuf:"varint,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SubagentInfo) Reset() {
+	*x = SubagentInfo{}
+	mi := &file_console_v1_session_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubagentInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubagentInfo) ProtoMessage() {}
+
+func (x *SubagentInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubagentInfo.ProtoReflect.Descriptor instead.
+func (*SubagentInfo) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SubagentInfo) GetSubagentId() string {
+	if x != nil {
+		return x.SubagentId
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetParentToolCallId() string {
+	if x != nil {
+		return x.ParentToolCallId
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetMaxTurns() int32 {
+	if x != nil {
+		return x.MaxTurns
+	}
+	return 0
+}
+
+func (x *SubagentInfo) GetCurrentTurn() int32 {
+	if x != nil {
+		return x.CurrentTurn
+	}
+	return 0
+}
+
+func (x *SubagentInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetSummary() string {
+	if x != nil && x.Summary != nil {
+		return *x.Summary
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *SubagentInfo) GetActivities() []*SubagentActivityItem {
+	if x != nil {
+		return x.Activities
+	}
+	return nil
+}
+
+func (x *SubagentInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *SubagentInfo) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
 var File_console_v1_session_proto protoreflect.FileDescriptor
 
 const file_console_v1_session_proto_rawDesc = "" +
@@ -505,7 +744,43 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\brestored\x18\x02 \x01(\bR\brestored\"a\n" +
 	"\x1eSessionPermanentDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
-	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeletedBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\xf0\x01\n" +
+	"\x14SubagentActivityItem\x12\x1d\n" +
+	"\n" +
+	"turn_index\x18\x01 \x01(\x05R\tturnIndex\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x1d\n" +
+	"\asummary\x18\x04 \x01(\tH\x00R\asummary\x88\x01\x01\x12\x12\n" +
+	"\x04args\x18\x05 \x01(\fR\x04args\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12\x19\n" +
+	"\x05error\x18\a \x01(\tH\x01R\x05error\x88\x01\x01B\n" +
+	"\n" +
+	"\b_summaryB\b\n" +
+	"\x06_error\"\xc6\x03\n" +
+	"\fSubagentInfo\x12\x1f\n" +
+	"\vsubagent_id\x18\x01 \x01(\tR\n" +
+	"subagentId\x12-\n" +
+	"\x13parent_tool_call_id\x18\x02 \x01(\tR\x10parentToolCallId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12\x16\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x1b\n" +
+	"\tmax_turns\x18\x06 \x01(\x05R\bmaxTurns\x12!\n" +
+	"\fcurrent_turn\x18\a \x01(\x05R\vcurrentTurn\x12\x16\n" +
+	"\x06status\x18\b \x01(\tR\x06status\x12\x1d\n" +
+	"\asummary\x18\t \x01(\tH\x00R\asummary\x88\x01\x01\x12\x19\n" +
+	"\x05error\x18\n" +
+	" \x01(\tH\x01R\x05error\x88\x01\x01\x12@\n" +
+	"\n" +
+	"activities\x18\v \x03(\v2 .console.v1.SubagentActivityItemR\n" +
+	"activities\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\f \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\r \x01(\x03R\tupdatedAtB\n" +
+	"\n" +
+	"\b_summaryB\b\n" +
+	"\x06_errorBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_session_proto_rawDescOnce sync.Once
@@ -519,7 +794,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -527,14 +802,17 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SessionDeleteResponse)(nil),          // 3: console.v1.SessionDeleteResponse
 	(*SessionRestoreResponse)(nil),         // 4: console.v1.SessionRestoreResponse
 	(*SessionPermanentDeleteResponse)(nil), // 5: console.v1.SessionPermanentDeleteResponse
+	(*SubagentActivityItem)(nil),           // 6: console.v1.SubagentActivityItem
+	(*SubagentInfo)(nil),                   // 7: console.v1.SubagentInfo
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1, // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	6, // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -543,13 +821,15 @@ func file_console_v1_session_proto_init() {
 		return
 	}
 	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[6].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[7].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

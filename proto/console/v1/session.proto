@@ -61,3 +61,36 @@ message SessionPermanentDeleteResponse {
   string id = 1;
   bool permanently_deleted = 2;
 }
+
+// Live subagent rows (Phase 3, third slice). Subagent start/activity/end
+// EVENT frames stay hand-shaped until the event stream migrates; only the
+// GET rows move here.
+//
+// Counts narrow to int32 so they stay JSON numbers; timestamps encode as
+// protojson strings. Activity args cross as raw JSON bytes (base64), like
+// tool call arguments.
+message SubagentActivityItem {
+  int32 turn_index = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  optional string summary = 4;
+  bytes args = 5;
+  string status = 6;
+  optional string error = 7;
+}
+
+message SubagentInfo {
+  string subagent_id = 1;
+  string parent_tool_call_id = 2;
+  string name = 3;
+  string role = 4;
+  string prompt = 5;
+  int32 max_turns = 6;
+  int32 current_turn = 7;
+  string status = 8;
+  optional string summary = 9;
+  optional string error = 10;
+  repeated SubagentActivityItem activities = 11;
+  int64 created_at = 12;
+  int64 updated_at = 13;
+}

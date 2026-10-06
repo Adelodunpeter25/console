@@ -1,0 +1,1 @@
+[{"subagentId":"sub1","parentToolCallId":"call1","name":"Explore","role":"explorer","prompt":"find things","maxTurns":5,"currentTurn":2,"status":"running","summary":"looking","activities":[{"turnIndex":2,"toolCallId":"c9","toolName":"read","summary":"reading","args":"eyJwYXRoIjoiL3gifQ==","status":"completed"}],"createdAt":"1700000000000","updatedAt":"1700000000001"}]

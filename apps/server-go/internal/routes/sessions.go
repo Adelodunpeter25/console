@@ -14,11 +14,44 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// subagentToProto converts a service row to the canonical wire type.
+// Activity args cross as raw JSON bytes; counts narrow to int32.
+func subagentToProto(s types.SubagentInfo) *consolev1.SubagentInfo {
+	out := &consolev1.SubagentInfo{
+		SubagentId: s.SubagentID, ParentToolCallId: s.ParentToolCallID,
+		Name: s.Name, Role: s.Role, Prompt: s.Prompt,
+		MaxTurns: int32(s.MaxTurns), CurrentTurn: int32(s.CurrentTurn),
+		Status: s.Status, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+	}
+	if s.Summary != nil {
+		out.Summary = s.Summary
+	}
+	if s.Error != nil {
+		out.Error = s.Error
+	}
+	for _, a := range s.Activities {
+		item := &consolev1.SubagentActivityItem{
+			TurnIndex: int32(a.TurnIndex), ToolCallId: a.ToolCallID,
+			ToolName: a.ToolName, Status: a.Status,
+		}
+		if a.Summary != nil {
+			item.Summary = a.Summary
+		}
+		if len(a.Args) > 0 {
+			item.Args = append([]byte(nil), a.Args...)
+		}
+		if a.Error != nil {
+			item.Error = a.Error
+		}
+		out.Activities = append(out.Activities, item)
+	}
+	return out
+}
+
 // sessionHeaderToProto converts a service header to the canonical wire
 // type. Timestamps encode as protojson strings; messageCount is always
 // populated, preserving the old always-present number.
-func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
-	out := &consolev1.SessionHeader{
+func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {	out := &consolev1.SessionHeader{
 		Id: h.ID, Title: h.Title, Cwd: h.Cwd,
 		ModelId: h.ModelID, Provider: h.Provider, ApprovalMode: h.ApprovalMode,
 		CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
@@ -327,7 +360,15 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(fiber.Map{"success": true, "data": subagents})
+		items := make([]*consolev1.SubagentInfo, 0, len(subagents))
+		for _, sub := range subagents {
+			items = append(items, subagentToProto(sub))
+		}
+		data, err := marshalProtoList(items)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// GET /api/sessions/:id/todos — persisted todos for a session.
