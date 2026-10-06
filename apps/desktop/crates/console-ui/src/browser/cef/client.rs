@@ -288,6 +288,13 @@ wrap_life_span_handler! {
     }
 
     impl LifeSpanHandler {
+        fn do_close(&self, _browser: Option<&mut Browser>) -> ::std::os::raw::c_int {
+            // The browser is a child view of the app window. Returning false
+            // would make CEF send performClose: to that top-level window and
+            // close the whole app window, so claim the close ourselves.
+            1
+        }
+
         fn on_before_close(&self, _browser: Option<&mut Browser>) {
             // CEF is done with the browser: now (and only now) detach the
             // native view. Detaching earlier races CEF's async teardown.
