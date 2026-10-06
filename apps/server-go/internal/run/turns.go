@@ -282,7 +282,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		}
 	}
 
-	history := decodeHistory(loaded.Messages)
+	history := DecodeHistory(loaded.Messages)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
 		Cwd:          header.Cwd,
 		Model:        modelID,

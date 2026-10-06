@@ -55,7 +55,7 @@ func (s *Service) ContextUsage(ctx context.Context, sessionID string) (loop.Cont
 		Model:        header.ModelID,
 		ApprovalMode: systemprompt.ApprovalMode(header.ApprovalMode),
 	})
-	history := decodeHistory(loaded.Messages)
+	history := DecodeHistory(loaded.Messages)
 	defs := tools.NewRegistry(tools.DefaultTools()...).Definitions()
 	est := compaction.EstimatePayloadTokens(history, prompt.SystemPrompt, defs)
 
