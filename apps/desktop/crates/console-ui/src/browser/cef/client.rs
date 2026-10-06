@@ -7,7 +7,7 @@
 //! future slice may upgrade to `CefMessageRouter` or CDP
 //! `Runtime.consoleAPICalled`.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use cef::{
@@ -19,6 +19,10 @@ use cef::{
     WrapLifeSpanHandler, WrapLoadHandler,
 };
 use cef::{wrap_client, wrap_context_menu_handler, wrap_display_handler, wrap_life_span_handler, wrap_load_handler};
+use cef::{
+    wrap_dev_tools_message_observer, DevToolsMessageObserver, ImplDevToolsMessageObserver,
+    WrapDevToolsMessageObserver,
+};
 use cef::rc::Rc as CefRc;
 
 use crate::browser::host::NativeNavigationError;
@@ -53,6 +57,10 @@ pub(super) struct Shared {
     /// Detached in `on_before_close`, when CEF is done with it — never
     /// earlier, so CEF's async teardown never meets a view we pulled away.
     pub(super) native_view: Cell<Option<objc2::rc::Retained<objc2_app_kit::NSView>>>,
+    /// This browser's CDP target id, from `Target.getTargetInfo` right after
+    /// creation. Lets an external CDP client (agent-browser) address exactly
+    /// this tab, even when several tabs show the same URL.
+    pub(super) target_id: RefCell<Option<String>>,
 }
 
 /// The navigation subset of [`HostCallbacks`]. Responder tracking stays with
@@ -332,6 +340,40 @@ wrap_life_span_handler! {
     }
 }
 
+/// DevTools message id used for the one-shot `Target.getTargetInfo` request.
+pub(super) const TARGET_INFO_MESSAGE_ID: i32 = 1;
+
+/// Extract `targetInfo.targetId` from a `Target.getTargetInfo` result.
+pub fn parse_target_id(result: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(result).ok()?;
+    let id = value.get("targetInfo")?.get("targetId")?.as_str()?;
+    (!id.is_empty()).then(|| id.to_string())
+}
+
+wrap_dev_tools_message_observer! {
+    pub(super) struct TargetInfoObserver {
+        shared: SharedRef,
+    }
+
+    impl DevToolsMessageObserver {
+        fn on_dev_tools_method_result(
+            &self,
+            _browser: Option<&mut Browser>,
+            message_id: ::std::os::raw::c_int,
+            success: ::std::os::raw::c_int,
+            result: Option<&[u8]>,
+        ) {
+            if message_id != TARGET_INFO_MESSAGE_ID || success == 0 {
+                return;
+            }
+            if let Some(id) = result.and_then(parse_target_id) {
+                log::debug!("CEF: browser target id {id}");
+                *self.shared.target_id.borrow_mut() = Some(id);
+            }
+        }
+    }
+}
+
 /// Built client plus the shared state the host keeps for progress reads.
 pub(super) struct ClientBundle {
     pub(super) client: Client,
@@ -354,6 +396,7 @@ pub(super) fn build_client(
         progress: Cell::new(0.0),
         closing: Cell::new(false),
         native_view: Cell::new(None),
+        target_id: RefCell::new(None),
     });
     ClientBundle {
         client: ConsoleClient::new(shared.clone()),

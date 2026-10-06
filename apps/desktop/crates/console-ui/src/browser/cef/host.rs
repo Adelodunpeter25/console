@@ -22,10 +22,13 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 use cef::{
     Browser, BrowserSettings, CefString, ImplBrowser, ImplBrowserHost, ImplFrame, Rect as CefRect,
-    RuntimeStyle, WindowInfo, browser_host_create_browser_sync,
+    Registration, RuntimeStyle, WindowInfo, browser_host_create_browser_sync,
 };
 
-use crate::browser::cef::client::{ClientBundle, NavCallbacks, SharedRef, build_client, progress_of};
+use crate::browser::cef::client::{
+    ClientBundle, NavCallbacks, SharedRef, TARGET_INFO_MESSAGE_ID, TargetInfoObserver, build_client,
+    progress_of,
+};
 use crate::browser::cef::runtime::ensure_initialized;
 use crate::browser::host::{HostCallbacks, HostContent};
 use crate::browser::native_utils::{ResponderObserver, lower_below_scene_overlay};
@@ -42,6 +45,9 @@ const INITIAL_BOUNDS: CefRect = CefRect {
 pub struct WebviewHost {
     browser: Browser,
     _client_bundle: ClientBundle,
+    /// Keeps the `Target.getTargetInfo` observer registered for the life of
+    /// the browser (dropping it unregisters the observer).
+    _target_info_registration: Option<Registration>,
     shared: SharedRef,
     cef_view: Retained<NSView>,
     parent_view: Retained<NSView>,
@@ -138,6 +144,13 @@ impl WebviewHost {
         let host = browser
             .host()
             .ok_or_else(|| "CEF browser has no host.".to_string())?;
+        // Ask this browser for its own CDP target id. The result arrives on
+        // `TargetInfoObserver` (same UI thread) and lands in `shared`.
+        let mut target_observer = TargetInfoObserver::new(bundle.shared.clone());
+        let target_info_registration =
+            host.add_dev_tools_message_observer(Some(&mut target_observer));
+        let method = CefString::from("Target.getTargetInfo");
+        host.execute_dev_tools_method(TARGET_INFO_MESSAGE_ID, Some(&method), None);
         let raw_view = host.window_handle();
         if raw_view.is_null() {
             return Err("CEF browser has no native view.".to_string());
@@ -158,6 +171,7 @@ impl WebviewHost {
             browser,
             shared: bundle.shared.clone(),
             _client_bundle: bundle,
+            _target_info_registration: target_info_registration,
             cef_view,
             parent_view,
             last_bounds: Cell::new(None),
@@ -167,6 +181,12 @@ impl WebviewHost {
         log::debug!("CEF: browser surface created for {initial_url}");
         this.set_visible(false);
         Ok(this)
+    }
+
+    /// The CDP target id of this browser, once CEF has reported it. `None`
+    /// until the first `Target.getTargetInfo` result arrives.
+    pub fn target_id(&self) -> Option<String> {
+        self.shared.target_id.borrow().clone()
     }
 
     pub fn ns_view(&self) -> &NSView {
