@@ -20,7 +20,12 @@ Run against the live dev app with a fixed debug port and four tabs open (one vis
 - `tN` ids (`t1`, `t2`) are reassigned from `t1` on every new connection and the order changes. They must **never** be used.
 - Connecting with a per-page WebSocket URL (`ws://.../devtools/page/<id>`) does **not** pin the target. It still attaches at browser level.
 
-Not verified yet: `Target.getTargetInfo` per browser from inside the app (see 5.2), closing a tab through CDP, an ephemeral port, multi-session concurrency.
+Second spike (four tabs, two of them on the same URL):
+
+- **`Target.getTargetInfo` works per browser, in-process.** `host.add_dev_tools_message_observer(...)` plus `host.execute_dev_tools_method(1, "Target.getTargetInfo", None)` on a freshly created browser returns `{"targetInfo":{"targetId":"<32-hex>", ...}}` immediately, even while the page is still `about:blank`. All four ids matched `/json/list` exactly, and the two same-URL tabs got different ids, so the Console tab to target mapping is reliable. A tab keeps its target id across navigation (a link click on a tab did not change its id).
+- **Focus:** with the chat composer focused, `tab <targetId>` (hidden tab), `fill` (hidden tab), `screenshot`, and `click` on another tab did not move focus. The composer cursor stayed put (confirmed by the user) and the app stayed the frontmost application. Not yet tested: a visible tab, `type` with Enter, keyboard commands, and long-running sessions.
+
+Not verified yet: closing a tab through CDP, an ephemeral port, multi-session concurrency, target id after cross-process navigation.
 
 ## 3. Hard rules (learned the hard way)
 
@@ -72,7 +77,7 @@ Everything new is compiled only for CEF builds:
 
 Each Console tab (`browser_id` in `browser_actions.rs`, resolved by `pick_browser_view`) must map to exactly one CDP `targetId`.
 
-- Preferred: ask each CEF browser for its own target id with a DevTools method on its host (`Target.getTargetInfo` via `execute_dev_tools_method`) once the browser is created, and store it on the `WebviewHost`/`BrowserView`. **Must be verified** against CEF 154 before building on it.
+- **Verified (CEF 154):** ask each CEF browser for its own target id with a DevTools method on its host (`Target.getTargetInfo` via `execute_dev_tools_method`, result delivered to a `DevToolsMessageObserver.on_dev_tools_method_result`) right after the browser is created, and store it on the `WebviewHost`/`BrowserView`. The call must run on the CEF UI thread (we are on the main thread there). Keep the observer `Registration` alive for the host's lifetime and drop it with the host. The throwaway spike code that logs this lives in `cef/client.rs` (`TargetInfoObserver`) and `cef/host.rs`; productionize it by replacing the logging with storing the id.
 - Fallback if that does not work: list targets over `http://127.0.0.1:<port>/json/list` and match by URL+title, resolving ambiguity (duplicate URLs) by temporarily tagging the page. This is fragile; avoid unless needed.
 - Targets get destroyed and recreated on cross-process navigation in some cases. Re-resolve the target id when an action fails with "target gone", and refresh on browser create/close events.
 
@@ -121,7 +126,7 @@ Later (optional, needs a tool schema change in `browser_tool.go`): `batch`, `pre
 
 ## 8. Phases
 
-1. **Foundation** - ephemeral debug port + accessor (5.1). Verify `Target.getTargetInfo` per browser and store the target id (5.2). Verify tab close via CDP vs Console close (`do_close`).
+1. **Foundation** - ephemeral debug port + accessor (5.1). Store each browser's `targetId` from `Target.getTargetInfo` (5.2, verified). Verify tab close via CDP vs Console close (`do_close`).
 2. **Module** - `agent_browser` module with binary lookup, argv builder with the hard rules (section 3), timeouts, error mapping, allow-list (5.3).
 3. **Dispatch** - wire `snapshot` / `click` / `type` / `run_js` / `screenshot` behind the CEF gate with fallback to the JS path (5.4, 5.5). Then `get_content` and `wait_for`.
 4. **Bundling** - ship a pinned `agent-browser` binary in the CEF app bundle (`scripts/build.sh --cef`), including release signing/notarization. Do not ship it in non-CEF builds.
@@ -143,10 +148,9 @@ A read-only clone lives at `~/Developer/Projects/agent-browser` (v0.38.2). It is
 
 ## 11. Open questions
 
-- Does `Target.getTargetInfo` work per browser via the host in CEF 154 (5.2)?
 - Does the CDP close path (`Target.closeTarget`) interact badly with the `do_close` handling? Expect Console to keep owning closes, so this may not matter.
 - Where does the binary live in the signed/notarized bundle, and does the hardened runtime need entitlements for spawning it?
-- **Focus (blocking):** with the composer focused, does `agent-browser --cdp <port> tab <targetId>`, `click`, `fill`, `screenshot` change the AppKit first responder or raise the window? Test on a visible and on a hidden tab. If yes, find which CDP call does it and avoid or undo it.
+- **Focus (mostly answered):** `tab <targetId>`, `fill`, `screenshot`, `click` did not steal focus on hidden tabs. Still to test: a visible tab, `type` plus Enter, `press`/keyboard commands, `hover`/`scroll`, and a stricter check than "the cursor stayed" (e.g. log first-responder changes through `ResponderObserver` while actions run). If any command steals focus, find which CDP call does it and avoid or undo it.
 - Do we want one agent-browser session per workspace or per tab? Per workspace is simpler; per tab avoids sharing the single "current tab" state under concurrent actions.
 - Dev workflow: how do developers set the port/binary when running unbundled?
 
