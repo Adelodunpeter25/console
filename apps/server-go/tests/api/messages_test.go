@@ -11,9 +11,10 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 )
 
 func messageFixture(t *testing.T, name string) string {
@@ -93,5 +94,29 @@ func TestMessageProtoMatchesFixtures(t *testing.T) {
 	wrapped, ok := decoded.GetMessage().(*consolev1.AgentMessage_User)
 	if !ok || wrapped.User.GetContent() != "Hello" {
 		t.Fatalf("decoded: %+v", &decoded)
+	}
+}
+
+func TestMixedShapeHistoryReplays(t *testing.T) {
+	// Pre-migration rows (role-keyed) and canonical rows (oneof) decode
+	// through the same replay path. Drop the legacy row once dev stores
+	// turn over.
+	canonical, err := loop.ToProtoBytes(loop.UserMessage{Role: loop.RoleUser, Content: "new"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := []json.RawMessage{
+		json.RawMessage(`{"role":"user","content":"old"}`),
+		json.RawMessage(canonical),
+	}
+	history := run.DecodeHistory(stored)
+	if len(history) != 2 {
+		t.Fatalf("replayed %d, want 2", len(history))
+	}
+	for i, want := range []string{"old", "new"} {
+		user, ok := history[i].(loop.UserMessage)
+		if !ok || user.Content != want {
+			t.Fatalf("row %d: %+v", i, history[i])
+		}
 	}
 }
