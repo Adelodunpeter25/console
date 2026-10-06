@@ -4,7 +4,6 @@ use console_core::types::*;
 fn test_git_types_deserialization() {
     let json_data = r#"{
         "branch": "feature/sidebar",
-        "clean": false,
         "files": [
             {
                 "path": "apps/desktop/src/main.rs",
@@ -84,8 +83,7 @@ fn test_fs_tree_entry_deserialization() {
             {
                 "name": "main.rs",
                 "path": "/repo/src/main.rs",
-                "isDir": false,
-                "size": 1024
+                "size": "1024"
             }
         ]
     }"#;
@@ -93,7 +91,7 @@ fn test_fs_tree_entry_deserialization() {
     let tree: FsTreeEntry = serde_json::from_str(json_data).expect("deserializes tree");
     assert_eq!(tree.name, "src");
     assert!(tree.is_dir);
-    assert_eq!(tree.children.as_ref().unwrap().len(), 1);
+    assert_eq!(tree.children.len(), 1);
 }
 
 #[test]

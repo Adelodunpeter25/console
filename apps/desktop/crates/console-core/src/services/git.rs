@@ -158,7 +158,12 @@ impl GitService {
 
     pub async fn checkout_branch(&self, path: Option<&str>, branch: &str) -> Result<()> {
         let url = self.transport.url("/api/git/checkout").await;
-        let payload = serde_json::json!({ "path": path, "branch": branch });
+        // Canonical bytes match the old hand-built object. None path
+        // encodes as "" and is rejected server-side, as before.
+        let payload = crate::types::GitCheckoutRequest {
+            path: path.unwrap_or_default().to_string(),
+            branch: branch.to_string(),
+        };
 
         let resp = self
             .transport

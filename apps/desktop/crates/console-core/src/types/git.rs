@@ -1,58 +1,36 @@
-use serde::{Deserialize, Serialize};
+// Canonical wire types from the shared protobuf schema
+// (proto/console/v1/git.proto): status codes stay plain strings, numstat
+// counts narrow to u32 so they stay JSON numbers.
+//
+// The summary counters lived on the hand-written struct as inherent methods;
+// generated types are foreign so they move to GitStatusSummaryExt,
+// re-exported alongside the types.
+pub use console_proto::{
+    GitBranchInfo, GitBranchesResponse, GitCheckoutRequest, GitCheckoutResponse, GitDiffResponse,
+    GitFileEntry, GitStatusSummary,
+};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitFileEntry {
-    pub path: String,
-    pub status: String,
-    pub staged: bool,
-    pub additions: Option<u64>,
-    pub deletions: Option<u64>,
+pub trait GitStatusSummaryExt {
+    fn modified_count(&self) -> usize;
+    fn staged_count(&self) -> usize;
+    fn untracked_count(&self) -> usize;
+    fn is_clean(&self) -> bool;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitStatusSummary {
-    pub branch: String,
-    pub clean: bool,
-    pub files: Vec<GitFileEntry>,
-}
-
-impl GitStatusSummary {
-    pub fn modified_count(&self) -> usize {
+impl GitStatusSummaryExt for GitStatusSummary {
+    fn modified_count(&self) -> usize {
         self.files
             .iter()
             .filter(|f| f.status == "M" && !f.staged)
             .count()
     }
-    pub fn staged_count(&self) -> usize {
+    fn staged_count(&self) -> usize {
         self.files.iter().filter(|f| f.staged).count()
     }
-    pub fn untracked_count(&self) -> usize {
+    fn untracked_count(&self) -> usize {
         self.files.iter().filter(|f| f.status == "?").count()
     }
-    pub fn is_clean(&self) -> bool {
+    fn is_clean(&self) -> bool {
         self.clean
     }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitDiffResponse {
-    pub path: Option<String>,
-    pub diff: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitBranchInfo {
-    pub name: String,
-    pub current: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GitBranchesResponse {
-    pub branches: Vec<GitBranchInfo>,
-    pub is_git_repository: bool,
 }

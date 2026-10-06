@@ -46,3 +46,7 @@ path = "tests/scripts_json_test.rs"
 [[test]]
 name = "fs_json_test"
 path = "tests/fs_json_test.rs"
+
+[[test]]
+name = "git_json_test"
+path = "tests/git_json_test.rs"
