@@ -251,10 +251,13 @@ mod macos_host {
             content: HostContent,
             callbacks: HostCallbacks,
         ) -> Result<Self, String> {
+            // Hidden at a sane size (the same as the CEF backend's initial
+            // bounds), not 0x0: a page loading in a background tab would lay
+            // out at zero width. `sync_bounds` sets the real size when shown.
             let mut builder = wry::WebViewBuilder::new()
                 .with_bounds(wry::Rect {
                     position: LogicalPosition::new(0.0, 0.0).into(),
-                    size: LogicalSize::new(0.0, 0.0).into(),
+                    size: LogicalSize::new(800.0, 600.0).into(),
                 })
                 .with_visible(false)
                 .with_focused(false)
