@@ -59,6 +59,10 @@ mod imp {
         !DISABLED.load(Ordering::Relaxed)
     }
 
+    pub fn is_ready() -> bool {
+        is_enabled() && debug_port().is_some()
+    }
+
     fn binary() -> Result<PathBuf, DriveError> {
         let mut cached = BINARY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(path) = cached.as_ref().filter(|path| path.is_file()) {
@@ -118,6 +122,10 @@ mod imp {
         false
     }
 
+    pub fn is_ready() -> bool {
+        false
+    }
+
     pub fn drive(
         _session: &str,
         _target_id: &str,
@@ -136,6 +144,12 @@ pub fn is_enabled() -> bool {
     imp::is_enabled()
 }
 
+/// Whether a drive can start right now: enabled and CEF's debug port is up.
+/// Callers use this to choose between agent-browser and the in-page fallback.
+pub fn is_ready() -> bool {
+    imp::is_ready()
+}
+
 /// Run `commands` (each `[verb, args...]`) against one CDP target as a single
 /// atomic batch. Blocking: call from a background thread.
 pub fn drive(
@@ -145,4 +159,117 @@ pub fn drive(
     timeout: Duration,
 ) -> Result<Vec<DriveStep>, DriveError> {
     imp::drive(session, target_id, commands, timeout)
+}
+
+// ---------------------------------------------------------------------------
+// Command builders (pure): Console browser action -> agent-browser commands
+// ---------------------------------------------------------------------------
+
+/// A command list is a batch of `[verb, args...]` steps.
+pub type Commands = Vec<Vec<String>>;
+
+fn command(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(|part| part.to_string()).collect()
+}
+
+/// Normalize an element ref from a snapshot (`e12`, `@e12`, `ref=e12`) to the
+/// `@e12` form agent-browser expects.
+pub fn normalize_ref(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let bare = trimmed
+        .strip_prefix("ref=")
+        .unwrap_or(trimmed)
+        .trim_start_matches('@');
+    format!("@{bare}")
+}
+
+/// Interactive accessibility snapshot with `@eN` refs.
+pub fn snapshot_commands() -> Commands {
+    vec![command(&["snapshot", "-i"])]
+}
+
+pub fn click_commands(element_ref: &str) -> Commands {
+    vec![vec!["click".to_string(), normalize_ref(element_ref)]]
+}
+
+/// Fill `text` into the element, then press Enter when `submit` is set.
+pub fn type_commands(element_ref: &str, text: &str, submit: bool) -> Commands {
+    let mut commands = vec![vec![
+        "fill".to_string(),
+        normalize_ref(element_ref),
+        text.to_string(),
+    ]];
+    if submit {
+        commands.push(command(&["press", "Enter"]));
+    }
+    commands
+}
+
+pub fn run_js_commands(script: &str) -> Commands {
+    vec![vec!["eval".to_string(), script.to_string()]]
+}
+
+/// Page text, or the text of `selector` when given.
+pub fn content_commands(selector: Option<&str>) -> Commands {
+    let target = selector.filter(|s| !s.trim().is_empty()).unwrap_or("body");
+    vec![vec!["get".to_string(), "text".to_string(), target.to_string()]]
+}
+
+/// One `wait` step per condition; all must hold. `url_contains` becomes a
+/// `**substring**` glob.
+pub fn wait_commands(
+    selector: Option<&str>,
+    url_contains: Option<&str>,
+    text: Option<&str>,
+    timeout_ms: u64,
+) -> Commands {
+    let timeout = timeout_ms.to_string();
+    let mut commands = Vec::new();
+    if let Some(selector) = selector {
+        commands.push(vec![
+            "wait".to_string(),
+            selector.to_string(),
+            "--timeout".to_string(),
+            timeout.clone(),
+        ]);
+    }
+    if let Some(text) = text {
+        commands.push(vec![
+            "wait".to_string(),
+            "--text".to_string(),
+            text.to_string(),
+            "--timeout".to_string(),
+            timeout.clone(),
+        ]);
+    }
+    if let Some(fragment) = url_contains {
+        commands.push(vec![
+            "wait".to_string(),
+            "--url".to_string(),
+            format!("**{fragment}**"),
+            "--timeout".to_string(),
+            timeout,
+        ]);
+    }
+    commands
+}
+
+pub fn screenshot_commands(path: &str) -> Commands {
+    vec![vec!["screenshot".to_string(), path.to_string()]]
+}
+
+/// Session name for agent-browser's daemon. One stable name per Console data
+/// dir, so repeated runs reuse a single daemon instead of leaking one per run
+/// while a test build with its own `CONSOLE_CEF_DATA_DIR` stays separate.
+pub fn session_name(data_dir: Option<&str>) -> String {
+    match data_dir.filter(|dir| !dir.is_empty()) {
+        None => "console".to_string(),
+        Some(dir) => {
+            // FNV-1a: stable across runs (std's hasher is randomly seeded).
+            let hash = dir.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |acc, byte| {
+                (acc ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+            });
+            format!("console-{:08x}", hash & 0xffff_ffff)
+        }
+    }
 }

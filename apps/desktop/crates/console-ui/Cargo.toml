@@ -118,3 +118,7 @@ required-features = ["cef-browser"]
 name = "browser_agent_browser_test"
 path = "tests/browser/agent_browser_test.rs"
 required-features = ["cef-browser"]
+
+[[test]]
+name = "browser_agent_driver_test"
+path = "tests/browser/agent_driver_test.rs"
