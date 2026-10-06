@@ -752,7 +752,7 @@ impl ConsoleDesktopApp {
                     existing.name = name;
                     existing.role = role;
                     existing.prompt = prompt;
-                    existing.max_turns = max_turns;
+                    existing.max_turns = max_turns as i32;
                     existing.status = "running".to_string();
                 } else {
                     list_mut.push(console_core::types::SubagentInfo {
@@ -761,12 +761,13 @@ impl ConsoleDesktopApp {
                         name,
                         role,
                         prompt,
-                        max_turns,
+                        max_turns: max_turns as i32,
                         current_turn: 1,
                         status: "running".to_string(),
                         summary: None,
                         error: None,
                         activities: Vec::new(),
+                        ..Default::default()
                     });
                 }
             }
@@ -779,6 +780,8 @@ impl ConsoleDesktopApp {
                 status,
                 error,
             } => {
+                // Event counts are usize; the wire narrows to i32.
+                let turn_index = turn_index as i32;
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
                     if let Some(subagent) =
@@ -802,7 +805,11 @@ impl ConsoleDesktopApp {
                                     tool_call_id,
                                     tool_name,
                                     summary: None,
-                                    args,
+                                    args: args
+                                        .map(|v| {
+                                            serde_json::to_vec(&v).unwrap_or_default()
+                                        })
+                                        .unwrap_or_default(),
                                     status,
                                     error,
                                 });
@@ -830,7 +837,7 @@ impl ConsoleDesktopApp {
                             subagent.error = error;
                         }
                         if total_turns > 0 {
-                            subagent.current_turn = total_turns;
+                            subagent.current_turn = total_turns as i32;
                         }
                     }
                 }

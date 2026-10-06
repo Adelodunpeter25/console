@@ -325,39 +325,10 @@ pub struct AskQuestionRequest {
 /// (pending/in_progress/completed); ids narrow to i32 and stay JSON numbers.
 pub use console_proto::TodoItem;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SubagentActivityItem {
-    pub turn_index: usize,
-    pub tool_call_id: String,
-    pub tool_name: String,
-    #[serde(default)]
-    pub summary: Option<String>,
-    #[serde(default)]
-    pub args: Option<serde_json::Value>,
-    pub status: String, // "running", "completed", "error"
-    #[serde(default)]
-    pub error: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SubagentInfo {
-    pub subagent_id: String,
-    pub parent_tool_call_id: String,
-    pub name: String,
-    pub role: String,
-    pub prompt: String,
-    pub max_turns: usize,
-    pub current_turn: usize,
-    pub status: String, // "running", "completed", "aborted", "error"
-    #[serde(default)]
-    pub summary: Option<String>,
-    #[serde(default)]
-    pub error: Option<String>,
-    #[serde(default)]
-    pub activities: Vec<SubagentActivityItem>,
-}
+/// Canonical wire types from the shared protobuf schema
+/// (proto/console/v1/session.proto). Activity args cross as raw JSON bytes;
+/// counts narrow to i32 and stay JSON numbers; timestamps encode as strings.
+pub use console_proto::{SubagentActivityItem, SubagentInfo};
 
 /// A prompt staged to run automatically once the session's active turn settles.
 #[derive(Clone, Debug, Serialize, Deserialize)]

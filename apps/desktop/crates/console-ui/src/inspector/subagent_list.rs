@@ -323,7 +323,7 @@ impl RenderOnce for SubagentListView {
                                                         let act_completed = act.status == "completed";
 
                                                         let args_summary = act.summary.clone().or_else(|| {
-                                                            let v = act.args.as_ref()?;
+                                                            let v: serde_json::Value = serde_json::from_slice(&act.args).ok()?;
                                                             let raw_str = if let Some(obj) = v.as_object() {
                                                                 if let Some(cmd) = obj.get("command").or_else(|| obj.get("CommandLine")).and_then(|c| c.as_str()) {
                                                                     Some(cmd.to_string())
