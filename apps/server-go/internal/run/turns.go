@@ -352,6 +352,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		},
 		SystemPrompt: prompt.StableSystem,
 		Setup:        setup,
+		// A subagent inherits the parent run's mode: it holds the same tools,
+		// so it must hold the same authority over them.
+		ApprovalMode: mode,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))

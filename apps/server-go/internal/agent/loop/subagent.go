@@ -32,8 +32,13 @@ type SubagentContext struct {
 	NestedTools  func(registry *tools.Registry)
 	SystemPrompt string
 	// Setup is the parent's per-session setup, sent as a leading message.
-	Setup    string
-	Approver Approver
+	Setup string
+	// ApprovalMode is the parent run's permission mode. A subagent inherits its
+	// parent's tools, so it must inherit the parent's authority too: it may not
+	// act with more permission than the run that spawned it. Zero value means
+	// always-ask, which is the safe default for a run that did not say.
+	ApprovalMode permissions.Mode
+	Approver    Approver
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
@@ -145,7 +150,11 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	if c.NestedTools != nil {
 		c.NestedTools(registry)
 	}
-	agent := New(c.Provider, NewExecutor(registry, permissions.FullAccess, c.Approver), nil)
+	mode := c.ApprovalMode
+	if mode == "" {
+		mode = permissions.AlwaysAsk
+	}
+	agent := New(c.Provider, NewExecutor(registry, mode, c.Approver), nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
 	agent.Model = c.Model

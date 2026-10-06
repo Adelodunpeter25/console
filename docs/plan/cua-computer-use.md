@@ -263,6 +263,14 @@ and that `kill_app` is denied under `standard`.
 **Phase 5 — modes and manifest.** Map Console's modes to `bounded` / `unrestricted`;
 generate the capability manifest; migrate the mode fallback in `run/turns.go:227`.
 
+**Phase 5a — subagents inherit the parent's mode. DONE.** `subagent.go` took a
+hard-coded `permissions.FullAccess` while inheriting the parent's tools, so a subagent
+could act with more authority than the run that spawned it. `SubagentContext` now carries
+`ApprovalMode`, `run/turns.go` passes the run's mode, and an unset mode falls back to
+`always-ask` rather than full-access. Required for any Cua mode: under `bounded` or
+`unrestricted` the whole point is unattended operation, and under `standard` the
+subagent must not quietly escape the parent's prompts.
+
 **Phase 6 — invocation.** `/computer-use` skill that tells the model to load `mcp:cua` and
 follows the driver's own loop rules. Surface the driver's `SKILL.md` content rather than
 reinventing it.

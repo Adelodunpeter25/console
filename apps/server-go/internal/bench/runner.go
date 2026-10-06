@@ -223,6 +223,8 @@ func buildAgent(opts Options, dir string, task Task) (*loop.Agent, []tools.Defin
 		if t.Name() == "subagent" {
 			toolList[i] = loop.NewSubagentTool(&loop.SubagentContext{
 				Provider: opts.Provider, Model: opts.Model, Tools: toolList, SystemPrompt: prompt.StableSystem, Setup: prompt.Setup, Usage: usage,
+				// The harness itself runs unrestricted, so the subagent does too.
+				ApprovalMode: permissions.FullAccess,
 			})
 		}
 	}
