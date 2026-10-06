@@ -330,24 +330,58 @@ pub use console_proto::TodoItem;
 /// counts narrow to i32 and stay JSON numbers; timestamps encode as strings.
 pub use console_proto::{SubagentActivityItem, SubagentInfo};
 
-/// A prompt staged to run automatically once the session's active turn settles.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueuedPrompt {
-    pub id: String,
-    pub session_id: String,
-    pub prompt: String,
-    #[serde(default)]
-    pub context_files: Option<Vec<String>>,
-    #[serde(default)]
-    pub attachments: Option<Vec<ImageAttachment>>,
-    #[serde(default)]
-    pub model_id: Option<String>,
-    #[serde(default)]
-    pub provider: Option<String>,
-    #[serde(default)]
-    pub approval_mode: Option<String>,
-    #[serde(default)]
-    pub thinking_level: Option<ThinkingLevel>,
-    pub created_at: String,
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/session.proto). The queueUpdated SSE frame stays
+/// hand-shaped until the event stream migrates, but its nested queuedPrompt
+/// payload decodes through this same type.
+///
+/// Wire notes: created_at is the server's RFC3339 string (not millis);
+/// thinking_level is desktop-optimistic (pane default on the local card) —
+/// the server never populates it. The ThinkingLevel enum stays client-side
+/// with conversion at the boundary (helpers below).
+pub use console_proto::QueuedPrompt;
+
+/// Boundary conversions between the render [`ImageAttachment`] and the wire
+/// shape. Both are `{data, mimeType}`; only the container differs
+/// (`Option<Vec>` locally, bare `Vec` on the wire where empty means absent).
+pub fn queued_attachments_to_proto(
+    items: Option<Vec<ImageAttachment>>,
+) -> Vec<ProtoImageAttachment> {
+    items.unwrap_or_default().into_iter().map(|a| ProtoImageAttachment {
+        data: a.data,
+        mime_type: a.mime_type,
+    }).collect()
+}
+
+pub fn queued_attachments_from_proto(
+    items: &[ProtoImageAttachment],
+) -> Option<Vec<ImageAttachment>> {
+    if items.is_empty() {
+        None
+    } else {
+        Some(items.iter().map(|a| ImageAttachment {
+            data: a.data.clone(),
+            mime_type: a.mime_type.clone(),
+        }).collect())
+    }
+}
+
+/// Boundary conversions between [`ThinkingLevel`] and its wire string.
+/// Unknown strings fall back to None, matching the old default.
+pub fn queued_thinking_to_proto(level: Option<ThinkingLevel>) -> Option<String> {
+    level.as_ref().map(|l| l.as_str().to_string())
+}
+
+pub fn queued_thinking_from_proto(raw: Option<&str>) -> Option<ThinkingLevel> {
+    raw.and_then(ThinkingLevel::from_str)
+}
+
+/// Repeated strings cross as a bare `Vec` on the wire (empty means absent);
+/// back to `None` when empty, preserving the old omit-when-empty requests.
+pub fn queued_strings_from_proto(items: &[String]) -> Option<Vec<String>> {
+    if items.is_empty() {
+        None
+    } else {
+        Some(items.to_vec())
+    }
 }

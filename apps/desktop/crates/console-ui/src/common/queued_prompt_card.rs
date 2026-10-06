@@ -46,10 +46,7 @@ pub fn queued_prompt_row(
     on_steer: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     theme: Theme,
 ) -> impl IntoElement {
-    let has_attachments = prompt
-        .attachments
-        .as_ref()
-        .is_some_and(|attachments| !attachments.is_empty());
+    let has_attachments = !prompt.attachments.is_empty();
     let display_text = format_prompt_preview(&prompt.prompt);
     let edit_id = format!("queued-edit-{}", prompt.id);
     let delete_id = format!("queued-delete-{}", prompt.id);

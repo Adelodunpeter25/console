@@ -89,12 +89,13 @@ impl ConsoleDesktopApp {
             id: format!("queued-{}", chrono::Utc::now().timestamp_micros()),
             session_id: session_id.clone(),
             prompt: prompt.clone(),
-            context_files: dq.context_files.clone(),
+            context_files: dq.context_files.clone().unwrap_or_default(),
             model_id: dq.model_id.clone(),
             provider: dq.provider.clone(),
             approval_mode: dq.approval_mode.clone(),
-            thinking_level: dq.thinking_level,
-            attachments: dq.attachments.clone(),
+            thinking_level: console_core::queued_thinking_to_proto(dq.thinking_level),
+            attachments: console_core::queued_attachments_to_proto(dq.attachments.clone()),
+            annotations: vec![],
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.add_queued_prompt_for_session(&session_id, queued_item);
@@ -171,12 +172,14 @@ impl ConsoleDesktopApp {
             let next = remaining[0].clone();
             let dq = console_core::RunPromptDto {
                 prompt: next.prompt,
-                context_files: next.context_files,
+                context_files: console_core::queued_strings_from_proto(&next.context_files),
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
-                thinking_level: next.thinking_level,
-                attachments: next.attachments,
+                thinking_level: console_core::queued_thinking_from_proto(
+                    next.thinking_level.as_deref(),
+                ),
+                attachments: console_core::queued_attachments_from_proto(&next.attachments),
             };
             cx.spawn(async move |_, _| {
                 let _ = client.runs.queue_prompt(&session_id, dq).await;
@@ -198,8 +201,9 @@ impl ConsoleDesktopApp {
             return;
         };
         let prompt = queued.prompt.clone();
-        let attachments = queued.attachments.clone().unwrap_or_default();
-        let context_files = queued.context_files.clone().unwrap_or_default();
+        let attachments = console_core::queued_attachments_from_proto(&queued.attachments)
+            .unwrap_or_default();
+        let context_files = queued.context_files.clone();
         // Restore into composer for editing, then discard the queue entry.
         self.composer_for_pane(&pane_id)
             .update(cx, |input, cx| {
@@ -220,12 +224,14 @@ impl ConsoleDesktopApp {
             let next = remaining[0].clone();
             let dq = console_core::RunPromptDto {
                 prompt: next.prompt,
-                context_files: next.context_files,
+                context_files: console_core::queued_strings_from_proto(&next.context_files),
                 model_id: next.model_id,
                 provider: next.provider,
                 approval_mode: next.approval_mode,
-                thinking_level: next.thinking_level,
-                attachments: next.attachments,
+                thinking_level: console_core::queued_thinking_from_proto(
+                    next.thinking_level.as_deref(),
+                ),
+                attachments: console_core::queued_attachments_from_proto(&next.attachments),
             };
             cx.spawn(async move |_, _| {
                 let _ = client.runs.queue_prompt(&session_id, dq).await;
@@ -248,7 +254,7 @@ impl ConsoleDesktopApp {
         };
         let dto = RunPromptDto {
             prompt: queued.prompt.clone(),
-            context_files: queued.context_files.clone(),
+            context_files: console_core::queued_strings_from_proto(&queued.context_files),
             model_id: queued.model_id.clone().or_else(|| {
                 self.pane_selected_model(&pane_id)
                     .as_ref()
@@ -263,10 +269,11 @@ impl ConsoleDesktopApp {
                 .approval_mode
                 .clone()
                 .or_else(|| Some(self.pane_approval_mode(&pane_id).value().to_string())),
-            thinking_level: queued
-                .thinking_level
-                .or_else(|| self.pane_thinking_level(&pane_id)),
-            attachments: queued.attachments.clone(),
+            thinking_level: console_core::queued_thinking_from_proto(
+                queued.thinking_level.as_deref(),
+            )
+            .or_else(|| self.pane_thinking_level(&pane_id)),
+            attachments: console_core::queued_attachments_from_proto(&queued.attachments),
         };
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -927,8 +934,12 @@ impl ConsoleDesktopApp {
                         let user_msg = console_core::AgentMessage::User {
                             id: None,
                             content: popped.prompt,
-                            attachments: popped.attachments,
-                            context_files: popped.context_files,
+                            attachments: console_core::queued_attachments_from_proto(
+                                &popped.attachments,
+                            ),
+                            context_files: console_core::queued_strings_from_proto(
+                                &popped.context_files,
+                            ),
                             created_at: Some(chrono::Utc::now().timestamp()),
                         };
                         if pane_shows_run {
@@ -946,12 +957,14 @@ impl ConsoleDesktopApp {
                             let sid = run_session_id.to_string();
                             let dq = console_core::RunPromptDto {
                                 prompt: next.prompt,
-                                context_files: next.context_files,
+                                context_files: console_core::queued_strings_from_proto(&next.context_files),
                                 model_id: next.model_id,
                                 provider: next.provider,
                                 approval_mode: next.approval_mode,
-                                thinking_level: next.thinking_level,
-                                attachments: next.attachments,
+                                thinking_level: console_core::queued_thinking_from_proto(
+                                    next.thinking_level.as_deref(),
+                                ),
+                                attachments: console_core::queued_attachments_from_proto(&next.attachments),
                             };
                             cx.spawn(async move |_, _| {
                                 let _ = client.runs.queue_prompt(&sid, dq).await;
