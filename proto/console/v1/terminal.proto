@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Interactive terminal control messages (/api/terminals). Ninth domain;
+// desktop + server + mobile.
+//
+// Only the JSON control frames migrate. Raw PTY bytes (binary tag-byte
+// frames in both directions) and the spawn query-string params stay exactly
+// as they are. Frames change from {"type":"spawned",...} to the oneof shape
+// {"spawned":{...}}.
+//
+// Two trims: the spawned label is dropped (sent by the server but read by
+// no client), and exit codes are always present (the server has no path
+// that omits them), so both stay plain fields.
+message TerminalSpawned {
+  string id = 1;
+  int32 pid = 2;
+  string cwd = 3;
+  string shell = 4;
+  int32 cols = 5;
+  int32 rows = 6;
+}
+
+// JSON text-mode output only; binary clients get raw tag-byte frames.
+message TerminalOutput {
+  string data = 1;
+}
+
+message TerminalExit {
+  // Always populated by the server (even 0), matching the old shape.
+  optional int32 code = 1;
+}
+
+message TerminalError {
+  string message = 1;
+}
+
+message TerminalServerMessage {
+  oneof event {
+    TerminalSpawned spawned = 1;
+    TerminalOutput output = 2;
+    TerminalExit exit = 3;
+    TerminalError error = 4;
+  }
+}
+
+message TerminalInput {
+  string data = 1;
+}
+
+message TerminalResize {
+  int32 cols = 1;
+  int32 rows = 2;
+}
+
+message TerminalKill {}
+
+message TerminalClientMessage {
+  oneof event {
+    TerminalInput input = 1;
+    TerminalResize resize = 2;
+    TerminalKill kill = 3;
+  }
+}

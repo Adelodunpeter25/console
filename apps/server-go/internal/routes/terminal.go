@@ -2,6 +2,10 @@
 // apps/server/api/src/terminal/socket.route.ts: JSON frames
 // {spawned|output|exit|error} server→client, {input|resize|kill}
 // client→server, plus the ?proto=binary tag-byte framing.
+//
+// Ninth domain on the shared protobuf schema. Control frames are built
+// from console.v1 generated types in the oneof shape ({"spawned":{...}});
+// raw PTY bytes and the binary tag framing are untouched.
 package routes
 
 import (
@@ -15,7 +19,9 @@ import (
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
+	"google.golang.org/protobuf/proto"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -43,7 +49,7 @@ var upgrader = websocket.FastHTTPUpgrader{
 	CheckOrigin: func(ctx *fasthttp.RequestCtx) bool { return true },
 }
 
-func registerTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
+func RegisterTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
 	app.Get("/api/terminals", func(c *fiber.Ctx) error {
 		params, perr := parseSpawnParams(
 			c.Query("cwd"), c.Query("shell"), c.Query("label"),
@@ -87,17 +93,27 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 		}
 	}()
 
-	sendJSON := func(msg any) {
+	sendProto := func(msg proto.Message) {
 		connMu.Lock()
 		defer connMu.Unlock()
 		if connClosed {
 			return
 		}
-		data, _ := json.Marshal(msg)
+		data, err := protoMarshal.Marshal(msg)
+		if err != nil {
+			slog.Debug("terminal encode error", "error", err)
+			connClosed = true
+			return
+		}
 		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			slog.Debug("terminal send error", "error", err)
 			connClosed = true
 		}
+	}
+	sendError := func(text string) {
+		sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Error{
+			Error: &consolev1.TerminalError{Message: text},
+		}})
 	}
 	sendBinary := func(chunk []byte) {
 		bufPtr := terminalFramePool.Get().(*[]byte)
@@ -123,7 +139,7 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 
 	session, err := ptyManager.Spawn(params)
 	if err != nil {
-		sendJSON(types.TerminalErrorMessage{Type: "error", Message: err.Error()})
+		sendError(err.Error())
 		_ = conn.WriteMessage(websocket.CloseMessage,
 			websocket.FormatCloseMessage(4000, "Spawn failed"))
 		return
@@ -144,16 +160,23 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 		} else {
 			text := decoder.Decode(chunk)
 			if text != "" {
-				sendJSON(fiber.Map{"type": "output", "data": text})
+				sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Output{
+					Output: &consolev1.TerminalOutput{Data: text},
+				}})
 			}
 		}
 	}, func(code int) {
-		sendJSON(types.TerminalExitMessage{Type: "exit", Code: code})
+		code32 := int32(code)
+		sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Exit{
+			Exit: &consolev1.TerminalExit{Code: &code32},
+		}})
 	})
-	sendJSON(types.TerminalSpawnedMessage{
-		Type: "spawned", ID: session.ID, Pid: session.Pid(), Cwd: params.Cwd, Shell: params.Shell,
-		Label: params.Label, Cols: params.Cols, Rows: params.Rows,
-	})
+	sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Spawned{
+		Spawned: &consolev1.TerminalSpawned{
+			Id: session.ID, Pid: int32(session.Pid()), Cwd: params.Cwd, Shell: params.Shell,
+			Cols: int32(params.Cols), Rows: int32(params.Rows),
+		},
+	}})
 
 	for {
 		msgType, data, err := conn.ReadMessage()
@@ -165,13 +188,13 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 			return
 		}
 		if len(data) > maxTerminalFrameBytes {
-			sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Frame too large."})
+			sendError("Frame too large.")
 			continue
 		}
 		switch msgType {
 		case websocket.BinaryMessage:
 			if !params.Binary {
-				sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Binary frames require ?proto=binary."})
+				sendError("Binary frames require ?proto=binary.")
 				continue
 			}
 			if len(data) == 0 {
@@ -180,33 +203,40 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 			if data[0] == terminalInputFrameTag {
 				payload := data[1:]
 				if len(payload) > maxTerminalInputBytes {
-					sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Input too large."})
+					sendError("Input too large.")
 					continue
 				}
 				_ = session.Write(payload)
 			} else {
-				sendJSON(types.TerminalErrorMessage{Type: "error", Message: fmt.Sprintf("Unknown binary frame tag: %d", data[0])})
+				sendError(fmt.Sprintf("Unknown binary frame tag: %d", data[0]))
 			}
 		case websocket.TextMessage:
-			var frame types.TerminalClientMessage
-			if err := json.Unmarshal(data, &frame); err != nil {
-				sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Invalid terminal frame: expected JSON."})
+			// The type discriminator is read with encoding/json first so
+			// unknown frame types still report their name; the payload
+			// itself decodes as the canonical oneof.
+			var kind struct {
+				Type string `json:"type"`
+			}
+			var frame consolev1.TerminalClientMessage
+			if err := json.Unmarshal(data, &kind); err != nil ||
+				protoUnmarshal.Unmarshal(data, &frame) != nil {
+				sendError("Invalid terminal frame: expected JSON.")
 				continue
 			}
-			switch frame.Type {
-			case "input":
-				if len(frame.Data) > maxTerminalInputBytes {
-					sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Input too large."})
+			switch e := frame.GetEvent().(type) {
+			case *consolev1.TerminalClientMessage_Input:
+				if len(e.Input.GetData()) > maxTerminalInputBytes {
+					sendError("Input too large.")
 					continue
 				}
-				_ = session.Write([]byte(frame.Data))
-			case "resize":
-				_ = session.Resize(frame.Cols, frame.Rows)
-			case "kill":
+				_ = session.Write([]byte(e.Input.GetData()))
+			case *consolev1.TerminalClientMessage_Resize:
+				_ = session.Resize(int(e.Resize.GetCols()), int(e.Resize.GetRows()))
+			case *consolev1.TerminalClientMessage_Kill:
 				ptyManager.Kill(session.ID)
 				return
 			default:
-				sendJSON(types.TerminalErrorMessage{Type: "error", Message: "Unknown terminal frame type: " + frame.Type})
+				sendError("Unknown terminal frame type: " + kind.Type)
 			}
 		}
 	}

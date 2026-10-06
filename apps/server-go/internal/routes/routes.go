@@ -63,7 +63,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		}
 		return project.ID
 	})
-	registerTerminalRoutes(app, ptyManager)
+	RegisterTerminalRoutes(app, ptyManager)
 	scriptsSvc := services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports)
 	RegisterScriptRoutes(app, scriptsSvc)
 	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB))
