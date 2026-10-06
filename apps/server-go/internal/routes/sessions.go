@@ -14,10 +14,47 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// sessionHeaderToProto converts a service header to the canonical wire
+// type. Timestamps encode as protojson strings; messageCount is always
+// populated, preserving the old always-present number.
+func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
+	out := &consolev1.SessionHeader{
+		Id: h.ID, Title: h.Title, Cwd: h.Cwd,
+		ModelId: h.ModelID, Provider: h.Provider, ApprovalMode: h.ApprovalMode,
+		CreatedAt: h.CreatedAt, UpdatedAt: h.UpdatedAt,
+		MessageCount: func() *int32 { v := int32(h.MessageCount); return &v }(),
+		Status: h.Status,
+	}
+	if h.ProjectID != nil {
+		out.ProjectId = h.ProjectID
+	}
+	if h.ThinkingLevel != nil {
+		out.ThinkingLevel = h.ThinkingLevel
+	}
+	if h.DeletedAt != nil {
+		out.DeletedAt = h.DeletedAt
+	}
+	if h.Worktree != nil {
+		out.Worktree = &consolev1.SessionWorktree{
+			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,
+		}
+	}
+	return out
+}
+
 // Session routes. Response shapes, status codes, and defaults mirror the TS
 // routes/sessions.ts + SessionService so the desktop client works unchanged.
 func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
 	h := app.Group("/api/sessions")
+
+	// sendSessionHeader emits one header through the canonical wire type.
+	sendSessionHeader := func(c *fiber.Ctx, header types.SessionHeader) error {
+		raw, err := protoMarshal.Marshal(sessionHeaderToProto(header))
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	}
 
 	// GET /api/sessions — list, optionally filtered by cwd/projectId, with
 	// onlyDeleted=true selecting the trash view.
@@ -30,7 +67,15 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(fiber.Map{"success": true, "data": list})
+		headers := make([]*consolev1.SessionHeader, 0, len(list))
+		for _, header := range list {
+			headers = append(headers, sessionHeaderToProto(header))
+		}
+		data, err := marshalProtoList(headers)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// POST /api/sessions — create a new session. Field defaults mirror the
@@ -53,7 +98,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(fiber.Map{"success": true, "data": header})
+		return sendSessionHeader(c, header)
 	})
 
 	// GET /api/sessions/:id — header plus a page of message history.
@@ -77,7 +122,17 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				result.Header.Status = "done"
 			}
 		}
-		return c.JSON(fiber.Map{"success": true, "data": result})
+		// Mixed envelope until messages migrate: proto header plus the raw
+		// message page, hasMore flag, and numeric-or-null cursor, assembled
+		// by hand in the old key order. Messages pass through byte-identical.
+		headerRaw, err := protoMarshal.Marshal(sessionHeaderToProto(result.Header))
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
+			"hasMore": result.HasMore, "header": json.RawMessage(headerRaw),
+			"messages": result.Messages, "nextCursor": result.NextCursor,
+		}})
 	})
 
 	// PATCH /api/sessions/:id — update title, model/provider, approval mode,
@@ -175,7 +230,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if updated == nil {
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
-		return c.JSON(fiber.Map{"success": true, "data": updated})
+		return sendSessionHeader(c, *updated)
 	})
 
 	// POST /api/sessions/:id/worktree — convert an existing, message-less
@@ -207,7 +262,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
 			}
 		}
-		return c.JSON(fiber.Map{"success": true, "data": header})
+		return sendSessionHeader(c, header)
 	})
 
 	// DELETE /api/sessions/:id — soft delete.
@@ -220,7 +275,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if !deleted {
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"id": id, "deleted": true}})
+		raw, err := protoMarshal.Marshal(&consolev1.SessionDeleteResponse{Id: id, Deleted: true})
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// POST /api/sessions/:id/restore — restore a soft-deleted session.
@@ -233,7 +292,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if !restored {
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"id": id, "restored": true}})
+		raw, err := protoMarshal.Marshal(&consolev1.SessionRestoreResponse{Id: id, Restored: true})
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// DELETE /api/sessions/:id/permanent — irreversibly delete a
@@ -251,7 +314,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if !deleted {
 			return sessionError(c, fiber.StatusNotFound, "Deleted session '"+id+"' not found.")
 		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"id": id, "permanentlyDeleted": true}})
+		raw, err := protoMarshal.Marshal(&consolev1.SessionPermanentDeleteResponse{Id: id, PermanentlyDeleted: true})
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// GET /api/sessions/:id/subagents — live (running) subagents.

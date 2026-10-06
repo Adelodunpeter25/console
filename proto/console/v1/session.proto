@@ -14,3 +14,50 @@ message TodoItem {
   string content = 2;
   string status = 3;
 }
+
+// Session headers (Phase 3, second slice). Requests stay hand-parsed:
+// create/update distinguish omitted from explicit null (scratchpad), which
+// no proto field can express. The GET /:id detail envelope is mixed until
+// messages migrate: proto header plus raw message bytes, hasMore, and a
+// numeric-or-null cursor assembled by hand.
+//
+// Timestamps encode as protojson strings. messageCount is optional but
+// always populated, preserving the old always-present number. Status and
+// thinking level stay plain strings, matched literally on all three sides.
+message SessionWorktree {
+  string path = 1;
+  string branch = 2;
+  string repo = 3;
+}
+
+message SessionHeader {
+  string id = 1;
+  string title = 2;
+  string cwd = 3;
+  optional string project_id = 4;
+  string model_id = 5;
+  string provider = 6;
+  string approval_mode = 7;
+  optional string thinking_level = 8;
+  int64 created_at = 9;
+  int64 updated_at = 10;
+  optional int32 message_count = 11;
+  string status = 12;
+  optional int64 deleted_at = 13;
+  SessionWorktree worktree = 14;
+}
+
+message SessionDeleteResponse {
+  string id = 1;
+  bool deleted = 2;
+}
+
+message SessionRestoreResponse {
+  string id = 1;
+  bool restored = 2;
+}
+
+message SessionPermanentDeleteResponse {
+  string id = 1;
+  bool permanently_deleted = 2;
+}

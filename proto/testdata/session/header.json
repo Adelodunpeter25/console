@@ -1,0 +1,1 @@
+{"id":"s1","title":"Demo","cwd":"/tmp","projectId":"p1","modelId":"gpt-5","provider":"openai","approvalMode":"always-ask","thinkingLevel":"medium","createdAt":"1700000000000","updatedAt":"1700000000001","messageCount":3,"status":"done","worktree":{"path":"/tmp/wt","branch":"feat","repo":"/tmp"}}

@@ -86,6 +86,379 @@ func (x *TodoItem) GetStatus() string {
 	return ""
 }
 
+// Session headers (Phase 3, second slice). Requests stay hand-parsed:
+// create/update distinguish omitted from explicit null (scratchpad), which
+// no proto field can express. The GET /:id detail envelope is mixed until
+// messages migrate: proto header plus raw message bytes, hasMore, and a
+// numeric-or-null cursor assembled by hand.
+//
+// Timestamps encode as protojson strings. messageCount is optional but
+// always populated, preserving the old always-present number. Status and
+// thinking level stay plain strings, matched literally on all three sides.
+type SessionWorktree struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Branch        string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	Repo          string                 `protobuf:"bytes,3,opt,name=repo,proto3" json:"repo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionWorktree) Reset() {
+	*x = SessionWorktree{}
+	mi := &file_console_v1_session_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionWorktree) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionWorktree) ProtoMessage() {}
+
+func (x *SessionWorktree) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionWorktree.ProtoReflect.Descriptor instead.
+func (*SessionWorktree) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SessionWorktree) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *SessionWorktree) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
+}
+
+func (x *SessionWorktree) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+type SessionHeader struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Cwd           string                 `protobuf:"bytes,3,opt,name=cwd,proto3" json:"cwd,omitempty"`
+	ProjectId     *string                `protobuf:"bytes,4,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
+	ModelId       string                 `protobuf:"bytes,5,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Provider      string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`
+	ApprovalMode  string                 `protobuf:"bytes,7,opt,name=approval_mode,json=approvalMode,proto3" json:"approval_mode,omitempty"`
+	ThinkingLevel *string                `protobuf:"bytes,8,opt,name=thinking_level,json=thinkingLevel,proto3,oneof" json:"thinking_level,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	MessageCount  *int32                 `protobuf:"varint,11,opt,name=message_count,json=messageCount,proto3,oneof" json:"message_count,omitempty"`
+	Status        string                 `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
+	DeletedAt     *int64                 `protobuf:"varint,13,opt,name=deleted_at,json=deletedAt,proto3,oneof" json:"deleted_at,omitempty"`
+	Worktree      *SessionWorktree       `protobuf:"bytes,14,opt,name=worktree,proto3" json:"worktree,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionHeader) Reset() {
+	*x = SessionHeader{}
+	mi := &file_console_v1_session_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionHeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionHeader) ProtoMessage() {}
+
+func (x *SessionHeader) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionHeader.ProtoReflect.Descriptor instead.
+func (*SessionHeader) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SessionHeader) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetCwd() string {
+	if x != nil {
+		return x.Cwd
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetProjectId() string {
+	if x != nil && x.ProjectId != nil {
+		return *x.ProjectId
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetApprovalMode() string {
+	if x != nil {
+		return x.ApprovalMode
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetThinkingLevel() string {
+	if x != nil && x.ThinkingLevel != nil {
+		return *x.ThinkingLevel
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *SessionHeader) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *SessionHeader) GetMessageCount() int32 {
+	if x != nil && x.MessageCount != nil {
+		return *x.MessageCount
+	}
+	return 0
+}
+
+func (x *SessionHeader) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SessionHeader) GetDeletedAt() int64 {
+	if x != nil && x.DeletedAt != nil {
+		return *x.DeletedAt
+	}
+	return 0
+}
+
+func (x *SessionHeader) GetWorktree() *SessionWorktree {
+	if x != nil {
+		return x.Worktree
+	}
+	return nil
+}
+
+type SessionDeleteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Deleted       bool                   `protobuf:"varint,2,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionDeleteResponse) Reset() {
+	*x = SessionDeleteResponse{}
+	mi := &file_console_v1_session_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionDeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionDeleteResponse) ProtoMessage() {}
+
+func (x *SessionDeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionDeleteResponse.ProtoReflect.Descriptor instead.
+func (*SessionDeleteResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SessionDeleteResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionDeleteResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+type SessionRestoreResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Restored      bool                   `protobuf:"varint,2,opt,name=restored,proto3" json:"restored,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionRestoreResponse) Reset() {
+	*x = SessionRestoreResponse{}
+	mi := &file_console_v1_session_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionRestoreResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionRestoreResponse) ProtoMessage() {}
+
+func (x *SessionRestoreResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionRestoreResponse.ProtoReflect.Descriptor instead.
+func (*SessionRestoreResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SessionRestoreResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionRestoreResponse) GetRestored() bool {
+	if x != nil {
+		return x.Restored
+	}
+	return false
+}
+
+type SessionPermanentDeleteResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	PermanentlyDeleted bool                   `protobuf:"varint,2,opt,name=permanently_deleted,json=permanentlyDeleted,proto3" json:"permanently_deleted,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SessionPermanentDeleteResponse) Reset() {
+	*x = SessionPermanentDeleteResponse{}
+	mi := &file_console_v1_session_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionPermanentDeleteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionPermanentDeleteResponse) ProtoMessage() {}
+
+func (x *SessionPermanentDeleteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionPermanentDeleteResponse.ProtoReflect.Descriptor instead.
+func (*SessionPermanentDeleteResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SessionPermanentDeleteResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionPermanentDeleteResponse) GetPermanentlyDeleted() bool {
+	if x != nil {
+		return x.PermanentlyDeleted
+	}
+	return false
+}
+
 var File_console_v1_session_proto protoreflect.FileDescriptor
 
 const file_console_v1_session_proto_rawDesc = "" +
@@ -95,7 +468,44 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\bTodoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06statusBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x06status\x18\x03 \x01(\tR\x06status\"Q\n" +
+	"\x0fSessionWorktree\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\"\x93\x04\n" +
+	"\rSessionHeader\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
+	"\x03cwd\x18\x03 \x01(\tR\x03cwd\x12\"\n" +
+	"\n" +
+	"project_id\x18\x04 \x01(\tH\x00R\tprojectId\x88\x01\x01\x12\x19\n" +
+	"\bmodel_id\x18\x05 \x01(\tR\amodelId\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bprovider\x12#\n" +
+	"\rapproval_mode\x18\a \x01(\tR\fapprovalMode\x12*\n" +
+	"\x0ethinking_level\x18\b \x01(\tH\x01R\rthinkingLevel\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\t \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\n" +
+	" \x01(\x03R\tupdatedAt\x12(\n" +
+	"\rmessage_count\x18\v \x01(\x05H\x02R\fmessageCount\x88\x01\x01\x12\x16\n" +
+	"\x06status\x18\f \x01(\tR\x06status\x12\"\n" +
+	"\n" +
+	"deleted_at\x18\r \x01(\x03H\x03R\tdeletedAt\x88\x01\x01\x127\n" +
+	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktreeB\r\n" +
+	"\v_project_idB\x11\n" +
+	"\x0f_thinking_levelB\x10\n" +
+	"\x0e_message_countB\r\n" +
+	"\v_deleted_at\"A\n" +
+	"\x15SessionDeleteResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\adeleted\x18\x02 \x01(\bR\adeleted\"D\n" +
+	"\x16SessionRestoreResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\brestored\x18\x02 \x01(\bR\brestored\"a\n" +
+	"\x1eSessionPermanentDeleteResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
+	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeletedBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_session_proto_rawDescOnce sync.Once
@@ -109,16 +519,22 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_console_v1_session_proto_goTypes = []any{
-	(*TodoItem)(nil), // 0: console.v1.TodoItem
+	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
+	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
+	(*SessionHeader)(nil),                  // 2: console.v1.SessionHeader
+	(*SessionDeleteResponse)(nil),          // 3: console.v1.SessionDeleteResponse
+	(*SessionRestoreResponse)(nil),         // 4: console.v1.SessionRestoreResponse
+	(*SessionPermanentDeleteResponse)(nil), // 5: console.v1.SessionPermanentDeleteResponse
 }
 var file_console_v1_session_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -126,13 +542,14 @@ func file_console_v1_session_proto_init() {
 	if File_console_v1_session_proto != nil {
 		return
 	}
+	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
