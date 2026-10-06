@@ -63,9 +63,12 @@ pub struct BrowserElementAnnotation {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantMessage {
+    #[serde(default)]
     pub id: Option<String>,
     pub content: Vec<AssistantContentPart>,
+    #[serde(default)]
     pub stop_reason: Option<String>,
+    #[serde(default)]
     pub created_at: Option<i64>,
 }
 
@@ -164,25 +167,28 @@ pub enum AgentMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
         content: String,
+        #[serde(default)]
         attachments: Option<Vec<ImageAttachment>>,
         #[serde(default, skip_serializing_if = "Option::is_none", rename = "contextFiles")]
         context_files: Option<Vec<String>>,
-        #[serde(rename = "createdAt")]
+        #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
     #[serde(rename = "assistant")]
     Assistant {
+        #[serde(default)]
         id: Option<String>,
         content: Vec<AssistantContentPart>,
-        #[serde(rename = "stopReason")]
+        #[serde(default, rename = "stopReason")]
         stop_reason: Option<String>,
-        #[serde(rename = "createdAt")]
+        #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
     #[serde(rename = "toolResult")]
     ToolResult {
+        #[serde(default)]
         results: Vec<ToolResult>,
-        #[serde(rename = "createdAt")]
+        #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
 }
@@ -213,7 +219,9 @@ pub enum AssistantContentPart {
 pub struct ToolCall {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub arguments: serde_json::Value,
+    #[serde(default)]
     pub thought_signature: Option<String>,
 }
 
@@ -231,8 +239,11 @@ pub struct ToolCallPreview {
 #[serde(rename_all = "camelCase")]
 pub struct ToolResult {
     pub tool_call_id: String,
+    #[serde(default)]
     pub tool_name: Option<String>,
+    #[serde(default)]
     pub content: serde_json::Value,
+    #[serde(default)]
     pub is_error: Option<bool>,
 }
 

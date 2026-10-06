@@ -57,3 +57,36 @@ fn converts_tool_result_message() {
         other => panic!("wrong variant: {other:?}"),
     }
 }
+
+#[test]
+fn mixed_old_and_new_rows_decode() {
+    // Transitional: pre-migration role-keyed rows decode alongside canonical
+    // oneof rows in one messages array. Drop the legacy row once dev stores
+    // turn over (Phase 5 cleanup).
+    let raw = serde_json::json!({
+        "header": {
+            "id": "s", "title": "t", "cwd": "/", "modelId": "m",
+            "provider": "p", "approvalMode": "a",
+            "createdAt": "1", "updatedAt": "2", "status": "done",
+        },
+        "messages": [
+            {"role": "user", "content": "old"},
+            serde_json::from_str::<serde_json::Value>(
+                &std::fs::read_to_string(
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../../..")
+                        .join("proto/testdata/message/assistant.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+        ],
+        "hasMore": false,
+    });
+    let detail: console_core::SessionDetailResponse = serde_json::from_value(raw).expect("detail");
+    assert_eq!(detail.messages.len(), 2);
+    match &detail.messages[0] {
+        AgentMessage::User { content, .. } => assert_eq!(content, "old"),
+        other => panic!("wrong variant: {other:?}"),
+    }
+}
