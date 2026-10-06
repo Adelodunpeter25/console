@@ -12,6 +12,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -43,7 +44,51 @@ func bodyToPrompt(body runPromptBody) run.Prompt {
 	return dto
 }
 
-func registerRunRoutes(app *fiber.App, runs *run.Service) {
+// queuedPromptToProto converts a staged prompt row to the canonical wire
+// type. Attachments/annotations reuse the message schema; created_at stays
+// the RFC3339 string the server stores; empty optionals stay absent.
+func queuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
+	if qp == nil {
+		return nil
+	}
+	out := &consolev1.QueuedPrompt{
+		Id: qp.ID, SessionId: qp.SessionID, Prompt: qp.Prompt, CreatedAt: qp.CreatedAt,
+	}
+	out.ContextFiles = append(out.ContextFiles, qp.ContextFiles...)
+	for _, a := range qp.Attachments {
+		out.Attachments = append(out.Attachments, &consolev1.ImageAttachment{
+			Data: a.Data, MimeType: a.MimeType,
+		})
+	}
+	for _, a := range qp.Annotations {
+		out.Annotations = append(out.Annotations, loop.AnnotationToProto(a))
+	}
+	if qp.ModelID != "" {
+		out.ModelId = &qp.ModelID
+	}
+	if qp.Provider != "" {
+		out.Provider = &qp.Provider
+	}
+	if qp.ApprovalMode != "" {
+		out.ApprovalMode = &qp.ApprovalMode
+	}
+	return out
+}
+
+// queuedPromptData marshals a staged row for the success envelope, preserving
+// the old data:null when nothing is staged.
+func queuedPromptData(qp *types.QueuedPrompt) (any, error) {
+	if qp == nil {
+		return nil, nil
+	}
+	raw, err := protoMarshal.Marshal(queuedPromptToProto(qp))
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(raw), nil
+}
+
+func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 	// POST /api/sessions/:id/run — start a run and stream its events.
 	app.Post("/api/sessions/:id/run", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
@@ -193,7 +238,11 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		if err != nil {
 			return queueError(c, sessionID, err)
 		}
-		return c.JSON(fiber.Map{"success": true, "data": queued})
+		data, err := queuedPromptData(queued)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// PUT /api/sessions/:id/queue — edit the staged prompt in place.
@@ -213,7 +262,11 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		if updated == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No queued prompt found for session '" + sessionID + "'."})
 		}
-		return c.JSON(fiber.Map{"success": true, "data": updated})
+		data, err := queuedPromptData(updated)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// GET /api/sessions/:id/queue — fetch the staged prompt, if any.
@@ -222,7 +275,11 @@ func registerRunRoutes(app *fiber.App, runs *run.Service) {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
-		return c.JSON(fiber.Map{"success": true, "data": queued})
+		data, err := queuedPromptData(queued)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	// DELETE /api/sessions/:id/queue — discard the staged prompt.
@@ -402,7 +459,11 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventSessionTitleUpdated:
 		return "sessionTitleUpdated", fiber.Map{"type": "sessionTitleUpdated", "title": e.Title}, false
 	case loop.EventQueueUpdated:
-		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": e.Queued}, false
+		data, err := queuedPromptData(e.Queued)
+		if err != nil {
+			return "", nil, true
+		}
+		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": data}, false
 	case loop.EventAskQuestion:
 		return "askQuestion", fiber.Map{"type": "askQuestion", "request": e.Ask}, false
 	case loop.EventBrowserAction:

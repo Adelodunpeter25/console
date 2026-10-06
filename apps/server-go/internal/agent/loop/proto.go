@@ -15,8 +15,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
-	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -110,12 +110,12 @@ func userToProto(m UserMessage) *consolev1.AgentUserMessage {
 		})
 	}
 	for _, a := range m.Annotations {
-		out.Annotations = append(out.Annotations, annotationToProto(a))
+		out.Annotations = append(out.Annotations, AnnotationToProto(a))
 	}
 	return out
 }
 
-func annotationToProto(a types.BrowserAnnotation) *consolev1.BrowserAnnotation {
+func AnnotationToProto(a types.BrowserAnnotation) *consolev1.BrowserAnnotation {
 	out := &consolev1.BrowserAnnotation{
 		Id: a.ID, Url: a.URL, Selector: a.Selector,
 		HtmlSnippet: a.HTMLSnippet, UserComment: a.UserComment,

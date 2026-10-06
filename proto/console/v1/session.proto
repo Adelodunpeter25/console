@@ -4,6 +4,8 @@ package console.v1;
 
 option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
 
+import "console/v1/message.proto";
+
 // Sessions (Phase 3, first slice: todos). Session headers, messages, and
 // content parts follow in later slices of this file.
 //
@@ -113,4 +115,33 @@ message SubagentInfo {
   repeated SubagentActivityItem activities = 11;
   int64 created_at = 12;
   int64 updated_at = 13;
+}
+
+// Queued prompts (Phase 3, fifth slice): the single staged next-turn prompt
+// per session (POST/PUT/GET /api/sessions/:id/queue). The queueUpdated SSE
+// frame stays hand-shaped until the event stream migrates, but its nested
+// queuedPrompt payload is this message, decoded through the same type.
+//
+// Shape notes:
+// - Attachments and annotations reuse message.proto (same package): image
+//   bytes stay inline base64 strings, annotation dimensions/computed styles
+//   keep their structured form for replay.
+// - created_at is the RFC3339 string the server already stores — plain
+//   string passthrough, not millis.
+// - thinking_level is desktop-optimistic (pane default attached to the local
+//   card); the server never populates it. Plain string, matched literally;
+//   the ThinkingLevel enum stays client-side with conversion at the boundary.
+// - Request bodies (run/queue/steer/answer/approve) stay hand-parsed.
+message QueuedPrompt {
+  string id = 1;
+  string session_id = 2;
+  string prompt = 3;
+  repeated string context_files = 4;
+  repeated ImageAttachment attachments = 5;
+  repeated BrowserAnnotation annotations = 6;
+  optional string model_id = 7;
+  optional string provider = 8;
+  optional string approval_mode = 9;
+  optional string thinking_level = 10;
+  string created_at = 11;
 }

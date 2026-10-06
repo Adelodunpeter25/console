@@ -92,7 +92,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	}
 	services.SetFffManager(fffManager)
 	tools.SetFffManager(fffManager)
-	registerRunRoutes(app, runSvc)
+	RegisterRunRoutes(app, runSvc)
 	registerMiscRoutes(app, cfg.Notifications)
 	deviceSvc := services.NewDeviceService()
 	registerDeviceRoutes(app, deviceSvc)

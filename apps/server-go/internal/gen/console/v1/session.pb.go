@@ -847,12 +847,151 @@ func (x *SubagentInfo) GetUpdatedAt() int64 {
 	return 0
 }
 
+// Queued prompts (Phase 3, fifth slice): the single staged next-turn prompt
+// per session (POST/PUT/GET /api/sessions/:id/queue). The queueUpdated SSE
+// frame stays hand-shaped until the event stream migrates, but its nested
+// queuedPrompt payload is this message, decoded through the same type.
+//
+// Shape notes:
+//   - Attachments and annotations reuse message.proto (same package): image
+//     bytes stay inline base64 strings, annotation dimensions/computed styles
+//     keep their structured form for replay.
+//   - created_at is the RFC3339 string the server already stores — plain
+//     string passthrough, not millis.
+//   - thinking_level is desktop-optimistic (pane default attached to the local
+//     card); the server never populates it. Plain string, matched literally;
+//     the ThinkingLevel enum stays client-side with conversion at the boundary.
+//   - Request bodies (run/queue/steer/answer/approve) stay hand-parsed.
+type QueuedPrompt struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Prompt        string                 `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	ContextFiles  []string               `protobuf:"bytes,4,rep,name=context_files,json=contextFiles,proto3" json:"context_files,omitempty"`
+	Attachments   []*ImageAttachment     `protobuf:"bytes,5,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	Annotations   []*BrowserAnnotation   `protobuf:"bytes,6,rep,name=annotations,proto3" json:"annotations,omitempty"`
+	ModelId       *string                `protobuf:"bytes,7,opt,name=model_id,json=modelId,proto3,oneof" json:"model_id,omitempty"`
+	Provider      *string                `protobuf:"bytes,8,opt,name=provider,proto3,oneof" json:"provider,omitempty"`
+	ApprovalMode  *string                `protobuf:"bytes,9,opt,name=approval_mode,json=approvalMode,proto3,oneof" json:"approval_mode,omitempty"`
+	ThinkingLevel *string                `protobuf:"bytes,10,opt,name=thinking_level,json=thinkingLevel,proto3,oneof" json:"thinking_level,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueuedPrompt) Reset() {
+	*x = QueuedPrompt{}
+	mi := &file_console_v1_session_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueuedPrompt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueuedPrompt) ProtoMessage() {}
+
+func (x *QueuedPrompt) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueuedPrompt.ProtoReflect.Descriptor instead.
+func (*QueuedPrompt) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *QueuedPrompt) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetContextFiles() []string {
+	if x != nil {
+		return x.ContextFiles
+	}
+	return nil
+}
+
+func (x *QueuedPrompt) GetAttachments() []*ImageAttachment {
+	if x != nil {
+		return x.Attachments
+	}
+	return nil
+}
+
+func (x *QueuedPrompt) GetAnnotations() []*BrowserAnnotation {
+	if x != nil {
+		return x.Annotations
+	}
+	return nil
+}
+
+func (x *QueuedPrompt) GetModelId() string {
+	if x != nil && x.ModelId != nil {
+		return *x.ModelId
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetProvider() string {
+	if x != nil && x.Provider != nil {
+		return *x.Provider
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetApprovalMode() string {
+	if x != nil && x.ApprovalMode != nil {
+		return *x.ApprovalMode
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetThinkingLevel() string {
+	if x != nil && x.ThinkingLevel != nil {
+		return *x.ThinkingLevel
+	}
+	return ""
+}
+
+func (x *QueuedPrompt) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
 var File_console_v1_session_proto protoreflect.FileDescriptor
 
 const file_console_v1_session_proto_rawDesc = "" +
 	"\n" +
 	"\x18console/v1/session.proto\x12\n" +
-	"console.v1\"L\n" +
+	"console.v1\x1a\x18console/v1/message.proto\"L\n" +
 	"\bTodoItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12\x16\n" +
@@ -944,7 +1083,26 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"updated_at\x18\r \x01(\x03R\tupdatedAtB\n" +
 	"\n" +
 	"\b_summaryB\b\n" +
-	"\x06_errorBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x06_error\"\xef\x03\n" +
+	"\fQueuedPrompt\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt\x12#\n" +
+	"\rcontext_files\x18\x04 \x03(\tR\fcontextFiles\x12=\n" +
+	"\vattachments\x18\x05 \x03(\v2\x1b.console.v1.ImageAttachmentR\vattachments\x12?\n" +
+	"\vannotations\x18\x06 \x03(\v2\x1d.console.v1.BrowserAnnotationR\vannotations\x12\x1e\n" +
+	"\bmodel_id\x18\a \x01(\tH\x00R\amodelId\x88\x01\x01\x12\x1f\n" +
+	"\bprovider\x18\b \x01(\tH\x01R\bprovider\x88\x01\x01\x12(\n" +
+	"\rapproval_mode\x18\t \x01(\tH\x02R\fapprovalMode\x88\x01\x01\x12*\n" +
+	"\x0ethinking_level\x18\n" +
+	" \x01(\tH\x03R\rthinkingLevel\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\v \x01(\tR\tcreatedAtB\v\n" +
+	"\t_model_idB\v\n" +
+	"\t_providerB\x10\n" +
+	"\x0e_approval_modeB\x11\n" +
+	"\x0f_thinking_levelBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_session_proto_rawDescOnce sync.Once
@@ -958,7 +1116,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -970,15 +1128,20 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SessionFileChangeDiff)(nil),          // 7: console.v1.SessionFileChangeDiff
 	(*SubagentActivityItem)(nil),           // 8: console.v1.SubagentActivityItem
 	(*SubagentInfo)(nil),                   // 9: console.v1.SubagentInfo
+	(*QueuedPrompt)(nil),                   // 10: console.v1.QueuedPrompt
+	(*ImageAttachment)(nil),                // 11: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 12: console.v1.BrowserAnnotation
 }
 var file_console_v1_session_proto_depIdxs = []int32{
-	1, // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
-	8, // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
+	8,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
+	11, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	12, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	4,  // [4:4] is the sub-list for method output_type
+	4,  // [4:4] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_session_proto_init() }
@@ -986,17 +1149,19 @@ func file_console_v1_session_proto_init() {
 	if File_console_v1_session_proto != nil {
 		return
 	}
+	file_console_v1_message_proto_init()
 	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[6].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[8].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[9].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
