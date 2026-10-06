@@ -130,24 +130,21 @@ impl ConsoleDesktopApp {
                 let known_ids: HashSet<String> = self.browser_views.keys().cloned().collect();
                 let matching_view = target.map(|(_, view)| view);
                 if let Some(view) = &matching_view {
-                    view.update(cx, |bv, cx| {
-                        bv.navigate_to_url(url.clone(), cx);
+                    // A reused tab may never have been rendered (opened in the
+                    // background earlier), so it can lack a native browser:
+                    // create it so the page actually loads.
+                    let view = view.clone();
+                    let url_to_load = url.clone();
+                    self.defer_in_main_window(cx, move |_this, window, cx| {
+                        view.update(cx, |bv, cx| {
+                            bv.navigate_to_url(url_to_load, cx);
+                            bv.ensure_host(window, cx);
+                        });
                     });
                 } else {
                     let url_to_open = url.clone();
-                    let entity = cx.entity().downgrade();
-                    let main_window = self.main_window_handle;
-                    cx.defer(move |cx| {
-                        // Prefer the app's own window so this works when it isn't the active one.
-                        if let Some(window) = main_window.or_else(|| cx.active_window()) {
-                            let _ = window.update(cx, |_, window, cx| {
-                                if let Some(app) = entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.open_browser_tab_with_url(Some(url_to_open), false, window, cx);
-                                    });
-                                }
-                            });
-                        }
+                    self.defer_in_main_window(cx, move |this, window, cx| {
+                        this.open_browser_tab_with_url(Some(url_to_open), false, window, cx);
                     });
                 }
 
@@ -612,6 +609,27 @@ impl ConsoleDesktopApp {
                 );
             }
         }
+    }
+
+    /// Runs `f` in the app's main window (falling back to the active one),
+    /// deferred until the current update finishes. Prefers the app's own window
+    /// so this works when it isn't the active one.
+    fn defer_in_main_window(
+        &self,
+        cx: &mut Context<Self>,
+        f: impl FnOnce(&mut Self, &mut gpui::Window, &mut Context<Self>) + 'static,
+    ) {
+        let entity = cx.entity().downgrade();
+        let main_window = self.main_window_handle;
+        cx.defer(move |cx| {
+            if let Some(window) = main_window.or_else(|| cx.active_window()) {
+                let _ = window.update(cx, |_, window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| f(this, window, cx));
+                    }
+                });
+            }
+        });
     }
 
     /// Re-queues `req` after a short delay while retries remain; otherwise

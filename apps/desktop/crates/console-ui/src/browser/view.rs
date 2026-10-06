@@ -625,6 +625,28 @@ impl BrowserView {
         cx.notify();
     }
 
+    /// Create the native browser for a view that has a page to show but no host
+    /// yet, and start loading it. Idempotent.
+    ///
+    /// `render` does this for the visible tab. The owner also calls it for a tab
+    /// that is opened or navigated in the background (an agent `navigate` with
+    /// another tab in front): that view is never rendered, so without this its
+    /// page would not start loading until the user clicked the tab. The native
+    /// view is created hidden and stays hidden until `sync_native_state` marks
+    /// the tab visible.
+    pub fn ensure_host(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.navigation_requested || self.host.is_some() || self.host_error.is_some() {
+            return;
+        }
+        let Some(url) = self.current_url.clone() else {
+            return;
+        };
+        self.build_webview(window, cx);
+        if let Some(host) = self.host.clone() {
+            host.load_url(&url);
+        }
+    }
+
     fn focus_page(&mut self, _cx: &mut Context<Self>) {
         if let Some(host) = self.host.clone() {
             host.focus();
@@ -1169,14 +1191,7 @@ impl Render for BrowserView {
 
         // First navigation creates the native browser. A tab that never
         // navigates never gets one, so nothing loads about:blank at open time.
-        if self.navigation_requested && self.host.is_none() && self.host_error.is_none() {
-            if let Some(url) = self.current_url.clone() {
-                self.build_webview(window, cx);
-                if let Some(host) = self.host.clone() {
-                    host.load_url(&url);
-                }
-            }
-        }
+        self.ensure_host(window, cx);
 
         let body = if let Some(error) = self.host_error.clone() {
             if let Some(host) = &self.host {

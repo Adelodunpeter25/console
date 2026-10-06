@@ -164,6 +164,12 @@ impl ConsoleDesktopApp {
             workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
         }
         self.active_pane_id = Some(pane_id);
+        if !focus {
+            // A background tab is never rendered, so create its native browser
+            // now (hidden) so the page loads without the user clicking it. A
+            // focused tab is rendered next frame, which creates it as usual.
+            browser_view.update(cx, |view, cx| view.ensure_host(window, cx));
+        }
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
         if focus {
