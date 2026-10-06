@@ -465,13 +465,13 @@ impl ConsoleDesktopApp {
             };
             let tab_id_for_reviewed = tab_id.clone();
             let session_id_for_reviewed = session_id.clone();
-            let on_toggle_reviewed: Rc<dyn Fn(String, u64, &mut Window, &mut gpui::App)> = {
+            let on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut gpui::App)> = {
                 let entity = entity.clone();
                 let tab_id = tab_id_for_reviewed;
                 let session_id = session_id_for_reviewed;
                 Rc::new(
                     move |path: String,
-                          turn_index: u64,
+                          turn_index: u32,
                           _window: &mut Window,
                           cx: &mut gpui::App| {
                         if let Some(app) = entity.upgrade() {

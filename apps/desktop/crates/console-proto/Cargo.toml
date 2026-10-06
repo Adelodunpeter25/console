@@ -56,6 +56,10 @@ name = "session_subagents_test"
 path = "tests/session_subagents_test.rs"
 
 [[test]]
+name = "session_changes_test"
+path = "tests/session_changes_test.rs"
+
+[[test]]
 name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 

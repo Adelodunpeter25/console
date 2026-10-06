@@ -127,20 +127,10 @@ pub struct UpdateSessionDto {
     pub thinking_level: Option<ThinkingLevel>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionFileChange {
-    pub path: String,
-    pub status: String,
-    pub additions: u64,
-    pub deletions: u64,
-    pub turn_index: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diff_text: Option<String>,
-    #[serde(default)]
-    pub reviewed: bool,
-    pub updated_at: i64,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/session.proto). Counts narrow to u32 and stay JSON
+/// numbers; updated_at encodes as a protojson string.
+pub use console_proto::{SessionFileChange, SessionFileChangeDiff};
 
 /// Turn-scope selector for the Changes tab and review tab. Purely a
 /// client-side filter over an already-fetched (unscoped) change list —

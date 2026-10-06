@@ -212,13 +212,7 @@ impl SessionService {
             .await
             .context("Failed to get session change diff")?;
 
-        #[derive(serde::Deserialize)]
-        struct DiffPayload {
-            #[serde(rename = "diffText")]
-            diff_text: String,
-        }
-
-        let body: ApiResponse<DiffPayload> = self
+        let body: ApiResponse<SessionFileChangeDiff> = self
             .transport
             .decode_json(resp)
             .await
@@ -241,7 +235,7 @@ impl SessionService {
         &self,
         id: &str,
         path: &str,
-        turn_index: u64,
+        turn_index: u32,
         reviewed: bool,
     ) -> Result<()> {
         let url = self

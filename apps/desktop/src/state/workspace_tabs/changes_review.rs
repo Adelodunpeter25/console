@@ -93,7 +93,7 @@ impl ConsoleDesktopApp {
         tab_id: &str,
         session_id: String,
         path: String,
-        turn_index: u64,
+        turn_index: u32,
         cx: &mut Context<Self>,
     ) {
         let new_reviewed = {

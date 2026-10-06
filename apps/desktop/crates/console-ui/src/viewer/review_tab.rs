@@ -23,7 +23,7 @@ pub struct ReviewTab {
     changes: Rc<Vec<SessionFileChange>>,
     collapsed: std::collections::HashSet<String>,
     on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_toggle_reviewed: Rc<dyn Fn(String, u64, &mut Window, &mut App) + 'static>,
+    on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
 }
 
 impl ReviewTab {
@@ -32,7 +32,7 @@ impl ReviewTab {
         changes: Rc<Vec<SessionFileChange>>,
         collapsed: std::collections::HashSet<String>,
         on_toggle_collapsed: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-        on_toggle_reviewed: Rc<dyn Fn(String, u64, &mut Window, &mut App) + 'static>,
+        on_toggle_reviewed: Rc<dyn Fn(String, u32, &mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
             scope,
@@ -48,8 +48,8 @@ impl RenderOnce for ReviewTab {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let scoped = console_core::types::filter_changes_for_scope(&self.changes, self.scope);
-        let total_additions: u64 = scoped.iter().map(|c| c.additions).sum();
-        let total_deletions: u64 = scoped.iter().map(|c| c.deletions).sum();
+        let total_additions: u32 = scoped.iter().map(|c| c.additions).sum();
+        let total_deletions: u32 = scoped.iter().map(|c| c.deletions).sum();
         let file_count = scoped.len();
         let on_toggle_collapsed = self.on_toggle_collapsed;
         let on_toggle_reviewed = self.on_toggle_reviewed;

@@ -72,8 +72,8 @@ impl RenderOnce for ChangesListView {
         // them stuck on the empty state with no way back.
         let has_any_changes = !self.session_changes.is_empty();
 
-        let total_additions: u64 = scoped_session_changes.iter().map(|c| c.additions).sum();
-        let total_deletions: u64 = scoped_session_changes.iter().map(|c| c.deletions).sum();
+        let total_additions: u32 = scoped_session_changes.iter().map(|c| c.additions).sum();
+        let total_deletions: u32 = scoped_session_changes.iter().map(|c| c.deletions).sum();
         let file_count = scoped_session_changes.len();
 
         let scope = self.scope;
