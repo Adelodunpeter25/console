@@ -11,6 +11,8 @@ use std::time::Duration;
 
 use crate::state::app::ConsoleDesktopApp;
 
+mod agent_cdp;
+
 /// Interval between tab-lookup / page-load polls.
 const BROWSER_POLL_INTERVAL: Duration = Duration::from_millis(150);
 /// How many times to retry finding a browser tab (~3s) before failing.
@@ -267,6 +269,9 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
+                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                    return;
+                }
 
                 let js = console_ui::browser::agent_script::element_script(
                     &action,
@@ -389,6 +394,9 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
+                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                    return;
+                }
 
                 let timeout = Duration::from_millis(
                     req.timeout_ms.unwrap_or(WAIT_FOR_DEFAULT_MS).clamp(100, WAIT_FOR_MAX_MS),
@@ -494,6 +502,9 @@ impl ConsoleDesktopApp {
 
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
+                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                    return;
+                }
                 let script_id = request_id.clone();
                 view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
                 cx.spawn(async move |this, cx| {
@@ -541,6 +552,9 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
+                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                    return;
+                }
                 let Some(slot) = view.read(cx).start_snapshot() else {
                     self.resolve_browser_action_result(
                         &sess_id,
