@@ -6,7 +6,7 @@ Use [agent-browser](https://github.com/vercel-labs/agent-browser) to drive Conso
 
 The `browser` agent tool is limited today because WKWebView has no CDP. Every capability (snapshot, click, type, run_js) is hand-built JS over a `console.log` IPC bridge with 150ms polling (`apps/desktop/src/state/browser_actions.rs`, `element_script.js`, `agent_script.js`). CEF is Chromium, so it can expose CDP, and agent-browser is a native Rust CLI/daemon that attaches to any CDP endpoint and gives us a real accessibility snapshot, real input events, screenshots, network, and more.
 
-Goal: the agent uses the **same visible tabs the user sees**, with proper browser control, and nothing else changes for users on the wry backend.
+Goal: the agent uses the **same visible tabs the user sees**, with proper browser control, and **never steals focus**. Today, when the agent opens a browser tab the webview does not take focus, so if the chat/composer is focused it stays focused. That must hold for every agent-browser action too: opening, navigating, clicking, typing, screenshotting. Nothing else changes for users on the wry backend.
 
 ## 2. Verified by spike (agent-browser 0.38.2, CEF 154, macOS)
 
@@ -28,7 +28,8 @@ Not verified yet: `Target.getTargetInfo` per browser from inside the app (see 5.
 2. **Never run `agent-browser install`.** Attach mode needs no downloaded browser.
 3. **Address tabs by CDP `targetId` only**, never `tN`.
 4. **Refs are cleared on every tab switch and navigation** and live in one per-session store. A "switch to tab, then snapshot" must be one atomic step (`batch`), and refs are only valid until the next snapshot or navigation.
-5. **Never let agent-browser create or close tabs.** `tab new` and `tab close` would create or destroy CDP targets that Console's UI does not know about. Tab lifecycle stays in Console (existing `navigate`, `switch_tab`, `close_tab` handling). agent-browser only operates on page content of an existing target.
+5. **Never steal focus.** The agent acting on a tab (visible or hidden) must not move keyboard focus out of the chat/composer or raise the window. CDP input events (`Input.dispatch*`) go straight to the renderer and should not change the AppKit first responder, but some calls can: `Page.bringToFront`, `Target.activateTarget`, `Emulation.setFocusEmulationEnabled`, and any agent-browser command that calls them (including `tab <id>` switching, which may activate the target). **Must be verified** (see 11) and, if any command steals focus, either avoid it or restore focus afterwards (Console already tracks first-responder changes via `ResponderObserver` in `cef/host.rs`).
+6. **Never let agent-browser create or close tabs.** `tab new` and `tab close` would create or destroy CDP targets that Console's UI does not know about. Tab lifecycle stays in Console (existing `navigate`, `switch_tab`, `close_tab` handling). agent-browser only operates on page content of an existing target.
 
 ## 4. Architecture
 
@@ -145,6 +146,7 @@ A read-only clone lives at `~/Developer/Projects/agent-browser` (v0.38.2). It is
 - Does `Target.getTargetInfo` work per browser via the host in CEF 154 (5.2)?
 - Does the CDP close path (`Target.closeTarget`) interact badly with the `do_close` handling? Expect Console to keep owning closes, so this may not matter.
 - Where does the binary live in the signed/notarized bundle, and does the hardened runtime need entitlements for spawning it?
+- **Focus (blocking):** with the composer focused, does `agent-browser --cdp <port> tab <targetId>`, `click`, `fill`, `screenshot` change the AppKit first responder or raise the window? Test on a visible and on a hidden tab. If yes, find which CDP call does it and avoid or undo it.
 - Do we want one agent-browser session per workspace or per tab? Per workspace is simpler; per tab avoids sharing the single "current tab" state under concurrent actions.
 - Dev workflow: how do developers set the port/binary when running unbundled?
 
