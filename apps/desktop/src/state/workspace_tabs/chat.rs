@@ -431,8 +431,12 @@ impl ConsoleDesktopApp {
         // Check active session header
         if let Some(session_id) = self.active_session_for_pane(pane_id) {
             if let Some(session) = self.sessions.iter().find(|s| s.id == session_id) {
-                if session.thinking_level.is_some() {
-                    return session.thinking_level;
+                if let Some(level) = session
+                    .thinking_level
+                    .as_deref()
+                    .and_then(ThinkingLevel::from_str)
+                {
+                    return Some(level);
                 }
             }
         }

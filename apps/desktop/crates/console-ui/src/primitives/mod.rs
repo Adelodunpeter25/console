@@ -15,7 +15,7 @@ pub mod tooltip;
 pub mod transparency;
 
 use crate::theme::Theme;
-use console_core::SessionStatus;
+
 
 pub use context_menu::{draft_context_menu, session_context_menu};
 pub use file_icons::{
@@ -101,12 +101,13 @@ pub fn provider_icon(provider: &str) -> &'static str {
     }
 }
 
-pub fn status_color(theme: &Theme, status: &SessionStatus) -> Hsla {
+pub fn status_color(theme: &Theme, status: &str) -> Hsla {
     match status {
-        SessionStatus::Idle => theme.text_ghost,
-        SessionStatus::Working => theme.accent,
-        SessionStatus::NeedsAttention => theme.warning,
-        SessionStatus::Done => theme.success,
+        "idle" => theme.text_ghost,
+        "working" => theme.accent,
+        "needs_attention" => theme.warning,
+        "done" => theme.success,
+        _ => theme.text_ghost,
     }
 }
 

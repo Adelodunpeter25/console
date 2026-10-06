@@ -316,7 +316,7 @@ impl SessionService {
 
         for attempt in 0..MAX_ATTEMPTS {
             let detail = self.get(id, None).await?;
-            if detail.header.status != Some(SessionStatus::Working) || attempt + 1 == MAX_ATTEMPTS {
+            if detail.header.status != "working" || attempt + 1 == MAX_ATTEMPTS {
                 return Ok(detail);
             }
             tokio::time::sleep(POLL_INTERVAL).await;

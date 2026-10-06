@@ -5,7 +5,8 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader, UpdateSessionDto};
+use console_core::{ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader,
+    SessionHeaderExt, UpdateSessionDto};
 use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
 use gpui::{Context, Window};
 
@@ -193,7 +194,7 @@ impl ConsoleDesktopApp {
                         session.model_id = mid.clone();
                     }
                     if payload.thinking_level.is_some() {
-                        session.thinking_level = payload.thinking_level;
+                        session.thinking_level = payload.thinking_level.as_ref().map(|t| t.as_str().to_string());
                     }
                 }
                 self.persist_workspaces();
@@ -338,14 +339,10 @@ impl ConsoleDesktopApp {
         }
         self.set_pane_approval_mode(
             pane_id,
-            header
-                .approval_mode
-                .as_deref()
-                .map(ApprovalMode::from_value)
-                .unwrap_or_default(),
+            ApprovalMode::from_value(&header.approval_mode),
         );
-        if header.thinking_level.is_some() {
-            self.set_pane_thinking_level(pane_id, header.thinking_level);
+        if let Some(level) = header.thinking_level.as_deref().and_then(console_core::ThinkingLevel::from_str) {
+            self.set_pane_thinking_level(pane_id, Some(level));
         }
 
         if let Some(session) = Rc::make_mut(&mut self.sessions)
@@ -357,7 +354,7 @@ impl ConsoleDesktopApp {
             session.model_id = header.model_id.clone();
             session.provider = header.provider.clone();
             session.approval_mode = header.approval_mode.clone();
-            session.thinking_level = header.thinking_level;
+            session.thinking_level = header.thinking_level.clone();
             session.status = header.status.clone();
             session.updated_at = header.updated_at;
             // Keep the sidebar row and any open chat tabs in step when the
@@ -984,8 +981,7 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
 
-                                if detail.header.status
-                                    == Some(console_core::SessionStatus::Working)
+                                if detail.header.status == "working"
                                     && !this.is_session_running(&session_id)
                                 {
                                     this.attach_session_run_for_pane(

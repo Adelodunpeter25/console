@@ -567,7 +567,7 @@ impl ConsoleDesktopApp {
             // client disconnects, so we must wait before allowing another prompt.
             match client.sessions.wait_until_settled(&session_id).await {
                 Ok(detail) => {
-                    server_run_may_be_active = detail.header.status == Some(console_core::SessionStatus::Working);
+                    server_run_may_be_active = detail.header.status == "working";
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {

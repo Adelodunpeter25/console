@@ -1,5 +1,5 @@
 use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
-use console_core::{ImageAttachment, SessionStatus};
+use console_core::ImageAttachment;
 use gpui::Context;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -24,7 +24,7 @@ impl ConsoleDesktopApp {
                     .iter_mut()
                     .find(|s| s.id == session_id)
                 {
-                    session.status = Some(SessionStatus::Working);
+                    session.status = "working".to_string();
                 }
             }
             None => {
@@ -33,8 +33,8 @@ impl ConsoleDesktopApp {
                     .iter_mut()
                     .find(|s| s.id == session_id)
                 {
-                    if session.status == Some(SessionStatus::Working) {
-                        session.status = None;
+                    if session.status == "working" {
+                        session.status = "idle".to_string();
                     }
                 }
             }

@@ -5,7 +5,7 @@
 //! the merge here gives rows one source of truth for Working/Waiting display
 //! without coupling the sidebar layout to run orchestration.
 
-use console_core::{SessionHeader, SessionStatus};
+use console_core::SessionHeader;
 use gpui::{AnyElement, IntoElement, SharedString};
 
 use crate::primitives::{IconName, app_icon};
@@ -30,7 +30,7 @@ pub fn session_loading_state(
     running_started_at: Option<i64>,
     is_waiting: bool,
 ) -> Option<SidebarLoadingState> {
-    if is_waiting || session.status.as_ref() == Some(&SessionStatus::NeedsAttention) {
+    if is_waiting || session.status == "needs_attention" {
         return Some(SidebarLoadingState::Waiting);
     }
 
@@ -43,7 +43,7 @@ pub fn session_loading_state(
         return Some(SidebarLoadingState::Working { started_at });
     }
 
-    if session.status.as_ref() == Some(&SessionStatus::Working) {
+    if session.status == "working" {
         return Some(SidebarLoadingState::Working {
             started_at: normalize_timestamp(session.updated_at),
         });

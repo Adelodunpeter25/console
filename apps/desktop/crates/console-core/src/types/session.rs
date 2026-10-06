@@ -13,36 +13,21 @@ use super::agent::AgentMessage;
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionStatus {
-    Idle,
-    Working,
-    Done,
-    NeedsAttention,
+// Canonical wire type from the shared protobuf schema
+// (proto/console/v1/session.proto). Timestamps encode as protojson strings;
+// status and thinking level stay plain strings, matched literally.
+pub use console_proto::{SessionHeader, SessionWorktree};
+
+// Run statuses were a snake_case enum; the wire is strings now. UI-domain
+// construction/comparison moved to plain strings with the server vocabulary
+// (idle/working/done/needs_attention); unknown values fall through to the
+// default branches at each match site.
+pub trait SessionHeaderExt {
+    fn display_title(&self) -> &str;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionHeader {
-    pub id: String,
-    pub title: String,
-    pub cwd: String,
-    pub project_id: Option<String>,
-    pub model_id: String,
-    pub provider: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub message_count: Option<usize>,
-    pub status: Option<SessionStatus>,
-    pub approval_mode: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub thinking_level: Option<ThinkingLevel>,
-    pub deleted_at: Option<i64>,
-}
-
-impl SessionHeader {
-    pub fn display_title(&self) -> &str {
+impl SessionHeaderExt for SessionHeader {
+    fn display_title(&self) -> &str {
         let trimmed = self.title.trim();
         if trimmed.is_empty() {
             "New Chat"
