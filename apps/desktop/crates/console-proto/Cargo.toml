@@ -48,6 +48,10 @@ name = "terminal_json_test"
 path = "tests/terminal_json_test.rs"
 
 [[test]]
+name = "session_todos_test"
+path = "tests/session_todos_test.rs"
+
+[[test]]
 name = "fs_json_test"
 path = "tests/fs_json_test.rs"
 

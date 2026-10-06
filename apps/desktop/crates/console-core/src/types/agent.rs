@@ -210,13 +210,10 @@ pub struct AskQuestionRequest {
     pub batch_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TodoItem {
-    pub id: i64,
-    pub content: String,
-    pub status: String,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/session.proto). Todo statuses stay plain strings
+/// (pending/in_progress/completed); ids narrow to i32 and stay JSON numbers.
+pub use console_proto::TodoItem;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
