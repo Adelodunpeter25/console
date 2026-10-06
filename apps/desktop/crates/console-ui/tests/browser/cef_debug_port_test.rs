@@ -21,3 +21,18 @@ fn no_override_picks_a_bindable_loopback_port() {
     // The reserved port was released, so it can be bound again.
     std::net::TcpListener::bind(("127.0.0.1", port)).expect("port is free");
 }
+
+#[test]
+fn eager_start_is_on_for_dev_or_a_pinned_port_and_can_be_forced() {
+    use console_ui::browser::cef::runtime::should_start_eagerly as eager;
+    assert!(eager(Some("dev"), None, None));
+    assert!(eager(Some("DEV"), None, None));
+    assert!(eager(None, Some("9333"), None));
+    assert!(eager(None, None, Some("1")));
+    assert!(!eager(None, None, None));
+    assert!(!eager(Some("prod"), None, None));
+    assert!(!eager(Some("prod"), Some(""), None));
+    // An explicit off switch beats everything else.
+    assert!(!eager(Some("dev"), Some("9333"), Some("0")));
+    assert!(!eager(Some("dev"), None, Some("false")));
+}

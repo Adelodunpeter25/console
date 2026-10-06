@@ -140,6 +140,45 @@ pub fn debug_port() -> Option<u16> {
     }
 }
 
+/// Whether CEF should start at app launch instead of at the first navigating
+/// tab. Without this the CDP port does not exist until someone opens a tab,
+/// which makes attaching agent-browser (or any CDP client) for debugging a
+/// manual chore. On for dev builds (`CONSOLE_ENV=dev`), when a debug port is
+/// pinned, or with `CONSOLE_CEF_EAGER=1`; `CONSOLE_CEF_EAGER=0` forces it off.
+pub fn should_start_eagerly(
+    console_env: Option<&str>,
+    debug_port_env: Option<&str>,
+    eager_env: Option<&str>,
+) -> bool {
+    match eager_env.map(str::trim) {
+        Some("0") | Some("false") => return false,
+        Some("1") | Some("true") => return true,
+        _ => {}
+    }
+    console_env.is_some_and(|env| env.eq_ignore_ascii_case("dev"))
+        || debug_port_env.is_some_and(|port| !port.trim().is_empty())
+}
+
+/// Start CEF now when [`should_start_eagerly`] says so (reads the env). Call
+/// on the main thread once the app is running. Returns whether CEF is up.
+pub fn start_eagerly_if_requested() -> bool {
+    let wanted = should_start_eagerly(
+        std::env::var("CONSOLE_ENV").ok().as_deref(),
+        std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref(),
+        std::env::var("CONSOLE_CEF_EAGER").ok().as_deref(),
+    );
+    if !wanted {
+        return false;
+    }
+    let up = ensure_initialized();
+    match (up, debug_port()) {
+        (true, Some(port)) => log::info!("CEF: started at launch, CDP on 127.0.0.1:{port}"),
+        (true, None) => log::info!("CEF: started at launch (no debug port)"),
+        (false, _) => log::warn!("CEF: could not start at launch"),
+    }
+    up
+}
+
 /// Pick the CDP port: a valid `override_port` (1024-65535) wins, otherwise a
 /// currently-free port on 127.0.0.1. `None` if neither is available.
 pub fn resolve_debug_port(override_port: Option<&str>) -> Option<u16> {
@@ -199,7 +238,7 @@ impl CefRuntime {
         let debug_port = resolve_debug_port(std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref());
         if let Some(port) = debug_port {
             DEBUG_PORT.store(port, Ordering::Relaxed);
-            log::debug!("CEF: remote debugging on 127.0.0.1:{port}");
+            log::info!("CEF: remote debugging on 127.0.0.1:{port}");
         }
         let settings = cef::Settings {
             // The macOS sandbox needs an endorsed helper plus entitlements;
