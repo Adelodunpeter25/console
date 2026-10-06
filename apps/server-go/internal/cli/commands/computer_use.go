@@ -27,10 +27,87 @@ func ComputerUseCommand() *cobra.Command {
 		Short: "Inspect and exercise the Cua Driver computer-use runtime",
 	}
 	root.AddCommand(computerUseStatusCmd())
+	root.AddCommand(computerUsePermissionsCmd())
 	root.AddCommand(computerUseProbeCmd())
 	root.AddCommand(computerUseBundleCmd())
 	root.AddCommand(computerUseResetCmd())
 	return root
+}
+
+// computerUsePermissionsCmd asks the driver itself, rather than inferring from
+// whether a tool happened to work. The driver reports the live TCC state and,
+// crucially, which process identity it was attributed to: "host" is correct,
+// "caller" means the process is running outside its bundle and borrowing
+// someone else's grant.
+func computerUsePermissionsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "permissions",
+		Short: "Report the live macOS Accessibility and Screen Recording state for this process",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if runtime.GOOS != "darwin" {
+				return fmt.Errorf("only macOS has permission grants to report; this is %s", runtime.GOOS)
+			}
+			driver, err := cua.Open(cua.Options{})
+			if err != nil {
+				return err
+			}
+			defer driver.Shutdown()
+			res, err := driver.Call(context.Background(), "check_permissions", map[string]any{}, nil)
+			if err != nil {
+				return err
+			}
+			printResult(res)
+			return explainAttribution(res)
+		},
+	}
+}
+
+// explainAttribution turns the driver's attribution report into the one action
+// that matters, because "permissions are granted but they belong to the wrong
+// process" is otherwise very confusing.
+func explainAttribution(res *cua.ToolResult) error {
+	if len(res.StructuredContent) == 0 {
+		return nil
+	}
+	var payload struct {
+		Accessibility *bool `json:"accessibility"`
+		ScreenRecord  *bool `json:"screen_recording"`
+		Source        struct {
+			Attribution     string `json:"attribution"`
+			HostBundleID    string `json:"host_bundle_id"`
+			Embedded        bool   `json:"embedded"`
+			ResponsiblePPID int    `json:"responsible_ppid"`
+			Executable      string `json:"executable"`
+		} `json:"source"`
+	}
+	if json.Unmarshal(res.StructuredContent, &payload) != nil {
+		return nil
+	}
+
+	fmt.Printf("\nattribution: %s\n", payload.Source.Attribution)
+	if payload.Source.HostBundleID != "" {
+		fmt.Printf("  host bundle: %s\n", payload.Source.HostBundleID)
+	}
+	if payload.Source.Executable != "" {
+		fmt.Printf("  executable:  %s\n", payload.Source.Executable)
+	}
+
+	granted := payload.Accessibility != nil && *payload.Accessibility
+	attribution := payload.Source.Attribution
+	if granted && attribution == "host" {
+		fmt.Println("\nAccessibility is granted to this bundle. Reading windows should work.")
+		return nil
+	}
+	if granted {
+		fmt.Println("\nAccessibility is granted, but NOT to this process identity.")
+		fmt.Println("  Run the server from inside the bundle so it inherits the grant:")
+		fmt.Println("    open \"/Applications/Console Computer Use.app\"")
+		return nil
+	}
+	fmt.Println("\nAccessibility is not granted. Add the bundle in System Settings:")
+	fmt.Println("  Privacy & Security → Accessibility → + → Console Computer Use")
+	fmt.Println("  Privacy & Security → Screen Recording → + → Console Computer Use")
+	return nil
 }
 
 func computerUseStatusCmd() *cobra.Command {
