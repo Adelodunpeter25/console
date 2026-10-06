@@ -2,6 +2,7 @@ package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.AgentMessage
+import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
@@ -71,6 +72,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
     private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
+    private val messageMoshi = wireMoshi.adapter(console.v1.AgentMessage::class.java)
     private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
     private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
     private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
@@ -109,8 +111,15 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
         val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
             ?: throw ApiException("Failed to load session")
+        // Transitional: canonical oneof rows convert to render models;
+        // pre-migration role-keyed rows fall back to the hand shape.
+        // Drop the fallback once dev stores turn over (Phase 5 cleanup).
         val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
             try {
+                messageMoshi.fromJson(item.toString())?.toUi()
+            } catch (_: Exception) {
+                null
+            } ?: try {
                 ConsoleJson.decodeFromString(AgentMessage.serializer(), item.toString())
             } catch (_: Exception) {
                 null
