@@ -38,7 +38,7 @@ type SubagentContext struct {
 	// act with more permission than the run that spawned it. Zero value means
 	// always-ask, which is the safe default for a run that did not say.
 	ApprovalMode permissions.Mode
-	Approver    Approver
+	Approver     Approver
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
