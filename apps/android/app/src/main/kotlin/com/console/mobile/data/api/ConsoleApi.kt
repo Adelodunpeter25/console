@@ -12,9 +12,9 @@ import console.v1.FsBrowseResult
 import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
-import com.console.mobile.data.model.GitBranchesResponse
-import com.console.mobile.data.model.GitDiffResponse
-import com.console.mobile.data.model.GitStatusSummary
+import console.v1.GitBranchesResponse
+import console.v1.GitDiffResponse
+import console.v1.GitStatusSummary
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry

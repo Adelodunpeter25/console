@@ -2,9 +2,8 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
-import com.console.mobile.data.api.ConsoleJson
-import com.console.mobile.data.model.GitBranchesResponse
-import com.console.mobile.data.model.GitStatusSummary
+import console.v1.GitBranchesResponse
+import console.v1.GitStatusSummary
 import console.v1.ProjectInfo
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -59,6 +58,11 @@ class GitRepository(
     /**
      * Watches git status changes via GET /api/git/status/watch?path=... SSE.
      */
+    private val gitStatusMoshi = com.squareup.moshi.Moshi.Builder()
+        .add(com.squareup.wire.WireJsonAdapterFactory())
+        .build()
+        .adapter(GitStatusSummary::class.java)
+
     fun watchStatus(path: String): Flow<GitStatusSummary> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
         val encoded = java.net.URLEncoder.encode(path, "UTF-8")
@@ -110,8 +114,7 @@ class GitRepository(
                                 val raw = l.substring(5).trim()
                                 if (eventType == "gitStatus" || eventType == "message") {
                                     try {
-                                        val summary = ConsoleJson.decodeFromString(GitStatusSummary.serializer(), raw)
-                                        trySend(summary)
+                                        gitStatusMoshi.fromJson(raw)?.let { trySend(it) }
                                     } catch (_: Exception) {
                                     }
                                 }

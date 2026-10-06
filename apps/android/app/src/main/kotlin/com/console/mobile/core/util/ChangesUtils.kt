@@ -1,6 +1,6 @@
 package com.console.mobile.core.util
 
-import com.console.mobile.data.model.GitFileEntry
+import console.v1.GitFileEntry
 
 sealed interface ChangesRow {
     data class Folder(val key: String, val name: String, val additions: Int, val deletions: Int, val count: Int) : ChangesRow

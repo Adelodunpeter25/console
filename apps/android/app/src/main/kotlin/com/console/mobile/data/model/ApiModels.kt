@@ -156,26 +156,10 @@ data class SessionDetailResponse(
 // proto/console/v1): sizes now arrive as protojson strings, and the
 // never-populated git status is gone. Unset sizes decode as absent.
 
-@Serializable
-data class GitFileEntry(
-    val path: String,
-    val status: String,
-    val staged: Boolean = false,
-    val additions: Int? = null,
-    val deletions: Int? = null,
-)
+// Git working-tree types moved to the shared protobuf schema (console.v1
+// from proto/console/v1): status codes stay plain strings, numstat counts
+// narrow to uint32 so they stay JSON numbers.
 
-@Serializable
-data class GitStatusSummary(val branch: String, val clean: Boolean, val files: List<GitFileEntry> = emptyList())
-
-@Serializable
-data class GitDiffResponse(val path: String? = null, val diff: String)
-
-@Serializable
-data class GitBranchInfo(val name: String, val current: Boolean)
-
-@Serializable
-data class GitBranchesResponse(val branches: List<GitBranchInfo> = emptyList(), val isGitRepository: Boolean)
 
 @Serializable
 data class FsChangeEvent(val type: String = "fsChange", val projectPath: String, val eventPath: String? = null)

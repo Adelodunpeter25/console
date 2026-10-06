@@ -16,9 +16,6 @@ import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
 import console.v1.WriteFileRequest
-import com.console.mobile.data.model.GitBranchesResponse
-import com.console.mobile.data.model.GitDiffResponse
-import com.console.mobile.data.model.GitStatusSummary
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry
@@ -27,6 +24,10 @@ import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.ConsoleSettings
 import console.v1.ModelFavorite
+import console.v1.GitBranchesResponse
+import console.v1.GitCheckoutRequest
+import console.v1.GitDiffResponse
+import console.v1.GitStatusSummary
 import console.v1.ProjectInfo
 import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
@@ -67,6 +68,10 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
+    private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
+    private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
+    private val gitBranchesAdapter = wireMoshi.adapter(GitBranchesResponse::class.java)
+    private val gitCheckoutAdapter = wireMoshi.adapter(GitCheckoutRequest::class.java)
     private val fsBrowseAdapter = wireMoshi.adapter(FsBrowseResult::class.java)
     private val fsTreeAdapter = wireMoshi.adapter(FsDirectoryTree::class.java)
     private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
@@ -263,24 +268,28 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val params = mutableMapOf("repoPath" to repoPath)
         if (filePath != null) params["path"] = filePath
         val raw = http.get("/api/git/diff", params)
-        return http.unwrap(raw, GitDiffResponse.serializer().nullable, "load diff")?.diff
+        val element = http.unwrap(raw, JsonElement.serializer(), "load diff")
+        if (element is JsonNull) return null
+        return gitDiffAdapter.fromJson(element.toString())?.diff
     }
 
     override suspend fun getGitStatus(path: String): GitStatusSummary? {
         val raw = http.get("/api/git/status", mapOf("path" to path))
-        return http.unwrap(raw, GitStatusSummary.serializer().nullable, "load git status")
+        val element = http.unwrap(raw, JsonElement.serializer(), "load git status")
+        if (element is JsonNull) return null
+        return gitStatusAdapter.fromJson(element.toString())
     }
 
     override suspend fun listBranches(repoPath: String): GitBranchesResponse? {
         val raw = http.get("/api/git/branches", mapOf("path" to repoPath))
-        return http.unwrap(raw, GitBranchesResponse.serializer().nullable, "list git branches")
+        val element = http.unwrap(raw, JsonElement.serializer(), "list git branches")
+        if (element is JsonNull) return null
+        return gitBranchesAdapter.fromJson(element.toString())
     }
 
     override suspend fun checkoutBranch(repoPath: String, branch: String) {
-        val body = buildJsonObject {
-            put("path", repoPath)
-            put("branch", branch)
-        }.toString()
+        // Same bytes as the old hand-built object: path, branch.
+        val body = gitCheckoutAdapter.toJson(GitCheckoutRequest(path = repoPath, branch = branch))
         val raw = http.post("/api/git/checkout", body)
         ensureOk(raw, "checkout branch")
     }
