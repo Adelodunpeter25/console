@@ -74,38 +74,40 @@ pub struct TerminalRecord {
     pub revision: u64,
 }
 
-/// Server → client frames (mirrors `@console/types` `TerminalServerMessage`).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum TerminalServerMessage {
-    #[serde(rename = "spawned")]
-    Spawned {
-        id: TerminalId,
-        pid: u32,
-        shell: String,
-        cwd: String,
-        cols: u16,
-        rows: u16,
-    },
-    #[serde(rename = "output")]
-    Output { data: String },
-    #[serde(rename = "exit")]
-    Exit { code: Option<i32> },
-    #[serde(rename = "error")]
-    Error { message: String },
+/// Server → client frames (canonical wire types from the shared protobuf
+/// schema). JSON text frames decode the oneof shape ({"spawned":{...}});
+/// binary tag-byte frames carry raw PTY output and never touch this type.
+pub use console_proto::{
+    TerminalClientMessage, TerminalExit, TerminalInput, TerminalKill, TerminalOutput,
+    TerminalResize, TerminalServerMessage, TerminalSpawned,
+};
+pub use console_proto::terminal_client_message::Event as TerminalClientEvent;
+pub use console_proto::terminal_server_message::Event as TerminalServerEvent;
+
+/// Constructors for client frames (prost oneof messages have no inherent
+/// constructors from outside their crate).
+pub fn client_input(data: impl Into<String>) -> TerminalClientMessage {
+    TerminalClientMessage {
+        event: Some(TerminalClientEvent::Input(TerminalInput { data: data.into() })),
+    }
 }
 
-/// Client → server frames.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum TerminalClientMessage {
-    #[serde(rename = "input")]
-    Input { data: String },
-    #[serde(rename = "resize")]
-    Resize { cols: u16, rows: u16 },
-    #[serde(rename = "kill")]
-    Kill,
+pub fn client_resize(cols: u16, rows: u16) -> TerminalClientMessage {
+    TerminalClientMessage {
+        event: Some(TerminalClientEvent::Resize(TerminalResize {
+            cols: cols as i32,
+            rows: rows as i32,
+        })),
+    }
 }
+
+pub fn client_kill() -> TerminalClientMessage {
+    TerminalClientMessage {
+        event: Some(TerminalClientEvent::Kill(TerminalKill {})),
+    }
+}
+
+/// Logical size of a terminal viewport.
 
 // ── Grid snapshot — backend-agnostic view for the UI ─────────────────────
 

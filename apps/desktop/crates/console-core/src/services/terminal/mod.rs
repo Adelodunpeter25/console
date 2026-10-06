@@ -126,9 +126,7 @@ pub struct TerminalSnapshotFull {
 
 impl TerminalHandle {
     pub fn send_input(&self, data: impl Into<String>) {
-        let _ = self
-            .sender
-            .send(TerminalClientMessage::Input { data: data.into() });
+        let _ = self.sender.send(crate::types::client_input(data));
     }
 
     pub fn resize(&self, size: TerminalSize) {
@@ -140,14 +138,11 @@ impl TerminalHandle {
             drop(b);
             notify.notify_one();
         });
-        let _ = self.sender.send(TerminalClientMessage::Resize {
-            cols: size.cols,
-            rows: size.rows,
-        });
+        let _ = self.sender.send(crate::types::client_resize(size.cols, size.rows));
     }
 
     pub fn kill(&self) {
-        let _ = self.sender.send(TerminalClientMessage::Kill);
+        let _ = self.sender.send(crate::types::client_kill());
     }
 
     pub fn scroll(&self, delta: i32) {
@@ -190,7 +185,7 @@ impl TerminalHandle {
                 let count = (delta.abs() as usize).min(10);
                 let input = key.repeat(count);
                 drop(b);
-                let _ = sender.send(TerminalClientMessage::Input { data: input });
+                let _ = sender.send(crate::types::client_input(input));
             } else {
                 b.scroll(delta);
                 drop(b);
@@ -309,20 +304,21 @@ impl TerminalService {
                 while let Some(msg) = rx.recv().await {
                     // Binary protocol: input rides a binary frame
                     // [0x01, ...bytes]; control messages stay JSON text.
-                    let wire = match &msg {
-                        TerminalClientMessage::Input { data } => {
-                            let mut frame = Vec::with_capacity(data.len() + 1);
+                    let wire = match &msg.event {
+                        Some(crate::types::TerminalClientEvent::Input(input)) => {
+                            let mut frame = Vec::with_capacity(input.data.len() + 1);
                             frame.push(TERMINAL_INPUT_FRAME_TAG);
-                            frame.extend_from_slice(data.as_bytes());
+                            frame.extend_from_slice(input.data.as_bytes());
                             tokio_tungstenite::tungstenite::Message::Binary(frame.into())
                         }
-                        other => match serde_json::to_string(other) {
+                        Some(_) => match serde_json::to_string(&msg) {
                             Ok(t) => tokio_tungstenite::tungstenite::Message::Text(t.into()),
                             Err(e) => {
                                 log::warn!("Failed to serialize terminal msg: {e}");
                                 continue;
                             }
                         },
+                        None => continue,
                     };
                     if let Err(e) = futures_util::SinkExt::send(&mut write, wire).await {
                         log::warn!("WS send failed: {e}");
@@ -337,37 +333,42 @@ impl TerminalService {
                         let server_msg: Result<TerminalServerMessage, _> =
                             serde_json::from_str(&text);
                         match server_msg {
-                            Ok(TerminalServerMessage::Spawned { id: sid, .. }) => {
-                                *id_clone.write().await = Some(sid);
-                                *status_clone.write().await = TerminalStatus::Running;
-                                notify_clone.notify_one();
-                            }
-                            Ok(TerminalServerMessage::Output { data }) => {
-                                let mut b = backend_clone.lock().await;
-                                let replies = b.advance_and_collect_replies(&data);
-                                drop(b);
-                                if !replies.is_empty() {
-                                    let _ = reply_sender.send(TerminalClientMessage::Input {
-                                        data: String::from_utf8_lossy(&replies).into_owned(),
-                                    });
+                            Ok(msg) => match msg.event {
+                                Some(crate::types::TerminalServerEvent::Spawned(s)) => {
+                                    *id_clone.write().await = Some(s.id);
+                                    *status_clone.write().await = TerminalStatus::Running;
+                                    notify_clone.notify_one();
                                 }
-                                notify_clone.notify_one();
-                            }
-                            Ok(TerminalServerMessage::Exit { code }) => {
-                                *status_clone.write().await = TerminalStatus::Exited;
-                                if let Some(c) = code {
-                                    *error_clone.write().await =
-                                        Some(format!("Shell exited with code {c}"));
+                                Some(crate::types::TerminalServerEvent::Output(o)) => {
+                                    let mut b = backend_clone.lock().await;
+                                    let replies = b.advance_and_collect_replies(&o.data);
+                                    drop(b);
+                                    if !replies.is_empty() {
+                                        let _ = reply_sender.send(crate::types::client_input(
+                                            String::from_utf8_lossy(&replies).into_owned(),
+                                        ));
+                                    }
+                                    notify_clone.notify_one();
                                 }
-                                notify_clone.notify_one();
-                                break;
-                            }
-                            Ok(TerminalServerMessage::Error { message }) => {
-                                *status_clone.write().await = TerminalStatus::Error;
-                                *error_clone.write().await = Some(message);
-                                notify_clone.notify_one();
-                                break;
-                            }
+                                Some(crate::types::TerminalServerEvent::Exit(e)) => {
+                                    *status_clone.write().await = TerminalStatus::Exited;
+                                    if let Some(c) = e.code {
+                                        *error_clone.write().await =
+                                            Some(format!("Shell exited with code {c}"));
+                                    }
+                                    notify_clone.notify_one();
+                                    break;
+                                }
+                                Some(crate::types::TerminalServerEvent::Error(e)) => {
+                                    *status_clone.write().await = TerminalStatus::Error;
+                                    *error_clone.write().await = Some(e.message);
+                                    notify_clone.notify_one();
+                                    break;
+                                }
+                                None => {
+                                    log::warn!("Empty terminal frame: {text}");
+                                }
+                            },
                             Err(e) => {
                                 log::warn!("Invalid terminal frame: {e} — {text}");
                             }
@@ -389,9 +390,9 @@ impl TerminalService {
                         let replies = b.advance_and_collect_replies_bytes(payload);
                         drop(b);
                         if !replies.is_empty() {
-                            let _ = reply_sender.send(TerminalClientMessage::Input {
-                                data: String::from_utf8_lossy(&replies).into_owned(),
-                            });
+                            let _ = reply_sender.send(crate::types::client_input(
+                                String::from_utf8_lossy(&replies).into_owned(),
+                            ));
                         }
                         notify_clone.notify_one();
                     }
