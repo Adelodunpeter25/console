@@ -29,7 +29,7 @@ import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionFileChange
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentInfo
 import console.v1.TodoItem
 import console.v1.UsageReport
 

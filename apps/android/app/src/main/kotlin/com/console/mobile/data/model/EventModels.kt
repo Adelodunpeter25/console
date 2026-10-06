@@ -46,33 +46,10 @@ data class SubagentEndEvent(
     val totalTurns: Int,
 )
 
-@Serializable
-data class SubagentActivityItem(
-    val turnIndex: Int,
-    val toolCallId: String,
-    val toolName: String,
-    val summary: String? = null,
-    val args: JsonElement? = null,
-    val status: String,
-    val error: String? = null,
-)
-
-@Serializable
-data class SubagentInfo(
-    val subagentId: String,
-    val parentToolCallId: String,
-    val name: String,
-    val role: String,
-    val prompt: String,
-    val maxTurns: Int,
-    val currentTurn: Int = 1,
-    val status: String,
-    val summary: String? = null,
-    val error: String? = null,
-    val activities: List<SubagentActivityItem> = emptyList(),
-    val createdAt: Long? = null,
-    val updatedAt: Long? = null,
-)
+// Subagent rows moved to the shared protobuf schema (console.v1 from
+// proto/console/v1): counts narrow to int32 and stay JSON numbers,
+// activity args cross as raw JSON bytes. Start/activity/end EVENT
+// frames stay hand-shaped until the event stream migrates.
 
 /** Agent session SSE event. */
 @Serializable

@@ -45,13 +45,14 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.SubagentActivityItem
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentActivityItem
+import console.v1.SubagentInfo
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import com.console.mobile.data.api.ConsoleJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -85,8 +86,8 @@ fun SubagentsScreen(onBackToChat: () -> Unit, onOpenDetails: (String) -> Unit) {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                 subagents.forEach { s ->
                     SubagentCard(subagent = s, onClick = {
-                        AppContainer.appStateHolder.setSelectedSubagentId(s.subagentId)
-                        onOpenDetails(s.subagentId)
+                        AppContainer.appStateHolder.setSelectedSubagentId(s.subagent_id)
+                        onOpenDetails(s.subagent_id)
                     })
                 }
             }
@@ -136,7 +137,7 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     var copied by remember { mutableStateOf(false) }
     val subagents = appState.selectedSessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
-    val subagent = subagents.firstOrNull { it.subagentId == appState.selectedSubagentId }
+    val subagent = subagents.firstOrNull { it.subagent_id == appState.selectedSubagentId }
 
     val running = subagent?.status == "running"
     val completed = subagent?.status == "completed"
@@ -156,7 +157,7 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
             ) {
                 Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
                 Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 10.dp))
-                Text("Turn ${maxOf(1, subagent.currentTurn)}/${subagent.maxTurns}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+                Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
             }
             // Prompt.
             Text("Prompt", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
@@ -206,10 +207,10 @@ private fun groupActivities(activities: List<SubagentActivityItem>): List<Activi
     val out = mutableListOf<ActivityGroup>()
     for (a in activities) {
         val last = out.lastOrNull()
-        if (last != null && last.toolName == a.toolName) {
+        if (last != null && last.toolName == a.tool_name) {
             out[out.lastIndex] = last.copy(activities = last.activities + a)
         } else {
-            out.add(ActivityGroup(a.toolName, listOf(a)))
+            out.add(ActivityGroup(a.tool_name, listOf(a)))
         }
     }
     return out
@@ -244,7 +245,7 @@ private fun ActivityGroupCard(group: ActivityGroup) {
 
 @Composable
 private fun ActivityRowItem(activity: SubagentActivityItem) {
-    val summary = activity.summary ?: argSummaryOf(activity.args)
+    val summary = activity.summary ?: argSummaryOf(activity.args.toByteArray())
     val running = activity.status == "running"
     val done = activity.status == "completed"
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -252,7 +253,7 @@ private fun ActivityRowItem(activity: SubagentActivityItem) {
         else if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
         else Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
         Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(activity.toolName, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
+            Text(activity.tool_name, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
         }
         if (summary != null) {
             Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
@@ -265,8 +266,13 @@ private fun ActivityRowItem(activity: SubagentActivityItem) {
     }
 }
 
-private fun argSummaryOf(args: kotlinx.serialization.json.JsonElement?): String? {
-    val o = args as? JsonObject ?: return null
+private fun argSummaryOf(args: ByteArray): String? {
+    if (args.isEmpty()) return null
+    val o = try {
+        ConsoleJson.parseToJsonElement(String(args, Charsets.UTF_8))
+    } catch (_: Exception) {
+        return null
+    } as? JsonObject ?: return null
     fun s(key: String): String? = (o[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
     val direct = s("command") ?: s("CommandLine") ?: s("path") ?: s("AbsolutePath") ?: s("SearchDirectory")
         ?: s("TargetFile") ?: s("pattern") ?: s("Pattern") ?: s("Query") ?: s("query") ?: s("url") ?: s("Url")

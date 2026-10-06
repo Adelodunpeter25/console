@@ -40,7 +40,7 @@ import com.console.mobile.data.model.SessionDetailResponse
 import com.console.mobile.data.model.SessionFileChange
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SlashCommandInfo
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.data.model.UpdateSessionDto
 import java.net.URLEncoder
@@ -72,6 +72,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
     private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
+    private val subagentAdapter = wireMoshi.adapter(SubagentInfo::class.java)
     private val messageMoshi = wireMoshi.adapter(console.v1.AgentMessage::class.java)
     private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
     private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
@@ -174,7 +175,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getSubagents(id: String): List<SubagentInfo> {
         val raw = http.get("/api/sessions/${enc(id)}/subagents")
-        return http.unwrap(raw, ListSerializer(SubagentInfo.serializer()), "get session subagents")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get session subagents")
+        val array = element as? JsonArray ?: throw ApiException("Failed to get session subagents")
+        return array.map { item ->
+            subagentAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to get session subagents")
+        }
     }
 
     override suspend fun getChanges(id: String): List<SessionFileChange> {

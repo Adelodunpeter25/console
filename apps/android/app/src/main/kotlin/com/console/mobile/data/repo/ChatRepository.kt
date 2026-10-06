@@ -26,7 +26,7 @@ import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentInfo
 import com.console.mobile.data.model.TextPart
 import console.v1.TodoItem
 import com.console.mobile.data.model.UserMessage

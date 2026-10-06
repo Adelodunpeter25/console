@@ -4,7 +4,7 @@ import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.AskQuestionRequest
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult

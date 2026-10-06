@@ -36,7 +36,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
-import com.console.mobile.data.model.SubagentInfo
+import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.ui.theme.ConsoleColors
 
@@ -59,7 +59,7 @@ fun TodoBanner(completed: Int, total: Int, nextTask: String?, onPress: () -> Uni
 fun SubagentBanner(subagents: List<SubagentInfo>, onPress: () -> Unit) {
     val latest = subagents.lastOrNull()
     val statusLabel = when (latest?.status) {
-        "running" -> if ((latest.maxTurns) > 0) "Running (Turn ${maxOf(1, latest.currentTurn)}/${latest.maxTurns})" else "Running"
+        "running" -> if ((latest.max_turns) > 0) "Running (Turn ${maxOf(1, latest.current_turn)}/${latest.max_turns})" else "Running"
         "completed" -> "Done"
         "aborted" -> "Aborted"
         null -> ""
@@ -155,15 +155,15 @@ fun SubagentSheet(subagents: List<SubagentInfo>, selectedId: String?, onSelect: 
             Text("Subagents (${subagents.size})", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 subagents.forEach { s ->
-                    val sel = s.subagentId == selected
+                    val sel = s.subagent_id == selected
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(12.dp))
                             .background(if (sel) ConsoleColors.CardAlt else ConsoleColors.Card)
                             .border(1.dp, if (sel) ConsoleColors.Border else ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp))
                             .clickable {
-                                selected = s.subagentId
-                                onSelect(s.subagentId)
-                                onOpenDetails(s.subagentId)
+                                selected = s.subagent_id
+                                onSelect(s.subagent_id)
+                                onOpenDetails(s.subagent_id)
                             }
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
