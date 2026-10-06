@@ -165,11 +165,19 @@ impl CefRuntime {
         let data_dir = std::env::var("CONSOLE_CEF_DATA_DIR").ok().filter(|dir| {
             std::fs::create_dir_all(dir).is_ok()
         });
+        // Opt-in CDP endpoint (127.0.0.1 only) so agent-browser can attach to
+        // this embedded Chromium. Unset/invalid leaves remote debugging off.
+        let debug_port = std::env::var("CONSOLE_CEF_DEBUG_PORT")
+            .ok()
+            .and_then(|port| port.parse::<i32>().ok())
+            .filter(|port| (1024..=65535).contains(port))
+            .unwrap_or(0);
         let settings = cef::Settings {
             // The macOS sandbox needs an endorsed helper plus entitlements;
             // that ships with distribution signing (later). Until then the
             // browser process runs unsandboxed, like our dev builds.
             no_sandbox: 1,
+            remote_debugging_port: debug_port,
             framework_dir_path: CefString::from(framework_dir.as_str()),
             browser_subprocess_path: CefString::from(helper_exe.as_str()),
             ..Default::default()
