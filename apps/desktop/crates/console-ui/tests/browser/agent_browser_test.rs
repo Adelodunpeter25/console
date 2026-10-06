@@ -251,3 +251,65 @@ fn step_output_covers_each_result_shape() {
     assert_eq!(step(json!({"lifecycle": {"launched": false}, "origin": "o"})).output(), "Done");
     assert_eq!(step(json!({"lifecycle": {}, "weird": 1})).output(), r#"{"weird":1}"#);
 }
+
+#[test]
+fn skipping_the_tab_step_keeps_element_refs_valid() {
+    use console_ui::browser::cef::agent_browser::build_invocation_for;
+    // Switching tabs clears every element ref, so an action that follows a
+    // snapshot on the same tab must not start with a `tab` step.
+    let same = build_invocation_for(9333, "s", TARGET, &[cmd(&["click", "@e3"])], false).unwrap();
+    let steps: Vec<Vec<String>> = serde_json::from_str(&same.stdin).unwrap();
+    assert_eq!(steps, vec![cmd(&["click", "@e3"])]);
+    assert!(!same.has_tab_step);
+    assert_eq!(same.args[..4], cmd(&["--cdp", "9333", "--session", "s"])[..]);
+
+    let switch = build_invocation_for(9333, "s", TARGET, &[cmd(&["click", "@e3"])], true).unwrap();
+    let steps: Vec<Vec<String>> = serde_json::from_str(&switch.stdin).unwrap();
+    assert_eq!(steps, vec![cmd(&["tab", TARGET]), cmd(&["click", "@e3"])]);
+    assert!(switch.has_tab_step);
+    // The default builder always switches.
+    assert!(build_invocation(9333, "s", TARGET, &[cmd(&["click", "@e3"])]).unwrap().has_tab_step);
+}
+
+#[test]
+fn the_allow_list_still_applies_when_the_tab_step_is_skipped() {
+    use console_ui::browser::cef::agent_browser::build_invocation_for;
+    assert_eq!(
+        build_invocation_for(9333, "s", TARGET, &[cmd(&["tab", "t2"])], false),
+        Err(BuildError::DisallowedVerb("tab".to_string()))
+    );
+}
+
+#[test]
+fn parse_output_without_a_tab_step_keeps_every_step() {
+    use console_ui::browser::cef::agent_browser::parse_output_for;
+    let out = r#"[{"command":["click","@e3"],"error":null,"result":{"clicked":"@e3"}}]"#;
+    let steps = parse_output_for(out, false).unwrap();
+    assert_eq!(steps.len(), 1);
+    assert_eq!(steps[0].command, cmd(&["click", "@e3"]));
+    // With a tab step the same output would drop its only step and be empty.
+    assert!(parse_output_for(out, true).is_err());
+    assert!(matches!(parse_output_for("[]", false), Err(RunError::Failed(_))));
+}
+
+#[test]
+fn finds_the_active_target_from_a_tab_listing() {
+    use console_ui::browser::cef::agent_browser::{active_target_invocation, parse_active_target};
+    let inv = active_target_invocation(9333, "console").unwrap();
+    assert!(!inv.has_tab_step);
+    assert_eq!(serde_json::from_str::<Vec<Vec<String>>>(&inv.stdin).unwrap(), vec![cmd(&["tab", "list"])]);
+    assert!(active_target_invocation(9333, "bad name").is_err());
+
+    let out = format!(
+        r#"[{{"command":["tab","list"],"error":null,"result":{{"tabs":[
+            {{"active":false,"targetId":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}},
+            {{"active":true,"targetId":"{TARGET}"}}]}}}}]"#
+    );
+    let steps = console_ui::browser::cef::agent_browser::parse_output_for(&out, false).unwrap();
+    assert_eq!(parse_active_target(&steps).as_deref(), Some(TARGET));
+
+    let none = r#"[{"command":["tab","list"],"error":null,"result":{"tabs":[{"active":false,"targetId":"A"}]}}]"#;
+    let steps = console_ui::browser::cef::agent_browser::parse_output_for(none, false).unwrap();
+    assert_eq!(parse_active_target(&steps), None);
+    assert_eq!(parse_active_target(&[]), None);
+}

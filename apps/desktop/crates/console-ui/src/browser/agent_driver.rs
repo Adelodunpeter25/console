@@ -54,6 +54,8 @@ mod imp {
     static DISABLED: AtomicBool = AtomicBool::new(false);
     /// Resolved binary path (the login-shell lookup is slow, do it once).
     static BINARY: Mutex<Option<PathBuf>> = Mutex::new(None);
+    /// Upper bound for the "which tab is active" lookup.
+    const LOOKUP_TIMEOUT: Duration = Duration::from_secs(15);
 
     pub fn is_enabled() -> bool {
         !DISABLED.load(Ordering::Relaxed)
@@ -93,8 +95,17 @@ mod imp {
         let port = debug_port()
             .ok_or_else(|| DriveError::Unavailable("CEF debug port is not ready".to_string()))?;
         let binary = binary()?;
-        let invocation = agent_browser::build_invocation(port, session, target_id, &commands)
-            .map_err(|err| DriveError::Failed(err.to_string()))?;
+        // Switching tabs clears every element ref, so only switch when the
+        // session is not already on this target. A failed lookup (or a daemon
+        // that restarted onto a different tab) falls back to switching.
+        let switch_tab = agent_browser::active_target(&binary, port, session, LOOKUP_TIMEOUT)
+            .ok()
+            .flatten()
+            .as_deref()
+            != Some(target_id);
+        let invocation =
+            agent_browser::build_invocation_for(port, session, target_id, &commands, switch_tab)
+                .map_err(|err| DriveError::Failed(err.to_string()))?;
         match agent_browser::run(&binary, &invocation, timeout) {
             Ok(steps) => Ok(steps
                 .into_iter()
