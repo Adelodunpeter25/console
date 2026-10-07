@@ -1,0 +1,1 @@
+{"calls":[{"id":"c1","name":"sh","arguments":"eyJjbWQiOiJscyJ9","thoughtSignature":"sig"},{"id":"c2","name":"read"}],"type":"toolExecutionStart"}

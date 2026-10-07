@@ -88,6 +88,41 @@ func queuedPromptData(qp *types.QueuedPrompt) (any, error) {
 	return json.RawMessage(raw), nil
 }
 
+// toolCallToProto converts a live tool call to the canonical wire type,
+// reusing the transcript schema: arguments cross as raw JSON bytes. Empty
+// or literal-null argument payloads stay absent, as omitempty did.
+func toolCallToProto(c tools.ToolCall) *consolev1.ToolCall {
+	out := &consolev1.ToolCall{Id: c.ID, Name: c.Name}
+	if len(c.Arguments) > 0 && string(c.Arguments) != "null" {
+		out.Arguments = append([]byte(nil), c.Arguments...)
+	}
+	if c.ThoughtSignature != "" {
+		out.ThoughtSignature = &c.ThoughtSignature
+	}
+	return out
+}
+
+// toolResultToProto converts a live tool result to the canonical wire type.
+// Content re-encodes from its parsed form (encoding/json sorts map keys, so
+// the bytes match what the old direct marshal emitted). The loop's echoed
+// call args are dropped — no client reads them (message.proto notes this
+// for the transcript rows too).
+func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
+	out := &consolev1.ToolResult{ToolCallId: r.ToolCallID}
+	if r.ToolName != "" {
+		out.ToolName = &r.ToolName
+	}
+	if r.Content != nil {
+		if raw, err := json.Marshal(r.Content); err == nil && string(raw) != "null" {
+			out.Content = raw
+		}
+	}
+	if r.IsError {
+		out.IsError = &r.IsError
+	}
+	return out
+}
+
 func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 	// POST /api/sessions/:id/run — start a run and stream its events.
 	app.Post("/api/sessions/:id/run", func(c *fiber.Ctx) error {
@@ -454,11 +489,34 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventModelStreamEnd:
 		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": e.Message}, false
 	case loop.EventToolExecutionStart:
-		return "toolExecutionStart", fiber.Map{"type": "toolExecutionStart", "calls": nonNilCalls(e.Calls)}, false
+		calls := make([]*consolev1.ToolCall, 0, len(e.Calls))
+		for _, c := range e.Calls {
+			calls = append(calls, toolCallToProto(c))
+		}
+		data, err := marshalProtoList(calls)
+		if err != nil {
+			return "", nil, true
+		}
+		return "toolExecutionStart", fiber.Map{"type": "toolExecutionStart", "calls": data}, false
 	case loop.EventToolExecutionResult:
-		return "toolExecutionResult", fiber.Map{"type": "toolExecutionResult", "result": e.Result}, false
+		if e.Result == nil {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(toolResultToProto(*e.Result))
+		if err != nil {
+			return "", nil, true
+		}
+		return "toolExecutionResult", fiber.Map{"type": "toolExecutionResult", "result": json.RawMessage(raw)}, false
 	case loop.EventToolExecutionEnd:
-		return "toolExecutionEnd", fiber.Map{"type": "toolExecutionEnd", "results": nonNilResults(e.Results)}, false
+		results := make([]*consolev1.ToolResult, 0, len(e.Results))
+		for _, r := range e.Results {
+			results = append(results, toolResultToProto(r))
+		}
+		data, err := marshalProtoList(results)
+		if err != nil {
+			return "", nil, true
+		}
+		return "toolExecutionEnd", fiber.Map{"type": "toolExecutionEnd", "results": data}, false
 	case loop.EventTurnEnd:
 		return "turnEnd", fiber.Map{"type": "turnEnd", "turnId": e.Text}, false
 	case loop.EventContextUpdate:
@@ -516,22 +574,6 @@ func nonNilTodos(items []types.TodoItem) []types.TodoItem {
 		return []types.TodoItem{}
 	}
 	return items
-}
-
-// nonNilCalls/nonNilResults keep array fields as [] (never null) for the
-// desktop lists.
-func nonNilCalls(s []tools.ToolCall) []tools.ToolCall {
-	if s == nil {
-		return []tools.ToolCall{}
-	}
-	return s
-}
-
-func nonNilResults(s []tools.ToolResult) []tools.ToolResult {
-	if s == nil {
-		return []tools.ToolResult{}
-	}
-	return s
 }
 
 func parseSince(raw string) (int64, error) {
