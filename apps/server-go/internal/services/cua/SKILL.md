@@ -36,7 +36,9 @@ pictures.
    attribute in the tree, e.g. `Multiply`) over raw row numbers: rows
    renumber between snapshots but ids do not. Pass
    `click({pid, window_id, element_id: "Multiply"})` and the runtime
-   snapshots, matches, and acts with a fresh token itself. Use pixel `x, y`
+   snapshots, matches, and acts with a fresh token itself — and appends a
+   confirmation naming what it touched. Raw row tokens carry no such
+   confirmation, which is one more reason to prefer ids. Use pixel `x, y`
    from that exact window's screenshot only for surfaces missing from the
    tree. Cua handles backing scale; do not resize the image or add the
    window's screen origin.
@@ -49,8 +51,11 @@ pictures.
    `verify_state({pid, window_id, expect: [{element: {selector:
    {label_contains: "56"}}}]})`.
    `timeout_ms` and `stable_samples` wait for asynchronous changes;
-   `include_screenshot: true` returns the final picture. One `verify_state`
-   or one targeted `get_window_state` is usually enough.
+   `include_screenshot: true` returns the final picture. A verdict of
+   `unknown` after samples were taken, with the target present, means the
+   assertion did not hold — read state directly instead of retrying; `unknown`
+   can also mean genuinely transient (missing target, untrusted source).
+   One `verify_state` or one targeted `get_window_state` is usually enough.
 4. Batch known steps in one block once a read has given you every token the
    steps need.
 

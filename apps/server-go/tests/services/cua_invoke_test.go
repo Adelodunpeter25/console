@@ -58,6 +58,8 @@ func TestSkillTextCarriesTheContract(t *testing.T) {
 		"label_contains",
 		"value_equals",
 		"set_value",
+		"confirmation",
+		"did not hold",
 		"cua.list_apps",
 	} {
 		if !strings.Contains(skill, want) {

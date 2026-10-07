@@ -277,6 +277,18 @@ func TestJSEmptyCodeIsRejected(t *testing.T) {
 	}
 }
 
+func TestJSStructuredContentIsAlwaysAnObject(t *testing.T) {
+	// The refusal path used to omit structuredContent (null), which threw
+	// TypeErrors in scripts accessing it. An empty result now carries {},
+	// so the shape never changes between paths.
+	runtime := newTestRuntime(t, screenSizeCaller())
+	parts := evalParts(t, runtime, `var r = cua.get_screen_size();
+(r.structuredContent !== null && typeof r.structuredContent === "object" && Object.keys(r.structuredContent).length === 0)`)
+	if text := partText(parts); text != "true" {
+		t.Fatalf("got %q", text)
+	}
+}
+
 func TestJSStructuredContentReachesCode(t *testing.T) {
 	caller := screenSizeCaller()
 	caller.results["get_window_state"] = &cua.ToolResult{

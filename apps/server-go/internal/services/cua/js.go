@@ -137,8 +137,11 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 	}
 	// element_id is ours, not the driver's: resolve it to a fresh token now
 	// (the wire inputs deny unknown fields, so it must never be forwarded).
+	var resolved *resolvedElement
 	if _, ok := args["element_id"]; ok {
-		if err := r.resolveElementArg(ctx, name, args); err != nil {
+		var err error
+		resolved, err = r.resolveElementArg(ctx, name, args)
+		if err != nil {
 			r.throwError(err.Error())
 		}
 	}
@@ -154,6 +157,14 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 	result, err := r.caller.Call(ctx, name, args, r.cancel)
 	if err != nil {
 		r.throwError("cua." + name + " failed: " + err.Error())
+	}
+	if resolved != nil && resolved.note != "" && !result.IsError {
+		// Confirm what was actually touched: the id requested, the row it
+		// landed on, and the role and label the tree displayed. Only for
+		// successful acts — a failed call has nothing to confirm — and only
+		// for the element_id path, which is the only one that resolved
+		// anything.
+		result.Content = append(result.Content, ContentPart{Type: "text", Text: resolved.note})
 	}
 	if name == "launch_app" {
 		if note := r.waitLaunchWindow(ctx, args, result, waitTimeoutMs); note != "" {
@@ -195,6 +206,9 @@ func pruneNulls(args map[string]any) map[string]any {
 
 // resultObject renders a driver result for script code: text and image parts
 // plus the typed structured view the next call's arguments come from.
+// structuredContent is always an object, never null: the refusal path used
+// to omit it, which threw TypeErrors in scripts accessing it, so an empty
+// result carries {} and the shape never changes between paths.
 func (r *JSRuntime) resultObject(result *ToolResult) goja.Value {
 	content := make([]any, 0, len(result.Content))
 	for _, part := range result.Content {
@@ -207,9 +221,12 @@ func (r *JSRuntime) resultObject(result *ToolResult) goja.Value {
 			})
 		}
 	}
-	var structured any
+	var structured any = map[string]any{}
 	if len(result.StructuredContent) > 0 {
-		_ = json.Unmarshal(result.StructuredContent, &structured)
+		var decoded any
+		if json.Unmarshal(result.StructuredContent, &decoded) == nil && decoded != nil {
+			structured = decoded
+		}
 	}
 	return r.rt.ToValue(map[string]any{
 		"content":           content,

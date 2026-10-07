@@ -29,6 +29,7 @@ func resolveCaller() *fakeJSCaller {
 			{Name: "launch_app"},
 			{Name: "list_windows"},
 		},
+		errors: map[string]error{},
 		results: map[string]*cua.ToolResult{
 			"get_window_state": {
 				StructuredContent: json.RawMessage(`{"snapshot_id": "s1", "tree_markdown": ` + quoteForJSON(resolveTree) + `}`),
@@ -142,16 +143,72 @@ func TestParseSnapshotRowsIgnoresNonRows(t *testing.T) {
 		"- AXStaticText = \"0\"\n" +
 		"- [9] AXButton (see [id=Fake] docs)\n" +
 		"element_token for row [N] = s1:N\n" +
+		`- [0] AXWindow "Main" [id=main actions=[raise]]` + "\n" +
 		"- [19] AXButton (Equals) [id=Equals actions=[press]]\n"
 	rows := cua.ParseSnapshotRowsForTest(markdown)
-	if len(rows) != 2 {
+	if len(rows) != 3 {
 		t.Fatalf("got %v", rows)
 	}
 	if rows[0].Row != 5 || rows[0].ID != "Seven" {
 		t.Errorf("first = %+v", rows[0])
 	}
-	if rows[1].Row != 19 || rows[1].ID != "Equals" {
-		t.Errorf("second = %+v", rows[1])
+	// Role and label ride along for the confirmation note: description wins
+	// (what trees display), then title.
+	if rows[0].Role != "AXButton" || rows[0].Label != "7" {
+		t.Errorf("first description = %+v", rows[0])
+	}
+	if rows[1].Role != "AXWindow" || rows[1].Label != "Main" {
+		t.Errorf("title fallback = %+v", rows[1])
+	}
+	if rows[2].Row != 19 || rows[2].ID != "Equals" {
+		t.Errorf("third = %+v", rows[2])
+	}
+}
+
+// TestResolveActConfirmsWhatItTouched is the self-evidencing log: the note
+// names the requested id, the landed row, and the role and label the tree
+// displayed, so a mis-resolution is visible instead of silent.
+func TestResolveActConfirmsWhatItTouched(t *testing.T) {
+	caller := resolveCaller()
+	runtime := newTestRuntime(t, caller)
+	parts := evalParts(t, runtime, `cua.click({pid: 1, window_id: 2, element_id: "Multiply"})`)
+	text := partText(parts)
+	// The note travels inside the stringified completion, so quotes arrive
+	// escaped; assert the three independently meaningful fragments.
+	for _, want := range []string{`resolved element_id`, "Multiply", "row 8", "AXButton"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("no confirmation note: %q", text)
+		}
+	}
+}
+
+// TestResolveExplicitTokenCarriesNoNote guards the asymmetry the skill
+// teaches: only the resolving path can confirm anything, so a raw token act
+// must not fabricate one.
+func TestResolveExplicitTokenCarriesNoNote(t *testing.T) {
+	caller := resolveCaller()
+	runtime := newTestRuntime(t, caller)
+	parts := evalParts(t, runtime, `cua.click({pid: 1, window_id: 2, element_token: "s9:1"})`)
+	if text := partText(parts); strings.Contains(text, "resolved element_id") {
+		t.Fatalf("unearned confirmation: %q", text)
+	}
+}
+
+// TestResolveFailedActCarriesNoNote: a failed call has nothing to confirm,
+// and the driver's own error must stand alone.
+func TestResolveFailedActCarriesNoNote(t *testing.T) {
+	caller := resolveCaller()
+	caller.errors["click"] = &cua.StatusError{Status: 6, Detail: "denied"}
+	runtime := newTestRuntime(t, caller)
+	_, err := runtime.Eval(context.Background(), `cua.click({pid: 1, window_id: 2, element_id: "Seven"})`, 0)
+	if err == nil {
+		t.Fatal("expected the driver failure")
+	}
+	if strings.Contains(err.Error(), "resolved element_id") {
+		t.Fatalf("confirmation on a failed act: %v", err)
+	}
+	if !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("driver message lost: %v", err)
 	}
 }
 
