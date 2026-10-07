@@ -8,6 +8,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,9 @@ var (
 	ErrUnbornHEAD = errors.New("repository has no commits yet; commit first")
 	// ErrNotGitRepo is returned when the target dir is not a git repo.
 	ErrNotGitRepo = errors.New("not a git repository")
+	// ErrUnknownBaseBranch is returned when the requested base branch has no
+	// commit to branch from.
+	ErrUnknownBaseBranch = errors.New("unknown base branch")
 )
 
 type WorktreeService struct{}
@@ -60,18 +64,22 @@ func isGitRepo(dir string) bool {
 	return err == nil && strings.TrimSpace(out) == "true"
 }
 
-// WorktreeAdd creates <branch> and checks it out at path, always branching
-// from origin/HEAD (the repo's default branch on the remote) so the new
-// worktree starts clean regardless of what the local HEAD is.
+// WorktreeAdd creates <branch> and checks it out at path, branching from
+// <base> (or from origin/HEAD when base is empty, so the new worktree starts
+// clean regardless of what the local HEAD is).
 // Refuses non-repos loudly and repos with no commits yet (unborn HEAD).
-func (s *WorktreeService) WorktreeAdd(repoDir, path, branch string) error {
+func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error {
 	if !isGitRepo(repoDir) {
 		return ErrNotGitRepo
 	}
 	if _, err := runGit(repoDir, "rev-parse", "--verify", "HEAD"); err != nil {
 		return ErrUnbornHEAD
 	}
-	base := resolveDefaultBranch(repoDir)
+	if base == "" {
+		base = resolveDefaultBranch(repoDir)
+	} else if _, err := runGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); err != nil {
+		return fmt.Errorf("%w: base branch %q", ErrUnknownBaseBranch, base)
+	}
 	_, err := runGit(repoDir, "worktree", "add", "-b", branch, path, base)
 	return err
 }

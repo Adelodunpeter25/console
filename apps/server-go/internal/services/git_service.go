@@ -3,6 +3,8 @@
 package services
 
 import (
+	"bytes"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -15,10 +17,20 @@ type GitService struct{}
 
 func NewGitService() *GitService { return &GitService{} }
 
+// runGit runs a git command in dir and returns its stdout. On failure the
+// error carries git's stderr — without it a caller only sees "exit status
+// 128/255", which tells neither the user nor the retry logic what went wrong.
 func runGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
+	if err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return string(out), fmt.Errorf("%w: %s", err, msg)
+		}
+	}
 	return string(out), err
 }
 

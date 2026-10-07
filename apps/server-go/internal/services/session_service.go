@@ -62,7 +62,7 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 			return types.SessionHeader{}, err
 		}
 		var branch string
-		wtPath, branch, err = s.provisionWorktree(wtRepo, root, opts.Worktree.Branch)
+		wtPath, branch, err = s.provisionWorktree(wtRepo, root, opts.Worktree.Branch, opts.Worktree.BaseBranch)
 		if err != nil {
 			return types.SessionHeader{}, err
 		}
@@ -112,9 +112,10 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 	}
 
 	repoDir := header.Cwd
-	var wantBranch string
+	var wantBranch, wantBase string
 	if spec != nil {
 		wantBranch = spec.Branch
+		wantBase = spec.BaseBranch
 	}
 	root, err := DefaultRoot()
 	if err != nil {
@@ -123,7 +124,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return types.SessionHeader{}, err
 	}
-	wtPath, branch, err := s.provisionWorktree(repoDir, root, wantBranch)
+	wtPath, branch, err := s.provisionWorktree(repoDir, root, wantBranch, wantBase)
 	if err != nil {
 		return types.SessionHeader{}, err
 	}
@@ -147,11 +148,13 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 // provisionWorktree creates a worktree at <root>/<branch> and returns its
 // path and branch. An empty wantBranch generates a random adjective-city
 // codename that doubles as the directory name; generated names retry on
-// collision since the word-pair space is small.
-func (s *SessionService) provisionWorktree(repoDir, root, wantBranch string) (string, string, error) {
+// collision since the word-pair space is small. wantBase is the existing
+// branch to cut from (empty = the repo default) and is kept distinct from
+// wantBranch: the new branch always gets its own name.
+func (s *SessionService) provisionWorktree(repoDir, root, wantBranch, wantBase string) (string, string, error) {
 	if wantBranch != "" {
 		wtPath := filepath.Join(root, wantBranch)
-		if err := s.wt.WorktreeAdd(repoDir, wtPath, wantBranch); err != nil {
+		if err := s.wt.WorktreeAdd(repoDir, wtPath, wantBranch, wantBase); err != nil {
 			return "", "", err
 		}
 		return wtPath, wantBranch, nil
@@ -162,7 +165,7 @@ func (s *SessionService) provisionWorktree(repoDir, root, wantBranch string) (st
 		if _, err := os.Stat(wtPath); err == nil {
 			continue
 		}
-		if err := s.wt.WorktreeAdd(repoDir, wtPath, branch); err != nil {
+		if err := s.wt.WorktreeAdd(repoDir, wtPath, branch, wantBase); err != nil {
 			if strings.Contains(err.Error(), "already exists") {
 				continue
 			}

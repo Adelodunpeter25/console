@@ -49,10 +49,14 @@ type CreateSessionOptions struct {
 	ResolvedWorktree *SessionWorktree `json:"-"`
 }
 
-// CreateWorktreeSpec is the client-facing worktree request. An empty Branch
-// auto-derives slug(title)-shortid.
+// CreateWorktreeSpec is the client-facing worktree request.
+// Branch names the branch to create; empty means the server derives one.
+// BaseBranch instead cuts the new branch from an existing branch — the two
+// are distinct because an existing branch's name can never be reused as the
+// new branch's name (`worktree add -b main` fails when main exists).
 type CreateWorktreeSpec struct {
-	Branch string `json:"branch,omitempty"`
+	Branch     string `json:"branch,omitempty"`
+	BaseBranch string `json:"baseBranch,omitempty"`
 }
 
 type LoadedSession struct {

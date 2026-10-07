@@ -50,7 +50,7 @@ func TestWorktreeAddListRemove(t *testing.T) {
 	}
 	wt := filepath.Join(tmp, "wt")
 
-	if err := svc.WorktreeAdd(repo, wt, "feature-x"); err != nil {
+	if err := svc.WorktreeAdd(repo, wt, "feature-x", ""); err != nil {
 		t.Fatalf("WorktreeAdd: %v", err)
 	}
 	list, err := svc.WorktreeList(repo)
@@ -81,7 +81,7 @@ func TestWorktreeRemoveRefusesDirty(t *testing.T) {
 	svc := services.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := svc.WorktreeAdd(repo, wt, "dirty-branch"); err != nil {
+	if err := svc.WorktreeAdd(repo, wt, "dirty-branch", ""); err != nil {
 		t.Fatalf("WorktreeAdd: %v", err)
 	}
 	// untracked file counts as dirty
@@ -110,8 +110,53 @@ func TestWorktreeAddRefusesUnbornHEAD(t *testing.T) {
 	svc := services.NewWorktreeService()
 	repo := initRepo(t, false)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := svc.WorktreeAdd(repo, wt, "nope"); !errors.Is(err, services.ErrUnbornHEAD) {
+	if err := svc.WorktreeAdd(repo, wt, "nope", ""); !errors.Is(err, services.ErrUnbornHEAD) {
 		t.Fatalf("add on unborn HEAD = %v; want ErrUnbornHEAD", err)
+	}
+}
+
+// Regression: the floating composer's "cut from an existing branch" mode used
+// to pass the picked branch as the new branch's name, so `worktree add -b main`
+// failed (git exit 255) whenever the branch already existed. The base must be
+// a *starting point* for a differently-named branch.
+func TestWorktreeAddCutsFromBaseWithNewName(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	// An existing branch the card could offer as a base.
+	git(t, repo, "branch", "feature-x")
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := svc.WorktreeAdd(repo, wt, "quiet-austin", "feature-x"); err != nil {
+		t.Fatalf("WorktreeAdd from existing base: %v", err)
+	}
+	got := strings.TrimSpace(git(t, wt, "rev-parse", "--abbrev-ref", "HEAD"))
+	if got != "quiet-austin" {
+		t.Fatalf("HEAD = %q; want the new branch name, not the base", got)
+	}
+}
+
+func TestWorktreeAddRejectsUnknownBase(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	wt := filepath.Join(t.TempDir(), "wt")
+	err := svc.WorktreeAdd(repo, wt, "quiet-austin", "no-such-branch")
+	if !errors.Is(err, services.ErrUnknownBaseBranch) {
+		t.Fatalf("add from unknown base = %v; want ErrUnknownBaseBranch", err)
+	}
+}
+
+// A git failure must carry git's own message, not just the exit code — the
+// composer's error banner showed a bare "exit status 255" until this.
+func TestWorktreeAddErrorCarriesGitStderr(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	git(t, repo, "branch", "feature-x")
+	wt := filepath.Join(t.TempDir(), "wt")
+	err := svc.WorktreeAdd(repo, wt, "feature-x", "") // name already taken
+	if err == nil {
+		t.Fatal("add with an existing branch name = nil; want failure")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("error = %q; want git's \"already exists\" message", err)
 	}
 }
 
@@ -133,7 +178,7 @@ func TestRandomCodename(t *testing.T) {
 
 func TestWorktreeAddNotGitRepo(t *testing.T) {
 	svc := services.NewWorktreeService()
-	err := svc.WorktreeAdd(t.TempDir(), filepath.Join(t.TempDir(), "wt"), "b")
+	err := svc.WorktreeAdd(t.TempDir(), filepath.Join(t.TempDir(), "wt"), "b", "")
 	if !errors.Is(err, services.ErrNotGitRepo) {
 		t.Fatalf("non-repo add = %v; want ErrNotGitRepo", err)
 	}
@@ -144,7 +189,7 @@ func TestBranchOfAndOrphans(t *testing.T) {
 	repo := initRepo(t, true)
 	root := t.TempDir()
 	wt := filepath.Join(root, "lonely")
-	if err := svc.WorktreeAdd(repo, wt, "lonely-branch"); err != nil {
+	if err := svc.WorktreeAdd(repo, wt, "lonely-branch", ""); err != nil {
 		t.Fatalf("WorktreeAdd: %v", err)
 	}
 	if branch, err := svc.BranchOf(wt); err != nil || branch != "lonely-branch" {
@@ -198,7 +243,7 @@ func TestWorktreeRemoveKeepsUnmergedBranch(t *testing.T) {
 	svc := services.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := svc.WorktreeAdd(repo, wt, "unmerged-branch"); err != nil {
+	if err := svc.WorktreeAdd(repo, wt, "unmerged-branch", ""); err != nil {
 		t.Fatalf("WorktreeAdd: %v", err)
 	}
 	git(t, wt, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "agent work")
@@ -223,7 +268,7 @@ func TestWorktreeRemoveAutoDetectsBranch(t *testing.T) {
 	svc := services.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := svc.WorktreeAdd(repo, wt, "auto-branch"); err != nil {
+	if err := svc.WorktreeAdd(repo, wt, "auto-branch", ""); err != nil {
 		t.Fatalf("WorktreeAdd: %v", err)
 	}
 	if err := svc.WorktreeRemove(repo, wt, "", false); err != nil {

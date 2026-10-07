@@ -149,6 +149,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			if errors.Is(err, services.ErrWorktreeScratchpad) ||
 				errors.Is(err, services.ErrWorktreeNeedsCwd) ||
 				errors.Is(err, services.ErrNotGitRepo) ||
+				errors.Is(err, services.ErrUnknownBaseBranch) ||
 				errors.Is(err, services.ErrUnbornHEAD) {
 				return sessionError(c, fiber.StatusBadRequest, err.Error())
 			}

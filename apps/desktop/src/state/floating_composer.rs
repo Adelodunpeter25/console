@@ -526,9 +526,11 @@ impl ConsoleDesktopApp {
             BranchChoice::Project => None,
             // Server auto-derives a slugged branch name.
             BranchChoice::NewWorktree => Some(CreateWorktreeSpec::default()),
-            // The picked branch names the new worktree's branch.
+            // The picked branch is where the new branch starts, not its name —
+            // the server still mints a fresh branch name for the worktree.
             BranchChoice::FromBranch(base) => Some(CreateWorktreeSpec {
-                branch: Some(base.clone()),
+                base_branch: Some(base.clone()),
+                ..Default::default()
             }),
         };
 

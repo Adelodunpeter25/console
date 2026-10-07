@@ -100,8 +100,14 @@ pub struct CreateSessionDto {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeSpec {
+    /// Names the branch to create. Omitted means the server derives one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
+    /// An existing branch to cut the new branch from. Distinct from `branch`
+    /// because an existing branch's name can never be reused as the new
+    /// branch's name — git rejects `worktree add -b <existing>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_branch: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
