@@ -69,4 +69,9 @@ func TestSkillTextCarriesTheContract(t *testing.T) {
 	if !strings.Contains(strings.ToLower(skill), "async") {
 		t.Error("skill must state the sync-only rule")
 	}
+	// The model sees the raw "/computer-use <task>" message (never rewritten),
+	// so the skill must explain the invocation form.
+	if !strings.Contains(skill, "/computer-use <task>") {
+		t.Error("skill must explain the invocation form")
+	}
 }

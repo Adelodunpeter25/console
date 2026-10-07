@@ -1,5 +1,9 @@
 # Computer use
 
+You were invoked by a `/computer-use <task>` message: the task follows the
+command on that message. If nothing follows it, ask what to drive before
+acting.
+
 Drive the computer the server runs on: read app windows and operate them with
 the keyboard and mouse. You have no computer-use tools until this moment; from
 here on the `computer` tool runs JavaScript with a preinstalled `cua` object,
@@ -140,5 +144,3 @@ detail?})` hands control up with a reason; `get_session()`, `list_sessions()`,
 `install_ffmpeg()` record and replay; `check_permissions()` reports the live
 macOS grants without ever prompting; `health_report({include?})` diagnoses;
 `get_config()` reads and `set_config({...})` writes driver configuration.
-
-If the user gave no task, ask what to drive before acting.

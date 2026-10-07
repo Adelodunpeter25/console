@@ -211,21 +211,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 
 	// /computer-use activates computer use for the session. The model has no
 	// prior knowledge of it, so the command is matched here rather than
-	// discovered: the prefix is stripped and the skill instructions ride
-	// along on this message, which persists in history like any skill
-	// content. Later messages in the session keep the tools without
-	// re-invoking.
-	computerTask, computerInvoked := cua.SplitInvocation(dto.Text)
-	if computerInvoked {
+	// discovered. The message itself is never rewritten: what the user typed
+	// is what gets persisted and displayed, and the skill instructions travel
+	// in setup instead (sent every turn, never saved).
+	if _, computerInvoked := cua.SplitInvocation(dto.Text); computerInvoked {
 		s.computerUse.mark(sessionID)
-	}
-	messageText := dto.Text
-	if computerInvoked {
-		messageText = computerTask
-		if messageText != "" {
-			messageText += "\n\n"
-		}
-		messageText += cua.SkillText()
 	}
 
 	providerID := dto.Provider
@@ -274,7 +264,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,
-		Content:      messageText,
+		Content:      dto.Text,
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
 	}
@@ -354,6 +344,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	mcpManager := s.mcpManager()
 	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
 		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
+	}
+	// Computer-use instructions ride setup rather than the user message: setup
+	// is sent every turn but never persisted, so the chat history (and the
+	// bubbles rendered from it) keeps exactly what the user typed.
+	if s.computerUse.isActive(sessionID) {
+		setup = strings.TrimSpace(setup + "\n\n" + cua.SkillText())
 	}
 	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
