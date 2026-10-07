@@ -14,10 +14,12 @@
 - Never write inline `#[cfg(test)]` modules at the bottom of Rust source files; always place tests in dedicated `tests/` files. Same rule for Kotlin: no test functions inside `app/src/main` sources.
 - **The Android app is native Kotlin/Compose at `apps/android`** (not Expo). Verify a change with:
   `cd apps/android && ./gradlew :app:assembleDebug`
-  Run its unit tests (if any) with `cd apps/android && ./gradlew :app:testDebugUnitTest`.
   `minifyReleaseWithR8` needs `key.properties`, so only run it when explicitly asked.
-- There is currently **no Kotlin test suite** (`apps/android/tests` does not exist) and CI only
-  builds Android on manual dispatch. If you add tests, they won't be enforced automatically.
+- **Android tests live in `apps/android/tests/`** (one flat folder, wired into the `test` source set
+  in `app/build.gradle.kts`). They are JVM unit tests (JUnit + kotlin-test) named `*FixtureTest.kt`
+  that decode the shared `proto/testdata` fixtures. Run only the relevant one:
+  `cd apps/android && ./gradlew :app:testDebugUnitTest --tests "<FullyQualifiedTestClass>"`
+- CI only builds Android on manual dispatch, so Kotlin tests are not enforced automatically.
 
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.
