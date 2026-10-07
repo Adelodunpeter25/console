@@ -11,6 +11,7 @@ import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.model.ToolResultMessage
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.AgentAssistantMessage as WireAssistantMessage
 import console.v1.ModelStreamPart
 import console.v1.TodoItem
 import console.v1.ToolCall as WireToolCall
@@ -23,6 +24,7 @@ private val partJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().ada
 private val wireMoshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
 private val toolCallJson = wireMoshi.adapter(WireToolCall::class.java)
 private val toolResultJson = wireMoshi.adapter(WireToolResult::class.java)
+private val turnJson = wireMoshi.adapter(WireAssistantMessage::class.java)
 
 private fun decodeToolCall(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolCall? =
     runCatching { toolCallJson.fromJson(raw.toString()) }.getOrNull()?.toUi()
@@ -115,7 +117,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             )
         }
         "modelStreamEnd" -> {
-            val turn = event.turn ?: run {
+            val turn = event.turn?.let { runCatching { turnJson.fromJson(it.toString()) }.getOrNull()?.toUi() } ?: run {
                 if (session.streamingText.isEmpty() && session.streamingThinking.isEmpty()) return session
                 return commitStreamingBuffer(session)
             }

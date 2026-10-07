@@ -46,6 +46,12 @@ private fun console.v1.AssistantContentPart.toUi(): MessageContent? = when (val 
     null -> null
 }
 
+internal fun console.v1.AgentAssistantMessage.toUi(): AssistantMessage = AssistantMessage(
+    id = id.takeIf { it.isNotEmpty() },
+    content = content.mapNotNull { it.toUi() },
+    stopReason = stop_reason.takeIf { it.isNotEmpty() },
+)
+
 fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
     is console.v1.AgentMessage.Message.User -> UserMessage(
         id = id,

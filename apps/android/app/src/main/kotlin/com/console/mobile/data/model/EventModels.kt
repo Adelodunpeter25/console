@@ -61,7 +61,9 @@ data class AgentSessionEvent(
     // console.v1.ModelStreamPart, decoded with Moshi in ChatEvents
     // (same nested-proto pattern as todo items).
     val part: JsonElement? = null,
-    val turn: AssistantMessage? = null,
+    // Turn-close snapshot: raw until consumed below; the payload is
+    // console.v1.AgentAssistantMessage, decoded with Moshi in ChatEvents.
+    val turn: JsonElement? = null,
     // Live tool payloads: raw until consumed below; the payloads are
     // console.v1.ToolCall/ToolResult (args/content as JSON bytes),
     // decoded with Moshi in ChatEvents like todo items.
