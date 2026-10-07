@@ -1,7 +1,4 @@
-use super::agent::{
-    AskQuestionRequest, BrowserActionRequest, ImageAttachment, PermissionRequest,
-    QueuedPrompt, TodoItem,
-};
+use super::agent::{ImageAttachment, QueuedPrompt, TodoItem};
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
 
@@ -61,10 +58,10 @@ pub enum AgentSessionEvent {
         calls: Vec<console_proto::ToolCall>,
     },
     PermissionRequest {
-        request: PermissionRequest,
+        request: console_proto::PermissionRequest,
     },
     AskQuestion {
-        request: AskQuestionRequest,
+        request: console_proto::AskQuestionRequest,
     },
     ToolExecutionResult {
         result: console_proto::ToolResult,
@@ -81,7 +78,7 @@ pub enum AgentSessionEvent {
         original_message_count: usize,
     },
     BrowserAction {
-        request: BrowserActionRequest,
+        request: console_proto::BrowserActionRequest,
     },
     TurnEnd {
         #[serde(rename = "turnId")]
@@ -129,7 +126,7 @@ pub enum AgentSessionEvent {
         title: String,
     },
     Error {
-        error: ServerErrorPayload,
+        error: console_proto::ErrorPayload,
     },
     /// The session's queued next-turn prompt changed (queued, replaced, or cleared).
     QueueUpdated {
@@ -150,9 +147,7 @@ pub use console_proto::ModelStreamPart;
 /// Re-exported for match arms on the stream-part oneof.
 pub use console_proto::model_stream_part::Part as ModelStreamPartKind;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ServerErrorPayload {
-    pub message: String,
-    pub data: Option<serde_json::Value>,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/event.proto): the error frame carries one string.
+/// The old hand shape's data field was never populated server-side.
+pub use console_proto::ErrorPayload;

@@ -715,17 +715,27 @@ impl ConsoleDesktopApp {
                 }
             }
             AgentSessionEvent::PermissionRequest { request } => {
-                self.set_pending_permission_for_session(run_session_id, Some(request));
+                self.set_pending_permission_for_session(
+                    run_session_id,
+                    Some(console_core::PermissionRequest::from_proto(&request)),
+                );
                 self.set_pending_question_for_session(run_session_id, None);
             }
             AgentSessionEvent::AskQuestion { request } => {
-                self.set_pending_question_for_session(run_session_id, Some(request));
+                self.set_pending_question_for_session(
+                    run_session_id,
+                    Some(console_core::AskQuestionRequest::from_proto(&request)),
+                );
                 self.set_pending_permission_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
             }
             AgentSessionEvent::BrowserAction { request } => {
-                self.handle_browser_action(run_session_id, request, cx);
+                self.handle_browser_action(
+                    run_session_id,
+                    console_core::BrowserActionRequest::from_proto(&request),
+                    cx,
+                );
             }
             AgentSessionEvent::ToolExecutionStart { calls } => {
                 if pane_shows_run {

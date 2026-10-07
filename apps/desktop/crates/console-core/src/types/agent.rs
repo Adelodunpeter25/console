@@ -10,7 +10,10 @@ use serde::{Deserialize, Serialize};
 // the desktop never reads them.
 pub use console_proto::{
     AgentMessage as ProtoAgentMessage, AgentAssistantMessage as ProtoAssistantMessage,
-    AssistantContentPart as ProtoContentPart, ImageAttachment as ProtoImageAttachment,
+    AskQuestionRequest as ProtoAskQuestionRequest,
+    AssistantContentPart as ProtoContentPart, BrowserActionRequest as ProtoBrowserActionRequest,
+    ErrorPayload as ProtoErrorPayload, ImageAttachment as ProtoImageAttachment,
+    PermissionRequest as ProtoPermissionRequest,
     ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
 };
 pub use console_proto::agent_message::Message as ProtoMessageEvent;
@@ -295,7 +298,24 @@ pub struct PermissionRequest {
     pub args: serde_json::Value,
     pub tier: String,
     pub reason: Option<String>,
+    /// Client-only UI state nothing populates; kept for the card shape,
+    /// always None from the wire.
     pub requires_upgrade: Option<bool>,
+}
+
+impl PermissionRequest {
+    /// Decode from the canonical wire shape (args arrive as raw JSON bytes).
+    pub fn from_proto(msg: &ProtoPermissionRequest) -> Self {
+        PermissionRequest {
+            request_id: msg.request_id.clone(),
+            tool_call_id: msg.tool_call_id.clone(),
+            tool_name: msg.tool_name.clone(),
+            args: decode_json_bytes(&msg.args),
+            tier: msg.tier.clone(),
+            reason: msg.reason.clone(),
+            requires_upgrade: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -321,6 +341,27 @@ pub struct BrowserActionRequest {
     pub element_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submit: Option<bool>,
+}
+
+impl BrowserActionRequest {
+    /// Decode from the canonical wire shape. Numeric/bool fields arrive
+    /// absent-as-default and map back to None, matching the old omitempty.
+    pub fn from_proto(msg: &ProtoBrowserActionRequest) -> Self {
+        let none_if_zero = |v: i32| if v == 0 { None } else { Some(v as u64) };
+        BrowserActionRequest {
+            request_id: msg.request_id.clone(),
+            action: msg.action.clone(),
+            url: msg.url.clone(),
+            script: msg.script.clone(),
+            selector: msg.selector.clone(),
+            tab_id: msg.tab_id.clone(),
+            url_contains: msg.url_contains.clone(),
+            text: msg.text.clone(),
+            timeout_ms: none_if_zero(msg.timeout_ms),
+            element_ref: msg.r#ref.clone(),
+            submit: if msg.submit { Some(true) } else { None },
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -357,6 +398,30 @@ pub struct AskQuestionRequest {
     pub is_multi_select: Option<bool>,
     pub skippable: Option<bool>,
     pub batch_id: Option<String>,
+}
+
+impl AskQuestionRequest {
+    /// Decode from the canonical wire shape. Empty options and false
+    /// is_multi_select map back to None, matching the old omitempty;
+    /// skippable is always set server-side, so it stays Some.
+    pub fn from_proto(msg: &ProtoAskQuestionRequest) -> Self {
+        AskQuestionRequest {
+            request_id: msg.request_id.clone(),
+            question: msg.question.clone(),
+            options: if msg.options.is_empty() {
+                None
+            } else {
+                Some(msg.options.clone())
+            },
+            is_multi_select: if msg.is_multi_select {
+                Some(true)
+            } else {
+                None
+            },
+            skippable: msg.skippable,
+            batch_id: msg.batch_id.clone(),
+        }
+    }
 }
 
 /// Canonical wire type from the shared protobuf schema
