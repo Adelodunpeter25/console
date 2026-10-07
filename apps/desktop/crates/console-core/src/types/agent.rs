@@ -225,15 +225,10 @@ pub struct ToolCall {
     pub thought_signature: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolCallPreview {
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub arguments: Option<serde_json::Value>,
-    pub thought_signature: Option<String>,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/event.proto): the id+name preview inside stream parts.
+/// Args arrive separately with the toolExecutionStart frame.
+pub use console_proto::ToolCallPreview;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

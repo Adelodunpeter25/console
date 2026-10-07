@@ -531,8 +531,13 @@ impl ConsoleDesktopApp {
                                     let defer_render = matches!(
                                         &event,
                                         AgentSessionEvent::ModelStreamPart { part }
-                                            if part.tool_call.is_none()
-                                                && (part.text.is_some() || part.thinking.is_some())
+                                            if matches!(
+                                                part.part,
+                                                Some(
+                                                    console_core::ModelStreamPartKind::Text(_)
+                                                    | console_core::ModelStreamPartKind::Thinking(_)
+                                                )
+                                            )
                                     );
                                     this.process_agent_event(&run_session_id, &run_pane_id, event, cx);
                                     if defer_render && pane_shows_run {
@@ -675,22 +680,27 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::ModelStreamPart { part } => {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                        if let Some(text) = &part.text {
-                            t.append_assistant_text(text, cx);
-                        }
-                        if let Some(thinking) = &part.thinking {
-                            t.append_assistant_thinking(thinking, cx);
-                        }
-                        if let Some(preview) = part.tool_call {
-                            t.upsert_assistant_tool_call(
-                                console_core::ToolCall {
-                                    id: preview.id,
-                                    name: preview.name,
-                                    arguments: preview.arguments.unwrap_or(serde_json::Value::Null),
-                                    thought_signature: preview.thought_signature,
-                                },
-                                cx,
-                            );
+                        match &part.part {
+                            Some(console_core::ModelStreamPartKind::Text(text)) => {
+                                t.append_assistant_text(text, cx);
+                            }
+                            Some(console_core::ModelStreamPartKind::Thinking(thinking)) => {
+                                t.append_assistant_thinking(thinking, cx);
+                            }
+                            Some(console_core::ModelStreamPartKind::ToolCall(preview)) => {
+                                // The wire preview carries id+name only; args
+                                // arrive with the toolExecutionStart frame.
+                                t.upsert_assistant_tool_call(
+                                    console_core::ToolCall {
+                                        id: preview.id.clone(),
+                                        name: preview.name.clone(),
+                                        arguments: serde_json::Value::Null,
+                                        thought_signature: None,
+                                    },
+                                    cx,
+                                );
+                            }
+                            None => {}
                         }
                     });
                 }
@@ -1118,8 +1128,13 @@ impl ConsoleDesktopApp {
                                     let defer_render = matches!(
                                         &event,
                                         AgentSessionEvent::ModelStreamPart { part }
-                                            if part.tool_call.is_none()
-                                                && (part.text.is_some() || part.thinking.is_some())
+                                            if matches!(
+                                                part.part,
+                                                Some(
+                                                    console_core::ModelStreamPartKind::Text(_)
+                                                    | console_core::ModelStreamPartKind::Thinking(_)
+                                                )
+                                            )
                                     );
 
                                     this.process_agent_event(

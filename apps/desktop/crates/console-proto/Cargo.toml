@@ -64,6 +64,10 @@ name = "session_queue_test"
 path = "tests/session_queue_test.rs"
 
 [[test]]
+name = "event_parts_test"
+path = "tests/event_parts_test.rs"
+
+[[test]]
 name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 

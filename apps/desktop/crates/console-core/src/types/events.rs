@@ -1,6 +1,6 @@
 use super::agent::{
     AskQuestionRequest, AssistantMessage, BrowserActionRequest, ImageAttachment, PermissionRequest,
-    QueuedPrompt, TodoItem, ToolCall, ToolCallPreview, ToolResult,
+    QueuedPrompt, TodoItem, ToolCall, ToolResult,
 };
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ pub enum AgentSessionEvent {
         turn_id: String,
     },
     ModelStreamPart {
-        part: ModelStreamPartPayload,
+        part: console_proto::ModelStreamPart,
     },
     ModelStreamEnd {
         #[serde(rename = "turnId")]
@@ -142,13 +142,13 @@ pub enum AgentSessionEvent {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelStreamPartPayload {
-    pub text: Option<String>,
-    pub thinking: Option<String>,
-    pub tool_call: Option<ToolCallPreview>,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/event.proto). The oneof holds scalars directly so the
+/// wire stays {"part":{"text":"..."}} — one arm per delta, exactly what the
+/// server emits. Match on [`ModelStreamPartKind`] to discriminate.
+pub use console_proto::ModelStreamPart;
+/// Re-exported for match arms on the stream-part oneof.
+pub use console_proto::model_stream_part::Part as ModelStreamPartKind;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
