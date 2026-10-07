@@ -53,7 +53,9 @@ impl UsageLimitExt for UsageLimit {
 
 /// Estimated context-window occupancy for one session, served by
 /// `GET /api/sessions/:id/context` and pushed as `contextUpdate` frames.
-/// Not part of the usage domain; untouched by the schema migration.
+/// Wire shape owned by the shared schema (console.v1.ContextSnapshot):
+/// counts stay JSON numbers, so this hand type decodes unchanged.
+/// Not part of the usage domain.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextSnapshot {

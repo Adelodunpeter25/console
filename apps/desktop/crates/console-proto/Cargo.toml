@@ -72,6 +72,10 @@ name = "event_tools_test"
 path = "tests/event_tools_test.rs"
 
 [[test]]
+name = "event_turn_test"
+path = "tests/event_turn_test.rs"
+
+[[test]]
 name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 

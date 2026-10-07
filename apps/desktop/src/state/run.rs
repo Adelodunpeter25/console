@@ -706,7 +706,7 @@ impl ConsoleDesktopApp {
                 }
             }
             AgentSessionEvent::ModelStreamEnd { turn, .. } => {
-                if let Some(turn) = turn {
+                if let Some(turn) = turn.as_ref().map(console_core::AssistantMessage::from_proto_assistant) {
                     if pane_shows_run {
                         self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                             t.finalize_assistant_message(turn, cx);

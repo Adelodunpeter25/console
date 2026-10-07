@@ -1,5 +1,5 @@
 use super::agent::{
-    AskQuestionRequest, AssistantMessage, BrowserActionRequest, ImageAttachment, PermissionRequest,
+    AskQuestionRequest, BrowserActionRequest, ImageAttachment, PermissionRequest,
     QueuedPrompt, TodoItem,
 };
 use super::model::ThinkingLevel;
@@ -55,7 +55,7 @@ pub enum AgentSessionEvent {
         #[serde(rename = "turnId")]
         turn_id: String,
         #[serde(default)]
-        turn: Option<AssistantMessage>,
+        turn: Option<console_proto::AgentAssistantMessage>,
     },
     ToolExecutionStart {
         calls: Vec<console_proto::ToolCall>,

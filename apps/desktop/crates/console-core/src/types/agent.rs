@@ -85,6 +85,24 @@ fn opt_string(s: String) -> Option<String> {
     }
 }
 
+impl AssistantMessage {
+    /// Decode a turn-close payload from the canonical wire shape. Same
+    /// normalization as the transcript path (empty id/stop_reason fall back
+    /// to None); the turn carries no timestamp on the wire.
+    pub fn from_proto_assistant(msg: &ProtoAssistantMessage) -> Self {
+        AssistantMessage {
+            id: opt_string(msg.id.clone()),
+            content: msg
+                .content
+                .iter()
+                .filter_map(content_part_from_proto)
+                .collect(),
+            stop_reason: opt_string(msg.stop_reason.clone()),
+            created_at: None,
+        }
+    }
+}
+
 impl AgentMessage {
     pub fn from_proto(msg: ProtoAgentMessage) -> Option<Self> {
         match msg.message? {
