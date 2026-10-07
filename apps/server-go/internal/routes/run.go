@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -131,6 +132,77 @@ func snapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
 		PercentUsed: snap.PercentUsed, ThresholdRatio: snap.ThresholdRatio,
 		ModelId: snap.ModelID, Provider: snap.Provider, Source: snap.Source,
 	}
+}
+
+// permissionToProto converts a pending tool approval to the canonical wire
+// type. Args cross as raw JSON bytes; null args stay absent (decodes as
+// null client-side, as before).
+func permissionToProto(r permissions.Request) *consolev1.PermissionRequest {
+	out := &consolev1.PermissionRequest{
+		RequestId: r.RequestID, ToolCallId: r.ToolCallID,
+		ToolName: r.ToolName, Tier: string(r.Tier),
+	}
+	if r.Args != nil {
+		if raw, err := json.Marshal(r.Args); err == nil && string(raw) != "null" {
+			out.Args = raw
+		}
+	}
+	if r.Reason != "" {
+		out.Reason = &r.Reason
+	}
+	return out
+}
+
+// askToProto converts a pending agent question. skippable is always set:
+// the old shape had no omitempty and clients tell explicit false apart
+// from absent.
+func askToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
+	skippable := q.Skippable
+	out := &consolev1.AskQuestionRequest{
+		RequestId: q.RequestID, Question: q.Question, Skippable: &skippable,
+	}
+	out.Options = append(out.Options, q.Options...)
+	if q.IsMultiSelect {
+		out.IsMultiSelect = true
+	}
+	if q.BatchID != "" {
+		out.BatchId = &q.BatchID
+	}
+	return out
+}
+
+// browserToProto converts a pending browser action. Zero timeout and false
+// submit stay absent, as omitempty did.
+func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionRequest {
+	out := &consolev1.BrowserActionRequest{RequestId: b.RequestID, Action: b.Action}
+	if b.URL != "" {
+		out.Url = &b.URL
+	}
+	if b.Script != "" {
+		out.Script = &b.Script
+	}
+	if b.Selector != "" {
+		out.Selector = &b.Selector
+	}
+	if b.TabID != "" {
+		out.TabId = &b.TabID
+	}
+	if b.URLContains != "" {
+		out.UrlContains = &b.URLContains
+	}
+	if b.Text != "" {
+		out.Text = &b.Text
+	}
+	if b.TimeoutMs != 0 {
+		out.TimeoutMs = int32(b.TimeoutMs)
+	}
+	if b.Ref != "" {
+		out.Ref = &b.Ref
+	}
+	if b.Submit {
+		out.Submit = true
+	}
+	return out
 }
 
 func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
@@ -561,11 +633,32 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		}
 		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": data}, false
 	case loop.EventAskQuestion:
-		return "askQuestion", fiber.Map{"type": "askQuestion", "request": e.Ask}, false
+		if e.Ask == nil {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(askToProto(*e.Ask))
+		if err != nil {
+			return "", nil, true
+		}
+		return "askQuestion", fiber.Map{"type": "askQuestion", "request": json.RawMessage(raw)}, false
 	case loop.EventBrowserAction:
-		return "browserAction", fiber.Map{"type": "browserAction", "request": e.Browser}, false
+		if e.Browser == nil {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(browserToProto(*e.Browser))
+		if err != nil {
+			return "", nil, true
+		}
+		return "browserAction", fiber.Map{"type": "browserAction", "request": json.RawMessage(raw)}, false
 	case loop.EventPermissionRequest:
-		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": e.Permission}, false
+		if e.Permission == nil {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(permissionToProto(*e.Permission))
+		if err != nil {
+			return "", nil, true
+		}
+		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": json.RawMessage(raw)}, false
 	case loop.EventTodoUpdate:
 		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": nonNilTodos(e.Items), "action": e.Action}, false
 	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
@@ -575,7 +668,11 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		}
 		return string(e.Kind), body, false
 	case loop.EventError:
-		return "error", fiber.Map{"type": "error", "error": fiber.Map{"message": e.Text}}, false
+		raw, err := protoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})
+		if err != nil {
+			return "", nil, true
+		}
+		return "error", fiber.Map{"type": "error", "error": json.RawMessage(raw)}, false
 	default:
 		// Internal provider kinds (text/thinking/toolCall/usage/toolResult/
 		// turnDone) never reach subscribers; drop defensively.

@@ -276,6 +276,348 @@ func (x *ContextSnapshot) GetSource() string {
 	return ""
 }
 
+// Interactive requests (Phase 4, fourth slice). Args cross as raw JSON bytes
+// like tool calls. requires_upgrade (desktop permission card) is client-only
+// UI state nothing populates, so it stays out of the schema. skippable is
+// optional but always set — the old shape had no omitempty, and clients
+// distinguish explicit false from absent.
+type PermissionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Args          []byte                 `protobuf:"bytes,4,opt,name=args,proto3" json:"args,omitempty"`
+	Tier          string                 `protobuf:"bytes,5,opt,name=tier,proto3" json:"tier,omitempty"`
+	Reason        *string                `protobuf:"bytes,6,opt,name=reason,proto3,oneof" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PermissionRequest) Reset() {
+	*x = PermissionRequest{}
+	mi := &file_console_v1_event_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PermissionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PermissionRequest) ProtoMessage() {}
+
+func (x *PermissionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_event_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PermissionRequest.ProtoReflect.Descriptor instead.
+func (*PermissionRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_event_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PermissionRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *PermissionRequest) GetToolCallId() string {
+	if x != nil {
+		return x.ToolCallId
+	}
+	return ""
+}
+
+func (x *PermissionRequest) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *PermissionRequest) GetArgs() []byte {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *PermissionRequest) GetTier() string {
+	if x != nil {
+		return x.Tier
+	}
+	return ""
+}
+
+func (x *PermissionRequest) GetReason() string {
+	if x != nil && x.Reason != nil {
+		return *x.Reason
+	}
+	return ""
+}
+
+type AskQuestionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Question      string                 `protobuf:"bytes,2,opt,name=question,proto3" json:"question,omitempty"`
+	Options       []string               `protobuf:"bytes,3,rep,name=options,proto3" json:"options,omitempty"`
+	IsMultiSelect bool                   `protobuf:"varint,4,opt,name=is_multi_select,json=isMultiSelect,proto3" json:"is_multi_select,omitempty"`
+	Skippable     *bool                  `protobuf:"varint,5,opt,name=skippable,proto3,oneof" json:"skippable,omitempty"`
+	BatchId       *string                `protobuf:"bytes,6,opt,name=batch_id,json=batchId,proto3,oneof" json:"batch_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AskQuestionRequest) Reset() {
+	*x = AskQuestionRequest{}
+	mi := &file_console_v1_event_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AskQuestionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AskQuestionRequest) ProtoMessage() {}
+
+func (x *AskQuestionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_event_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AskQuestionRequest.ProtoReflect.Descriptor instead.
+func (*AskQuestionRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_event_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AskQuestionRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *AskQuestionRequest) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+func (x *AskQuestionRequest) GetOptions() []string {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+func (x *AskQuestionRequest) GetIsMultiSelect() bool {
+	if x != nil {
+		return x.IsMultiSelect
+	}
+	return false
+}
+
+func (x *AskQuestionRequest) GetSkippable() bool {
+	if x != nil && x.Skippable != nil {
+		return *x.Skippable
+	}
+	return false
+}
+
+func (x *AskQuestionRequest) GetBatchId() string {
+	if x != nil && x.BatchId != nil {
+		return *x.BatchId
+	}
+	return ""
+}
+
+type BrowserActionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Url           *string                `protobuf:"bytes,3,opt,name=url,proto3,oneof" json:"url,omitempty"`
+	Script        *string                `protobuf:"bytes,4,opt,name=script,proto3,oneof" json:"script,omitempty"`
+	Selector      *string                `protobuf:"bytes,5,opt,name=selector,proto3,oneof" json:"selector,omitempty"`
+	TabId         *string                `protobuf:"bytes,6,opt,name=tab_id,json=tabId,proto3,oneof" json:"tab_id,omitempty"`
+	UrlContains   *string                `protobuf:"bytes,7,opt,name=url_contains,json=urlContains,proto3,oneof" json:"url_contains,omitempty"`
+	Text          *string                `protobuf:"bytes,8,opt,name=text,proto3,oneof" json:"text,omitempty"`
+	TimeoutMs     int32                  `protobuf:"varint,9,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	Ref           *string                `protobuf:"bytes,10,opt,name=ref,proto3,oneof" json:"ref,omitempty"`
+	Submit        bool                   `protobuf:"varint,11,opt,name=submit,proto3" json:"submit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BrowserActionRequest) Reset() {
+	*x = BrowserActionRequest{}
+	mi := &file_console_v1_event_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BrowserActionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BrowserActionRequest) ProtoMessage() {}
+
+func (x *BrowserActionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_event_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BrowserActionRequest.ProtoReflect.Descriptor instead.
+func (*BrowserActionRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_event_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BrowserActionRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetUrl() string {
+	if x != nil && x.Url != nil {
+		return *x.Url
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetScript() string {
+	if x != nil && x.Script != nil {
+		return *x.Script
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetSelector() string {
+	if x != nil && x.Selector != nil {
+		return *x.Selector
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetTabId() string {
+	if x != nil && x.TabId != nil {
+		return *x.TabId
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetUrlContains() string {
+	if x != nil && x.UrlContains != nil {
+		return *x.UrlContains
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetText() string {
+	if x != nil && x.Text != nil {
+		return *x.Text
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetTimeoutMs() int32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+func (x *BrowserActionRequest) GetRef() string {
+	if x != nil && x.Ref != nil {
+		return *x.Ref
+	}
+	return ""
+}
+
+func (x *BrowserActionRequest) GetSubmit() bool {
+	if x != nil {
+		return x.Submit
+	}
+	return false
+}
+
+// The error frame carries one string; data was never populated server-side.
+type ErrorPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Message       string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ErrorPayload) Reset() {
+	*x = ErrorPayload{}
+	mi := &file_console_v1_event_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrorPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrorPayload) ProtoMessage() {}
+
+func (x *ErrorPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_event_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrorPayload.ProtoReflect.Descriptor instead.
+func (*ErrorPayload) Descriptor() ([]byte, []int) {
+	return file_console_v1_event_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ErrorPayload) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_console_v1_event_proto protoreflect.FileDescriptor
 
 const file_console_v1_event_proto_rawDesc = "" +
@@ -298,7 +640,52 @@ const file_console_v1_event_proto_rawDesc = "" +
 	"\x0fthreshold_ratio\x18\x04 \x01(\x01R\x0ethresholdRatio\x12\x19\n" +
 	"\bmodel_id\x18\x05 \x01(\tR\amodelId\x12\x1a\n" +
 	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x16\n" +
-	"\x06source\x18\a \x01(\tR\x06sourceBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x06source\x18\a \x01(\tR\x06source\"\xc1\x01\n" +
+	"\x11PermissionRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12 \n" +
+	"\ftool_call_id\x18\x02 \x01(\tR\n" +
+	"toolCallId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x12\n" +
+	"\x04args\x18\x04 \x01(\fR\x04args\x12\x12\n" +
+	"\x04tier\x18\x05 \x01(\tR\x04tier\x12\x1b\n" +
+	"\x06reason\x18\x06 \x01(\tH\x00R\x06reason\x88\x01\x01B\t\n" +
+	"\a_reason\"\xef\x01\n" +
+	"\x12AskQuestionRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1a\n" +
+	"\bquestion\x18\x02 \x01(\tR\bquestion\x12\x18\n" +
+	"\aoptions\x18\x03 \x03(\tR\aoptions\x12&\n" +
+	"\x0fis_multi_select\x18\x04 \x01(\bR\risMultiSelect\x12!\n" +
+	"\tskippable\x18\x05 \x01(\bH\x00R\tskippable\x88\x01\x01\x12\x1e\n" +
+	"\bbatch_id\x18\x06 \x01(\tH\x01R\abatchId\x88\x01\x01B\f\n" +
+	"\n" +
+	"_skippableB\v\n" +
+	"\t_batch_id\"\x9a\x03\n" +
+	"\x14BrowserActionRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12\x15\n" +
+	"\x03url\x18\x03 \x01(\tH\x00R\x03url\x88\x01\x01\x12\x1b\n" +
+	"\x06script\x18\x04 \x01(\tH\x01R\x06script\x88\x01\x01\x12\x1f\n" +
+	"\bselector\x18\x05 \x01(\tH\x02R\bselector\x88\x01\x01\x12\x1a\n" +
+	"\x06tab_id\x18\x06 \x01(\tH\x03R\x05tabId\x88\x01\x01\x12&\n" +
+	"\furl_contains\x18\a \x01(\tH\x04R\vurlContains\x88\x01\x01\x12\x17\n" +
+	"\x04text\x18\b \x01(\tH\x05R\x04text\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\t \x01(\x05R\ttimeoutMs\x12\x15\n" +
+	"\x03ref\x18\n" +
+	" \x01(\tH\x06R\x03ref\x88\x01\x01\x12\x16\n" +
+	"\x06submit\x18\v \x01(\bR\x06submitB\x06\n" +
+	"\x04_urlB\t\n" +
+	"\a_scriptB\v\n" +
+	"\t_selectorB\t\n" +
+	"\a_tab_idB\x0f\n" +
+	"\r_url_containsB\a\n" +
+	"\x05_textB\x06\n" +
+	"\x04_ref\"(\n" +
+	"\fErrorPayload\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessageBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_event_proto_rawDescOnce sync.Once
@@ -312,11 +699,15 @@ func file_console_v1_event_proto_rawDescGZIP() []byte {
 	return file_console_v1_event_proto_rawDescData
 }
 
-var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_console_v1_event_proto_goTypes = []any{
-	(*ToolCallPreview)(nil), // 0: console.v1.ToolCallPreview
-	(*ModelStreamPart)(nil), // 1: console.v1.ModelStreamPart
-	(*ContextSnapshot)(nil), // 2: console.v1.ContextSnapshot
+	(*ToolCallPreview)(nil),      // 0: console.v1.ToolCallPreview
+	(*ModelStreamPart)(nil),      // 1: console.v1.ModelStreamPart
+	(*ContextSnapshot)(nil),      // 2: console.v1.ContextSnapshot
+	(*PermissionRequest)(nil),    // 3: console.v1.PermissionRequest
+	(*AskQuestionRequest)(nil),   // 4: console.v1.AskQuestionRequest
+	(*BrowserActionRequest)(nil), // 5: console.v1.BrowserActionRequest
+	(*ErrorPayload)(nil),         // 6: console.v1.ErrorPayload
 }
 var file_console_v1_event_proto_depIdxs = []int32{
 	0, // 0: console.v1.ModelStreamPart.tool_call:type_name -> console.v1.ToolCallPreview
@@ -337,13 +728,16 @@ func file_console_v1_event_proto_init() {
 		(*ModelStreamPart_Thinking)(nil),
 		(*ModelStreamPart_ToolCall)(nil),
 	}
+	file_console_v1_event_proto_msgTypes[3].OneofWrappers = []any{}
+	file_console_v1_event_proto_msgTypes[4].OneofWrappers = []any{}
+	file_console_v1_event_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_event_proto_rawDesc), len(file_console_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -39,3 +39,45 @@ message ContextSnapshot {
   string provider = 6;
   string source = 7;
 }
+
+// Interactive requests (Phase 4, fourth slice). Args cross as raw JSON bytes
+// like tool calls. requires_upgrade (desktop permission card) is client-only
+// UI state nothing populates, so it stays out of the schema. skippable is
+// optional but always set — the old shape had no omitempty, and clients
+// distinguish explicit false from absent.
+message PermissionRequest {
+  string request_id = 1;
+  string tool_call_id = 2;
+  string tool_name = 3;
+  bytes args = 4;
+  string tier = 5;
+  optional string reason = 6;
+}
+
+message AskQuestionRequest {
+  string request_id = 1;
+  string question = 2;
+  repeated string options = 3;
+  bool is_multi_select = 4;
+  optional bool skippable = 5;
+  optional string batch_id = 6;
+}
+
+message BrowserActionRequest {
+  string request_id = 1;
+  string action = 2;
+  optional string url = 3;
+  optional string script = 4;
+  optional string selector = 5;
+  optional string tab_id = 6;
+  optional string url_contains = 7;
+  optional string text = 8;
+  int32 timeout_ms = 9;
+  optional string ref = 10;
+  bool submit = 11;
+}
+
+// The error frame carries one string; data was never populated server-side.
+message ErrorPayload {
+  string message = 1;
+}
