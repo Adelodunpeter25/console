@@ -730,21 +730,30 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::ToolExecutionStart { calls } => {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                        t.upsert_assistant_tool_calls(calls, cx);
+                        t.upsert_assistant_tool_calls(
+                            calls.iter().map(console_core::ToolCall::from_proto).collect(),
+                            cx,
+                        );
                     });
                 }
             }
             AgentSessionEvent::ToolExecutionResult { result } => {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                        t.append_tool_results(vec![result], cx);
+                        t.append_tool_results(
+                            vec![console_core::ToolResult::from_proto(&result)],
+                            cx,
+                        );
                     });
                 }
             }
             AgentSessionEvent::ToolExecutionEnd { results } => {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                        t.append_tool_results(results, cx);
+                        t.append_tool_results(
+                            results.iter().map(console_core::ToolResult::from_proto).collect(),
+                            cx,
+                        );
                     });
                 }
                 self.maybe_refresh_inspector(cx);

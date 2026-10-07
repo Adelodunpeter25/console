@@ -225,6 +225,19 @@ pub struct ToolCall {
     pub thought_signature: Option<String>,
 }
 
+impl ToolCall {
+    /// Decode from the canonical wire shape (arguments arrive as raw JSON
+    /// bytes carrying UTF-8). Infallible: every field has a default.
+    pub fn from_proto(msg: &ProtoToolCall) -> Self {
+        ToolCall {
+            id: msg.id.clone(),
+            name: msg.name.clone(),
+            arguments: decode_json_bytes(&msg.arguments),
+            thought_signature: msg.thought_signature.clone(),
+        }
+    }
+}
+
 /// Canonical wire type from the shared protobuf schema
 /// (proto/console/v1/event.proto): the id+name preview inside stream parts.
 /// Args arrive separately with the toolExecutionStart frame.
@@ -240,6 +253,19 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     #[serde(default)]
     pub is_error: Option<bool>,
+}
+
+impl ToolResult {
+    /// Decode from the canonical wire shape (content arrives as raw JSON
+    /// bytes carrying UTF-8). Infallible: every field has a default.
+    pub fn from_proto(msg: &ProtoToolResult) -> Self {
+        ToolResult {
+            tool_call_id: msg.tool_call_id.clone(),
+            tool_name: msg.tool_name.clone(),
+            content: decode_json_bytes(&msg.content),
+            is_error: msg.is_error,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

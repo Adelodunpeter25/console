@@ -1,6 +1,6 @@
 use super::agent::{
     AskQuestionRequest, AssistantMessage, BrowserActionRequest, ImageAttachment, PermissionRequest,
-    QueuedPrompt, TodoItem, ToolCall, ToolResult,
+    QueuedPrompt, TodoItem,
 };
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,7 @@ pub enum AgentSessionEvent {
         turn: Option<AssistantMessage>,
     },
     ToolExecutionStart {
-        calls: Vec<ToolCall>,
+        calls: Vec<console_proto::ToolCall>,
     },
     PermissionRequest {
         request: PermissionRequest,
@@ -67,10 +67,10 @@ pub enum AgentSessionEvent {
         request: AskQuestionRequest,
     },
     ToolExecutionResult {
-        result: ToolResult,
+        result: console_proto::ToolResult,
     },
     ToolExecutionEnd {
-        results: Vec<ToolResult>,
+        results: Vec<console_proto::ToolResult>,
     },
     TodoUpdate {
         items: Vec<TodoItem>,
