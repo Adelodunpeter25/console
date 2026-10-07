@@ -129,9 +129,9 @@ command = "sleep 30"
 		Data    struct {
 			ProjectID string `json:"projectId"`
 			Scripts   []struct {
-				ID        string  `json:"id"`
-				Shortcut  *string `json:"shortcut"`
-				Persist   bool    `json:"persistent"`
+				ID       string  `json:"id"`
+				Shortcut *string `json:"shortcut"`
+				Persist  bool    `json:"persistent"`
 			} `json:"scripts"`
 			Source string `json:"source"`
 		} `json:"data"`

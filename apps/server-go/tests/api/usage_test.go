@@ -30,9 +30,9 @@ func usageFixture(t *testing.T, name string) string {
 	return strings.TrimSpace(string(raw))
 }
 
-func strptr(s string) *string { return &s }
+func strptr(s string) *string   { return &s }
 func f64ptr(f float64) *float64 { return &f }
-func i64ptr(i int64) *int64 { return &i }
+func i64ptr(i int64) *int64     { return &i }
 
 // canonicalReport mirrors usage_report.json: one fully populated limit.
 func canonicalReport() *consolev1.UsageReport {
@@ -135,8 +135,8 @@ func TestUsageRoutesLoggedOut(t *testing.T) {
 	}
 	raw, _ := io.ReadAll(resp.Body)
 	var envelope struct {
-		Success bool            `json:"success"`
-		Data    map[string]any  `json:"data"`
+		Success bool           `json:"success"`
+		Data    map[string]any `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &envelope); err != nil || !envelope.Success {
 		t.Fatalf("envelope: %s", raw)

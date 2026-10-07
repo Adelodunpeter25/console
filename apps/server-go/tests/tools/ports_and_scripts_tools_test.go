@@ -136,11 +136,11 @@ func TestPortsTool_Forward(t *testing.T) {
 }
 
 type mockProjectScriptsProvider struct {
-	scripts     types.ProjectScriptsResult
-	runs        map[string]*types.ScriptRun
-	startErr    error
-	listErr     error
-	nextRunID   int
+	scripts   types.ProjectScriptsResult
+	runs      map[string]*types.ScriptRun
+	startErr  error
+	listErr   error
+	nextRunID int
 }
 
 func (m *mockProjectScriptsProvider) List(projectID string) (types.ProjectScriptsResult, error) {
@@ -271,5 +271,3 @@ func TestProjectScriptsTool_Lifecycle(t *testing.T) {
 		t.Fatalf("unexpected run status: %s", text)
 	}
 }
-
-

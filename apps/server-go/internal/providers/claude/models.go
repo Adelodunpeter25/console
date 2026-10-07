@@ -138,9 +138,9 @@ func FetchModels(ctx context.Context, client *http.Client, baseURL string, cred 
 	}
 	var payload struct {
 		Data []struct {
-			ID               string `json:"id"`
-			MaxInputTokens   *int   `json:"max_input_tokens"`
-			Capabilities     *struct {
+			ID             string `json:"id"`
+			MaxInputTokens *int   `json:"max_input_tokens"`
+			Capabilities   *struct {
 				ImageInput *struct {
 					Supported *bool `json:"supported"`
 				} `json:"image_input"`

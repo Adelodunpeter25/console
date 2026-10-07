@@ -88,16 +88,16 @@ func mapStainlessArch(arch string) string {
 // Code's own CLI. sessionID is omitted from the headers when empty.
 func buildHeaders(accessToken, sessionID string) map[string]string {
 	headers := map[string]string{
-		"Authorization":   "Bearer " + accessToken,
-		"Content-Type":    "application/json",
-		"Accept":          "text/event-stream",
+		"Authorization":     "Bearer " + accessToken,
+		"Content-Type":      "application/json",
+		"Accept":            "text/event-stream",
 		"anthropic-version": "2023-06-01",
 		"anthropic-beta":    strings.Join(OAuthBetas, ","),
 		"anthropic-dangerous-direct-browser-access": "true",
-		"User-Agent":           UserAgent(),
-		"X-Stainless-Arch":     mapStainlessArch(runtime.GOARCH),
-		"X-Stainless-Lang":     "go",
-		"X-Stainless-OS":       mapStainlessOS(runtime.GOOS),
+		"User-Agent":                  UserAgent(),
+		"X-Stainless-Arch":            mapStainlessArch(runtime.GOARCH),
+		"X-Stainless-Lang":            "go",
+		"X-Stainless-OS":              mapStainlessOS(runtime.GOOS),
 		"X-Stainless-Package-Version": SDKVersion,
 		"X-Stainless-Retry-Count":     "0",
 		"X-Stainless-Runtime":         "go",
@@ -428,7 +428,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 		case "content_block_stop":
 			index, _ := f.data["index"].(float64)
 			if state, ok := calls[int(index)]; ok {
-					emitFinal(state)
+				emitFinal(state)
 			}
 		case "message_delta":
 			if usage, ok := f.data["usage"].(map[string]any); ok {

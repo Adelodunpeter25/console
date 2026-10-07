@@ -30,6 +30,7 @@ func ComputerUseCommand() *cobra.Command {
 	root.AddCommand(computerUsePermissionsCmd())
 	root.AddCommand(computerUseProbeCmd())
 	root.AddCommand(computerUseRunCmd())
+	root.AddCommand(computerUseEvalCmd())
 	root.AddCommand(computerUseBundleCmd())
 	root.AddCommand(computerUseResetCmd())
 	return root

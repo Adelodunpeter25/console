@@ -18,6 +18,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/systemprompt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -208,6 +209,25 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 	header := loaded.Header
 
+	// /computer-use activates computer use for the session. The model has no
+	// prior knowledge of it, so the command is matched here rather than
+	// discovered: the prefix is stripped and the skill instructions ride
+	// along on this message, which persists in history like any skill
+	// content. Later messages in the session keep the tools without
+	// re-invoking.
+	computerTask, computerInvoked := cua.SplitInvocation(dto.Text)
+	if computerInvoked {
+		s.computerUse.mark(sessionID)
+	}
+	messageText := dto.Text
+	if computerInvoked {
+		messageText = computerTask
+		if messageText != "" {
+			messageText += "\n\n"
+		}
+		messageText += cua.SkillText()
+	}
+
 	providerID := dto.Provider
 	if providerID == "" {
 		providerID = header.Provider
@@ -254,7 +274,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 	user := loop.UserMessage{
 		Role:         loop.RoleUser,
-		Content:      dto.Text,
+		Content:      messageText,
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
 	}
@@ -373,6 +393,17 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 					slog.Warn("restore tool group failed", "session", sessionID, "group", group, "error", err)
 				}
 			}
+		}
+	}
+	// Computer use restores the same way: sessions that invoked /computer-use
+	// keep the two tools from the next turn on, appended after everything
+	// else so the provider's cached prefix stays stable. With no driver the
+	// load fails honestly and the model is told, so it reports unavailability
+	// instead of calling into the void.
+	if s.computerUse.isActive(sessionID) {
+		loader := cua.NewLoader(s.cuaManager, sessionID)
+		if _, err := loader.Load(registry); err != nil {
+			user.Content += "\n\nComputer use is unavailable: " + err.Error()
 		}
 	}
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))

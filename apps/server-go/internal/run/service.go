@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -66,6 +67,12 @@ type Service struct {
 	mcp       *mcp.Manager
 	prompts   promptCache
 	groups    toolGroups
+	// cuaManager owns the computer-use driver runtime (nil-safe when the
+	// library is absent: runs simply never activate computer use).
+	cuaManager *cua.Manager
+	// computerUse remembers sessions that invoked /computer-use, so later
+	// runs of the same session keep the computer tools without re-invoking.
+	computerUse computerUseSessions
 	// ctxCache holds the last context-window snapshot per session, keyed
 	// by message count so the footer ring never recomputes a walk it
 	// already did. Has its own mutex: read on the request path while a
@@ -85,7 +92,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager()}
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
 		// A pending question/approval pauses the run until the user

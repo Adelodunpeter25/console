@@ -49,7 +49,10 @@ func (t *computerTool) Execute(ctx context.Context, arguments json.RawMessage) (
 	timeout := time.Duration(in.TimeoutMs) * time.Millisecond
 	runtime, err := t.manager.sessionRuntime(t.sessionID)
 	if err != nil {
-		return nil, &ErrNoDriver{Cause: err}
+		// A missing driver must read as information, not an abort: the
+		// model tells the user computer use is unavailable instead of the
+		// turn dying with an internal error.
+		return nil, tools.NewToolError("computer use is unavailable: %v", err)
 	}
 	return runtime.Eval(ctx, in.Code, timeout)
 }

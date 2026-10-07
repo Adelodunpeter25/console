@@ -29,13 +29,13 @@ type SessionWorktree struct {
 }
 
 type CreateSessionOptions struct {
-	ID           string  `json:"id,omitempty"`
-	Title        string  `json:"title,omitempty"`
-	Cwd          string  `json:"cwd,omitempty"`
-	ProjectID    *string `json:"projectId,omitempty"`
-	ModelID      string  `json:"modelId,omitempty"`
-	Provider     string  `json:"provider,omitempty"`
-	ApprovalMode string  `json:"approvalMode,omitempty"`
+	ID            string  `json:"id,omitempty"`
+	Title         string  `json:"title,omitempty"`
+	Cwd           string  `json:"cwd,omitempty"`
+	ProjectID     *string `json:"projectId,omitempty"`
+	ModelID       string  `json:"modelId,omitempty"`
+	Provider      string  `json:"provider,omitempty"`
+	ApprovalMode  string  `json:"approvalMode,omitempty"`
 	ThinkingLevel *string `json:"thinkingLevel,omitempty"`
 	// ProjectNull tracks an explicit JSON null for projectId (scratchpad),
 	// distinct from an omitted key (infer from cwd). Set by the route, which
@@ -56,10 +56,10 @@ type CreateWorktreeSpec struct {
 }
 
 type LoadedSession struct {
-	Header     SessionHeader   `json:"header"`
+	Header     SessionHeader     `json:"header"`
 	Messages   []json.RawMessage `json:"messages"`
-	HasMore    bool            `json:"hasMore"`
-	NextCursor *int64          `json:"nextCursor"`
+	HasMore    bool              `json:"hasMore"`
+	NextCursor *int64            `json:"nextCursor"`
 }
 
 // SubagentActivityItem is one row of subagent activity JSON.

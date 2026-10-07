@@ -183,8 +183,8 @@ type loadCodeAssistResponse struct {
 }
 
 type onboardOperation struct {
-	Name string `json:"name"`
-	Done bool   `json:"done"`
+	Name     string `json:"name"`
+	Done     bool   `json:"done"`
 	Response *struct {
 		CloudaicompanionProject any `json:"cloudaicompanionProject"`
 	} `json:"response"`

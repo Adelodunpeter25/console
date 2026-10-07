@@ -111,7 +111,7 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 		ID: id, Title: title, Cwd: cwd, ProjectID: projectID,
 		ModelID: modelID, Provider: provider, ApprovalMode: approvalMode,
 		ThinkingLevel: opts.ThinkingLevel,
-		CreatedAt: now, UpdatedAt: now, MessageCount: 0, Status: "idle",
+		CreatedAt:     now, UpdatedAt: now, MessageCount: 0, Status: "idle",
 		Worktree: opts.ResolvedWorktree,
 	}, nil
 }

@@ -182,6 +182,7 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 	}
 	return &types.SessionWorktree{Path: wtPath.String, Branch: wtBranch.String, Repo: wtRepo.String}, nil
 }
+
 // Header returns the indexed header, or nil for unknown/deleted sessions.
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`

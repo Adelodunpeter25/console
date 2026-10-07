@@ -43,4 +43,3 @@ type QueuedPrompt struct {
 	ApprovalMode string              `json:"approvalMode,omitempty"`
 	CreatedAt    string              `json:"createdAt"`
 }
-

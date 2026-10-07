@@ -44,7 +44,7 @@ func (f *fakeJSCaller) Call(_ context.Context, name string, args map[string]any,
 
 func screenSizeCaller() *fakeJSCaller {
 	return &fakeJSCaller{
-		tools: []cua.ToolDef{{Name: "get_screen_size"}, {Name: "list_apps"}},
+		tools:  []cua.ToolDef{{Name: "get_screen_size"}, {Name: "list_apps"}},
 		errors: map[string]error{},
 		results: map[string]*cua.ToolResult{
 			"get_screen_size": {Content: []cua.ContentPart{

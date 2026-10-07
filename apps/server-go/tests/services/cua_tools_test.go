@@ -140,3 +140,18 @@ func keysOf(m map[string]any) []string {
 	}
 	return out
 }
+
+// TestComputerExecuteWithoutDriverIsInformationNotAbort proves a missing
+// library reads as a message to the user, not a dead turn: the harness
+// surfaces ToolError to the model, which reports unavailability.
+func TestComputerExecuteWithoutDriverIsInformationNotAbort(t *testing.T) {
+	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	tool := cua.NewComputerTool(cua.NewManager(), "session-a")
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"code": "1+1"}`))
+	if err == nil {
+		t.Fatal("expected unavailability, got success")
+	}
+	if !strings.Contains(err.Error(), "unavailable") {
+		t.Fatalf("got %v, want an unavailability message", err)
+	}
+}

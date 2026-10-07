@@ -40,8 +40,8 @@ func canonicalHeader() *consolev1.SessionHeader {
 		ApprovalMode: "always-ask", ThinkingLevel: strptr("medium"),
 		CreatedAt: 1700000000000, UpdatedAt: 1700000000001,
 		MessageCount: func() *int32 { v := int32(3); return &v }(),
-		Status: "done",
-		Worktree: &consolev1.SessionWorktree{Path: "/tmp/wt", Branch: "feat", Repo: "/tmp"},
+		Status:       "done",
+		Worktree:     &consolev1.SessionWorktree{Path: "/tmp/wt", Branch: "feat", Repo: "/tmp"},
 	}
 }
 

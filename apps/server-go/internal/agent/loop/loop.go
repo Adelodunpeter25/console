@@ -106,6 +106,7 @@ const (
 	// footer ring moves live without polling.
 	EventContextUpdate EventKind = "contextUpdate"
 )
+
 type Event struct {
 	Kind       EventKind                   `json:"kind"`
 	Text       string                      `json:"text,omitempty"`
