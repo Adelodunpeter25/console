@@ -4,6 +4,7 @@
 package cua
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -176,7 +177,22 @@ func (m *Manager) Close() error {
 	return driver.Shutdown()
 }
 
-// stopped reports whether a stop is in force, for the per-call cancel hook.
+// EvalOnce runs code in a throwaway runtime: nothing persists afterwards.
+// This is the CLI path (one process per invocation has no session to persist
+// to) and the shape a single question takes when no follow-up needs the
+// bindings. Sessions that need persistence go through Manager instead.
+func (m *Manager) EvalOnce(ctx context.Context, code string, timeout time.Duration) (any, error) {
+	driver, err := m.Driver()
+	if err != nil {
+		return nil, &ErrNoDriver{Cause: err}
+	}
+	runtime, err := NewJSRuntime(driver)
+	if err != nil {
+		return nil, err
+	}
+	return runtime.Eval(ctx, code, timeout)
+}
+
 // Stopped reports whether a stop is in force. This is the per-call cancel hook
 // handed to the driver, so a Stop interrupts the action already in flight
 // rather than only refusing the next one.
