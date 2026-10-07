@@ -1,5 +1,4 @@
-// Agent lifecycle notifications. Port of
-// apps/server/api/src/services/notify-agent-event.ts: attention banners for
+// Agent lifecycle notifications: attention banners for
 // questions/approvals/errors and done banners with the last assistant
 // excerpt. The run service calls NotifyEvent per hub event and NotifyDone
 // when a chain settles cleanly.
@@ -25,7 +24,7 @@ func TruncateNotificationText(value string, max int) string {
 	if len([]rune(single)) <= max {
 		return single
 	}
-	// TS slices UTF-16 units; runes are the closest Go equivalent.
+	// Truncate by runes so multi-byte characters are never split.
 	return strings.TrimRight(string([]rune(single)[:max-1]), " \t") + "…"
 }
 

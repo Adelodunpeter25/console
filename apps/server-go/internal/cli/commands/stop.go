@@ -1,4 +1,4 @@
-// Stop command - terminate the daemon. Port of apps/cli/commands/stop.ts.
+// Stop command - terminate the daemon.
 package commands
 
 import (

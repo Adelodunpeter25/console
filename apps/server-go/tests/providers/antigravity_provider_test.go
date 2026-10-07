@@ -34,7 +34,7 @@ func TestAntigravityAuthorizationURL(t *testing.T) {
 	if !strings.Contains(q.Get("scope"), "cloud-platform") || !strings.Contains(q.Get("redirect_uri"), "51121") {
 		t.Fatalf("params = %s", authURL)
 	}
-	// TS order: client_id, response_type, scope, redirect_uri, state, access_type, prompt.
+	// Expected order: client_id, response_type, scope, redirect_uri, state, access_type, prompt.
 	order := []string{"client_id=", "response_type=", "scope=", "redirect_uri=", "state=", "access_type=", "prompt="}
 	last := -1
 	for _, key := range order {

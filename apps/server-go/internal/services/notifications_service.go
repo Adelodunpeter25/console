@@ -1,5 +1,4 @@
 // Notification bus: services push events, the SSE route fans them out.
-// Port of apps/server/api/src/services/notification.service.ts.
 package services
 
 import (

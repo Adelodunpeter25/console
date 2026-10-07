@@ -1,5 +1,4 @@
-// Antigravity (Google Cloud Code Assist) constants. Port of
-// apps/server/providers/src/constants.ts (antigravity slice).
+// Antigravity (Google Cloud Code Assist) constants.
 package antigravity
 
 import (

@@ -1,7 +1,6 @@
 // Verifies bash background jobs feed their output into the PortRegistry
-// (mirrors bash/manager.ts's portRegistry.observeOutput/removeOwner wiring)
-// so a dev server started via the bash tool gets auto-detected the same
-// way the TS server does.
+// (observeOutput/removeOwner wiring) so a dev server started via the bash
+// tool gets auto-detected.
 package tests
 
 import (
@@ -29,7 +28,7 @@ func TestBashJobOutputRegistersPort(t *testing.T) {
 	bash := tools.NewBashTool(jobs, "sess1")
 
 	// The job must still be running when detection fires: maybeFinish
-	// calls RemoveOwner the instant a job exits (mirrors bash/manager.ts),
+	// calls RemoveOwner the instant a job exits,
 	// so an already-exited "echo" job's port would already be gone by the
 	// time this test observes it.
 	startArgs, _ := json.Marshal(map[string]any{

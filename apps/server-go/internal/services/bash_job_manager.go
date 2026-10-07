@@ -1,5 +1,4 @@
-// Background bash job manager. Port of
-// apps/server/agent/src/tools/bash/manager.ts: one child shell per job in
+// Background bash job manager: one child shell per job in
 // its own process group (tree-kill via negative pid), output ring-buffered
 // per stream, cursor-paginated reads, retention after completion.
 package services
@@ -78,7 +77,7 @@ type BashJobManager struct {
 	mu   sync.Mutex
 	jobs map[string]*bashJobRecord
 
-	// ports backs the same live dev-server detection as pty.manager.ts:
+	// ports backs live dev-server detection:
 	// job output is scanned for localhost:PORT candidates, and the job's
 	// owner entry is cleaned up once it settles. Nil disables detection
 	// (e.g. tests).

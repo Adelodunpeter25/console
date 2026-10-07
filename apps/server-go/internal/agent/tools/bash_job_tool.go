@@ -1,6 +1,5 @@
 // bashJob tool: manage background bash jobs started by the bash tool's
-// background=true mode. Port of
-// apps/server/agent/src/tools/bash/job-tool.ts.
+// background=true mode.
 package tools
 
 import (
@@ -66,7 +65,7 @@ func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID st
 
 // NewBashJobTool builds the "bashJob" tool bound to jobs, scoped to
 // ownerSessionID (must match the session that started the job via bash's
-// background=true, matching the TS ownership check).
+// background=true).
 func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 	return NewTool("bashJob", "Manage background bash jobs. action: status|output|wait|kill|list. output is cursor-paginated (nextCursor, truncated).", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {

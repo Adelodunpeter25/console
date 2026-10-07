@@ -1,5 +1,4 @@
-// Always-apply / inventory rule discovery from `rules/` config dirs. Port of
-// apps/server/agent/src/systemprompt/discover-rules.ts.
+// Always-apply / inventory rule discovery from `rules/` config dirs.
 package systemprompt
 
 import (

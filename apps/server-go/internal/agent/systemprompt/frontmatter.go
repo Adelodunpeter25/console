@@ -1,5 +1,4 @@
-// Minimal frontmatter parser (no YAML dependency). Port of
-// apps/server/agent/src/systemprompt/frontmatter.ts.
+// Minimal frontmatter parser (no YAML dependency).
 package systemprompt
 
 import (

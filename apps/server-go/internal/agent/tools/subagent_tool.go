@@ -1,7 +1,6 @@
-// subagent tool (static registration). The model-facing shape from
-// apps/server/agent/src/tools/subagent.ts. This instance is simulated
-// (no nested run); the run service replaces it with the loop-bound real
-// one per turn, the same way ask/askMany/memory get per-run handlers.
+// subagent tool (static registration). This instance is simulated (no
+// nested run); the run service replaces it with the loop-bound real one per
+// turn, the same way ask/askMany/memory get per-run handlers.
 package tools
 
 import (

@@ -1,6 +1,5 @@
-// Provider registry: id → streaming backend. Port of the provider lookup
-// in apps/server/agent/src/commands/provider-registry.ts. Implementations
-// plug in here without run-package changes.
+// Provider registry: id → streaming backend. Implementations plug in here
+// without run-package changes.
 package providers
 
 import (

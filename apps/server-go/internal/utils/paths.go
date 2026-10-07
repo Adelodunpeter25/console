@@ -1,6 +1,5 @@
-// Storage path resolution. Port of agent/src/session/apppaths.ts — the
-// binary-only NODE_ENV quirk does not apply to Go, so CONSOLE_ENV and
-// CONSOLE_STORAGE_DIR are the only inputs. Keep in sync with the TS side.
+// Storage path resolution. CONSOLE_ENV and CONSOLE_STORAGE_DIR are the only
+// inputs.
 package utils
 
 import (
@@ -9,7 +8,7 @@ import (
 	"strings"
 )
 
-// IgnoredPaths mirrors apps/server/api/src/utils/ignored.ts.
+// IgnoredPaths lists directory and file names ignored by tree and search.
 var IgnoredPaths = []string{
 	"node_modules", ".git", ".hg", ".svn", "dist", "build", ".next",
 	".turbo", ".vite", ".vite-temp", ".cache", "coverage", ".ds_store",

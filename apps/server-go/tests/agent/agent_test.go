@@ -105,8 +105,8 @@ func TestToolValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal output: %v", err)
 	}
-	// Wire shape must be the MCP-style content array the TS server sends
-	// (tool-output.ts normalizeToolOutput), not a raw Go struct — the
+	// Wire shape must be the MCP-style content array,
+	// not a raw Go struct — the
 	// desktop UI's read-file renderer parses this exact "File: ...\n
 	// Showing: ...\n\n N: line" text format.
 	var blocks []map[string]any
@@ -439,7 +439,7 @@ func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
 }
 
 func TestStreamNoEventLoss(t *testing.T) {
-	// Producer outpacing consumer must not skip events (the TS bug fix).
+	// Producer outpacing consumer must not skip events.
 	s := stream.New[int]()
 	received := make(chan int, 100)
 	go func() {

@@ -1,4 +1,4 @@
-// Assist + notification + usage wire types ported from packages/types.
+// Assist + notification + usage wire types.
 package types
 
 type SlashCommandInfo struct {

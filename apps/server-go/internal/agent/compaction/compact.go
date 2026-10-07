@@ -1,7 +1,5 @@
 // Compaction entry points: threshold checks, history rewriting, and
-// overflow detection. Port of the exported surface of
-// apps/server/agent/src/compaction/index.ts plus the overflow predicate in
-// agent/src/utils/error.ts.
+// overflow detection.
 package compaction
 
 import (

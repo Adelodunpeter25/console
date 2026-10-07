@@ -1,7 +1,7 @@
-// ask / askMany tools: interactive questions to the user. Port of
-// apps/server/agent/src/tools/ask.ts. Both take an optional AskHandler;
-// without one (headless), they auto-select the first option (or report
-// "skipped") so the tools still work when nothing is attached to answer.
+// ask / askMany tools: interactive questions to the user. Both take an
+// optional AskHandler; without one (headless), they auto-select the first
+// option (or report "skipped") so the tools still work when nothing is
+// attached to answer.
 package tools
 
 import (

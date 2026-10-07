@@ -1,6 +1,5 @@
 // bash / bashJob tools: run a shell command synchronously (with timeout,
-// output truncation) or as a pollable background job. Ports of
-// apps/server/agent/src/tools/bash/{bash.ts,job-tool.ts}.
+// output truncation) or as a pollable background job.
 package tools
 
 import (

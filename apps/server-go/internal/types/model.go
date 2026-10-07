@@ -1,5 +1,4 @@
-// Provider/model catalog types. Mirrors Model and ProviderCatalogEntry in
-// packages/types/src/model.ts.
+// Provider/model catalog types (Model and ProviderCatalogEntry).
 package types
 
 type Model struct {

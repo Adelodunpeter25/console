@@ -17,7 +17,7 @@ func newMessageID() string {
 	return "msg_" + hex.EncodeToString(b)
 }
 
-// newTurnID mints an opaque turn id (TS parity: randomUUID per turn).
+// newTurnID mints an opaque turn id (one random id per turn).
 func newTurnID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

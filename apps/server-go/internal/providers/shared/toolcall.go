@@ -2,7 +2,7 @@
 // Multiple providers (codex first, claude/antigravity next) correlate
 // argument deltas by item_id while the stable tool-call id is the call_id.
 // Deltas or done events arriving before output_item.added are buffered and
-// attached once the call appears — mirroring the TS stream-fn logic.
+// attached once the call appears.
 package shared
 
 // Call is one reassembled function call.

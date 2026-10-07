@@ -1,6 +1,5 @@
-// Model favorites routes (/api/model-favorites). Port of
-// apps/server/api/src/routes/model-favorites.ts. Provider-name validation
-// against the registry lands in Phase 3; non-empty is enforced here.
+// Model favorites routes (/api/model-favorites). Provider-name validation
+// against the registry is not done here; non-empty is enforced.
 //
 // First domain on the shared protobuf schema: request/response payloads are
 // built from console.v1 generated types and encoded with protojson. The

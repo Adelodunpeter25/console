@@ -1,4 +1,4 @@
-// Start command - launch the daemon. Port of apps/cli/commands/start.ts.
+// Start command - launch the daemon.
 package commands
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
-// StartOptions mirrors the TS StartOptions: port/host save-and-reuse,
+// StartOptions configures start: port/host save-and-reuse,
 // daemon selects background vs foreground, dev pins dev storage.
 type StartOptions struct {
 	Port   string
@@ -26,7 +26,7 @@ type serverLaunch struct {
 	serveSelf bool
 }
 
-// resolveServerLaunch mirrors the old TS multi-call behavior: the CLI binary
+// resolveServerLaunch resolves how the server is launched: the CLI binary
 // re-executes itself as the server (CONSOLE_SERVE=1), with an explicit
 // CONSOLE_SERVER_BIN path as an escape hatch.
 func resolveServerLaunch() (serverLaunch, error) {

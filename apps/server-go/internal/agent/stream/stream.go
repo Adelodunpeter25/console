@@ -1,7 +1,6 @@
-// Generic queue-based event stream. Port of
-// apps/server/agent/src/service/event-stream.ts: events are always enqueued
-// so a slow consumer never skips frames; Close(err) terminates with a
-// terminal value extracted by the caller from the final event.
+// Generic queue-based event stream: events are always enqueued so a
+// slow consumer never skips frames; Close(err) terminates with a terminal
+// value extracted by the caller from the final event.
 package stream
 
 import "sync"

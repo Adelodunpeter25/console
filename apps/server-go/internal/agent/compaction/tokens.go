@@ -1,7 +1,6 @@
-// Token estimation for compaction decisions. Port of
-// apps/server/agent/src/compaction/token-estimator.ts: ~4 chars per token
-// for prose, ~3 for code/JSON/tool output, ~1,000 per inline image. No
-// tokenizer dependency; provider-native counting can plug in later.
+// Token estimation for compaction decisions: ~4 chars per token for
+// prose, ~3 for code/JSON/tool output, ~1,000 per inline image. No tokenizer
+// dependency; provider-native counting can plug in later.
 package compaction
 
 import (
@@ -139,7 +138,7 @@ func argsChars(args json.RawMessage) int {
 	if len(args) == 0 {
 		return 0
 	}
-	// Raw JSON counts as code chars; invalid JSON gets the TS fallback.
+	// Raw JSON counts as code chars; invalid JSON gets a fixed fallback estimate.
 	var v any
 	if err := json.Unmarshal(args, &v); err != nil {
 		return 50

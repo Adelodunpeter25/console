@@ -1,5 +1,5 @@
 // Text-part coalescing: consecutive text/thinking deltas must persist as
-// one part (TS streamOneTurn parity). Without this each streamed word is
+// one part. Without this each streamed word is
 // its own TextPart and desktop renders every part as a separate vertical
 // markdown block — one word per line.
 package tests

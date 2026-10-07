@@ -1,4 +1,4 @@
-// Status command - check daemon status. Port of apps/cli/commands/status.ts.
+// Status command - check daemon status.
 package commands
 
 import (

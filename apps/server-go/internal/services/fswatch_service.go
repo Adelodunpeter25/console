@@ -1,5 +1,4 @@
-// Recursive filesystem watcher with per-path debouncing. Port of
-// apps/server/api/src/services/fswatch.service.ts using fsnotify (which
+// Recursive filesystem watcher with per-path debouncing, built on fsnotify (which
 // needs per-directory watch registration).
 package services
 
@@ -57,7 +56,7 @@ func (s *FsWatchService) loop() {
 		if projectPath == "" {
 			continue
 		}
-		// The TS watcher applies ignore rules to paths relative to the
+		// Ignore rules apply to paths relative to the
 		// project root, so absolute paths through ignored ancestors
 		// (e.g. /tmp) don't get filtered.
 		rel := strings.TrimPrefix(event.Name, projectPath+"/")

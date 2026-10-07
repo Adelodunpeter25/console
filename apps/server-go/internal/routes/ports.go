@@ -1,8 +1,7 @@
-// Port routes (/api/ports/*). Port of apps/server/api/src/routes/ports.ts
-// plus the tunnel WebSocket (port-tunnel.socket.ts): raw TCP over WebSocket
-// binary frames in both directions.
+// Port routes (/api/ports/*) plus the tunnel WebSocket: raw TCP over
+// WebSocket binary frames in both directions.
 //
-// Fifth domain on the shared protobuf schema, closing Phase 1. List, stream
+// Fifth domain on the shared protobuf schema. List, stream
 // frames, forward responses, and unforward responses are built from
 // console.v1 generated types with byte-identical output. The forward
 // *request* keeps its lenient number-or-string parsing (see

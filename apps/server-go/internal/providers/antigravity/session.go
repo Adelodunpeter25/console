@@ -1,5 +1,4 @@
-// Antigravity per-session request envelope. Port of
-// apps/server/providers/src/antigravity/session-envelope.ts.
+// Antigravity per-session request envelope.
 package antigravity
 
 import (
@@ -96,9 +95,7 @@ func UpdateLastExecutionID(state *SessionState, responseID string) {
 
 // stateStore holds one SessionState per conversation for the life of the
 // process, so requestId/stepIndex/sessionId stay stable across every run
-// in a conversation — not just the turns within one run — mirroring the TS
-// factory (createAntigravityStreamFn is called once per Agent instance,
-// which persists for the whole conversation).
+// in a conversation — not just the turns within one run.
 var (
 	stateStoreMu sync.Mutex
 	stateStore   = map[string]*SessionState{}

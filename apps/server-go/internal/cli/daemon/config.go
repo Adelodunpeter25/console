@@ -1,5 +1,4 @@
-// Daemon config persistence (~/.console/config.json). Port of the config
-// helpers in apps/cli/daemon-manager.ts.
+// Daemon config persistence (~/.console/config.json).
 package daemon
 
 import (

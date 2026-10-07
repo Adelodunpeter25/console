@@ -1,7 +1,5 @@
-// Provider + model catalog. Port of the catalog slice of
-// apps/server/agent/src/commands/provider-registry.ts: static seeds,
-// provider listing, and dynamic model refresh with favorites-first
-// sorting. Only implemented providers are listed.
+// Provider + model catalog: static seeds, provider listing, and dynamic
+// model refresh with favorites-first sorting. Only implemented providers are listed.
 package providers
 
 import (
@@ -80,8 +78,7 @@ func OpenCodeModels(ctx context.Context) []types.Model {
 	return DefaultOpenCodeModels()
 }
 
-// SortModelsByFavorites moves favorited models first (stable), mirroring
-// ProviderService's sorting in the TS server.
+// SortModelsByFavorites moves favorited models first (stable).
 func SortModelsByFavorites(models []types.Model, favs []types.ModelFavorite) []types.Model {
 	if len(favs) == 0 {
 		return models

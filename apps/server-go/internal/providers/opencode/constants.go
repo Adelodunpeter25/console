@@ -81,7 +81,8 @@ func ResponsesURL(baseURL string) string {
 	return endpoint(baseURL, "responses")
 }
 
-// IsResponsesModel preserves the TypeScript provider's model-family split.
+// IsResponsesModel reports whether modelID belongs to the Responses model
+// family.
 func IsResponsesModel(modelID string) bool {
 	return strings.HasPrefix(modelID, "muse-") ||
 		strings.HasPrefix(modelID, "gpt-5") ||

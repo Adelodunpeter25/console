@@ -1,5 +1,5 @@
 // File-change tracking: pre-write snapshots, diff generation, and recording
-// for session file changes. Mirrors run-file-changes.ts from the TS server.
+// for session file changes.
 package run
 
 import (
@@ -227,8 +227,7 @@ func diffTextOrNil(patch string) *string {
 	return &patch
 }
 
-// createUnifiedDiff produces a standard unified diff with @@ hunk headers,
-// matching the output of jsdiff's createPatch in the TS server this mirrors.
+// createUnifiedDiff produces a standard unified diff with @@ hunk headers.
 //
 // It walks difflib's grouped opcodes by hand rather than calling
 // GetUnifiedDiffString for one reason: that helper calls NewMatcher, which

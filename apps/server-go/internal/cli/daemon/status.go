@@ -1,5 +1,4 @@
-// Daemon status: running/pid/uptime/port/host/mode. Port of getDaemonStatus
-// in apps/cli/daemon-manager.ts, including the dual-directory fallback so
+// Daemon status: running/pid/uptime/port/host/mode, including the dual-directory fallback so
 // stop/status work regardless of which storage mode the running daemon used.
 package daemon
 

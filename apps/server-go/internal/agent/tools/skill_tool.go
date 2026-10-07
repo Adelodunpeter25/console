@@ -1,7 +1,6 @@
-// readSkill tool: on-demand skill content loader. Port of
-// apps/server/agent/src/tools/read-skill.ts. The system prompt lists skills
-// by name + description only; this tool loads full content when the model
-// decides a skill is relevant.
+// readSkill tool: on-demand skill content loader.
+// The system prompt lists skills by name + description only; this tool loads
+// full content when the model decides a skill is relevant.
 package tools
 
 import (

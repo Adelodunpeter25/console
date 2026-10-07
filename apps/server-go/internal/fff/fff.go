@@ -646,7 +646,7 @@ func (i *Instance) search(query string, limit int) ([]Item, error) {
 }
 
 // Glob filters indexed files by a glob pattern (native fff glob, no query
-// parsing — backs the agent glob tool the same way TS's FileFinder.glob does).
+// parsing — backs the agent glob tool).
 func (i *Instance) Glob(pattern string, limit int) ([]Item, error) {
 	if _, err := i.acquire(); err != nil {
 		return nil, err

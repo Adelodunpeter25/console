@@ -62,7 +62,7 @@ type LoadedSession struct {
 	NextCursor *int64          `json:"nextCursor"`
 }
 
-// SubagentActivityItem mirrors the TS row activity JSON.
+// SubagentActivityItem is one row of subagent activity JSON.
 type SubagentActivityItem struct {
 	TurnIndex  int             `json:"turnIndex"`
 	ToolCallID string          `json:"toolCallId"`
@@ -73,7 +73,7 @@ type SubagentActivityItem struct {
 	Error      *string         `json:"error,omitempty"`
 }
 
-// SubagentInfo mirrors the TS getSessionSubagents shape.
+// SubagentInfo describes one subagent of a session.
 type SubagentInfo struct {
 	SubagentID       string                 `json:"subagentId"`
 	ParentToolCallID string                 `json:"parentToolCallId"`

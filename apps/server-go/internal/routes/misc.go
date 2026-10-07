@@ -1,5 +1,4 @@
-// Config + notifications routes. Ports of apps/server/api/src/routes/
-// config.ts and notifications.ts.
+// Config + notifications routes.
 package routes
 
 import (

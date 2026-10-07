@@ -1,4 +1,4 @@
-// Git types ported from packages/types/src/api.ts.
+// Git wire types.
 package types
 
 type GitFileStatus string // M, A, D, R, C, U, "?", "!"

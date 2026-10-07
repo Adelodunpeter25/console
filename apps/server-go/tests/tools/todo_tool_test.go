@@ -135,8 +135,7 @@ func TestTodoPersistsAcrossToolInstances(t *testing.T) {
 	}
 }
 
-// TestClearCompletedTodos matches RunService's end-of-run cleanup (TS
-// run.service.ts finally block): only a non-empty list where EVERY item is
+// TestClearCompletedTodos matches RunService's end-of-run cleanup: only a non-empty list where EVERY item is
 // completed gets wiped; a partial list is left alone.
 func TestClearCompletedTodos(t *testing.T) {
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
@@ -197,8 +196,8 @@ func TestClearCompletedTodos(t *testing.T) {
 }
 
 // TestTodoOnUpdateActions covers the live-update hook the run service uses
-// to broadcast todoUpdate: action names ("created"/"updated") match the TS
-// tool, and delivered snapshots are copies the tool cannot mutate later.
+// to broadcast todoUpdate: action names ("created"/"updated") match the
+// tool's, and delivered snapshots are copies the tool cannot mutate later.
 func TestTodoOnUpdateActions(t *testing.T) {
 	type update struct {
 		items  []types.TodoItem

@@ -28,9 +28,9 @@ type readFileInput struct {
 	EndLine   int    `json:"endLine,omitempty" jsonschema:"description=1-based end line (inclusive)"`
 }
 
-// readMaxBytes/readMaxLines mirror the TS readFileTool's MAX_BYTES/MAX_LINES
-// safety ceilings (engine.ts). Go reads the capped bytes in one shot rather
-// than streaming, so only the *content* ceiling matters here.
+// readMaxBytes/readMaxLines are the read tool's safety ceilings. The capped
+// bytes are read in one shot rather than streamed, so only the *content*
+// ceiling matters here.
 const (
 	readMaxBytes = 512 * 1024
 	readMaxLines = 2000
@@ -45,10 +45,10 @@ func sparseLineNumbers() bool {
 	return os.Getenv("CONSOLE_HARNESS_SPARSE_LINE_NUMBERS") == "1"
 }
 
-// textResult wraps a formatted string as the MCP-style content array the TS
-// server always sends over the wire (tool-output.ts normalizeToolOutput
-// strips everything except this array + isError before it reaches the
-// client) — the desktop UI parses this exact shape, not raw Go structs.
+// textResult wraps a formatted string as the MCP-style content array that is
+// always sent over the wire (everything except this array + isError is
+// stripped before it reaches the client) — the desktop UI parses this exact
+// shape, not raw Go structs.
 func textResult(text string) []map[string]any {
 	return []map[string]any{{"type": "text", "text": text}}
 }
@@ -179,7 +179,7 @@ type dirEntry struct {
 	Size  int64
 }
 
-// formatBytes mirrors packages/types/src/fs.ts formatBytes.
+// formatBytes renders a byte count as a short human-readable size.
 func formatBytes(n int64) string {
 	switch {
 	case n < 1024:
@@ -191,7 +191,7 @@ func formatBytes(n int64) string {
 	}
 }
 
-// renderDirTree mirrors list-dir.ts's renderTree: box-drawing connectors,
+// renderDirTree renders directory entries as a tree: box-drawing connectors,
 // "N/" for directories, "  [size]" for files.
 func renderDirTree(entries []dirEntry) []string {
 	lines := make([]string, 0, len(entries))
@@ -305,7 +305,7 @@ var Glob = NewTool("glob", "Find files matching a glob pattern (e.g. 'src/**/*.t
 		return textResult(formatGlobMatches(matches, in.Pattern, resolvedRoot)), nil
 	})
 
-// formatGlobMatches mirrors glob.ts's result text.
+// formatGlobMatches renders the glob tool's result text.
 func formatGlobMatches(matches []string, pattern, searchRoot string) string {
 	if len(matches) == 0 {
 		return fmt.Sprintf("No files matched pattern %q in %s", pattern, searchRoot)
@@ -442,7 +442,7 @@ var Grep = NewTool("grep", "Search file contents by pattern. Use for finding def
 		return textResult(formatGrepMatches(matches, filesSearched, max, in.Pattern, root)), nil
 	})
 
-// formatGrepMatches mirrors the TS grepTool's result text: a header line,
+// formatGrepMatches renders the grep tool's result text: a header line,
 // then matches grouped by file under "── path ──" with "→ line: text" rows.
 func formatGrepMatches(matches []grepMatch, filesSearched, max int, pattern, searchPath string) string {
 	if len(matches) == 0 {
@@ -489,7 +489,7 @@ func globToRegex(glob string) string {
 	return b.String()
 }
 
-// DefaultTools is the initial Phase 2 toolset.
+// DefaultTools is the default toolset.
 func DefaultTools() []Tool {
 	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent, Ports, ProjectScripts, Browser}
 }

@@ -15,7 +15,7 @@ func (s *Service) AppendMessage(sessionID string, msg types.AgentMessage) error 
 }
 
 // AppendMessages inserts messages transactionally; duplicates by id are
-// ignored (INSERT OR IGNORE, matching the TS path).
+// ignored (INSERT OR IGNORE).
 func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage) error {
 	if len(messages) == 0 {
 		return nil

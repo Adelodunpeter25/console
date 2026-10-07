@@ -1,5 +1,4 @@
-// Fiber API surface. Route parity with apps/server/api/src/routes is
-// tracked in docs/plan/go-server-rewrite.md (Phase 5).
+// Fiber API surface.
 package routes
 
 import (

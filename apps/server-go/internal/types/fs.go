@@ -1,4 +1,4 @@
-// Filesystem types ported from packages/types/src/api.ts and fs.ts.
+// Filesystem types.
 package types
 
 type FsTreeEntry struct {
@@ -16,7 +16,7 @@ type FsBrowseResult struct {
 	Entries     []FsTreeEntry `json:"entries"`
 }
 
-// FileSearchResult mirrors the TS assist search item: the desktop ⌘P
+// FileSearchResult is an assist file-search item: the desktop ⌘P
 // palette requires all four keys (score included).
 type FileSearchResult struct {
 	RelativePath string  `json:"relativePath"`

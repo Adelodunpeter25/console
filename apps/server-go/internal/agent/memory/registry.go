@@ -1,5 +1,5 @@
-// Memory store registry. Port of agent/src/memory/registry.ts: resolves
-// (scope, projectId) to a cached store instance with LRU eviction.
+// Memory store registry: resolves (scope, projectId) to a
+// cached store instance with LRU eviction.
 package memory
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
-// MaxCachedProjectStores mirrors the TS LRU cap.
+// MaxCachedProjectStores is the LRU cap on cached project stores.
 const MaxCachedProjectStores = 50
 
 // Registry opens memory databases on demand:
@@ -96,7 +96,7 @@ func (r *Registry) ForGlobal() (*Store, error) {
 }
 
 // Resolve returns the store for a scope, requiring a project id for the
-// project scope (mirrors the TS resolve error).
+// project scope.
 func (r *Registry) Resolve(scope Scope, projectID string) (*Store, error) {
 	if scope == ScopeGlobal {
 		return r.ForGlobal()

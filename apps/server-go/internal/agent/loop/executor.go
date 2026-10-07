@@ -1,6 +1,5 @@
 // Tool executor: runs model-requested tool calls through the registry with
-// permission resolution, emitting events. Port of
-// apps/server/agent/src/service/tool-executor.ts (initial slice).
+// permission resolution, emitting events.
 package loop
 
 import (
@@ -57,8 +56,8 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		}
 		ok, err := e.approver.Approve(ctx, req)
 		if err != nil {
-			// Timeout/abort/steer while waiting fails this call only (TS
-			// parity); the loop sees ctx and stops on its own when aborted.
+			// Timeout/abort/steer while waiting fails this call only; the
+			// loop sees ctx and stops on its own when aborted.
 			return e.errResult(call, e.failureMessage(ctx, err)), nil
 		}
 		if !ok {
@@ -90,7 +89,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	if err != nil {
 		// Every tool failure (including ask timeouts and "Run ended"
 		// rejections) becomes an isError result the model can react to,
-		// mirroring the TS executor; it never tears down the whole run.
+		// it never tears down the whole run.
 		return e.errResult(call, e.failureMessage(ctx, err)), nil
 	}
 	slog.Debug("tool executed", "tool", call.Name, "call", call.ID)
@@ -137,8 +136,8 @@ func (e *Executor) errResult(call tools.ToolCall, errMsg string) tools.ToolResul
 	}
 }
 
-// newRequestID mints a unique id per permission prompt (mirroring the TS
-// randomUUID), so concurrent sessions can never collide on one map key.
+// newRequestID mints a unique id per permission prompt, so concurrent
+// sessions can never collide on one map key.
 func newRequestID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {

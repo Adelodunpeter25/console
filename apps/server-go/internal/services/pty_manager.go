@@ -1,7 +1,6 @@
-// PTY manager for the terminal WebSocket. Port of
-// apps/server/api/src/terminal/pty.manager.ts (JSON + binary protocol).
+// PTY manager for the terminal WebSocket (JSON + binary protocol).
 //
-// Performance hardening mirrors the Bun version:
+// Performance hardening:
 //   - output coalescing (8ms window / 4KB early-flush / 64KB frame cap)
 //   - bounded queues with oldest-drop (8MB cap) so flooding programs can't OOM
 //   - pause/resume for send-buffer backpressure
@@ -349,9 +348,8 @@ type PtyManager struct {
 	sessions   map[string]*PtySession
 	spawnTimes []int64
 
-	// ports and projectByDir back the same live dev-server detection as
-	// the TS pty.manager.ts: every raw PTY read is scanned for
-	// localhost:PORT candidates (mirrors portRegistry.observeOutput), and
+	// ports and projectByDir back live dev-server detection: every raw
+	// PTY read is scanned for localhost:PORT candidates, and
 	// the session's owner entry is cleaned up on exit. Both are optional —
 	// a nil ports registry disables detection entirely (e.g. tests).
 	ports        *PortRegistry
@@ -359,10 +357,9 @@ type PtyManager struct {
 }
 
 // NewPtyManager wires port-forward auto-detection: ports may be nil to
-// disable it (matching a manager with no registry attached). projectByDir
-// resolves a spawn's cwd to a project id for scoping detected ports,
-// mirroring pty.manager.ts's getSharedSessionStorage().getProjectByDir(cwd)
-// lookup; nil means every session is unscoped (empty project id).
+// disable it (a manager with no registry attached). projectByDir
+// resolves a spawn's cwd to a project id for scoping detected ports;
+// nil means every session is unscoped (empty project id).
 func NewPtyManager(ports *PortRegistry, projectByDir func(cwd string) string) *PtyManager {
 	return &PtyManager{sessions: make(map[string]*PtySession), ports: ports, projectByDir: projectByDir}
 }

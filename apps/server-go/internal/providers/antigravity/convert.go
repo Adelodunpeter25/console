@@ -1,6 +1,5 @@
 // Antigravity wire conversion: loop messages/tools to Gemini Content
-// format. Port of apps/server/providers/src/shared/convert-messages.ts and
-// convert-tools.ts.
+// format.
 package antigravity
 
 import (
@@ -244,8 +243,8 @@ type GeminiFunctionDeclaration struct {
 }
 
 var ccaBannedKeywords = map[string]bool{
-	// $id is Go-specific: invopop/jsonschema emits a top-level $id that the
-	// TS zod-to-json-schema generator never produces; CCA rejects it too.
+	// $id is Go-specific: invopop/jsonschema emits a top-level $id
+	// that CCA rejects.
 	"$id":     true,
 	"$schema": true, "$ref": true, "$defs": true, "$dynamicRef": true, "$dynamicAnchor": true,
 	"exclusiveMinimum": true, "exclusiveMaximum": true, "minimum": true, "maximum": true,

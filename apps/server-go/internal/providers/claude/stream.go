@@ -1,6 +1,5 @@
-// Claude Messages streaming provider. Port of
-// apps/server/providers/src/claude/stream-fn.ts: request body, Anthropic
-// SSE parsing, tool_use reassembly, usage normalization. Implements
+// Claude Messages streaming provider: request body, Anthropic SSE
+// parsing, tool_use reassembly, usage normalization. Implements
 // loop.Provider so the agent loop drives turns without changes.
 package claude
 
@@ -168,7 +167,7 @@ type sseFrame struct {
 }
 
 // parseAnthropicSSE yields named frames, skipping [DONE]/blanks/malformed
-// chunks. Port of parseAnthropicSse in TS.
+// chunks.
 func parseAnthropicSSE(ctx context.Context, r io.Reader, handle func(sseFrame) error) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)

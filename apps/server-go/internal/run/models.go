@@ -23,8 +23,8 @@ import (
 // only while the stored title is still generic. Uses a fresh provider
 // instance so generation never interferes with the running turn.
 func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, hub *Hub) {
-	// Titles use the configured smol role model (TS generateSessionTitle
-	// parity), falling back to the run model.
+	// Titles use the configured smol role model, falling back to the run
+	// model.
 	titleModel := roles.ResolveRoleModel(roles.Smol, s.resolveModel(context.Background(), providerID, modelID), s.roleRef(roles.Smol))
 	title := ""
 	if provider, err := s.Lookup(titleModel.Provider); err == nil {
@@ -45,8 +45,7 @@ func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, h
 
 // resolveModel returns the catalog entry for a run model, consulting live
 // discovery (fetch-once-per-hour cache) before synthesizing a fallback
-// with inferred thinking levels for unknown ids (TS resolveRoleModel
-// parity).
+// with inferred thinking levels for unknown ids.
 func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) types.Model {
 	if found, ok := providers.FindModel(providerID, modelID); ok {
 		return found

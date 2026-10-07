@@ -1,6 +1,5 @@
-// Built-in `/init` slash command constants. Port of
-// apps/server/agent/src/commands/init.ts. Prompt-level only — the agent
-// does the work with its normal file tools.
+// Built-in `/init` slash command constants. Prompt-level only — the agent does
+// the work with its normal file tools.
 package systemprompt
 
 import (

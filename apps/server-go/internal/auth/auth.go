@@ -1,7 +1,6 @@
-// Codex OAuth login flow state. Port of the codex branch in
-// apps/server/api/src/services/auth.service.ts: pending PKCE verifiers
-// keyed by state token (10-minute TTL), login URL generation, and the
-// code-exchange callback. Other providers return "not supported" until
+// Codex OAuth login flow state: pending PKCE verifiers keyed by state
+// token (10-minute TTL), login URL generation, and the code-exchange
+// callback. Other providers return "not supported" until
 // their Go ports land.
 //
 // This lives outside services because the provider layer (codex → loop →
@@ -24,7 +23,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
-// pendingTTL mirrors the TS 10-minute OAuth state expiry.
+// pendingTTL is the 10-minute OAuth state expiry.
 const pendingTTL = 10 * time.Minute
 
 type pendingLogin struct {
@@ -236,7 +235,7 @@ func (s *AuthService) GetLoginURLFor(provider string) (LoginURL, error) {
 }
 
 // HandleCallback exchanges the authorization code, consuming the pending
-// state (single-use, like the TS service).
+// state (single-use).
 func (s *AuthService) HandleCallback(code, state string) (CallbackResult, error) {
 	return s.HandleCallbackFor("codex", code, state)
 }
@@ -319,7 +318,7 @@ func newStateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// newAntigravityStateToken mirrors login.ts randomBytes(16).toString("hex").
+// newAntigravityStateToken returns 16 random bytes, hex-encoded.
 func newAntigravityStateToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {

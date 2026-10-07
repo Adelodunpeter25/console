@@ -7,7 +7,7 @@ import (
 )
 
 // SaveSessionTodos replaces the persisted todo list for a session
-// (delete-then-insert, matching the TS session-todos.ts semantics).
+// (delete-then-insert).
 func (s *Service) SaveSessionTodos(sessionID string, items []types.TodoItem) error {
 	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
@@ -88,10 +88,10 @@ func (s *Service) ClearSessionTodos(sessionID string) error {
 }
 
 // ClearCompletedTodos wipes the session's todo list once every item is
-// "completed" — matching RunService's end-of-run cleanup in the TS server
-// (finally block of runAgentStream): a finished list is cleared so the next
-// run starts fresh, but a partially-done list is left alone. Call this
-// after an agent run settles, not from the todo tool itself.
+// "completed" — matching RunService's end-of-run cleanup: a finished list
+// is cleared so the next run starts fresh, but a partially-done list is
+// left alone. Call this after an agent run settles, not from the todo tool
+// itself.
 func (s *Service) ClearCompletedTodos(sessionID string) error {
 	items, err := s.GetSessionTodos(sessionID)
 	if err != nil {

@@ -1,5 +1,4 @@
-// Usage quota service. Port of apps/server/api/src/services/usage.service.ts
-// (codex slice): 60s cached reports with in-flight dedup and a 5s upstream
+// Usage quota service: 60s cached reports with in-flight dedup and a 5s upstream
 // cap. Lives in providers/usage because services cannot import the codex
 // provider (codex → loop → services cycle).
 package usage
@@ -45,7 +44,7 @@ func NewService() *Service {
 	return &Service{cache: map[string]cacheEntry{}, inflight: map[string]*call{}}
 }
 
-// IsValidProvider mirrors the TS route check.
+// IsValidProvider reports whether provider is a supported usage provider.
 func IsValidProvider(provider string) bool {
 	for _, p := range usageProviders {
 		if p == provider {

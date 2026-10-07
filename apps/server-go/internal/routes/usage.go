@@ -1,5 +1,4 @@
-// Usage routes (/api/usage, /api/providers/:id/usage). Port of
-// apps/server/api/src/routes/usage.ts.
+// Usage routes (/api/usage, /api/providers/:id/usage).
 //
 // Fourth domain on the shared protobuf schema, and the first trimmed one:
 // response payloads are the canonical proto reports (see

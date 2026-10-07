@@ -1,5 +1,4 @@
-// Environment / workstation info for the system prompt. Port of
-// apps/server/agent/src/systemprompt/environment.ts.
+// Environment / workstation info for the system prompt.
 package systemprompt
 
 import (

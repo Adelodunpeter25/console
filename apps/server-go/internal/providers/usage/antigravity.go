@@ -1,5 +1,4 @@
-// Antigravity quota fetcher. Port of
-// providers/src/usage/google-antigravity.ts: POST
+// Antigravity quota fetcher: POST
 // /v1internal:fetchAvailableModels with {project}, normalizing the many
 // quotaInfo/quotaInfos/dailyQuotaInfo*/weeklyQuotaInfo*/quotaInfoByTier/
 // quotaInfoByWindow shapes into a deduped UsageReport.
@@ -301,7 +300,7 @@ func agFormatCounterName(info agQuotaInfo) string {
 }
 
 // agSingleOrList reads a field that may be a single object or an array of
-// objects, mirroring the TS `AntigravityQuotaInfo | AntigravityQuotaInfo[]`.
+// objects.
 func agSingleOrList(v any) []map[string]any {
 	switch val := v.(type) {
 	case map[string]any:

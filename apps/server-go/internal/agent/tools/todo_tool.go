@@ -1,6 +1,5 @@
 // todo tool: session-scoped task list, persisted to the session's
-// session_todos table (survives restarts and session reload). Port of
-// apps/server/agent/src/tools/todo.ts + agent/src/session/session-todos.ts.
+// session_todos table (survives restarts and session reload).
 package tools
 
 import (
@@ -49,10 +48,10 @@ func renderTodoList(title string, items []types.TodoItem) []map[string]any {
 // NewTodoTool builds a todo tool bound to one session: reads/writes persist
 // through store. A nil store (used by the DefaultTools() singleton, which
 // has no session context) falls back to in-memory-only state for the
-// process lifetime — mirrors TS's unbound `createTodoTool()` default.
-// TodoUpdateHandler mirrors the TS TodoUpdateHandler: fired with a snapshot
-// copy after every op ("created" for init/append, "updated" for
-// start/done/view). The run service uses it to broadcast todoUpdate.
+// process lifetime.
+// TodoUpdateHandler is fired with a snapshot copy after every op ("created"
+// for init/append, "updated" for start/done/view). The run service uses it to
+// broadcast todoUpdate.
 type TodoUpdateHandler func(items []types.TodoItem, action string)
 
 func NewTodoTool(sessionID string, store TodoStore) Tool {

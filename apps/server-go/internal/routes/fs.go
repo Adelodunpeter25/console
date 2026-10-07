@@ -1,5 +1,4 @@
-// File browser & operations routes (/api/fs/*). Port of
-// apps/server/api/src/routes/fs.ts.
+// File browser & operations routes (/api/fs/*).
 //
 // Seventh domain on the shared protobuf schema. All JSON payloads are built
 // from console.v1 generated types; the {success, data} envelope, SSE framing,

@@ -1,8 +1,6 @@
-// Model roles and thinking-level validation. Port of
-// apps/server/agent/src/service/model-roles.ts (resolution),
-// role-resolver.ts (role entry point), and validate-thinking.ts.
+// Model roles and thinking-level validation.
 // Configured refs come from settings as "provider/model" or bare ids;
-// unknown ids synthesize a fallback entry like the TS resolver.
+// unknown ids synthesize a fallback entry.
 package roles
 
 import (
@@ -63,7 +61,7 @@ func InferThinkingLevels(provider, modelID string) (levels []string, def string)
 
 // ResolveRoleModel maps a configured role to a model, falling back to the
 // active model. Unknown ids synthesize a 128k entry with inferred levels;
-// unknown providers fall back entirely (TS parity).
+// unknown providers fall back entirely.
 func ResolveRoleModel(role string, fallback types.Model, configuredRef string) types.Model {
 	reference := strings.TrimSpace(configuredRef)
 	if reference == "" {

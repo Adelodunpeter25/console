@@ -1,5 +1,4 @@
-// Deterministic structural summaries of discarded turns. Port of
-// apps/server/agent/src/compaction/structural-summary.ts.
+// Deterministic structural summaries of discarded turns.
 package compaction
 
 import (
@@ -314,8 +313,7 @@ func asMessage(m any) messageView {
 	return messageView{}
 }
 
-// flatLines trims then collapses newline runs to spaces (TS
-// content.trim().replace(/\n+/g, " ")).
+// flatLines trims then collapses newline runs to spaces.
 func flatLines(s string) string {
 	var b strings.Builder
 	newlines := 0

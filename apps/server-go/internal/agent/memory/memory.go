@@ -1,6 +1,6 @@
-// Persistent cross-session memory. Port of agent/src/memory/: one
-// `memories` table per database file, deterministic keyword/tag recall
-// (no embeddings), and a registry resolving (scope, project) to stores.
+// Persistent cross-session memory: one `memories` table per
+// database file, deterministic keyword/tag recall (no embeddings), and a
+// registry resolving (scope, project) to stores.
 package memory
 
 import (

@@ -1,5 +1,4 @@
-// Codex quota fetcher. Port of providers/src/usage/openai-codex.ts:
-// GET {base}/wham/usage with the subscription token, parsed into a
+// Codex quota fetcher: GET {base}/wham/usage with the subscription token, parsed into a
 // UsageReport with primary/secondary/additional limits.
 package usage
 
@@ -279,7 +278,7 @@ func ParseCodexPayload(payload any, accountID, email string, nowMs int64) *Repor
 
 // FetchCodexUsage GETs the wham/usage endpoint and parses the report.
 // Returns (nil, nil) when not logged in, the token is expired, or the
-// upstream call fails — matching the TS provider's null contract.
+// upstream call fails.
 func FetchCodexUsage(ctx context.Context, client *http.Client, baseURL, accessToken, accountID, email string, expiresAtMs int64) (*Report, error) {
 	if accessToken == "" {
 		return nil, nil

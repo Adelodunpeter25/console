@@ -1,7 +1,6 @@
-// Desktop assistant support routes (/api/assist/*). Port of
-// apps/server/api/src/routes/assist.ts: slash-command autocomplete (init +
-// discovered skills) and fff-backed @-mention file search scoped to the
-// session cwd.
+// Desktop assistant support routes (/api/assist/*): slash-command
+// autocomplete (init + discovered skills) and @-mention file search scoped
+// to the session cwd.
 package routes
 
 import (
@@ -68,8 +67,8 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 	app.Get("/api/assist/files", handleSearch)
 }
 
-// resolveSessionCwd mirrors the TS handler: explicit session id param or
-// query, else the server cwd.
+// resolveSessionCwd returns the cwd of the session named by the sessionId
+// param or query, else the server cwd.
 func resolveSessionCwd(c *fiber.Ctx, sessions *services.SessionService) string {
 	sessionID := c.Params("sessionId")
 	if sessionID == "" {

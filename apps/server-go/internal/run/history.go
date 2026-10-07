@@ -24,7 +24,7 @@ func DecodeHistory(stored []json.RawMessage) []any {
 		}
 		// Transitional: pre-migration rows still carry the role-keyed
 		// shape. New writes are always canonical; drop this fallback
-		// once dev stores turn over (Phase 5 cleanup).
+		// once dev stores turn over.
 		if msg, ok := legacyDecodeMessage(raw); ok {
 			out = append(out, msg)
 		}

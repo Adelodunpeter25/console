@@ -1,5 +1,5 @@
 // Upgrade command - blind re-download of the latest `console` binary.
-// Port of apps/cli/commands/upgrade.ts: no version tags, no "already
+// There are no version tags and no "already
 // current" check — every push to main rebuilds the rolling release, so
 // upgrade always fetches and swaps (running it twice is harmless).
 package commands
@@ -59,7 +59,7 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 
 	// A Go binary is always compiled, so the binary swaps itself in place —
 	// unless running under `go run` (temp exe), where we target the install
-	// dir like the TS dev path does via CONSOLE_INSTALL_DIR.
+	// dir (overridable via CONSOLE_INSTALL_DIR).
 	if exe, err := os.Executable(); err == nil && !isGoBuildTemp(exe) {
 		dir := filepath.Dir(exe)
 		return upgradeTarget{suffix: suffix, binPath: exe, libPath: filepath.Join(dir, libFile), libAsset: libAsset}, nil

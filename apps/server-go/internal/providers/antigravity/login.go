@@ -1,6 +1,5 @@
-// Antigravity interactive OAuth handshake. Port of
-// apps/server/providers/src/auth/login.ts (exchangeCodeForTokens,
-// getUserEmail, loadCodeAssist, onboardUser, completeAuthFlowWithCode).
+// Antigravity interactive OAuth handshake: code exchange, user email lookup,
+// loadCodeAssist, onboardUser, and completing the auth flow.
 package antigravity
 
 import (
@@ -18,14 +17,13 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
-// Tier mirrors the {id, isDefault} tier shape in login.ts.
+// Tier is the {id, isDefault} tier shape.
 type Tier struct {
 	ID        string `json:"id,omitempty"`
 	IsDefault bool   `json:"isDefault,omitempty"`
 }
 
-// TierFree and TierLegacy mirror TIER_FREE / TIER_LEGACY in login.ts.
-// TIER_STANDARD is defined but never used in TS, so it is not ported.
+// TierFree and TierLegacy are the tier IDs used during onboarding.
 const (
 	TierFree   = "free-tier"
 	TierLegacy = "legacy-tier"
@@ -65,7 +63,7 @@ func RedirectURI() string {
 }
 
 // AuthorizationURL builds the installed-app authorize URL + redirect URI.
-// Param order mirrors login.ts: client_id, response_type, scope,
+// Param order: client_id, response_type, scope,
 // redirect_uri, state, access_type, prompt. Antigravity does not use PKCE.
 func AuthorizationURL(state string) (authURL, redirectURI string) {
 	redirectURI = RedirectURI()
@@ -140,8 +138,8 @@ func GetUserEmail(client *http.Client, accessToken string) (string, error) {
 	return data.Email, nil
 }
 
-// GetDefaultTier mirrors getDefaultTier in login.ts: legacy-tier when
-// allowedTiers is empty or has no default.
+// GetDefaultTier returns legacy-tier when allowedTiers is empty or has no
+// default.
 func GetDefaultTier(allowedTiers []Tier) Tier {
 	if len(allowedTiers) == 0 {
 		return Tier{ID: TierLegacy}
@@ -154,8 +152,8 @@ func GetDefaultTier(allowedTiers []Tier) Tier {
 	return Tier{ID: TierLegacy}
 }
 
-// ReadProjectId mirrors readProjectId in login.ts: cloudaicompanionProject
-// may be a bare string or {id: string}.
+// ReadProjectId extracts the project ID: cloudaicompanionProject may be a
+// bare string or {id: string}.
 func ReadProjectId(value any) string {
 	switch v := value.(type) {
 	case string:
@@ -215,7 +213,8 @@ func codeAssistMetadataBody(extra map[string]any) []byte {
 	return raw
 }
 
-// LoadCodeAssist mirrors loadCodeAssist in login.ts.
+// LoadCodeAssist discovers the Cloud Code Assist project ID, onboarding the
+// user if needed.
 func LoadCodeAssist(client *http.Client, accessToken, explicitProjectID string) (string, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
@@ -262,7 +261,7 @@ func LoadCodeAssist(client *http.Client, accessToken, explicitProjectID string) 
 	return OnboardUser(client, accessToken, tierID, envProjectID)
 }
 
-// OnboardUser mirrors onboardUser in login.ts, polling the long-running
+// OnboardUser onboards the user, polling the long-running
 // operation up to 30 times at 1s.
 func OnboardUser(client *http.Client, accessToken, tierID, envProjectID string) (string, error) {
 	if client == nil {
@@ -336,7 +335,8 @@ func OnboardUser(client *http.Client, accessToken, tierID, envProjectID string) 
 	return "", fmt.Errorf("Could not discover or provision a Google Cloud project. Try setting the GOOGLE_CLOUD_PROJECT or GOOGLE_CLOUD_PROJECT_ID environment variable.")
 }
 
-// CompleteAuthFlowWithCode mirrors completeAuthFlowWithCode in login.ts.
+// CompleteAuthFlowWithCode exchanges the authorization code and resolves the
+// user's email and project ID into a credential.
 func CompleteAuthFlowWithCode(client *http.Client, code, explicitProjectID string) (OAuthCredential, error) {
 	redirectURI := RedirectURI()
 	tokens, err := ExchangeCode(client, code, redirectURI)
@@ -358,7 +358,8 @@ func CompleteAuthFlowWithCode(client *http.Client, code, explicitProjectID strin
 	}, nil
 }
 
-// ConfigPath mirrors provider-config.ts: ~/.console/antigravity-config.json.
+// ConfigPath returns ~/.console/antigravity-config.json (overridable via
+// ANTIGRAVITY_CONFIG_PATH).
 func ConfigPath() string {
 	return shared.CredentialPath("ANTIGRAVITY_CONFIG_PATH", "antigravity-config.json")
 }

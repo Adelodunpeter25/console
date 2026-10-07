@@ -1,5 +1,5 @@
 // SystemPromptBuilder — assemble the final system prompt from layered
-// sources. Port of apps/server/agent/src/systemprompt/builder.ts.
+// sources.
 //
 // The prompt has two parts. StableSystem holds what never changes within a
 // session and is sent as the system prompt: identity/SYSTEM.md,
@@ -51,7 +51,7 @@ type DiscoveredContext struct {
 
 // BuildOptions configures one discovery + prompt-assembly run. The
 // workspace tree section is included by default; set SkipWorkspaceTree to
-// omit it (matches the TS `includeWorkspaceTree: false` option).
+// omit it.
 type BuildOptions struct {
 	Cwd               string
 	Home              string

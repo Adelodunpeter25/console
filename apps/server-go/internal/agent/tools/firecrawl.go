@@ -1,5 +1,4 @@
-// Firecrawl HTTP client — keyless-first. Port of
-// apps/server/agent/src/tools/firecrawl.ts. Uses
+// Firecrawl HTTP client — keyless-first. Uses
 // https://api.firecrawl.dev/v1 without Authorization by default; sends a
 // Bearer token when FIRECRAWL_API_KEY is set. Supports self-hosted via
 // FIRECRAWL_BASE_URL.

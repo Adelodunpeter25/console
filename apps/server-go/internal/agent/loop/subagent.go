@@ -1,8 +1,7 @@
 // Subagent tool: delegate a focused sub-task to an isolated nested agent
-// run. Port of apps/server/agent/src/tools/subagent.ts: same input shape,
-// no-subagent recursion, start/activity/end lifecycle events, text summary
-// result. The nested run persists nothing (in-memory agent); lifecycle is
-// reported through OnEvent for the parent to broadcast/persist.
+// run: no-subagent recursion, start/activity/end lifecycle events, text
+// summary result. The nested run persists nothing (in-memory agent);
+// lifecycle is reported through OnEvent for the parent to broadcast/persist.
 package loop
 
 import (
@@ -16,7 +15,7 @@ import (
 )
 
 // SubagentContext wires a subagent tool run. A nil context yields the
-// simulated no-model response (TS parity for static registration).
+// simulated no-model response (used for static registration).
 type SubagentContext struct {
 	Provider Provider
 	// Model is the parent's model ID; the nested run reuses it (providers
@@ -52,7 +51,7 @@ type SubagentStartInfo struct {
 	Name           string `json:"name"`
 	Role           string `json:"role"`
 	Prompt         string `json:"prompt"`
-	// MaxTurns mirrors the TS subagent default (10); the desktop requires it.
+	// MaxTurns is the nested run's turn limit (default 10); the desktop requires it.
 	MaxTurns int `json:"maxTurns"`
 }
 
@@ -222,9 +221,9 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	return textResult(fmt.Sprintf("Subagent [%s] Completed Task:\n%s", name, final)), nil
 }
 
-// textResult wraps a formatted string as the MCP-style content array the TS
-// server always sends over the wire (mirrors tools.textResult; duplicated
-// here since it is unexported across the package boundary).
+// textResult wraps a formatted string as the MCP-style content array that is
+// always sent over the wire (mirrors tools.textResult; duplicated here since
+// it is unexported across the package boundary).
 func textResult(text string) []map[string]any {
 	return []map[string]any{{"type": "text", "text": text}}
 }

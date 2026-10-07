@@ -1,5 +1,4 @@
-// Project script routes (/projects/:projectId/scripts/*). Port of
-// apps/server/api/src/routes/project-scripts.ts.
+// Project script routes (/projects/:projectId/scripts/*).
 //
 // Sixth domain on the shared protobuf schema (desktop + server only; mobile
 // has no scripts client). List, run, and stop payloads are built from
@@ -161,7 +160,7 @@ func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 				}
 				return sse.Send(name, string(raw))
 			}
-			// End the stream when the run stops running, like the TS
+			// End the stream when the run stops running, detected by a
 			// 100ms status poll.
 			poll := time.NewTicker(100 * time.Millisecond)
 			defer poll.Stop()

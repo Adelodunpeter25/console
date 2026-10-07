@@ -14,8 +14,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
-// Execute runs the CLI. One deliberate flag divergence from the old TS CLI:
-// `-h` stays the help flag (Go convention), so host is long-only `--host`.
+// Execute runs the CLI. `-h` stays the help flag (Go convention), so host
+// is long-only `--host`.
 func Execute() {
 	root := &cobra.Command{
 		Use:     "console",

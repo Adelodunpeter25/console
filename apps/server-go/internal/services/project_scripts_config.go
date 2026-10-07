@@ -1,5 +1,4 @@
-// console.toml script parsing. Port of
-// apps/server/api/src/services/project-scripts/config.ts.
+// console.toml script parsing.
 package services
 
 import (
@@ -43,9 +42,8 @@ func parseProjectScripts(text string) ([]types.ProjectScript, error) {
 	if err != nil {
 		return nil, fail(err.Error())
 	}
-	// Mirror the TS server's Object.entries order: @iarna/toml builds a JS
-	// object in document order, so script ids come back in the order their
-	// [scripts.*] tables appear in console.toml. Go maps have no order, so
+	// Script ids come back in the order their [scripts.*] tables appear in
+	// console.toml (document order). Go maps have no order, so
 	// range doc.Scripts would reshuffle the panel on every cache refresh —
 	// MetaData.Keys() reports the same document order instead.
 	ordered := make([]string, 0, len(doc.Scripts))

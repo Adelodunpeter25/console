@@ -1,5 +1,4 @@
-// Model-role settings persisted to settings.json. Port of
-// apps/server/agent/src/service/model-roles.ts (load/save/patch semantics).
+// Model-role settings persisted to settings.json (load/save/patch semantics).
 package services
 
 import (

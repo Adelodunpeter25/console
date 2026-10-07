@@ -28,7 +28,7 @@ type Frame struct {
 // Hub broadcasts run events to live subscribers and keeps a bounded ring
 // for ?since= replay. Each subscriber has its own unbounded queue drained
 // by a pump goroutine, so a slow client never stalls the run and never
-// silently loses frames (TS event-stream parity). Only a client that falls
+// silently loses frames. Only a client that falls
 // subMaxBacklog frames behind — i.e. is effectively dead — is dropped.
 type Hub struct {
 	mu     sync.Mutex

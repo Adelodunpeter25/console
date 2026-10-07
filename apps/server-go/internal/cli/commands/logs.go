@@ -1,4 +1,4 @@
-// Logs command - tail daemon logs. Port of apps/cli/commands/logs.ts.
+// Logs command - tail daemon logs.
 package commands
 
 import (
@@ -10,7 +10,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
-// LogsOptions mirrors the TS LogsOptions: follow streams, lines caps output.
+// LogsOptions configures log tailing: follow streams, lines caps output.
 type LogsOptions struct {
 	Follow bool
 	Lines  string

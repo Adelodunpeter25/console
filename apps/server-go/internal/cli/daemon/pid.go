@@ -1,5 +1,4 @@
-// PID file management and process control. Port of the PID/kill helpers in
-// apps/cli/daemon-manager.ts.
+// PID file management and process control.
 package daemon
 
 import (

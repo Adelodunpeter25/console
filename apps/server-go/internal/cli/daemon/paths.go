@@ -1,7 +1,4 @@
-// Storage path resolution. Port of apps/cli/daemon-manager.ts's directory
-// helpers. Compiled Go binaries have no NODE_ENV quirk to work around (that
-// was a Bun-compiled-binary artifact), so CONSOLE_ENV alone decides mode —
-// simpler than the TS side, same storage layout.
+// Storage path resolution. CONSOLE_ENV alone decides the storage mode.
 package daemon
 
 import (

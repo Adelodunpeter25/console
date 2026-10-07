@@ -1,6 +1,5 @@
-// Conversation message types. Field names match the TS agent messages
-// (apps/server/agent/src/types/message.ts) so session storage stays
-// compatible.
+// Conversation message types. Field names are part of the persisted session
+// storage format, so they must stay stable.
 package loop
 
 import (
@@ -63,7 +62,6 @@ const (
 )
 
 // TurnUsage is the normalized per-turn token usage with cache breakdown.
-// Port of packages/types/src/cache.ts TurnUsage.
 type TurnUsage struct {
 	Input           int         `json:"input"`
 	CacheRead       int         `json:"cacheRead"`

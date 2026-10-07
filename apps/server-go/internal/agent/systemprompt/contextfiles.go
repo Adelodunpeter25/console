@@ -1,5 +1,4 @@
-// AGENTS.md / CLAUDE.md context-file discovery. Port of
-// apps/server/agent/src/systemprompt/discover-agents-md.ts.
+// AGENTS.md / CLAUDE.md context-file discovery.
 package systemprompt
 
 import (

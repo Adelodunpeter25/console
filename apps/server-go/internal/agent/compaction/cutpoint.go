@@ -1,6 +1,5 @@
 // Cut-point selection: discard old turns without orphaning tool results
-// from their calls or breaking provider role alternation. Port of
-// apps/server/agent/src/compaction/cut-point.ts.
+// from their calls or breaking provider role alternation.
 package compaction
 
 import (

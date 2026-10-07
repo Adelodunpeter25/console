@@ -1,8 +1,7 @@
-// LLM compaction summaries via a text-capable provider. Port of
-// apps/server/agent/src/compaction/llm-compaction.ts: flatten discarded
+// LLM compaction summaries via a text-capable provider: flatten discarded
 // turns to a bounded transcript, pack into one user message, and stream a
 // narrative summary. Opt-in via Options.SummaryStrategy "llm"; failures
-// fall back to structural (TS createSmolSummarizer parity).
+// fall back to structural.
 package compaction
 
 import (

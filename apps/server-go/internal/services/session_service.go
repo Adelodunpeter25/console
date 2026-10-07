@@ -191,7 +191,7 @@ func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) 
 }
 
 // SoftDelete marks a session deleted (unconditional, idempotent success for
-// known ids — mirrors the TS deleteSession). When the session owns a clean
+// known ids). When the session owns a clean
 // worktree, the worktree and its branch are removed immediately as part of
 // this call: no reason to make the user wait a week for disk space back on
 // a worktree with nothing in it. A dirty worktree (uncommitted work) is
@@ -254,8 +254,7 @@ func (s *SessionService) UpdateModel(sessionID, modelID, provider string) error 
 
 // UpdateCwd moves a session to a new working directory. projectGiven
 // distinguishes an omitted projectId (false — keep the current link) from
-// an explicit null (true with nil — drop to a scratchpad session), matching
-// the TS updateCwd tri-state.
+// an explicit null (true with nil — drop to a scratchpad session).
 func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string, projectGiven bool) error {
 	err := s.inner.UpdateCwd(sessionID, cwd, projectID, projectGiven)
 	if err == nil && cwd != "" && manager != nil {

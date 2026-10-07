@@ -1,4 +1,4 @@
-// Port registry types ported from port-registry.service.ts.
+// Port registry types.
 package types
 
 type ClientPort struct {

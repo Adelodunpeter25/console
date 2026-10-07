@@ -1,5 +1,4 @@
-// Project script types ported from
-// apps/server/api/src/services/project-scripts/types.ts.
+// Project script types.
 package types
 
 type ProjectScript struct {

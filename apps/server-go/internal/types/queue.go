@@ -1,5 +1,4 @@
-// Queued-prompt types. Mirrors QueuedPrompt in packages/types/src/api.ts:
-// at most one staged prompt per session, auto-run when the active turn
+// Queued-prompt types: at most one staged prompt per session, auto-run when the active turn
 // settles (or steered early).
 package types
 

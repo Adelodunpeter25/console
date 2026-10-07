@@ -1,5 +1,4 @@
-// Filesystem walk-up helpers for config discovery. Port of
-// apps/server/agent/src/systemprompt/walk.ts.
+// Filesystem walk-up helpers for config discovery.
 package systemprompt
 
 import (

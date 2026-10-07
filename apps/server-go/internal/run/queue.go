@@ -1,5 +1,4 @@
-// Queued prompts and steering. Port of the queue slice of
-// apps/server/api/src/services/run.service.ts: stage (or replace) the
+// Queued prompts and steering: stage (or replace) the
 // prompt that runs once the active turn settles, edit/fetch/discard it,
 // and steer (halt the run, staged prompt drains next).
 package run

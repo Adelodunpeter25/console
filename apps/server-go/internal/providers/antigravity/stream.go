@@ -1,6 +1,4 @@
-// Antigravity CCA streaming provider. Port of
-// apps/server/providers/src/antigravity/stream-fn.ts and
-// apps/server/providers/src/shared/stream-core.ts. Implements
+// Antigravity CCA streaming provider. Implements
 // loop.Provider so the agent loop drives turns without changes.
 package antigravity
 

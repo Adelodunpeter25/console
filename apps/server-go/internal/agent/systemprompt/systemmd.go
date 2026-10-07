@@ -1,5 +1,4 @@
-// SYSTEM.md discovery: project overrides win over user-level. Port of
-// apps/server/agent/src/systemprompt/discover-system-md.ts.
+// SYSTEM.md discovery: project overrides win over user-level.
 package systemprompt
 
 import (

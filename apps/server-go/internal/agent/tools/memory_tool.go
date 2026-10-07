@@ -1,6 +1,6 @@
-// memory tool: persistent cross-session facts. Port of
-// apps/server/agent/src/tools/memory.ts (store/recall/list/edit/delete
-// over project/global scopes, keyword recall, tag rendering).
+// memory tool: persistent cross-session facts
+// (store/recall/list/edit/delete over project/global scopes, keyword recall,
+// tag rendering).
 package tools
 
 import (

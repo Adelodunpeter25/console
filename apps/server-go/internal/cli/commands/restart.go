@@ -1,4 +1,4 @@
-// Restart command - restart the daemon. Port of apps/cli/commands/restart.ts.
+// Restart command - restart the daemon.
 package commands
 
 import (
@@ -7,7 +7,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
-// RestartOptions mirrors the TS RestartOptions. Dev pins dev storage;
+// RestartOptions configures restart. Dev pins dev storage;
 // otherwise the running daemon's storage mode is preserved.
 type RestartOptions struct {
 	Port string
@@ -16,8 +16,7 @@ type RestartOptions struct {
 }
 
 // RestartDaemon stops the running daemon (if any) and starts it again.
-// Unlike the TS version, restarting a stopped daemon works instead of
-// exiting early (TS stopDaemon calls process.exit when nothing runs).
+// Restarting a stopped daemon works instead of exiting early.
 func RestartDaemon(options RestartOptions) error {
 	fmt.Println("Restarting daemon...")
 

@@ -1,5 +1,4 @@
 // Claude (Anthropic subscription) backend constants.
-// Port of apps/server/providers/src/claude/constants.ts.
 package claude
 
 import (
@@ -132,7 +131,7 @@ const MaxOutputTokens = 64_000
 // Must stay below MaxOutputTokens.
 const ThinkingBudgetTokens = 8192
 
-// ClaudeThinkingLevels mirrors CLAUDE_THINKING_LEVELS in TS: Claude
+// ClaudeThinkingLevels lists the supported thinking levels: Claude
 // supports 5 levels (low..max) — no "none" or "minimal".
 var ClaudeThinkingLevels = []string{"low", "medium", "high", "xhigh", "max"}
 

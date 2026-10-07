@@ -1,4 +1,4 @@
-// Claude quota fetcher. Port of providers/src/usage/claude.ts: GET
+// Claude quota fetcher: GET
 // {base}/usage with the subscription OAuth token, parsed into a
 // UsageReport with 5h/7d/scoped/extra limits.
 package usage
@@ -29,7 +29,7 @@ func claudeHeaders(accessToken string) map[string]string {
 	}
 }
 
-// normalizeClaudeUsageBaseURL mirrors normalizeBaseUrl in the TS provider.
+// normalizeClaudeUsageBaseURL trims whitespace and trailing slashes from baseURL.
 func normalizeClaudeUsageBaseURL(baseURL string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmed == "" {
@@ -145,7 +145,7 @@ func parseClaudeLimitEntries(raw any) []claudeLimitEntry {
 	return out
 }
 
-// claudeBuildLimit mirrors the TS buildLimit: fixed window duration/label
+// claudeBuildLimit builds a limit with a fixed window duration/label
 // (not derived from payload seconds, unlike Codex), percent amount.
 func claudeBuildLimit(id, label, windowID, windowLabel string, durationMs int64, bucket *claudeBucket, provider, tier string, shared bool) *Limit {
 	if bucket == nil {
@@ -393,7 +393,7 @@ func ParseClaudePayload(payload any, provider, accountID, email, endpoint string
 
 // FetchClaudeUsage GETs the Claude /usage endpoint and parses the report.
 // Returns (nil, nil) when not logged in, the token is expired, or the
-// upstream call fails — matching the TS provider's null contract.
+// upstream call fails.
 func FetchClaudeUsage(ctx context.Context, client *http.Client, baseURL, accessToken, email string, expiresAtMs int64) (*Report, error) {
 	if accessToken == "" {
 		return nil, nil

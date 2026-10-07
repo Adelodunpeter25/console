@@ -1,5 +1,4 @@
-// editFile and batchWrite tools. Ports of
-// apps/server/agent/src/tools/edit-file.ts and batch-write.ts.
+// editFile and batchWrite tools.
 package tools
 
 import (
@@ -93,7 +92,7 @@ func writeOneFile(path, content string) batchWriteResult {
 	return batchWriteResult{Path: path, Status: "written", Bytes: len(content), Lines: strings.Count(content, "\n") + 1}
 }
 
-// formatBatchWriteResults mirrors batch-write.ts's formatResults.
+// formatBatchWriteResults renders the per-file batchWrite results as text.
 func formatBatchWriteResults(results []batchWriteResult) string {
 	var lines []string
 	written := 0

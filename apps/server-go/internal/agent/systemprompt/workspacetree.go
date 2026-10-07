@@ -1,5 +1,4 @@
-// Lightweight workspace tree for the system prompt. Port of
-// apps/server/agent/src/systemprompt/workspace-tree.ts.
+// Lightweight workspace tree for the system prompt.
 package systemprompt
 
 import (

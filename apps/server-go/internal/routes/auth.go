@@ -1,6 +1,5 @@
-// OAuth auth routes. Port of apps/server/api/src/routes/auth.ts (codex
-// slice): status, login URL generation, and the code-exchange callback.
-// Other providers answer 501 until their Go ports land.
+// OAuth auth routes (codex slice): status, login URL generation, and the
+// code-exchange callback. Other providers answer 501 until implemented.
 package routes
 
 import (

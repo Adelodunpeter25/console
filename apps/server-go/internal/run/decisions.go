@@ -1,5 +1,5 @@
 // Interactive decisions: tool permission approvals and ask-question
-// answers. Port of apps/server/api/src/services/run/run-decisions.ts.
+// answers.
 // Handlers broadcast the request on the run hub and block until the
 // answer/approve route resolves them, the run aborts, or they time out.
 package run
@@ -15,7 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-// decisionTimeout mirrors the TS 10-minute decision timeout.
+// decisionTimeout is how long a decision waits before timing out.
 const decisionTimeout = 10 * time.Minute
 
 type approvalResult struct {

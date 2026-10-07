@@ -1,7 +1,5 @@
-// Provider & model catalog routes. Port of
-// apps/server/api/src/routes/providers.ts: list providers and fetch
-// dynamic models. Only implemented providers serve live data; the rest
-// answer 501 until their Go ports land.
+// Provider & model catalog routes: list providers and fetch dynamic
+// models. Only implemented providers serve live data; the rest answer 501.
 package routes
 
 import (

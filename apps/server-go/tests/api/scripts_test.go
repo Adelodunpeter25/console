@@ -83,9 +83,8 @@ command = "y"
 	}
 }
 
-// The TS server surfaces scripts in console.toml document order
-// (Object.entries insertion order); the Go port must match instead of
-// exposing Go's randomized map iteration order.
+// Scripts are surfaced in console.toml document order instead of
+// Go's randomized map iteration order.
 func TestParseProjectScriptsDocumentOrder(t *testing.T) {
 	tomlText := `
 [scripts.zeta]
@@ -237,7 +236,7 @@ func scriptOutputContains(haystack, needle string) bool {
 }
 
 // Killing (or stopping) a script run must drop its detected ports from the
-// registry immediately via owner removal — mirroring the TS service — not on
+// registry immediately via owner removal, not on
 // the next liveness sweep, which used to leave stale rows in the dropdown.
 func TestStopRemovesDetectedPorts(t *testing.T) {
 	scripts, ports, projectID, root := newScriptServiceWithPorts(t)

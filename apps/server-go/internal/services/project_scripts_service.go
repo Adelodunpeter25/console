@@ -1,5 +1,4 @@
-// Managed script runs. Port of
-// apps/server/api/src/services/project-scripts/service.ts: one child shell
+// Managed script runs: one child shell
 // per run in the project's own process group, output ring-buffered to
 // 256KB, subscriber fan-out, SIGTERM-to-group stop.
 package services
@@ -84,8 +83,7 @@ func nowISO() string {
 }
 
 // BuildScriptEnv strips daemon-owned env vars so project dev servers that
-// honor $PORT don't inherit the console daemon's port. Port of
-// buildScriptEnv in the TS service.
+// honor $PORT don't inherit the console daemon's port.
 func BuildScriptEnv() []string {
 	out := make([]string, 0)
 	for _, kv := range os.Environ() {

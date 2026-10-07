@@ -98,8 +98,8 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	return out
 }
 
-// Session routes. Response shapes, status codes, and defaults mirror the TS
-// routes/sessions.ts + SessionService so the desktop client works unchanged.
+// RegisterSessionRoutes registers the /api/sessions routes, with the
+// response shapes, status codes, and defaults the desktop client expects.
 func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
 	h := app.Group("/api/sessions")
 
@@ -134,9 +134,9 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
-	// POST /api/sessions — create a new session. Field defaults mirror the
-	// TS SessionService.createSession (fallback model/provider, cwd, project
-	// inference, scratchpad for explicit-null projectId).
+	// POST /api/sessions — create a new session. Defaults: fallback
+	// model/provider, cwd, project inference, scratchpad for explicit-null
+	// projectId.
 	h.Post("/", func(c *fiber.Ctx) error {
 		var req types.CreateSessionOptions
 		if err := json.Unmarshal(c.Body(), &req); err != nil {
@@ -192,8 +192,8 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	})
 
 	// PATCH /api/sessions/:id — update title, model/provider, approval mode,
-	// or cwd/project (the latter only before the first message, mirroring
-	// the TS cwd lock). Returns the refreshed header.
+	// or cwd/project (the latter only before the first message).
+	// Returns the refreshed header.
 	h.Patch("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		var req struct {
@@ -224,8 +224,8 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		if present["cwd"] || present["projectId"] {
 			// Cwd lock: silently ignore project/cwd moves once the chat has
-			// messages (mirrors the TS updateSession no-op, which keeps the
-			// client's header refresh running).
+			// messages (a no-op update, which keeps the client's
+			// header refresh running).
 			if header.MessageCount == 0 {
 				cwd := header.Cwd
 				if req.Cwd != nil {
@@ -238,9 +238,8 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 					// null/"scratch" become scratch in UpdateCwd.
 					projectID = parseNullableString(c.Body(), "projectId")
 				} else if cwd != "" {
-					// Key absent: infer from cwd like the TS updateSession.
-					// No match means no project, same as TS's
-					// `project ? project.id : null`.
+					// Key absent: infer the project from cwd.
+					// No match means no project.
 					if found, err := sessions.ProjectByDir(cwd); err == nil && found != "" {
 						projectID = &found
 					}
@@ -478,12 +477,13 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	})
 }
 
-// sessionError mirrors the TS error shape with TS status codes.
+// sessionError writes the {success: false, error} response with the given
+// status code.
 func sessionError(c *fiber.Ctx, code int, message string) error {
 	return c.Status(code).JSON(fiber.Map{"success": false, "error": message})
 }
 
-// parsePageParams mirrors the TS get-session pagination: default limit 50,
+// parsePageParams reads get-session pagination: default limit 50,
 // both values positive integers when present.
 func parsePageParams(c *fiber.Ctx) (limit, before int64, ok bool) {
 	limit = 50
@@ -530,7 +530,7 @@ func bodyFieldIsNull(body []byte, key string) bool {
 }
 
 // parseNullableString reads a top-level JSON string key: nil for explicit
-// null (or when unparseable), matching the TS string|null DTO fields.
+// null (or when unparseable), matching the nullable string DTO fields.
 func parseNullableString(body []byte, key string) *string {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(body, &raw); err != nil {

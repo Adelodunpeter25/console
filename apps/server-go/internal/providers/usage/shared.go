@@ -1,7 +1,7 @@
 // Shared quota-report builders for provider usage fetchers (codex first,
 // claude/antigravity next). The math — window labels, percent amounts,
-// ok/warning/exhausted thresholds — mirrors the TS usage providers so
-// reports stay wire-compatible across backends.
+// ok/warning/exhausted thresholds — is shared so reports stay
+// wire-compatible across backends.
 package usage
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 // Number extracts a finite float64 from JSON-ish values (numbers and
-// numeric strings, mirroring the TS toNumber helper).
+// numeric strings).
 func Number(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -143,8 +143,8 @@ func BuildPercentAmount(usedPercent *float64) Amount {
 }
 
 // StatusForFraction maps a used fraction to ok/warning/exhausted/unknown.
-// explicitlyAllowed mirrors the TS buildUsageStatus rule: allowed===true
-// AND limitReached===false (absent is not false).
+// A limit counts as explicitly allowed only when allowed is true
+// AND limitReached is false (absent is not false).
 func StatusForFraction(usedFraction *float64, allowed, limitReached *bool) string {
 	if usedFraction == nil {
 		return "unknown"

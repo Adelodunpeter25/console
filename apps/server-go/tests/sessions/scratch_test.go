@@ -122,7 +122,7 @@ func TestScratchUpdateClearsProjectAndMakesDir(t *testing.T) {
 	}
 }
 
-// An omitted projectId keeps the current link (the TS `undefined` case).
+// An omitted projectId keeps the current link.
 func TestScratchUpdateOmittedProjectKeepsLink(t *testing.T) {
 	sessions, projects, _ := newScratchStore(t)
 	header := projectSession(t, sessions, projects)

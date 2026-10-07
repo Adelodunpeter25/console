@@ -1,5 +1,4 @@
-// Codex Responses streaming provider. Port of
-// apps/server/providers/src/codex/stream-fn.ts: request body, SSE parsing,
+// Codex Responses streaming provider: request body, SSE parsing,
 // function-call reassembly, usage normalization. Implements loop.Provider
 // so the agent loop drives turns without changes.
 //
@@ -172,7 +171,7 @@ func ConvertTools(defs []tools.Definition) []map[string]any {
 }
 
 // NormalizeSchema upgrades draft-07 boolean exclusiveMinimum/Maximum to
-// draft-2020-12 numeric form, mirroring normalizeCodexSchema in TS.
+// draft-2020-12 numeric form.
 func NormalizeSchema(value any) any {
 	switch v := value.(type) {
 	case []any:
@@ -302,10 +301,9 @@ func BuildRequestBody(modelID, systemPrompt string, messages []any, toolDefs []t
 }
 
 // emitCall pushes a single EventToolCall per call. Empty arguments fall back
-// to {} (mirrors TS parseToolCallArguments: "" → {}). The Emitted flag
-// prevents the done-handler + final flush from double-emitting; the Go loop
-// appends one ToolCallPart per event, so unlike the TS streamFn we must NOT
-// emit an initial empty event.
+// to {} ("" → {}). The Emitted flag prevents the done-handler + final flush
+// from double-emitting; the loop appends one ToolCallPart per event, so we
+// must NOT emit an initial empty event.
 func emitCall(c *shared.Call) *loop.Event {
 	if c.Emitted {
 		return nil
@@ -460,7 +458,7 @@ func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *st
 	})
 
 	// Flush incomplete calls (stream ended with only deltas) and the final
-	// usage delta before terminating — mirrors the TS finally block. The
+	// usage delta before terminating. The
 	// usage push must precede Complete/Fail (Push after termination drops).
 	for _, c := range acc.Unfinalized() {
 		if ev := emitCall(c); ev != nil {

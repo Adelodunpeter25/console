@@ -1,5 +1,5 @@
 // Codex ChatGPT OAuth: PKCE, authorize URL, code exchange, token refresh,
-// credential load/save. Port of apps/server/providers/src/codex/oauth.ts.
+// credential load/save.
 // Generic JWT/PKCE/file helpers live in providers/shared.
 package codex
 
@@ -43,7 +43,7 @@ type tokenResponse struct {
 	ExpiresIn    *int64 `json:"expires_in"`
 }
 
-// CredentialPath mirrors oauth.ts: CODEX_CREDENTIALS_PATH override,
+// CredentialPath returns the CODEX_CREDENTIALS_PATH override if set,
 // otherwise ~/.console/codex-creds.json.
 func CredentialPath() string {
 	return shared.CredentialPath("CODEX_CREDENTIALS_PATH", "codex-creds.json")
@@ -228,7 +228,7 @@ func LoadCredential() (ParsedCredential, error) {
 	if err != nil {
 		return ParsedCredential{}, err
 	}
-	// Tolerate extra whitespace/BOM-free JSON only (parity with TS readFile).
+	// Tolerate extra whitespace/BOM-free JSON only.
 	dec := json.NewDecoder(bytes.NewReader(bytes.TrimSpace(raw)))
 	var cred OAuthCredential
 	if err := dec.Decode(&cred); err != nil {

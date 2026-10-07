@@ -1,4 +1,4 @@
-// Git routes (/api/git/*). Port of apps/server/api/src/routes/git.ts.
+// Git routes (/api/git/*).
 //
 // Eighth domain on the shared protobuf schema. Status, diff, branches, and
 // checkout payloads are built from console.v1 generated types; the watch

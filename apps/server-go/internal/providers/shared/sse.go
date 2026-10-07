@@ -1,5 +1,4 @@
-// Shared SSE parsing for provider event streams. Ports
-// apps/server/providers/src/shared/sse-parser.ts: each `data: {...}` line
+// Shared SSE parsing for provider event streams: each `data: {...}` line
 // yields a JSON object; [DONE]/blank/malformed lines are skipped.
 package shared
 

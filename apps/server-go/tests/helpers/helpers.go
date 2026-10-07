@@ -1,4 +1,4 @@
-// Shared test doubles and fixtures, mirroring apps/server/tests/helpers/.
+// Shared test doubles and fixtures.
 // One home for the mocks every suite reuses so grouped test packages stay
 // decoupled from each other.
 package helpers

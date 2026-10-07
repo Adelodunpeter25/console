@@ -1,6 +1,6 @@
 // Shared OAuth helpers for subscription providers (codex, claude, ...).
-// Ports the generic parts of apps/server/providers/src/auth/token-store.ts
-// and the PKCE/token-POST helpers duplicated across provider oauth modules.
+// Covers credential-store basics and the PKCE/token-POST helpers common to
+// the provider oauth modules.
 package shared
 
 import (

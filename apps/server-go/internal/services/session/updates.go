@@ -1,5 +1,5 @@
 // Session mutations beyond create/list/load: restore, permanent delete,
-// field updates, status, subagents. Ports of the TS session-ops helpers.
+// field updates, status, subagents.
 package session
 
 import (
@@ -34,8 +34,8 @@ func (s *Service) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
 	return ids, rows.Err()
 }
 
-// Restore clears the soft-delete mark. Mirrors the TS restoreSession:
-// success for any known id, even one that was not deleted.
+// Restore clears the soft-delete mark. It succeeds for any known id, even
+// one that was not deleted.
 func (s *Service) Restore(sessionID string) (bool, error) {
 	res, err := s.manager.Global().Exec(
 		`UPDATE sessions SET deleted_at = NULL WHERE id = ?`, sessionID)
@@ -47,8 +47,8 @@ func (s *Service) Restore(sessionID string) (bool, error) {
 }
 
 // PermanentDelete irreversibly removes an already soft-deleted session:
-// per-session DB file, scratch working dir, then the index row. Mirrors the
-// TS permanentlyDeleteSession (false unless the session is soft-deleted).
+// per-session DB file, scratch working dir, then the index row. Returns false
+// unless the session is soft-deleted.
 func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 	var projectID sql.NullString
 	var deletedAt sql.NullInt64
@@ -99,7 +99,7 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 	return n > 0, nil
 }
 
-// removeDbFile mirrors the TS helper: main file plus WAL sidecars.
+// removeDbFile removes a session DB: main file plus WAL sidecars.
 func removeDbFile(dbPath string) {
 	_ = os.Remove(dbPath)
 	_ = os.Remove(dbPath + "-wal")
@@ -203,7 +203,7 @@ func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	return &headers[0], nil
 }
 
-// UpdateModel mirrors the TS updateModel: session_meta (when the DB file
+// UpdateModel updates session_meta (when the DB file
 // exists, to avoid materializing empty DBs) plus the global index.
 func (s *Service) UpdateModel(sessionID, modelID, provider string) error {
 	projectID, _, err := s.projectIDBySession(sessionID)
@@ -228,10 +228,10 @@ func (s *Service) UpdateModel(sessionID, modelID, provider string) error {
 	return err
 }
 
-// UpdateCwd mirrors the TS updateCwd: meta + index writes, then file
+// UpdateCwd does meta + index writes, then file
 // relocation when project ownership changes (never clobbers).
 //
-// projectGiven separates the three TS cases that a *string alone cannot:
+// projectGiven separates the three cases that a *string alone cannot:
 // absent (false) keeps the current link, an explicit null (true + nil)
 // clears it into a scratchpad, and a value (true) sets it.
 func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, projectGiven bool) error {
@@ -290,7 +290,7 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 	return nil
 }
 
-// normalizeProjectID mirrors the TS norm(): empty/"scratch" means no project.
+// normalizeProjectID normalizes a project id: empty/"scratch" means no project.
 func normalizeProjectID(p string) string {
 	if p == "" || p == "scratch" {
 		return ""
@@ -306,7 +306,7 @@ func scratchOrProjectPath(storageDir, projectID, sessionID string) string {
 }
 
 // sessionDBExists reports whether the per-session DB file is already
-// materialized (TS checks the open handle or the file for the same reason).
+// materialized.
 func (s *Service) sessionDBExists(sessionID, projectID string) bool {
 	if s.manager.StorageDir() == ":memory:" {
 		return false
@@ -315,7 +315,7 @@ func (s *Service) sessionDBExists(sessionID, projectID string) bool {
 }
 
 // relocateSessionDb moves a session DB file (plus WAL sidecars), never
-// clobbering an existing destination. Mirrors the TS helper.
+// clobbering an existing destination.
 func relocateSessionDb(fromPath, toPath string) bool {
 	if fromPath == toPath || !statFile(fromPath) || statFile(toPath) {
 		return false
@@ -368,7 +368,7 @@ func (s *Service) UpdateWorktree(sessionID, cwd, branch, repo string) error {
 	return err
 }
 
-// UpdateApprovalMode mirrors the TS updateApprovalMode.
+// UpdateApprovalMode updates a session's approval mode.
 func (s *Service) UpdateApprovalMode(sessionID, approvalMode string) error {
 	projectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
@@ -427,7 +427,7 @@ func (s *Service) UpdateStatus(sessionID, status string) error {
 	return err
 }
 
-// GetSubagents mirrors the TS getSessionSubagents: live (running) subagents
+// GetSubagents returns live (running) subagents
 // only, empty for unknown sessions.
 func (s *Service) GetSubagents(sessionID string) ([]types.SubagentInfo, error) {
 	projectID, ok, err := s.projectIDBySession(sessionID)

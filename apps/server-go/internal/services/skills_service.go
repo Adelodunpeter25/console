@@ -1,6 +1,5 @@
 // Skill discovery from `skills/` config dirs (flat .md and <name>/SKILL.md).
-// Port of apps/server/agent/src/systemprompt/discover-skills.ts + walk.ts:
-// user dirs (~/.console|agent|agents) then project ancestors (closest wins).
+// User dirs (~/.console|agent|agents) then project ancestors (closest wins).
 package services
 
 import (

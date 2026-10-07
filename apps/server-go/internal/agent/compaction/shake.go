@@ -1,5 +1,5 @@
 // Tool-output shaking: mechanically truncate bloated tool results before
-// throwing away whole turns. Port of apps/server/agent/src/compaction/shake.ts.
+// throwing away whole turns.
 package compaction
 
 import (

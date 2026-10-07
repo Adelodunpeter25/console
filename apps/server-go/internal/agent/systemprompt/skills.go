@@ -1,5 +1,4 @@
 // Skill discovery from `skills/` config dirs (flat .md and <name>/SKILL.md).
-// Port of apps/server/agent/src/systemprompt/discover-skills.ts.
 package systemprompt
 
 import (

@@ -1,5 +1,4 @@
-// Filesystem operations. Port of apps/server/api/src/services/fs.service.ts
-// and the preview gating rules in packages/types/src/fs.ts.
+// Filesystem operations and preview gating rules.
 package services
 
 import (
@@ -314,8 +313,7 @@ func (s *FsService) ReadFileContentWithMeta(path string, startLine, endLine int)
 	}, nil
 }
 
-// sliceLines extracts [startLine, endLine] (1-based, inclusive), matching
-// the TS implementation's semantics.
+// sliceLines extracts [startLine, endLine] (1-based, inclusive).
 func sliceLines(text string, startLine, endLine int) string {
 	if startLine == 0 && endLine == 0 {
 		return text
@@ -402,8 +400,7 @@ func (s *FsService) DeleteDirectory(path string) (bool, error) {
 // SearchFiles serves /api/fs/search. When the fff C library is available the
 // fuzzy search runs through its index (much faster, frecency-ranked); until
 // the index is warm — and always when fff is absent — it falls back to a
-// substring walk, mirroring the TS fff-node semantics. Items use the TS
-// FileSearchResult shape (relative/absolute paths plus score).
+// substring walk. Items carry relative/absolute paths plus a score.
 func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FileSearchResult, error) {
 	if manager != nil && manager.Enabled() {
 		if items, ok := manager.SearchAsync(root, query, limit); ok {

@@ -1,5 +1,4 @@
-// Cumulative file-operation tracking for summaries. Port of
-// apps/server/agent/src/compaction/file-tracker.ts.
+// Cumulative file-operation tracking for summaries.
 package compaction
 
 import (

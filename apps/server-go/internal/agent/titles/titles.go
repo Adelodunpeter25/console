@@ -1,7 +1,6 @@
-// Session title generation. Port of
-// apps/server/agent/src/service/session-title.ts: generic-title detection,
-// truncation fallback, sanitizing, and LLM generation (same-model; the TS
-// smol role has no Go resolver yet).
+// Session title generation: generic-title detection,
+// truncation fallback, sanitizing, and LLM generation (same-model; there is
+// no separate small-model role resolver yet).
 package titles
 
 import (
@@ -29,8 +28,8 @@ func IsGenericTitle(title string) bool {
 	}
 }
 
-// FallbackTitle truncates the prompt to 35 chars like the TS fallback. The
-// first letter is capitalized so a fallback title matches the generated ones.
+// FallbackTitle truncates the prompt to 35 chars. The first letter is
+// capitalized so a fallback title matches the generated ones.
 func FallbackTitle(prompt string) string {
 	compact := strings.Join(strings.Fields(prompt), " ")
 	if len([]rune(compact)) > 35 {

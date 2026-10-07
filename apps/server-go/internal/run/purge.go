@@ -1,5 +1,4 @@
-// Deleted-chat retention purge. Mirrors the TS purgeExpiredDeletedSessions:
-// permanently remove soft-deleted sessions past retention, skipping runs
+// Deleted-chat retention purge: permanently remove soft-deleted sessions past retention, skipping runs
 // in flight (deferred to a later sweep).
 package run
 
@@ -11,7 +10,7 @@ import (
 )
 
 // DeletedSessionRetention is how long soft-deleted chats stay restorable
-// (TS DELETED_SESSION_RETENTION_MS parity: 7 days).
+// (7 days).
 const DeletedSessionRetention = 7 * 24 * time.Hour
 
 // PurgeExpiredDeletedSessions permanently removes soft-deleted sessions

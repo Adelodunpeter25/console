@@ -1,6 +1,6 @@
 // webSearch tool: keyless Firecrawl search first, DuckDuckGo HTML scrape on
 // retryable failure, or Brave (requires BRAVE_SEARCH_API_KEY) when
-// explicitly requested. Port of apps/server/agent/src/tools/web-search.ts.
+// explicitly requested.
 package tools
 
 import (
@@ -73,7 +73,7 @@ func SetBraveSearchURLForTest(url string) (restore func()) {
 }
 
 // searchDuckDuckGo scrapes the no-JS "lite" HTML results page — no API key
-// required, best-effort regex parsing (mirrors the TS scraper).
+// required, best-effort regex parsing.
 func searchDuckDuckGo(ctx context.Context, query string, numResults int) ([]webSearchResult, error) {
 	reqURL := duckDuckGoURL + "?q=" + url.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)

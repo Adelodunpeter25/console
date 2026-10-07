@@ -1,7 +1,6 @@
 // Env command - manage provider API keys for the daemon.
-// Port of apps/cli/commands/env.ts: one hidden prompt per known service
-// key, empty input keeps the existing value, keys land in ~/.console/env
-// (mode 0600). Piped stdin works too: `echo "$KEY" | console env`.
+// One hidden prompt per known service key, empty input keeps the existing
+// value, keys land in ~/.console/env (mode 0600). Piped stdin works too: `echo "$KEY" | console env`.
 package commands
 
 import (
@@ -20,7 +19,7 @@ type serviceKey struct {
 	envVar  string
 }
 
-// serviceKeys mirrors SERVICE_KEYS in env.ts.
+// serviceKeys lists the services whose API keys `console env` prompts for.
 var serviceKeys = []serviceKey{{service: "firecrawl", envVar: "FIRECRAWL_API_KEY"}}
 
 func isValidValue(value string) bool {
@@ -28,7 +27,7 @@ func isValidValue(value string) bool {
 }
 
 // readHiddenLine reads one line without echoing it. Piped input returns the
-// first line; a TTY masks typed characters with * like the TS version.
+// first line; a TTY masks typed characters with *.
 func readHiddenLine() (string, error) {
 	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice == 0 {
 		reader := bufio.NewReader(os.Stdin)

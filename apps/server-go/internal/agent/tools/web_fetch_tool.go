@@ -1,8 +1,7 @@
-// webFetch tool: HTTP GET/POST/etc a URL, returning readable text. Port of
-// apps/server/agent/src/tools/fetch.ts. GET requests to likely web pages
-// try Firecrawl first (clean markdown extraction); everything else, and
-// any Firecrawl miss, falls back to a direct HTTP request with naive
-// HTML-to-text stripping.
+// webFetch tool: HTTP GET/POST/etc a URL, returning readable text.
+// GET requests to likely web pages try Firecrawl first (clean markdown
+// extraction); everything else, and any Firecrawl miss, falls back to a
+// direct HTTP request with naive HTML-to-text stripping.
 package tools
 
 import (

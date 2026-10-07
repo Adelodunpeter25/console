@@ -1,5 +1,4 @@
-// Terminal WebSocket endpoint (/api/terminals). Port of
-// apps/server/api/src/terminal/socket.route.ts: JSON frames
+// Terminal WebSocket endpoint (/api/terminals): JSON frames
 // {spawned|output|exit|error} server→client, {input|resize|kill}
 // client→server, plus the ?proto=binary tag-byte framing.
 //

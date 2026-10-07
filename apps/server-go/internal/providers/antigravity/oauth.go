@@ -1,5 +1,4 @@
-// Antigravity OAuth credential storage and refresh. Port of
-// apps/server/providers/src/auth/token-store.ts and token-refresh.ts.
+// Antigravity OAuth credential storage and refresh.
 package antigravity
 
 import (
@@ -36,8 +35,8 @@ type ParsedCredential struct {
 	Email        string
 }
 
-// CredentialPath mirrors token-store.ts: ANTIGRAVITY_CREDENTIALS_PATH
-// override, otherwise ~/.console/antigravity-creds.json.
+// CredentialPath returns the ANTIGRAVITY_CREDENTIALS_PATH override if set,
+// otherwise ~/.console/antigravity-creds.json.
 func CredentialPath() string {
 	return shared.CredentialPath("ANTIGRAVITY_CREDENTIALS_PATH", "antigravity-creds.json")
 }
@@ -60,8 +59,7 @@ func stringField(m map[string]any, keys ...string) string {
 	return ""
 }
 
-// normalizeExpiryMs converts epoch seconds or ms to ms, mirroring
-// normalizeExpiryMs in token-store.ts.
+// normalizeExpiryMs converts epoch seconds or ms to ms.
 func normalizeExpiryMs(v float64, ok bool) int64 {
 	if !ok || v <= 0 {
 		return 0

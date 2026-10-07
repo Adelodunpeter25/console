@@ -1,6 +1,5 @@
-// Git operations via the git CLI. Port of
-// apps/server/api/src/services/git.service.ts (status, diff, branches,
-// checkout) with the same parsing rules.
+// Git operations via the git CLI (status, diff, branches,
+// checkout).
 package services
 
 import (

@@ -8,7 +8,7 @@ import (
 
 // resultText extracts the text of the first MCP content block from a tool's
 // successful return value, unwrapping tools.Envelope when present. Tools
-// return this exact shape (mirroring the TS server's normalizeToolOutput)
+// return this exact shape (MCP-style content blocks)
 // so the desktop UI's result renderer has something to parse.
 func resultText(t *testing.T, out any) string {
 	t.Helper()

@@ -1,5 +1,4 @@
-// User-defined slash command discovery from `commands/*.md`. Port of
-// apps/server/agent/src/systemprompt/discover-commands.ts.
+// User-defined slash command discovery from `commands/*.md`.
 package systemprompt
 
 import (

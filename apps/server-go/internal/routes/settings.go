@@ -1,4 +1,4 @@
-// Settings routes (/api/settings). Port of apps/server/api/src/routes/settings.ts.
+// Settings routes (/api/settings).
 //
 // Second domain on the shared protobuf schema. Response payloads are built
 // from console.v1 generated types and encoded with protojson; the

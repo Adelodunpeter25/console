@@ -1,5 +1,4 @@
-// Localhost port discovery + reverse proxy. Port of
-// apps/server/api/src/services/port-registry.service.ts: observe terminal
+// Localhost port discovery + reverse proxy: observe terminal
 // and job output for localhost URLs, probe liveness, allocate a proxy port
 // per entry (HTTP + WebSocket passthrough), reap dead entries.
 package services
@@ -246,7 +245,7 @@ func (r *PortRegistry) entriesByProxy(proxyPort int) (*portEntry, bool) {
 	return nil, false
 }
 
-// List probes liveness and drops dead entries (like the TS list()).
+// List probes liveness and drops dead entries.
 func (r *PortRegistry) List(host, projectID string) []types.ClientPort {
 	r.mu.Lock()
 	entries := make([]*portEntry, 0, len(r.entries))

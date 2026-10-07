@@ -1,6 +1,4 @@
-// Claude model discovery. Port of the claude branch in
-// apps/server/agent/src/commands/provider-registry.ts (seed) and
-// apps/server/providers/src/claude/discovery.ts (live list).
+// Claude model discovery: static seed list plus live list.
 package claude
 
 import (

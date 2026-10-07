@@ -21,13 +21,13 @@ func New(manager *db.DB) *Service {
 	return &Service{manager: manager}
 }
 
-// TS parity constants from SessionService.createSession.
+// Fallback model and provider used when Create is not given one.
 const (
 	DefaultFallbackModel    = "claude-opus-4-6-thinking"
 	DefaultFallbackProvider = "antigravity"
 )
 
-// Create resolves TS-parity defaults (model/provider/title/cwd/project,
+// Create resolves defaults (model/provider/title/cwd/project,
 // scratchpad for explicit-null projectId) then writes the index + meta rows.
 func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, error) {
 	id := opts.ID
@@ -125,14 +125,14 @@ func worktreeCol(w *types.SessionWorktree, pick func(*types.SessionWorktree) str
 	return pick(w)
 }
 
-// ListFilter mirrors the TS listSessions options.
+// ListFilter holds the options for ListFiltered.
 type ListFilter struct {
 	Cwd         string
 	ProjectID   string
 	OnlyDeleted bool
 }
 
-// ListFiltered mirrors the TS listSessions: limit 100, newest first, cwd
+// ListFiltered lists sessions: limit 100, newest first, cwd
 // takes precedence over projectId, deleted filter flips the condition.
 func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	const limit = 100
@@ -230,7 +230,7 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 }
 
 // Load reads the header from the global index and history from the
-// per-session DB. Pagination mirrors the TS loadSession: rowid cursor,
+// per-session DB. Pagination uses a rowid cursor,
 // newest page first, limit <= 0 means all messages. Messages are the stored
 // content JSON with createdAt injected, exactly as the desktop parses them.
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
@@ -308,9 +308,8 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	return result, nil
 }
 
-// withCreatedAt injects createdAt into a stored message object, mirroring
-// the TS loadSession (msg.createdAt = r.created_at). Non-object payloads
-// pass through untouched.
+// withCreatedAt injects createdAt (the row's created_at) into a stored
+// message object. Non-object payloads pass through untouched.
 //
 // Timestamps inject as protojson strings and the row id as a string: the
 // canonical shape carries both on the wrapper, absent at persist time. The
@@ -334,8 +333,8 @@ func withCreatedAt(content string, createdAt int64, id string) json.RawMessage {
 	return out
 }
 
-// SoftDelete marks a session deleted; retention purge is 7 days. Mirrors
-// the TS deleteSession: unconditional, idempotent success for known ids.
+// SoftDelete marks a session deleted; retention purge is 7 days. It
+// succeeds unconditionally and idempotently for known ids.
 func (s *Service) SoftDelete(sessionID string) (bool, error) {
 	now := utils.NowMillis()
 	res, err := s.manager.Global().Exec(

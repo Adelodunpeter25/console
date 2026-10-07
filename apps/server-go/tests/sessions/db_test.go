@@ -320,9 +320,9 @@ func TestSessionFileChangeReviewed(t *testing.T) {
 	}
 }
 
-// TestOpsOnMissingSessionNoOp mirrors the TS session-*.ts convention: an
+// TestOpsOnMissingSessionNoOp checks that an
 // operation on a session id with no row in the global index silently
-// no-ops (matching `if (projectId === undefined) return;`) instead of
+// no-ops instead of
 // leaking a raw "sql: no rows in result set" as a turn-ending agent error.
 func TestOpsOnMissingSessionNoOp(t *testing.T) {
 	_, sessions, _, _ := newTestManager(t)

@@ -1,5 +1,5 @@
 // Claude OAuth: PKCE authorization URL, JSON token exchange, credential
-// storage. Port of apps/server/providers/src/claude/oauth.ts.
+// storage.
 package claude
 
 import (
@@ -38,7 +38,7 @@ type tokenResponse struct {
 	ExpiresIn    *int64 `json:"expires_in"`
 }
 
-// CredentialPath mirrors oauth.ts: CLAUDE_CREDENTIALS_PATH override,
+// CredentialPath returns the CLAUDE_CREDENTIALS_PATH override if set,
 // otherwise ~/.console/claude-creds.json.
 func CredentialPath() string {
 	return shared.CredentialPath("CLAUDE_CREDENTIALS_PATH", "claude-creds.json")
@@ -97,7 +97,7 @@ func postToken(client *http.Client, body map[string]string) (tokenResponse, erro
 }
 
 // fetchBootstrapEmail is a best-effort account identity lookup via the
-// Claude Code bootstrap endpoint. It never throws (mirrors oauth.ts).
+// Claude Code bootstrap endpoint. It never fails; errors yield an empty string.
 func fetchBootstrapEmail(client *http.Client, accessToken string) string {
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
@@ -202,7 +202,7 @@ func ParseCredential(raw OAuthCredential) (ParsedCredential, error) {
 }
 
 // LoadCredential reads CLAUDE_OAUTH_TOKEN/ANTHROPIC_OAUTH_TOKEN or the
-// credential file. Env tokens never expire (parity with TS MAX_SAFE_INTEGER).
+// credential file. Env tokens never expire.
 func LoadCredential() (ParsedCredential, error) {
 	envToken := os.Getenv("CLAUDE_OAUTH_TOKEN")
 	if envToken == "" {

@@ -1,4 +1,4 @@
-// Session-scoped TODO list item. Port of packages/types/src/todo.ts.
+// Session-scoped TODO list item.
 package types
 
 type TodoItem struct {

@@ -1,6 +1,5 @@
 // Tool framework: struct-tag-driven schemas via invopop/jsonschema, with
-// validation for free from the unmarshal step. Ports the shape of
-// apps/server/agent/src/types/tool.ts (ToolCall/ToolResult/AgentTool).
+// validation for free from the unmarshal step.
 package tools
 
 import (
@@ -52,10 +51,10 @@ func NewToolError(format string, args ...any) error {
 	return &ToolError{Msg: fmt.Sprintf(format, args...)}
 }
 
-// Envelope lets a tool signal isError from a *successful* return, mirroring
-// TS's normalizeToolOutput: `{content, isError}` (batch-write.ts's partial
-// failure reports isError this way without throwing — the summary text is
-// still useful even when some writes failed).
+// Envelope lets a tool signal isError from a *successful* return as
+// `{content, isError}` (batchWrite's partial failure reports isError this way
+// without throwing — the summary text is still useful even when some writes
+// failed).
 type Envelope struct {
 	Content any
 	IsError bool

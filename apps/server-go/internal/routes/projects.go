@@ -1,5 +1,4 @@
-// Project management routes (/api/projects/*). Port of
-// apps/server/api/src/routes/projects.ts.
+// Project management routes (/api/projects/*).
 //
 // Third domain on the shared protobuf schema. Response payloads are built
 // from console.v1 generated types; the {success, data} envelope is

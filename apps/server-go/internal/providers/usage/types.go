@@ -1,5 +1,4 @@
-// Usage report types. Mirrors packages/types/src/usage.ts JSON shapes so
-// /api/usage responses match the TS server wire format.
+// Usage report types: the JSON shapes returned by /api/usage.
 package usage
 
 type Window struct {

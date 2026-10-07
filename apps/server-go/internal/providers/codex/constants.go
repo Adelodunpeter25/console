@@ -1,5 +1,4 @@
 // OpenAI Codex (ChatGPT subscription) backend constants.
-// Port of apps/server/providers/src/codex/constants.ts.
 package codex
 
 import (

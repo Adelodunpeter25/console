@@ -1,5 +1,4 @@
-// Per-machine secret env file (~/.console/env). Port of the env-file
-// helpers in apps/cli/daemon-manager.ts: KEY=VALUE lines, quotes optional,
+// Per-machine secret env file (~/.console/env): KEY=VALUE lines, quotes optional,
 // comments/blank lines ignored. Managed by `console env`, mode 0600.
 package daemon
 

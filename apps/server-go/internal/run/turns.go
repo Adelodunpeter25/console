@@ -74,7 +74,7 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 		}
 		next, hasNext := s.nextTurn(currentCtx, turnErr, sessionID, hub)
 		if !hasNext {
-			// Terminal frame mirrors the TS finally: sessionEnd always
+			// Terminal frame: sessionEnd always
 			// closes the wire stream, on done and on abort alike. A finished
 			// (all-completed) todo list is cleared first so the next run
 			// starts fresh, with an empty todoUpdate so the card clears too.
@@ -88,7 +88,7 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
 			if currentCtx.Err() != nil {
 				// Abort/steer is a user action, not a failure: settle done
-				// (TS parity), never needs_attention.
+				// never needs_attention.
 				s.setStatus(sessionID, "done")
 				hub.Close(OutcomeAborted)
 			} else {
@@ -262,7 +262,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
 	}
 	if err := roles.ValidateLevel(model, effectiveThinking); err != nil {
-		// TS persists the user message before validation fails, so the
+		// Persist the user message even though validation fails, so the
 		// failed turn is visible in history.
 		_ = s.sessions.AppendMessage(sessionID, userMessageRecord(user))
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
@@ -270,7 +270,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 
 	// Image attachments on a model without image support fall back to the
-	// configured vision role model (TS runAgentStreamInternal parity).
+	// configured vision role model.
 	if len(dto.Attachments) > 0 && !model.SupportsImages {
 		if vision, ok := s.resolveVision(model); ok {
 			model = vision
@@ -391,7 +391,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort
 	// Stable per conversation, scoped by provider+model so cached prefixes
-	// stay valid (mirrors the TS cache-identity rotation rule).
+	// stay valid.
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
 	agent.ThinkingLevel = effectiveThinking
 	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
@@ -399,7 +399,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
 
 	// First user turn on a placeholder title: generate one in the
-	// background (TS session-title flow). Only applied if still generic.
+	// background. Only applied if still generic.
 	if titles.IsGenericTitle(header.Title) && len(history) == 0 {
 		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub)
 	}
@@ -409,7 +409,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-	// Translate the flat provider stream into the TS/desktop wire
+	// Translate the flat provider stream into the desktop wire
 	// vocabulary: model-stream triplets bracketed by turn ids, tool phases
 	// bracketed by execution start/end. Raw provider kinds (text/thinking/
 	// toolCall/usage/toolResult/turnDone) never reach subscribers.
@@ -426,7 +426,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			turner.flushTools()
 			if err != nil {
 				// Abort/steer is a user action, not a failure: no error
-				// frame or attention banner (TS parity).
+				// frame or attention banner.
 				if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 					s.broadcastContextUsage(ctx, sessionID, hub)
 					return context.Canceled
@@ -456,7 +456,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 }
 
 // turnTranslator converts one agent run's flat provider events into the
-// TS wire structure: model-stream parts pass through (turn triplets arrive
+// desktop wire structure: model-stream parts pass through (turn triplets arrive
 // bracketed from the loop with canonical snapshots), tool phases are
 // bracketed by execution start/end around results.
 type turnTranslator struct {
@@ -551,8 +551,8 @@ func (t *turnTranslator) translate(event loop.Event) {
 		t.flushTools()
 		t.hub.Broadcast(event)
 	case loop.EventUsage, loop.EventTurnDone:
-		// Token accounting and the terminal marker stay internal; TS does
-		// not stream them and the desktop cannot parse them.
+		// Token accounting and the terminal marker stay internal; they are
+		// not streamed and the desktop cannot parse them.
 	default:
 		t.hub.Broadcast(event)
 	}

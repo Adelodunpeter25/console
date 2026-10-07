@@ -1,4 +1,4 @@
-// Agent run routes. Port of apps/server/api/src/routes/run.ts: run,
+// Agent run routes: run,
 // attach-to-stream, abort, queue, steer, approve, answer.
 package routes
 
@@ -321,7 +321,7 @@ func queueError(c *fiber.Ctx, sessionID string, err error) error {
 	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 }
 
-// parseAnswer maps the TS answer union (string | string[]) to AskAnswer.
+// parseAnswer maps the answer union (string | string[]) to AskAnswer.
 func parseAnswer(raw any) (tools.AskAnswer, bool) {
 	switch v := raw.(type) {
 	case string:
@@ -345,7 +345,7 @@ func parseAnswer(raw any) (tools.AskAnswer, bool) {
 const runPingInterval = 15 * time.Second
 
 // pumpHub streams live frames until the hub settles, then closes silently:
-// the terminal sessionEnd hub event (mirroring the TS finally) is the
+// the terminal sessionEnd hub event is the
 // desktop's run-completion signal, so no extra terminal frame is needed.
 // Send errors (client gone) end the pump; the server-side run continues.
 func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
@@ -365,7 +365,7 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 	}
 	// Heartbeat comment frames keep the connection alive through long
 	// silent stretches (a question awaiting the user, slow tools); SSE
-	// parsers ignore comments (TS ": ping" parity).
+	// parsers ignore comments.
 	ping := time.NewTicker(runPingInterval)
 	defer ping.Stop()
 	for {
@@ -409,7 +409,7 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 	}
 }
 
-// sendFrame translates one hub event into the TS/desktop wire shape:
+// sendFrame translates one hub event into the desktop wire shape:
 // {"type": <event>, ...payload}, prefixed with an `id:` line carrying the hub
 // sequence so a reconnecting client can resume from ?since=<seq>. Internal-only
 // kinds (token accounting, raw provider deltas) are dropped; the desktop
@@ -487,7 +487,7 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	}
 }
 
-// subagentWire flattens a subagent lifecycle payload under its TS type tag.
+// subagentWire flattens a subagent lifecycle payload under its type tag.
 func subagentWire(e loop.Event) (any, bool) {
 	raw, err := json.Marshal(e.Subagent)
 	if err != nil {

@@ -1,5 +1,5 @@
 // Claude wire conversion: loop messages/tools to the Anthropic Messages
-// format. Port of apps/server/providers/src/claude/convert.ts.
+// format.
 package claude
 
 import (

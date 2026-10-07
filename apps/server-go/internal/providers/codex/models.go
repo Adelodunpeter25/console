@@ -1,5 +1,4 @@
-// Codex model discovery. Port of the codex branch in
-// apps/server/agent/src/commands/provider-registry.ts.
+// Codex model discovery.
 package codex
 
 import (
@@ -19,7 +18,7 @@ import (
 // shared catalog model type).
 type DiscoveredModel = types.Model
 
-// CodexThinkingLevels mirrors CODEX_THINKING_LEVELS in TS.
+// CodexThinkingLevels lists the thinking levels Codex supports.
 var CodexThinkingLevels = []string{"none", "low", "medium", "high", "xhigh", "max"}
 
 const defaultContextWindow = 272_000

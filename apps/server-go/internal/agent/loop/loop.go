@@ -1,6 +1,5 @@
 // Agent loop: drives turns against a provider, executing tool calls until
-// the model stops. Port of apps/server/agent/src/service/agent-loop.ts
-// (initial slice: sequential turns, session persistence, event stream).
+// the model stops (sequential turns, session persistence, event stream).
 package loop
 
 import (
@@ -15,7 +14,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-// Provider is the Phase 3 seam: a streaming model backend. The loop only
+// Provider is a streaming model backend. The loop only
 // depends on this interface, so real providers (claude, codex...) plug in
 // without loop changes. Contract: RunTurn must terminate the stream via
 // Complete (success) or Fail (error) before returning; otherwise the turn
@@ -35,7 +34,7 @@ type TurnRequest struct {
 	Setup    string
 	Messages []any // UserMessage | AssistantMessage | ToolResultMessage
 	Tools    []tools.Definition
-	// Phase 3 provider options (all optional, zero value = provider default).
+	// Provider options (all optional, zero value = provider default).
 	// BaseURL overrides the provider's default endpoint (e.g. tests).
 	BaseURL string
 	// CacheRetention controls prompt-cache behavior ("short"|"long"|"none").
@@ -51,7 +50,7 @@ type TurnRequest struct {
 	ThinkingLevel string
 }
 
-// Events a turn can emit (mirrors the TS event stream vocabulary).
+// EventKind identifies an event a turn can emit.
 type EventKind string
 
 const (
@@ -77,7 +76,7 @@ const (
 	EventSubagentActivity EventKind = "subagentActivity"
 	EventSubagentEnd      EventKind = "subagentEnd"
 	// Wire-structure markers. The run service broadcasts these around the
-	// raw provider stream so the SSE layer can emit the TS/desktop event
+	// raw provider stream so the SSE layer can emit the desktop event
 	// vocabulary (sessionStart/turnStart/modelStream*/toolExecution*/turnEnd/
 	// sessionEnd) instead of internal-turn kinds.
 	// EventSessionStart opens a run.
@@ -335,9 +334,9 @@ func WithSetup(setup string, history []any) []any {
 // success.
 func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, toolsList []tools.Definition, events *stream.Stream[Event]) (AssistantMessage, error) {
 	assistant := AssistantMessage{Role: RoleAssistant, ID: newMessageID(), Content: []any{}}
-	// Bracket every provider turn with stream markers (TS streamOneTurn
-	// parity) so subscribers get per-turn triplets with the canonical
-	// assistant snapshot — the desktop replaces streamed content with it.
+	// Bracket every provider turn with stream markers so subscribers get
+	// per-turn triplets with the canonical assistant snapshot — the desktop
+	// replaces streamed content with it.
 	turnID := newTurnID()
 	if a.OnRequest != nil {
 		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))
@@ -374,7 +373,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			// Coalesce consecutive text deltas into a single TextPart.
 			// Without this each streamed word persists as its own part,
 			// and clients render every part as a separate vertical
-			// markdown block (one word per line). Mirrors TS streamOneTurn.
+			// markdown block (one word per line).
 			if n := len(assistant.Content); n > 0 {
 				if last, ok := assistant.Content[n-1].(TextPart); ok {
 					last.Text += event.Text
