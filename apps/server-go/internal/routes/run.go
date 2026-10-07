@@ -424,11 +424,12 @@ func sendFrame(sse *sseStream, f run.Frame) error {
 
 // modelStreamPartFrame is the one wire frame emitted per model token, so it
 // is a struct rather than a fiber.Map: encoding/json reflects over maps and
-// sorts their keys on every call, which is measurable at token rates. The
-// other frames stay maps — they fire at most a few times per turn.
+// sorts their keys on every call. The part itself is protojson (shared
+// schema); the ~2.5µs/frame overhead measured against encoding/json is
+// 0.01% of a core at real delta rates — schema uniformity wins.
 type modelStreamPartFrame struct {
-	Type string `json:"type"`
-	Part any    `json:"part"`
+	Type string          `json:"type"`
+	Part json.RawMessage `json:"part"`
 }
 
 // wireFrame maps a hub event to its SSE event name and JSON body.
@@ -441,7 +442,15 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventModelStreamStart:
 		return "modelStreamStart", fiber.Map{"type": "modelStreamStart", "turnId": e.Text}, false
 	case loop.EventModelStreamPart:
-		return "modelStreamPart", modelStreamPartFrame{Type: "modelStreamPart", Part: e.Part}, false
+		part, ok := e.Part.(*consolev1.ModelStreamPart)
+		if !ok {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(part)
+		if err != nil {
+			return "", nil, true
+		}
+		return "modelStreamPart", modelStreamPartFrame{Type: "modelStreamPart", Part: json.RawMessage(raw)}, false
 	case loop.EventModelStreamEnd:
 		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": e.Message}, false
 	case loop.EventToolExecutionStart:

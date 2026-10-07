@@ -18,6 +18,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/systemprompt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -540,12 +541,16 @@ func (t *turnTranslator) translate(event loop.Event) {
 	case loop.EventText:
 		t.hub.Broadcast(loop.Event{
 			Kind: loop.EventModelStreamPart,
-			Part: map[string]any{"text": event.Text},
+			Part: &consolev1.ModelStreamPart{
+				Part: &consolev1.ModelStreamPart_Text{Text: event.Text},
+			},
 		})
 	case loop.EventThinking:
 		t.hub.Broadcast(loop.Event{
 			Kind: loop.EventModelStreamPart,
-			Part: map[string]any{"thinking": event.Text},
+			Part: &consolev1.ModelStreamPart{
+				Part: &consolev1.ModelStreamPart_Thinking{Thinking: event.Text},
+			},
 		})
 	case loop.EventToolCall:
 		if event.Call == nil {
@@ -553,9 +558,11 @@ func (t *turnTranslator) translate(event loop.Event) {
 		}
 		t.hub.Broadcast(loop.Event{
 			Kind: loop.EventModelStreamPart,
-			Part: map[string]any{"toolCall": map[string]any{
-				"id": event.Call.ID, "name": event.Call.Name,
-			}},
+			Part: &consolev1.ModelStreamPart{
+				Part: &consolev1.ModelStreamPart_ToolCall{ToolCall: &consolev1.ToolCallPreview{
+					Id: event.Call.ID, Name: event.Call.Name,
+				}},
+			},
 		})
 		t.calls = append(t.calls, *event.Call)
 	case loop.EventToolResult:

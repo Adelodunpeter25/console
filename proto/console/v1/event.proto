@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Run event payloads (Phase 4). Frame envelopes stay hand-shaped
+// ({"type": kind, ...payload}); only structured payloads move here.
+// First slice: per-token model stream parts.
+//
+// The oneof holds scalars directly (not wrapper messages) so the wire stays
+// {"part":{"text":"..."}} — a wrapper would add a nesting level
+// (part.text.text). Deltas carry exactly one arm, matching what the server
+// has always emitted.
+message ToolCallPreview {
+  string id = 1;
+  string name = 2;
+}
+
+message ModelStreamPart {
+  oneof part {
+    string text = 1;
+    string thinking = 2;
+    ToolCallPreview tool_call = 3;
+  }
+}
