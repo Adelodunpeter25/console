@@ -16,6 +16,11 @@ import (
 const (
 	initCommandName        = "init"
 	initCommandDescription = "Generate a console.toml with project run scripts for the Run tab"
+	// computerUseCommandName is the chat command that activates computer use:
+	// listed so the composer suggests it, while the model itself learns
+	// nothing until the user actually invokes it (see SplitInvocation).
+	computerUseCommandName        = "computer-use"
+	computerUseCommandDescription = "Drive the computer: read app windows and operate them with keyboard and mouse"
 )
 
 func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
@@ -23,6 +28,7 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 		cwd := resolveSessionCwd(c, sessions)
 		commands := []types.SlashCommandInfo{
 			{Name: initCommandName, Description: initCommandDescription, Builtin: true},
+			{Name: computerUseCommandName, Description: computerUseCommandDescription, Builtin: true},
 		}
 		for _, skill := range skills.Discover(cwd) {
 			commands = append(commands, types.SlashCommandInfo{
@@ -65,6 +71,12 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 	app.Get("/api/assist/:sessionId/search", handleSearch)
 	app.Get("/api/assist/search", handleSearch)
 	app.Get("/api/assist/files", handleSearch)
+}
+
+// RegisterAssistRoutes exposes the assist routes for tests, following the
+// same pattern as RegisterMCPRoutes.
+func RegisterAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
+	registerAssistRoutes(app, sessions, fs, skills)
 }
 
 // resolveSessionCwd returns the cwd of the session named by the sessionId

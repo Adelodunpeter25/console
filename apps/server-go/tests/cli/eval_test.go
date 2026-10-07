@@ -10,7 +10,7 @@ import (
 )
 
 func TestRunEvalWithoutDriverExplainsItself(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	_, err := commands.RunEvalForTest("1+1", 0)
 	if err == nil {
 		t.Fatal("expected unavailability, got success")

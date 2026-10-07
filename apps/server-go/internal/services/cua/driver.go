@@ -195,6 +195,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -312,33 +313,93 @@ func LibraryPathOverride() (string, error) {
 	return p, nil
 }
 
-// candidates lists the absolute paths tried, in order. Only an explicit env
-// override or a path next to our own binary is considered: never PATH, never
-// the working directory.
+// candidates lists the library locations tried, in order. Only fixed
+// locations are considered, never PATH and never an ambient search: an
+// explicit absolute override first, then beside our own binary (installed
+// layout), then the repo layouts for dev servers and test binaries, then the
+// system library dir. A relative env override is refused outright rather
+// than resolved against whatever the process has as its working directory.
 func candidates() ([]string, error) {
-	var out []string
 	override, err := LibraryPathOverride()
 	if err != nil {
 		return nil, err
 	}
+	var out []string
 	if override != "" {
 		out = append(out, override)
 	}
-	names := libraryNames()
+	var exeDir string
 	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		for _, n := range names {
-			out = append(out, filepath.Join(dir, n))
-			out = append(out, filepath.Join(dir, "third_party/cua", n))
+		exeDir = filepath.Dir(exe)
+	}
+	cwd, _ := os.Getwd()
+	seen := map[string]bool{}
+	for _, path := range candidatePaths(exeDir, cwd, libraryNames()) {
+		if !seen[path] {
+			seen[path] = true
+			out = append(out, path)
 		}
 	}
 	return out, nil
+}
+
+// candidatePaths lists locations for one executable directory and one working
+// directory, in priority order. The working-directory forms exist because a
+// dev server (`go run`) executes from a temp dir: without them the vendored
+// library beside the repo is invisible, which is exactly how fff's
+// third_party fallback earns its keep. Ancestors are walked so test binaries
+// (whose working directory is their package dir) resolve the same tree.
+func candidatePaths(exeDir, cwd string, names []string) []string {
+	var out []string
+	if exeDir != "" {
+		for _, n := range names {
+			out = append(out,
+				filepath.Join(exeDir, n),
+				filepath.Join(exeDir, "third_party", "cua", n),
+			)
+		}
+	}
+	dir := cwd
+	for i := 0; i < 8 && dir != "" && dir != "."; i++ {
+		for _, n := range names {
+			out = append(out,
+				filepath.Join(dir, "third_party", "cua", n),
+				filepath.Join(dir, "apps", "server-go", "third_party", "cua", n),
+			)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	for _, n := range names {
+		out = append(out, filepath.Join("/usr/local/lib", n))
+	}
+	return out
+}
+
+// CandidatePathsForTest exposes the location order so it is pinned without
+// touching the filesystem: beside the binary, the repo layouts for dev
+// servers and test binaries, then the system dir.
+func CandidatePathsForTest(exeDir, cwd string, names ...string) []string {
+	if len(names) == 0 {
+		names = libraryNames()
+	}
+	return candidatePaths(exeDir, cwd, names)
 }
 
 // Load resolves the Cua Driver library at runtime. It is safe to call
 // repeatedly; the attempt happens once.
 func Load() error {
 	loadOnce.Do(func() {
+		// An explicit off switch beats every candidate: operators can force
+		// computer use off without uninstalling the library, and tests can
+		// force absence without depending on what happens to be on disk.
+		if disabled, _ := strconv.ParseBool(os.Getenv("CUA_DRIVER_DISABLED")); disabled {
+			loadErr = errors.New("cua driver disabled by CUA_DRIVER_DISABLED")
+			return
+		}
 		paths, err := candidates()
 		if err != nil {
 			loadErr = err

@@ -18,22 +18,23 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 )
 
-// requireDriver skips unless a real library is configured.
+// requireDriver opens the real library, wherever the loader finds it
+// (vendored tree, system dir, or explicit override). It skips when no usable
+// library exists, so CI is unaffected — but an explicitly configured path
+// that fails to open is a real misconfiguration and fails loudly instead of
+// silently skipping.
 func requireDriver(t *testing.T) *cua.Driver {
 	t.Helper()
-	path := os.Getenv("CUA_DRIVER_LIB_PATH")
-	if path == "" {
-		t.Skip("set CUA_DRIVER_LIB_PATH to a libcua_driver_sdk to run driver integration tests")
-	}
-	if !strings.HasSuffix(path, ".dylib") && !strings.HasSuffix(path, ".so") {
-		t.Skipf("CUA_DRIVER_LIB_PATH does not look like a driver library: %q", path)
-	}
 	driver, err := cua.Open(cua.Options{})
-	if err != nil {
-		t.Fatalf("open driver: %v", err)
+	if err == nil {
+		t.Cleanup(func() { _ = driver.Shutdown() })
+		return driver
 	}
-	t.Cleanup(func() { _ = driver.Shutdown() })
-	return driver
+	if os.Getenv("CUA_DRIVER_LIB_PATH") != "" {
+		t.Fatalf("CUA_DRIVER_LIB_PATH is set but the driver would not open: %v", err)
+	}
+	t.Skipf("no usable Cua Driver library: %v", err)
+	return nil
 }
 
 // driverList reads the advertised inventory, the same call /computer-use makes

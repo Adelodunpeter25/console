@@ -61,7 +61,7 @@ func TestStatusErrorCancelled(t *testing.T) {
 // use is unavailable" rather than panicking or hanging. An absolute path is
 // used so the result does not depend on the test binary's directory.
 func TestOpenWithoutLibraryFailsCleanly(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	if _, err := cua.Open(cua.Options{}); err == nil {
 		t.Fatal("Open succeeded with no library present")
 	}
@@ -119,7 +119,7 @@ func TestOptionsMarshalIsAlwaysAJSONObject(t *testing.T) {
 	// The encoding happens inside Open, which needs the library, so assert the
 	// property through the exported entry point: with no library the call must
 	// fail at load time rather than panicking on an empty byte slice.
-	t.Setenv("CUA_DRIVER_LIB_PATH", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	if _, err := cua.Open(cua.Options{}); err == nil {
 		t.Fatal("expected a load failure")
 	}
@@ -136,4 +136,53 @@ func TestMissingLibraryPathIsNotSilentlyIgnored(t *testing.T) {
 	if filepath.IsAbs(missing) != true {
 		t.Fatal("temp paths must be absolute for this test to mean anything")
 	}
+}
+
+// TestCandidatePathsOrderBesideBinaryFirst pins the search order: an
+// explicitly installed library next to the binary beats every repo-layout
+// guess, and the system dir is the last resort, never the first.
+func TestCandidatePathsOrderBesideBinaryFirst(t *testing.T) {
+	got := cua.CandidatePathsForTest("/opt/console/bin", "/repo", "libx.so")
+	if len(got) == 0 {
+		t.Fatal("no candidates")
+	}
+	if got[0] != filepath.Join("/opt/console/bin", "libx.so") {
+		t.Fatalf("first candidate = %q, want the binary-side library", got[0])
+	}
+	last := got[len(got)-1]
+	if last != filepath.Join("/usr/local/lib", "libx.so") {
+		t.Fatalf("last candidate = %q, want the system dir", last)
+	}
+}
+
+// TestCandidatePathsCoverDevLayouts is why the dev server finds the vendored
+// library: both the module dir layout (go run from apps/server-go) and the
+// repo-root layout (make dev-server) must appear, so neither working
+// directory needs an env override.
+func TestCandidatePathsCoverDevLayouts(t *testing.T) {
+	got := cua.CandidatePathsForTest("/tmp/go-build123/server", "/repo", "libx.so")
+	joined := "\n" + strings.Join(got, "\n") + "\n"
+	for _, want := range []string{
+		filepath.Join("/repo", "third_party", "cua", "libx.so"),
+		filepath.Join("/repo", "apps", "server-go", "third_party", "cua", "libx.so"),
+	} {
+		if !strings.Contains(joined, "\n"+want+"\n") {
+			t.Errorf("missing dev-layout candidate %q in:\n%s", want, joined)
+		}
+	}
+}
+
+// TestCandidatePathsWalkUpForTestBinaries pins the ancestor walk: a test
+// binary running from a package dir resolves the module's vendored tree
+// without help.
+func TestCandidatePathsWalkUpForTestBinaries(t *testing.T) {
+	cwd := filepath.Join(string(filepath.Separator), "a", "b", "apps", "server-go", "tests", "services")
+	got := cua.CandidatePathsForTest("", cwd, "libx.so")
+	want := filepath.Join(string(filepath.Separator), "a", "b", "apps", "server-go", "third_party", "cua", "libx.so")
+	for _, path := range got {
+		if path == want {
+			return
+		}
+	}
+	t.Fatalf("ancestor walk missed %q in %v", want, got)
 }

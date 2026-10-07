@@ -1,2 +1,7 @@
 third_party/fff/libfff_c.so
 third_party/fff/libfff_c.dylib
+# Cua Driver SDK (built from trycua/cua; 28MB per platform, never committed).
+# Provided at install time next to the binary or via CUA_DRIVER_LIB_PATH.
+third_party/cua/libcua_driver_sdk.so
+third_party/cua/libcua_driver_sdk.dylib
+third_party/cua/cua_driver_sdk.dll

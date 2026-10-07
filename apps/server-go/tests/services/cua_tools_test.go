@@ -56,7 +56,7 @@ func TestComputerToolSchemaTakesCode(t *testing.T) {
 // TestLoaderRefusesWithoutDriver keeps /computer-use honest: with no runtime
 // it must report the reason rather than silently loading an empty group.
 func TestLoaderRefusesWithoutDriver(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	// Without a library the load must fail honestly rather than install an
 	// empty group the model would call into the void.
 	registry := tools.NewRegistry()
@@ -79,7 +79,7 @@ func TestLoaderRefusesWithoutDriver(t *testing.T) {
 // dropping a kernel touches no native code, so it must succeed even when the
 // library is absent.
 func TestComputerResetClearsSessionState(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	reset := cua.NewComputerResetTool(cua.NewManager(), "session-a")
 	out, err := reset.Execute(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
@@ -94,7 +94,7 @@ func TestComputerResetClearsSessionState(t *testing.T) {
 // TestManagerAbsentDriverIsUnavailableNotBroken proves the feature degrades:
 // with no library the manager reports unavailable rather than panicking.
 func TestManagerAbsentDriverIsUnavailableNotBroken(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	m := cua.NewManager()
 	if m.Available() {
 		t.Skip("a real Cua Driver library is installed and loaded first")
@@ -120,7 +120,7 @@ func TestManagerAbsentDriverIsUnavailableNotBroken(t *testing.T) {
 // TestManagerStatusWithoutLibrary proves Status reports the problem instead of
 // returning a misleading "available".
 func TestManagerStatusWithoutLibrary(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	status := cua.NewManager().Status()
 	if status.PermissionMode != "unrestricted" {
 		t.Errorf("permissionMode = %q, want unrestricted", status.PermissionMode)
@@ -145,7 +145,7 @@ func keysOf(m map[string]any) []string {
 // library reads as a message to the user, not a dead turn: the harness
 // surfaces ToolError to the model, which reports unavailability.
 func TestComputerExecuteWithoutDriverIsInformationNotAbort(t *testing.T) {
-	t.Setenv("CUA_DRIVER_LIB_PATH", t.TempDir()+"/absent")
+	t.Setenv("CUA_DRIVER_DISABLED", "1")
 	tool := cua.NewComputerTool(cua.NewManager(), "session-a")
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"code": "1+1"}`))
 	if err == nil {
