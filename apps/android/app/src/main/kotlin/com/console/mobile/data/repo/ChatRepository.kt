@@ -26,6 +26,9 @@ import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.model.ToolTier
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.SubagentInfo
 import com.console.mobile.data.model.TextPart
 import console.v1.TodoItem
@@ -40,10 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -433,38 +433,41 @@ class ChatRepository(
         persistence?.setSuppress(false)
     }
 
+    // Interactive request payloads are console.v1 (args as JSON bytes),
+    // decoded with Moshi; the hand types stay as the UI render models.
+    private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
+    private val askAdapter = wireMoshi.adapter(console.v1.AskQuestionRequest::class.java)
+    private val permissionAdapter = wireMoshi.adapter(console.v1.PermissionRequest::class.java)
+
     private fun parseQuestion(event: AgentSessionEvent): AskQuestionRequest? {
-        val req = event.request as? JsonObject ?: return null
-        fun str(key: String): String? = (req[key] as? JsonPrimitive)?.contentOrNull
-        fun bool(key: String, default: Boolean): Boolean = (req[key] as? JsonPrimitive)?.booleanOrNull ?: default
-        val requestId = str("requestId") ?: return null
-        val question = str("question") ?: return null
-        val options = (req["options"] as? JsonArray)?.mapNotNull { element ->
-            (element as? JsonPrimitive)?.contentOrNull
-        }.orEmpty()
+        val raw = event.request?.toString() ?: return null
+        val req = runCatching { askAdapter.fromJson(raw) }.getOrNull() ?: return null
+        if (req.request_id.isBlank() || req.question.isBlank()) return null
         return AskQuestionRequest(
-            requestId = requestId,
-            question = question,
-            options = options,
-            // Go tags both `isMultiSelect` and `options` omitempty, so an absent
-            // key means false / no options rather than "unknown".
-            isMultiSelect = bool("isMultiSelect", default = false),
-            // `skippable` is *not* omitempty, but the tool input defaults it to
-            // true (askQuestionInput.skippable() in apps/server-go/internal/agent/
-            // tools/ask_tools.go), so default to true when the key is missing.
-            skippable = bool("skippable", default = true),
-            batchId = str("batchId"),
+            requestId = req.request_id,
+            question = req.question,
+            options = req.options,
+            isMultiSelect = req.is_multi_select,
+            // The server always sets skippable, but the tool input defaults
+            // it to true, so default to true when the key is missing.
+            skippable = req.skippable ?: true,
+            batchId = req.batch_id,
         )
     }
 
     private fun parsePermission(event: AgentSessionEvent): PermissionRequest? {
-        val req = event.request as? JsonObject ?: return null
-        fun str(key: String): String? = (req[key] as? JsonPrimitive)?.contentOrNull
-        val requestId = str("requestId") ?: return null
+        val raw = event.request?.toString() ?: return null
+        val req = runCatching { permissionAdapter.fromJson(raw) }.getOrNull() ?: return null
+        if (req.request_id.isBlank()) return null
         return PermissionRequest(
-            requestId = requestId,
-            toolCallId = str("toolCallId").orEmpty(),
-            toolName = str("toolName").orEmpty(),
+            requestId = req.request_id,
+            toolCallId = req.tool_call_id,
+            toolName = req.tool_name,
+            args = req.args.utf8().takeIf { it.isNotEmpty() }?.let {
+                runCatching { ConsoleJson.parseToJsonElement(it) }.getOrNull()
+            },
+            tier = runCatching { ToolTier.valueOf(req.tier) }.getOrNull(),
+            reason = req.reason,
         )
     }
 }
