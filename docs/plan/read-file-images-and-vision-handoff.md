@@ -188,6 +188,8 @@ const (
 
 Deliberately simpler than OpenCode's 32-scale ladder — four halvings covers the realistic range, and each step is a decode-free re-encode of an already-downscaled buffer.
 
+**Placement:** put `fitImage`, `sniffImageMime`, and the limits in a small shared package (e.g. `internal/utils/image`) rather than keeping them unexported inside the tools package. The browser and MCP paths both want them later (§7), and getting the location right now costs nothing while doing it as an extraction later costs a refactor.
+
 ### 4.3 Vision side
 
 ```go
@@ -236,7 +238,17 @@ func (s *Service) imageDescriber(model types.Model) tools.ImageDescriber {
 
 `visionDescriber.Describe` resolves the role, `s.Lookup`s the provider, calls `vision.Describe`, and returns `ok=false` if the role model or the call fails. It wraps each call in `context.WithTimeout(ctx, 30*time.Second)` so a slow vision model cannot stall the run indefinitely.
 
-**Known sharp edge to fix while we are here:** `roles.ResolveRoleModel` (`internal/agent/roles/roles.go:78-81`) synthesizes a model for an unknown id with a hardcoded `ContextWindow: 128_000` and leaves `SupportsImages` at the zero value `false`. Combined with the `!vision.SupportsImages` gate in `run/models.go:67`, a `vision` role pointing at a model id the catalog does not know can *never* win the fallback — silently. Either let the role string force `SupportsImages: true`, or make the vision path bypass that gate. Whichever we pick, add a test.
+**Decision — trust the user's declared vision role (fix A).** `roles.ResolveRoleModel` (`internal/agent/roles/roles.go:78-81`) synthesizes a model for an unknown id with a hardcoded `ContextWindow: 128_000` and never sets `SupportsImages`, so it is `false`. Combined with the `!vision.SupportsImages` gate in `run/models.go:67`, a `vision` role pointing at a model id the catalog does not know **can never win the fallback, silently** — the user configures a vision model, the UI shows it set, and images are still redacted to `[image omitted: ...]`.
+
+This is live, not theoretical. `providers/opencode/models.go:113-115` hardcodes `supportsImages := false` and only sets it for the literal id `space-bunny-free`, so on the OpenCode provider every other model reports `false`. Claude, Codex, and Antigravity read the flag from live API metadata (`InputModalities`, `capabilities.image_input.supported`) and so rarely hit this path. `tests/agent/roles_test.go:58-79` asserts the synthesized case's `ContextWindow` but says nothing about `SupportsImages`, so nothing catches it.
+
+**The fix:** in the synthesize branch only, set `SupportsImages: true` when `role == Vision`. Constraints:
+
+- `ResolveRoleModel` already accepts a `role string` parameter and **never reads it** — this gives it its first purpose, so no signature change.
+- Gate **only** the synthesize branch. Both `return fallback` paths (empty ref, unknown provider) must keep the fallback model's real capabilities; a catalogued model's flag is never overwritten.
+- **No logging inside `roles`** — it is a pure function package with no logger and `roles_test.go` tests it as pure. Emit `slog.Warn` from the caller: `run` already uses package-level `slog.Warn` (`run/hub.go:163`), so `resolveVision` logs when it accepts an uncatalogued model on the user's word.
+- Rejected the alternative — dropping the `SupportsImages` gate. It would let a genuinely blind model through and surface as an opaque provider 400 mid-turn, which is far harder to debug than trusting the user.
+- This ships **independently** of the rest of this plan. It silently disables a feature the user believes they turned on, which is worth fixing whether or not the image work lands.
 
 ---
 
@@ -322,9 +334,14 @@ Note `model` here is the **post-vision-fallback** variable. If the run already s
 
 `internal/run/models.go` — add `imageDescriber`. Reuse `resolveVision` so the `SupportsImages` gate stays in one place.
 
+Also land the §4.3 fix here, in two small pieces:
+- `internal/agent/roles/roles.go:78-81` — `SupportsImages: true` in the synthesize branch when `role == Vision`.
+- `internal/run/models.go` `resolveVision` — `slog.Warn` when the role resolved to an uncatalogued id, naming the provider/model, so the trust decision is visible in logs.
+
 Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a subagent's `read_file` should get its own describer rather than the parent's. Wire `SubagentContext` the same way if subagents can read files.
 
-- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model gets `CanSeeImages: true` and no describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil. Extend to cover the case where the role model does not declare `SupportsImages` (§4.3).
+- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model gets `CanSeeImages: true` and no describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil.
+- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestResolveRoleModel -v` — extend the existing table in `tests/agent/roles_test.go` with `TestResolveRoleModelVisionCapability`: a `vision` role resolving to an uncatalogued id synthesizes with `SupportsImages == true`; the same ref under the `smol` role still synthesizes with `SupportsImages == false`; a catalogued model's real flag is preserved and never overwritten; an empty ref and an unknown provider both return the fallback unchanged.
 
 ### Phase 5 — Prompt text, kill switch, docs
 
@@ -346,7 +363,7 @@ Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a s
 | `golang.org/x/image` is a new dependency | Pulls nothing else; `x/image` is leaf-only and stdlib-adjacent. Verify `go mod tidy` adds no transitive surprises. |
 | Provider rejects an image payload | Bounded by `imageMaxBase64` and `imageMaxEdge`; Phase 2 verifies the bounds hold. |
 | `read_file` behaviour change breaks existing tests | `tests/tools/read_file_test.go` exists and must stay green. Text paths are byte-identical by design — only new branches are added. |
-| Synthetic role model has `SupportsImages: false` | §4.3 — fix and test explicitly rather than letting it silently disable the feature. |
+| Synthetic role model has `SupportsImages: false` | Fixed per §4.3 (trust the declared vision role) + `slog.Warn` from the caller. Ships independently of this plan. |
 
 ---
 
@@ -355,4 +372,4 @@ Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a s
 - Should the vision description be cached per run? Costs one model call per image read otherwise.
 - Should `write_file` refuse binary writes, or is that out of scope?
 - Does `imageTokensEach = 1000` hold for the vision role models we route to, or should descriptions count as text against their context?
-- Should the browser tool's screenshot path also route through `fitImage`? It has the same unbounded-payload exposure and this would be the natural place to share it.
+- Should the browser tool's screenshot path route through `fitImage` too? **Separate follow-up, not part of this plan.** To be explicit, since it was unclear before: nothing gets replaced. `read_file` reads bytes off local disk; browser screenshots are captured by the desktop client and arrive as `res.ImageBase64` (`browser_tool.go:117`). Only the pure `fitImage` helper would be shared. Both paths are currently unbounded — the browser tool has no size guard at all, and the MCP adapter caps image *count* at 4 (`mcp/adapter.go:118`) but not per-image bytes — so both would benefit. Worth its own change; bundled here it would just be scope creep.
