@@ -238,7 +238,17 @@ agent's pointer is lost; you watch via screenshots or VNC instead.
 This is what removes the Swift requirement. With no AppKit loop to own, the Go server can
 own the bundle itself.
 
-### 4.1 Linux and Windows
+### 4.2 The target window must be on the current Space (verified 2026-10-07)
+
+A window sitting on a different Space from the one showing cannot be read: the driver
+reports zero elements with `ax_unresolved` / `off_space_or_ax_unresolved`, which looks
+exactly like a missing Accessibility grant but is not one. `bring_to_front` activates the
+process but does not pull the window across Spaces (`front_in_process_on_display=false`);
+a freshly launched window lands on the current Space, which is why relaunching fixed
+Calculator. The agent loop must bring the target to the current desktop before reading
+it, and must not misdiagnose an off-space window as a permission failure.
+
+### 4.3 Linux and Windows
 
 The same ABI from a plain host process, no bundle, no TCC. Cua ships a portable host
 (Windows/Linux) that starts the overlay thread itself; macOS is the only platform needing
