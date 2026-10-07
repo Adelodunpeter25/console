@@ -1,0 +1,9 @@
+[
+  {"label": "gorex windows", "tool": "list_windows",
+   "args": {"pid": 90112}, "as": "gorexwins"},
+  {"label": "read frontmost window", "tool": "get_window_state",
+   "args": {"pid": 90112, "window_id": "{{gorexwins.windows.0.window_id}}",
+            "query": "zsh", "include_screenshot": false}, "as": "gorexstate"},
+  {"label": "calculator spaces", "tool": "list_windows",
+   "args": {"pid": 58151}, "as": "calcwins"}
+]

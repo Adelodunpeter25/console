@@ -400,6 +400,10 @@ Our Stop button must use this wording and must not pretend cancellation is atomi
 | Tiering matches Cua's assessment | **PASS** — `kill_app` exec, observations read |
 | Stop is honest | **PASS** — refused start reports a known outcome; Resume restores service |
 | Screenshot reaches Claude | a chat that describes what is on screen |
+| Calculator end to end | **PASS (2026-10-07)** — 7×8=56 via four background `AXPress` actions
+  addressed by `snapshot_id:row` tokens, display verified from a fresh read.
+  Debugging scripts live in `docs/plan/cua-scripts/` and run without rebuilding:
+  `console computer-use run --script … --out transcript.jsonl` |
 | Grant attribution correct | `check_permissions` → `source.attribution == "host"` |
 | Bundle identity | `health_report(include=["bundle_identity"])` matches our bundle id |
 | Tiering | unit test that `kill_app` is not classified by name prefix |

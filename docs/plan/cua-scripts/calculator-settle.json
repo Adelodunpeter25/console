@@ -1,0 +1,9 @@
+[
+  {"label": "launch calculator", "tool": "launch_app",
+   "args": {"bundle_id": "com.apple.calculator"}, "as": "launch"},
+  {"label": "wait for window", "tool": "$wait_window",
+   "args": {"pid": "{{launch.pid}}", "timeout_ms": 15000}, "as": "win"},
+  {"label": "let it settle", "tool": "$sleep", "args": {"ms": 4000}},
+  {"label": "read with screenshot", "tool": "get_window_state",
+   "args": {"pid": "{{launch.pid}}", "window_id": "{{win.window_id}}"}, "as": "tree"}
+]

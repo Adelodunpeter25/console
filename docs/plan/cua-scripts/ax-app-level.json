@@ -1,0 +1,5 @@
+[
+  {"label": "list apps", "tool": "list_apps", "args": {}, "as": "apps"},
+  {"label": "app-level AX tree for Finder", "tool": "get_accessibility_tree",
+   "args": {"pid": 960}, "as": "finax"}
+]

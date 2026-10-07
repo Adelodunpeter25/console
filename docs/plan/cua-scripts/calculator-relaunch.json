@@ -1,0 +1,14 @@
+[
+  {"label": "kill stranded calculator", "tool": "kill_app",
+   "args": {"pid": 58151}, "as": "killed"},
+  {"label": "relaunch calculator", "tool": "launch_app",
+   "args": {"bundle_id": "com.apple.calculator"}, "as": "launch"},
+  {"label": "wait for window", "tool": "$wait_window",
+   "args": {"pid": "{{launch.pid}}", "timeout_ms": 15000}, "as": "win"},
+  {"label": "settle", "tool": "$sleep", "args": {"ms": 2000}},
+  {"label": "check space", "tool": "list_windows",
+   "args": {"pid": "{{launch.pid}}"}, "as": "spaces"},
+  {"label": "read fresh window", "tool": "get_window_state",
+   "args": {"pid": "{{launch.pid}}", "window_id": "{{win.window_id}}",
+            "query": "seven", "include_screenshot": false}, "as": "tree"}
+]
