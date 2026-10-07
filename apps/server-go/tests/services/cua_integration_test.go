@@ -8,7 +8,9 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -90,9 +92,10 @@ func TestDriverAdvertisesClassifiedTools(t *testing.T) {
 	}
 }
 
-// TestDriverTiersDangerousToolsCorrectly pins the two classifications a name
-// heuristic gets wrong or gets right only by luck.
-func TestDriverTiersDangerousToolsCorrectly(t *testing.T) {
+// TestDriverClassifiesKnownTools pins the classifications the skill relies on:
+// kill_app terminates a process, the input loop must be able to act, and
+// observation carries the driver's own readOnlyHint.
+func TestDriverClassifiesKnownTools(t *testing.T) {
 	requireDriver(t)
 	list, err := driverList(t)
 	if err != nil {
@@ -103,27 +106,31 @@ func TestDriverTiersDangerousToolsCorrectly(t *testing.T) {
 		byName[tool.Name] = tool
 	}
 
-	// kill_app terminates a process and has no exec-ish name prefix.
 	if def, ok := byName["kill_app"]; ok {
-		if got := cua.Tier(def); got != tools.TierExec {
-			t.Errorf("kill_app tier = %s, want exec (risk %s)", got, def.RiskClass())
+		if def.RiskClass() != "r3" {
+			t.Errorf("kill_app risk = %q, want r3", def.RiskClass())
 		}
+	} else {
+		t.Error("kill_app not advertised")
 	}
-	// The input loop must be able to act.
 	for _, name := range []string{"click", "type_text", "press_key"} {
-		if def, ok := byName[name]; ok {
-			if got := cua.Tier(def); got != tools.TierWrite {
-				t.Errorf("%s tier = %s, want write (risk %s)", name, got, def.RiskClass())
-			}
+		def, ok := byName[name]
+		if !ok {
+			t.Errorf("%s not advertised", name)
+			continue
+		}
+		if def.RiskClass() != "r1" {
+			t.Errorf("%s risk = %q, want r1", name, def.RiskClass())
 		}
 	}
-	// Observation must be a read, or the model prompts on every screenshot.
 	for _, name := range []string{"get_window_state", "list_apps"} {
-		if def, ok := byName[name]; ok {
-			if got := cua.Tier(def); got != tools.TierRead {
-				t.Errorf("%s tier = %s, want read (risk %s, readOnly=%v)",
-					name, got, def.RiskClass(), def.ReadOnly())
-			}
+		def, ok := byName[name]
+		if !ok {
+			t.Errorf("%s not advertised", name)
+			continue
+		}
+		if !def.ReadOnly() {
+			t.Errorf("%s should carry readOnlyHint", name)
 		}
 	}
 }
@@ -150,36 +157,21 @@ func TestDriverCallReturnsStructuredResult(t *testing.T) {
 	}
 }
 
-// TestDriverDecodesImageContent is the screenshot path. It needs a real
-// permitted process, so it asserts only what holds either way: an image part
-// arrives as raw bytes, never as a base64 string, and the harness shape carries
-// a mime type the Claude converter accepts.
-func TestDriverDecodesImageContent(t *testing.T) {
-	driver := requireDriver(t)
-	result, err := driver.Call(context.Background(), "get_desktop_state", map[string]any{}, nil)
+// TestDriverScreenshotReachesScriptCode is the screenshot path through the
+// same conversion the model receives: an image part arrives with a mime type
+// the Claude converter accepts and base64 data. It needs a real permitted
+// process, so a refusal skips rather than fails.
+func TestDriverScreenshotReachesScriptCode(t *testing.T) {
+	requireDriver(t)
+	out, err := cua.NewManager().EvalOnce(context.Background(),
+		`cua.get_desktop_state().content.filter(function(p) { return p.type === "image" })`, 0)
 	if err != nil {
 		t.Skipf("capture refused in this environment: %v", err)
 	}
-
-	var image *cua.ContentPart
-	for i := range result.Content {
-		if result.Content[i].Type == "image" {
-			image = &result.Content[i]
-		}
+	parts, ok := out.([]map[string]any)
+	if !ok {
+		t.Fatalf("eval returned %T", out)
 	}
-	if image == nil {
-		// Without Screen Recording the driver returns a refusal instead of an
-		// image; that is a legitimate outcome, not a binding failure.
-		t.Skip("no image content: capture is not permitted for this process")
-	}
-	if len(image.Data) == 0 {
-		t.Fatal("image part carries no bytes")
-	}
-	if !strings.Contains(string(image.Data[:8]), "PNG") {
-		t.Errorf("image data is not a PNG: %q", image.Data[:8])
-	}
-
-	parts := cua.ToolResultParts(result)
 	var harnessImage map[string]any
 	for _, p := range parts {
 		if p["type"] == "image" {
@@ -187,13 +179,16 @@ func TestDriverDecodesImageContent(t *testing.T) {
 		}
 	}
 	if harnessImage == nil {
-		t.Fatal("no image part in the harness conversion")
+		// Without Screen Recording the driver returns a refusal instead of an
+		// image; that is a legitimate outcome, not a binding failure.
+		t.Skip("no image content: capture is not permitted for this process")
 	}
 	if harnessImage["mimeType"] != "image/png" {
 		t.Errorf("mimeType = %v, want image/png", harnessImage["mimeType"])
 	}
-	if _, ok := harnessImage["data"].(string); !ok {
-		t.Errorf("harness image data must be a base64 string, got %T", harnessImage["data"])
+	data, _ := harnessImage["data"].(string)
+	if len(data) == 0 {
+		t.Fatal("image part carries no data")
 	}
 }
 
@@ -220,6 +215,97 @@ func TestDriverStopRefusesThenResumes(t *testing.T) {
 	driver.Resume()
 	if _, err := driver.Call(ctx, "get_screen_size", map[string]any{}, nil); err != nil {
 		t.Fatalf("call after Resume failed: %v", err)
+	}
+}
+
+// TestLoaderLoadsExactlyTwoTools is the option-3 surface: one invocation
+// brings computer plus computer_reset and nothing else, so the per-turn
+// schema cost stays flat no matter how many methods the driver has.
+func TestLoaderLoadsExactlyTwoTools(t *testing.T) {
+	requireDriver(t)
+	registry := tools.NewRegistry()
+	loader := cua.NewLoader(cua.NewManager(), "session-1")
+	n, err := loader.Load(registry)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("loaded %d tools, want 2", n)
+	}
+	names := registry.Names()
+	if len(names) != 2 || names[0] != "computer" || names[1] != "computer_reset" {
+		t.Fatalf("registry holds %v", names)
+	}
+	if !loader.Loaded() {
+		t.Error("a successful load must mark the group loaded")
+	}
+}
+
+// TestComputerToolRunsCode drives the tool exactly the way the agent will:
+// through the registry, with JSON arguments.
+func TestComputerToolRunsCode(t *testing.T) {
+	requireDriver(t)
+	registry := tools.NewRegistry()
+	loader := cua.NewLoader(cua.NewManager(), "session-1")
+	if _, err := loader.Load(registry); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	tool, err := registry.Get("computer")
+	if err != nil {
+		t.Fatalf("registry: %v", err)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"code": "40 + 2"}`))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	parts, ok := out.([]map[string]any)
+	if !ok || len(parts) == 0 || parts[0]["type"] != "text" {
+		t.Fatalf("unexpected result shape: %v", out)
+	}
+	if !strings.Contains(parts[0]["text"].(string), "42") {
+		t.Errorf("got %q", parts[0]["text"])
+	}
+}
+
+// TestSessionKernelsAreIsolated proves one session cannot see another's
+// variables, and that reset clears without touching siblings.
+func TestSessionKernelsAreIsolated(t *testing.T) {
+	requireDriver(t)
+	manager := cua.NewManager()
+	exec := func(session, code string) string {
+		t.Helper()
+		tool := cua.NewComputerTool(manager, session)
+		out, err := tool.Execute(context.Background(), json.RawMessage(`{"code": `+strconv.Quote(code)+`}`))
+		if err != nil {
+			t.Fatalf("%s: %v", session, err)
+		}
+		parts := out.([]map[string]any)
+		text, _ := parts[0]["text"].(string)
+		return text
+	}
+
+	exec("s1", `var secret = "s1-only"`)
+	if got := exec("s2", `typeof secret`); !strings.Contains(got, "undefined") {
+		t.Fatalf("s2 sees s1's variables: %q", got)
+	}
+	if got := exec("s1", `secret`); !strings.Contains(got, "s1-only") {
+		t.Fatalf("s1 lost its own variable: %q", got)
+	}
+	if got := manager.SessionRuntimeCount(); got != 2 {
+		t.Fatalf("want 2 live kernels, got %d", got)
+	}
+
+	reset := cua.NewComputerResetTool(manager, "s1")
+	if _, err := reset.Execute(context.Background(), json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	// Count before touching s1 again: the verification call below recreates
+	// its kernel.
+	if got := manager.SessionRuntimeCount(); got != 1 {
+		t.Fatalf("want 1 live kernel after reset, got %d", got)
+	}
+	if got := exec("s1", `typeof secret`); !strings.Contains(got, "undefined") {
+		t.Fatalf("reset did not clear s1: %q", got)
 	}
 }
 

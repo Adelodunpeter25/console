@@ -53,11 +53,18 @@ const (
 // entry takes mu — including the interrupt path, which goja documents as
 // safe to call from another goroutine.
 type JSRuntime struct {
-	mu        sync.Mutex
-	rt        *goja.Runtime
-	caller    JSCaller
-	output    []string
-	evalCtx   context.Context
+	mu     sync.Mutex
+	rt     *goja.Runtime
+	caller JSCaller
+	output []string
+	// evalCtx is the context of the evaluation currently running on the
+	// Eval goroutine; cua methods read it without locking because only that
+	// goroutine touches it.
+	evalCtx context.Context
+	// cancel is polled while a driver call is in flight, so a Stop
+	// interrupts admitted work. Set by Manager, which wires its own stop
+	// flag; nil means no external stop source.
+	cancel    func() bool
 	isPromise func(goja.Value, ...goja.Value) (goja.Value, error)
 }
 
@@ -128,7 +135,7 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	result, err := r.caller.Call(ctx, name, args, nil)
+	result, err := r.caller.Call(ctx, name, args, r.cancel)
 	if err != nil {
 		r.throwError("cua." + name + " failed: " + err.Error())
 	}

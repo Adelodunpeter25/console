@@ -5,19 +5,15 @@ package cua
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
 // Manager hands out the shared driver and lazily materialises its tools.
 type Manager struct {
 	mu      sync.Mutex
+	jsMu    sync.Mutex
 	driver  *Driver
 	initErr error
 	loading bool
@@ -28,7 +24,17 @@ type Manager struct {
 	// stoppedFlag records that a Stop is in force. A Stop both refuses new
 	// work and cancels whatever the driver already admitted.
 	stoppedFlag bool
+	// jsRuntimes is one persistent JavaScript kernel per chat session, in
+	// creation order for eviction. Sessions are unbounded over a server
+	// lifetime, so the map is capped: evicting a runtime only loses that
+	// session's variables, which the model rebuilds by re-observing.
+	jsRuntimes map[string]*JSRuntime
+	jsOrder    []string
 }
+
+// maxJSRuntimes caps live session kernels. Computer use is rare next to
+// chat, so this bounds memory without ever triggering in practice.
+const maxJSRuntimes = 16
 
 // NewManager returns a manager that opens the driver on first use.
 func NewManager() *Manager {
@@ -87,6 +93,72 @@ func driverTools(driver *Driver) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+// sessionRuntime returns the session's JavaScript kernel, creating it on
+// first use. Creation opens the driver, so an unavailable library fails here
+// rather than at some later, more confusing point.
+func (m *Manager) sessionRuntime(sessionID string) (*JSRuntime, error) {
+	m.jsMu.Lock()
+	defer m.jsMu.Unlock()
+	if runtime, ok := m.jsRuntimes[sessionID]; ok {
+		m.touchRuntime(sessionID)
+		return runtime, nil
+	}
+	driver, err := m.Driver()
+	if err != nil {
+		return nil, err
+	}
+	runtime, err := NewJSRuntime(driver)
+	if err != nil {
+		return nil, err
+	}
+	runtime.cancel = m.Stopped
+	if m.jsRuntimes == nil {
+		m.jsRuntimes = map[string]*JSRuntime{}
+	}
+	m.jsRuntimes[sessionID] = runtime
+	m.jsOrder = append(m.jsOrder, sessionID)
+	for len(m.jsOrder) > maxJSRuntimes {
+		oldest := m.jsOrder[0]
+		m.jsOrder = m.jsOrder[1:]
+		// A session holding the runtime elsewhere keeps working; only the
+		// map entry goes, so the next call starts that session fresh.
+		delete(m.jsRuntimes, oldest)
+	}
+	return runtime, nil
+}
+
+// touchRuntime moves a session to the back of the eviction order.
+func (m *Manager) touchRuntime(sessionID string) {
+	for i, id := range m.jsOrder {
+		if id == sessionID {
+			m.jsOrder = append(append(m.jsOrder[:i:i], m.jsOrder[i+1:]...), sessionID)
+			return
+		}
+	}
+}
+
+// dropRuntime forgets a session's kernel: variables and bindings are gone,
+// and the next call starts fresh. Safe to call for unknown sessions.
+func (m *Manager) dropRuntime(sessionID string) {
+	m.jsMu.Lock()
+	defer m.jsMu.Unlock()
+	delete(m.jsRuntimes, sessionID)
+	for i, id := range m.jsOrder {
+		if id == sessionID {
+			m.jsOrder = append(m.jsOrder[:i:i], m.jsOrder[i+1:]...)
+			return
+		}
+	}
+}
+
+// SessionRuntimeCount reports how many session kernels are live, for tests
+// and status surfaces.
+func (m *Manager) SessionRuntimeCount() int {
+	m.jsMu.Lock()
+	defer m.jsMu.Unlock()
+	return len(m.jsRuntimes)
 }
 
 // Available reports whether the driver loaded, without attempting to open it.
@@ -202,126 +274,6 @@ func (m *Manager) Stopped() bool {
 	return m.stoppedFlag
 }
 
-// Tools materialises the driver's inventory as harness tools.
-//
-// Each tool keeps Cua's own input schema, so the model sees the real argument
-// names rather than a flattened guess. Tiering comes from Cua's risk metadata
-// when the driver advertises it, because Cua's classes do not follow the name
-// prefixes Console's heuristic assumes: kill_app is not an exec-by-name tool,
-// it is R3 with a bespoke rule.
-func (m *Manager) Tools() ([]tools.Tool, error) {
-	driver, err := m.Driver()
-	if err != nil {
-		return nil, err
-	}
-	inventory, err := driver.ListTools()
-	if err != nil {
-		return nil, err
-	}
-	out := make([]tools.Tool, 0, len(inventory))
-	for _, def := range inventory {
-		if def.Name == "" {
-			continue
-		}
-		out = append(out, NewTool(m, driver, def))
-	}
-	return out, nil
-}
-
-// ToolName maps a Cua tool name onto a harness-safe name. Cua's names are
-// already snake_case and valid, so this only guards against a name the
-// provider would reject and against the 64-char cap.
-func ToolName(cuaName string) string {
-	name := "cua__" + unsafeName.ReplaceAllString(cuaName, "_")
-	if len(name) > 64 {
-		name = name[:64]
-	}
-	return name
-}
-
-// Tier maps one advertised tool onto a Console tool tier, using Cua's own
-// assessment. readOnlyHint wins when present because it is the driver's own
-// statement about the tool rather than an inference.
-//
-// r0 is metadata with no user payload, r1 is local reversible control, and r2
-// and above reveal or change state the user cares about. Unclassified is
-// deliberately exec: a tool Cua has not reviewed must not be waved through.
-func Tier(def ToolDef) tools.ToolTier {
-	if def.ReadOnly() {
-		return tools.TierRead
-	}
-	switch def.RiskClass() {
-	case "r0":
-		return tools.TierRead
-	case "r1":
-		return tools.TierWrite
-	case "r2", "r3", "r4":
-		return tools.TierExec
-	case "unclassified", "":
-		// No reviewed classification: treat as exec rather than trusting a
-		// name heuristic. Cua itself fails closed on this.
-		return tools.TierExec
-	default:
-		return tools.TierExec
-	}
-}
-
-// ToolResultParts converts a Cua result into the harness content-part shape:
-// text stays text, images become native image parts carrying raw bytes, and
-// structured content is used when there is nothing else to describe what
-// happened. Exported because the same conversion is needed by any surface that
-// replays a stored result.
-func ToolResultParts(result *ToolResult) []map[string]any {
-	if result == nil {
-		return []map[string]any{{"type": "text", "text": "(no output)"}}
-	}
-	var text []string
-	var out []map[string]any
-	for _, part := range result.Content {
-		switch part.Type {
-		case "text":
-			if strings.TrimSpace(part.Text) != "" {
-				text = append(text, part.Text)
-			}
-		case "image":
-			if len(part.Data) == 0 {
-				continue
-			}
-			mimeType := part.MIMEType
-			if mimeType == "" {
-				mimeType = "image/png"
-			}
-			out = append(out, map[string]any{
-				"type":     "image",
-				"data":     base64Encode(part.Data),
-				"mimeType": mimeType,
-			})
-		case "audio":
-			text = append(text, "[audio content omitted]")
-		case "resource_link":
-			text = append(text, fmt.Sprintf("[resource %s: %s]", part.Name, part.URI))
-		}
-	}
-	// Structured content is the driver's typed view of the same observation.
-	// When there is no text at all it is the only description of what happened,
-	// so it must not be dropped.
-	if len(text) == 0 && len(out) == 0 && len(result.StructuredContent) > 0 {
-		if raw, err := json.Marshal(result.StructuredContent); err == nil {
-			text = append(text, string(raw))
-		}
-	}
-	if len(text) == 0 && len(out) == 0 {
-		text = append(text, "(no output)")
-	}
-	joined := strings.Join(text, "\n")
-	if len(joined) > maxResultText {
-		joined = joined[:maxResultText] + "\n… [truncated]"
-	}
-	return append([]map[string]any{{"type": "text", "text": joined}}, out...)
-}
-
-const maxResultText = 100_000
-
 // ErrNoDriver reports that computer use is unavailable, with the reason.
 type ErrNoDriver struct{ Cause error }
 
@@ -334,7 +286,6 @@ func (e *ErrNoDriver) Error() string {
 
 func (e *ErrNoDriver) Unwrap() error { return e.Cause }
 
-// runTimeout bounds one tool call. Cua's own reference hosts rely on the
-// driver's own cancellation rather than a harness deadline, so this is generous
-// and exists only to stop a wedged call from pinning a run forever.
-const runTimeout = 5 * time.Minute
+// maxResultText caps text pulled out of one result, so a large observation
+// cannot blow up the context by itself.
+const maxResultText = 100_000
