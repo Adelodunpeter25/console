@@ -1,5 +1,0 @@
-[
-  {"label": "full calculator tree", "tool": "get_window_state",
-   "args": {"pid": 58151, "window_id": 34964,
-            "timeout_ms": 5000, "include_screenshot": false}, "as": "full"}
-]

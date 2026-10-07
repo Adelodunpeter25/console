@@ -1,9 +1,0 @@
-[
-  {"label": "read visible terminal window", "tool": "get_window_state",
-   "args": {"pid": 90112, "window_id": 28470,
-            "query": "zsh", "include_screenshot": false}, "as": "termstate"},
-  {"label": "bring calculator front", "tool": "bring_to_front",
-   "args": {"pid": 58151, "window_id": 34964}, "as": "front"},
-  {"label": "calculator windows now", "tool": "list_windows",
-   "args": {"pid": 58151}, "as": "calcwins2"}
-]

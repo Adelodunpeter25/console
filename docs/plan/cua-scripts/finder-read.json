@@ -1,7 +1,0 @@
-[
-  {"label": "finder windows", "tool": "list_windows",
-   "args": {"pid": 960}, "as": "finderwins"},
-  {"label": "read finder window", "tool": "get_window_state",
-   "args": {"pid": 960, "window_id": "{{finderwins.windows.0.window_id}}",
-            "query": "Recents", "include_screenshot": false}, "as": "finderstate"}
-]

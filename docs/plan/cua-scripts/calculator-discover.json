@@ -1,9 +1,0 @@
-[
-  {"label": "launch calculator", "tool": "launch_app",
-   "args": {"bundle_id": "com.apple.calculator"}, "as": "launch"},
-  {"label": "wait for window", "tool": "$wait_window",
-   "args": {"pid": "{{launch.pid}}", "timeout_ms": 15000}, "as": "win"},
-  {"label": "read full tree", "tool": "get_window_state",
-   "args": {"pid": "{{launch.pid}}", "window_id": "{{win.window_id}}",
-            "include_screenshot": false}, "as": "tree"}
-]
