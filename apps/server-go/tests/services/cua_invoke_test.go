@@ -51,9 +51,13 @@ func TestSkillTextCarriesTheContract(t *testing.T) {
 		"get_window_state",
 		"click",
 		"element_token",
+		"element_id",
 		"snapshot",
 		"background",
 		"verify_state",
+		"label_contains",
+		"value_equals",
+		"set_value",
 		"cua.list_apps",
 	} {
 		if !strings.Contains(skill, want) {

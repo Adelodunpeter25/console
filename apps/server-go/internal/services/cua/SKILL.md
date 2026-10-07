@@ -32,12 +32,25 @@ pictures.
    target is missing.
 2. Act by `element_token` from the latest snapshot. Tokens read
    `snapshot_id:row` and die on the next snapshot, so observe and act in the
-   same block where you can. Use pixel `x, y` from that exact window's
-   screenshot only for surfaces missing from the tree. Cua handles backing
-   scale; do not resize the image or add the window's screen origin.
+   same block where you can. Prefer the stable `element_id` (the `id=`
+   attribute in the tree, e.g. `Multiply`) over raw row numbers: rows
+   renumber between snapshots but ids do not. Pass
+   `click({pid, window_id, element_id: "Multiply"})` and the runtime
+   snapshots, matches, and acts with a fresh token itself. Use pixel `x, y`
+   from that exact window's screenshot only for surfaces missing from the
+   tree. Cua handles backing scale; do not resize the image or add the
+   window's screen origin.
 3. Verify at checkpoints (after a meaningful state change, before finishing),
-   not after every action. One `verify_state` or one targeted
-   `get_window_state` is usually enough.
+   not after every action. `verify_state({pid, window_id, expect: [...]})`
+   takes one to eight predicates, ANDed: each is `{window: {exists?,
+   bounds?}}` or `{element: {selector: {role?, label_contains?}, exists?,
+   value_equals?, enabled?, selected?}}`. For example, to assert a display
+   reads 56:
+   `verify_state({pid, window_id, expect: [{element: {selector:
+   {label_contains: "56"}}}]})`.
+   `timeout_ms` and `stable_samples` wait for asynchronous changes;
+   `include_screenshot: true` returns the final picture. One `verify_state`
+   or one targeted `get_window_state` is usually enough.
 4. Batch known steps in one block once a read has given you every token the
    steps need.
 
@@ -46,8 +59,11 @@ pictures.
 1. Select the exact target on each action: `{pid, window_id}` plus an
    `element_token`, never "the focused window" from memory.
 2. Observe before input and verify the outcome at checkpoints, not after every
-   action. A successful exit without a verified postcondition is not task
-   success; never replay a partial, canceled, or unknown action blindly.
+   action. Every method reports success when the CALL succeeds, not when the
+   outcome is right: after acting, read the outcome (display text, fresh
+   tree) and compare it to intent. A successful exit without a verified
+   postcondition is not task success; never replay a partial, canceled, or
+   unknown action blindly.
 3. Use returned tokens, never invented indices. A fresh snapshot replaces
    prior handles; act with `element_token`.
 4. Keep background window actions non-interfering: prefer
@@ -79,15 +95,17 @@ geometry; `zoom({pid, window_id, x1, y1, x2, y2})` magnifies a region;
 `parse_visual_regions()` names visual regions; `clipboard_read()` reads the
 clipboard.
 
-Act: `click({pid, window_id, element_token?, x?, y?, button?,
+Act: `click({pid, window_id, element_token?, element_id?, x?, y?, button?,
 delivery_mode?})`, `double_click` and `right_click` the same way;
 `drag({pid, window_id, from_x, from_y, to_x, to_y, delivery_mode})` is
 pixel-only and foreground-only; `type_text({pid, window_id, element_token?,
-text, delivery_mode?})` types; `press_key({pid, window_id, key,
-modifiers?})` presses one key; `hotkey({pid, window_id, keys,
+element_id?, text, delivery_mode?})` types; `press_key({pid, window_id,
+element_token?, element_id?, key, modifiers?})` presses one key;
+`hotkey({pid, window_id, element_token?, element_id?, keys,
 delivery_mode?})` presses a chord; `set_value({pid, window_id,
-element_token?, value})` sets a control directly;
-`scroll({pid, window_id, element_token?, direction, amount?,
+element_token?, element_id?, value})` sets a control directly — prefer it
+over click-then-type sequences for text fields;
+`scroll({pid, window_id, element_token?, element_id?, direction, amount?,
 delivery_mode?})`; `invoke_menu({pid, window_id, path})` picks a native menu
 path like `["File", "New"]` and owns the temporary activation;
 `move_cursor({x, y})` moves the agent cursor where one is available.

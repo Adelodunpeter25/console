@@ -135,9 +135,30 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	// element_id is ours, not the driver's: resolve it to a fresh token now
+	// (the wire inputs deny unknown fields, so it must never be forwarded).
+	if _, ok := args["element_id"]; ok {
+		if err := r.resolveElementArg(ctx, name, args); err != nil {
+			r.throwError(err.Error())
+		}
+	}
+	// wait_timeout_ms tunes only the launch wait below; strip it for the same
+	// reason.
+	waitTimeoutMs := 0
+	if rawTimeout, ok := args["wait_timeout_ms"]; ok {
+		delete(args, "wait_timeout_ms")
+		if timeout, ok := toInt64(rawTimeout); ok && timeout > 0 {
+			waitTimeoutMs = int(timeout)
+		}
+	}
 	result, err := r.caller.Call(ctx, name, args, r.cancel)
 	if err != nil {
 		r.throwError("cua." + name + " failed: " + err.Error())
+	}
+	if name == "launch_app" {
+		if note := r.waitLaunchWindow(ctx, args, result, waitTimeoutMs); note != "" {
+			result.Content = append(result.Content, ContentPart{Type: "text", Text: note})
+		}
 	}
 	return r.resultObject(result)
 }

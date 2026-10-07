@@ -16,12 +16,15 @@ import (
 )
 
 // fakeJSCaller answers tool calls from canned results and records what it was
-// asked, so tests assert the exact arguments the script produced.
+// asked, so tests assert the exact arguments the script produced. onCall
+// answers statefully per call (counted from 1) when set; returning handled
+// false falls through to the canned maps.
 type fakeJSCaller struct {
 	tools   []cua.ToolDef
 	results map[string]*cua.ToolResult
 	errors  map[string]error
 	calls   []fakeJSCall
+	onCall  func(name string, args map[string]any, call int) (*cua.ToolResult, error, bool)
 }
 
 type fakeJSCall struct {
@@ -33,6 +36,11 @@ func (f *fakeJSCaller) ListTools() ([]cua.ToolDef, error) { return f.tools, nil 
 
 func (f *fakeJSCaller) Call(_ context.Context, name string, args map[string]any, _ func() bool) (*cua.ToolResult, error) {
 	f.calls = append(f.calls, fakeJSCall{name: name, args: args})
+	if f.onCall != nil {
+		if res, err, handled := f.onCall(name, args, len(f.calls)); handled {
+			return res, err
+		}
+	}
 	if err, ok := f.errors[name]; ok {
 		return nil, err
 	}
