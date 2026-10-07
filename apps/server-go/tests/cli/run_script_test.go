@@ -140,3 +140,21 @@ func containsStr(haystack, needle string) bool {
 	}
 	return false
 }
+
+// TestScriptStepMeasuresElapsed pins the transcript clock: a step that sleeps
+// must report it. $sleep touches no driver, so no library is needed. The bound
+// is generous (half the sleep) because CI machines stall, but a zero Ms from a
+// 150ms sleep means the deferred write is landing on a discarded copy.
+func TestScriptStepMeasuresElapsed(t *testing.T) {
+	entry := commands.ExecuteScriptStep(nil, map[string]any{}, 0, commands.ScriptStep{
+		Label: "nap",
+		Tool:  "$sleep",
+		Args:  map[string]any{"ms": float64(150)},
+	})
+	if !entry.OK {
+		t.Fatalf("sleep step failed: %s", entry.Error)
+	}
+	if entry.Ms < 75 {
+		t.Fatalf("Ms = %d after a 150ms sleep; the clock is not landing on the returned entry", entry.Ms)
+	}
+}

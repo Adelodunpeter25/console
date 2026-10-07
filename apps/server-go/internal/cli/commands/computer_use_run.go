@@ -55,8 +55,9 @@ import (
 )
 
 // scriptStep is one executable step. TimeoutMs bounds driver calls; the
-// default keeps a wedged call from pinning the transcript forever.
-type scriptStep struct {
+// default keeps a wedged call from pinning the transcript forever. Exported
+// along with ExecuteScriptStep so the timing contract is pinned by tests.
+type ScriptStep struct {
 	Label     string         `json:"label"`
 	Tool      string         `json:"tool"`
 	Args      map[string]any `json:"args"`
@@ -253,7 +254,7 @@ debugged without rebuilding anything.`,
 			if err != nil {
 				return err
 			}
-			var steps []scriptStep
+			var steps []ScriptStep
 			if err := json.Unmarshal(raw, &steps); err != nil {
 				return fmt.Errorf("script is not a JSON step array: %w", err)
 			}
@@ -279,7 +280,7 @@ debugged without rebuilding anything.`,
 			scope := scriptScope{}
 			failed := 0
 			for i, step := range steps {
-				entry := executeScriptStep(driver, scope, i, step)
+				entry := ExecuteScriptStep(driver, scope, i, step)
 				if transcript != nil {
 					line, _ := json.Marshal(entry)
 					fmt.Fprintln(transcript, string(line))
@@ -325,10 +326,16 @@ func firstLine(s string) string {
 	return s
 }
 
-// executeScriptStep runs one step and returns its transcript entry. Local $
-// helpers never reach the driver.
-func executeScriptStep(driver *cua.Driver, scope scriptScope, index int, step scriptStep) transcriptEntry {
-	entry := transcriptEntry{Index: index, Label: step.Label, Tool: step.Tool}
+// ExecuteScriptStep runs one step and returns its transcript entry. Local $
+// helpers never reach the driver. Exported so the timing contract is pinned
+// by tests rather than trusted.
+//
+// entry is a named return so the deferred clock lands on the value the caller
+// receives. Returning executeDriverStep's copy directly would evaluate the
+// copy first and let the defer modify only the discarded local, freezing Ms
+// at zero in every transcript.
+func ExecuteScriptStep(driver *cua.Driver, scope map[string]any, index int, step ScriptStep) (entry transcriptEntry) {
+	entry = transcriptEntry{Index: index, Label: step.Label, Tool: step.Tool}
 	start := time.Now()
 	defer func() { entry.Ms = time.Since(start).Milliseconds() }()
 
@@ -348,14 +355,16 @@ func executeScriptStep(driver *cua.Driver, scope scriptScope, index int, step sc
 	}
 
 	if strings.HasPrefix(step.Tool, "$") {
-		return executeLocalStep(driver, step.Tool, args, step, scope, entry)
+		entry = executeLocalStep(driver, step.Tool, args, step, scope, entry)
+		return entry
 	}
-	return executeDriverStep(driver, step, args, scope, entry)
+	entry = executeDriverStep(driver, step, args, scope, entry)
+	return entry
 }
 
 // executeDriverStep calls one real driver tool with a deadline, so a wedged
 // call fails the step instead of pinning the transcript forever.
-func executeDriverStep(driver *cua.Driver, step scriptStep, args map[string]any, scope scriptScope, entry transcriptEntry) transcriptEntry {
+func executeDriverStep(driver *cua.Driver, step ScriptStep, args map[string]any, scope map[string]any, entry transcriptEntry) transcriptEntry {
 	timeoutMs := step.TimeoutMs
 	if timeoutMs <= 0 {
 		timeoutMs = 120_000
@@ -415,7 +424,7 @@ func executeDriverStep(driver *cua.Driver, step scriptStep, args map[string]any,
 // driver envelopes. They share the run's driver: Cua owns process-global
 // executor threads, so a second handle in the same process risks a
 // runtime-conflict rather than independence.
-func executeLocalStep(driver *cua.Driver, tool string, args map[string]any, step scriptStep, scope scriptScope, entry transcriptEntry) transcriptEntry {
+func executeLocalStep(driver *cua.Driver, tool string, args map[string]any, step ScriptStep, scope map[string]any, entry transcriptEntry) transcriptEntry {
 	switch tool {
 	case "$sleep":
 		ms, _ := args["ms"].(float64)
@@ -443,7 +452,7 @@ func executeLocalStep(driver *cua.Driver, tool string, args map[string]any, step
 // window_ready=false: the window does not exist at the instant launch returns.
 // The first window whose title contains title_contains (when given) is
 // captured under "as".
-func executeWaitWindow(driver *cua.Driver, args map[string]any, step scriptStep, scope scriptScope, entry transcriptEntry) transcriptEntry {
+func executeWaitWindow(driver *cua.Driver, args map[string]any, step ScriptStep, scope map[string]any, entry transcriptEntry) transcriptEntry {
 	pidValue, ok := args["pid"]
 	if !ok {
 		entry.Error = "$wait_window needs a pid"
@@ -507,7 +516,7 @@ func executeWaitWindow(driver *cua.Driver, args map[string]any, step scriptStep,
 
 // executeFind picks one element out of a captured array. The usual use is an
 // accessibility snapshot's elements array matched by label.
-func executeFind(args map[string]any, step scriptStep, scope scriptScope, entry transcriptEntry) transcriptEntry {
+func executeFind(args map[string]any, step ScriptStep, scope map[string]any, entry transcriptEntry) transcriptEntry {
 	from, _ := args["from"].(string)
 	if from == "" {
 		entry.Error = "$find needs a from capture name"
