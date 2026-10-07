@@ -13,10 +13,22 @@ import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.ModelStreamPart
 import console.v1.TodoItem
+import console.v1.ToolCall as WireToolCall
+import console.v1.ToolResult as WireToolResult
+import com.console.mobile.data.model.toUi
 import java.util.UUID
 
 private val todoJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(TodoItem::class.java)
 private val partJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(ModelStreamPart::class.java)
+private val wireMoshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
+private val toolCallJson = wireMoshi.adapter(WireToolCall::class.java)
+private val toolResultJson = wireMoshi.adapter(WireToolResult::class.java)
+
+private fun decodeToolCall(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolCall? =
+    runCatching { toolCallJson.fromJson(raw.toString()) }.getOrNull()?.toUi()
+
+private fun decodeToolResult(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolResult? =
+    runCatching { toolResultJson.fromJson(raw.toString()) }.getOrNull()?.toUi()
 
 
 fun newMessageId(): String = try {
@@ -133,13 +145,13 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             base = base.copy(activeToolCalls = toolCalls.map { it.call })
             updateLatestRun(base) { run -> run.copy(events = run.events + newEvents) }
         }
-        "toolExecutionStart" -> session.copy(activeToolCalls = event.calls ?: emptyList())
+        "toolExecutionStart" -> session.copy(activeToolCalls = event.calls?.mapNotNull(::decodeToolCall) ?: emptyList())
         "toolExecutionResult" -> {
-            val r = event.result ?: return session
+            val r = event.result?.let(::decodeToolResult) ?: return session
             updateLatestRun(session) { run -> run.copy(events = setToolCallResult(run.events, r)) }
         }
         "toolExecutionEnd" -> {
-            val results = event.results ?: emptyList()
+            val results = event.results?.mapNotNull(::decodeToolResult) ?: emptyList()
             var s = session
             for (r in results) {
                 s = updateLatestRun(s) { run -> run.copy(events = setToolCallResult(run.events, r)) }

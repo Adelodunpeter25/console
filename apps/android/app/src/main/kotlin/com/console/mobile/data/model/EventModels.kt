@@ -62,10 +62,13 @@ data class AgentSessionEvent(
     // (same nested-proto pattern as todo items).
     val part: JsonElement? = null,
     val turn: AssistantMessage? = null,
-    val calls: List<ToolCall>? = null,
+    // Live tool payloads: raw until consumed below; the payloads are
+    // console.v1.ToolCall/ToolResult (args/content as JSON bytes),
+    // decoded with Moshi in ChatEvents like todo items.
+    val calls: List<JsonElement>? = null,
     val request: JsonElement? = null,
-    val result: ToolResult? = null,
-    val results: List<ToolResult>? = null,
+    val result: JsonElement? = null,
+    val results: List<JsonElement>? = null,
     // Wire TodoItems arrive here as raw JSON (Phase 4 will schema the
     // event frames); decoded with Moshi in ChatEvents.
     val items: List<JsonElement>? = null,

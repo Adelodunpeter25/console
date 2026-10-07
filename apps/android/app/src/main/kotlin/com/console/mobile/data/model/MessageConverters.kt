@@ -21,14 +21,14 @@ private fun bytesToJson(bytes: okio.ByteString): JsonElement? = try {
 private fun console.v1.ImageAttachment.toUi(): ImagePart =
     ImagePart(data = data_, mimeType = mime_type)
 
-private fun console.v1.ToolCall.toUi(): ToolCall = ToolCall(
+internal fun console.v1.ToolCall.toUi(): ToolCall = ToolCall(
     id = id,
     name = name,
     arguments = bytesToJson(arguments),
     thoughtSignature = thought_signature,
 )
 
-private fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(
+internal fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(
     toolCallId = tool_call_id,
     toolName = tool_name,
     content = bytesToJson(content),
