@@ -235,6 +235,15 @@ func (r *JSRuntime) resultObject(result *ToolResult) goja.Value {
 	})
 }
 
+// evalOutcome carries one evaluation's result across the worker boundary.
+// The worker always sends exactly one, so Eval never leaks a goroutine and
+// never confuses one evaluation's outcome with another's.
+type evalOutcome struct {
+	completion goja.Value
+	runErr     error
+	panicked   any
+}
+
 // Eval runs code and converts the outcome to harness content parts. The
 // returned error is nil on success; a *tools.ToolError carries a model-visible
 // failure (bad code, driver refusal), anything else aborts the turn.
@@ -244,6 +253,11 @@ func (r *JSRuntime) Eval(ctx context.Context, code string, timeout time.Duration
 	}
 	if len(code) > maxJSCodeBytes {
 		return nil, tools.NewToolError("code is %d bytes, over the %d limit", len(code), maxJSCodeBytes)
+	}
+	if ctx.Err() != nil {
+		// Already cancelled before starting: nothing ran, so the outcome is
+		// known (not unknown) — the action was refused, not interrupted.
+		return nil, tools.NewToolError("%s", (&CancelledError{}).Error())
 	}
 	if timeout <= 0 {
 		timeout = jsCallTimeout
@@ -258,47 +272,54 @@ func (r *JSRuntime) Eval(ctx context.Context, code string, timeout time.Duration
 	r.evalCtx = callCtx
 	defer func() { r.evalCtx = nil }()
 
-	// A runaway script must die on abort rather than pin the turn: watching
-	// ctx and interrupting matches the driver's own cancel-every-50ms
-	// contract. goja delivers the interrupt as an *InterruptedError panic,
-	// which is uncatchable by script code; genuine JS throws arrive as the
-	// error return instead. A stale interrupt flag would poison the next
-	// evaluation, so it is cleared up front while no other eval can run.
+	// The script runs on a worker so an abort can interrupt it without any
+	// cross-evaluation signalling: the outcome travels back on a per-eval
+	// channel, so a late event from one evaluation can never be mistaken for
+	// another's. (A watcher goroutine plus a shared interrupt flag was tried
+	// here and raced: close(done) followed by cancel() leaves both channels
+	// closed, and Go picks randomly — half the late wakeups interrupted the
+	// wrong evaluation.)
 	r.rt.ClearInterrupt()
-
-	interrupted := false
-	done := make(chan struct{})
-	defer close(done)
+	resCh := make(chan evalOutcome, 1)
 	go func() {
-		select {
-		case <-callCtx.Done():
-			r.rt.Interrupt("computer stopped")
-		case <-done:
-		}
-	}()
-
-	var completion goja.Value
-	var runErr error
-	func() {
+		var out evalOutcome
 		defer func() {
-			if recovered := recover(); recovered != nil {
-				if _, ok := recovered.(*goja.InterruptedError); ok {
-					interrupted = true
-					r.rt.ClearInterrupt()
-					return
-				}
-				// Anything else is a genuine Go bug, not a stop: re-panic
-				// rather than misreporting it as an interrupted action.
-				panic(recovered)
+			if p := recover(); p != nil {
+				out.panicked = p
 			}
+			resCh <- out
 		}()
-		completion, runErr = r.rt.RunString(code)
+		out.completion, out.runErr = r.rt.RunString(code)
 	}()
 
-	if interrupted || isInterrupt(runErr) {
-		// An interrupted action may already have taken effect on screen, so
-		// its outcome is unknown: never let the model assume it did not
-		// happen. This is the same wording Stop uses everywhere else.
+	var out evalOutcome
+	select {
+	case out = <-resCh:
+		// Finished before any abort.
+	case <-callCtx.Done():
+		// Abort while running: interrupt, then drain. The worker always
+		// sends exactly one outcome, so this cannot hang.
+		r.rt.Interrupt("computer stopped")
+		out = <-resCh
+	}
+
+	if out.panicked != nil {
+		if _, ok := out.panicked.(*goja.InterruptedError); ok {
+			r.rt.ClearInterrupt()
+			// An interrupted action may already have taken effect on screen,
+			// so its outcome is unknown: never let the model assume it did
+			// not happen. This is the same wording Stop uses everywhere
+			// else. goja makes interrupts uncatchable, so script code cannot
+			// swallow a stop.
+			return nil, tools.NewToolError("computer stopped; action completion is unknown. Inspect fresh state before retrying.")
+		}
+		// Anything else is a genuine Go bug, not a stop: re-panic rather
+		// than misreporting it as an interrupted action.
+		panic(out.panicked)
+	}
+	completion, runErr := out.completion, out.runErr
+	if isInterrupt(runErr) {
+		r.rt.ClearInterrupt()
 		return nil, tools.NewToolError("computer stopped; action completion is unknown. Inspect fresh state before retrying.")
 	}
 	if runErr != nil {

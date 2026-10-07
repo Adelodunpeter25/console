@@ -277,6 +277,21 @@ func TestJSEmptyCodeIsRejected(t *testing.T) {
 	}
 }
 
+func TestJSPreCancelledContextRefusesWithKnownOutcome(t *testing.T) {
+	// Cancelling before anything starts is a refusal, not an interruption:
+	// no action ran, so the outcome is known and must not claim otherwise.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	runtime := newTestRuntime(t, screenSizeCaller())
+	_, err := runtime.Eval(ctx, `cua.get_screen_size()`, 0)
+	if err == nil {
+		t.Fatal("expected a refusal on a cancelled context")
+	}
+	if strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("a refused start has no unknown outcome: %v", err)
+	}
+}
+
 func TestJSStructuredContentIsAlwaysAnObject(t *testing.T) {
 	// The refusal path used to omit structuredContent (null), which threw
 	// TypeErrors in scripts accessing it. An empty result now carries {},
