@@ -60,7 +60,8 @@ fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: 
         out.add(ChangesRow.Folder("dir:$dir", dir, fs.sumOf { it.additions }, fs.sumOf { it.deletions }, fs.size))
         if (collapsed.contains(dir)) continue
         for (f in fs.sortedBy { it.path }) {
-            out.add(ChangesRow.File("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.reviewed, f.turn_index))
+            // Same path can repeat across turns: key on both.
+            out.add(ChangesRow.File("file:${f.path}#${f.turn_index}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.reviewed, f.turn_index))
         }
     }
     return out
