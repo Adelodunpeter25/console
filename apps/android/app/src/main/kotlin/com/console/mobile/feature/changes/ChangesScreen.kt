@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,7 +49,6 @@ import com.console.mobile.core.util.statusColorHex
 import com.console.mobile.core.util.statusLetter
 import com.console.mobile.core.util.stripRepoPrefix
 import com.console.mobile.core.util.sumTotals
-import console.v1.GitFileEntry
 import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
 import com.console.mobile.ui.components.FileIcon
@@ -60,8 +60,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Port of screens/changes/changes-screen.tsx + hooks/useChanges + ChangesRows.
- * Live git status list (folder groups) → file diff view (cached).
+ * Session file changes for the active chat: folder-grouped file list with
+ * reviewed checkmarks → cached unified diff per file. Backed by
+ * GET /api/sessions/:id/changes (+ diff + reviewed toggle).
  */
 @Composable
 fun ChangesScreen(onBack: () -> Unit) {
@@ -69,57 +70,59 @@ fun ChangesScreen(onBack: () -> Unit) {
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val sessionChanges by AppContainer.sessionStateHolder.sessionChanges.collectAsStateWithLifecycle()
 
-    val sessionCwd = appState.selectedSessionId?.let { sessionViews[it]?.sessionCwd }
+    val sessionId = appState.selectedSessionId
+    val sessionCwd = sessionId?.let { sessionViews[it]?.sessionCwd }
     val project = projectState.projects.firstOrNull { p ->
         sessionCwd?.let { cwd -> p.path == cwd || cwd.startsWith(p.path + "/") } == true
     } ?: projectState.projects.firstOrNull { it.id == appState.selectedProjectId } ?: projectState.projects.firstOrNull()
     val repoPath = sessionCwd ?: project?.path
 
-    var files by remember(repoPath) { mutableStateOf<List<GitFileEntry>>(emptyList()) }
-    var branch by remember(repoPath) { mutableStateOf<String?>(null) }
-    var loading by remember(repoPath) { mutableStateOf(true) }
-    var error by remember(repoPath) { mutableStateOf<String?>(null) }
-    var collapsed by remember(repoPath) { mutableStateOf(setOf<String>()) }
-    var selectedPath by remember(repoPath) { mutableStateOf<String?>(null) }
+    val files = sessionId?.let { sessionChanges[it].orEmpty() }.orEmpty()
+    var loading by remember(sessionId) { mutableStateOf(true) }
+    var error by remember(sessionId) { mutableStateOf<String?>(null) }
+    var collapsed by remember(sessionId) { mutableStateOf(setOf<String>()) }
+    var selectedPath by remember(sessionId) { mutableStateOf<String?>(null) }
+    var selectedTurn by remember(sessionId) { mutableStateOf(0) }
     var diffText by remember { mutableStateOf<String?>(null) }
     var diffLoading by remember { mutableStateOf(false) }
     var diffError by remember { mutableStateOf<String?>(null) }
-    val diffCache = remember(repoPath) { mutableMapOf<String, String?>() }
+    val diffCache = remember(sessionId) { mutableMapOf<String, String?>() }
 
     fun refresh() {
-        val rp = repoPath ?: return
+        val sid = sessionId ?: return
         loading = true
         error = null
         scope.launch {
             try {
-                val summary = withContext(Dispatchers.IO) { AppContainer.gitRepository.getStatus(rp) }
-                files = (summary?.files ?: emptyList()).filter { it.status != "!" }
-                branch = summary?.branch
+                withContext(Dispatchers.IO) { AppContainer.sessionRepository.loadSessionChanges(sid) }
             } catch (e: Exception) {
-                error = e.message ?: "Failed to load git status."
+                error = e.message ?: "Failed to load changes."
             } finally {
                 loading = false
             }
         }
     }
 
-    LaunchedEffect(repoPath) {
+    LaunchedEffect(sessionId) {
         selectedPath = null
         diffText = null
         diffError = null
-        refresh()
+        if (sessionId != null) refresh() else loading = false
     }
 
-    LaunchedEffect(selectedPath, repoPath) {
+    LaunchedEffect(selectedPath, sessionId) {
         val sp = selectedPath
-        val rp = repoPath
-        if (sp == null || rp == null) {
+        val sid = sessionId
+        if (sp == null || sid == null) {
             diffText = null
             diffError = null
             diffLoading = false
             return@LaunchedEffect
         }
+        val turn = files.firstOrNull { it.path == sp }?.turn_index ?: 0
+        selectedTurn = turn
         if (diffCache.containsKey(sp)) {
             diffText = diffCache[sp]
             diffError = null
@@ -130,10 +133,7 @@ fun ChangesScreen(onBack: () -> Unit) {
         diffText = null
         diffError = null
         try {
-            val d = withContext(Dispatchers.IO) { AppContainer.gitRepository.getDiff(rp, sp) }
-            // Only cache a real answer. Caching the null that used to stand in for
-            // a failed request pinned the file to "No diff available" until the
-            // repo path changed.
+            val d = withContext(Dispatchers.IO) { AppContainer.sessionRepository.loadChangeDiff(sid, sp, turn) }
             diffCache[sp] = d
             if (selectedPath == sp) diffText = d
         } catch (e: Exception) {
@@ -156,8 +156,18 @@ fun ChangesScreen(onBack: () -> Unit) {
                 if (change != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
                         Text(statusLetter(change.status), color = parseChangeColor(statusColorHex(change.status)), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text("+${change.additions ?: 0}", color = Color(0xFF34D399), fontSize = 12.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 8.dp))
-                        Text("-${change.deletions ?: 0}", color = Color(0xFFF87171), fontSize = 12.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 8.dp))
+                        Text("+${change.additions}", color = Color(0xFF34D399), fontSize = 12.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 8.dp))
+                        Text("-${change.deletions}", color = Color(0xFFF87171), fontSize = 12.sp, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(start = 8.dp))
+                        Box(modifier = Modifier.weight(1f))
+                        Text("Reviewed", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
+                        Checkbox(
+                            checked = change.reviewed,
+                            onCheckedChange = {
+                                sessionId?.let { sid ->
+                                    AppContainer.sessionRepository.toggleChangeReviewed(sid, change.path, change.turn_index, !change.reviewed)
+                                }
+                            },
+                        )
                     }
                 }
                 when {
@@ -168,11 +178,8 @@ fun ChangesScreen(onBack: () -> Unit) {
                         Text(diffError ?: "Failed to load diff.", color = ConsoleColors.Destructive, fontSize = 12.sp)
                     }
                     diffText != null -> DiffView(diff = parseUnifiedDiff(diffText ?: ""), filePath = sel)
-                    change != null && (change.status == "A" || change.status == "?") -> Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(12.dp)) {
-                        Text("New file +${change.additions ?: 0} lines (diff unavailable off-git).", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
-                    }
                     else -> Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(12.dp)) {
-                        Text("No diff available for this file.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+                        Text("No diff available for this file.", color = ConsoleColors.TextSecondary, fontSize = 12.sp)
                     }
                 }
             }
@@ -182,7 +189,7 @@ fun ChangesScreen(onBack: () -> Unit) {
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
         ScreenHeader(
-            title = branch ?: "Changes",
+            title = "Changes",
             subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
             onBack = onBack,
             actions = {
@@ -192,6 +199,12 @@ fun ChangesScreen(onBack: () -> Unit) {
             },
         )
         when {
+            sessionId == null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No active session", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Open a chat to see its file changes.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
             loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = ConsoleColors.TextMuted)
@@ -201,17 +214,18 @@ fun ChangesScreen(onBack: () -> Unit) {
             error != null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Couldn't load changes", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text(error ?: "Failed to load git status.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(error ?: "Failed to load session changes.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
             rows.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No working tree changes", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Text("The working tree is clean.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text("No file changes yet", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Files this session touches will show up here.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
             else -> LazyColumn(modifier = Modifier.fillMaxSize().padding(bottom = 24.dp)) {
-                items(rows, key = { it.keyOf() }) { row ->                    when (row) {
+                items(rows, key = { it.keyOf() }) { row ->
+                    when (row) {
                         is ChangesRow.Folder -> Row(
                             modifier = Modifier.fillMaxWidth().clickable {
                                 collapsed = if (collapsed.contains(row.name)) collapsed - row.name else collapsed + row.name
@@ -233,6 +247,14 @@ fun ChangesScreen(onBack: () -> Unit) {
                                 Text(row.rel, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             DiffSummaryBadge(addedCount = row.additions, removedCount = row.deletions)
+                            Checkbox(
+                                checked = row.reviewed,
+                                onCheckedChange = {
+                                    sessionId?.let { sid ->
+                                        AppContainer.sessionRepository.toggleChangeReviewed(sid, row.path, row.turnIndex, !row.reviewed)
+                                    }
+                                },
+                            )
                             Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                         }
                     }

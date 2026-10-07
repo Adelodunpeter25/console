@@ -77,7 +77,6 @@ interface ConsoleApi {
     suspend fun createDir(path: String)
     suspend fun deleteDir(path: String)
     // git
-    suspend fun getDiff(repoPath: String, filePath: String?): String?
     suspend fun getGitStatus(path: String): GitStatusSummary?
     suspend fun listBranches(repoPath: String): GitBranchesResponse?
     suspend fun checkoutBranch(repoPath: String, branch: String)

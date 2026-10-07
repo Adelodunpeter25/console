@@ -25,9 +25,6 @@ class GitRepository(
     private val apiClient: ConsoleApiClient,
     private val httpClient: OkHttpClient,
 ) {
-    suspend fun getDiff(repoPath: String, filePath: String? = null): String? = withContext(Dispatchers.IO) {
-        api.getDiff(repoPath, filePath)
-    }
 
     suspend fun getStatus(path: String): GitStatusSummary? = withContext(Dispatchers.IO) {
         api.getGitStatus(path)

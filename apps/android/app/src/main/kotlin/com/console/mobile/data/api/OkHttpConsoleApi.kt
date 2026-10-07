@@ -376,14 +376,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     // rendered as "The working tree is clean." Callers (ChangesScreen,
     // GitRepository) already handle the throw.
 
-    override suspend fun getDiff(repoPath: String, filePath: String?): String? {
-        val params = mutableMapOf("repoPath" to repoPath)
-        if (filePath != null) params["path"] = filePath
-        val raw = http.get("/api/git/diff", params)
-        val element = http.unwrap(raw, JsonElement.serializer(), "load diff")
-        if (element is JsonNull) return null
-        return gitDiffAdapter.fromJson(element.toString())?.diff
-    }
 
     override suspend fun getGitStatus(path: String): GitStatusSummary? {
         val raw = http.get("/api/git/status", mapOf("path" to path))

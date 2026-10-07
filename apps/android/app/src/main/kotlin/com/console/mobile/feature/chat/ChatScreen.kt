@@ -38,7 +38,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
-import io.github.lyxnx.compose.ui.tablericons.outline.Files
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
@@ -112,7 +111,6 @@ fun ChatScreen(
     var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentSheet by remember { mutableStateOf(false) }
-    var changesSheet by remember { mutableStateOf(false) }
     var subagentSelected by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
@@ -339,14 +337,6 @@ fun ChatScreen(
                                 jumpToProjectTab(MobileTab.Terminal)
                             },
                         )
-                        ConsoleDropdownMenuItem(
-                            label = "Session changes",
-                            icon = TablerIcons.Outline.Files,
-                            onClick = {
-                                overflowMenu = false
-                                changesSheet = true
-                            },
-                        )
                     }
                 }
             },
@@ -431,9 +421,6 @@ fun ChatScreen(
 
     if (todoSheet) {
         TodoBottomSheet(items = todos, completed = todoDone, total = todoTotal, onDismiss = { todoSheet = false })
-    }
-    if (changesSheet && sessionId != null) {
-        SessionChangesSheet(sessionId = sessionId, onDismiss = { changesSheet = false })
     }
     if (subagentSheet) {
         SubagentSheet(subagents = subagents, selectedId = subagentSelected, onSelect = { subagentSelected = it }, onDismiss = { subagentSheet = false }, onOpenDetails = { id ->
