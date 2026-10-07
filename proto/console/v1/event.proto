@@ -24,3 +24,18 @@ message ModelStreamPart {
     ToolCallPreview tool_call = 3;
   }
 }
+
+// Turn close + context (Phase 4, third slice). The modelStreamEnd turn
+// reuses the transcript schema (AgentAssistantMessage): role/usage keys the
+// old hand shape emitted are dropped — no client reads them. Context numbers
+// stay JSON numbers (int32 counts, double ratios), so the contextUpdate frame
+// and GET /context bytes are unchanged; only their source moves here.
+message ContextSnapshot {
+  int32 used_tokens = 1;
+  int32 context_window = 2;
+  double percent_used = 3;
+  double threshold_ratio = 4;
+  string model_id = 5;
+  string provider = 6;
+  string source = 7;
+}

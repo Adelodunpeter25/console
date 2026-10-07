@@ -1,0 +1,1 @@
+{"turn":{"id":"a1","content":[{"text":{"text":"hi"}},{"toolCall":{"id":"c1","name":"sh","arguments":"eyJjbWQiOiJscyJ9"}}],"stopReason":"end_turn"},"turnId":"t1","type":"modelStreamEnd"}

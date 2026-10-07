@@ -179,6 +179,103 @@ func (*ModelStreamPart_Thinking) isModelStreamPart_Part() {}
 
 func (*ModelStreamPart_ToolCall) isModelStreamPart_Part() {}
 
+// Turn close + context (Phase 4, third slice). The modelStreamEnd turn
+// reuses the transcript schema (AgentAssistantMessage): role/usage keys the
+// old hand shape emitted are dropped — no client reads them. Context numbers
+// stay JSON numbers (int32 counts, double ratios), so the contextUpdate frame
+// and GET /context bytes are unchanged; only their source moves here.
+type ContextSnapshot struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	UsedTokens     int32                  `protobuf:"varint,1,opt,name=used_tokens,json=usedTokens,proto3" json:"used_tokens,omitempty"`
+	ContextWindow  int32                  `protobuf:"varint,2,opt,name=context_window,json=contextWindow,proto3" json:"context_window,omitempty"`
+	PercentUsed    float64                `protobuf:"fixed64,3,opt,name=percent_used,json=percentUsed,proto3" json:"percent_used,omitempty"`
+	ThresholdRatio float64                `protobuf:"fixed64,4,opt,name=threshold_ratio,json=thresholdRatio,proto3" json:"threshold_ratio,omitempty"`
+	ModelId        string                 `protobuf:"bytes,5,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Provider       string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`
+	Source         string                 `protobuf:"bytes,7,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ContextSnapshot) Reset() {
+	*x = ContextSnapshot{}
+	mi := &file_console_v1_event_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ContextSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ContextSnapshot) ProtoMessage() {}
+
+func (x *ContextSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_event_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ContextSnapshot.ProtoReflect.Descriptor instead.
+func (*ContextSnapshot) Descriptor() ([]byte, []int) {
+	return file_console_v1_event_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ContextSnapshot) GetUsedTokens() int32 {
+	if x != nil {
+		return x.UsedTokens
+	}
+	return 0
+}
+
+func (x *ContextSnapshot) GetContextWindow() int32 {
+	if x != nil {
+		return x.ContextWindow
+	}
+	return 0
+}
+
+func (x *ContextSnapshot) GetPercentUsed() float64 {
+	if x != nil {
+		return x.PercentUsed
+	}
+	return 0
+}
+
+func (x *ContextSnapshot) GetThresholdRatio() float64 {
+	if x != nil {
+		return x.ThresholdRatio
+	}
+	return 0
+}
+
+func (x *ContextSnapshot) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *ContextSnapshot) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *ContextSnapshot) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
 var File_console_v1_event_proto protoreflect.FileDescriptor
 
 const file_console_v1_event_proto_rawDesc = "" +
@@ -192,7 +289,16 @@ const file_console_v1_event_proto_rawDesc = "" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x1c\n" +
 	"\bthinking\x18\x02 \x01(\tH\x00R\bthinking\x12:\n" +
 	"\ttool_call\x18\x03 \x01(\v2\x1b.console.v1.ToolCallPreviewH\x00R\btoolCallB\x06\n" +
-	"\x04partBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x04part\"\xf4\x01\n" +
+	"\x0fContextSnapshot\x12\x1f\n" +
+	"\vused_tokens\x18\x01 \x01(\x05R\n" +
+	"usedTokens\x12%\n" +
+	"\x0econtext_window\x18\x02 \x01(\x05R\rcontextWindow\x12!\n" +
+	"\fpercent_used\x18\x03 \x01(\x01R\vpercentUsed\x12'\n" +
+	"\x0fthreshold_ratio\x18\x04 \x01(\x01R\x0ethresholdRatio\x12\x19\n" +
+	"\bmodel_id\x18\x05 \x01(\tR\amodelId\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x16\n" +
+	"\x06source\x18\a \x01(\tR\x06sourceBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_event_proto_rawDescOnce sync.Once
@@ -206,10 +312,11 @@ func file_console_v1_event_proto_rawDescGZIP() []byte {
 	return file_console_v1_event_proto_rawDescData
 }
 
-var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_console_v1_event_proto_goTypes = []any{
 	(*ToolCallPreview)(nil), // 0: console.v1.ToolCallPreview
 	(*ModelStreamPart)(nil), // 1: console.v1.ModelStreamPart
+	(*ContextSnapshot)(nil), // 2: console.v1.ContextSnapshot
 }
 var file_console_v1_event_proto_depIdxs = []int32{
 	0, // 0: console.v1.ModelStreamPart.tool_call:type_name -> console.v1.ToolCallPreview
@@ -236,7 +343,7 @@ func file_console_v1_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_event_proto_rawDesc), len(file_console_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -37,7 +37,7 @@ func ToProtoMessage(v any) (*consolev1.AgentMessage, error) {
 		return ToProtoMessage(*m)
 	case AssistantMessage:
 		return &consolev1.AgentMessage{Message: &consolev1.AgentMessage_Assistant{
-			Assistant: assistantToProto(m),
+			Assistant: AssistantToProto(m),
 		}}, nil
 	case *AssistantMessage:
 		if m == nil {
@@ -156,7 +156,7 @@ func AnnotationToProto(a types.BrowserAnnotation) *consolev1.BrowserAnnotation {
 	return out
 }
 
-func assistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
+func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 	out := &consolev1.AgentAssistantMessage{
 		Id: m.ID, StopReason: string(m.StopReason),
 	}

@@ -123,6 +123,16 @@ func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
 	return out
 }
 
+// snapshotToProto converts a context-window snapshot to the canonical wire
+// type. Counts narrow to int32 and stay JSON numbers.
+func snapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
+	return &consolev1.ContextSnapshot{
+		UsedTokens: int32(snap.UsedTokens), ContextWindow: int32(snap.ContextWindow),
+		PercentUsed: snap.PercentUsed, ThresholdRatio: snap.ThresholdRatio,
+		ModelId: snap.ModelID, Provider: snap.Provider, Source: snap.Source,
+	}
+}
+
 func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 	// POST /api/sessions/:id/run — start a run and stream its events.
 	app.Post("/api/sessions/:id/run", func(c *fiber.Ctx) error {
@@ -188,7 +198,11 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
-		return c.JSON(fiber.Map{"success": true, "data": snap})
+		raw, err := protoMarshal.Marshal(snapshotToProto(snap))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	// POST /api/sessions/:id/abort — cancel the active run and discard any
@@ -487,7 +501,15 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		}
 		return "modelStreamPart", modelStreamPartFrame{Type: "modelStreamPart", Part: json.RawMessage(raw)}, false
 	case loop.EventModelStreamEnd:
-		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": e.Message}, false
+		var turn any
+		if m, ok := e.Message.(loop.AssistantMessage); ok {
+			raw, err := protoMarshal.Marshal(loop.AssistantToProto(m))
+			if err != nil {
+				return "", nil, true
+			}
+			turn = json.RawMessage(raw)
+		}
+		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": turn}, false
 	case loop.EventToolExecutionStart:
 		calls := make([]*consolev1.ToolCall, 0, len(e.Calls))
 		for _, c := range e.Calls {
@@ -520,7 +542,14 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventTurnEnd:
 		return "turnEnd", fiber.Map{"type": "turnEnd", "turnId": e.Text}, false
 	case loop.EventContextUpdate:
-		return "contextUpdate", fiber.Map{"type": "contextUpdate", "context": e.Context}, false
+		if e.Context == nil {
+			return "", nil, true
+		}
+		raw, err := protoMarshal.Marshal(snapshotToProto(*e.Context))
+		if err != nil {
+			return "", nil, true
+		}
+		return "contextUpdate", fiber.Map{"type": "contextUpdate", "context": json.RawMessage(raw)}, false
 	case loop.EventSessionEnd:
 		return "sessionEnd", fiber.Map{"type": "sessionEnd"}, false
 	case loop.EventSessionTitleUpdated:
