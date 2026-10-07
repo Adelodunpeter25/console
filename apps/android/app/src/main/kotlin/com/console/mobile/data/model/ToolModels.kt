@@ -46,13 +46,10 @@ data class ToolCall(
     val thoughtSignature: String? = null,
 )
 
-@Serializable
-data class ToolCallPreview(
-    val id: String,
-    val name: String,
-    val arguments: kotlinx.serialization.json.JsonElement? = null,
-    val thoughtSignature: String? = null,
-)
+// ToolCallPreview moved to the shared protobuf schema
+// (console.v1.ToolCallPreview): the stream preview carries id+name only;
+// args arrive with the toolExecutionStart frame.
+
 
 @Serializable
 data class ToolResult(

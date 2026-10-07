@@ -57,7 +57,10 @@ data class AgentSessionEvent(
     val type: String,
     val prompt: String? = null,
     val turnId: String? = null,
-    val part: StreamPart? = null,
+    // Per-token delta: raw until consumed below; the payload is
+    // console.v1.ModelStreamPart, decoded with Moshi in ChatEvents
+    // (same nested-proto pattern as todo items).
+    val part: JsonElement? = null,
     val turn: AssistantMessage? = null,
     val calls: List<ToolCall>? = null,
     val request: JsonElement? = null,
@@ -92,13 +95,6 @@ data class AgentSessionEvent(
     val args: JsonElement? = null,
     val status: String? = null,
     val totalTurns: Int? = null,
-)
-
-@Serializable
-data class StreamPart(
-    val text: String? = null,
-    val thinking: String? = null,
-    val toolCall: ToolCallPreview? = null,
 )
 
 @Serializable

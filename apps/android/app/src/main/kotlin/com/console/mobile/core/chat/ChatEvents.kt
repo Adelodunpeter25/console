@@ -11,10 +11,12 @@ import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.model.ToolResultMessage
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.ModelStreamPart
 import console.v1.TodoItem
 import java.util.UUID
 
 private val todoJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(TodoItem::class.java)
+private val partJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(ModelStreamPart::class.java)
 
 
 fun newMessageId(): String = try {
@@ -91,8 +93,9 @@ fun commitStreamingBuffer(session: ChatSessionState): ChatSessionState {
 fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSessionState {
     return when (event.type) {
         "modelStreamPart" -> {
-            val text = event.part?.text.orEmpty()
-            val thinking = event.part?.thinking.orEmpty()
+            val part = event.part?.let { runCatching { partJson.fromJson(it.toString()) }.getOrNull() }?.part
+            val text = (part as? ModelStreamPart.Part.Text)?.value.orEmpty()
+            val thinking = (part as? ModelStreamPart.Part.Thinking)?.value.orEmpty()
             if (text.isEmpty() && thinking.isEmpty()) session
             else session.copy(
                 streamingText = session.streamingText + text,
