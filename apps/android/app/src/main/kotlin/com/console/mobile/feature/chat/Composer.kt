@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -75,7 +74,6 @@ import kotlin.math.roundToInt
  * slash-command / @file autocomplete. The chips below live in
  * [ComposerBottomStrip], attachments in [ComposerAttachments].
  */
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun Composer(
     sessionId: String,
@@ -165,14 +163,16 @@ fun Composer(
     // which would otherwise look like "the user left"; focus changes seen while
     // something is held are ignored, so intent survives and is restored after.
     var wantsOpen by remember(sessionId) { mutableStateOf(false) }
-    val expanded = wantsOpen || hold.held
-    // One value drives every part of the morph (corner, heights, strips), so they
-    // can never drift out of step with each other.
-    val expansion by animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 20, easing = FastOutSlowInEasing),
-        label = "composerExpansion",
-    )
+    // The composer's openness follows the keyboard's own animated height, so the
+    // two move together instead of one after the other. The reference is the
+    // tallest keyboard seen (a plain holder, not state: it is only read here).
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val imeBottomPx = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(density)
+    val imeRef = remember { intArrayOf(with(density) { DEFAULT_IME_HEIGHT_DP.dp.roundToPx() }) }
+    if (imeBottomPx > imeRef[0]) imeRef[0] = imeBottomPx
+    val imeOpen = imeBottomPx > 0
+    val imeOpenNow = androidx.compose.runtime.rememberUpdatedState(imeOpen)
+
     fun focusField() {
         try {
             focusRequester.requestFocus()
@@ -181,19 +181,42 @@ fun Composer(
             // Not attached yet; the next tap will do it.
         }
     }
+    // Open for reasons other than the keyboard: a sheet/picker is showing, focus
+    // is coming back to the field after one closed (the keyboard has not started
+    // yet), or the field is focused with no on-screen keyboard (hardware keyboard).
+    var restoring by remember { mutableStateOf(false) }
+    var focusedWithoutIme by remember(sessionId) { mutableStateOf(false) }
+    LaunchedEffect(wantsOpen) {
+        if (wantsOpen) {
+            kotlinx.coroutines.delay(400)
+            focusedWithoutIme = !imeOpenNow.value
+        } else {
+            focusedWithoutIme = false
+        }
+    }
+    val pinnedOpen = hold.held || restoring || focusedWithoutIme
+    // Short and only for the cases the keyboard is not driving.
+    val pinned by animateFloatAsState(
+        targetValue = if (pinnedOpen) 1f else 0f,
+        animationSpec = tween(durationMillis = 50, easing = FastOutSlowInEasing),
+        label = "composerPinned",
+    )
+    // One value drives every part of the morph (corner, heights, strips), so they
+    // can never drift out of step with each other.
+    val expansion = maxOf(pinned, imeExpansion(imeBottomPx, imeRef[0]))
+
     // Back (or any keyboard dismissal) hides the IME without taking focus from the
-    // field, so focus alone would leave the composer stuck open. Fold on the
-    // visible -> hidden transition only: right after a tap the keyboard is still
-    // on its way up and also reads as "hidden", which must not count as a close.
-    // A held composer (sheet/picker open) hides the keyboard on purpose; just note it.
-    val imeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    // field, so focus alone would leave the field "wanting" the composer open.
+    // Reset intent on the visible -> hidden transition only: right after a tap the
+    // keyboard is still on its way up and also reads as hidden, which must not
+    // count as a close. A held composer (sheet/picker) hides it on purpose.
     var imeWasVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(imeVisible) {
-        if (imeWasVisible && !imeVisible && !hold.held) {
+    LaunchedEffect(imeOpen) {
+        if (imeWasVisible && !imeOpen && !hold.held) {
             wantsOpen = false
             focusManager.clearFocus()
         }
-        imeWasVisible = imeVisible
+        imeWasVisible = imeOpen
     }
     val onFieldFocusChange: (Boolean) -> Unit = { hasFocus ->
         if (!hold.held) wantsOpen = hasFocus
@@ -201,7 +224,16 @@ fun Composer(
     // Whatever was holding the composer open has closed; if the user was typing,
     // hand focus back so they are typing again rather than facing a stale pill.
     LaunchedEffect(hold.held) {
-        if (!hold.held && wantsOpen) focusField()
+        if (!hold.held && wantsOpen) {
+            restoring = true
+            try {
+                focusField()
+                // Bridges the gap until the keyboard's own animation takes over.
+                kotlinx.coroutines.delay(500)
+            } finally {
+                restoring = false
+            }
+        }
     }
     // Sending is the end of composing: fold back to the pill so the reply has room.
     val sendAndCollapse = {

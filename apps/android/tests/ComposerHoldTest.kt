@@ -47,3 +47,31 @@ class ComposerHoldTest {
         assertEquals(false, hold.held)
     }
 }
+
+/** The composer opens in step with the keyboard's own animated height. */
+class ImeExpansionTest {
+    @Test
+    fun closedKeyboardMeansCollapsed() {
+        assertEquals(0f, com.console.mobile.feature.chat.imeExpansion(0, 800), 0f)
+    }
+
+    @Test
+    fun followsTheKeyboardAsItRisesAndFalls() {
+        val f = { ime: Int, ref: Int -> com.console.mobile.feature.chat.imeExpansion(ime, ref) }
+        assertEquals(0.25f, f(200, 800), 0.001f)
+        assertEquals(0.5f, f(400, 800), 0.001f)
+        // Same mapping going down, so closing mirrors opening.
+        assertEquals(0.25f, f(200, 800), 0.001f)
+    }
+
+    @Test
+    fun fullyOpenIsClampedToOne() {
+        assertEquals(1f, com.console.mobile.feature.chat.imeExpansion(800, 800), 0f)
+        assertEquals(1f, com.console.mobile.feature.chat.imeExpansion(1200, 800), 0f)
+    }
+
+    @Test
+    fun missingReferenceCannotDivideByZero() {
+        assertEquals(0f, com.console.mobile.feature.chat.imeExpansion(300, 0), 0f)
+    }
+}

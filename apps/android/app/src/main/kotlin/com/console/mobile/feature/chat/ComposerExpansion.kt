@@ -72,3 +72,16 @@ fun Collapsible(
         }
     }
 }
+
+/** Keyboard height assumed before one has been seen, so the first-ever open still tracks smoothly. */
+const val DEFAULT_IME_HEIGHT_DP = 280
+
+/**
+ * How far open the composer is for a given keyboard height, 0..1. Driven by the
+ * keyboard's own animated inset so the composer moves in lockstep with it —
+ * a separate timer made the two run one after the other.
+ */
+fun imeExpansion(imeBottomPx: Int, referencePx: Int): Float {
+    if (imeBottomPx <= 0 || referencePx <= 0) return 0f
+    return (imeBottomPx.toFloat() / referencePx).coerceIn(0f, 1f)
+}
