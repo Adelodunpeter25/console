@@ -58,7 +58,7 @@ import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.ConsoleSearchBar
+import com.console.mobile.ui.components.common.new.SearchBar
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.SessionListSkeleton
@@ -273,7 +273,7 @@ fun HomeScreen(
                 }
             }
         }
-        ConsoleSearchBar(
+        SearchBar(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             onComposePress = ::composeSession,
