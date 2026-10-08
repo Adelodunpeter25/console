@@ -47,6 +47,13 @@ import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.AddButton
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * MCP servers settings, mirroring the desktop `mcp_page.rs`: server cards
@@ -87,7 +94,7 @@ fun McpSettings(onBack: () -> Unit) {
             ScreenHeader(
                 title = "MCP Servers",
                 onBack = onBack,
-                actions = { HeaderAddButton("Add MCP server") { editing = "__create__" } },
+                actions = { AddButton("Add MCP server") { editing = "__create__" } },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
                 Text(
@@ -96,13 +103,13 @@ fun McpSettings(onBack: () -> Unit) {
                     fontSize = 14.sp,
                     modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
                 )
-                mcpState.error?.let { SettingsBanner(it, modifier = Modifier.padding(top = 16.dp)) }
+                mcpState.error?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
                 if (mcpState.loading && mcpState.servers.isEmpty()) {
-                    SettingsLoading("Loading MCP servers…")
+                    LoadingState("Loading MCP servers…")
                 } else if (mcpState.servers.isEmpty()) {
                     McpEmptyState { editing = "__create__" }
                 } else {
-                    SettingsCategory("Servers") {
+                    Section("Servers") {
                         mcpState.servers.forEachIndexed { index, server ->
                             McpServerCard(
                                 server = server,
@@ -112,7 +119,7 @@ fun McpSettings(onBack: () -> Unit) {
                                 onEdit = { editing = server.id },
                                 onDelete = { AppContainer.mcpRepository.deleteServer(server.id) },
                             )
-                            if (index < mcpState.servers.lastIndex) SettingsDivider()
+                            if (index < mcpState.servers.lastIndex) SectionDivider()
                         }
                     }
                 }
@@ -130,7 +137,7 @@ private fun McpEmptyState(onAdd: () -> Unit) {
             Icon(TablerIcons.Outline.Server, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(36.dp))
         },
         action = {
-            SettingsButton(text = "Add your first MCP server", onClick = onAdd, kind = SettingsButtonKind.Primary)
+            ActionButton(text = "Add your first MCP server", onClick = onAdd, kind = ActionButtonKind.Primary)
         },
     )
 }

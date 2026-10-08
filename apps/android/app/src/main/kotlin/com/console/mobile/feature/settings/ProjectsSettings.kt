@@ -49,6 +49,10 @@ import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.AddButton
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * Port of screens/settings/projects-settings.tsx + screens/projects/add-project-screen.tsx.
@@ -66,10 +70,10 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
         ScreenHeader(
             title = "Projects",
             onBack = onBack,
-            actions = { HeaderAddButton("Add folder", onAddProject) },
+            actions = { AddButton("Add folder", onAddProject) },
         )
         if (projectState.loading && projectState.projects.isEmpty()) {
-            SettingsLoading("Loading projects…", Modifier.fillMaxSize())
+            LoadingState("Loading projects…", Modifier.fillMaxSize())
         } else if (projectState.error != null && projectState.projects.isEmpty()) {
             EmptyState(
                 title = "Couldn't load projects",
@@ -81,7 +85,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
         } else {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                 val n = projectState.projects.size
-                SettingsCategory("$n project folder${if (n == 1) "" else "s"}") {
+                Section("$n project folder${if (n == 1) "" else "s"}") {
                     projectState.projects.forEachIndexed { index, proj ->
                         ProjectRow(proj = proj, busy = busyId == proj.id, onDelete = {
                             confirmAlert("Remove Project", "Are you sure you want to remove \"${proj.name}\" from your project workspace list? The folder on disk will not be deleted.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Remove", destructive = true, onPress = {
@@ -95,7 +99,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
                                 }
                             })))
                         })
-                        if (index < projectState.projects.lastIndex) SettingsDivider(startInset = 58.dp)
+                        if (index < projectState.projects.lastIndex) SectionDivider(startInset = 58.dp)
                     }
                 }
             }

@@ -53,6 +53,11 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * Full-screen folder picker for adding a project. Starts at the server's home
@@ -114,13 +119,13 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                loading -> SettingsLoading("Browsing…", Modifier.fillMaxSize())
+                loading -> LoadingState("Browsing…", Modifier.fillMaxSize())
                 error != null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp))
                         Text("Couldn't list that folder", color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
                         Text(error ?: "Browse failed.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                        SettingsButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
+                        ActionButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
                     }
                 }
                 else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
@@ -136,14 +141,14 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                     if (dirs.isEmpty()) {
                         EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
                     } else {
-                        SettingsCategory("Folders") {
+                        Section("Folders") {
                             dirs.forEachIndexed { index, d ->
                                 Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(TablerIcons.Outline.Folder, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(24.dp))
                                     Text(d.name, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 16.dp))
                                     Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
                                 }
-                                if (index < dirs.lastIndex) SettingsDivider(startInset = 58.dp)
+                                if (index < dirs.lastIndex) SectionDivider(startInset = 58.dp)
                             }
                         }
                     }
@@ -154,10 +159,10 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
         Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = NewTheme.CardRadius, topEnd = NewTheme.CardRadius)).background(NewTheme.Card).padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 24.dp)) {
             Text("Selected folder", color = NewTheme.Accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Text(currentPath ?: "…", color = NewTheme.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-            SettingsButton(
+            ActionButton(
                 text = "Use this folder",
                 onClick = {
-                    val target = currentPath ?: return@SettingsButton
+                    val target = currentPath ?: return@ActionButton
                     adding = true
                     scope.launch {
                         try {
@@ -168,7 +173,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         } finally { adding = false }
                     }
                 },
-                kind = SettingsButtonKind.Primary,
+                kind = ActionButtonKind.Primary,
                 enabled = currentPath != null && !adding,
                 loading = adding,
                 icon = TablerIcons.Outline.Check,

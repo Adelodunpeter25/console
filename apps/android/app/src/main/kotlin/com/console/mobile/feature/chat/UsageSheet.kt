@@ -39,6 +39,7 @@ import com.console.mobile.ui.components.picker.PickerSheetTitle
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
+import com.console.mobile.ui.components.common.new.MeterBar
 
 /**
  * The desktop usage popover as a sheet: context occupancy first, then the
@@ -84,7 +85,7 @@ fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
             }
             if (snapshot != null) {
                 val percent = snapshot.percent_used.coerceIn(0.0, 100.0)
-                UsageBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(top = 10.dp))
+                MeterBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(top = 10.dp))
             } else {
                 Text("Context usage unavailable.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
@@ -134,17 +135,6 @@ private fun LimitRow(limit: UsageLimit) {
         if (scope.isNotEmpty()) {
             Text(scope, color = ConsoleColors.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
-        UsageBar(percent, limitTone(limit, percent).color(), modifier = Modifier.padding(top = 7.dp))
-    }
-}
-
-/** Thin meter bar. A non-zero value always shows a sliver so "1%" isn't invisible. */
-@Composable
-private fun UsageBar(percent: Double, fill: Color, modifier: Modifier = Modifier) {
-    val fraction = (percent / 100.0).coerceIn(0.0, 1.0).toFloat().let { if (it > 0f) it.coerceAtLeast(0.015f) else 0f }
-    Box(modifier = modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
-        if (fraction > 0f) {
-            Box(modifier = Modifier.fillMaxWidth(fraction).height(4.dp).clip(RoundedCornerShape(999.dp)).background(fill))
-        }
+        MeterBar(percent, limitTone(limit, percent).color(), modifier = Modifier.padding(top = 7.dp))
     }
 }

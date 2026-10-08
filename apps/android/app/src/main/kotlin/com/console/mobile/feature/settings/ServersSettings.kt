@@ -58,6 +58,13 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.ActionRow
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TextInput
 
 /**
  * Port of screens/settings/environments-settings.tsx + components/environments/environment-editor.tsx.
@@ -108,9 +115,9 @@ fun ServersSettings(onBack: () -> Unit) {
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                SettingsCategory("Environments") {
+                Section("Environments") {
                     if (envState.environments.isEmpty()) {
-                        SettingsNote("No environments yet. Add a backend URL to get started.")
+                        Note("No environments yet. Add a backend URL to get started.")
                     } else {
                         envState.environments.forEachIndexed { index, env ->
                             val probe = probes[env.id]
@@ -134,13 +141,13 @@ fun ServersSettings(onBack: () -> Unit) {
                                 }
                                 Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
                             }
-                            if (index < envState.environments.lastIndex) SettingsDivider(startInset = 44.dp)
+                            if (index < envState.environments.lastIndex) SectionDivider(startInset = 44.dp)
                         }
                     }
                 }
                 if (envState.activeId != null) {
-                    SettingsCategory("Connection") {
-                        SettingsActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.Danger) {
+                    Section("Connection") {
+                        ActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.Danger) {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))
@@ -163,12 +170,12 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
     val canDelete = env != null && !(isActive && envState.environments.size == 1)
 
     Column(modifier = modifier) {
-        SettingsField("Name", name, { name = it; if (status != "testing" && status != "saving") status = "idle" }, "My server")
-        SettingsField("Backend URL", url, { url = it; if (status != "testing" && status != "saving") status = "idle" }, "http://192.168.1.X:3000")
-        SettingsButton(
+        TextInput("Name", name, { name = it; if (status != "testing" && status != "saving") status = "idle" }, "My server")
+        TextInput("Backend URL", url, { url = it; if (status != "testing" && status != "saving") status = "idle" }, "http://192.168.1.X:3000")
+        ActionButton(
             text = if (status == "testing") "Testing…" else "Test connection",
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@SettingsButton
+                val normalized = normalizeBackendUrl(url) ?: return@ActionButton
                 status = "testing"
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) {
@@ -188,7 +195,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
         if (status == "test-ok") Text("Connection OK", color = NewTheme.Success, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         else if (status == "test-fail") Text("Could not reach the backend", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         if (env != null && !isActive) {
-            SettingsButton(
+            ActionButton(
                 text = "Set as active",
                 onClick = {
                     scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.activateEnvironment(env.id) } }
@@ -232,16 +239,16 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     }
                 }
             }
-            SettingsButton(
+            ActionButton(
                 text = if (env != null) "Save changes" else "Save",
                 onClick = doSave,
-                kind = SettingsButtonKind.Primary,
+                kind = ActionButtonKind.Primary,
                 enabled = url.isNotBlank() && status != "saving",
                 loading = status == "saving",
                 modifier = Modifier.weight(1f),
             )
             if (env != null) {
-                SettingsButton(
+                ActionButton(
                     text = "Delete",
                     onClick = {
                         confirmAlert("Delete environment", "Remove \"${env.name}\" from your environments?", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
@@ -249,7 +256,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                             onDone()
                         })))
                     },
-                    kind = SettingsButtonKind.Danger,
+                    kind = ActionButtonKind.Danger,
                     enabled = canDelete,
                     modifier = Modifier.weight(1f).padding(start = 12.dp),
                 )

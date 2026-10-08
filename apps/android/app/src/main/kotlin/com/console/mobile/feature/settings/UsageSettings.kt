@@ -50,6 +50,10 @@ import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
 import console.v1.UsageReport
 import com.console.mobile.ui.components.ScreenHeader
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.MeterBar
 
 /**
  * Port of screens/settings/usage-settings.tsx + usage-provider-card + usage-limit-row.
@@ -116,7 +120,7 @@ private fun UsageProviderCard(provider: String, displayName: String, report: Usa
     val mostPressured = report?.limits?.firstOrNull()
     val pressure = mostPressured?.let { usedPercent(it) }
     // Heading is the provider; the card holds its limits (or why there are none).
-    SettingsCategory(displayName) {
+    Section(displayName) {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             ProviderIcon(provider = provider, sizeDp = 24)
             Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
@@ -128,22 +132,22 @@ private fun UsageProviderCard(provider: String, displayName: String, report: Usa
         }
         when {
             !loggedIn -> {
-                SettingsDivider()
-                SettingsNote("Sign in under Providers to see quota.")
+                SectionDivider()
+                Note("Sign in under Providers to see quota.")
             }
             report == null -> {
-                SettingsDivider()
+                SectionDivider()
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Warning, modifier = Modifier.size(18.dp))
                     Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login under Providers.", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp))
                 }
             }
             report.limits.isEmpty() -> {
-                SettingsDivider()
-                SettingsNote("No limits reported.")
+                SectionDivider()
+                Note("No limits reported.")
             }
             else -> report.limits.forEach { limit ->
-                SettingsDivider()
+                SectionDivider()
                 UsageLimitRow(limit)
             }
         }
@@ -168,10 +172,7 @@ private fun UsageLimitRow(limit: UsageLimit) {
         if (sub.isNotEmpty()) {
             Text(sub, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(5.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
-            val fraction = (percent / 100.0).toFloat().let { if (it > 0f) it.coerceIn(0.015f, 1f) else 0f }
-            if (fraction > 0f) Box(modifier = Modifier.fillMaxWidth(fraction).height(5.dp).clip(RoundedCornerShape(999.dp)).background(tone))
-        }
+        MeterBar(percent, tone, modifier = Modifier.padding(top = 8.dp), height = 5.dp)
     }
 }
 

@@ -49,6 +49,9 @@ import com.console.mobile.ui.components.ProviderIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * Port of screens/settings/account-settings.tsx. Named ProvidersSettings: this
@@ -78,8 +81,8 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 }
             } else {
                 val providers = providerState.providers.filter { it.auth_method != "none" }
-                SettingsCategory("Providers") {
-                    if (providers.isEmpty()) SettingsNote("No providers available.")
+                Section("Providers") {
+                    if (providers.isEmpty()) Note("No providers available.")
                     providers.forEachIndexed { i, p ->
                         val status = authState.status?.get(p.name)
                         val loggedIn = status?.logged_in == true
@@ -123,7 +126,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                                 variant = if (loggedIn) PillButtonVariant.Outline else PillButtonVariant.Filled,
                             )
                         }
-                        if (i < providers.lastIndex) SettingsDivider(startInset = 58.dp)
+                        if (i < providers.lastIndex) SectionDivider(startInset = 58.dp)
                     }
                 }
             }

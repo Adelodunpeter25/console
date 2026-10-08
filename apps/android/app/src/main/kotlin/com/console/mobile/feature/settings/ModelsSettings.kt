@@ -45,6 +45,11 @@ import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /** Role -> (label, description), mirroring the desktop Models page. */
 private data class RoleSpec(val role: String, val label: String, val description: String)
@@ -92,11 +97,11 @@ fun ModelsSettings(onBack: () -> Unit) {
             )
 
             if (providerState.loadingRoles && loaded.isEmpty()) {
-                SettingsLoading()
+                LoadingState()
                 return@Column
             }
 
-            SettingsCategory("Model roles") {
+            Section("Model roles") {
                 ROLE_SPECS.forEachIndexed { index, spec ->
                     RolePickerRow(
                         spec = spec,
@@ -104,12 +109,12 @@ fun ModelsSettings(onBack: () -> Unit) {
                         onOpen = { sheetRole = spec.role },
                         onClear = { setRef(spec.role, null) },
                     )
-                    if (index < ROLE_SPECS.lastIndex) SettingsDivider()
+                    if (index < ROLE_SPECS.lastIndex) SectionDivider()
                 }
             }
-            SettingsButton(
+            ActionButton(
                 text = if (providerState.savingRoles) "Saving…" else "Save model roles",
-                kind = SettingsButtonKind.Primary,
+                kind = ActionButtonKind.Primary,
                 enabled = dirty && !providerState.savingRoles,
                 loading = providerState.savingRoles,
                 onClick = {

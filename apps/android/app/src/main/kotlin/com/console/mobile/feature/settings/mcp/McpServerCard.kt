@@ -35,11 +35,11 @@ import com.console.mobile.data.model.displayName
 import com.console.mobile.data.model.needsAuth
 import com.console.mobile.data.model.isConnected
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.feature.settings.SettingsButton
-import com.console.mobile.feature.settings.SettingsButtonKind
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
 
 private fun mcpStatusColor(status: String): Color = when (status) {
     "connected" -> NewTheme.Success
@@ -120,10 +120,10 @@ internal fun McpServerCard(
                 server.isConnected -> "Reconnect"
                 else -> "Connect"
             }
-            SettingsButton(connectLabel, onConnect, enabled = !busy, loading = busy, icon = TablerIcons.Outline.PlugConnected, compact = true)
-            if (server.isConnected) SettingsButton("Disconnect", onDisconnect, enabled = !busy, compact = true)
-            SettingsButton("Edit", onEdit, enabled = !busy, compact = true)
-            SettingsButton(
+            ActionButton(connectLabel, onConnect, enabled = !busy, loading = busy, icon = TablerIcons.Outline.PlugConnected, compact = true)
+            if (server.isConnected) ActionButton("Disconnect", onDisconnect, enabled = !busy, compact = true)
+            ActionButton("Edit", onEdit, enabled = !busy, compact = true)
+            ActionButton(
                 text = "Delete",
                 onClick = {
                     confirmAlert(
@@ -135,7 +135,7 @@ internal fun McpServerCard(
                         ),
                     )
                 },
-                kind = SettingsButtonKind.Danger,
+                kind = ActionButtonKind.Danger,
                 enabled = !busy,
                 icon = TablerIcons.Outline.Trash,
                 compact = true,

@@ -52,6 +52,11 @@ import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /** Port of screens/settings/deleted-chats-settings.tsx. */
 @Composable
@@ -116,14 +121,14 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
             } else null,
         )
         if (projectState.deletedLoading && deleted.isEmpty()) {
-            SettingsLoading("Loading deleted chats…", Modifier.fillMaxSize())
+            LoadingState("Loading deleted chats…", Modifier.fillMaxSize())
         } else if (projectState.error != null && deleted.isEmpty()) {
             EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp)) })
         } else if (deleted.isEmpty()) {
             EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                SettingsCategory("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
+                Section("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
                     deleted.forEachIndexed { index, item ->
                         DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
                             val title = item.title.ifBlank { "Untitled Chat" }
@@ -138,7 +143,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                                 }
                             })))
                         })
-                        if (index < deleted.lastIndex) SettingsDivider()
+                        if (index < deleted.lastIndex) SectionDivider()
                     }
                 }
             }
@@ -153,8 +158,8 @@ private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit
         val ts = item.deleted_at ?: item.updated_at
         Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
         Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
-            SettingsButton("Restore", onRestore, enabled = !busy, loading = busy, icon = TablerIcons.Outline.Refresh, compact = true)
-            SettingsButton("Delete", onDelete, kind = SettingsButtonKind.Danger, enabled = !busy, icon = TablerIcons.Outline.Trash, compact = true)
+            ActionButton("Restore", onRestore, enabled = !busy, loading = busy, icon = TablerIcons.Outline.Refresh, compact = true)
+            ActionButton("Delete", onDelete, kind = ActionButtonKind.Danger, enabled = !busy, icon = TablerIcons.Outline.Trash, compact = true)
         }
     }
 }

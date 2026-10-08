@@ -33,13 +33,13 @@ import com.console.mobile.data.model.McpAuthConfig
 import com.console.mobile.data.model.McpSavePayload
 import console.v1.McpServerStatus as McpServerEntry
 import com.console.mobile.data.model.displayName
-import com.console.mobile.feature.settings.SettingsBanner
-import com.console.mobile.feature.settings.SettingsButton
-import com.console.mobile.feature.settings.SettingsButtonKind
-import com.console.mobile.feature.settings.SettingsChoice
-import com.console.mobile.feature.settings.SettingsField
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.ChoiceGroup
+import com.console.mobile.ui.components.common.new.TextInput
 
 @Composable
 internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier: Modifier = Modifier) {
@@ -59,7 +59,7 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
 
     @Composable
     fun Field(label: String, value: String, onValue: (String) -> Unit, placeholder: String, singleLine: Boolean = true) {
-        SettingsField(label, value, onValue, placeholder, singleLine)
+        TextInput(label, value, onValue, placeholder, singleLine)
     }
 
     fun save() {
@@ -118,7 +118,7 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
 
     Column(modifier = modifier) {
         Field("Server name / ID", name, { name = it }, "e.g. atlassian, filesystem")
-        SettingsChoice(
+        ChoiceGroup(
             label = "Transport",
             options = listOf(false to "Local (stdio)", true to "Remote (HTTP)"),
             selected = isHttp,
@@ -126,7 +126,7 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
         )
         if (isHttp) {
             Field("Endpoint URL", url, { url = it }, "https://mcp.atlassian.com/v2/mcp")
-            SettingsChoice(
+            ChoiceGroup(
                 label = "Authentication",
                 options = listOf("oauth2" to "OAuth 2.1", "static" to "Token", "none" to "None"),
                 selected = auth,
@@ -140,13 +140,13 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
             Field("Arguments (space-delimited)", args, { args = it }, "-y @modelcontextprotocol/server-filesystem /path/to/folder")
             Field("Environment variables (KEY=VAL, comma-separated)", env, { env = it }, "API_KEY=xyz, DEBUG=true")
         }
-        formError?.let { SettingsBanner(it, modifier = Modifier.padding(top = 16.dp)) }
+        formError?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SettingsButton("Cancel", onDone, enabled = !saving, modifier = Modifier.weight(1f))
-            SettingsButton(
+            ActionButton("Cancel", onDone, enabled = !saving, modifier = Modifier.weight(1f))
+            ActionButton(
                 text = if (saving) "Saving…" else "Save server",
                 onClick = ::save,
-                kind = SettingsButtonKind.Primary,
+                kind = ActionButtonKind.Primary,
                 enabled = !saving,
                 loading = saving,
                 modifier = Modifier.weight(1f),
