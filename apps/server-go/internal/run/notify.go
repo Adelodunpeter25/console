@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 const (
@@ -47,9 +47,9 @@ func IsAttentionKind(kind loop.EventKind) bool {
 }
 
 // AttentionNotification builds the needs-attention banner for an event.
-func AttentionNotification(sessionID string, event loop.Event, sessionTitle string) types.NotificationEvent {
-	out := types.NotificationEvent{
-		Type: "notification", Kind: "needs_attention", SessionID: sessionID, Title: "Needs Attention",
+func AttentionNotification(sessionID string, event loop.Event, sessionTitle string) *consolev1.NotificationEvent {
+	out := &consolev1.NotificationEvent{
+		Type: "notification", Kind: "needs_attention", SessionId: sessionID, Title: "Needs Attention",
 	}
 	if subtitle := cleanSubtitle(sessionTitle); subtitle != "" {
 		out.Subtitle = subtitle
@@ -75,9 +75,9 @@ func AttentionNotification(sessionID string, event loop.Event, sessionTitle stri
 }
 
 // DoneNotification builds the clean-completion banner with an excerpt.
-func DoneNotification(sessionID, sessionTitle, summary string) types.NotificationEvent {
-	out := types.NotificationEvent{
-		Type: "notification", Kind: "done", SessionID: sessionID, Title: "Done",
+func DoneNotification(sessionID, sessionTitle, summary string) *consolev1.NotificationEvent {
+	out := &consolev1.NotificationEvent{
+		Type: "notification", Kind: "done", SessionId: sessionID, Title: "Done",
 	}
 	if subtitle := cleanSubtitle(sessionTitle); subtitle != "" {
 		out.Subtitle = subtitle

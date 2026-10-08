@@ -1,4 +1,4 @@
-// Assist + notification + usage wire types.
+// Assist + usage wire types.
 package types
 
 type SlashCommandInfo struct {
@@ -7,11 +7,6 @@ type SlashCommandInfo struct {
 	Builtin     bool   `json:"builtin"`
 }
 
-type NotificationEvent struct {
-	Type      string `json:"type"` // "notification"
-	Kind      string `json:"kind"`
-	SessionID string `json:"sessionId"`
-	Title     string `json:"title"`
-	Subtitle  string `json:"subtitle,omitempty"`
-	Body      string `json:"body"`
-}
+// NotificationEvent moved to the shared protobuf schema
+// (console.v1.NotificationEvent from proto/console/v1): the bus, builders,
+// and SSE route all carry the generated type now.

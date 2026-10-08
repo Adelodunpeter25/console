@@ -10,15 +10,15 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func collectNotifications(t *testing.T, bus *services.NotificationService, stop <-chan struct{}) chan types.NotificationEvent {
+func collectNotifications(t *testing.T, bus *services.NotificationService, stop <-chan struct{}) chan *consolev1.NotificationEvent {
 	t.Helper()
-	out := make(chan types.NotificationEvent, 16)
+	out := make(chan *consolev1.NotificationEvent, 16)
 	ch := bus.Subscribe()
 	go func() {
 		defer bus.Unsubscribe(ch)
@@ -37,13 +37,13 @@ func collectNotifications(t *testing.T, bus *services.NotificationService, stop 
 	return out
 }
 
-func waitNotification(t *testing.T, ch chan types.NotificationEvent, kind string) types.NotificationEvent {
+func waitNotification(t *testing.T, ch chan *consolev1.NotificationEvent, kind string) *consolev1.NotificationEvent {
 	t.Helper()
 	deadline := time.After(10 * time.Second)
 	for {
 		select {
 		case ev := <-ch:
-			if ev.Kind == kind {
+			if ev.GetKind() == kind {
 				return ev
 			}
 		case <-deadline:
@@ -77,15 +77,15 @@ func TestNotifyApprovalAndDone(t *testing.T) {
 	}
 	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
 	attention := waitNotification(t, notes, "needs_attention")
-	if !strings.Contains(attention.Body, "write_file") {
-		t.Fatalf("attention body: %q", attention.Body)
+	if !strings.Contains(attention.GetBody(), "write_file") {
+		t.Fatalf("attention body: %q", attention.GetBody())
 	}
 	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
 		t.Fatal("approve must resolve")
 	}
 	helpers.WaitSettled(t, hub)
 	done := waitNotification(t, notes, "done")
-	if done.Title != "Done" || !strings.Contains(done.Body, "all done here") {
+	if done.GetTitle() != "Done" || !strings.Contains(done.GetBody(), "all done here") {
 		t.Fatalf("done: %+v", done)
 	}
 }
@@ -115,7 +115,7 @@ func TestNotifySilentOnAbort(t *testing.T) {
 	helpers.WaitSettled(t, hub)
 	select {
 	case ev := <-notes:
-		if ev.Kind == "done" {
+		if ev.GetKind() == "done" {
 			t.Fatalf("aborted run must not send done: %+v", ev)
 		}
 	case <-time.After(500 * time.Millisecond):

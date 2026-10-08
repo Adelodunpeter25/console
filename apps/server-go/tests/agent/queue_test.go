@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
@@ -105,8 +106,8 @@ func TestQueueDrainsNextTurn(t *testing.T) {
 	for f := range subCh {
 		switch f.Event.Kind {
 		case loop.EventModelStreamPart:
-			if part, ok := f.Event.Part.(map[string]any); ok {
-				if text, ok := part["text"].(string); ok {
+			if part, ok := f.Event.Part.(*consolev1.ModelStreamPart); ok {
+				if text := part.GetText(); text != "" {
 					texts = append(texts, text)
 				}
 			}
@@ -189,8 +190,8 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 	var texts []string
 	for f := range subCh {
 		if f.Event.Kind == loop.EventModelStreamPart {
-			if part, ok := f.Event.Part.(map[string]any); ok {
-				if text, ok := part["text"].(string); ok {
+			if part, ok := f.Event.Part.(*consolev1.ModelStreamPart); ok {
+				if text := part.GetText(); text != "" {
 					texts = append(texts, text)
 				}
 			}

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Notification banners (unscoped domains pass). Pushed over the
+// /api/notifications/stream SSE channel, never a request/response.
+//
+// Shape notes:
+// - type is the literal "notification" tag the SSE client switches on; kind
+//   stays a plain string (needs_attention | done). Both stay strings so the
+//   stream client keeps switching on type without an enum lookup.
+// - subtitle omits when empty, exactly like the old omitempty: the desktop
+//   renders a single-line banner from a blank subtitle and defaults the
+//   absent key to empty, so absent-vs-empty carries no meaning here.
+message NotificationEvent {
+  string type = 1;
+  string kind = 2;
+  string session_id = 3;
+  string title = 4;
+  string subtitle = 5;
+  string body = 6;
+}
