@@ -630,7 +630,7 @@ impl ConsoleDesktopApp {
 
     /// Reload a pane's branch dropdown state against `cwd` — used after a
     /// worktree attach/create moves the pane onto a different checkout.
-    fn reload_branches_for_pane(&mut self, pane_id: String, cwd: String, cx: &mut Context<Self>) {
+    pub(crate) fn reload_branches_for_pane(&mut self, pane_id: String, cwd: String, cx: &mut Context<Self>) {
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
             state.branch_loaded = false;
         }
