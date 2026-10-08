@@ -294,7 +294,7 @@ fun HomeScreen(
     val sheetSession = activeSession
     if (sheetSession != null) {
         var renameOpen by remember(sheetSession.id) { mutableStateOf(false) }
-        BaseSheet(onDismiss = { activeSession = null }, title = sheetSession.title.ifBlank { "Untitled Session" }) {
+        BaseSheet(onDismiss = { activeSession = null }) {
             SectionCard {
                 ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
                 SectionDivider()

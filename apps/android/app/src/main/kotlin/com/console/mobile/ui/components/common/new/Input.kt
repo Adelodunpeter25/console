@@ -84,3 +84,36 @@ fun <T> ChoiceGroup(
         }
     }
 }
+
+/**
+ * A text field with no heading, for panels that already say what it is for (an
+ * answer box under a question). Filled with [NewTheme.Raised] so it reads on a
+ * [NewTheme.Card] surface.
+ */
+@Composable
+fun InlineTextInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 4,
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
+        maxLines = maxLines,
+        textStyle = TextStyle(color = NewTheme.TextPrimary, fontSize = 16.sp),
+        shape = RoundedCornerShape(NewTheme.FieldRadius),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = NewTheme.Raised,
+            unfocusedContainerColor = NewTheme.Raised,
+            disabledContainerColor = NewTheme.Raised,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            cursorColor = NewTheme.Accent,
+        ),
+        modifier = modifier.fillMaxWidth(),
+    )
+}
