@@ -101,6 +101,37 @@ func (m *Manager) Connect(id string, redirectURL ...string) error {
 	return nil
 }
 
+// AutoConnect connects, in the background, every enabled server that already
+// has a saved credential, so Status reflects reality after a restart. Servers
+// with no stored token (first login still needed) are left disconnected so no
+// browser is opened unprompted. Returns the ids it started.
+func (m *Manager) AutoConnect() []string {
+	cfgs, err := m.Config.List()
+	if err != nil {
+		slog.Warn("mcp autoconnect: list servers", "error", err)
+		return nil
+	}
+	var started []string
+	for _, c := range cfgs {
+		if !c.Enabled || c.Auth == nil || c.Auth.Type == AuthNone || c.Auth.TokenRef == "" {
+			continue
+		}
+		cred, ok, err := m.Credentials.Get(c.Auth.TokenRef)
+		if err != nil || !ok {
+			continue
+		}
+		if c.Auth.Type == AuthOAuth2 && cred.AccessToken == "" && cred.RefreshToken == "" {
+			continue
+		}
+		if err := m.Connect(c.ID); err != nil {
+			slog.Warn("mcp autoconnect failed", "id", c.ID, "error", err)
+			continue
+		}
+		started = append(started, c.ID)
+	}
+	return started
+}
+
 func (m *Manager) update(st *serverState, fn func(*serverState)) {
 	m.mu.Lock()
 	fn(st)
