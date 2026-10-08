@@ -65,6 +65,10 @@ import com.console.mobile.ui.theme.NewTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.SectionCard
 
 /**
  * Selection sheets shared by the composer strip and settings. These are
@@ -72,64 +76,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
  * they live with the other shared UI rather than inside a feature.
  */
 
-/** Sheet title row. */
-@Composable
-fun PickerSheetTitle(title: String) {
-    Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
-}
-
-/** One selectable row: title, optional subtitle, and a check on the selection.
- * [trailing] renders beside the check — the model picker's star. */
-@Composable
-fun PickerRow(
-    title: String,
-    subtitle: String? = null,
-    selected: Boolean = false,
-    monoSubtitle: Boolean = false,
-    trailing: (@Composable () -> Unit)? = null,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) ConsoleColors.CardAlt else Color.Transparent)
-            .border(1.dp, if (selected) ConsoleColors.Border else Color.Transparent, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    subtitle, color = ConsoleColors.TextSecondary, fontSize = if (monoSubtitle) 11.sp else 12.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    fontFamily = if (monoSubtitle) ConsoleMonoFamily else null,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-            }
-        }
-        if (trailing != null) {
-            trailing()
-            Spacer(modifier = Modifier.size(8.dp))
-        }
-        if (selected) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
-    }
-}
-
-/** Centered placeholder for a sheet's loading / empty / no-match state. */
-@Composable
-fun PickerPlaceholder(message: String? = null, spinner: Boolean = false) {
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-        if (spinner) {
-            CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-        } else if (!message.isNullOrBlank()) {
-            Text(message, color = ConsoleColors.TextSecondary, fontSize = 12.sp)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProjectPickerSheet(
     projects: List<ProjectInfo>,
@@ -140,24 +86,24 @@ fun ProjectPickerSheet(
     onSelectNone: () -> Unit,
     onAddProject: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            PickerSheetTitle("Select Folder")
-            if (locked) {
-                Text("Folder cannot be changed once a chat has started.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
-            } else {
+    BaseSheet(onDismiss = onDismiss, title = "Select Folder") {
+        if (locked) {
+            Text("Folder cannot be changed once a chat has started.", color = NewTheme.TextMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+        } else {
+            SectionCard {
                 projects.forEach { p ->
-                    PickerRow(title = p.name, subtitle = p.path, selected = p.id == selectedId, monoSubtitle = true) { onSelect(p) }
+                    OptionRow(title = p.name, subtitle = p.path, selected = p.id == selectedId, monoSubtitle = true) { onSelect(p) }
+                    SectionDivider()
                 }
-                PickerRow(title = "No project", subtitle = "Work in a scratch folder", selected = selectedId == null) { onSelectNone() }
-                if (projects.isEmpty()) {
-                    com.console.mobile.ui.components.PillButton(
-                        text = "Add new project",
-                        onClick = onAddProject,
-                        fullWidth = true,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
+                OptionRow(title = "No project", subtitle = "Work in a scratch folder", selected = selectedId == null) { onSelectNone() }
+            }
+            if (projects.isEmpty()) {
+                ActionButton(
+                    text = "Add new project",
+                    onClick = onAddProject,
+                    kind = ActionButtonKind.Primary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                )
             }
         }
     }
@@ -328,26 +274,25 @@ private fun ModelPlaceholder(message: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadApprovalModes() }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            PickerSheetTitle("Approval Mode")
-            if (providerState.loadingApprovalModes && providerState.approvalModes.isEmpty()) {
-                PickerPlaceholder(spinner = true)
-            } else {
-                val modes = providerState.approvalModes.ifEmpty {
-                    ApprovalMode.entries.map { ApprovalModeOption(it, it.value, "") }
-                }
-                modes.forEach { m ->
-                    PickerRow(
+    BaseSheet(onDismiss = onDismiss, title = "Approval Mode") {
+        if (providerState.loadingApprovalModes && providerState.approvalModes.isEmpty()) {
+            LoadingState()
+        } else {
+            val modes = providerState.approvalModes.ifEmpty {
+                ApprovalMode.entries.map { ApprovalModeOption(it, it.value, "") }
+            }
+            SectionCard {
+                modes.forEachIndexed { index, m ->
+                    OptionRow(
                         title = m.label.ifBlank { m.value.value },
                         subtitle = m.description.takeIf { it.isNotBlank() },
                         selected = m.value.value == current,
                     ) { onSelect(m.value.value) }
+                    if (index < modes.lastIndex) SectionDivider()
                 }
             }
         }
@@ -356,13 +301,12 @@ fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (S
 
 /**
  * Branch picker for a chat's project. "New worktree" is an action, not a
- * selection, so it sits apart from the branch list behind a divider.
+ * selection, so it sits in its own card above the branch list.
  *
  * [locked] covers a run in flight and a chat that already has messages: a
  * branch switch mid-stream would only land on the next turn, and a worktree
  * can only be attached to a message-less session.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BranchPickerSheet(
     branches: List<console.v1.GitBranchInfo>?,
@@ -379,35 +323,38 @@ fun BranchPickerSheet(
     onSelect: (String) -> Unit,
     onNewWorktree: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            PickerSheetTitle("Branch")
-            if (locked && !lockedReason.isNullOrBlank()) {
-                Text(lockedReason, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
-            }
-            if (!error.isNullOrBlank()) {
-                Text(error, color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
-            }
-            Column(modifier = Modifier.alpha(if (locked) 0.45f else 1f)) {
-                if (worktreeBranch == null && canStartWorktree) {
-                    PickerRow(title = "New worktree", subtitle = "Work in an isolated copy on its own branch") {
+    // The branch list scrolls itself, so the sheet must not also scroll.
+    BaseSheet(onDismiss = onDismiss, title = "Branch", scrollable = false) {
+        if (locked && !lockedReason.isNullOrBlank()) {
+            Text(lockedReason, color = NewTheme.TextMuted, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+        }
+        if (!error.isNullOrBlank()) {
+            Banner(error, modifier = Modifier.padding(vertical = 8.dp))
+        }
+        Column(modifier = Modifier.alpha(if (locked) 0.45f else 1f)) {
+            if (worktreeBranch == null && canStartWorktree) {
+                SectionCard(modifier = Modifier.padding(bottom = 12.dp)) {
+                    OptionRow(title = "New worktree", subtitle = "Work in an isolated copy on its own branch") {
                         if (!locked) onNewWorktree()
                     }
-                    HorizontalDivider(color = ConsoleColors.BorderSubtle, modifier = Modifier.padding(vertical = 8.dp))
                 }
-                when {
-                    loading && branches == null -> PickerPlaceholder(spinner = true)
-                    branches.isNullOrEmpty() -> PickerPlaceholder("No branches found")
-                    else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                        items(branches, key = { it.name }) { b ->
-                            PickerRow(
-                                title = b.name,
-                                selected = b.current,
-                                trailing = if (switchingTo == b.name) {
-                                    { CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(16.dp)) }
-                                } else null,
-                            ) { if (!locked && switchingTo == null) onSelect(b.name) }
-                        }
+            }
+            when {
+                loading && branches == null -> LoadingState()
+                branches.isNullOrEmpty() -> Text("No branches found", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+                        .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
+                ) {
+                    itemsIndexed(branches, key = { _, b -> b.name }) { index, b ->
+                        OptionRow(
+                            title = b.name,
+                            selected = b.current,
+                            trailing = if (switchingTo == b.name) {
+                                { CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) }
+                            } else null,
+                        ) { if (!locked && switchingTo == null) onSelect(b.name) }
+                        if (index < branches.lastIndex) SectionDivider()
                     }
                 }
             }

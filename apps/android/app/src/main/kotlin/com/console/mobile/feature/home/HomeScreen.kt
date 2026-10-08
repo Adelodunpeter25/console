@@ -69,6 +69,16 @@ import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.ActionRow
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 
 /**
  * Port of screens/home/home-screen.tsx + components/home/session-list.tsx + hooks/useHomeSessions.
@@ -284,57 +294,40 @@ fun HomeScreen(
     val sheetSession = activeSession
     if (sheetSession != null) {
         var renameOpen by remember(sheetSession.id) { mutableStateOf(false) }
-        ModalBottomSheet(
-            onDismissRequest = { activeSession = null },
-            sheetState = rememberModalBottomSheetState(),
-            containerColor = ConsoleColors.Surface,
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-                androidx.compose.material3.TextButton(onClick = { renameOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Rename", color = ConsoleColors.TextPrimary, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
-                }
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        activeSession = null
-                        confirmAlert(
-                            "Delete Chat",
-                            "Are you sure you want to delete \"${sheetSession.title.ifBlank { "Untitled Session" }}\"?",
-                            listOf(
-                                ConfirmButton("Cancel", cancel = true),
-                                ConfirmButton("Delete", destructive = true, onPress = {
-                                    scope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(sheetSession.id) }
-                                        } catch (e: Exception) {
-                                            confirmAlert("Failed", e.message ?: "Unable to delete chat.")
-                                        }
+        BaseSheet(onDismiss = { activeSession = null }, title = sheetSession.title.ifBlank { "Untitled Session" }) {
+            SectionCard {
+                ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
+                SectionDivider()
+                ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
+                    activeSession = null
+                    confirmAlert(
+                        "Delete Chat",
+                        "Are you sure you want to delete \"${sheetSession.title.ifBlank { "Untitled Session" }}\"?",
+                        listOf(
+                            ConfirmButton("Cancel", cancel = true),
+                            ConfirmButton("Delete", destructive = true, onPress = {
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(sheetSession.id) }
+                                    } catch (e: Exception) {
+                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
                                     }
-                                }),
-                            ),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Delete", color = ConsoleColors.Destructive, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+                                }
+                            }),
+                        ),
+                    )
                 }
             }
         }
         if (renameOpen) {
             var renameValue by remember(sheetSession.id) { mutableStateOf(sheetSession.title) }
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { renameOpen = false },
-                containerColor = ConsoleColors.Surface,
-                title = { Text("Rename session", color = ConsoleColors.TextPrimary) },
-                text = {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = renameValue,
-                        onValueChange = { renameValue = it },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(onClick = {
+            // A sheet inside the sheet: renaming is a one-field form, so it gets the
+            // same field + primary button as every other form instead of a system dialog.
+            BaseSheet(onDismiss = { renameOpen = false }, title = "Rename chat") {
+                TextInput("Title", renameValue, { renameValue = it }, "Chat title")
+                ActionButton(
+                    text = "Save",
+                    onClick = {
                         renameOpen = false
                         activeSession = null
                         scope.launch {
@@ -346,12 +339,12 @@ fun HomeScreen(
                                 confirmAlert("Failed", e.message ?: "Unable to rename chat.")
                             }
                         }
-                    }) { Text("Save", color = ConsoleColors.TextPrimary) }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { renameOpen = false }) { Text("Cancel", color = ConsoleColors.TextSecondary) }
-                },
-            )
+                    },
+                    kind = ActionButtonKind.Primary,
+                    enabled = renameValue.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                )
+            }
         }
     }
 }

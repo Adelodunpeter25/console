@@ -30,13 +30,18 @@ fun SessionStatus.label(): String = when (this) {
     SessionStatus.Idle -> "Idle"
 }
 
+/** A small pill in [tint] on a faint wash of the same colour. */
+@Composable
+fun TintPill(text: String, tint: Color, modifier: Modifier = Modifier) {
+    Text(
+        text, color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+        modifier = modifier.clip(RoundedCornerShape(999.dp)).background(tint.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
 /** A small tinted pill with a chat's status. A null status reads as Idle. */
 @Composable
 fun StatusPill(status: SessionStatus?, modifier: Modifier = Modifier) {
     val s = status ?: SessionStatus.Idle
-    val tint = s.tint()
-    Text(
-        s.label(), color = tint, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-        modifier = modifier.clip(RoundedCornerShape(999.dp)).background(tint.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 4.dp),
-    )
+    TintPill(s.label(), s.tint(), modifier)
 }

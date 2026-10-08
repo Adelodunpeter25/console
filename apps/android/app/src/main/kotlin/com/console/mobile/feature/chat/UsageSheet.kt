@@ -35,11 +35,14 @@ import com.console.mobile.core.util.formatUsageValue
 import com.console.mobile.core.util.limitTone
 import com.console.mobile.core.util.usageResetLabel
 import com.console.mobile.core.util.usedPercent
-import com.console.mobile.ui.components.picker.PickerSheetTitle
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
 import com.console.mobile.ui.components.common.new.MeterBar
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * The desktop usage popover as a sheet: context occupancy first, then the
@@ -62,56 +65,37 @@ fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
     val report = provider?.let { usage.reports[it] }
     val loading = provider != null && usage.loadingByProvider[provider] == true
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = ConsoleColors.Background,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp).padding(bottom = 40.dp),
-        ) {
-            PickerSheetTitle("Usage")
-
-            // ---- Context
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Context", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                if (snapshot != null) {
-                    Text(
-                        formatContextUsage(snapshot.used_tokens.toLong(), snapshot.context_window.toLong()),
-                        color = ConsoleColors.TextSecondary, fontSize = 12.sp,
-                    )
-                }
-            }
+    BaseSheet(onDismiss = onDismiss, title = "Usage") {
+        // ---- Context
+        Row(modifier = Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Context", color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             if (snapshot != null) {
-                val percent = snapshot.percent_used.coerceIn(0.0, 100.0)
-                MeterBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(top = 10.dp))
-            } else {
-                Text("Context usage unavailable.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    formatContextUsage(snapshot.used_tokens.toLong(), snapshot.context_window.toLong()),
+                    color = NewTheme.TextSecondary, fontSize = 13.sp,
+                )
             }
+        }
+        if (snapshot != null) {
+            val percent = snapshot.percent_used.coerceIn(0.0, 100.0)
+            MeterBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
+        } else {
+            Text("Context usage unavailable.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
+        }
 
-            HorizontalDivider(color = ConsoleColors.BorderSubtle, modifier = Modifier.padding(vertical = 18.dp))
-
-            // ---- Provider limits
-            Text("Usage Limits", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Column(modifier = Modifier.padding(top = 14.dp)) {
-                when {
-                    loading && report == null -> Note("Loading usage data…")
-                    report == null -> Note("No quota limits reported for this provider.")
-                    report.limits.isEmpty() -> Note("No active rate limit windows.")
-                    else -> report.limits.forEachIndexed { i, limit ->
-                        if (i > 0) Box(modifier = Modifier.height(16.dp))
-                        LimitRow(limit)
-                    }
+        // ---- Provider limits
+        Section("Usage limits") {
+            when {
+                loading && report == null -> Note("Loading usage data…")
+                report == null -> Note("No quota limits reported for this provider.")
+                report.limits.isEmpty() -> Note("No active rate limit windows.")
+                else -> report.limits.forEachIndexed { i, limit ->
+                    if (i > 0) SectionDivider()
+                    LimitRow(limit)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun Note(text: String) {
-    Text(text, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
 }
 
 @Composable
@@ -124,16 +108,16 @@ private fun LimitRow(limit: UsageLimit) {
         limit.scope?.tier?.takeIf { it.isNotBlank() },
         limit.scope?.model_id?.takeIf { it.isNotBlank() },
     ).joinToString(" · ")
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(limit.label, color = ConsoleColors.TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 8.dp))
+            Text(limit.label, color = NewTheme.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 8.dp))
             if (reset != null) {
-                Text(reset, color = ConsoleColors.TextMuted, fontSize = 11.5.sp, maxLines = 1, modifier = Modifier.padding(end = 8.dp))
+                Text(reset, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(end = 8.dp))
             }
-            Text(formatUsageValue(limit, percent), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1)
+            Text(formatUsageValue(limit, percent), color = limitTone(limit, percent).color(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
         if (scope.isNotEmpty()) {
-            Text(scope, color = ConsoleColors.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(scope, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
         MeterBar(percent, limitTone(limit, percent).color(), modifier = Modifier.padding(top = 7.dp))
     }

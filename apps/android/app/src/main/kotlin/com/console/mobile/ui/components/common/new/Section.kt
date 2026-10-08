@@ -45,8 +45,20 @@ fun Section(
         title, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
         modifier = modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
     )
+    SectionCard(content = content)
+}
+
+/**
+ * The rounded card on its own, for places where a heading would repeat what is
+ * already on screen (a sheet's title, a page header).
+ */
+@Composable
+fun SectionCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
         content = content,
     )
 }

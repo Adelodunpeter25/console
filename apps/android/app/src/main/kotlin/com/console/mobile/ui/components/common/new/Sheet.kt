@@ -73,7 +73,8 @@ fun SheetTitle(title: String) {
 
 /**
  * A selectable row for a [Section] inside a sheet: title, optional subtitle, an
- * optional [trailing] control (a star, say), and a check on the selection.
+ * optional [leading] glyph (a status dot), an optional [trailing] control (a
+ * star, say), and a check on the selection.
  */
 @Composable
 fun OptionRow(
@@ -82,6 +83,7 @@ fun OptionRow(
     subtitle: String? = null,
     selected: Boolean = false,
     monoSubtitle: Boolean = false,
+    leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
@@ -89,6 +91,10 @@ fun OptionRow(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (leading != null) {
+            leading()
+            Spacer(modifier = Modifier.size(14.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {

@@ -9,11 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,17 +44,17 @@ import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.CircleIconButton
-import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TextInput
 import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.SectionCard
 
 /**
  * Port of components/environments/environment-switcher.tsx.
  * Server-icon trigger → bottom sheet with env list + probe dots, inline add form.
  * Probes are local UI state (GET {url}/api/projects, 6s) — mirrors probeEnvironment.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
@@ -99,19 +96,12 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
     )
 
     if (sheetOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { sheetOpen = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = NewTheme.Background,
-        ) {
+        BaseSheet(onDismiss = { sheetOpen = false }, title = if (creating) "Add environment" else "Environments") {
             if (creating) {
                 var newName by remember { mutableStateOf("") }
                 var newUrl by remember { mutableStateOf("") }
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
-                        CircleIconButton(TablerIcons.Outline.ArrowNarrowLeft, "Back", { creating = false })
-                        Text("Add environment", color = NewTheme.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 12.dp))
-                    }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ActionRow(icon = TablerIcons.Outline.ArrowNarrowLeft, title = "Back to environments") { creating = false }
                     TextInput("Name", newName, { newName = it }, "My server")
                     TextInput("Backend URL", newUrl, { newUrl = it }, "http://192.168.1.X:3000")
                     ActionButton(
@@ -132,8 +122,8 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
                     )
                 }
             } else {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                    Section("Environments") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    SectionCard {
                         envState.environments.forEachIndexed { index, env ->
                             val isActive = env.id == envState.activeId
                             val probe = probes[env.id]
