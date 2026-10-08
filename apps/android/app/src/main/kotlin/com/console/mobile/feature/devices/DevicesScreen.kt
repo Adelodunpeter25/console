@@ -62,7 +62,7 @@ import com.console.mobile.data.model.isBooting
 import com.console.mobile.data.model.isIos
 import console.v1.DeviceDescriptor
 import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
@@ -168,7 +168,7 @@ fun DevicesScreen(
             .fillMaxSize()
             .background(ConsoleColors.Background),
     ) {
-        ScreenHeader(title = "Devices", onBack = onBack)
+        PageHeader(title = "Devices", onBack = onBack)
         // Top Toolbar
         Row(
             modifier = Modifier

@@ -60,7 +60,7 @@ import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.common.new.SearchBar
 import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.SessionListSkeleton
 import com.console.mobile.ui.components.StatusBadge
 import com.console.mobile.ui.components.confirmAlert
@@ -169,7 +169,7 @@ fun HomeScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = "Console",
             centerTitle = false,
             showSettings = true,

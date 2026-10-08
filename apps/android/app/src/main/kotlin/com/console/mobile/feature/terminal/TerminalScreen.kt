@@ -49,7 +49,7 @@ import console.v1.ProjectInfo
 import com.console.mobile.data.store.TerminalStatus
 import com.console.mobile.feature.terminal.native.NativeTerminalView
 import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
@@ -142,7 +142,7 @@ fun TerminalScreen(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background).imePadding()) {
-        ScreenHeader(
+        PageHeader(
             title = "Terminal",
             onBack = onBack,
             actions = if (term != null) {

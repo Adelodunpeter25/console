@@ -52,7 +52,7 @@ import com.console.mobile.ui.components.ConsoleDropdownMenu
 import com.console.mobile.ui.components.ConsoleDropdownMenuItem
 import com.console.mobile.ui.components.EdgeScrollIndicator
 import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -102,7 +102,7 @@ fun ChatScreen(
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-            ScreenHeader(title = "Chat", centerTitle = false, onBack = { onBackToHome() })
+            PageHeader(title = "Chat", centerTitle = false, onBack = { onBackToHome() })
             EmptyState(title = "No session selected", description = "Pick a chat from Home to get started.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
         }
         return
@@ -311,7 +311,7 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = chatTitle,
             centerTitle = false,
             onBack = {

@@ -77,29 +77,32 @@ fun SubagentBanner(subagents: List<SubagentInfo>, onPress: () -> Unit) {
 
 @Composable
 private fun BannerShell(label: String, count: String, detail: String?, onPress: () -> Unit, running: Boolean = false) {
+    // A raised card strip above the composer. The icon takes the accent while work is running.
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF121214))
-            .border(1.dp, Color(0xFF27272A), RoundedCornerShape(12.dp))
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(NewTheme.FieldRadius))
+            .background(NewTheme.Card)
             .clickable(onClick = onPress)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C20).copy(alpha = 1f)).border(1.dp, Color(0xFF303036), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            Icon(if (label == "SUBAGENTS") TablerIcons.Outline.Robot else TablerIcons.Outline.Check, contentDescription = null, tint = if (running) Color(0xFF38BDF8) else ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
-        }
-        Text(label, color = Color(0xFFFAFAFA), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
-        Box(modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(count, color = ConsoleColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-        }
+        Icon(
+            if (label == "SUBAGENTS") TablerIcons.Outline.Robot else TablerIcons.Outline.Check,
+            contentDescription = null,
+            tint = if (running) NewTheme.Accent else NewTheme.TextSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(label, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+        Text(
+            count, color = NewTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 2.dp),
+        )
         if (detail != null) {
-            Text(detail, color = ConsoleColors.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            Text(detail, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
         } else {
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
         }
-        Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF1C1C20)).border(1.dp, Color(0xFF303036), CircleShape), contentAlignment = Alignment.Center) {
-            Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(12.dp))
-        }
+        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(18.dp))
     }
 }
 
