@@ -1,4 +1,4 @@
-package com.console.mobile.ui.components
+package com.console.mobile.ui.components.common.new
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -20,7 +20,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.delay
 
 /**
@@ -35,11 +35,11 @@ import kotlinx.coroutines.delay
  * between — good enough for a scrollbar on a list of uneven message heights.
  */
 @Composable
-fun EdgeScrollIndicator(
+fun ScrollThumb(
     state: LazyListState,
     modifier: Modifier = Modifier,
     thickness: Dp = 3.dp,
-    color: Color = ConsoleColors.TextMuted.copy(alpha = 0.5f),
+    color: Color = NewTheme.TextMuted.copy(alpha = 0.5f),
     hideDelayMillis: Long = 500L,
 ) {
     var scrolling by remember { mutableStateOf(false) }
@@ -55,7 +55,7 @@ fun EdgeScrollIndicator(
             shown = false
         }
     }
-    val alpha by animateFloatAsState(if (shown) 1f else 0f, label = "edgeScrollIndicator")
+    val alpha by animateFloatAsState(if (shown) 1f else 0f, label = "scrollThumb")
     if (alpha <= 0.01f) return
 
     val metrics by remember(state) {

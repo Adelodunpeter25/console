@@ -33,10 +33,13 @@ import com.console.mobile.data.model.McpAuthConfig
 import com.console.mobile.data.model.McpSavePayload
 import console.v1.McpServerStatus as McpServerEntry
 import com.console.mobile.data.model.displayName
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.ChoiceGroup
+import com.console.mobile.ui.components.common.new.TextInput
 
 @Composable
 internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier: Modifier = Modifier) {
@@ -54,25 +57,9 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
     var formError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = ConsoleColors.Border,
-        unfocusedBorderColor = ConsoleColors.Border,
-        focusedTextColor = ConsoleColors.TextPrimary,
-        unfocusedTextColor = ConsoleColors.TextPrimary,
-        cursorColor = ConsoleColors.TextPrimary,
-    )
     @Composable
     fun Field(label: String, value: String, onValue: (String) -> Unit, placeholder: String, singleLine: Boolean = true) {
-        Text(label, color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValue,
-            placeholder = { Text(placeholder, color = ConsoleColors.TextMuted, fontSize = 13.sp) },
-            singleLine = singleLine,
-            colors = fieldColors,
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        TextInput(label, value, onValue, placeholder, singleLine)
     }
 
     fun save() {
@@ -130,71 +117,47 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
     }
 
     Column(modifier = modifier) {
-        Field("Server Name / ID", name, { name = it }, "e.g. atlassian, filesystem")
-        Text("Transport Type", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(
-                text = "Local (stdio)",
-                onClick = { isHttp = false },
-                variant = if (!isHttp) PillButtonVariant.Filled else PillButtonVariant.Outline,
-                cornerRadius = 8.dp,
-            )
-            PillButton(
-                text = "Remote (HTTP)",
-                onClick = { isHttp = true },
-                variant = if (isHttp) PillButtonVariant.Filled else PillButtonVariant.Outline,
-                cornerRadius = 8.dp,
-            )
-        }
+        Field("Server name / ID", name, { name = it }, "e.g. atlassian, filesystem")
+        ChoiceGroup(
+            label = "Transport",
+            options = listOf(false to "Local (stdio)", true to "Remote (HTTP)"),
+            selected = isHttp,
+            onSelect = { isHttp = it },
+        )
         if (isHttp) {
             Field("Endpoint URL", url, { url = it }, "https://mcp.atlassian.com/v2/mcp")
-            Text("Authentication", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PillButton(text = "OAuth 2.1", onClick = { auth = "oauth2" }, variant = if (auth == "oauth2") PillButtonVariant.Filled else PillButtonVariant.Outline, cornerRadius = 8.dp)
-                PillButton(text = "Static Token", onClick = { auth = "static" }, variant = if (auth == "static") PillButtonVariant.Filled else PillButtonVariant.Outline, cornerRadius = 8.dp)
-                PillButton(text = "None", onClick = { auth = "none" }, variant = if (auth == "none") PillButtonVariant.Filled else PillButtonVariant.Outline, cornerRadius = 8.dp)
-            }
+            ChoiceGroup(
+                label = "Authentication",
+                options = listOf("oauth2" to "OAuth 2.1", "static" to "Token", "none" to "None"),
+                selected = auth,
+                onSelect = { auth = it },
+            )
             if (auth == "static") {
                 Field("Token", token, { token = it }, if (server != null) "Leave blank to keep the stored token" else "Bearer token (stored server-side, never shown again)")
             }
         } else {
             Field("Command", command, { command = it }, "npx, uvx, docker, or path to binary")
             Field("Arguments (space-delimited)", args, { args = it }, "-y @modelcontextprotocol/server-filesystem /path/to/folder")
-            Field("Environment Variables (KEY=VAL, comma-separated)", env, { env = it }, "API_KEY=xyz, DEBUG=true")
+            Field("Environment variables (KEY=VAL, comma-separated)", env, { env = it }, "API_KEY=xyz, DEBUG=true")
         }
-        if (formError != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp))
-                    .background(ConsoleColors.Destructive.copy(alpha = 0.08f))
-                    .border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(16.dp))
-                Text(formError!!, color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(text = "Cancel", onClick = onDone, enabled = !saving, variant = PillButtonVariant.Outline, cornerRadius = 8.dp, modifier = Modifier.weight(1f), fullWidth = true)
-            PillButton(
-                text = if (saving) "Saving…" else "Save Server",
+        formError?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionButton("Cancel", onDone, enabled = !saving, modifier = Modifier.weight(1f))
+            ActionButton(
+                text = if (saving) "Saving…" else "Save server",
                 onClick = ::save,
+                kind = ActionButtonKind.Primary,
                 enabled = !saving,
-                cornerRadius = 8.dp,
+                loading = saving,
                 modifier = Modifier.weight(1f),
-                fullWidth = true,
             )
         }
         if (server != null) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
-                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
-                Text(
-                    "Editing “${server.displayName}”. Token fields left blank keep their stored value.",
-                    color = ConsoleColors.TextSecondary,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
-            }
+            Text(
+                "Editing “${server.displayName}”. Token fields left blank keep their stored value.",
+                color = NewTheme.TextMuted, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            )
         }
     }
 }

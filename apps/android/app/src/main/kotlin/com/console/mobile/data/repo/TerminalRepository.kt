@@ -5,10 +5,10 @@ import com.console.mobile.data.model.INPUT_FRAME_TAG
 import com.console.mobile.data.model.OUTPUT_FRAME_TAG
 import com.console.mobile.data.model.TerminalSpawnParams
 import com.console.mobile.data.model.buildTerminalWsUrl
+import com.console.mobile.data.model.encodeKillFrame
+import com.console.mobile.data.model.encodeResizeFrame
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
-import console.v1.TerminalKill
-import console.v1.TerminalResize
 import console.v1.TerminalServerMessage
 import console.v1.TerminalSpawned
 import com.console.mobile.data.store.TerminalRecord
@@ -66,8 +66,6 @@ class TerminalRepository(
         val deferred = CompletableDeferred<TerminalSpawned>()
         val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
         val serverAdapter = wireMoshi.adapter(TerminalServerMessage::class.java)
-        val resizeAdapter = wireMoshi.adapter(TerminalResize::class.java)
-        val killAdapter = wireMoshi.adapter(TerminalKill::class.java)
         openingDeferreds[cacheKey] = deferred
 
         val params = TerminalSpawnParams(
@@ -99,11 +97,11 @@ class TerminalRepository(
             }
 
             override fun resize(cols: Int, rows: Int) {
-                ws?.send(resizeAdapter.toJson(TerminalResize(cols = cols, rows = rows)))
+                ws?.send(encodeResizeFrame(cols, rows))
             }
 
             override fun kill() {
-                ws?.send(killAdapter.toJson(TerminalKill()))
+                ws?.send(encodeKillFrame())
             }
 
             override fun close() {

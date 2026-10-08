@@ -2,7 +2,6 @@ package com.console.mobile.feature.files
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -18,13 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,11 +52,7 @@ import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,6 +60,14 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.SearchInput
+import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Search
 
 /**
  * Port of screens/files/files-screen.tsx + FileTreeBrowser + FileTreeRows.
@@ -191,26 +190,16 @@ fun FilesScreen(onBack: () -> Unit) {
             if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
         } ?: sel
         val subtitle = listOfNotNull(project?.name?.takeIf { it.isNotBlank() }, relativePath).joinToString(" · ")
-        Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-            ScreenHeader(title = fileName, subtitle = subtitle, centerTitle = false, onBack = { selectedPath = null })
-            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp).padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
+            PageHeader(title = fileName, subtitle = subtitle, onBack = { selectedPath = null })
+            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                 when {
-                    block != null -> Column(modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).padding(20.dp)) {
-                        Text(block.title, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text(block.message, color = ConsoleColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
+                    block != null -> Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(20.dp)) {
+                        Text(block.title, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Text(block.message, color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                     }
-                    fileLoading && fileContent == null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                            Text("Loading file…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                        }
-                    }
-                    fileError != null && fileContent == null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Failed to load file", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text(fileError ?: "", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                        }
-                    }
+                    fileLoading && fileContent == null -> LoadingState("Loading file…", Modifier.fillMaxSize())
+                    fileError != null && fileContent == null -> EmptyView(title = "Failed to load file", description = fileError, icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
                     else -> {
                         val content = fileContent ?: ""
                         if (isMarkdownPath(sel)) {
@@ -227,13 +216,13 @@ fun FilesScreen(onBack: () -> Unit) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
+        PageHeader(
             title = "Files",
             subtitle = project?.name,
             onBack = onBack,
             actions = {
-                IconButton(onClick = {
+                CircleIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = {
                     scope.launch {
                         entriesLoading = true
                         try {
@@ -246,17 +235,15 @@ fun FilesScreen(onBack: () -> Unit) {
                             entriesLoading = false
                         }
                     }
-                }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
-                }
+                })
             },
         )
         // Search bar.
-        ConsoleSearchField(
+        SearchInput(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             placeholder = "Search files",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp),
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             // Scrolling the results means the user has seen enough to act on
@@ -267,24 +254,15 @@ fun FilesScreen(onBack: () -> Unit) {
                     .collect { scrolling -> if (scrolling) keyboard?.hide() }
             }
             when {
-                projectRoot == null -> EmptyState(title = "No project selected", description = "Add a project folder in Settings → Projects.")
-                entriesLoading && entries.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ConsoleColors.TextMuted)
-                }
-                entriesError != null && entries.isEmpty() -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Couldn't load directory", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(entriesError ?: "", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                    }
-                }
+                projectRoot == null -> EmptyView(title = "No project selected", description = "Add a project folder in Settings → Projects.", icon = TablerIcons.Outline.FolderOpen, modifier = Modifier.fillMaxSize())
+                entriesLoading && entries.isEmpty() -> LoadingState(modifier = Modifier.fillMaxSize())
+                entriesError != null && entries.isEmpty() -> EmptyView(title = "Couldn't load directory", description = entriesError, icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
                 searchResults != null -> {
                     val results = searchResults ?: emptyList()
                     if (searching && results.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = ConsoleColors.TextMuted)
-                        }
+                        LoadingState(modifier = Modifier.fillMaxSize())
                     } else if (results.isEmpty()) {
-                        EmptyState(title = "No results", description = "No files match \"$searchQuery\".")
+                        EmptyView(title = "No results", description = "No files match \"$searchQuery\".", icon = TablerIcons.Outline.Search, modifier = Modifier.fillMaxSize())
                     } else {
                         LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
                             items(results, key = { it.path }) { r ->
@@ -296,18 +274,18 @@ fun FilesScreen(onBack: () -> Unit) {
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(flattenTree(entries, expanded, childrenByPath), key = { it.key }) { row ->
                         when (row.kind) {
-                            TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (8 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                Text("Loading…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                            TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                Text("Loading…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
                             }
-                            TreeKind.Empty -> Text("(empty)", color = ConsoleColors.TextMuted, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (8 + row.depth * 18).dp, top = 2.dp, bottom = 6.dp))
+                            TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
                             TreeKind.Entry -> {
                                 val e = row.entry!!
                                 val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
                                 if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
-                                    Row(modifier = Modifier.fillMaxWidth().padding(start = (8 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                        Text(e.name, color = ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                                    Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                        Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
                                     }
                                 } else {
                                     TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
@@ -350,31 +328,31 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
 
 @Composable
 private fun TreeRowEntry(entry: FsTreeEntry, depth: Int, selected: Boolean, expanded: Boolean, onPressDir: () -> Unit, onPressFile: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(shape)
-            .background(if (selected) ConsoleColors.Card else Color.Transparent)
-            .border(if (selected) 1.dp else 0.dp, if (selected) ConsoleColors.Border else Color.Transparent, shape)
+        modifier = Modifier.fillMaxWidth()
+            .background(if (selected) Color.White.copy(alpha = 0.06f) else Color.Transparent)
             .clickable { if (entry.is_dir) onPressDir() else onPressFile() }
-            .padding(start = (8 + depth * 18).dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+            .padding(start = (16 + depth * 18).dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (entry.is_dir) {
-            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(14.dp))
         } else {
-            Box(modifier = Modifier.size(12.dp))
+            Box(modifier = Modifier.size(14.dp))
         }
-        if (entry.is_dir) {
-            Icon(
-                if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
-                contentDescription = null,
-                tint = ConsoleColors.TextSecondary,
-                modifier = Modifier.size(17.dp),
-            )
-        } else {
-            FileIcon(filename = entry.name, sizeDp = 17)
+        Box(modifier = Modifier.padding(start = 8.dp)) {
+            if (entry.is_dir) {
+                Icon(
+                    if (expanded) TablerIcons.Outline.FolderOpen else TablerIcons.Outline.Folder,
+                    contentDescription = null,
+                    tint = NewTheme.TextPrimary,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                FileIcon(filename = entry.name, sizeDp = 20)
+            }
         }
-        Text(entry.name, color = if (selected) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+        Text(entry.name, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
     }
 }
 
@@ -388,6 +366,8 @@ private fun CodePreview(content: String, path: String?) {
         language = language,
         modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
         showLineNumbers = true,
+        // The screen is pure black, so the pinned gutter has to be too.
+        gutterColor = NewTheme.Black,
     )
 }
 

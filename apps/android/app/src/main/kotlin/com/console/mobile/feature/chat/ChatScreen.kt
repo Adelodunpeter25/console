@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -43,21 +42,23 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
+import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
-import com.console.mobile.ui.components.ChatScreenSkeleton
-import com.console.mobile.ui.components.ConsoleDropdownMenu
-import com.console.mobile.ui.components.ConsoleDropdownMenuItem
-import com.console.mobile.ui.components.EdgeScrollIndicator
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
+import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.OverflowMenu
+import com.console.mobile.ui.components.common.new.OverflowMenuItem
+import com.console.mobile.ui.components.common.new.ScrollThumb
 
 /** Scroll position to restore after older messages are prepended. */
 private data class ListAnchor(
@@ -100,9 +101,9 @@ fun ChatScreen(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
 
     if (sessionId == null) {
-        Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-            ScreenHeader(title = "Chat", centerTitle = false, onBack = { onBackToHome() })
-            EmptyState(title = "No session selected", description = "Pick a chat from Home to get started.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
+        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+            PageHeader(title = "Chat", onBack = { onBackToHome() })
+            EmptyView(title = "No session selected", description = "Pick a chat from Home to get started.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize())
         }
         return
     }
@@ -189,12 +190,14 @@ fun ChatScreen(
         header?.title?.ifBlank { "Chat" } ?: "Chat"
     }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
-            val match = projectState.projects.firstOrNull { p -> p.path == cwd || cwd.startsWith(p.path + "/") || p.path.endsWith(cwd) }
+            val match = projectForSession(projectState.projects, view?.projectId, cwd)
+                ?: projectState.projects.firstOrNull { p -> p.path.endsWith(cwd) }
             if (match != null) AppContainer.appStateHolder.setSelectedProjectId(match.id)
         }
         AppContainer.appStateHolder.setActiveTab(tab)
@@ -213,7 +216,17 @@ fun ChatScreen(
     LaunchedEffect(listState) {
         launch {
             listState.interactionSource.interactions.collect {
-                if (it is DragInteraction.Start) following = false
+                if (it is DragInteraction.Start) {
+                    following = false
+                    // The user took over the list: put the keyboard away, as the file
+                    // search does. Keyed on the drag, not on isScrollInProgress, which is
+                    // also true while the list auto-follows streamed text and would close
+                    // the keyboard mid-typing.
+                    keyboardController?.hide()
+                    // Also drop focus: an unfocused composer folds back to the pill, giving
+                    // the transcript the room while you read.
+                    focusManager.clearFocus()
+                }
             }
         }
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
@@ -297,24 +310,19 @@ fun ChatScreen(
         anchor = null
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(
             title = chatTitle,
-            centerTitle = false,
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()
             },
             actions = {
-                IconButton(onClick = { jumpToProjectTab(MobileTab.Files) }, modifier = Modifier.size(40.dp)) {
-                    Icon(TablerIcons.Outline.Folder, contentDescription = "Open file explorer", tint = Color.White)
-                }
-                Box {
-                    IconButton(onClick = { overflowMenu = true }, modifier = Modifier.size(40.dp)) {
-                        Icon(TablerIcons.Outline.DotsVertical, contentDescription = "More options", tint = Color.White)
-                    }
-                    ConsoleDropdownMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
-                        ConsoleDropdownMenuItem(
+                CircleIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
+                Box(modifier = Modifier.padding(start = 8.dp)) {
+                    CircleIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
+                    OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                        OverflowMenuItem(
                             label = "Open diff",
                             icon = TablerIcons.Outline.BrandGit,
                             onClick = {
@@ -322,7 +330,7 @@ fun ChatScreen(
                                 jumpToProjectTab(MobileTab.Changes)
                             },
                         )
-                        ConsoleDropdownMenuItem(
+                        OverflowMenuItem(
                             label = "Open devices",
                             icon = TablerIcons.Outline.DeviceMobile,
                             onClick = {
@@ -330,7 +338,7 @@ fun ChatScreen(
                                 jumpToProjectTab(MobileTab.Devices)
                             },
                         )
-                        ConsoleDropdownMenuItem(
+                        OverflowMenuItem(
                             label = "Open terminal",
                             icon = TablerIcons.Outline.Terminal2,
                             onClick = {
@@ -344,8 +352,8 @@ fun ChatScreen(
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                loadingMessages && !hasMessages -> ChatScreenSkeleton()
-                !hasMessages && !isStreaming -> EmptyState(title = "Start the conversation", description = "Ask anything about your project.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) })
+                loadingMessages && !hasMessages -> ChatLoadingSkeleton()
+                !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize())
                 else -> {
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
@@ -366,7 +374,7 @@ fun ChatScreen(
                         }
                     }
                     }
-                    EdgeScrollIndicator(
+                    ScrollThumb(
                         state = listState,
                         modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
                     )
@@ -379,8 +387,8 @@ fun ChatScreen(
                         scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
                     },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                    containerColor = ConsoleColors.SurfaceElevated,
-                    contentColor = ConsoleColors.TextPrimary,
+                    containerColor = NewTheme.Raised,
+                    contentColor = NewTheme.TextPrimary,
                 ) {
                     Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
                 }

@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.code.CodeViewer
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
@@ -73,9 +73,9 @@ fun CustomMarkdown(content: String, modifier: Modifier = Modifier, streaming: Bo
     SelectionContainer(modifier = modifier) {
         val blocks = remember(content) { parseBlocks(content) }
         Column(modifier = Modifier.fillMaxWidth()) {
-            MdBlocks(blocks, ConsoleColors.TextPrimary, 15.sp, 22.sp, 6.dp)
+            MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
             if (streaming) {
-                Text("▍", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+                Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
             }
         }
     }
@@ -96,7 +96,7 @@ private fun MdBlockView(block: MdBlock, color: Color, size: TextUnit, lineHeight
         is MdBlock.Code -> CodeBlock(language = block.language, code = block.code)
         is MdBlock.Heading -> Text(
             block.text,
-            color = ConsoleColors.TextPrimary,
+            color = NewTheme.TextPrimary,
             fontSize = when (block.level) { 1 -> 18.sp; 2 -> 16.sp; else -> 15.sp },
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
@@ -106,7 +106,7 @@ private fun MdBlockView(block: MdBlock, color: Color, size: TextUnit, lineHeight
                 .background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
             Column {
-                MdBlocks(block.blocks, ConsoleColors.TextSecondary, 14.sp, TextUnit.Unspecified, 4.dp)
+                MdBlocks(block.blocks, NewTheme.TextSecondary, 14.sp, TextUnit.Unspecified, 4.dp)
             }
         }
         is MdBlock.Rule -> Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).background(Color.White.copy(alpha = 0.1f)).padding(vertical = 0.5.dp))
@@ -135,7 +135,7 @@ private fun ListView(block: MdBlock.ListBlock, color: Color) {
             Row(modifier = Modifier.padding(vertical = 2.dp)) {
                 Text(
                     marker,
-                    color = ConsoleColors.TextSecondary,
+                    color = NewTheme.TextSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.widthIn(min = 20.dp).padding(end = 6.dp),
                 )
@@ -165,7 +165,7 @@ private fun TableView(block: MdBlock.Table) {
         modifier = Modifier.padding(vertical = 8.dp)
             .horizontalScroll(rememberScrollState())
             .clip(shape)
-            .border(1.dp, ConsoleColors.Border, shape),
+            .border(1.dp, NewTheme.Divider, shape),
     ) {
         TableRowView(block.header, widths, header = true)
         block.rows.forEach { TableRowView(it, widths, header = false) }
@@ -176,16 +176,16 @@ private fun TableView(block: MdBlock.Table) {
 private fun TableRowView(cells: List<AnnotatedString>, widths: List<Dp>, header: Boolean) {
     Row(
         modifier = Modifier.height(IntrinsicSize.Min)
-            .background(if (header) ConsoleColors.SurfaceElevated else Color.Transparent),
+            .background(if (header) NewTheme.Raised else Color.Transparent),
     ) {
         widths.forEachIndexed { c, w ->
             Text(
                 cells.getOrNull(c) ?: AnnotatedString(""),
-                color = ConsoleColors.TextPrimary,
+                color = NewTheme.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = if (header) FontWeight.SemiBold else null,
                 modifier = Modifier.width(w).fillMaxHeight()
-                    .border(0.5.dp, ConsoleColors.BorderSubtle)
+                    .border(0.5.dp, NewTheme.Divider)
                     .padding(horizontal = 10.dp, vertical = 7.dp),
             )
         }
@@ -210,14 +210,14 @@ private fun CodeBlock(language: String, code: String) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             com.console.mobile.ui.components.FileLanguageIcon(language = language, sizeDp = 13)
-            Text(language.ifBlank { "code" }, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 6.dp))
+            Text(language.ifBlank { "code" }, color = NewTheme.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 6.dp))
             IconButton(onClick = {
                 clipboard.setText(AnnotatedString(code))
                 copied = true
                 scope.launch { delay(1500); copied = false }
             }, modifier = Modifier.padding(0.dp)) {
                 if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399))
-                else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy code", tint = ConsoleColors.TextSecondary)
+                else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy code", tint = NewTheme.TextSecondary)
             }
         }
         CodeViewer(

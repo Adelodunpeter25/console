@@ -40,15 +40,22 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Circle
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
-import com.console.mobile.core.util.colorForLimit
-import com.console.mobile.core.util.formatWindowLabel
-import com.console.mobile.core.util.getBarPercent
-import com.console.mobile.core.util.getUsedPercent
-import com.console.mobile.core.util.statusForLimit
+import com.console.mobile.core.util.formatUsageValue
+import com.console.mobile.core.util.limitTone
+import com.console.mobile.core.util.usageResetLabel
+import com.console.mobile.core.util.usedPercent
+import com.console.mobile.ui.components.ProviderIcon
+import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
 import console.v1.UsageReport
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.MeterBar
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.SkeletonLoader
+import com.console.mobile.ui.components.common.new.SectionSkeleton
 
 /**
  * Port of screens/settings/usage-settings.tsx + usage-provider-card + usage-limit-row.
@@ -72,24 +79,27 @@ fun UsageSettings(onBack: () -> Unit) {
     )
     val isLoading = usageState.loading && usageState.reports.isEmpty()
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(
             title = "Usage",
             onBack = onBack,
             actions = {
                 IconButton(onClick = { AppContainer.usageRepository.loadAllUsage(force = true) }, modifier = Modifier.size(36.dp)) {
-                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(16.dp))
+                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = NewTheme.TextPrimary, modifier = Modifier.size(16.dp))
                 }
             },
         )
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    Text("Loading quota…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+        SkeletonLoader(
+            loading = isLoading,
+            modifier = Modifier.fillMaxSize(),
+            skeleton = {
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    SectionSkeleton(rows = 2)
+                    SectionSkeleton(rows = 2)
+                    SectionSkeleton(rows = 2)
                 }
-            }
-        } else {
+            },
+        ) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = {
@@ -100,9 +110,9 @@ fun UsageSettings(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             ) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                    Text("Remaining quota for your signed-in providers. Pull to refresh.", color = ConsoleColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 16.dp))
+                    Text("Remaining quota for your signed-in providers. Pull to refresh.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
                     cards.forEach { (key, displayName, auth) ->
-                        UsageProviderCard(displayName = displayName, report = usageState.reports[key], loggedIn = auth?.logged_in == true, email = auth?.email)
+                        UsageProviderCard(provider = key, displayName = displayName, report = usageState.reports[key], loggedIn = auth?.logged_in == true, email = auth?.email)
                     }
                 }
             }
@@ -111,86 +121,63 @@ fun UsageSettings(onBack: () -> Unit) {
 }
 
 @Composable
-private fun UsageProviderCard(displayName: String, report: UsageReport?, loggedIn: Boolean, email: String?) {
-    val isExhausted = report?.limits?.any { statusForLimit(it) == "exhausted" } == true
+private fun UsageProviderCard(provider: String, displayName: String, report: UsageReport?, loggedIn: Boolean, email: String?) {
     val mostPressured = report?.limits?.firstOrNull()
-    val cardShape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(cardShape)
-            .background(ConsoleColors.Card)
-            .border(1.dp, ConsoleColors.Border, cardShape)
-            .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-            if (loggedIn) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = if (isExhausted) Color(0xFFF87171) else Color(0xFF34D399), modifier = Modifier.size(14.dp))
-            else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
-            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                Text(displayName, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                var sub = if (loggedIn) (email ?: "Connected") else "Not connected"
-                Text(sub, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+    val pressure = mostPressured?.let { usedPercent(it) }
+    // Heading is the provider; the card holds its limits (or why there are none).
+    Section(displayName) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            ProviderIcon(provider = provider, sizeDp = 24)
+            Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                Text(if (loggedIn) (email ?: "Connected") else "Not connected", color = if (loggedIn) NewTheme.TextPrimary else NewTheme.TextMuted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            val used = mostPressured?.amount?.used
-            if (mostPressured != null && used != null) {
-                Text("${Math.round(used)}%", color = parseUsageColor(colorForLimit(mostPressured)), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (mostPressured != null && pressure != null) {
+                Text("${pressure.toInt()}%", color = limitTone(mostPressured, pressure).color(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-        if (!loggedIn) {
-            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                Text("Sign in via Account to see quota.", color = ConsoleColors.TextSecondary, fontSize = 12.sp)
+        when {
+            !loggedIn -> {
+                SectionDivider()
+                Note("Sign in under Providers to see quota.")
             }
-        } else if (report == null) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
-                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(14.dp))
-                Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login in Account.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+            report == null -> {
+                SectionDivider()
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Warning, modifier = Modifier.size(18.dp))
+                    Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login under Providers.", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp))
+                }
             }
-        } else if (report.limits.isEmpty()) {
-            Text("No limits reported.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
-        } else {
-            report.limits.forEach { UsageLimitRow(it) }
+            report.limits.isEmpty() -> {
+                SectionDivider()
+                Note("No limits reported.")
+            }
+            else -> report.limits.forEach { limit ->
+                SectionDivider()
+                UsageLimitRow(limit)
+            }
         }
     }
 }
 
 @Composable
 private fun UsageLimitRow(limit: UsageLimit) {
-    val usedPct = getUsedPercent(limit)
-    val remainingPct = limit.amount?.remaining_fraction?.let { Math.round(it * 1000) / 10.0 }
-    val barPct = getBarPercent(limit).toFloat() / 100f
-    val color = parseUsageColor(colorForLimit(limit))
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+    val percent = usedPercent(limit)
+    val tone = limitTone(limit, percent).color()
+    val reset = usageResetLabel(limit)
+    val scope = listOfNotNull(
+        limit.scope?.tier?.takeIf { it.isNotBlank() },
+        limit.scope?.model_id?.takeIf { it.isNotBlank() },
+    ).joinToString(" · ")
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(limit.label, color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                var sub = formatWindowLabel(limit)
-                if (!limit.scope?.tier.isNullOrBlank()) sub = "${limit.scope?.tier} · $sub"
-                if (!limit.scope?.model_id.isNullOrBlank()) sub = "$sub · ${limit.scope?.model_id}"
-                Text(sub, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    when {
-                        usedPct != null -> "$usedPct% used"
-                        remainingPct != null -> "$remainingPct% left"
-                        !limit.status.isNullOrBlank() -> limit.status
-                        else -> "—"
-                    },
-                    color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                )
-                if (limit.amount?.remaining != null && limit.amount?.remaining_fraction != null) {
-                    Text("${String.format("%.1f", limit.amount?.remaining)}% remaining", color = ConsoleColors.TextSecondary, fontSize = 11.sp)
-                }
-            }
+            Text(limit.label, color = NewTheme.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 8.dp))
+            Text(formatUsageValue(limit, percent), color = tone, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(6.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.1f))) {
-            Box(modifier = Modifier.fillMaxWidth(barPct).height(6.dp).clip(RoundedCornerShape(999.dp)).background(color))
+        val sub = listOfNotNull(scope.ifEmpty { null }, reset).joinToString(" · ")
+        if (sub.isNotEmpty()) {
+            Text(sub, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
+        MeterBar(percent, tone, modifier = Modifier.padding(top = 8.dp), height = 5.dp)
     }
 }
 
-private fun parseUsageColor(hex: String): Color {
-    return try {
-        Color(android.graphics.Color.parseColor(hex))
-    } catch (_: Exception) {
-        ConsoleColors.TextMuted
-    }
-}

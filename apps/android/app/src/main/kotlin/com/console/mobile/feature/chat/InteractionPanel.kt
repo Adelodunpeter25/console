@@ -20,8 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,14 +45,26 @@ import com.console.mobile.core.chat.PendingPermission
 import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.PermissionRequest
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.InlineTextInput
+import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.theme.ConsoleMonoFamily
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.delay
 
 /**
  * Port of components/chat/interactions/interaction-panel.tsx + question-panel.tsx.
@@ -71,39 +81,42 @@ fun InteractionPanel(sessionId: String, permissions: List<PendingPermission>, qu
     QuestionWizard(questions = questions.map { it.request }, sessionId = sessionId)
 }
 
+/** The raised card both panels sit in. */
+@Composable
+private fun PanelCard(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(18.dp),
+        content = content,
+    )
+}
+
 @Composable
 private fun PermissionPanel(request: PermissionRequest, sessionId: String) {
     val scope = rememberCoroutineScope()
     var busy by remember(request.requestId) { mutableStateOf<String?>(null) }
     val argsString = request.args?.toString() ?: ""
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).clip(shape)
-            .background(Color(0xFFF59E0B).copy(alpha = 0.1f))
-            .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.3f), shape)
-            .padding(16.dp),
-    ) {
+    PanelCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
+            Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = NewTheme.Warning, modifier = Modifier.size(22.dp))
             Text(
                 buildString {
                     append(if (request.requiresUpgrade) "Upgrade permission required: " else "Permission required: ")
                     append(request.toolName)
                 },
-                color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f).padding(start = 10.dp),
+                color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
             )
         }
         if (!request.reason.isNullOrBlank()) {
-            Text(request.reason, color = ConsoleColors.TextSecondary, fontSize = 12.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 28.dp, top = 8.dp))
+            Text(request.reason, color = NewTheme.TextSecondary, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 10.dp))
         }
         if (argsString.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().padding(start = 28.dp, top = 8.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.4f)).padding(10.dp)) {
-                Text(argsString.take(1200), color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = com.console.mobile.ui.theme.ConsoleMonoFamily, lineHeight = 17.sp, modifier = Modifier.verticalScroll(rememberScrollState()))
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Background).padding(12.dp)) {
+                Text(argsString.take(1200), color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 18.sp, modifier = Modifier.verticalScroll(rememberScrollState()))
             }
         }
-        Row(modifier = Modifier.padding(start = 28.dp, top = 12.dp)) {
-            val allowLabel = if (request.requiresUpgrade) "Allow once" else "Allow"
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val approve = { allow: Boolean ->
                 busy = if (allow) "allow" else "deny"
                 scope.launch {
@@ -111,28 +124,24 @@ private fun PermissionPanel(request: PermissionRequest, sessionId: String) {
                     busy = null
                 }
             }
-            PillButton(
-                text = allowLabel,
-                onClick = { approve(true) },
-                icon = TablerIcons.Outline.ShieldCheck,
-                loading = busy == "allow",
-                enabled = busy == null,
-                accent = Color(0xFF34D399),
-                cornerRadius = 12.dp,
-                horizontalPadding = 16.dp,
-                verticalPadding = 8.dp,
-            )
-            PillButton(
+            ActionButton(
                 text = "Deny",
                 onClick = { approve(false) },
+                kind = ActionButtonKind.Danger,
                 icon = TablerIcons.Outline.ShieldX,
                 loading = busy == "deny",
                 enabled = busy == null,
-                accent = Color(0xFFF87171),
-                modifier = Modifier.padding(start = 10.dp),
-                cornerRadius = 12.dp,
-                horizontalPadding = 16.dp,
-                verticalPadding = 8.dp,
+                surface = NewTheme.Raised,
+                modifier = Modifier.weight(1f),
+            )
+            ActionButton(
+                text = if (request.requiresUpgrade) "Allow once" else "Allow",
+                onClick = { approve(true) },
+                kind = ActionButtonKind.Primary,
+                icon = TablerIcons.Outline.ShieldCheck,
+                loading = busy == "allow",
+                enabled = busy == null,
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -182,94 +191,102 @@ private fun QuestionPanel(
     var custom by remember(request.requestId) { mutableStateOf("") }
     val hasOptions = request.options.isNotEmpty()
     val hasAnswer = custom.trim().isNotEmpty() || selected.isNotEmpty()
-    val shape = RoundedCornerShape(16.dp)
 
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            // The panel hosts a text field, so it has to ride above the IME or
-            // the keyboard covers the answer box and the Submit row. Navigation
-            // bars are excluded because the window already insets for them —
-            // same treatment as Composer.kt.
-            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
-            .padding(horizontal = 12.dp).padding(bottom = 8.dp).clip(shape)
-            .background(Color(0xFF18181B))
-            .border(1.dp, Color.White.copy(alpha = 0.15f), shape)
-            .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(TablerIcons.Outline.HelpCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-            Text(request.question, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 10.dp))
-            if (total > 1) {
-                Text("$index of $total", color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = com.console.mobile.ui.theme.ConsoleMonoFamily)
-            }
+    // --- Keyboard avoiding ---------------------------------------------------
+    // The panel rides above the IME (inset padding below), but riding up is not
+    // enough on its own: a tall panel (many options + the answer box) was simply
+    // clipped at the bottom, hiding the text field and the Submit row. So the
+    // body scrolls, the buttons stay pinned, the height is capped, and the field
+    // is scrolled into view when it gains focus.
+    val density = LocalDensity.current
+    val imeOpen = WindowInsets.ime.getBottom(density) > 0
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    // Leave the transcript some room while reading; with the keyboard up the panel
+    // may use everything left, since the keyboard already took its share.
+    val maxHeight = if (imeOpen) screenHeight else screenHeight * 0.62f
+    val bodyScroll = rememberScrollState()
+    val fieldRequester = remember { BringIntoViewRequester() }
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused, imeOpen) {
+        // The keyboard animates up after focus lands; wait for the insets to settle
+        // or the field is scrolled to where the bottom *was*.
+        if (fieldFocused && imeOpen) {
+            delay(120)
+            fieldRequester.bringIntoView()
         }
-        if (hasOptions) {
-            Column(modifier = Modifier.padding(start = 28.dp, top = 12.dp)) {
-                request.options.forEach { option ->
-                    val isSelected = selected.contains(option)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) Color.White.copy(alpha = 0.08f) else Color.Transparent)
-                            .border(1.dp, if (isSelected) Color.White.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                            .clickable {
-                                selected = if (request.isMultiSelect) {
-                                    if (isSelected) selected - option else selected + option
-                                } else {
-                                    setOf(option)
-                                }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier.size(16.dp).clip(if (request.isMultiSelect) RoundedCornerShape(4.dp) else CircleShape)
-                                .background(if (isSelected) Color.White else Color.Transparent)
-                                .border(1.dp, Color.White.copy(alpha = 0.4f), if (request.isMultiSelect) RoundedCornerShape(4.dp) else CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (isSelected) {
-                                if (request.isMultiSelect) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
-                                else Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color.Black))
-                            }
-                        }
-                        Text(option, color = if (isSelected) Color.White else ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.padding(start = 12.dp))
+    }
+
+    Column(modifier = Modifier.heightIn(max = maxHeight).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))) {
+        PanelCard {
+            Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(bodyScroll)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(TablerIcons.Outline.HelpCircle, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(22.dp))
+                    Text(request.question, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                    if (total > 1) {
+                        Text("$index of $total", color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
                     }
                 }
-            }
-        }
-        OutlinedTextField(
-            value = custom,
-            onValueChange = { custom = it },
-            placeholder = { Text(if (hasOptions) "Or type your own answer…" else "Type your answer…") },
-            singleLine = false,
-            maxLines = 4,
-            colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.Black.copy(alpha = 0.4f), unfocusedContainerColor = Color.Black.copy(alpha = 0.4f), focusedBorderColor = Color.White.copy(alpha = 0.1f), unfocusedBorderColor = Color.White.copy(alpha = 0.1f), focusedTextColor = Color.White, unfocusedTextColor = Color.White, cursorColor = Color.White),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(start = 28.dp, top = 4.dp),
-        )
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 28.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (request.skippable) {
-                PillButton(
-                    text = "Skip",
-                    onClick = onSkip,
-                    enabled = !submitting,
-                    variant = PillButtonVariant.Outline,
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            PillButton(
-                text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
-                onClick = {
-                    if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
-                    else if (selected.isNotEmpty()) {
-                        if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
+                if (hasOptions) {
+                    Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        request.options.forEach { option ->
+                            val isSelected = selected.contains(option)
+                            val markShape = if (request.isMultiSelect) RoundedCornerShape(6.dp) else CircleShape
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius))
+                                    .background(if (isSelected) NewTheme.Accent.copy(alpha = 0.16f) else NewTheme.Raised)
+                                    .clickable {
+                                        selected = if (request.isMultiSelect) {
+                                            if (isSelected) selected - option else selected + option
+                                        } else {
+                                            setOf(option)
+                                        }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(20.dp).clip(markShape)
+                                        .background(if (isSelected) NewTheme.Accent else Color.Transparent)
+                                        .border(1.5.dp, if (isSelected) NewTheme.Accent else NewTheme.TextMuted, markShape),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        if (request.isMultiSelect) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.OnPrimary, modifier = Modifier.size(13.dp))
+                                        else Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(NewTheme.OnPrimary))
+                                    }
+                                }
+                                Text(option, color = if (isSelected) NewTheme.TextPrimary else NewTheme.TextSecondary, fontSize = 16.sp, fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.padding(start = 14.dp))
+                            }
+                        }
                     }
-                },
-                enabled = hasAnswer && !submitting,
-                loading = submitting,
-            )
+                }
+                InlineTextInput(
+                    value = custom,
+                    onValueChange = { custom = it },
+                    placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
+                    modifier = Modifier.padding(top = 12.dp)
+                        .bringIntoViewRequester(fieldRequester)
+                        .onFocusChanged { fieldFocused = it.isFocused },
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (request.skippable) {
+                    ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))
+                }
+                ActionButton(
+                    text = if (isLast) (if (total > 1) "Submit all" else "Submit") else "Next",
+                    onClick = {
+                        if (custom.trim().isNotEmpty()) onAnswerText(custom.trim())
+                        else if (selected.isNotEmpty()) {
+                            if (request.isMultiSelect) onAnswerList(selected.toList()) else onAnswerText(selected.first())
+                        }
+                    },
+                    kind = ActionButtonKind.Primary,
+                    enabled = hasAnswer && !submitting,
+                    loading = submitting,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
     }
 }

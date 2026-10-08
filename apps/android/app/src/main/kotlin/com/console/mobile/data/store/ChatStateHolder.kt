@@ -22,5 +22,7 @@ class ChatStateHolder(initial: Map<String, ChatSessionState> = emptyMap()) {
 
     fun setInput(id: String, value: String) = update(id) { it.copy(input = value) }
     fun clear(id: String) { _sessions.value = _sessions.value + (id to createChatSessionState()) }
+    /** Drop a session's local state entirely (not reset to empty), so a draft can't outlive it. */
+    fun remove(id: String) { _sessions.value = _sessions.value - id }
     fun clearAll() { _sessions.value = emptyMap() }
 }

@@ -4,6 +4,7 @@ import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.AskQuestionRequest
+import console.v1.ContextSnapshot
 import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.data.model.ToolCall
@@ -47,6 +48,8 @@ data class ChatSessionState(
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),
     val runs: List<RunActivityState> = emptyList(),
+    // Context-window occupancy for the footer ring; null until first known.
+    val context: ContextSnapshot? = null,
     val attachments: List<ImageAttachment> = emptyList(),
     val draftUpdatedAt: Long? = null,
     // Message pagination. The session API returns the newest page on open;

@@ -122,6 +122,20 @@ class ProviderRepository(
     fun resolveProvider(modelId: String, fallback: String? = null): String? =
         providerState.resolveProvider(modelId, fallback)
 
+    /**
+     * The saved level if this model still offers it, else null so the server
+     * falls back to the model's default. Switching models can leave a level
+     * the new one doesn't list, which the server would reject for the run.
+     */
+    fun validThinkingLevel(providerId: String?, modelId: String?, level: String?): String? {
+        if (level.isNullOrBlank() || providerId.isNullOrBlank() || modelId.isNullOrBlank()) return null
+        val models = providerState.state.value.modelsByProvider[providerId]
+            ?: providerState.state.value.providers.firstOrNull { it.name == providerId }?.models
+            ?: return level
+        val model = models.firstOrNull { it.id == modelId } ?: return level
+        return level.takeIf { it in model.supported_thinking_levels }
+    }
+
     fun supportsImages(providerId: String?, modelId: String?): Boolean {
         if (providerId.isNullOrBlank() || modelId.isNullOrBlank()) return true
         val models = providerState.state.value.modelsByProvider[providerId]

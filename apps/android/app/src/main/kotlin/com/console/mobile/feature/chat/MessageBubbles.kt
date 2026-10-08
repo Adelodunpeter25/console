@@ -5,7 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -79,7 +78,7 @@ import com.console.mobile.data.model.ToolResultMessage
 import com.console.mobile.data.model.UserMessage
 import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.components.attachmentBytes
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleDimens
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
@@ -96,7 +95,7 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
         androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
             Column(
                 modifier = Modifier.widthIn(min = 64.dp, max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
-                    .background(ConsoleColors.SurfaceElevated).padding(horizontal = 16.dp, vertical = 10.dp),
+                    .background(NewTheme.UserBubble).padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 if (attachments.isNotEmpty()) {
                     Row(modifier = Modifier.padding(bottom = 6.dp)) {
@@ -111,22 +110,22 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                 if (content.isNotEmpty()) {
                     val mentions = remember(content) { parseFileMentions(content) }
                     if (mentions.isEmpty()) {
-                        Text(content, color = ConsoleColors.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                        Text(content, color = NewTheme.OnUserBubble, fontSize = 16.sp, lineHeight = 23.sp)
                     } else {
                         val (annotated, inlineContent) = mentionAnnotatedString(content, mentions)
                         Text(
                             annotated,
                             inlineContent = inlineContent,
-                            color = ConsoleColors.TextPrimary,
-                            fontSize = 15.sp,
-                            lineHeight = 22.sp,
+                            color = NewTheme.OnUserBubble,
+                            fontSize = 16.sp,
+                            lineHeight = 23.sp,
                         )
                     }
                 }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, end = 2.dp)) {
-            Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = ConsoleColors.TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
+            Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = NewTheme.TextMuted, fontSize = 12.sp)
             if (content.isNotEmpty()) {
                 CopyButton(text = content, context = context)
             }
@@ -158,13 +157,13 @@ fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming:
         }
         if (!isStreaming && !showTyping && textContent.isNullOrEmpty() && thinkingContent.isNullOrEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
-                Text("Done", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(14.dp))
+                Text("Done", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
             }
         }
         if (!isStreaming && (createdAt != null || !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty())) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp, start = 2.dp)) {
-                Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = ConsoleColors.TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
+                Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = NewTheme.TextMuted, fontSize = 12.sp)
                 val copyable = buildList {
                     if (!thinkingContent.isNullOrEmpty()) add("Thought:\n$thinkingContent")
                     if (!textContent.isNullOrEmpty()) add(textContent)
@@ -185,8 +184,8 @@ private fun CopyButton(text: String, context: Context) {
             copied = true
         } catch (_: Exception) {}
     }, modifier = Modifier.size(24.dp)) {
-        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(12.dp))
-        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = NewTheme.Success, modifier = Modifier.size(13.dp))
+        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
     }
 }
 
@@ -194,7 +193,7 @@ private fun CopyButton(text: String, context: Context) {
 private fun TypingDots() {
     Row(modifier = Modifier.padding(vertical = 4.dp)) {
         repeat(3) { i ->
-            Box(modifier = Modifier.padding(end = 4.dp).size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(ConsoleColors.TextSecondary))
+            Box(modifier = Modifier.padding(end = 4.dp).size(6.dp).clip(androidx.compose.foundation.shape.CircleShape).background(NewTheme.TextSecondary))
         }
     }
 }
@@ -204,16 +203,16 @@ fun ThinkingBlock(text: String, isStreaming: Boolean) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         Row(
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f)).clickable { expanded = !expanded }.padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.clip(RoundedCornerShape(NewTheme.ChipRadius)).background(NewTheme.Card).clickable { expanded = !expanded }.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = Color(0xFFFB923C), modifier = Modifier.size(13.dp))
-            Text(if (isStreaming) "Thinking…" else "Thought", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
-            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
+            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(14.dp))
+            Text(if (isStreaming) "Thinking…" else "Thought", color = NewTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(12.dp))
         }
         if (expanded) {
-            Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.03f)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-                Text(text, color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, lineHeight = 20.sp)
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Card).padding(horizontal = 14.dp, vertical = 12.dp)) {
+                Text(text, color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, lineHeight = 20.sp)
             }
         }
     }
@@ -238,18 +237,17 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     val added = diffs.sumOf { it.diff.addedCount }
     val removed = diffs.sumOf { it.diff.removedCount }
     val filePath = remember(call.id, call.arguments) { argumentPath(call) ?: extractWriteArgs(call)?.first }
-    val shape = RoundedCornerShape(10.dp)
-    Column(modifier = Modifier.fillMaxWidth().clip(shape).background(Color.White.copy(alpha = 0.02f)).border(1.dp, Color.White.copy(alpha = 0.06f), shape)) {
-        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Card)) {
+        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isFileTargetTool(call.name) && filePath != null) {
                 // File rows carry the real file-type icon, like desktop.
                 FileIcon(filename = filePath, sizeDp = 13, modifier = Modifier.padding(end = 6.dp))
             } else {
-                Icon(getToolIcon(call.name), contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp).padding(end = 6.dp))
+                Icon(getToolIcon(call.name), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(14.dp).padding(end = 6.dp))
             }
-            Text(getToolLabel(call.name), color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(getToolLabel(call.name), color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (!summary.isNullOrEmpty()) {
-                Text(summary, color = ConsoleColors.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                Text(summary, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
             } else {
                 Spacer(modifier = Modifier.weight(1f))
             }
@@ -257,16 +255,18 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
                 DiffSummaryBadge(addedCount = added, removedCount = removed)
             }
             if (result == null) {
-                CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
+                CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
             } else if (result.isError) {
-                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(14.dp))
             } else {
-                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
+                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(14.dp))
             }
-            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (open) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+            // Arguments and output sit on a darker inset than the row's card, like a
+            // terminal pane under its title bar.
+            Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Output).padding(top = 4.dp, bottom = 12.dp)) {
                 // A diff replaces the raw arguments — the diff already shows the
                 // new content, which is what the arguments were for.
                 if (diffs.isNotEmpty()) {
@@ -280,16 +280,16 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
                     if (isReadFileTool(call.name)) {
                         ReadFileResult(detail, filePath)
                     } else if (isSubagentTool(call.name)) {
-                        Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        Text("Result", color = NewTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         CustomMarkdown(content = detail, modifier = Modifier.padding(horizontal = 12.dp))
                     } else {
-                        Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        Text("Result", color = NewTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
-                            Text(detail, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp)
+                            Text(detail, color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp)
                         }
                     }
                 } else if (result == null) {
-                    Text("Running…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
+                    Text("Running…", color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp))
                 }
             }
         }
@@ -300,9 +300,9 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
 private fun ToolArguments(arguments: kotlinx.serialization.json.JsonElement?) {
     if (arguments == null) return
     val pretty = remember(arguments) { prettyJson(arguments) }
-    Text("Arguments", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    Text("Arguments", color = NewTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
-        Text(pretty, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp)
+        Text(pretty, color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, lineHeight = 17.sp)
     }
 }
 
@@ -315,12 +315,12 @@ private fun ReadFileResult(raw: String, filePath: String?) {
     // read carries the tool's own line numbers (which do not start at 1), and
     // the viewer's built-in gutter would renumber them from 1.
     val height = remember(body.size) { ((body.size * ConsoleDimens.CodeLineHeight + 16).coerceIn(80, 400)).dp }
-    Text("Result", color = ConsoleColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    Text("Result", color = NewTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
         // Line height has to equal the viewer's or the two grids drift apart.
         Text(
             numbers.joinToString("\n"),
-            color = ConsoleColors.TextMuted,
+            color = NewTheme.TextMuted,
             fontSize = ConsoleDimens.CodeGutterFontSizeSp.sp,
             fontFamily = ConsoleMonoFamily,
             lineHeight = ConsoleDimens.CodeLineHeight.sp,
@@ -331,6 +331,7 @@ private fun ReadFileResult(raw: String, filePath: String?) {
             language = language,
             modifier = Modifier.fillMaxWidth().height(height),
             showLineNumbers = false,
+            gutterColor = NewTheme.Output,
         )
     }
 }

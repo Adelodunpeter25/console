@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleDimens
 import io.github.rosemoe.sora.lang.EmptyLanguage
 import io.github.rosemoe.sora.lang.Language
@@ -33,7 +34,7 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
  * sits directly on the screen (no boxed card). Used by the file viewer,
  * chat code blocks and the diff viewer.
  */
-class ConsoleColorScheme : EditorColorScheme() {
+class ConsoleColorScheme(gutter: androidx.compose.ui.graphics.Color = NewTheme.Background) : EditorColorScheme() {
     init {
         applyDefault()
         val s = ConsoleColors.Syntax
@@ -47,22 +48,22 @@ class ConsoleColorScheme : EditorColorScheme() {
         setColor(IDENTIFIER_NAME, s.ClassName.toArgb())
         setColor(IDENTIFIER_VAR, s.Plain.toArgb())
         setColor(ANNOTATION, s.Number.toArgb())
-        setColor(LINE_NUMBER, ConsoleColors.TextMuted.copy(alpha = 0.6f).toArgb())
+        setColor(LINE_NUMBER, NewTheme.TextMuted.copy(alpha = 0.6f).toArgb())
         // Opaque gutter so horizontally-scrolled code slides behind it instead
         // of bleeding through the pinned line numbers. LINE_NUMBER_PANEL is
         // what 0.21.1 paints for the pinned gutter; BACKGROUND covers the rest.
         // Both match the screen so it still looks uniform.
-        setColor(LINE_NUMBER_BACKGROUND, ConsoleColors.Background.toArgb())
-        setColor(LINE_NUMBER_PANEL, ConsoleColors.Background.toArgb())
-        setColor(LINE_NUMBER_PANEL_TEXT, ConsoleColors.TextMuted.copy(alpha = 0.6f).toArgb())
-        setColor(LINE_NUMBER_CURRENT, ConsoleColors.TextSecondary.toArgb())
-        setColor(LINE_DIVIDER, ConsoleColors.BorderSubtle.toArgb())
+        setColor(LINE_NUMBER_BACKGROUND, gutter.toArgb())
+        setColor(LINE_NUMBER_PANEL, gutter.toArgb())
+        setColor(LINE_NUMBER_PANEL_TEXT, NewTheme.TextMuted.copy(alpha = 0.6f).toArgb())
+        setColor(LINE_NUMBER_CURRENT, NewTheme.TextSecondary.toArgb())
+        setColor(LINE_DIVIDER, NewTheme.Divider.toArgb())
         setColor(CURRENT_LINE, 0x00000000)
-        setColor(SELECTED_TEXT_BACKGROUND, ConsoleColors.TextSecondary.copy(alpha = 0.25f).toArgb())
-        setColor(SCROLL_BAR_THUMB, ConsoleColors.TextMuted.copy(alpha = 0.4f).toArgb())
+        setColor(SELECTED_TEXT_BACKGROUND, NewTheme.TextSecondary.copy(alpha = 0.25f).toArgb())
+        setColor(SCROLL_BAR_THUMB, NewTheme.TextMuted.copy(alpha = 0.4f).toArgb())
         setColor(SCROLL_BAR_TRACK, 0x00000000)
-        setColor(BLOCK_LINE, ConsoleColors.BorderSubtle.toArgb())
-        setColor(BLOCK_LINE_CURRENT, ConsoleColors.Border.toArgb())
+        setColor(BLOCK_LINE, NewTheme.Divider.toArgb())
+        setColor(BLOCK_LINE_CURRENT, NewTheme.Divider.toArgb())
     }
 
     override fun isDark(): Boolean = true
@@ -173,8 +174,10 @@ fun CodeViewer(
     fontSizeSp: Float = ConsoleDimens.CodeFontSizeSp,
     addLines: Set<Int> = emptySet(),
     removeLines: Set<Int> = emptySet(),
+    /** What the viewer sits on, so the pinned line-number gutter blends in. */
+    gutterColor: androidx.compose.ui.graphics.Color = NewTheme.Background,
 ) {
-    val colorScheme = remember { ConsoleColorScheme() }
+    val colorScheme = remember(gutterColor) { ConsoleColorScheme(gutterColor) }
     val soraLanguage = remember(language, addLines, removeLines) {
         ConsoleLanguage(language, addLines, removeLines)
     }

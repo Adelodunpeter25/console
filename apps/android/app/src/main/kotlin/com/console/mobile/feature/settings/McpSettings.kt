@@ -42,11 +42,17 @@ import com.console.mobile.AppContainer
 import com.console.mobile.feature.settings.mcp.McpEditorForm
 import com.console.mobile.feature.settings.mcp.McpOAuthLauncher
 import com.console.mobile.feature.settings.mcp.McpServerCard
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.AddButton
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /**
  * MCP servers settings, mirroring the desktop `mcp_page.rs`: server cards
@@ -77,67 +83,43 @@ fun McpSettings(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         if (editing != null) {
             val serverId = editing!!.takeIf { it != "__create__" }
             val server = mcpState.servers.firstOrNull { it.id == serverId }
-            ScreenHeader(title = if (serverId != null) "Edit MCP server" else "Add MCP server", onBack = { editing = null })
+            PageHeader(title = if (serverId != null) "Edit MCP server" else "Add MCP server", onBack = { editing = null })
             McpEditorForm(server = server, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
         } else {
-            ScreenHeader(
+            PageHeader(
                 title = "MCP Servers",
                 onBack = onBack,
-                actions = {
-                    IconButton(onClick = { editing = "__create__" }, modifier = Modifier.size(40.dp)) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(androidx.compose.foundation.shape.CircleShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, androidx.compose.foundation.shape.CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(TablerIcons.Outline.Plus, contentDescription = "Add MCP server", tint = ConsoleColors.TextPrimary)
-                        }
-                    }
-                },
+                actions = { AddButton("Add MCP server") { editing = "__create__" } },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
                 Text(
                     "Connect external tools and services via local stdio or remote HTTP servers.",
-                    color = ConsoleColors.TextSecondary,
+                    color = NewTheme.TextSecondary,
                     fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 16.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
                 )
-                if (mcpState.error != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                            .background(ConsoleColors.Destructive.copy(alpha = 0.08f))
-                            .border(1.dp, ConsoleColors.Destructive.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                            .padding(bottom = 0.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(16.dp))
-                        Text(mcpState.error!!, color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
-                    }
-                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 12.dp))
-                }
+                mcpState.error?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
                 if (mcpState.loading && mcpState.servers.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                            Text("Loading MCP servers…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                        }
-                    }
+                    LoadingState("Loading MCP servers…")
                 } else if (mcpState.servers.isEmpty()) {
                     McpEmptyState { editing = "__create__" }
                 } else {
-                    mcpState.servers.forEach { server ->
-                        McpServerCard(
-                            server = server,
-                            busy = server.id in connectingIds || server.id in mcpState.busyServerIds,
-                            onConnect = { connect(server.id) },
-                            onDisconnect = { AppContainer.mcpRepository.disconnectServer(server.id) },
-                            onEdit = { editing = server.id },
-                            onDelete = { AppContainer.mcpRepository.deleteServer(server.id) },
-                        )
+                    Section("Servers") {
+                        mcpState.servers.forEachIndexed { index, server ->
+                            McpServerCard(
+                                server = server,
+                                busy = server.id in connectingIds || server.id in mcpState.busyServerIds,
+                                onConnect = { connect(server.id) },
+                                onDisconnect = { AppContainer.mcpRepository.disconnectServer(server.id) },
+                                onEdit = { editing = server.id },
+                                onDelete = { AppContainer.mcpRepository.deleteServer(server.id) },
+                            )
+                            if (index < mcpState.servers.lastIndex) SectionDivider()
+                        }
                     }
                 }
             }
@@ -147,14 +129,12 @@ fun McpSettings(onBack: () -> Unit) {
 
 @Composable
 private fun McpEmptyState(onAdd: () -> Unit) {
-    EmptyState(
+    EmptyView(
         title = "No MCP servers configured",
         description = "Add local stdio commands or remote HTTP servers to equip the harness with dynamic tools.",
-        icon = {
-            Icon(TablerIcons.Outline.Server, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(36.dp))
-        },
+        icon = TablerIcons.Outline.Server, iconTint = NewTheme.TextMuted,
         action = {
-            PillButton(text = "Add your first MCP server", onClick = onAdd)
+            ActionButton(text = "Add your first MCP server", onClick = onAdd, kind = ActionButtonKind.Primary)
         },
     )
 }

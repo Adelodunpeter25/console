@@ -51,23 +51,35 @@ import com.console.mobile.core.chat.buildGroupedProjectSections
 import com.console.mobile.core.chat.draftPreview
 import com.console.mobile.core.chat.formatProjectTitle
 import com.console.mobile.core.chat.isDraftSession
+import com.console.mobile.core.chat.sessionBranch
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
 import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.ConsoleSearchBar
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.components.SessionListSkeleton
-import com.console.mobile.ui.components.StatusBadge
+import com.console.mobile.ui.components.common.new.SearchBar
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
-import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.ActionRow
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.SectionSkeleton
+import com.console.mobile.ui.components.common.new.StatusPill
+import com.console.mobile.ui.components.common.new.TintPill
+import io.github.lyxnx.compose.ui.tablericons.outline.Search
 
 /**
  * Port of screens/home/home-screen.tsx + components/home/session-list.tsx + hooks/useHomeSessions.
@@ -117,8 +129,7 @@ fun HomeScreen(
         val proj = projectState.projects.firstOrNull { p ->
             (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.project_id
         }
-        val key = proj?.id ?: s.project_id ?: return null
-        return branches[key]?.ifBlank { null }
+        return sessionBranch(s.worktree?.branch, proj?.id ?: s.project_id, branches)
     }
 
     fun onRefresh() {
@@ -158,10 +169,9 @@ fun HomeScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(
             title = "Console",
-            centerTitle = false,
             showSettings = true,
             onSettingsPress = onOpenSettings,
             actions = { EnvironmentSwitcher() },
@@ -172,26 +182,28 @@ fun HomeScreen(
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             if (isLoading) {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    item { SessionListSkeleton() }
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    SectionSkeleton(rows = 3)
+                    SectionSkeleton(rows = 2)
                 }
             } else if (sections.isEmpty() && projectState.error != null) {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     item {
-                        EmptyState(
+                        EmptyView(
                             title = "Couldn't load chats",
                             description = projectState.error ?: "Failed to load chat sessions.",
-                            icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive) },
+                            icon = TablerIcons.Outline.AlertTriangle,
+                            iconTint = NewTheme.Danger,
                         )
                     }
                 }
             } else if (sections.isEmpty()) {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     item {
-                        EmptyState(
+                        EmptyView(
                             title = if (searchQuery.isNotBlank()) "No matching sessions" else "No chat sessions",
                             description = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"." else "Start a new chat or select a project folder to get started.",
-                            icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted) },
+                            icon = if (searchQuery.isNotBlank()) TablerIcons.Outline.Search else TablerIcons.Outline.Message,
                         )
                     }
                 }
@@ -207,13 +219,14 @@ fun HomeScreen(
                     sections.forEachIndexed { sIdx, section ->
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 8.dp),
+                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                // The accent heading every grouped screen uses, with the folder glyph.
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
-                                    Text(section.projectName, color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+                                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
+                                    Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
                                 }
                                 if (section.projectId != null && section.projectName != "Drafts") {
                                     IconButton(
@@ -232,19 +245,15 @@ fun HomeScreen(
                                                 }
                                             }
                                         },
-                                        modifier = Modifier.size(32.dp),
+                                        modifier = Modifier.size(36.dp),
                                     ) {
-                                        Icon(TablerIcons.Outline.Plus, contentDescription = "New chat in ${section.projectName}", tint = ConsoleColors.TextSecondary)
+                                        Icon(TablerIcons.Outline.Plus, contentDescription = "New chat in ${section.projectName}", tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
                         }
                         item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp).clip(RoundedCornerShape(16.dp))
-                                    .background(ConsoleColors.Card)
-                                    .border(1.dp, ConsoleColors.Border, RoundedCornerShape(16.dp)),
-                            ) {
+                            SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
                                 section.data.forEachIndexed { index, session ->
                                     val draft = chatSessions[session.id]
                                     val isDraft = draft != null && isDraftSession(draft)
@@ -258,7 +267,6 @@ fun HomeScreen(
                                         status = status,
                                         isDraft = isDraft,
                                         draftPreview = preview,
-                                        showDivider = index != section.data.lastIndex,
                                         onClick = {
                                             scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
                                             AppContainer.appStateHolder.openChatSession(session.id)
@@ -266,6 +274,7 @@ fun HomeScreen(
                                         },
                                         onLongPress = { activeSession = session },
                                     )
+                                    if (index < section.data.lastIndex) SectionDivider()
                                 }
                             }
                         }
@@ -273,7 +282,7 @@ fun HomeScreen(
                 }
             }
         }
-        ConsoleSearchBar(
+        SearchBar(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             onComposePress = ::composeSession,
@@ -284,57 +293,40 @@ fun HomeScreen(
     val sheetSession = activeSession
     if (sheetSession != null) {
         var renameOpen by remember(sheetSession.id) { mutableStateOf(false) }
-        ModalBottomSheet(
-            onDismissRequest = { activeSession = null },
-            sheetState = rememberModalBottomSheetState(),
-            containerColor = ConsoleColors.Surface,
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-                androidx.compose.material3.TextButton(onClick = { renameOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Rename", color = ConsoleColors.TextPrimary, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
-                }
-                androidx.compose.material3.TextButton(
-                    onClick = {
-                        activeSession = null
-                        confirmAlert(
-                            "Delete Chat",
-                            "Are you sure you want to delete \"${sheetSession.title.ifBlank { "Untitled Session" }}\"?",
-                            listOf(
-                                ConfirmButton("Cancel", cancel = true),
-                                ConfirmButton("Delete", destructive = true, onPress = {
-                                    scope.launch {
-                                        try {
-                                            withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(sheetSession.id) }
-                                        } catch (e: Exception) {
-                                            confirmAlert("Failed", e.message ?: "Unable to delete chat.")
-                                        }
+        BaseSheet(onDismiss = { activeSession = null }) {
+            SectionCard {
+                ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
+                SectionDivider()
+                ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
+                    activeSession = null
+                    confirmAlert(
+                        "Delete Chat",
+                        "Are you sure you want to delete \"${sheetSession.title.ifBlank { "Untitled Session" }}\"?",
+                        listOf(
+                            ConfirmButton("Cancel", cancel = true),
+                            ConfirmButton("Delete", destructive = true, onPress = {
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(sheetSession.id) }
+                                    } catch (e: Exception) {
+                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
                                     }
-                                }),
-                            ),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Delete", color = ConsoleColors.Destructive, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+                                }
+                            }),
+                        ),
+                    )
                 }
             }
         }
         if (renameOpen) {
             var renameValue by remember(sheetSession.id) { mutableStateOf(sheetSession.title) }
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { renameOpen = false },
-                containerColor = ConsoleColors.Surface,
-                title = { Text("Rename session", color = ConsoleColors.TextPrimary) },
-                text = {
-                    androidx.compose.material3.OutlinedTextField(
-                        value = renameValue,
-                        onValueChange = { renameValue = it },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(onClick = {
+            // A sheet inside the sheet: renaming is a one-field form, so it gets the
+            // same field + primary button as every other form instead of a system dialog.
+            BaseSheet(onDismiss = { renameOpen = false }, title = "Rename chat") {
+                TextInput("Title", renameValue, { renameValue = it }, "Chat title")
+                ActionButton(
+                    text = "Save",
+                    onClick = {
                         renameOpen = false
                         activeSession = null
                         scope.launch {
@@ -346,12 +338,12 @@ fun HomeScreen(
                                 confirmAlert("Failed", e.message ?: "Unable to rename chat.")
                             }
                         }
-                    }) { Text("Save", color = ConsoleColors.TextPrimary) }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { renameOpen = false }) { Text("Cancel", color = ConsoleColors.TextSecondary) }
-                },
-            )
+                    },
+                    kind = ActionButtonKind.Primary,
+                    enabled = renameValue.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                )
+            }
         }
     }
 }
@@ -365,64 +357,51 @@ private fun SessionRow(
     status: SessionStatus?,
     isDraft: Boolean,
     draftPreview: String?,
-    showDivider: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
-    Column(
+    // Top-aligned, with a fixed first line shared by the title and the status pill.
+    // Centring the right column on the whole row put "Ready" lower than the "Draft"
+    // pill beside the title; giving both the same line height puts their centres level.
+    Row(
         modifier = Modifier.fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        session.title.ifBlank { "Untitled Session" },
-                        color = ConsoleColors.TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isDraft) {
-                        Box(
-                            modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFFF59E0B).copy(alpha = 0.2f))
-                                .border(1.dp, Color(0xFFF59E0B).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text("DRAFT", color = Color(0xFFFCD34D), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                if (isDraft && draftPreview != null) {
-                    Text(draftPreview, color = Color(0xFFFCD34D).copy(alpha = 0.9f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(projectName, color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (branch != null) {
-                        Text(" • ", color = ConsoleColors.TextSecondary, fontSize = 12.sp)
-                        Text(branch, color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    session.title.ifBlank { "Untitled Session" },
+                    color = NewTheme.TextPrimary,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
             }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatusBadge(status)
-                val ts = if (session.updated_at > 0) session.updated_at else session.created_at
-                Text(shortRelative(ts), color = ConsoleColors.TextSecondary, fontSize = 10.sp)
+            if (isDraft && draftPreview != null) {
+                Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
+                Text(projectName, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (branch != null) {
+                    Text(" • ", color = NewTheme.TextMuted, fontSize = 13.sp)
+                    Text(branch, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                }
             }
         }
-        if (showDivider) {
-            Box(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(start = 16.dp)
-                    .height(1.dp)
-                    .background(ConsoleColors.BorderSubtle),
-            )
+        Column(horizontalAlignment = Alignment.End) {
+            Box(modifier = Modifier.height(FirstLineHeight), contentAlignment = Alignment.CenterEnd) { StatusPill(status) }
+            val ts = if (session.updated_at > 0) session.updated_at else session.created_at
+            Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 1.dp))
         }
     }
 }
+
+/** Height of a row's first line: the title and the status pill are both centred in it. */
+private val FirstLineHeight = 28.dp
 
 private fun shortRelative(ts: Long): String {
     if (ts <= 0) return ""

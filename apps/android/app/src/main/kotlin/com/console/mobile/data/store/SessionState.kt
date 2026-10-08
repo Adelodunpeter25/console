@@ -11,6 +11,13 @@ data class SessionViewState(
     val sessionProvider: String? = null,
     val sessionCwd: String? = null,
     val approvalMode: String = "always-ask",
+    val thinkingLevel: String? = null,
+    // Set when the chat lives in a worktree; null for a plain checkout.
+    val worktreeBranch: String? = null,
+    // The server's own project link. A worktree chat's cwd moves to the
+    // worktree folder, outside the project's path, so path matching alone
+    // loses the project; this id survives the move.
+    val projectId: String? = null,
 )
 
 val EMPTY_SESSION_VIEW = SessionViewState()

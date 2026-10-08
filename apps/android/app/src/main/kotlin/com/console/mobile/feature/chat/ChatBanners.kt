@@ -39,6 +39,12 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.OptionRow
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TintPill
+import com.console.mobile.ui.theme.NewTheme
 
 fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
     val done = items.count { it.status == "completed" || it.status == "done" || it.status == "complete" }
@@ -71,110 +77,93 @@ fun SubagentBanner(subagents: List<SubagentInfo>, onPress: () -> Unit) {
 
 @Composable
 private fun BannerShell(label: String, count: String, detail: String?, onPress: () -> Unit, running: Boolean = false) {
+    // A raised card strip above the composer. The icon takes the accent while work is running.
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF121214))
-            .border(1.dp, Color(0xFF27272A), RoundedCornerShape(12.dp))
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(NewTheme.FieldRadius))
+            .background(NewTheme.Card)
             .clickable(onClick = onPress)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C20).copy(alpha = 1f)).border(1.dp, Color(0xFF303036), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            Icon(if (label == "SUBAGENTS") TablerIcons.Outline.Robot else TablerIcons.Outline.Check, contentDescription = null, tint = if (running) Color(0xFF38BDF8) else ConsoleColors.TextSecondary, modifier = Modifier.size(13.dp))
-        }
-        Text(label, color = Color(0xFFFAFAFA), fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
-        Box(modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(count, color = ConsoleColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-        }
+        Icon(
+            if (label == "SUBAGENTS") TablerIcons.Outline.Robot else TablerIcons.Outline.Check,
+            contentDescription = null,
+            tint = if (running) NewTheme.Accent else NewTheme.TextSecondary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(label, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
+        Text(
+            count, color = NewTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 2.dp),
+        )
         if (detail != null) {
-            Text(detail, color = ConsoleColors.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            Text(detail, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
         } else {
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
         }
-        Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF1C1C20)).border(1.dp, Color(0xFF303036), CircleShape), contentAlignment = Alignment.Center) {
-            Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(12.dp))
-        }
+        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(18.dp))
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoBottomSheet(items: List<TodoItem>, completed: Int, total: Int, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            Text("Tasks ($completed/$total)", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                items.forEach { item ->
-                    val done = item.status == "completed" || item.status == "done" || item.status == "complete"
-                    val inProgress = item.status == "in_progress"
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).clip(RoundedCornerShape(12.dp))
-                            .background(if (inProgress) Color(0xFF18181C) else if (done) Color(0xFF121214).copy(alpha = 0.6f) else Color(0xFF141417))
-                            .border(1.dp, if (inProgress) Color(0xFF3F3F46) else if (done) Color(0xFF222226) else Color(0xFF27272A), RoundedCornerShape(12.dp))
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+    BaseSheet(onDismiss = onDismiss, title = "Tasks ($completed/$total)") {
+        SectionCard {
+            items.forEachIndexed { index, item ->
+                val done = item.status == "completed" || item.status == "done" || item.status == "complete"
+                val inProgress = item.status == "in_progress"
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Status marker: filled check when done, accent dot while running, empty ring otherwise.
+                    Box(
+                        modifier = Modifier.size(22.dp).clip(CircleShape)
+                            .background(if (done) NewTheme.Success.copy(alpha = 0.18f) else if (inProgress) NewTheme.Accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f)),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier.size(20.dp).clip(RoundedCornerShape(6.dp))
-                                .background(if (done) Color(0xFF14532D).copy(alpha = 0.4f) else if (inProgress) Color(0xFF1E293B) else Color(0xFF18181B))
-                                .border(1.dp, if (done) Color(0xFF22C55E) else if (inProgress) Color(0xFF38BDF8) else Color(0xFF3F3F46), RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(12.dp))
-                            else if (inProgress) Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
-                        }
-                        Text(
-                            item.content, fontSize = 14.sp, lineHeight = 20.sp,
-                            color = if (done) ConsoleColors.TextMuted else if (inProgress) Color(0xFFFAFAFA) else Color(0xFFD4D4D8),
-                            fontWeight = if (inProgress) FontWeight.Medium else FontWeight.Normal,
-                            textDecoration = if (done) TextDecoration.LineThrough else null,
-                            modifier = Modifier.weight(1f).padding(start = 12.dp),
-                        )
-                        if (inProgress) {
-                            Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color(0xFF0284C7).copy(alpha = 0.2f)).border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.3f), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                                Text("In Progress", color = Color(0xFF38BDF8), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        } else if (done) {
-                            Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color(0xFF15803D).copy(alpha = 0.2f)).border(1.dp, Color(0xFF22C55E).copy(alpha = 0.3f), RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                                Text("Done", color = Color(0xFF22C55E), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+                        if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(13.dp))
+                        else if (inProgress) Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(NewTheme.Accent))
                     }
+                    Text(
+                        item.content, fontSize = 16.sp, lineHeight = 22.sp,
+                        color = if (done) NewTheme.TextMuted else NewTheme.TextPrimary,
+                        fontWeight = if (inProgress) FontWeight.Medium else FontWeight.Normal,
+                        textDecoration = if (done) TextDecoration.LineThrough else null,
+                        modifier = Modifier.weight(1f).padding(start = 14.dp),
+                    )
+                    if (inProgress) TintPill("In progress", NewTheme.Accent, Modifier.padding(start = 8.dp))
+                    else if (done) TintPill("Done", NewTheme.Success, Modifier.padding(start = 8.dp))
                 }
+                if (index < items.lastIndex) SectionDivider(startInset = 54.dp)
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubagentSheet(subagents: List<SubagentInfo>, selectedId: String?, onSelect: (String?) -> Unit, onDismiss: () -> Unit, onOpenDetails: (String) -> Unit) {
     var selected by remember(selectedId) { mutableStateOf(selectedId) }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            Text("Subagents (${subagents.size})", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 12.dp))
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                subagents.forEach { s ->
-                    val sel = s.subagent_id == selected
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(12.dp))
-                            .background(if (sel) ConsoleColors.CardAlt else ConsoleColors.Card)
-                            .border(1.dp, if (sel) ConsoleColors.Border else ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp))
-                            .clickable {
-                                selected = s.subagent_id
-                                onSelect(s.subagent_id)
-                                onOpenDetails(s.subagent_id)
-                            }
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(if (s.status == "running") Color(0xFF38BDF8) else if (s.status == "completed") Color(0xFF34D399) else Color(0xFFF87171)))
-                        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text(s.name.ifBlank { s.role.ifBlank { "Subagent" } }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text("${s.role} · ${s.status}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                        }
-                    }
+    BaseSheet(onDismiss = onDismiss, title = "Subagents (${subagents.size})") {
+        SectionCard {
+            subagents.forEachIndexed { index, s ->
+                val dot = when (s.status) {
+                    "running" -> NewTheme.Gauge
+                    "completed" -> NewTheme.Success
+                    else -> NewTheme.Danger
                 }
+                OptionRow(
+                    title = s.name.ifBlank { s.role.ifBlank { "Subagent" } },
+                    subtitle = "${s.role} · ${s.status}",
+                    selected = s.subagent_id == selected,
+                    leading = { Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(dot)) },
+                ) {
+                    selected = s.subagent_id
+                    onSelect(s.subagent_id)
+                    onOpenDetails(s.subagent_id)
+                }
+                if (index < subagents.lastIndex) SectionDivider(startInset = 42.dp)
             }
         }
     }

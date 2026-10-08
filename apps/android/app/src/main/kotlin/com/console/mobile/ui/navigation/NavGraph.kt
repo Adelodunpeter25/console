@@ -33,8 +33,8 @@ import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.subagents.SubagentDetailsScreen
 import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
-import com.console.mobile.ui.components.ConfirmDialogHost
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.ConfirmPromptHost
+import com.console.mobile.ui.theme.NewTheme
 
 @Composable
 fun AppNavGraph() {
@@ -47,14 +47,14 @@ fun AppNavGraph() {
 
     if (!booted) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = ConsoleColors.TextPrimary)
+            CircularProgressIndicator(color = NewTheme.TextPrimary)
         }
         return
     }
 
     if (appState.backendUrl.isNullOrBlank()) {
         OnboardingScreen(onConnected = {})
-        ConfirmDialogHost()
+        ConfirmPromptHost()
         return
     }
 
@@ -84,7 +84,7 @@ fun AppNavGraph() {
     }
 
     Scaffold(
-        containerColor = ConsoleColors.Background,
+        containerColor = NewTheme.Background,
     ) { padding ->
         NavHost(
             navController = navController,
@@ -194,13 +194,13 @@ fun AppNavGraph() {
             }
             composable<RouteOnboarding> { OnboardingScreen(onConnected = {}) }
         }
-        ConfirmDialogHost()
+        ConfirmPromptHost()
     }
 }
 
 @Composable
 fun PlaceholderScreen(label: String) {
     Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = ConsoleColors.TextSecondary)
+        Text(label, color = NewTheme.TextSecondary)
     }
 }

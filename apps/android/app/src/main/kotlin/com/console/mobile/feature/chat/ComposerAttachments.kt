@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -40,7 +39,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.newAttachmentId
 import com.console.mobile.ui.components.ImagePreviewDialog
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -57,17 +56,24 @@ private const val VISIBLE_ATTACHMENTS = 4
  * is dropped rather than failing the whole pick; everything else is kept.
  */
 @Composable
-fun rememberAttachmentPicker(sessionId: String): () -> Unit {
+fun rememberAttachmentPicker(sessionId: String, hold: ComposerHold? = null): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        // The result callback fires for a cancelled pick too (empty list), so this
+        // always pairs with the acquire below.
+        hold?.release()
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
             val list = withContext(Dispatchers.IO) { uris.mapNotNull { readAttachment(context, it) } }
             if (list.isNotEmpty()) AppContainer.chatRepository.addAttachments(sessionId, list)
         }
     }
-    return { launcher.launch("image/*") }
+    return {
+        // The picker is a separate screen: keep the composer open behind it.
+        hold?.acquire()
+        launcher.launch("image/*")
+    }
 }
 
 private fun readAttachment(context: Context, uri: Uri): ImageAttachment? = try {
@@ -122,8 +128,7 @@ private fun AttachmentCard(attachment: ImageAttachment, onClick: () -> Unit, onR
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = Modifier.padding(end = 8.dp).size(56.dp).clip(shape)
-            .background(ConsoleColors.CardAlt)
-            .border(1.dp, ConsoleColors.Border, shape)
+            .background(NewTheme.Card)
             .clickable(onClick = onClick),
     ) {
         if (attachment.bytes.isNotEmpty()) {
@@ -135,7 +140,7 @@ private fun AttachmentCard(attachment: ImageAttachment, onClick: () -> Unit, onR
             )
         } else {
             Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                Icon(TablerIcons.Outline.Photo, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
+                Icon(TablerIcons.Outline.Photo, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
             }
         }
         Box(
@@ -154,11 +159,10 @@ private fun AttachmentCard(attachment: ImageAttachment, onClick: () -> Unit, onR
 private fun OverflowCard(count: Int, onClick: () -> Unit) {
     Box(
         modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
-            .background(ConsoleColors.SurfaceElevated)
-            .border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp))
+            .background(NewTheme.Card)
             .clickable(onClickLabel = "Show $count more", onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text("+$count", color = ConsoleColors.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text("+$count", color = NewTheme.TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }

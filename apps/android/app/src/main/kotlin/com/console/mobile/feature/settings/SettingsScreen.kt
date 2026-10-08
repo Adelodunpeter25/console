@@ -2,9 +2,7 @@ package com.console.mobile.feature.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,8 +38,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.components.common.new.NavRow
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.PageHeader
 
 enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
 
@@ -63,7 +63,7 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when (val s = section) {
             null -> SettingsLanding(onBack = onBackToHome, onOpen = { section = it })
             SettingsSection.Servers -> ServersSettings(onBack = { section = null })
@@ -88,43 +88,24 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     // to be in state before the list renders.
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
-    ScreenHeader(title = "Settings", onBack = { onBack() })
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
-        val signedIn = authState.status?.values?.any { it.logged_in } == true
-        LandingRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
-        LandingRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
-        LandingRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
-        val roles = providerState.modelRoles.count { it.value.isNotBlank() }
-        LandingRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
-        val n = projectState.projects.size
-        LandingRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
-        val d = projectState.deletedSessions.size
-        LandingRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
-        LandingRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
-    }
-}
-
-@Composable
-private fun LandingRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(shape)
-            .background(ConsoleColors.Card)
-            .border(1.dp, ConsoleColors.Border, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.SurfaceElevated),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = ConsoleColors.TextPrimary)
+    PageHeader(title = "Settings", onBack = { onBack() })
+    val signedIn = authState.status?.values?.any { it.logged_in } == true
+    val roles = providerState.modelRoles.count { it.value.isNotBlank() }
+    val n = projectState.projects.size
+    val d = projectState.deletedSessions.size
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+        Section("Connections") {
+            NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
+            NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
+            NavRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
         }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        Section("AI & tools") {
+            NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
+            NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
         }
-        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
+        Section("Projects & chats") {
+            NavRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
+            NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+        }
     }
 }

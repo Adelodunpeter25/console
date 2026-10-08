@@ -29,9 +29,10 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.util.FileMention
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import com.console.mobile.ui.theme.NewTheme
 
 /** Accent for file-mention pills, matching the desktop theme accent. */
-internal val MentionAccent = Color(0xFFC85F44)
+internal val MentionAccent = NewTheme.Accent
 
 /**
  * Inline file-mention pill: file-type icon + filename, accent wash.

@@ -146,6 +146,13 @@ class SessionRepository(
             }
         }
 
+    /** Turn a message-less session into a worktree session; the header carries the new cwd/branch. */
+    suspend fun attachWorktree(sessionId: String): SessionHeader {
+        val header = withContext(Dispatchers.IO) { api.attachWorktree(sessionId, null, null) }
+        applyHeader(sessionId, header)
+        return header
+    }
+
     fun refreshHeader(sessionId: String) {
         scope.launch {
             try {
@@ -164,6 +171,9 @@ class SessionRepository(
                 sessionProvider = header.provider,
                 sessionCwd = header.cwd,
                 approvalMode = header.approval_mode ?: ApprovalMode.AlwaysAsk.value,
+                thinkingLevel = header.thinking_level?.takeIf { it.isNotBlank() },
+                worktreeBranch = header.worktree?.branch?.takeIf { it.isNotBlank() },
+                projectId = header.project_id?.takeIf { it.isNotBlank() },
             ),
         )
         sessions.setStatus(sessionId, com.console.mobile.data.model.SessionStatus.fromValue(header.status))

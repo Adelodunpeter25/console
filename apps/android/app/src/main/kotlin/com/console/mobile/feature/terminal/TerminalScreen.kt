@@ -1,7 +1,6 @@
 package com.console.mobile.feature.terminal
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,13 +46,20 @@ import com.console.mobile.AppContainer
 import console.v1.ProjectInfo
 import com.console.mobile.data.store.TerminalStatus
 import com.console.mobile.feature.terminal.native.NativeTerminalView
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.theme.NewTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 
 private data class ExtraKey(val label: String, val bytes: String)
 
@@ -141,27 +146,25 @@ fun TerminalScreen(onBack: () -> Unit) {
         else -> null
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background).imePadding()) {
-        ScreenHeader(
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background).imePadding()) {
+        PageHeader(
             title = "Terminal",
             onBack = onBack,
             actions = if (term != null) {
                 {
-                    IconButton(onClick = ::killAndRespawn, modifier = Modifier.size(40.dp)) {
-                        Icon(TablerIcons.Outline.Trash, contentDescription = "Restart shell", tint = ConsoleColors.Destructive, modifier = Modifier.size(18.dp))
-                    }
+                    CircleIconButton(TablerIcons.Outline.Trash, "Restart shell", onClick = ::killAndRespawn)
                 }
             } else null,
         )
         if (statusBanner != null) {
-            Text(statusBanner, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp))
+            Text(statusBanner, color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp))
         }
         when {
             needsProjectPick -> ProjectPicker(
                 projects = projectState.projects,
                 onSelect = { AppContainer.appStateHolder.setSelectedProjectId(it) },
             )
-            project == null -> EmptyState(title = "No projects yet", description = "Add a project folder in Settings → Projects to open a shell.")
+            project == null -> EmptyView(title = "No projects yet", description = "Add a project folder in Settings → Projects to open a shell.", icon = TablerIcons.Outline.FolderOpen, modifier = Modifier.fillMaxSize())
             else -> {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -169,7 +172,7 @@ fun TerminalScreen(onBack: () -> Unit) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                                    Text("Starting shell…", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                                    Text("Starting shell…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
                                 }
                             }
                         } else {
@@ -224,17 +227,20 @@ private fun GhosttyTerminalSurface(terminalId: String?, buffer: String, isRunnin
 @Composable
 private fun ProjectPicker(projects: List<ProjectInfo>, onSelect: (String) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-        Text("Select a project", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 12.dp))
-        projects.forEach { p ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(12.dp)).clickable { onSelect(p.id) }.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
-                Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
-                    Text(p.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Text(p.path, color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Section("Select a project") {
+            projects.forEachIndexed { index, p ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(p.id) }.padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(TablerIcons.Outline.Folder, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(24.dp))
+                    Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+                        Text(p.name, color = NewTheme.TextPrimary, fontSize = 17.sp)
+                        Text(p.path, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+                    }
+                    Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
                 }
+                if (index < projects.lastIndex) SectionDivider(startInset = 58.dp)
             }
         }
     }
@@ -245,19 +251,28 @@ private fun ProjectPicker(projects: List<ProjectInfo>, onSelect: (String) -> Uni
 private fun ExtraKeysBar(onExtraKey: (String) -> Unit) {
     val keyboard = LocalSoftwareKeyboardController.current
     var kbVisible by remember { mutableStateOf(false) }
-    Row(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).border(1.dp, ConsoleColors.BorderSubtle).horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { if (kbVisible) keyboard?.hide() else keyboard?.show(); kbVisible = !kbVisible }, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(6.dp))) {
-            Icon(if (kbVisible) TablerIcons.Outline.KeyboardOff else TablerIcons.Outline.Keyboard, contentDescription = "Toggle keyboard", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(15.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth().background(NewTheme.Background).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(NewTheme.ChipRadius)).background(NewTheme.Card)
+                .clickable(onClickLabel = "Toggle keyboard") { if (kbVisible) keyboard?.hide() else keyboard?.show(); kbVisible = !kbVisible },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(if (kbVisible) TablerIcons.Outline.KeyboardOff else TablerIcons.Outline.Keyboard, contentDescription = "Toggle keyboard", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
         }
-        EXTRA_KEYS.forEach { k ->
-            TextButton2(label = k.label, onClick = { onExtraKey(k.bytes) })
-        }
+        EXTRA_KEYS.forEach { k -> KeyButton(label = k.label, onClick = { onExtraKey(k.bytes) }) }
     }
 }
 
 @Composable
-private fun TextButton2(label: String, onClick: () -> Unit) {
-    Box(modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(6.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-        Text(label, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+private fun KeyButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.height(38.dp).clip(RoundedCornerShape(NewTheme.ChipRadius)).background(NewTheme.Card).clickable(onClick = onClick).padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
     }
 }

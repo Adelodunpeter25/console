@@ -48,13 +48,18 @@ import com.console.mobile.AppContainer
 import console.v1.SubagentActivityItem
 import console.v1.SubagentInfo
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.data.api.ConsoleJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TintPill
 
 /**
  * Port of screens/subagents/subagents-screen.tsx + subagent-details-screen.tsx.
@@ -70,63 +75,59 @@ fun SubagentsScreen(onBackToChat: () -> Unit, onOpenDetails: (String) -> Unit) {
     }
     val subagents = sessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(title = "Subagents (${subagents.size})", onBack = onBackToChat)
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(title = "Subagents (${subagents.size})", onBack = onBackToChat)
         if (subagents.isEmpty()) {
-            EmptyState(
-                title = "No Subagents Spawned",
+            EmptyView(
+                title = "No subagents spawned",
                 description = "Subagents created by the assistant during this session will stream their activity and summaries here in real time.",
-                icon = {
-                    Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(Color(0xFF18181C)).border(1.dp, Color(0xFF27272A), CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(24.dp))
-                    }
-                },
+                icon = TablerIcons.Outline.Robot,
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                subagents.forEach { s ->
-                    SubagentCard(subagent = s, onClick = {
-                        AppContainer.appStateHolder.setSelectedSubagentId(s.subagent_id)
-                        onOpenDetails(s.subagent_id)
-                    })
+                SectionCard(modifier = Modifier.padding(top = 8.dp)) {
+                    subagents.forEachIndexed { index, s ->
+                        SubagentRow(subagent = s, onClick = {
+                            AppContainer.appStateHolder.setSelectedSubagentId(s.subagent_id)
+                            onOpenDetails(s.subagent_id)
+                        })
+                        if (index < subagents.lastIndex) SectionDivider()
+                    }
                 }
             }
         }
     }
 }
 
+/** Colour a subagent's status is shown in: running = the accent, done = green, otherwise red. */
+private fun subagentTint(status: String): Color = when (status) {
+    "running" -> NewTheme.Accent
+    "completed" -> NewTheme.Success
+    else -> NewTheme.Danger
+}
+
+private fun subagentLabel(status: String): String = when (status) {
+    "running" -> "Running"
+    "completed" -> "Done"
+    "aborted" -> "Aborted"
+    else -> "Failed"
+}
+
 @Composable
-private fun SubagentCard(subagent: SubagentInfo, onClick: () -> Unit) {
-    val running = subagent.status == "running"
-    val completed = subagent.status == "completed"
-    val color = if (running) Color(0xFF38BDF8) else if (completed) Color(0xFF22C55E) else Color(0xFFEF4444)
-    val label = if (running) "Running" else if (completed) "Done" else if (subagent.status == "aborted") "Aborted" else "Failed"
-    val shape = RoundedCornerShape(12.dp)
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(shape)
-            .background(Color(0xFF141417))
-            .border(1.dp, Color(0xFF27272A), shape)
-            .clickable(onClick = onClick)
-            .padding(14.dp),
-    ) {
+private fun SubagentRow(subagent: SubagentInfo, onClick: () -> Unit) {
+    val tint = subagentTint(subagent.status)
+    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF1C1C20)).border(1.dp, Color(0xFF303036), RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-                Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = color, modifier = Modifier.size(13.dp))
-            }
-            Text(subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } }, color = Color(0xFFFAFAFA), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(color.copy(alpha = 0.12f)).border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 2.dp)) {
-                Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-            }
-            Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+            Text(subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } }, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 14.dp))
+            TintPill(subagentLabel(subagent.status), tint)
+            Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp).padding(start = 4.dp))
         }
         if (subagent.prompt.isNotBlank()) {
-            Text(subagent.prompt, color = ConsoleColors.TextSecondary, fontSize = 12.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
+            Text(subagent.prompt, color = NewTheme.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${subagent.activities.size} tool action${if (subagent.activities.size == 1) "" else "s"}", color = ConsoleColors.TextMuted, fontSize = 11.sp)
-            Box(modifier = Modifier.weight(1f))
-            Text("View details →", color = Color(0xFF38BDF8), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-        }
+        Text("${subagent.activities.size} tool action${if (subagent.activities.size == 1) "" else "s"}", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -139,62 +140,55 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
     val subagents = appState.selectedSessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
     val subagent = subagents.firstOrNull { it.subagent_id == appState.selectedSubagentId }
 
-    val running = subagent?.status == "running"
-    val completed = subagent?.status == "completed"
-    val color = if (running) Color(0xFF38BDF8) else if (completed) Color(0xFF22C55E) else Color(0xFFEF4444)
-
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(title = subagent?.role ?: "Subagent Details", onBack = onBack)
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(title = subagent?.role ?: "Subagent Details", onBack = onBack)
         if (subagent == null) {
-            EmptyState(title = "Subagent not found", description = "It may have been cleared when switching environments.")
+            EmptyView(title = "Subagent not found", description = "It may have been cleared when switching environments.", icon = TablerIcons.Outline.Robot, modifier = Modifier.fillMaxSize())
             return@Column
         }
+        val tint = subagentTint(subagent.status)
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
             // Status header.
-            Row(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF141417)).border(1.dp, Color(0xFF27272A), RoundedCornerShape(12.dp)).padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
-                Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 10.dp))
-                Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+            SectionCard(modifier = Modifier.padding(top = 8.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(tint))
+                    Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = NewTheme.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f).padding(start = 14.dp))
+                    Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
+                }
             }
             // Prompt.
-            Text("Prompt", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                Text(subagent.prompt, color = ConsoleColors.TextPrimary, fontSize = 13.sp, lineHeight = 20.sp)
+            Section("Prompt") {
+                Text(subagent.prompt, color = NewTheme.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.fillMaxWidth().padding(18.dp))
             }
             // Summary (markdown) + copy.
             if (!subagent.summary.isNullOrBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)) {
-                    Text("Summary", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 4.dp)) {
+                    Text("Summary", color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     IconButton(onClick = {
                         try {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             cm.setPrimaryClip(ClipData.newPlainText("console", subagent.summary))
                             copied = true
                         } catch (_: Exception) {}
-                    }, modifier = Modifier.size(28.dp)) {
-                        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
-                        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(14.dp))
+                    }, modifier = Modifier.size(36.dp)) {
+                        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = NewTheme.Success, modifier = Modifier.size(18.dp))
+                        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
-                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ConsoleColors.Card).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                    CustomMarkdown(content = subagent.summary)
-                }
+                SectionCard { Box(modifier = Modifier.fillMaxWidth().padding(18.dp)) { CustomMarkdown(content = subagent.summary) } }
             }
             // Error.
             if (!subagent.error.isNullOrBlank()) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF87171).copy(alpha = 0.08f)).border(1.dp, Color(0xFFF87171).copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
-                    Text(subagent.error, color = Color(0xFFF87171), fontSize = 13.sp, modifier = Modifier.padding(start = 10.dp))
-                }
+                Banner(subagent.error, modifier = Modifier.padding(top = 16.dp))
             }
             // Activity groups.
             if (subagent.activities.isNotEmpty()) {
-                Text("Activity (${subagent.activities.size})", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
-                groupActivities(subagent.activities).forEach { g ->
-                    ActivityGroupCard(group = g)
+                Section("Activity (${subagent.activities.size})") {
+                    val groups = groupActivities(subagent.activities)
+                    groups.forEachIndexed { index, g ->
+                        ActivityGroupRow(group = g)
+                        if (index < groups.lastIndex) SectionDivider()
+                    }
                 }
             }
         }
@@ -217,30 +211,36 @@ private fun groupActivities(activities: List<SubagentActivityItem>): List<Activi
 }
 
 @Composable
-private fun ActivityGroupCard(group: ActivityGroup) {
+private fun ActivityGroupRow(group: ActivityGroup) {
     var open by remember(group.toolName, group.activities.size) { mutableStateOf(false) }
     val hasError = group.activities.any { it.status != "completed" && it.status != "running" }
     val isRunning = group.activities.any { it.status == "running" }
     val done = group.activities.count { it.status == "completed" }
-    val shape = RoundedCornerShape(12.dp)
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape).background(Color(0xFF141417)).border(1.dp, Color(0xFF27272A), shape)) {
-        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (isRunning) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
-            else if (hasError) Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
-            else Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
-            Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                Text(group.toolName, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
-            }
-            Text("${group.activities.size} ${if (group.activities.size == 1) "call" else "calls"}", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f).padding(start = 8.dp))
-            Text(if (isRunning) "Running" else "$done/${group.activities.size}", color = ConsoleColors.TextMuted, fontSize = 10.sp)
-            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (isRunning) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(18.dp))
+            else if (hasError) Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(18.dp))
+            else Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(18.dp))
+            ToolNameChip(group.toolName, Modifier.padding(start = 12.dp))
+            Text("${group.activities.size} ${if (group.activities.size == 1) "call" else "calls"}", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 10.dp))
+            Text(if (isRunning) "Running" else "$done/${group.activities.size}", color = NewTheme.TextMuted, fontSize = 12.sp)
+            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(18.dp).padding(start = 4.dp))
         }
         if (open) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(bottom = 8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 10.dp)) {
                 group.activities.forEach { a -> ActivityRowItem(activity = a) }
             }
         }
     }
+}
+
+/** The tool's name in a small mono chip. */
+@Composable
+private fun ToolNameChip(name: String, modifier: Modifier = Modifier) {
+    Text(
+        name, color = NewTheme.TextPrimary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium,
+        modifier = modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 @Composable
@@ -249,19 +249,17 @@ private fun ActivityRowItem(activity: SubagentActivityItem) {
     val running = activity.status == "running"
     val done = activity.status == "completed"
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (running) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
-        else if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF22C55E), modifier = Modifier.size(13.dp))
-        else Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
-        Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF222226)).border(1.dp, Color(0xFF33333A), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-            Text(activity.tool_name, color = Color(0xFFFAFAFA), fontSize = 10.5.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.Medium)
-        }
+        if (running) Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(16.dp))
+        else if (done) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(16.dp))
+        else Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(16.dp))
+        ToolNameChip(activity.tool_name, Modifier.padding(start = 10.dp))
         if (summary != null) {
-            Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+            Text(summary, color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
         } else {
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
         }
         if (activity.error != null) {
-            Text("Error", color = Color(0xFFEF4444), fontSize = 10.sp, modifier = Modifier.padding(start = 6.dp))
+            Text("Error", color = NewTheme.Danger, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
         }
     }
 }

@@ -40,14 +40,19 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Circle
 import io.github.lyxnx.compose.ui.tablericons.outline.Login
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.components.ProviderIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.SectionSkeleton
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
 
 /**
  * Port of screens/settings/account-settings.tsx. Named ProvidersSettings: this
@@ -67,72 +72,70 @@ fun ProvidersSettings(onBack: () -> Unit) {
         AppContainer.authRepository.loadStatus()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
-        ScreenHeader(title = "Account", onBack = onBack)
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        PageHeader(title = "Account", onBack = onBack)
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-            Text("Sign in to AI providers to use their models in chat.", color = ConsoleColors.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 4.dp).padding(top = 8.dp, bottom = 16.dp))
+            Text("Sign in to AI providers to use their models in chat.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
             if (providerState.loadingProviders && providerState.providers.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                }
+                SectionSkeleton(rows = 4)
             } else {
-                val cardShape = RoundedCornerShape(16.dp)
-                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    val providers = providerState.providers.filter { it.auth_method != "none" }
-                    if (providers.isEmpty()) {
-                        Text("No providers available.", color = ConsoleColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 16.dp))
-                    }
+                val providers = providerState.providers.filter { it.auth_method != "none" }
+                Section("Providers") {
+                    if (providers.isEmpty()) Note("No providers available.")
                     providers.forEachIndexed { i, p ->
                         val status = authState.status?.get(p.name)
                         val loggedIn = status?.logged_in == true
                         val busy = loggingIn == p.name
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (loggedIn) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
-                                else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
-                                Column(modifier = Modifier.weight(1f).padding(start = 10.dp).padding(end = 12.dp)) {
-                                    Text(p.display_name.ifBlank { p.name }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(if (loggedIn) (status.email ?: "Connected") else "Not connected", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                                }
-                                val label = when {
-                                    busy -> "Wait"
-                                    loggedIn -> "Re-login"
-                                    p.auth_method == "device-code" -> "Pair"
-                                    else -> "Login"
-                                }
-                                PillButton(
-                                    text = label,
-                                    onClick = {
-                                        loggingIn = p.name
-                                        scope.launch {
-                                            try {
-                                                // LocalContext.current here is the hosting Activity,
-                                                // which Custom Tabs requires — the app context can't
-                                                // start activities without FLAG_ACTIVITY_NEW_TASK.
-                                                OAuthLoginLauncher.login(context, AppContainer.authRepository, p.name)
-                                            } catch (e: Exception) {
-                                                confirmAlert("Login Failed", e.message ?: "Login failed.")
-                                            } finally {
-                                                loggingIn = null
-                                            }
-                                        }
-                                    },
-                                    enabled = loggingIn == null,
-                                    loading = busy,
-                                    icon = if (loggedIn) TablerIcons.Outline.Refresh else TablerIcons.Outline.Login,
-                                    variant = if (loggedIn) PillButtonVariant.Outline else PillButtonVariant.Filled,
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            ProviderIcon(provider = p.name, sizeDp = 24)
+                            Column(modifier = Modifier.weight(1f).padding(start = 16.dp).padding(end = 12.dp)) {
+                                Text(p.display_name.ifBlank { p.name }, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    if (loggedIn) (status.email ?: "Connected") else "Not connected",
+                                    color = if (loggedIn) NewTheme.Success else NewTheme.TextMuted,
+                                    fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp),
                                 )
                             }
-                            if (i < providers.lastIndex) {
-                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(ConsoleColors.BorderSubtle))
+                            val label = when {
+                                busy -> "Wait"
+                                loggedIn -> "Re-login"
+                                p.auth_method == "device-code" -> "Pair"
+                                else -> "Login"
                             }
+                            ActionButton(
+                                text = label,
+                                onClick = {
+                                    loggingIn = p.name
+                                    scope.launch {
+                                        try {
+                                            // LocalContext.current here is the hosting Activity,
+                                            // which Custom Tabs requires — the app context can't
+                                            // start activities without FLAG_ACTIVITY_NEW_TASK.
+                                            OAuthLoginLauncher.login(context, AppContainer.authRepository, p.name)
+                                        } catch (e: Exception) {
+                                            confirmAlert("Login Failed", e.message ?: "Login failed.")
+                                        } finally {
+                                            loggingIn = null
+                                        }
+                                    }
+                                },
+                                enabled = loggingIn == null,
+                                loading = busy,
+                                icon = if (loggedIn) TablerIcons.Outline.Refresh else TablerIcons.Outline.Login,
+                                // Signing in is the call to action; re-login is secondary. The row sits on a
+                                // card, so the secondary fill must be the raised one to show up.
+                                kind = if (loggedIn) ActionButtonKind.Secondary else ActionButtonKind.Primary,
+                                surface = NewTheme.Raised,
+                                compact = true,
+                            )
                         }
+                        if (i < providers.lastIndex) SectionDivider(startInset = 58.dp)
                     }
                 }
             }
             val err = authState.error
             if (err != null) {
-                Text(err, color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
+                Text(err, color = NewTheme.Danger, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
             }
         }
     }

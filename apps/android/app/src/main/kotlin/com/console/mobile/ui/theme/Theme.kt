@@ -8,27 +8,27 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Console is dark-only (background #0a0a0b). We still expose a light hook
- * for previews. Dark scheme maps ConsoleColors into Material3 ColorScheme so
+ * for previews. Dark scheme maps NewTheme into Material3 ColorScheme so
  * Scaffold/Card/BottomSheet pick up the right surfaces automatically.
  */
 private val ConsoleDarkScheme = darkColorScheme(
-    primary = ConsoleColors.Primary,
-    onPrimary = ConsoleColors.TextDark,
-    primaryContainer = ConsoleColors.SurfaceElevated,
-    onPrimaryContainer = ConsoleColors.TextPrimary,
-    secondary = ConsoleColors.TextSecondary,
-    onSecondary = ConsoleColors.TextPrimary,
-    background = ConsoleColors.Background,
-    onBackground = ConsoleColors.TextPrimary,
-    surface = ConsoleColors.Surface,
-    onSurface = ConsoleColors.TextPrimary,
-    surfaceVariant = ConsoleColors.SurfaceElevated,
-    onSurfaceVariant = ConsoleColors.TextSecondary,
-    outline = ConsoleColors.Border,
-    outlineVariant = ConsoleColors.BorderSubtle,
-    error = ConsoleColors.Destructive,
+    primary = NewTheme.Primary,
+    onPrimary = NewTheme.OnPrimary,
+    primaryContainer = NewTheme.Raised,
+    onPrimaryContainer = NewTheme.TextPrimary,
+    secondary = NewTheme.TextSecondary,
+    onSecondary = NewTheme.TextPrimary,
+    background = NewTheme.Background,
+    onBackground = NewTheme.TextPrimary,
+    surface = NewTheme.Card,
+    onSurface = NewTheme.TextPrimary,
+    surfaceVariant = NewTheme.Raised,
+    onSurfaceVariant = NewTheme.TextSecondary,
+    outline = NewTheme.TextGhost,
+    outlineVariant = NewTheme.Divider,
+    error = NewTheme.Danger,
     onError = Color.White,
-    errorContainer = ConsoleColors.Destructive.copy(alpha = 0.18f),
+    errorContainer = NewTheme.Danger.copy(alpha = 0.18f),
     scrim = Color.Black.copy(alpha = 0.45f),
 )
 

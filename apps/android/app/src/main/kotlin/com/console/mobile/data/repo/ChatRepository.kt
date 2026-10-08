@@ -13,6 +13,9 @@ import com.console.mobile.core.chat.newMessageId
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.toChatSnapshot
 import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.core.chat.mergeLiveHistory
+import com.console.mobile.core.chat.prependOlderMessages
+import com.console.mobile.core.chat.withLiveRun
 import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
@@ -47,13 +50,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-
-/**
- * Stable identity for deduping a prepended page against messages already
- * held. Prefers the server id and falls back to the timestamp, which is what
- * the server injects for rows stored without one.
- */
-private fun messageKey(m: AgentMessage): String = m.id ?: "t${m.createdAt ?: 0L}"
 
 class ChatRepository(
     private val api: ConsoleApi,
@@ -157,19 +153,27 @@ class ChatRepository(
         }
     }
 
+    /** One-off fetch so the ring has a value before the first live update. */
+    fun loadContext(sessionId: String) {
+        scope.launch {
+            try {
+                val snap = withContext(Dispatchers.IO) { api.getSessionContext(sessionId) } ?: return@launch
+                chats.update(sessionId) { if (it.context == null) it.copy(context = snap) else it }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun loadMessages(sessionId: String, messages: List<AgentMessage>) {
         if (messages.isEmpty()) return
         val withIds = ensureMessageIds(messages)
         chats.update(sessionId) { current ->
-            // A live stream owns the run state and the streaming buffers, but the
-            // history page still has to land. Bailing out here left the
-            // transcript blank whenever a run was already active on entry, which
-            // is exactly when attach had just set running — a losing race between
-            // the detail fetch and the attach, which both start on entry.
+            // The server's history is the source of truth even mid-run; the live
+            // stream only owns the in-flight buffers and the newest run's
+            // activity, which is re-paired with the latest prompt here.
             if (current.running) {
-                val seen = current.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
-                val fresh = withIds.filterNot { m -> messageKey(m) in seen }
-                if (fresh.isEmpty()) current else current.copy(messages = fresh + current.messages)
+                val merged = mergeLiveHistory(withIds, current.messages)
+                current.copy(messages = merged, runs = withLiveRun(merged, current.runs))
             } else {
                 current.copy(
                     messages = withIds,
@@ -201,28 +205,7 @@ class ChatRepository(
      */
     fun prependMessages(sessionId: String, older: List<AgentMessage>) {
         if (older.isEmpty()) return
-        chats.update(sessionId) {
-            // A message that arrived on the first page can also arrive in a
-            // later page if the stream appended it after that page was served,
-            // which would render it twice. Ids win; createdAt is the fallback
-            // for rows the server stored without one.
-            val seen = it.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
-            val fresh = older.filterNot { m -> messageKey(m) in seen }
-            if (fresh.isEmpty()) return@update it
-            val merged = ensureMessageIds(fresh) + it.messages
-            // Rebuild whenever nothing is streaming, not merely when `runs` is
-            // empty. A run reconstructed from the newest page alone has no tool
-            // calls for history that predates it, so its "Worked for Ns" header
-            // never appeared; `ifEmpty` locked that in, and pulling the older
-            // pages in could never repair it. Rebuilding still has to yield to a
-            // live stream, whose run state the reducer owns.
-            val streaming = it.running || it.runs.lastOrNull()?.status == RunStatus.Working
-            val rebuilt = if (streaming) it.runs else reconstructRuns(merged)
-            // A page can straddle a run (assistant/tool rows whose user turn is
-            // still on an unfetched page), and then reconstruct yields nothing —
-            // keep what we had rather than blanking the transcript.
-            it.copy(messages = merged, runs = rebuilt.ifEmpty { it.runs })
-        }
+        chats.update(sessionId) { prependOlderMessages(it, older) }
     }
 
     fun handleEvent(sessionId: String, event: AgentSessionEvent) {
@@ -305,6 +288,7 @@ class ChatRepository(
             modelId = view.sessionModelId,
             provider = view.sessionProvider,
             approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
+            thinkingLevel = providerRepo?.validThinkingLevel(view.sessionProvider, view.sessionModelId, view.thinkingLevel) ?: view.thinkingLevel.takeIf { providerRepo == null },
             attachments = attachments,
             contextFiles = mentionPaths(prompt),
         )
@@ -342,16 +326,7 @@ class ChatRepository(
         val current = chats.get(sessionId)
         if (current.running || controllers[sessionId]?.isActive == true) return
         chats.update(sessionId) {
-            val runs = it.runs
-            val hasWorking = runs.isNotEmpty() && runs.last().status == com.console.mobile.core.chat.RunStatus.Working
-            it.copy(
-                running = true,
-                runs = if (hasWorking) runs else runs + com.console.mobile.core.chat.RunActivityState(
-                    runId = newMessageId(),
-                    startedAt = System.currentTimeMillis(),
-                    status = com.console.mobile.core.chat.RunStatus.Working,
-                ),
-            )
+            it.copy(running = true, runs = withLiveRun(it.messages, it.runs))
         }
         sessions.setStatus(sessionId, SessionStatus.Working)
         persistence?.setSuppress(true)
@@ -395,6 +370,17 @@ class ChatRepository(
     }
 
     fun clear(sessionId: String) = chats.clear(sessionId)
+
+    /**
+     * The session no longer exists: stop its stream and drop everything held
+     * locally, including the unsent draft. The draft is what keeps a deleted
+     * chat in the list — the grouping builds a "Drafts" row from any local draft
+     * even when the server has no such session.
+     */
+    fun discard(sessionId: String) {
+        controllers.remove(sessionId)?.cancel()
+        chats.remove(sessionId)
+    }
 
     private fun getOrCreate(sessionId: String, bodyJson: String): RunStreamController {
         return controllers.getOrPut(sessionId) {
