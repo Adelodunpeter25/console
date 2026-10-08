@@ -51,10 +51,20 @@ import com.console.mobile.data.model.ApprovalModeOption
 import console.v1.Model
 import console.v1.ProjectInfo
 import com.console.mobile.data.model.favoriteKey
-import com.console.mobile.ui.components.ConsoleSearchField
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.IconTabPill
+import com.console.mobile.ui.components.common.new.OptionRow
+import com.console.mobile.ui.components.common.new.SearchInput
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TabPill
+import com.console.mobile.ui.components.common.new.LoadingState
+import com.console.mobile.ui.theme.NewTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.lazy.itemsIndexed
 
 /**
  * Selection sheets shared by the composer strip and settings. These are
@@ -161,7 +171,6 @@ private data class FavoriteEntry(
 )
 
 /** Provider → model browser, with the desktop's favourites tab and per-row star. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerSheet(
     title: String = "Select Model",
@@ -210,119 +219,112 @@ fun ModelPickerSheet(
         scope.launch { AppContainer.providerRepository.setFavorite(providerId, modelId, !isFav) }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
-            PickerSheetTitle(title)
-            if (providerState.providers.isNotEmpty()) {
-                LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                    item {
-                        // Favourites tab: a star button ahead of the provider
-                        // chips, matching the desktop's tab bar.
-                        Box(
-                            modifier = Modifier.padding(end = 8.dp).size(34.dp).clip(RoundedCornerShape(8.dp))
-                                .background(if (showFavorites) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt)
-                                .clickable { showFavorites = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                TablerIcons.Outline.Star,
-                                contentDescription = "Favorites",
-                                tint = if (showFavorites) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
+    // The list scrolls itself (LazyColumn), so the sheet must not also scroll.
+    BaseSheet(onDismiss = onDismiss, title = title, scrollable = false) {
+        if (providerState.providers.isNotEmpty()) {
+            LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Favourites tab: a star ahead of the provider tabs, matching the desktop's tab bar.
+                item { IconTabPill(TablerIcons.Outline.Star, "Favorites", selected = showFavorites) { showFavorites = true } }
+                items(providerState.providers) { p ->
+                    TabPill(
+                        label = p.display_name.ifBlank { p.name },
+                        selected = !showFavorites && p.name == activeProvider,
+                    ) {
+                        showFavorites = false
+                        activeProvider = p.name
                     }
-                    items(providerState.providers) { p ->
-                        val sel = !showFavorites && p.name == activeProvider
-                        Box(
-                            modifier = Modifier.padding(end = 8.dp).clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Color.White.copy(alpha = 0.12f) else ConsoleColors.CardAlt)
-                                .clickable {
-                                    showFavorites = false
-                                    activeProvider = p.name
-                                }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) {
-                            Text(p.display_name.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-            }
-            ConsoleSearchField(
-                value = search,
-                onValueChange = { search = it },
-                placeholder = "Search models…",
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            )
-            val q = search.trim().lowercase()
-            val activeLoading = activeProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
-            // The favourites tab resolves entries against every provider's model
-            // list, so it has to wait on all of them — not just the favourites
-            // request, which finishes long before the models arrive.
-            val anyModelLoading = providerState.loadingProviders ||
-                providerState.providers.any { providerState.loadingModels[it.name] == true }
-            // On the first frame the provider list is still in flight, so no
-            // per-provider flag is set yet. Without this the sheet flashes
-            // "No models available" before the spinner ever appears.
-            val bootstrapping = providerState.providers.isEmpty() && providerState.error == null
-
-            // Star button for a row. Filled once starred, outline otherwise.
-            @Composable
-            fun starFor(providerId: String, modelId: String) {
-                val isFav = favoriteKey(providerId, modelId) in favorites
-                Icon(
-                    if (isFav) TablerIcons.Filled.Star else TablerIcons.Outline.Star,
-                    contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFav) Color(0xFFFACC15) else ConsoleColors.TextMuted,
-                    modifier = Modifier.size(18.dp).clickable { toggleFavorite(providerId, modelId) },
-                )
-            }
-
-            if (showFavorites) {
-                val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
-                when {
-                    (providerState.loadingFavorites || anyModelLoading) && favoriteEntries.isEmpty() -> PickerPlaceholder(spinner = true)
-                    visibleFavorites.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
-                    else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                        items(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
-                            PickerRow(
-                                title = formatModelName(entry.model.id),
-                                // Provider is not shown as a tab here, so it
-                                // belongs on the row (desktop parity).
-                                subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                                selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
-                                trailing = { starFor(entry.provider, entry.model.id) },
-                            ) { onSelect(entry.model.id, entry.provider) }
-                        }
-                    }
-                }
-            } else {
-                val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
-                val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
-                when {
-                    (activeLoading || bootstrapping) && models.isEmpty() -> PickerPlaceholder(spinner = true)
-                    filtered.isEmpty() -> PickerPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
-                    else ->
-                        // The list must own the remaining sheet height and scroll within it.
-                        // A plain Column here grew past the sheet on long provider lists
-                        // (antigravity) with no way to reach the overflow items.
-                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                            items(filtered.take(100), key = { it.id }) { m ->
-                                val providerId = activeProvider.orEmpty()
-                                PickerRow(
-                                    title = formatModelName(m.id),
-                                    // The formatted name is already the row title, so
-                                    // the id under it repeated itself — the context
-                                    // window is the useful second line (desktop parity).
-                                    subtitle = "${formatContextWindow(m.context_window)} context",
-                                    selected = m.id == selectedModel,
-                                    trailing = { starFor(providerId, m.id) },
-                                ) { onSelect(m.id, activeProvider) }
-                            }
-                        }
                 }
             }
         }
+        SearchInput(
+            value = search,
+            onValueChange = { search = it },
+            placeholder = "Search models…",
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        )
+        val q = search.trim().lowercase()
+        val activeLoading = activeProvider?.let { providerState.loadingModels[it] } == true || providerState.loadingProviders
+        // The favourites tab resolves entries against every provider's model
+        // list, so it has to wait on all of them — not just the favourites
+        // request, which finishes long before the models arrive.
+        val anyModelLoading = providerState.loadingProviders ||
+            providerState.providers.any { providerState.loadingModels[it.name] == true }
+        // On the first frame the provider list is still in flight, so no
+        // per-provider flag is set yet. Without this the sheet flashes
+        // "No models available" before the spinner ever appears.
+        val bootstrapping = providerState.providers.isEmpty() && providerState.error == null
+
+        // Star button for a row. Filled once starred, outline otherwise.
+        @Composable
+        fun starFor(providerId: String, modelId: String) {
+            val isFav = favoriteKey(providerId, modelId) in favorites
+            Icon(
+                if (isFav) TablerIcons.Filled.Star else TablerIcons.Outline.Star,
+                contentDescription = if (isFav) "Remove from favorites" else "Add to favorites",
+                tint = if (isFav) NewTheme.Warning else NewTheme.TextMuted,
+                modifier = Modifier.size(22.dp).clickable { toggleFavorite(providerId, modelId) },
+            )
+        }
+
+        if (showFavorites) {
+            val visibleFavorites = if (q.isEmpty()) favoriteEntries else favoriteEntries.filter { it.model.id.lowercase().contains(q) }
+            when {
+                (providerState.loadingFavorites || anyModelLoading) && favoriteEntries.isEmpty() -> LoadingState()
+                visibleFavorites.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching favorites" else "No favorites yet — tap a star to pin a model")
+                else -> ModelListCard(visibleFavorites, key = { favoriteKey(it.provider, it.model.id) }) { entry ->
+                    OptionRow(
+                        title = formatModelName(entry.model.id),
+                        // Provider is not shown as a tab here, so it belongs on the row (desktop parity).
+                        subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
+                        selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
+                        trailing = { starFor(entry.provider, entry.model.id) },
+                    ) { onSelect(entry.model.id, entry.provider) }
+                }
+            }
+        } else {
+            val models: List<Model> = activeProvider?.let { providerState.modelsByProvider[it] } ?: emptyList()
+            val filtered = if (q.isEmpty()) models else models.filter { it.id.lowercase().contains(q) }
+            when {
+                (activeLoading || bootstrapping) && models.isEmpty() -> LoadingState()
+                filtered.isEmpty() -> ModelPlaceholder(if (search.isNotEmpty()) "No matching models found" else "No models available")
+                else -> ModelListCard(filtered.take(100), key = { it.id }) { m ->
+                    val providerId = activeProvider.orEmpty()
+                    OptionRow(
+                        title = formatModelName(m.id),
+                        // The formatted name is already the row title, so the id under it
+                        // repeated itself — the context window is the useful second line.
+                        subtitle = "${formatContextWindow(m.context_window)} context",
+                        selected = m.id == selectedModel,
+                        trailing = { starFor(providerId, m.id) },
+                    ) { onSelect(m.id, activeProvider) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The model rows in one rounded card. The list owns the remaining sheet height
+ * and scrolls within it: a plain Column here grew past the sheet on long
+ * provider lists (antigravity) with no way to reach the overflow items.
+ */
+@Composable
+private fun <T> ColumnScope.ModelListCard(items: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+            .clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card),
+    ) {
+        itemsIndexed(items, key = { _, item -> key(item) }) { index, item ->
+            row(item)
+            if (index < items.lastIndex) SectionDivider()
+        }
+    }
+}
+
+@Composable
+private fun ModelPlaceholder(message: String) {
+    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
+        Text(message, color = NewTheme.TextSecondary, fontSize = 14.sp)
     }
 }
 

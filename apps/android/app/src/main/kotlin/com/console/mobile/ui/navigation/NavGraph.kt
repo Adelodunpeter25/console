@@ -33,7 +33,7 @@ import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.subagents.SubagentDetailsScreen
 import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
-import com.console.mobile.ui.components.ConfirmDialogHost
+import com.console.mobile.ui.components.common.new.ConfirmPromptHost
 import com.console.mobile.ui.theme.ConsoleColors
 
 @Composable
@@ -54,7 +54,7 @@ fun AppNavGraph() {
 
     if (appState.backendUrl.isNullOrBlank()) {
         OnboardingScreen(onConnected = {})
-        ConfirmDialogHost()
+        ConfirmPromptHost()
         return
     }
 
@@ -194,7 +194,7 @@ fun AppNavGraph() {
             }
             composable<RouteOnboarding> { OnboardingScreen(onConnected = {}) }
         }
-        ConfirmDialogHost()
+        ConfirmPromptHost()
     }
 }
 
