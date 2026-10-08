@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -64,6 +65,45 @@ func grepResultToProto(r types.GrepResult) *consolev1.GrepResult {
 		out.Matches = append(out.Matches, match)
 	}
 	return out
+}
+
+// entriesResponseCache holds encoded /api/fs/entries bodies tagged with the
+// watcher version they were built at. The TTL is a backstop for missed events.
+type entriesResponseCache struct {
+	mu    sync.Mutex
+	items map[string]entriesCacheItem
+}
+
+type entriesCacheItem struct {
+	version uint64
+	at      time.Time
+	body    []byte
+}
+
+const (
+	entriesCacheTTL = 30 * time.Second
+	entriesCacheMax = 32
+)
+
+var entriesCache = &entriesResponseCache{items: make(map[string]entriesCacheItem)}
+
+func (c *entriesResponseCache) get(key string, version uint64) ([]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	item, ok := c.items[key]
+	if !ok || item.version != version || time.Since(item.at) > entriesCacheTTL {
+		return nil, false
+	}
+	return item.body, true
+}
+
+func (c *entriesResponseCache) put(key string, version uint64, body []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.items) >= entriesCacheMax {
+		c.items = make(map[string]entriesCacheItem)
+	}
+	c.items[key] = entriesCacheItem{version: version, at: time.Now(), body: body}
 }
 
 func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.FsWatchService) {
@@ -181,16 +221,39 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Query parameter 'depth' must be an integer between 1 and 25."))
 		}
 		maxEntries := clampInt(c.QueryInt("maxEntries", 30000), 1, 100000)
-		entries, err := fs.ListAllEntries(dirPath, maxDepth, c.Query("hidden") == "true",
-			services.EntriesOptions{WithSizes: c.Query("withSizes") != "false" && c.Query("withSizes") != "0", MaxEntries: maxEntries})
+		withSizes := c.Query("withSizes") != "false" && c.Query("withSizes") != "0"
+		hidden := c.Query("hidden") == "true"
+
+		// Re-listing and re-encoding a deep tree is expensive and clients refetch
+		// it on every fs event, so serve the encoded body until the watcher sees
+		// a change. Hidden listings include ignored dirs the watcher skips, so
+		// they are never cached.
+		cacheable := !hidden
+		key := fmt.Sprintf("%s|%d|%d|%t", dirPath, maxDepth, maxEntries, withSizes)
+		var version uint64
+		if cacheable {
+			watch.Watch(dirPath)
+			version = watch.Version(dirPath)
+			if body, hit := entriesCache.get(key, version); hit {
+				c.Set("Content-Type", "application/json")
+				return c.Send(body)
+			}
+		}
+
+		entries, err := fs.ListAllEntries(dirPath, maxDepth, hidden,
+			services.EntriesOptions{WithSizes: withSizes, MaxEntries: maxEntries})
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		data, err := marshalProtoList(fsEntriesToProto(entries))
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		// Flat list, no nested children: clients rebuild the tree from paths.
+		body := EncodeFsEntriesResponse(entries)
+		if cacheable {
+			// version was read before listing, so a change during the walk
+			// leaves this entry already stale and it is rebuilt next time.
+			entriesCache.put(key, version, body)
 		}
-		return ok(c, data)
+		c.Set("Content-Type", "application/json")
+		return c.Send(body)
 	})
 
 	// GET /api/fs/tree

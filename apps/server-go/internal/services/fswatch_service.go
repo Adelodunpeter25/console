@@ -22,6 +22,40 @@ type FsWatchService struct {
 	debounce map[string]*time.Timer
 	subs     map[chan types.FsChangeEvent]string // chan -> project path filter
 	closed   bool
+
+	// roots are the project paths callers asked to watch; watched also holds
+	// every subdirectory under them, so it must not be used to find a project.
+	roots map[string]bool
+	// versions bumps per project on every non-ignored change so listing
+	// caches drop as soon as anything under that project changes. Entries
+	// outlive a release so a re-watched project never reuses an old number.
+	versions map[string]uint64
+	// release timers drop a project's watches once nobody has used it for
+	// idleRelease; every subdirectory watch costs an inotify/kqueue handle.
+	release     map[string]*time.Timer
+	idleRelease time.Duration
+}
+
+const defaultIdleRelease = 2 * time.Minute
+
+// SetIdleRelease changes how long an unsubscribed project keeps its watches.
+func (s *FsWatchService) SetIdleRelease(d time.Duration) {
+	s.mu.Lock()
+	s.idleRelease = d
+	s.mu.Unlock()
+}
+
+// Version returns a counter that increases whenever a non-ignored path under
+// projectPath changes. A cached listing taken at version N is still valid
+// while Version(projectPath) == N.
+func (s *FsWatchService) Version(projectPath string) uint64 {
+	abs, err := filepath.Abs(projectPath)
+	if err != nil {
+		abs = projectPath
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.versions[abs]
 }
 
 func NewFsWatchService() (*FsWatchService, error) {
@@ -35,6 +69,11 @@ func NewFsWatchService() (*FsWatchService, error) {
 		gitMeta:  make(map[string]string),
 		debounce: make(map[string]*time.Timer),
 		subs:     make(map[chan types.FsChangeEvent]string),
+
+		roots:       make(map[string]bool),
+		versions:    make(map[string]uint64),
+		release:     make(map[string]*time.Timer),
+		idleRelease: defaultIdleRelease,
 	}
 	go s.loop()
 	return s, nil
@@ -52,15 +91,8 @@ func (s *FsWatchService) loop() {
 			s.scheduleEmit(project, event.Name)
 			continue
 		}
-		projectPath := s.projectFor(event.Name)
-		if projectPath == "" {
-			continue
-		}
-		// Ignore rules apply to paths relative to the
-		// project root, so absolute paths through ignored ancestors
-		// (e.g. /tmp) don't get filtered.
-		rel := strings.TrimPrefix(event.Name, projectPath+"/")
-		if utils.IsPathIgnored(rel) {
+		projects := s.projectsFor(event.Name)
+		if len(projects) == 0 {
 			continue
 		}
 		// New directories get their own watches for recursion.
@@ -69,19 +101,36 @@ func (s *FsWatchService) loop() {
 				s.addDirRecursive(event.Name)
 			}
 		}
-		s.scheduleEmit(projectPath, event.Name)
+		for _, projectPath := range projects {
+			// Ignore rules apply to paths relative to the project root, so
+			// absolute paths through ignored ancestors (e.g. /tmp) don't get
+			// filtered.
+			rel := strings.TrimPrefix(event.Name, projectPath+"/")
+			if utils.IsPathIgnored(rel) {
+				continue
+			}
+			s.mu.Lock()
+			s.versions[projectPath]++
+			s.mu.Unlock()
+			s.scheduleEmit(projectPath, event.Name)
+		}
 	}
 }
 
-func (s *FsWatchService) projectFor(eventPath string) string {
+// projectsFor returns every watched project root containing eventPath. The
+// old lookup scanned s.watched, which also holds every subdirectory, so a
+// nested event could be attributed to a subdirectory "project" nobody had
+// subscribed to and was silently dropped. Nested roots all get notified.
+func (s *FsWatchService) projectsFor(eventPath string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for project := range s.watched {
-		if len(eventPath) >= len(project) && eventPath[:len(project)] == project {
-			return project
+	var out []string
+	for root := range s.roots {
+		if eventPath == root || strings.HasPrefix(eventPath, root+"/") {
+			out = append(out, root)
 		}
 	}
-	return ""
+	return out
 }
 
 func (s *FsWatchService) scheduleEmit(projectPath, eventPath string) {
@@ -144,12 +193,84 @@ func (s *FsWatchService) Watch(projectPath string) {
 		return
 	}
 	s.mu.Lock()
-	already := s.watched[abs]
+	already := s.roots[abs]
+	s.roots[abs] = true
+	s.touchLocked(abs)
 	s.mu.Unlock()
 	if !already {
 		s.addDirRecursive(abs)
 	}
 	s.watchGitMeta(abs)
+}
+
+// touchLocked restarts the idle-release countdown for root when nobody is
+// subscribed to it. Callers hold s.mu.
+func (s *FsWatchService) touchLocked(root string) {
+	if t, ok := s.release[root]; ok {
+		t.Stop()
+		delete(s.release, root)
+	}
+	if s.closed || s.hasSubscriberLocked(root) {
+		return
+	}
+	s.release[root] = time.AfterFunc(s.idleRelease, func() { s.releaseIfIdle(root) })
+}
+
+func (s *FsWatchService) hasSubscriberLocked(root string) bool {
+	for _, filter := range s.subs {
+		if filter == root {
+			return true
+		}
+	}
+	return false
+}
+
+// releaseIfIdle drops root's watches unless it has subscribers again, and
+// keeps any directory another watched root still covers.
+func (s *FsWatchService) releaseIfIdle(root string) {
+	s.mu.Lock()
+	delete(s.release, root)
+	if s.closed || !s.roots[root] || s.hasSubscriberLocked(root) {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.roots, root)
+	s.versions[root]++
+	var drop []string
+	for dir := range s.watched {
+		if dir != root && !strings.HasPrefix(dir, root+"/") {
+			continue
+		}
+		covered := false
+		for other := range s.roots {
+			if dir == other || strings.HasPrefix(dir, other+"/") {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			drop = append(drop, dir)
+			delete(s.watched, dir)
+		}
+	}
+	for dir, project := range s.gitMeta {
+		if project == root {
+			drop = append(drop, dir)
+			delete(s.gitMeta, dir)
+		}
+	}
+	w := s.watcher
+	s.mu.Unlock()
+	for _, dir := range drop {
+		_ = w.Remove(dir)
+	}
+}
+
+// WatchedDirCount reports how many directories currently hold a watch.
+func (s *FsWatchService) WatchedDirCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.watched) + len(s.gitMeta)
 }
 
 // gitProjectFor maps a git-metadata event back to its project, so worktree
@@ -209,21 +330,35 @@ func (s *FsWatchService) watchGitMeta(projectAbs string) {
 // Subscribe returns a channel receiving change events for projectPath.
 func (s *FsWatchService) Subscribe(projectPath string) chan types.FsChangeEvent {
 	ch := make(chan types.FsChangeEvent, 64)
+	if abs, err := filepath.Abs(projectPath); err == nil {
+		projectPath = abs
+	}
 	s.mu.Lock()
 	s.subs[ch] = projectPath
+	if t, ok := s.release[projectPath]; ok {
+		t.Stop()
+		delete(s.release, projectPath)
+	}
 	s.mu.Unlock()
 	return ch
 }
 
 func (s *FsWatchService) Unsubscribe(ch chan types.FsChangeEvent) {
 	s.mu.Lock()
+	root := s.subs[ch]
 	delete(s.subs, ch)
+	if s.roots[root] {
+		s.touchLocked(root)
+	}
 	s.mu.Unlock()
 }
 
 func (s *FsWatchService) Close() {
 	s.mu.Lock()
 	s.closed = true
+	for _, t := range s.release {
+		t.Stop()
+	}
 	s.mu.Unlock()
 	s.watcher.Close()
 }

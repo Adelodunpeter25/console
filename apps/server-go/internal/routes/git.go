@@ -21,6 +21,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// gitStatusDebounce is the minimum gap between status recomputations pushed
+// to a watch stream.
+const gitStatusDebounce = 1500 * time.Millisecond
+
 func gitFileEntryToProto(f types.GitFileEntry) *consolev1.GitFileEntry {
 	additions := uint32(f.Additions)
 	deletions := uint32(f.Deletions)
@@ -72,25 +76,41 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 			events := watch.Subscribe(repoPath)
 			defer watch.Unsubscribe(events)
 
-			sendStatus := func() {
+			// A send error means the client is gone; stop instead of running
+			// git for a dead stream until the next ping notices.
+			sendStatus := func() error {
 				summary, err := protoMarshal.Marshal(gitSummaryToProto(git.GetGitStatus(repoPath)))
 				if err != nil {
-					return
+					return nil
 				}
-				_ = sse.Send("gitStatus", string(summary))
+				return sse.Send("gitStatus", string(summary))
 			}
-			sendStatus()
+			if err := sendStatus(); err != nil {
+				return
+			}
 
-			debounce := time.NewTimer(400 * time.Millisecond)
+			// Leading-edge throttle: the first change schedules one refresh
+			// gitStatusDebounce later and further changes in that window fold
+			// into it. Builds and pushes emit events continuously, so a trailing
+			// debounce that resets on each one would never fire, and a short one
+			// would spawn git constantly.
+			debounce := time.NewTimer(gitStatusDebounce)
 			debounce.Stop()
+			pending := false
 			ticker := time.NewTicker(15 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-events:
-					debounce.Reset(400 * time.Millisecond)
+					if !pending {
+						pending = true
+						debounce.Reset(gitStatusDebounce)
+					}
 				case <-debounce.C:
-					sendStatus()
+					pending = false
+					if err := sendStatus(); err != nil {
+						return
+					}
 				case <-ticker.C:
 					if err := sse.Send("ping", ""); err != nil {
 						return

@@ -9,13 +9,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-type GitService struct{}
+type GitService struct {
+	mu       sync.Mutex
+	inflight map[string]*statusCall
+}
 
-func NewGitService() *GitService { return &GitService{} }
+// statusCall lets concurrent GetGitStatus calls for one repo share a single
+// computation: several watchers on the same checkout used to each spawn their
+// own git processes for identical results.
+type statusCall struct {
+	done   chan struct{}
+	result types.GitStatusSummary
+}
+
+func NewGitService() *GitService { return &GitService{inflight: make(map[string]*statusCall)} }
 
 // runGit runs a git command in dir and returns its stdout. On failure the
 // error carries git's stderr — without it a caller only sees "exit status
@@ -35,16 +47,37 @@ func runGit(dir string, args ...string) (string, error) {
 }
 
 // GetGitStatus returns branch + porcelain file entries with numstat deltas.
+// It runs two git processes (status and one combined numstat) instead of four,
+// with --no-optional-locks so polling never contends with the user's own git
+// commands for the index lock.
 func (s *GitService) GetGitStatus(repoPath string) types.GitStatusSummary {
-	branchOut, err := runGit(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	s.mu.Lock()
+	if call, ok := s.inflight[repoPath]; ok {
+		s.mu.Unlock()
+		<-call.done
+		return call.result
+	}
+	call := &statusCall{done: make(chan struct{})}
+	s.inflight[repoPath] = call
+	s.mu.Unlock()
+
+	call.result = s.computeGitStatus(repoPath)
+	s.mu.Lock()
+	delete(s.inflight, repoPath)
+	s.mu.Unlock()
+	close(call.done)
+	return call.result
+}
+
+func (s *GitService) computeGitStatus(repoPath string) types.GitStatusSummary {
+	statusOut, err := runGit(repoPath, "--no-optional-locks", "status", "--porcelain=v1", "--branch", "-u")
 	if err != nil {
 		// Not a git repository or git failed — clean empty summary.
 		return types.GitStatusSummary{Branch: "", Clean: true, Files: []types.GitFileEntry{}}
 	}
-	statusOut, _ := runGit(repoPath, "status", "--porcelain=v1", "-u")
+	branch, statusOut := splitStatusBranch(statusOut)
 	numstat := s.numstatMap(repoPath)
 
-	branch := strings.TrimSpace(branchOut)
 	if branch == "" {
 		branch = "main"
 	}
@@ -91,15 +124,38 @@ func (s *GitService) GetGitStatus(repoPath string) types.GitStatusSummary {
 	return types.GitStatusSummary{Branch: branch, Clean: len(files) == 0, Files: files}
 }
 
+// numstatMap returns per-file added/deleted line counts for everything that
+// differs from HEAD (staged and unstaged together). A repo with no commits has
+// no HEAD, so the map is simply empty there.
 func (s *GitService) numstatMap(repoPath string) map[string][2]int64 {
 	m := make(map[string][2]int64)
-	if out, err := runGit(repoPath, "diff", "--numstat"); err == nil {
-		parseNumstat(out, m)
-	}
-	if out, err := runGit(repoPath, "diff", "--cached", "--numstat"); err == nil {
+	if out, err := runGit(repoPath, "--no-optional-locks", "diff", "HEAD", "--numstat"); err == nil {
 		parseNumstat(out, m)
 	}
 	return m
+}
+
+// splitStatusBranch pulls the "## branch...upstream [ahead 1]" header line
+// off `status --branch` output and returns the branch name plus the file lines.
+func splitStatusBranch(out string) (string, string) {
+	header, rest, _ := strings.Cut(out, "\n")
+	if !strings.HasPrefix(header, "## ") {
+		return "", out
+	}
+	name := strings.TrimPrefix(header, "## ")
+	switch {
+	case strings.HasPrefix(name, "No commits yet on "):
+		name = strings.TrimPrefix(name, "No commits yet on ")
+	case strings.HasPrefix(name, "HEAD (no branch)"):
+		name = "HEAD"
+	}
+	if i := strings.Index(name, "..."); i >= 0 {
+		name = name[:i]
+	}
+	if i := strings.IndexByte(name, ' '); i >= 0 {
+		name = name[:i]
+	}
+	return strings.TrimSpace(name), rest
 }
 
 func parseNumstat(out string, m map[string][2]int64) {
