@@ -231,10 +231,12 @@ PLIST
 if [[ "$WITH_CEF" == true ]]; then
     echo "==> Assembling CEF framework and helpers..."
     CEF_DIST="${CEF_PATH:-$HOME/.local/share/cef}"
-    case "$(uname -m)" in
-        x86_64) CEF_ARCH="x86_64" ;;
-        arm64) CEF_ARCH="aarch64" ;;
-        *) echo "Error: unsupported architecture $(uname -m) for CEF" >&2; exit 1 ;;
+    # Key off the build target, not the host: CI cross-compiles x86_64 on
+    # Apple Silicon runners, where uname -m would pick the wrong framework.
+    case "${TARGET_TRIPLE:-$(uname -m)}" in
+        x86_64-apple-darwin|x86_64) CEF_ARCH="x86_64" ;;
+        aarch64-apple-darwin|arm64) CEF_ARCH="aarch64" ;;
+        *) echo "Error: unsupported architecture ${TARGET_TRIPLE:-$(uname -m)} for CEF" >&2; exit 1 ;;
     esac
     # Exactly one CEF version directory must match (unexpanded globs fail the
     # existence check below, which also keeps this safe under `set -u` on the
