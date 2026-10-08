@@ -76,14 +76,18 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 			events := watch.Subscribe(repoPath)
 			defer watch.Unsubscribe(events)
 
-			sendStatus := func() {
+			// A send error means the client is gone; stop instead of running
+			// git for a dead stream until the next ping notices.
+			sendStatus := func() error {
 				summary, err := protoMarshal.Marshal(gitSummaryToProto(git.GetGitStatus(repoPath)))
 				if err != nil {
-					return
+					return nil
 				}
-				_ = sse.Send("gitStatus", string(summary))
+				return sse.Send("gitStatus", string(summary))
 			}
-			sendStatus()
+			if err := sendStatus(); err != nil {
+				return
+			}
 
 			// Leading-edge throttle: the first change schedules one refresh
 			// gitStatusDebounce later and further changes in that window fold
@@ -104,7 +108,9 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 					}
 				case <-debounce.C:
 					pending = false
-					sendStatus()
+					if err := sendStatus(); err != nil {
+						return
+					}
 				case <-ticker.C:
 					if err := sse.Send("ping", ""); err != nil {
 						return

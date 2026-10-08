@@ -9,13 +9,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
-type GitService struct{}
+type GitService struct {
+	mu       sync.Mutex
+	inflight map[string]*statusCall
+}
 
-func NewGitService() *GitService { return &GitService{} }
+// statusCall lets concurrent GetGitStatus calls for one repo share a single
+// computation: several watchers on the same checkout used to each spawn their
+// own git processes for identical results.
+type statusCall struct {
+	done   chan struct{}
+	result types.GitStatusSummary
+}
+
+func NewGitService() *GitService { return &GitService{inflight: make(map[string]*statusCall)} }
 
 // runGit runs a git command in dir and returns its stdout. On failure the
 // error carries git's stderr — without it a caller only sees "exit status
@@ -39,6 +51,25 @@ func runGit(dir string, args ...string) (string, error) {
 // with --no-optional-locks so polling never contends with the user's own git
 // commands for the index lock.
 func (s *GitService) GetGitStatus(repoPath string) types.GitStatusSummary {
+	s.mu.Lock()
+	if call, ok := s.inflight[repoPath]; ok {
+		s.mu.Unlock()
+		<-call.done
+		return call.result
+	}
+	call := &statusCall{done: make(chan struct{})}
+	s.inflight[repoPath] = call
+	s.mu.Unlock()
+
+	call.result = s.computeGitStatus(repoPath)
+	s.mu.Lock()
+	delete(s.inflight, repoPath)
+	s.mu.Unlock()
+	close(call.done)
+	return call.result
+}
+
+func (s *GitService) computeGitStatus(repoPath string) types.GitStatusSummary {
 	statusOut, err := runGit(repoPath, "--no-optional-locks", "status", "--porcelain=v1", "--branch", "-u")
 	if err != nil {
 		// Not a git repository or git failed — clean empty summary.

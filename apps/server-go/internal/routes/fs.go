@@ -233,7 +233,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		var version uint64
 		if cacheable {
 			watch.Watch(dirPath)
-			version = watch.Version()
+			version = watch.Version(dirPath)
 			if body, hit := entriesCache.get(key, version); hit {
 				c.Set("Content-Type", "application/json")
 				return c.Send(body)
