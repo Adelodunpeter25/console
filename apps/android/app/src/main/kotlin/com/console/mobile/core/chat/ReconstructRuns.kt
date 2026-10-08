@@ -52,6 +52,45 @@ fun reconstructRuns(messages: List<AgentMessage>): List<RunActivityState> {
     return runs
 }
 
+/**
+ * Runs for a session whose latest prompt is still executing server-side.
+ *
+ * The UI pairs runs with user messages by position, so the live run must be
+ * the one belonging to the newest user message. Appending a fresh run after
+ * [reconstructRuns] (which already built one for that message) left it
+ * orphaned: every streamed tool call landed in a run no message rendered,
+ * which is why a run started elsewhere showed only the stop button.
+ *
+ * The reconstructed run for the latest prompt is reopened as Working, keeping
+ * the persisted activity and any live events already collected.
+ */
+fun withLiveRun(
+    messages: List<AgentMessage>,
+    runs: List<RunActivityState>,
+    nowMs: Long = System.currentTimeMillis(),
+): List<RunActivityState> {
+    val live = runs.lastOrNull()?.takeIf { it.status == RunStatus.Working }
+    val base = reconstructRuns(messages)
+    if (base.isEmpty()) {
+        return if (live != null) runs else runs + RunActivityState(
+            runId = newMessageId(),
+            startedAt = nowMs,
+            status = RunStatus.Working,
+        )
+    }
+    val last = base.last()
+    val known = last.events.mapTo(HashSet()) { it.id }
+    val extra = live?.events?.filterNot { it.id in known }.orEmpty()
+    val reopened = last.copy(
+        runId = live?.runId ?: last.runId,
+        startedAt = live?.startedAt ?: last.startedAt ?: nowMs,
+        elapsedMs = 0,
+        status = RunStatus.Working,
+        events = last.events + extra,
+    )
+    return base.dropLast(1) + reopened
+}
+
 private fun applyPending(run: RunActivityState, results: Map<String, ToolResult>): RunActivityState {
     if (results.isEmpty()) return run
     val updated = run.events.map { e ->
