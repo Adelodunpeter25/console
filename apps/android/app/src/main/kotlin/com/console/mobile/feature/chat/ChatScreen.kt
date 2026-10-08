@@ -89,6 +89,7 @@ fun ChatScreen(
     onBackToHome: () -> Unit,
     onOpenTab: (MobileTab) -> Unit,
     onOpenSubagentDetails: (String) -> Unit,
+    onAddProject: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
@@ -407,6 +408,7 @@ fun ChatScreen(
                     onChange = { AppContainer.chatRepository.setInput(sessionId, it) },
                     running = chat.running,
                     projectLocked = hasMessages,
+                    onAddProject = onAddProject,
                     onSend = {
                         keyboardController?.hide()
                         AppContainer.chatRepository.sendMessage(sessionId)

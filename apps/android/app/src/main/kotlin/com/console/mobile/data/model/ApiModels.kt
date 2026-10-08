@@ -22,6 +22,8 @@ data class CreateSessionDto(
 
 @Serializable
 data class UpdateSessionDto(
+    /** Send an explicit `projectId: null` — the server moves the chat to "No project". */
+    @kotlinx.serialization.Transient val clearProject: Boolean = false,
     val title: String? = null,
     val cwd: String? = null,
     val projectId: String? = null,

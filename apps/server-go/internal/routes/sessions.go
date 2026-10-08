@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,6 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // subagentToProto converts a service row to the canonical wire type.
@@ -238,6 +240,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 					// Explicit value (or null) passes through as-is;
 					// null/"scratch" become scratch in UpdateCwd.
 					projectID = parseNullableString(c.Body(), "projectId")
+					// Clearing to No project without a cwd (mobile): point at
+					// the session's sandboxed scratch dir.
+					if (projectID == nil || *projectID == "" || *projectID == "scratch") && req.Cwd == nil {
+						cwd = filepath.Join(utils.ConsoleStorageDir(), "scratch", id)
+					}
 				} else if cwd != "" {
 					// Key absent: infer the project from cwd.
 					// No match means no project.

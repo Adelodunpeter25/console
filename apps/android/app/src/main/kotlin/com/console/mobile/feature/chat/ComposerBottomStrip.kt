@@ -33,7 +33,7 @@ import kotlinx.coroutines.launch
  * itself never writes to the session.
  */
 @Composable
-fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
+fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean, onAddProject: () -> Unit) {
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -99,6 +99,14 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean) {
             onSelect = { proj ->
                 projectSheet = false
                 updateSession(UpdateSessionDto(cwd = proj.path))
+            },
+            onSelectNone = {
+                projectSheet = false
+                updateSession(UpdateSessionDto(clearProject = true))
+            },
+            onAddProject = {
+                projectSheet = false
+                onAddProject()
             },
         )
     }

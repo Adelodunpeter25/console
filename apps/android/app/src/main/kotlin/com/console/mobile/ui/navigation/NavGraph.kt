@@ -114,6 +114,7 @@ fun AppNavGraph() {
                         }
                     },
                     onOpenSubagentDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
+                    onAddProject = { navController.navigate(RouteAddProject) },
                 )
             }
             composable<RouteFiles> {

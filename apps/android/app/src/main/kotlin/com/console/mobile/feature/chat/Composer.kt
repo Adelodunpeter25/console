@@ -69,6 +69,7 @@ fun Composer(
     onChange: (String) -> Unit,
     running: Boolean,
     projectLocked: Boolean,
+    onAddProject: () -> Unit,
     topBanner: (@Composable () -> Unit)? = null,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -237,7 +238,7 @@ fun Composer(
                 null -> {}
             }
         }
-        ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked)
+        ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked, onAddProject = onAddProject)
     }
 }
 

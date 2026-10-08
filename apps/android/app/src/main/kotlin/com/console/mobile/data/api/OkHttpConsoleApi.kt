@@ -147,7 +147,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun updateSession(id: String, payload: UpdateSessionDto): SessionHeader {
-        val raw = http.patch("/api/sessions/${enc(id)}", http.encodeBody(UpdateSessionDto.serializer(), payload))
+        var body = http.encodeBody(UpdateSessionDto.serializer(), payload)
+        if (payload.clearProject) {
+            val obj = kotlinx.serialization.json.Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonObject
+            body = kotlinx.serialization.json.JsonObject(obj + ("projectId" to kotlinx.serialization.json.JsonNull)).toString()
+        }
+        val raw = http.patch("/api/sessions/${enc(id)}", body)
         val element = http.unwrap(raw, JsonElement.serializer(), "update session")
         return sessionAdapter.fromJson(element.toString())
             ?: throw ApiException("Failed to update session")

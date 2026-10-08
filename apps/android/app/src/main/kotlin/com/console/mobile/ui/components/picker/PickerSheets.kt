@@ -119,7 +119,15 @@ fun PickerPlaceholder(message: String? = null, spinner: Boolean = false) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProjectPickerSheet(projects: List<ProjectInfo>, selectedId: String?, locked: Boolean, onDismiss: () -> Unit, onSelect: (ProjectInfo) -> Unit) {
+fun ProjectPickerSheet(
+    projects: List<ProjectInfo>,
+    selectedId: String?,
+    locked: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (ProjectInfo) -> Unit,
+    onSelectNone: () -> Unit,
+    onAddProject: () -> Unit,
+) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
             PickerSheetTitle("Select Folder")
@@ -128,6 +136,15 @@ fun ProjectPickerSheet(projects: List<ProjectInfo>, selectedId: String?, locked:
             } else {
                 projects.forEach { p ->
                     PickerRow(title = p.name, subtitle = p.path, selected = p.id == selectedId, monoSubtitle = true) { onSelect(p) }
+                }
+                PickerRow(title = "No project", subtitle = "Work in a scratch folder", selected = selectedId == null) { onSelectNone() }
+                if (projects.isEmpty()) {
+                    com.console.mobile.ui.components.PillButton(
+                        text = "Add new project",
+                        onClick = onAddProject,
+                        fullWidth = true,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
         }
