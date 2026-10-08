@@ -91,21 +91,20 @@ fn message_text_with_mentions(
             }
             Some((start, end, pill_idx)) => {
                 if start > 0 {
-                    text.push_str(&remaining[..start]);
-                }
-                let (label, path) = &pills[pill_idx];
-                // Submitted prompts are trimmed before the bubble is created,
-                // so a mention at the start of a line loses the composer's
-                // invisible five-space reservation. Restore that reservation
-                // before painting the chip's left icon overhang.
-                let line_start = text.rfind('\n').map_or(0, |index| index + 1);
-                let line_prefix = &text[line_start..];
-                if line_prefix.chars().all(char::is_whitespace) {
-                    let padding = 5usize.saturating_sub(line_prefix.chars().count());
-                    for _ in 0..padding {
-                        text.push(' ');
+                    let prefix = &remaining[..start];
+                    if prefix.chars().all(char::is_whitespace) && text.is_empty() {
+                        // Mention at start of message: don't add leading whitespace
+                    } else if prefix.ends_with(|c: char| c.is_whitespace()) {
+                        let trimmed = prefix.trim_end_matches(' ');
+                        text.push_str(trimmed);
+                        if !text.is_empty() && !text.ends_with('\n') {
+                            text.push(' ');
+                        }
+                    } else {
+                        text.push_str(prefix);
                     }
                 }
+                let (label, path) = &pills[pill_idx];
                 let mention_start = text.len();
                 text.push_str(label);
                 mentions.push(InlineFileMention {
@@ -113,6 +112,12 @@ fn message_text_with_mentions(
                     path: path.clone(),
                 });
                 remaining = &remaining[end..];
+                if remaining.starts_with("  ") {
+                    remaining = remaining.trim_start_matches(' ');
+                    if !remaining.is_empty() {
+                        text.push(' ');
+                    }
+                }
             }
         }
     }
