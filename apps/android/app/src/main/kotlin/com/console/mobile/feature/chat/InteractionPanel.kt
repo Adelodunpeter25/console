@@ -56,6 +56,15 @@ import com.console.mobile.ui.components.common.new.InlineTextInput
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.delay
 
 /**
  * Port of components/chat/interactions/interaction-panel.tsx + question-panel.tsx.
@@ -183,58 +192,83 @@ private fun QuestionPanel(
     val hasOptions = request.options.isNotEmpty()
     val hasAnswer = custom.trim().isNotEmpty() || selected.isNotEmpty()
 
-    // The panel hosts a text field, so it has to ride above the IME or the keyboard
-    // covers the answer box and the Submit row. Navigation bars are excluded because
-    // the window already insets for them — same treatment as Composer.kt.
-    Column(modifier = Modifier.windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))) {
+    // --- Keyboard avoiding ---------------------------------------------------
+    // The panel rides above the IME (inset padding below), but riding up is not
+    // enough on its own: a tall panel (many options + the answer box) was simply
+    // clipped at the bottom, hiding the text field and the Submit row. So the
+    // body scrolls, the buttons stay pinned, the height is capped, and the field
+    // is scrolled into view when it gains focus.
+    val density = LocalDensity.current
+    val imeOpen = WindowInsets.ime.getBottom(density) > 0
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    // Leave the transcript some room while reading; with the keyboard up the panel
+    // may use everything left, since the keyboard already took its share.
+    val maxHeight = if (imeOpen) screenHeight else screenHeight * 0.62f
+    val bodyScroll = rememberScrollState()
+    val fieldRequester = remember { BringIntoViewRequester() }
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused, imeOpen) {
+        // The keyboard animates up after focus lands; wait for the insets to settle
+        // or the field is scrolled to where the bottom *was*.
+        if (fieldFocused && imeOpen) {
+            delay(120)
+            fieldRequester.bringIntoView()
+        }
+    }
+
+    Column(modifier = Modifier.heightIn(max = maxHeight).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))) {
         PanelCard {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(TablerIcons.Outline.HelpCircle, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(22.dp))
-                Text(request.question, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 12.dp))
-                if (total > 1) {
-                    Text("$index of $total", color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+            Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(bodyScroll)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(TablerIcons.Outline.HelpCircle, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(22.dp))
+                    Text(request.question, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                    if (total > 1) {
+                        Text("$index of $total", color = NewTheme.TextSecondary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily)
+                    }
                 }
-            }
-            if (hasOptions) {
-                Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    request.options.forEach { option ->
-                        val isSelected = selected.contains(option)
-                        val markShape = if (request.isMultiSelect) RoundedCornerShape(6.dp) else CircleShape
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius))
-                                .background(if (isSelected) NewTheme.Accent.copy(alpha = 0.16f) else NewTheme.Raised)
-                                .clickable {
-                                    selected = if (request.isMultiSelect) {
-                                        if (isSelected) selected - option else selected + option
-                                    } else {
-                                        setOf(option)
+                if (hasOptions) {
+                    Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        request.options.forEach { option ->
+                            val isSelected = selected.contains(option)
+                            val markShape = if (request.isMultiSelect) RoundedCornerShape(6.dp) else CircleShape
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius))
+                                    .background(if (isSelected) NewTheme.Accent.copy(alpha = 0.16f) else NewTheme.Raised)
+                                    .clickable {
+                                        selected = if (request.isMultiSelect) {
+                                            if (isSelected) selected - option else selected + option
+                                        } else {
+                                            setOf(option)
+                                        }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(20.dp).clip(markShape)
+                                        .background(if (isSelected) NewTheme.Accent else Color.Transparent)
+                                        .border(1.5.dp, if (isSelected) NewTheme.Accent else NewTheme.TextMuted, markShape),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        if (request.isMultiSelect) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.OnPrimary, modifier = Modifier.size(13.dp))
+                                        else Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(NewTheme.OnPrimary))
                                     }
                                 }
-                                .padding(horizontal = 14.dp, vertical = 13.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier.size(20.dp).clip(markShape)
-                                    .background(if (isSelected) NewTheme.Accent else Color.Transparent)
-                                    .border(1.5.dp, if (isSelected) NewTheme.Accent else NewTheme.TextMuted, markShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (isSelected) {
-                                    if (request.isMultiSelect) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.OnPrimary, modifier = Modifier.size(13.dp))
-                                    else Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(NewTheme.OnPrimary))
-                                }
+                                Text(option, color = if (isSelected) NewTheme.TextPrimary else NewTheme.TextSecondary, fontSize = 16.sp, fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.padding(start = 14.dp))
                             }
-                            Text(option, color = if (isSelected) NewTheme.TextPrimary else NewTheme.TextSecondary, fontSize = 16.sp, fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.padding(start = 14.dp))
                         }
                     }
                 }
+                InlineTextInput(
+                    value = custom,
+                    onValueChange = { custom = it },
+                    placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
+                    modifier = Modifier.padding(top = 12.dp)
+                        .bringIntoViewRequester(fieldRequester)
+                        .onFocusChanged { fieldFocused = it.isFocused },
+                )
             }
-            InlineTextInput(
-                value = custom,
-                onValueChange = { custom = it },
-                placeholder = if (hasOptions) "Or type your own answer…" else "Type your answer…",
-                modifier = Modifier.padding(top = 12.dp),
-            )
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (request.skippable) {
                     ActionButton(text = "Skip", onClick = onSkip, enabled = !submitting, surface = NewTheme.Raised, modifier = Modifier.weight(1f))

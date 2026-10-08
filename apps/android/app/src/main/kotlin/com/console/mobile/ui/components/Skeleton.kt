@@ -34,56 +34,6 @@ fun SkeletonBox(
 }
 
 @Composable
-fun SessionRowSkeleton(isLast: Boolean = false) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SkeletonBox(modifier = Modifier.fillMaxWidth(0.6f))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SkeletonBox(modifier = Modifier.fillMaxWidth(0.25f), height = 12.dp, radius = 4.dp)
-                SkeletonBox(modifier = Modifier.fillMaxWidth(0.2f), height = 12.dp, radius = 4.dp)
-            }
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SkeletonBox(width = 48.dp, height = 16.dp, radius = 24.dp)
-            SkeletonBox(width = 32.dp, height = 10.dp, radius = 4.dp)
-        }
-    }
-}
-
-@Composable
-fun ProjectSectionSkeleton(rows: Int = 3) {
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SkeletonBox(width = 96.dp, height = 14.dp, radius = 4.dp)
-            SkeletonBox(width = 24.dp, height = 24.dp, radius = 8.dp)
-        }
-        androidx.compose.material3.Surface(
-            color = ConsoleColors.Card,
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Column {
-                repeat(rows) { SkeletonBox(modifier = Modifier.padding(4.dp), height = 56.dp, radius = 12.dp) }
-            }
-        }
-    }
-}
-
-@Composable
-fun SessionListSkeleton() {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        ProjectSectionSkeleton(rows = 3)
-        ProjectSectionSkeleton(rows = 2)
-    }
-}
-
-@Composable
 fun ChatScreenSkeleton() {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
