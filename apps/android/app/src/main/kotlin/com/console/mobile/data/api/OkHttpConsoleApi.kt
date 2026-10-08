@@ -1,7 +1,6 @@
 package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
-import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
@@ -123,24 +122,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         if (limit != null) params["limit"] = limit.toString()
         if (before != null) params["before"] = before.toString()
         val raw = http.get("/api/sessions/${enc(id)}", params)
-        // Mixed envelope until messages migrate: Moshi header plus hand
-        // AgentMessage list plus scalars, decoded field by field.
+        // Envelope stays kotlinx; header and messages decode through the
+        // shared schema, scalars read field by field.
         val obj = http.unwrap(raw, JsonObject.serializer(), "load session")
         val header = obj["header"]?.let { sessionAdapter.fromJson(it.toString()) }
             ?: throw ApiException("Failed to load session")
-        // Transitional: canonical oneof rows convert to render models;
-        // pre-migration role-keyed rows fall back to the hand shape.
-        // Drop the fallback once dev stores turn over (Phase 5 cleanup).
+        // Rows are the canonical oneof shape; unparseable rows are skipped.
         val messages = obj["messages"]?.jsonArray?.mapNotNull { item ->
-            try {
-                messageMoshi.fromJson(item.toString())?.toUi()
-            } catch (_: Exception) {
-                null
-            } ?: try {
-                ConsoleJson.decodeFromString(AgentMessage.serializer(), item.toString())
-            } catch (_: Exception) {
-                null
-            }
+            runCatching { messageMoshi.fromJson(item.toString())?.toUi() }.getOrNull()
         } ?: emptyList()
         return SessionDetailResponse(
             header = header,
