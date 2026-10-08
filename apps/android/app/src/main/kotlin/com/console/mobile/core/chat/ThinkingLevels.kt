@@ -1,36 +1,35 @@
 package com.console.mobile.core.chat
 
-import com.console.mobile.data.model.ThinkingLevels
+/**
+ * Thinking-level helpers. Nothing here knows which levels exist: the backend
+ * sends each model's `supported_thinking_levels` and `default_thinking_level`,
+ * and these functions only work out where the user is within that list.
+ * (Desktop's click-to-cycle stepper does the same — see thinking_stepper.rs.)
+ */
 
-/** A thinking level as the user sees it. [value] is what goes on the wire. */
-data class ThinkingOption(val value: String, val label: String, val description: String)
+/** The level in force: the saved one if the model still offers it, else the model's default, else the first. */
+fun effectiveThinkingLevel(supported: List<String>, saved: String?, default: String?): String? {
+    if (supported.isEmpty()) return null
+    return saved?.takeIf { it in supported }
+        ?: default?.takeIf { it in supported }
+        ?: supported.first()
+}
 
-private val KNOWN = listOf(
-    ThinkingOption(ThinkingLevels.NONE, "Off", "No extended thinking"),
-    ThinkingOption(ThinkingLevels.MINIMAL, "Minimal", "Quickest answers"),
-    ThinkingOption(ThinkingLevels.LOW, "Fast", "Fastest"),
-    ThinkingOption(ThinkingLevels.MEDIUM, "Balanced", "Balanced"),
-    ThinkingOption(ThinkingLevels.HIGH, "Deep", "Thorough"),
-    ThinkingOption(ThinkingLevels.XHIGH, "Extra deep", "Very thorough"),
-    ThinkingOption(ThinkingLevels.MAX, "Max", "Maximum depth"),
-)
+/** The level after [current], wrapping around. Null when the model has no levels. */
+fun nextThinkingLevel(supported: List<String>, current: String?): String? {
+    if (supported.isEmpty()) return null
+    val index = supported.indexOf(current).coerceAtLeast(0)
+    return supported[(index + 1) % supported.size]
+}
 
 /**
- * Options for a model, in the server's declared order. Raw enum strings never
- * reach the UI: an unknown level is kept (so a new server value still works)
- * but gets a capitalised label rather than being dropped.
+ * Step label like desktop's "3/5". A leading "none" level counts as step 0 so
+ * "off" reads "0/N" rather than shifting every other level up by one.
  */
-fun thinkingOptions(supported: List<String>): List<ThinkingOption> =
-    supported.map { raw ->
-        KNOWN.firstOrNull { it.value == raw }
-            ?: ThinkingOption(raw, raw.replaceFirstChar { it.uppercase() }, "")
-    }
-
-/** Label for the chip; null hides the chip (model reports no levels). */
-fun thinkingChipLabel(supported: List<String>, current: String?, default: String?): String? {
-    if (supported.isEmpty()) return null
-    val level = current?.takeIf { it in supported } ?: default?.takeIf { it in supported } ?: supported.first()
-    return thinkingOptions(listOf(level)).first().label
+fun thinkingStepLabel(supported: List<String>, current: String?): String? {
+    val level = current?.takeIf { it in supported } ?: return null
+    val index = supported.indexOf(level)
+    return if (supported.first() == "none") "$index/${supported.size - 1}" else "${index + 1}/${supported.size}"
 }
 
 /** Whole-number percent (the server sends 0..100) for the ring; null until known. */

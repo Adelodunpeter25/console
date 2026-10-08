@@ -21,6 +21,7 @@ import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.picker.ApprovalModePickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import io.github.lyxnx.compose.ui.tablericons.outline.Shield
 import kotlinx.coroutines.launch
@@ -72,30 +73,19 @@ fun ComposerBottomStrip(sessionId: String) {
     }
 }
 
-/**
- * Model + thinking, fused into one chip. Hides the thinking half when the
- * model reports no levels, rather than showing a control that can't be used.
- */
+/** Model chip. Thinking is its own cycle chip beside it, as on desktop. */
 @Composable
-fun ModelThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modifier) {
+fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
-    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
     var sheet by remember { mutableStateOf(false) }
-
     val modelId = view?.sessionModelId?.ifBlank { null }
     val provider = view?.sessionProvider
-    // Make sure the committed model's list is in memory so its levels are known.
-    LaunchedEffect(provider) { provider?.let { AppContainer.providerRepository.loadModels(it) } }
-    val model = provider?.let { providerState.modelsByProvider[it] }?.firstOrNull { it.id == modelId }
-    val supported = model?.supported_thinking_levels.orEmpty()
-    val thinkingLabel = com.console.mobile.core.chat.thinkingChipLabel(supported, view?.thinkingLevel, model?.default_thinking_level)
 
-    val modelLabel = modelId?.let { com.console.mobile.core.util.formatModelName(it) } ?: "Default Model"
     PickerChip(
         icon = TablerIcons.Outline.Robot,
-        label = if (thinkingLabel != null) "$modelLabel · $thinkingLabel" else modelLabel,
+        label = modelId?.let { com.console.mobile.core.util.formatModelName(it) } ?: "Default Model",
         provider = provider,
         modifier = modifier,
     ) {
@@ -111,24 +101,46 @@ fun ModelThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = 
             onSelect = { newModel, newProvider ->
                 sheet = false
                 scope.launch {
-                    // The saved level is left alone here; a run only sends it when
-                    // the model still lists it (see ProviderRepository.validThinkingLevel).
                     AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(modelId = newModel, provider = newProvider))
                     AppContainer.sessionRepository.refreshHeader(sessionId)
                 }
             },
-            selectedThinking = view?.thinkingLevel,
-            thinkingLocked = running,
-            onSelectThinking = { newModel, newProvider, level ->
-                sheet = false
-                scope.launch {
-                    AppContainer.projectRepository.updateSession(
-                        sessionId,
-                        UpdateSessionDto(modelId = newModel, provider = newProvider, thinkingLevel = level),
-                    )
-                    AppContainer.sessionRepository.refreshHeader(sessionId)
-                }
-            },
         )
+    }
+}
+
+/**
+ * Tap-to-cycle thinking chip, mirroring desktop's stepper. The levels come from
+ * the model the backend reports; with none declared the chip is not shown.
+ * Disabled during a run, where a change would only apply to the next turn.
+ */
+@Composable
+fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modifier) {
+    val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    val view = sessionViews[sessionId]
+    val modelId = view?.sessionModelId?.ifBlank { null }
+    val provider = view?.sessionProvider
+
+    // The committed model's list has to be in memory for its levels to be known.
+    LaunchedEffect(provider) { provider?.let { AppContainer.providerRepository.loadModels(it) } }
+    val model = provider?.let { providerState.modelsByProvider[it] }?.firstOrNull { it.id == modelId }
+        ?: providerState.providers.firstOrNull { it.name == provider }?.models?.firstOrNull { it.id == modelId }
+    val supported = model?.supported_thinking_levels.orEmpty()
+    val current = com.console.mobile.core.chat.effectiveThinkingLevel(supported, view?.thinkingLevel, model?.default_thinking_level) ?: return
+    val step = com.console.mobile.core.chat.thinkingStepLabel(supported, current) ?: return
+
+    PickerChip(
+        icon = TablerIcons.Outline.Brain,
+        label = "$step ${current.replaceFirstChar { it.uppercase() }}",
+        enabled = !running,
+        modifier = modifier,
+    ) {
+        val next = com.console.mobile.core.chat.nextThinkingLevel(supported, current) ?: return@PickerChip
+        scope.launch {
+            AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = next))
+            AppContainer.sessionRepository.refreshHeader(sessionId)
+        }
     }
 }

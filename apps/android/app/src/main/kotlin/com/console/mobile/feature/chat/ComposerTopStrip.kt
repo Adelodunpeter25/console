@@ -51,6 +51,10 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     var loadingBranches by remember(cwd) { mutableStateOf(false) }
     // Reloads after a checkout too, so the chip shows the branch actually checked out.
     var reloadTick by remember(cwd) { mutableStateOf(0) }
+    // The branch being switched to (sheet stays open, showing progress) and the
+    // reason a switch was refused. Both live here so they survive recomposition.
+    var switchingTo by remember(cwd) { mutableStateOf<String?>(null) }
+    var switchError by remember(cwd) { mutableStateOf<String?>(null) }
     LaunchedEffect(cwd, reloadTick) {
         if (cwd.isNullOrEmpty()) { isRepo = false; branches = null; return@LaunchedEffect }
         loadingBranches = true
@@ -137,14 +141,31 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             lockedReason = reason,
             canStartWorktree = !hasMessages,
             worktreeBranch = worktreeBranch,
-            onDismiss = { branchSheet = false },
-            onSelect = { name ->
+            switchingTo = switchingTo,
+            error = switchError,
+            onDismiss = {
                 branchSheet = false
-                scope.launch {
-                    try {
-                        AppContainer.gitRepository.checkoutBranch(cwd, name)
-                        reloadTick++
-                    } catch (_: Exception) {
+                switchError = null
+            },
+            onSelect = { name ->
+                if (switchingTo == null && name != currentBranch) {
+                    switchError = null
+                    switchingTo = name
+                    scope.launch {
+                        try {
+                            AppContainer.gitRepository.checkoutBranch(cwd, name)
+                            // Reflect the switch immediately; the reload below confirms it.
+                            branches = branches?.map { it.copy(current = it.name == name) }
+                            reloadTick++
+                            branchSheet = false
+                        } catch (e: Exception) {
+                            // Keep the sheet open: git refuses a switch with conflicting
+                            // local changes, or to a branch checked out in another worktree,
+                            // and the user needs to see why instead of a silent close.
+                            switchError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn't switch branch."
+                        } finally {
+                            switchingTo = null
+                        }
                     }
                 }
             },

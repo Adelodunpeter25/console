@@ -3,8 +3,9 @@ package com.console.mobile
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.applyChatEvent
 import com.console.mobile.core.chat.contextPercent
-import com.console.mobile.core.chat.thinkingChipLabel
-import com.console.mobile.core.chat.thinkingOptions
+import com.console.mobile.core.chat.effectiveThinkingLevel
+import com.console.mobile.core.chat.nextThinkingLevel
+import com.console.mobile.core.chat.thinkingStepLabel
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.AgentSessionEvent
 import org.junit.Assert.assertEquals
@@ -13,30 +14,32 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ComposerRestructureTest {
+    // Levels are whatever the backend reports for the model — none are assumed.
     @Test
-    fun levelsReadAsWordsNeverRawEnums() {
-        val opts = thinkingOptions(listOf("low", "medium", "high", "xhigh", "max"))
-        assertEquals(listOf("Fast", "Balanced", "Deep", "Extra deep", "Max"), opts.map { it.label })
-        assertEquals("Maximum depth", opts.last().description)
-        // Wire values stay raw.
-        assertEquals(listOf("low", "medium", "high", "xhigh", "max"), opts.map { it.value })
+    fun effectiveLevelPrefersSavedThenBackendDefault() {
+        val supported = listOf("low", "medium", "high")
+        assertEquals("high", effectiveThinkingLevel(supported, "high", "low"))
+        // Saved level the model no longer offers: fall back to the backend's default.
+        assertEquals("medium", effectiveThinkingLevel(supported, "max", "medium"))
+        assertEquals("low", effectiveThinkingLevel(supported, null, null))
+        assertNull(effectiveThinkingLevel(emptyList(), "high", "medium"))
     }
 
     @Test
-    fun unknownLevelIsKeptWithReadableLabel() {
-        assertEquals("Turbo", thinkingOptions(listOf("turbo")).single().label)
+    fun cyclingWalksTheBackendListAndWraps() {
+        val supported = listOf("minimal", "low", "medium")
+        assertEquals("low", nextThinkingLevel(supported, "minimal"))
+        assertEquals("minimal", nextThinkingLevel(supported, "medium"))
+        assertEquals("low", nextThinkingLevel(supported, "not-in-list"))
+        assertNull(nextThinkingLevel(emptyList(), "low"))
     }
 
     @Test
-    fun chipHidesWhenModelReportsNoLevels() {
-        assertNull(thinkingChipLabel(emptyList(), "high", "medium"))
-    }
-
-    @Test
-    fun chipFallsBackToDefaultWhenSavedLevelUnsupported() {
-        // Saved "max" isn't offered by this model, so show its default.
-        assertEquals("Balanced", thinkingChipLabel(listOf("low", "medium"), "max", "medium"))
-        assertEquals("Fast", thinkingChipLabel(listOf("low", "medium"), "low", "medium"))
+    fun stepLabelCountsNoneAsZeroLikeDesktop() {
+        assertEquals("0/6", thinkingStepLabel(listOf("none", "minimal", "low", "medium", "high", "xhigh", "max"), "none"))
+        assertEquals("3/6", thinkingStepLabel(listOf("none", "minimal", "low", "medium", "high", "xhigh", "max"), "medium"))
+        assertEquals("1/3", thinkingStepLabel(listOf("low", "medium", "high"), "low"))
+        assertNull(thinkingStepLabel(listOf("low"), "high"))
     }
 
     @Test

@@ -364,8 +364,14 @@ private fun ComposerInput(
             }
             // Fills the gap so send/stop stays pinned right; the chip truncates
             // rather than pushing the button off a narrow screen.
-            Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterEnd) {
-                ModelThinkingChip(sessionId = sessionId, running = running)
+            Row(
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Model shrinks first (its label truncates); the thinking chip is short and stays whole.
+                ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
+                ThinkingChip(sessionId = sessionId, running = running)
             }
             if (running) {
                 // Same 35dp footprint as the send button so the composer doesn't
