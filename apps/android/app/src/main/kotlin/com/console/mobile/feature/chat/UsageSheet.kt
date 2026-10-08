@@ -1,7 +1,6 @@
 package com.console.mobile.feature.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,7 +31,6 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.util.UsageTone
 import com.console.mobile.core.util.contextTone
 import com.console.mobile.core.util.formatContextUsage
-import com.console.mobile.core.util.formatModelName
 import com.console.mobile.core.util.formatUsageValue
 import com.console.mobile.core.util.limitTone
 import com.console.mobile.core.util.usageResetLabel
@@ -46,7 +44,7 @@ private val GaugeBlue = Color(0xFF3B82F6)
 private val WarningAmber = Color(0xFFE0B36A)
 private val DangerRed = Color(0xFFE2726A)
 
-private fun UsageTone.color(): Color = when (this) {
+internal fun UsageTone.color(): Color = when (this) {
     UsageTone.Normal -> GaugeBlue
     UsageTone.Warning -> WarningAmber
     UsageTone.Danger -> DangerRed
@@ -61,7 +59,6 @@ private fun UsageTone.color(): Color = when (this) {
 fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val usage by AppContainer.usageStateHolder.state.collectAsStateWithLifecycle()
-    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
 
     val view = sessionViews[sessionId]
@@ -73,9 +70,6 @@ fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
     val snapshot = chatSessions[sessionId]?.context
     val report = provider?.let { usage.reports[it] }
     val loading = provider != null && usage.loadingByProvider[provider] == true
-    val providerLabel = providerState.providers.firstOrNull { it.name == provider }
-        ?.display_name?.takeIf { it.isNotBlank() } ?: provider
-    val modelLabel = view?.sessionModelId?.takeIf { it.isNotBlank() }?.let { formatModelName(it) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -88,37 +82,27 @@ fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
         ) {
             PickerSheetTitle("Usage")
 
-            // ---- Context tile
-            val tile = RoundedCornerShape(14.dp)
-            Column(
-                modifier = Modifier.fillMaxWidth().clip(tile).background(ConsoleColors.Card)
-                    .border(1.dp, ConsoleColors.Border, tile).padding(14.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Context", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    if (snapshot != null) {
-                        Text(
-                            formatContextUsage(snapshot.used_tokens.toLong(), snapshot.context_window.toLong()),
-                            color = ConsoleColors.TextSecondary, fontSize = 12.sp,
-                        )
-                    }
-                }
+            // ---- Context
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Context", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 if (snapshot != null) {
-                    val percent = snapshot.percent_used.coerceIn(0.0, 100.0)
-                    UsageBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(top = 10.dp))
-                } else {
-                    Text("Context usage unavailable.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        formatContextUsage(snapshot.used_tokens.toLong(), snapshot.context_window.toLong()),
+                        color = ConsoleColors.TextSecondary, fontSize = 12.sp,
+                    )
                 }
+            }
+            if (snapshot != null) {
+                val percent = snapshot.percent_used.coerceIn(0.0, 100.0)
+                UsageBar(percent, contextTone(percent, snapshot.threshold_ratio).color(), modifier = Modifier.padding(top = 10.dp))
+            } else {
+                Text("Context usage unavailable.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
 
             HorizontalDivider(color = ConsoleColors.BorderSubtle, modifier = Modifier.padding(vertical = 18.dp))
 
             // ---- Provider limits
             Text("Usage Limits", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            val subtitle = listOfNotNull(providerLabel, modelLabel).joinToString(" · ")
-            if (subtitle.isNotEmpty()) {
-                Text(subtitle, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-            }
             Column(modifier = Modifier.padding(top = 14.dp)) {
                 when {
                     loading && report == null -> Note("Loading usage data…")

@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.contextPercent
+import com.console.mobile.core.util.UsageTone
+import com.console.mobile.core.util.ringTone
 import com.console.mobile.ui.theme.ConsoleColors
 import console.v1.ContextSnapshot
 
@@ -32,13 +34,9 @@ import console.v1.ContextSnapshot
 @Composable
 fun ContextRing(snapshot: ContextSnapshot?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val pct = snapshot?.let { contextPercent(it.used_tokens, it.context_window, it.percent_used) }
-    val threshold = snapshot?.threshold_ratio?.takeIf { it > 0.0 }?.times(100) ?: 90.0
-    val tint = when {
-        pct == null -> ConsoleColors.TextMuted
-        pct >= threshold -> ConsoleColors.Destructive
-        pct >= threshold - 10 -> Color(0xFFFACC15)
-        else -> ConsoleColors.TextSecondary
-    }
+    // Blue like desktop's gauge, going amber at 80% and red at 95%.
+    val tone = if (pct == null) UsageTone.Normal else ringTone(pct.toDouble())
+    val tint = tone.color()
     Row(
         // Padding is inside the clickable so the touch target is larger than the 14dp glyph.
         modifier = modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Show usage", onClick = onClick)
@@ -55,7 +53,8 @@ fun ContextRing(snapshot: ContextSnapshot?, onClick: () -> Unit, modifier: Modif
             }
         }
         if (pct != null) {
-            Text("$pct%", color = tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 5.dp))
+            // The arc carries the blue; the number only takes on a colour once it matters.
+            Text("$pct%", color = if (tone == UsageTone.Normal) ConsoleColors.TextSecondary else tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 5.dp))
         }
     }
 }

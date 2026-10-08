@@ -7,6 +7,7 @@ import com.console.mobile.core.util.formatTokens
 import com.console.mobile.core.util.formatUsageAmount
 import com.console.mobile.core.util.formatUsageValue
 import com.console.mobile.core.util.limitTone
+import com.console.mobile.core.util.ringTone
 import com.console.mobile.core.util.usageResetLabel
 import com.console.mobile.core.util.usedPercent
 import console.v1.UsageAmount
@@ -102,5 +103,15 @@ class UsageSheetFormatTest {
     fun resetLabelPrefersTheServersText() {
         assertEquals("resets Mon", usageResetLabel(limit(resetLabel = "resets Mon")))
         assertNull(usageResetLabel(limit()))
+    }
+
+    @Test
+    fun ringMatchesDesktopThresholds() {
+        assertEquals(UsageTone.Normal, ringTone(0.0))
+        assertEquals(UsageTone.Normal, ringTone(79.9))
+        assertEquals(UsageTone.Warning, ringTone(80.0))
+        assertEquals(UsageTone.Warning, ringTone(94.9))
+        assertEquals(UsageTone.Danger, ringTone(95.0))
+        assertEquals(UsageTone.Danger, ringTone(100.0))
     }
 }

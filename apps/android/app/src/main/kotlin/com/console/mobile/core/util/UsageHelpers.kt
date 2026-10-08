@@ -131,6 +131,17 @@ fun contextTone(percent: Double, thresholdRatio: Double): UsageTone {
     }
 }
 
+/**
+ * Footer ring colour. Desktop's ring (usage_meter.rs) turns amber at 80% and red
+ * at 95%, a different rule from the context bar inside its panel; this follows
+ * the ring so the two glyphs match.
+ */
+fun ringTone(percent: Double): UsageTone = when {
+    percent >= 95.0 -> UsageTone.Danger
+    percent >= 80.0 -> UsageTone.Warning
+    else -> UsageTone.Normal
+}
+
 /** Reset text for a row: the server's own label when it sent one, else a countdown. */
 fun usageResetLabel(limit: UsageLimit, nowMs: Long = System.currentTimeMillis()): String? =
     limit.window?.reset_label?.takeIf { it.isNotBlank() } ?: formatResetsAt(limit.window?.resets_at, nowMs)
