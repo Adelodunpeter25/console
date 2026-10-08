@@ -40,8 +40,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Circle
 import io.github.lyxnx.compose.ui.tablericons.outline.Login
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.ProviderIcon
@@ -53,6 +51,8 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.SectionSkeleton
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
 
 /**
  * Port of screens/settings/account-settings.tsx. Named ProvidersSettings: this
@@ -102,7 +102,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                                 p.auth_method == "device-code" -> "Pair"
                                 else -> "Login"
                             }
-                            PillButton(
+                            ActionButton(
                                 text = label,
                                 onClick = {
                                     loggingIn = p.name
@@ -122,7 +122,11 @@ fun ProvidersSettings(onBack: () -> Unit) {
                                 enabled = loggingIn == null,
                                 loading = busy,
                                 icon = if (loggedIn) TablerIcons.Outline.Refresh else TablerIcons.Outline.Login,
-                                variant = if (loggedIn) PillButtonVariant.Outline else PillButtonVariant.Filled,
+                                // Signing in is the call to action; re-login is secondary. The row sits on a
+                                // card, so the secondary fill must be the raised one to show up.
+                                kind = if (loggedIn) ActionButtonKind.Secondary else ActionButtonKind.Primary,
+                                surface = NewTheme.Raised,
+                                compact = true,
                             )
                         }
                         if (i < providers.lastIndex) SectionDivider(startInset = 58.dp)

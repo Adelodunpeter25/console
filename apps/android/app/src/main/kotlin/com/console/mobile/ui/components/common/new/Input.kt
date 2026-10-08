@@ -104,7 +104,7 @@ fun InlineTextInput(
         placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
         maxLines = maxLines,
         textStyle = TextStyle(color = NewTheme.TextPrimary, fontSize = 16.sp),
-        shape = RoundedCornerShape(NewTheme.FieldRadius),
+        shape = RoundedCornerShape(NewTheme.InputRadius),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = NewTheme.Raised,
             unfocusedContainerColor = NewTheme.Raised,

@@ -42,7 +42,6 @@ import com.console.mobile.AppContainer
 import com.console.mobile.feature.settings.mcp.McpEditorForm
 import com.console.mobile.feature.settings.mcp.McpOAuthLauncher
 import com.console.mobile.feature.settings.mcp.McpServerCard
-import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
 import com.console.mobile.ui.components.common.new.ActionButton

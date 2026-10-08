@@ -224,8 +224,11 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                // The accent heading every grouped screen uses.
-                                Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                // The accent heading every grouped screen uses, with the folder glyph.
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
+                                    Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+                                }
                                 if (section.projectId != null && section.projectName != "Drafts") {
                                     IconButton(
                                         onClick = {
@@ -358,14 +361,17 @@ private fun SessionRow(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
+    // Top-aligned, with a fixed first line shared by the title and the status pill.
+    // Centring the right column on the whole row put "Ready" lower than the "Draft"
+    // pill beside the title; giving both the same line height puts their centres level.
     Row(
         modifier = Modifier.fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     session.title.ifBlank { "Untitled Session" },
                     color = NewTheme.TextPrimary,
@@ -387,13 +393,16 @@ private fun SessionRow(
                 }
             }
         }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            StatusPill(status)
+        Column(horizontalAlignment = Alignment.End) {
+            Box(modifier = Modifier.height(FirstLineHeight), contentAlignment = Alignment.CenterEnd) { StatusPill(status) }
             val ts = if (session.updated_at > 0) session.updated_at else session.created_at
-            Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 12.sp)
+            Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 1.dp))
         }
     }
 }
+
+/** Height of a row's first line: the title and the status pill are both centred in it. */
+private val FirstLineHeight = 28.dp
 
 private fun shortRelative(ts: Long): String {
     if (ts <= 0) return ""

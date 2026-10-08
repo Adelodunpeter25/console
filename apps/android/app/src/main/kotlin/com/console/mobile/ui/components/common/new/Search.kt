@@ -51,7 +51,7 @@ fun SearchInput(
 ) {
     Row(
         modifier = modifier.height(48.dp)
-            .clip(RoundedCornerShape(NewTheme.FieldRadius))
+            .clip(RoundedCornerShape(NewTheme.InputRadius))
             .background(NewTheme.Card)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,

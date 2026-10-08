@@ -47,8 +47,6 @@ import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHostPort
 import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers

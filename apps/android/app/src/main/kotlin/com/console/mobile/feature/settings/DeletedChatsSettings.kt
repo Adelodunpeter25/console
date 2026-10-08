@@ -43,8 +43,6 @@ import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
 import console.v1.SessionHeader
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers

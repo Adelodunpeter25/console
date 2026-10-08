@@ -53,6 +53,8 @@ object NewTheme {
     // ---- Shapes
     val CardRadius = 26.dp
     val FieldRadius = 16.dp
+    /** Standalone text inputs (search, answer box): one point tighter than [FieldRadius], which buttons and banners share. */
+    val InputRadius = 15.dp
     val ChipRadius = 12.dp
 }
 

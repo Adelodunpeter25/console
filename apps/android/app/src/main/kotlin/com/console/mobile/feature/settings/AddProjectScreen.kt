@@ -44,7 +44,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Eye
 import io.github.lyxnx.compose.ui.tablericons.outline.EyeOff
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
