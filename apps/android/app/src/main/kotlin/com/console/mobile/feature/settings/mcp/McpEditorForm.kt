@@ -31,7 +31,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.McpAuthConfig
 import com.console.mobile.data.model.McpSavePayload
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus as McpServerEntry
+import com.console.mobile.data.model.displayName
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.theme.ConsoleColors

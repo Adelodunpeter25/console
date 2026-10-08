@@ -16,33 +16,11 @@ data class McpToolInfo(
     val description: String = "",
 )
 
-/**
- * One row of `GET /api/mcp/servers` — the canonical `ServerConfig` plus
- * live status. All fields defaulted: the row must decode even when the
- * server omits sections.
- */
-@Serializable
-data class McpServerEntry(
-    val id: String,
-    val label: String = "",
-    val transport: String = "stdio",
-    val url: String? = null,
-    val command: String? = null,
-    val args: List<String> = emptyList(),
-    val env: Map<String, String> = emptyMap(),
-    val auth: McpAuthConfig? = null,
-    val enabled: Boolean = true,
-    val status: String = "disconnected",
-    val error: String? = null,
-    val authUrl: String? = null,
-    val toolCount: Int = 0,
-    val tools: List<McpToolInfo> = emptyList(),
-) {
-    val displayName: String get() = label.ifBlank { id }
-    val isConnected: Boolean get() = status == "connected"
-    val isWorking: Boolean get() = status == "connecting" || status == "needs_auth"
-    val needsAuth: Boolean get() = status == "needs_auth"
-}
+// McpServerEntry moved to the shared protobuf schema (console.v1.McpServerStatus
+// from proto/console/v1/mcp.proto): the list row is flat — config keys plus
+// live status — with transport/enabled always set and timestamps as strings.
+// McpSavePayload stays hand-shaped: the save request keeps the dual
+// name/auth_type spellings, enabled null-vs-absent, and the static token.
 
 /** Body for `POST /api/mcp/servers` and `PUT /api/mcp/servers/:id`. */
 @Serializable
@@ -68,3 +46,11 @@ data class McpOAuthCallbackPayload(
     val error: String? = null,
     val iss: String? = null,
 )
+
+// Render conveniences over the Wire row (console.v1.McpServerStatus): the
+// hand class carried these as members; extensions keep every call site
+// unchanged now that the row is schema'd.
+val console.v1.McpServerStatus.displayName: String get() = label.ifBlank { id }
+val console.v1.McpServerStatus.isConnected: Boolean get() = status == "connected"
+val console.v1.McpServerStatus.isWorking: Boolean get() = status == "connecting" || status == "needs_auth"
+val console.v1.McpServerStatus.needsAuth: Boolean get() = status == "needs_auth"

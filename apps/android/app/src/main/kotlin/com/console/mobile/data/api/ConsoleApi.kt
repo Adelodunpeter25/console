@@ -3,7 +3,6 @@ package com.console.mobile.data.api
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
-import com.console.mobile.data.model.AuthStatusShim
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import console.v1.FileSearchResult
@@ -83,8 +82,8 @@ interface ConsoleApi {
     suspend fun getProviderModels(providerId: String): List<Model>
     suspend fun getApprovalModes(): List<ApprovalModeOption>
     // auth
-    suspend fun getAuthStatus(): AuthStatusShim
-    suspend fun getLoginUrl(payload: OAuthLoginUrlDto): LoginUrlResult
+    suspend fun getAuthStatus(): console.v1.AuthStatusResponse
+    suspend fun getLoginUrl(payload: OAuthLoginUrlDto): console.v1.OAuthLoginUrlResponse
     suspend fun handleCallback(payload: OAuthCallbackDto)
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
@@ -116,5 +115,3 @@ interface ConsoleApi {
     suspend fun interactDevice(id: String, platform: String, action: console.v1.DeviceActionRequest)
 }
 
-@kotlinx.serialization.Serializable
-data class LoginUrlResult(val authUrl: String, val state: String, val redirectUri: String)

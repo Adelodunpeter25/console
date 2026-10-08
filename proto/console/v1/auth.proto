@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// OAuth login and credential status (/api/auth/*): provider login state,
+// the authorization-URL hand-off, the code-exchange result, the Google Cloud
+// project id, and GitHub git-credential state. All three sides.
+//
+// Notes:
+// - email is optional: a credential can carry a token with no account email,
+//   so absent and empty are genuinely different.
+// - project_id is optional for the same reason. See ProjectIDResponse for the
+//   null → absent trim on the project-id routes.
+// - the desktop's ProviderAuthStatus also carries project_id and
+//   configured_project_id. Those are read by the clients but never populated
+//   by /api/auth/status, so they stay optional and read as None.
+// - GitHubAuthStatus is a git credential, not a chat session: it exists so
+//   `git` can reach private repositories. username and scopes are cached from
+//   the moment the token was accepted, so reading status never touches the
+//   network. A revoked token still reports connected until re-login.
+// - credentials themselves (access/refresh tokens, PATs) never cross this
+//   boundary.
+// - OAuth provider ids stay plain strings: codex | claude | antigravity |
+//   devin, with devin reserved and answering 501. A proto enum would force a
+//   client-wide rename for no gain.
+message ProviderAuthStatus {
+  bool logged_in = 1;
+  optional string email = 2;
+  // Project id stored inside the provider credential.
+  optional string project_id = 3;
+  // Project id configured via the settings/project-id endpoint.
+  optional string configured_project_id = 4;
+}
+
+message GitHubAuthStatus {
+  bool connected = 1;
+  optional string username = 2;
+  repeated string scopes = 3;
+}
+
+// Response of GET /api/auth/status. Every provider is always present so a
+// client never has to distinguish "logged out" from "not reported".
+message AuthStatusResponse {
+  ProviderAuthStatus antigravity = 1;
+  ProviderAuthStatus codex = 2;
+  ProviderAuthStatus devin = 3;
+  ProviderAuthStatus claude = 4;
+  GitHubAuthStatus github = 5;
+}
+
+// Response of POST /api/auth/login/url. state is the single-use token the
+// callback must echo back.
+message OAuthLoginUrlResponse {
+  string provider = 1;
+  string auth_url = 2;
+  string state = 3;
+  string redirect_uri = 4;
+}
+
+// Response of POST /api/auth/login/callback.
+message OAuthCallbackResponse {
+  string provider = 1;
+  optional string user_email = 2;
+}
+
+// Response of GET /api/auth/project-id/:provider.
+//
+// project_id is optional. NOTE this is a deliberate wire trim: the route used
+// to answer `{"projectId": null}` when unset, and protojson omits an unset
+// optional entirely, so the key is now absent. Both clients read it as a
+// defaulting Option (`#[serde(default)]` / Wire null), so null and absent
+// already meant the same thing to them — no behavior change, just a smaller
+// payload.
+message ProjectIDResponse {
+  optional string project_id = 1;
+}
+
+// Response of POST /api/auth/project-id. provider is echoed so a client can
+// confirm which credential it just wrote.
+message SetProjectIDResponse {
+  string provider = 1;
+  optional string project_id = 2;
+}
+
+message GitHubLogoutResponse {
+  bool disconnected = 1;
+}
+
+// The GitHub token itself never crosses the boundary: validating a pasted PAT
+// answers with the cached username and scopes only.
+message GitHubValidateResponse {
+  bool connected = 1;
+  optional string username = 2;
+  repeated string scopes = 3;
+}

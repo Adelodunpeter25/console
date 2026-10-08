@@ -1,9 +1,18 @@
-//! Auth DTOs mirroring the server's `/api/auth/*` contracts and the shared
-//! `@console/types` definitions (`packages/types/src/api.ts`, `model.ts`).
+//! Auth DTOs mirroring the server's `/api/auth/*` contracts.
+//!
+//! The wire types are now shared protobuf (console_proto, see
+//! proto/console/v1/auth.proto) and re-exported below. `OAuthProviderId`
+//! stays a hand-written UI-side enum — it is a closed set of ids the UI
+//! switches on, not something the server enumerates.
 
 use serde::{Deserialize, Serialize};
 
-/// OAuth-capable providers with credential state (`OAuthProviderId`).
+pub use console_proto::{
+    AuthStatusResponse, GitHubAuthStatus, GitHubLogoutResponse, OAuthCallbackResponse,
+    OAuthLoginUrlResponse, ProjectIdResponse, ProviderAuthStatus,
+};
+
+/// OAuth-capable providers with credential state.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OAuthProviderId {
     Antigravity,
@@ -21,35 +30,26 @@ impl OAuthProviderId {
     }
 }
 
-/// Per-provider login status from `GET /api/auth/status`.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderAuthStatus {
-    pub logged_in: bool,
-    pub email: Option<String>,
-    /// Project id stored inside the provider credential.
-    #[serde(default)]
-    pub project_id: Option<String>,
-    /// Project id configured via the settings/project-id endpoint.
-    #[serde(default)]
-    pub configured_project_id: Option<String>,
-}
-
-/// Response of `GET /api/auth/status`.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct AuthStatusResponse {
-    pub antigravity: ProviderAuthStatus,
-    pub codex: ProviderAuthStatus,
-    pub claude: ProviderAuthStatus,
-}
-
-/// Response of `POST /api/auth/login/url`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OAuthLoginUrlResponse {
-    pub auth_url: String,
-    pub state: String,
-    /** Loopback URI the authorization code will land on. */
-    pub redirect_uri: String,
+/// The login status for one provider id, flattened out of the proto's
+/// `Option<ProviderAuthStatus>`.
+///
+/// Provider ids are an open vocabulary on the wire (the server also reports
+/// `devin`, and `openai`/`anthropic` are catalog aliases), so an unknown id
+/// is "not reported" rather than logged out — hence `None`.
+///
+/// The `ProviderAuthStatus` sub-messages are optional in proto because the
+/// wire may omit an empty one, but the server always sends every provider, so
+/// the common case is `Some`.
+pub fn auth_status_for<'a>(
+    status: &'a AuthStatusResponse,
+    provider: &str,
+) -> Option<&'a ProviderAuthStatus> {
+    match provider {
+        "antigravity" => status.antigravity.as_ref(),
+        // "openai" is the catalog's name for the codex provider.
+        "codex" | "openai" => status.codex.as_ref(),
+        // "anthropic" is the catalog's name for the claude provider.
+        "claude" | "anthropic" => status.claude.as_ref(),
+        _ => None,
+    }
 }

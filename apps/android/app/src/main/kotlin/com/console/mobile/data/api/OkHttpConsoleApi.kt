@@ -5,7 +5,8 @@ import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
-import com.console.mobile.data.model.AuthStatusShim
+import console.v1.AuthStatusResponse
+import console.v1.OAuthLoginUrlResponse
 import com.console.mobile.data.model.CreateSessionDto
 import console.v1.DeviceActionRequest
 import console.v1.DeviceDescriptor
@@ -21,7 +22,7 @@ import console.v1.FsTreeEntry
 import console.v1.WriteFileRequest
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus
 import console.v1.Model
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
@@ -92,6 +93,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
     private val fileSearchAdapter = wireMoshi.adapter(FileSearchResult::class.java)
     private val slashCommandAdapter = wireMoshi.adapter(SlashCommandInfo::class.java)
+    private val authStatusAdapter = wireMoshi.adapter(AuthStatusResponse::class.java)
+    private val loginUrlAdapter = wireMoshi.adapter(OAuthLoginUrlResponse::class.java)
     private val deviceAdapter = wireMoshi.adapter(DeviceDescriptor::class.java)
     private val deviceDiagnosticsAdapter = wireMoshi.adapter(DeviceDiagnostics::class.java)
     private val deviceActionAdapter = wireMoshi.adapter(DeviceActionRequest::class.java)
@@ -428,14 +431,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrap(raw, ListSerializer(ApprovalModeOption.serializer()), "list approval modes")
     }
 
-    override suspend fun getAuthStatus(): AuthStatusShim {
+    override suspend fun getAuthStatus(): AuthStatusResponse {
         val raw = http.get("/api/auth/status")
-        return http.unwrap(raw, AuthStatusShimSerializer, "get auth status")
+        return http.unwrapOrRawAdapter(raw, authStatusAdapter, "get auth status")
     }
 
-    override suspend fun getLoginUrl(payload: OAuthLoginUrlDto): LoginUrlResult {
+    override suspend fun getLoginUrl(payload: OAuthLoginUrlDto): OAuthLoginUrlResponse {
         val raw = http.post("/api/auth/login/url", http.encodeBody(OAuthLoginUrlDto.serializer(), payload))
-        return http.unwrap(raw, LoginUrlResultSerializer, "get login url")
+        return http.unwrapOrRawAdapter(raw, loginUrlAdapter, "get login url")
     }
 
     override suspend fun handleCallback(payload: OAuthCallbackDto) {
@@ -536,19 +539,31 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     // mcp
-    override suspend fun listMcpServers(): List<McpServerEntry> {
+    private val mcpServerAdapter = wireMoshi.adapter(McpServerEntry::class.java)
+
+    override suspend fun listMcpServers(): List<McpServerStatus> {
         val raw = http.get("/api/mcp/servers")
-        return http.unwrap(raw, ListSerializer(McpServerEntry.serializer()), "list MCP servers")
+        // Envelope stays kotlinx; the rows are Wire types.
+        val element = http.unwrap(raw, JsonElement.serializer(), "list MCP servers")
+        val array = element as? JsonArray ?: throw ApiException("Failed to list MCP servers")
+        return array.map { item ->
+            mcpServerAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to list MCP servers")
+        }
     }
 
-    override suspend fun saveMcpServer(payload: McpSavePayload): McpServerEntry {
+    override suspend fun saveMcpServer(payload: McpSavePayload): McpServerStatus {
         val raw = http.post("/api/mcp/servers", http.encodeBody(McpSavePayload.serializer(), payload))
-        return http.unwrap(raw, McpServerEntry.serializer(), "save MCP server")
+        val element = http.unwrap(raw, JsonElement.serializer(), "save MCP server")
+        return mcpServerAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to save MCP server")
     }
 
-    override suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerEntry {
+    override suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerStatus {
         val raw = http.put("/api/mcp/servers/${enc(id)}", http.encodeBody(McpSavePayload.serializer(), payload))
-        return http.unwrap(raw, McpServerEntry.serializer(), "update MCP server")
+        val element = http.unwrap(raw, JsonElement.serializer(), "update MCP server")
+        return mcpServerAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to update MCP server")
     }
 
     override suspend fun deleteMcpServer(id: String) {
@@ -620,8 +635,4 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         }
     }
 
-    companion object {
-        private val LoginUrlResultSerializer = LoginUrlResult.serializer()
-        private val AuthStatusShimSerializer = AuthStatusShim.serializer()
-    }
 }

@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use console_core::types::{AuthStatusResponse, ProviderCatalogEntry};
+use console_core::types::{AuthStatusResponse, ProviderCatalogEntry, auth_status_for};
 use gpui::{
     App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
@@ -55,14 +55,9 @@ impl RenderOnce for ProvidersPage {
                         .map(|provider| {
                             let provider_id = provider.name.clone();
                             let is_logging_in = logging_in.contains(&provider_id);
-                            let prov_status = auth_status.as_ref().and_then(|st| match provider_id
-                                .as_str()
-                            {
-                                "antigravity" => Some(&st.antigravity),
-                                "codex" | "openai" => Some(&st.codex),
-                                "claude" | "anthropic" => Some(&st.claude),
-                                _ => None,
-                            });
+                            let prov_status = auth_status
+                                .as_ref()
+                                .and_then(|st| auth_status_for(st, &provider_id));
 
                             let is_logged_in = prov_status.map_or(false, |s| s.logged_in);
                             let user_email = prov_status.and_then(|s| s.email.clone());

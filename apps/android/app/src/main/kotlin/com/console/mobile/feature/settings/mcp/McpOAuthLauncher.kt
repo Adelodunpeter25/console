@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus as McpServerEntry
+import com.console.mobile.data.model.isConnected
+import com.console.mobile.data.model.needsAuth
 import com.console.mobile.data.repo.McpRepository
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -58,7 +60,7 @@ object McpOAuthLauncher {
         try {
             val settled = mcpRepo.startConnect(serverId, redirectUri) ?: return false
             if (settled.isConnected) return true
-            val authUrl = settled.authUrl
+            val authUrl = settled.auth_url
             if (!settled.needsAuth || authUrl.isNullOrBlank()) return false
             val expectedState = stateOf(authUrl) ?: return false
             withContext(Dispatchers.Main) {

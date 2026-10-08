@@ -30,7 +30,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus as McpServerEntry
+import com.console.mobile.data.model.displayName
+import com.console.mobile.data.model.needsAuth
+import com.console.mobile.data.model.isConnected
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant

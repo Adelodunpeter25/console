@@ -2,6 +2,7 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use console_core::types::{
     AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageLimitExt, UsageReport,
+    auth_status_for,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -130,14 +131,9 @@ impl RenderOnce for UsagePage {
                         matches!(p.name.as_str(), "antigravity" | "codex" | "claude")
                     }).map(|provider| {
                         let provider_id = provider.name.clone();
-                        let prov_status = auth_status.as_ref().and_then(|st| {
-                            match provider_id.as_str() {
-                                "antigravity" => Some(&st.antigravity),
-                                "codex" | "openai" => Some(&st.codex),
-                                "claude" => Some(&st.claude),
-                                _ => None,
-                            }
-                        });
+                        let prov_status = auth_status
+                            .as_ref()
+                            .and_then(|st| auth_status_for(st, &provider_id));
 
                         let is_logged_in = prov_status.map_or(false, |s| s.logged_in);
                         let user_email = prov_status.and_then(|s| s.email.clone());

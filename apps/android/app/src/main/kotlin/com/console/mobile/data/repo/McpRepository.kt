@@ -3,7 +3,7 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus as McpServerEntry
 import com.console.mobile.data.store.McpStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

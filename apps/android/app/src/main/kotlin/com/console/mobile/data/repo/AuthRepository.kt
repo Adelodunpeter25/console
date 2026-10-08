@@ -1,8 +1,9 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
-import com.console.mobile.data.api.LoginUrlResult
-import com.console.mobile.data.model.AuthStatusShim
+import console.v1.AuthStatusResponse
+import console.v1.OAuthLoginUrlResponse
+import console.v1.ProviderAuthStatus
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
@@ -22,15 +23,21 @@ class AuthRepository(
         scope.launch {
             authState.patch { it.copy(loading = true, error = null) }
             try {
-                val shim = withContext(Dispatchers.IO) { api.getAuthStatus() }
+                val status = withContext(Dispatchers.IO) { api.getAuthStatus() }
+                // Provider sub-messages are optional in proto; the server always
+                // sends all four, but an absent one must still read as logged
+                // out rather than crash the settings page.
+                fun ProviderAuthStatus?.orLoggedOut(): ProviderAuthStatus =
+                    this ?: ProviderAuthStatus.Builder().setLoggedIn(false).build()
+                val antigravity = status.antigravity.orLoggedOut()
                 val statusMap = mapOf(
-                    "antigravity" to shim.antigravity,
-                    "codex" to shim.codex,
-                    "devin" to shim.devin,
-                    "claude" to shim.claude,
+                    "antigravity" to antigravity,
+                    "codex" to status.codex.orLoggedOut(),
+                    "devin" to status.devin.orLoggedOut(),
+                    "claude" to status.claude.orLoggedOut(),
                 )
                 val projectIds = mapOf(
-                    "antigravity" to shim.antigravity.configuredProjectId,
+                    "antigravity" to antigravity.configured_project_id,
                 )
                 authState.set(
                     AuthState(
@@ -49,7 +56,7 @@ class AuthRepository(
         }
     }
 
-    suspend fun getLoginUrl(provider: String): LoginUrlResult =
+    suspend fun getLoginUrl(provider: String): OAuthLoginUrlResponse =
         withContext(Dispatchers.IO) {
             api.getLoginUrl(OAuthLoginUrlDto(provider = provider))
         }

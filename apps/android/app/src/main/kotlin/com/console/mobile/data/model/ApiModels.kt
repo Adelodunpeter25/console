@@ -120,13 +120,7 @@ data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
 // proto/console/v1): timestamps now arrive as protojson strings, so the
 // hand-written data class with Long timestamps was deleted.
 
-@Serializable
-data class ProviderAuthStatus(
-    val loggedIn: Boolean,
-    val email: String? = null,
-    val projectId: String? = null,
-    val configuredProjectId: String? = null,
-)
+// ProviderAuthStatus moved to the shared protobuf schema (console.v1).
 
 // Header is the shared Wire type; messages stay hand-written until the
 // messages slice migrates. Deliberately NOT @Serializable: decoded manually

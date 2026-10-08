@@ -1,0 +1,1 @@
+{"provider":"codex","authUrl":"https://auth.openai.com/oauth/authorize?state=st_123","state":"st_123","redirectUri":"http://localhost:1455/auth/callback"}

@@ -24,6 +24,10 @@ name = "assist_json_test"
 path = "tests/assist_json_test.rs"
 
 [[test]]
+name = "auth_json_test"
+path = "tests/auth_json_test.rs"
+
+[[test]]
 name = "device_json_test"
 path = "tests/device_json_test.rs"
 
