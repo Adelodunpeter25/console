@@ -2,8 +2,8 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ProviderCatalogEntry
+import console.v1.Model
+import console.v1.ProviderCatalogEntry
 import com.console.mobile.data.model.favoriteKey
 import com.console.mobile.data.model.toRefMap
 import console.v1.ModelFavorite
@@ -128,6 +128,6 @@ class ProviderRepository(
             ?: providerState.state.value.providers.firstOrNull { it.name == providerId }?.models
             ?: return true
         val model = models.firstOrNull { it.id == modelId } ?: return true
-        return model.supportsImages
+        return model.supports_images
     }
 }

@@ -37,7 +37,6 @@ import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
-import console.v1.Model
 import console.v1.ProviderCatalogEntry
 import console.v1.ProviderModelsResponse
 import com.console.mobile.data.model.RunPromptDto
@@ -626,6 +625,3 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         private val AuthStatusShimSerializer = AuthStatusShim.serializer()
     }
 }
-
-@kotlinx.serialization.Serializable
-

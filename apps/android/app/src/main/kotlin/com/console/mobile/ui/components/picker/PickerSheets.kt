@@ -46,7 +46,7 @@ import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.Model
+import console.v1.Model
 import console.v1.ProjectInfo
 import com.console.mobile.data.model.favoriteKey
 import com.console.mobile.ui.components.ConsoleSearchField
@@ -183,7 +183,7 @@ fun ModelPickerSheet(
         val modelId = key.substring(sep + 1)
         val model = modelsByProvider[provider]?.firstOrNull { it.id == modelId } ?: return@mapNotNull null
         val entry = providerState.providers.firstOrNull { it.name == provider }
-        FavoriteEntry(provider, model, entry?.displayName?.ifBlank { provider } ?: provider)
+        FavoriteEntry(provider, model, entry?.display_name?.ifBlank { provider } ?: provider)
     }
 
     fun toggleFavorite(providerId: String, modelId: String) {
@@ -224,7 +224,7 @@ fun ModelPickerSheet(
                                 }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
-                            Text(p.displayName.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(p.display_name.ifBlank { p.name }, color = if (sel) ConsoleColors.TextPrimary else ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -270,7 +270,7 @@ fun ModelPickerSheet(
                                 title = formatModelName(entry.model.id),
                                 // Provider is not shown as a tab here, so it
                                 // belongs on the row (desktop parity).
-                                subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.contextWindow)} context",
+                                subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
                                 selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
                                 trailing = { starFor(entry.provider, entry.model.id) },
                             ) { onSelect(entry.model.id, entry.provider) }
@@ -295,7 +295,7 @@ fun ModelPickerSheet(
                                     // The formatted name is already the row title, so
                                     // the id under it repeated itself — the context
                                     // window is the useful second line (desktop parity).
-                                    subtitle = "${formatContextWindow(m.contextWindow)} context",
+                                    subtitle = "${formatContextWindow(m.context_window)} context",
                                     selected = m.id == selectedModel,
                                     trailing = { starFor(providerId, m.id) },
                                 ) { onSelect(m.id, activeProvider) }

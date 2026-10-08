@@ -23,7 +23,6 @@ import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProjectInfo
 import console.v1.QueuedPrompt
-import console.v1.Model
 import console.v1.ProviderCatalogEntry
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse

@@ -1,8 +1,8 @@
 package com.console.mobile.data.store
 
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.Model
-import com.console.mobile.data.model.ProviderCatalogEntry
+import console.v1.Model
+import console.v1.ProviderCatalogEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

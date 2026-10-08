@@ -78,7 +78,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
             } else {
                 val cardShape = RoundedCornerShape(16.dp)
                 Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    val providers = providerState.providers.filter { it.authMethod != "none" }
+                    val providers = providerState.providers.filter { it.auth_method != "none" }
                     if (providers.isEmpty()) {
                         Text("No providers available.", color = ConsoleColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(vertical = 16.dp))
                     }
@@ -91,13 +91,13 @@ fun ProvidersSettings(onBack: () -> Unit) {
                                 if (loggedIn) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
                                 else Icon(TablerIcons.Outline.Circle, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
                                 Column(modifier = Modifier.weight(1f).padding(start = 10.dp).padding(end = 12.dp)) {
-                                    Text(p.displayName.ifBlank { p.name }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(p.display_name.ifBlank { p.name }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                     Text(if (loggedIn) (status.email ?: "Connected") else "Not connected", color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 val label = when {
                                     busy -> "Wait"
                                     loggedIn -> "Re-login"
-                                    p.authMethod == "device-code" -> "Pair"
+                                    p.auth_method == "device-code" -> "Pair"
                                     else -> "Login"
                                 }
                                 PillButton(
