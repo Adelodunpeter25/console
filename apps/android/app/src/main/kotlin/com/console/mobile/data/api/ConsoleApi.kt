@@ -15,7 +15,7 @@ import console.v1.GitDiffResponse
 import console.v1.GitStatusSummary
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
-import com.console.mobile.data.model.McpServerEntry
+import console.v1.McpServerStatus
 import console.v1.Model
 import console.v1.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
@@ -93,9 +93,9 @@ interface ConsoleApi {
     suspend fun getProviderUsage(providerId: String): UsageReport?
     suspend fun getAllUsage(): Map<String, UsageReport?>
     // mcp
-    suspend fun listMcpServers(): List<McpServerEntry>
-    suspend fun saveMcpServer(payload: McpSavePayload): McpServerEntry
-    suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerEntry
+    suspend fun listMcpServers(): List<McpServerStatus>
+    suspend fun saveMcpServer(payload: McpSavePayload): McpServerStatus
+    suspend fun updateMcpServer(id: String, payload: McpSavePayload): McpServerStatus
     suspend fun deleteMcpServer(id: String)
     suspend fun connectMcpServer(id: String, redirectUri: String?)
     suspend fun disconnectMcpServer(id: String)

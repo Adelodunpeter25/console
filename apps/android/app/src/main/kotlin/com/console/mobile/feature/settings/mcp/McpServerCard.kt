@@ -88,7 +88,7 @@ internal fun McpServerCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            McpBadge(text = server.transport, tint = ConsoleColors.TextSecondary)
+            McpBadge(text = server.transport.orEmpty(), tint = ConsoleColors.TextSecondary)
             McpBadge(text = mcpStatusLabel(server), tint = statusColor)
         }
         if (target.isNotBlank()) {
@@ -122,8 +122,8 @@ internal fun McpServerCard(
                 ) {
                     server.tools.forEach { tool ->
                         Text(tool.name, color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (tool.description.isNotBlank()) {
-                            Text(tool.description, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp))
+                        tool.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                            Text(desc, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp))
                         }
                     }
                 }

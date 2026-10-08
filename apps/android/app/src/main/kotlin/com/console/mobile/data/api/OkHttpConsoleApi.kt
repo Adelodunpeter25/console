@@ -539,7 +539,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     // mcp
-    private val mcpServerAdapter = wireMoshi.adapter(McpServerEntry::class.java)
+    private val mcpServerAdapter = wireMoshi.adapter(McpServerStatus::class.java)
 
     override suspend fun listMcpServers(): List<McpServerStatus> {
         val raw = http.get("/api/mcp/servers")
