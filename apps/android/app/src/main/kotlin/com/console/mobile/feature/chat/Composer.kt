@@ -263,7 +263,7 @@ private fun ComposerInput(
     val bubbleShape = RoundedCornerShape(20.dp)
     // Three lines tall from the start so the bubble doesn't grow as you type.
     // Derived from the text's own line height so it tracks the system font size.
-    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 3).toDp() }
+    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 3).toDp() - 2.dp }
     Column(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(ConsoleColors.Card)
