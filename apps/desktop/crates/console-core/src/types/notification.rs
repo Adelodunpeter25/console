@@ -1,21 +1,8 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct NotificationEvent {
-    #[serde(default)]
-    pub r#type: String,
-    #[serde(default)]
-    pub kind: String,
-    #[serde(rename = "sessionId", default)]
-    pub session_id: String,
-    #[serde(default)]
-    pub title: String,
-    /// Optional second line (session title). Empty = single-line banner.
-    #[serde(default)]
-    pub subtitle: String,
-    #[serde(default)]
-    pub body: String,
-}
+/// Canonical wire type from the shared protobuf schema
+/// (proto/console/v1/notification.proto). `subtitle` omits when empty, as
+/// the old omitempty did: an absent key means blank, i.e. a single-line
+/// banner.
+pub use console_proto::NotificationEvent;
 
 /// Grouping key so session banners stack under one group in Notification Center.
 pub const NOTIFICATION_THREAD_ID: &str = "console-sessions";

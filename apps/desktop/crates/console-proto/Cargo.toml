@@ -84,6 +84,10 @@ name = "event_subagents_test"
 path = "tests/event_subagents_test.rs"
 
 [[test]]
+name = "notification_test"
+path = "tests/notification_test.rs"
+
+[[test]]
 name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 
