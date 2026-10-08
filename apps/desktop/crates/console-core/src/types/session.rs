@@ -58,18 +58,15 @@ fn deserialize_messages<'de, D>(deserializer: D) -> Result<Vec<AgentMessage>, D:
 where
     D: serde::Deserializer<'de>,
 {
-    // Transitional: pre-migration rows still carry the role-keyed shape.
-    // Each element tries the canonical shape first, then the legacy hand
-    // shape; unparseable rows are skipped. Drop the fallback once dev
-    // stores turn over (Phase 5 cleanup).
+    // Rows are the canonical oneof shape; unparseable rows are skipped,
+    // matching the old untagged leniency for forward growth.
     let raw: Vec<serde_json::Value> = serde::Deserialize::deserialize(deserializer)?;
     Ok(raw
         .into_iter()
         .filter_map(|value| {
-            serde_json::from_value::<console_proto::AgentMessage>(value.clone())
+            serde_json::from_value::<console_proto::AgentMessage>(value)
                 .ok()
                 .and_then(AgentMessage::from_proto)
-                .or_else(|| serde_json::from_value(value).ok())
         })
         .collect())
 }
