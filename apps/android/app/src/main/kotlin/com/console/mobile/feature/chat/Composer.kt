@@ -261,9 +261,10 @@ private fun ComposerInput(
     // A constant rounded rect: the old pill-to-rect morph keyed off the visual
     // line count and made the bubble jump shape while typing.
     val bubbleShape = RoundedCornerShape(20.dp)
-    // Three lines tall from the start so the bubble doesn't grow as you type.
+    // Two lines of text from the start (three lines with the button row), so the
+    // bubble doesn't grow as you type.
     // Derived from the text's own line height so it tracks the system font size.
-    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 3).toDp() - 2.dp }
+    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 2).toDp() }
     Column(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(ConsoleColors.Card)
