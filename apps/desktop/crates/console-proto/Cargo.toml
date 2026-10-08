@@ -114,3 +114,7 @@ path = "tests/git_json_test.rs"
 [[test]]
 name = "catalog_test"
 path = "tests/catalog_test.rs"
+
+[[test]]
+name = "mcp_test"
+path = "tests/mcp_test.rs"

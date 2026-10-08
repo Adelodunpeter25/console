@@ -25,6 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/event.proto"),
         proto_root.join("console/v1/notification.proto"),
         proto_root.join("console/v1/catalog.proto"),
+        proto_root.join("console/v1/mcp.proto"),
         proto_root.join("console/v1/settings.proto"),
         proto_root.join("console/v1/terminal.proto"),
         proto_root.join("console/v1/usage.proto"),
