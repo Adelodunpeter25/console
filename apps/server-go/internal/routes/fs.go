@@ -245,11 +245,8 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
-		data, err := marshalProtoList(fsEntriesToProto(entries))
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
-		}
-		body := append(append([]byte(`{"success":true,"data":`), data...), '}')
+		// Flat list, no nested children: clients rebuild the tree from paths.
+		body := EncodeFsEntriesResponse(entries)
 		if cacheable {
 			// version was read before listing, so a change during the walk
 			// leaves this entry already stale and it is rebuilt next time.
