@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// MCP servers (unscoped domains pass). Config CRUD, connection control, and
+// the server list/detail rows. Secrets never cross the wire back: the static
+// token lives in the credential file and save REQUEST bodies stay
+// hand-parsed (the desktop's `name`/`auth_type` spellings, `enabled`
+// null-vs-absent, and the token field).
+//
+// Shape notes:
+// - The list row is flat: the old Go type embedded ServerConfig, so every
+//   config key sits alongside the live status keys. Proto has no embedding,
+//   so McpServerStatus repeats the config fields; McpServerConfig (used for
+//   the detail payload and save responses) holds them once.
+// - transport and enabled are optional but always set: the old shape never
+//   omitted them, and the desktop requires transport on decode.
+// - created_at/updated_at encode as protojson strings. Neither client reads
+//   them (or tier_overrides); they ride along for schema completeness.
+// - McpTool keeps name + description only. inputSchema and readOnly are
+//   dropped — neither client reads them.
+// - Transport, auth type, and connection status stay plain strings; the
+//   client-side enums convert at the boundary.
+message McpAuth {
+  string type = 1;
+  optional string token_ref = 2;
+}
+
+message McpTool {
+  string name = 1;
+  optional string description = 2;
+}
+
+message McpServerConfig {
+  string id = 1;
+  string label = 2;
+  optional string transport = 3;
+  optional string url = 4;
+  optional string command = 5;
+  repeated string args = 6;
+  map<string, string> env = 7;
+  McpAuth auth = 8;
+  map<string, string> tier_overrides = 9;
+  optional bool enabled = 10;
+  int64 created_at = 11;
+  int64 updated_at = 12;
+}
+
+message McpServerStatus {
+  string id = 1;
+  string label = 2;
+  optional string transport = 3;
+  optional string url = 4;
+  optional string command = 5;
+  repeated string args = 6;
+  map<string, string> env = 7;
+  McpAuth auth = 8;
+  map<string, string> tier_overrides = 9;
+  optional bool enabled = 10;
+  int64 created_at = 11;
+  int64 updated_at = 12;
+  string status = 13;
+  optional string error = 14;
+  optional string auth_url = 15;
+  int32 tool_count = 16;
+  repeated McpTool tools = 17;
+}
+
+message McpServerDetail {
+  McpServerConfig config = 1;
+  repeated McpTool tools = 2;
+}

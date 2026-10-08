@@ -1,0 +1,1 @@
+{"config":{"id":"atlassian","label":"Atlassian","transport":"http","url":"https://mcp.example","env":{"REGION":"eu"},"auth":{"type":"static","tokenRef":"atlassian"},"enabled":true,"createdAt":"1700000000000","updatedAt":"1700000000001"},"tools":[{"name":"t1","description":"d1"}]}

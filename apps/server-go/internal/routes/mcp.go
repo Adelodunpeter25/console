@@ -2,14 +2,85 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
+
+// mcpAuthToProto converts the auth object. The token ref is server-side
+// state and never round-trips, but the ref itself is harmless metadata.
+func mcpAuthToProto(a *mcp.AuthConfig) *consolev1.McpAuth {
+	if a == nil {
+		return nil
+	}
+	out := &consolev1.McpAuth{Type: a.Type}
+	if a.TokenRef != "" {
+		out.TokenRef = &a.TokenRef
+	}
+	return out
+}
+
+func mcpToolToProto(t mcp.RemoteTool) *consolev1.McpTool {
+	out := &consolev1.McpTool{Name: t.Name}
+	if t.Description != "" {
+		out.Description = &t.Description
+	}
+	return out
+}
+
+// mcpConfigToProto converts the stored config. transport and enabled are
+// always set: the old shape never omitted them, and the desktop requires
+// transport on decode.
+func mcpConfigToProto(cfg mcp.ServerConfig) *consolev1.McpServerConfig {
+	transport, enabled := cfg.Transport, cfg.Enabled
+	return &consolev1.McpServerConfig{
+		Id: cfg.ID, Label: cfg.Label, Transport: &transport,
+		Url: strOrNil(cfg.URL), Command: strOrNil(cfg.Command),
+		Args: append([]string(nil), cfg.Args...),
+		Env:  cfg.Env, Auth: mcpAuthToProto(cfg.Auth),
+		TierOverrides: cfg.TierOverrides, Enabled: &enabled,
+		CreatedAt: cfg.CreatedAt, UpdatedAt: cfg.UpdatedAt,
+	}
+}
+
+// mcpStatusToProto converts one list row. The row is flat — the old Go type
+// embedded ServerConfig — so the config keys repeat here; proto has no
+// embedding.
+func mcpStatusToProto(st mcp.ServerStatus) *consolev1.McpServerStatus {
+	transport, enabled := st.Transport, st.Enabled
+	out := &consolev1.McpServerStatus{
+		Id: st.ID, Label: st.Label, Transport: &transport,
+		Url: strOrNil(st.URL), Command: strOrNil(st.Command),
+		Args: append([]string(nil), st.Args...),
+		Env:  st.Env, Auth: mcpAuthToProto(st.Auth),
+		TierOverrides: st.TierOverrides, Enabled: &enabled,
+		CreatedAt: st.CreatedAt, UpdatedAt: st.UpdatedAt,
+		Status: st.Status, ToolCount: int32(st.ToolCount),
+	}
+	if st.Error != "" {
+		out.Error = &st.Error
+	}
+	if st.AuthURL != "" {
+		out.AuthUrl = &st.AuthURL
+	}
+	for _, t := range st.Tools {
+		out.Tools = append(out.Tools, mcpToolToProto(t))
+	}
+	return out
+}
+
+func strOrNil(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
 
 func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 	ok := func(c *fiber.Ctx, data any, status ...int) error {
@@ -26,7 +97,15 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 		if err != nil {
 			return fail400(c, err)
 		}
-		return ok(c, list)
+		rows := make([]*consolev1.McpServerStatus, 0, len(list))
+		for _, st := range list {
+			rows = append(rows, mcpStatusToProto(st))
+		}
+		data, err := marshalProtoList(rows)
+		if err != nil {
+			return fail400(c, err)
+		}
+		return ok(c, json.RawMessage(data))
 	})
 
 	h.Get("/servers/:id", func(c *fiber.Ctx) error {
@@ -37,7 +116,20 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 		if !found {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "MCP server not found."})
 		}
-		return ok(c, fiber.Map{"config": cfg, "tools": m.Tools(cfg.ID)})
+		tools := m.Tools(cfg.ID)
+		items := make([]*consolev1.McpTool, 0, len(tools))
+		for _, t := range tools {
+			items = append(items, mcpToolToProto(t))
+		}
+		configRaw, err := protoMarshal.Marshal(mcpConfigToProto(cfg))
+		if err != nil {
+			return fail400(c, err)
+		}
+		toolsRaw, err := marshalProtoList(items)
+		if err != nil {
+			return fail400(c, err)
+		}
+		return ok(c, fiber.Map{"config": json.RawMessage(configRaw), "tools": toolsRaw})
 	})
 
 	// Body: ServerConfig plus an optional "token" (static auth only), which
@@ -99,7 +191,11 @@ func registerMCPRoutes(app *fiber.App, m *mcp.Manager) {
 		}
 		// Config changed: drop any live session so it reconnects with the new one.
 		m.Disconnect(saved.ID)
-		return ok(c, saved)
+		raw, err := protoMarshal.Marshal(mcpStatusToProto(mcp.ServerStatus{ServerConfig: saved}))
+		if err != nil {
+			return fail400(c, err)
+		}
+		return ok(c, json.RawMessage(raw))
 	}
 	h.Post("/servers", func(c *fiber.Ctx) error { return save(c) })
 	h.Put("/servers/:id", save)
