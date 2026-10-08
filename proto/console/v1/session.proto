@@ -145,3 +145,35 @@ message QueuedPrompt {
   optional string thinking_level = 10;
   string created_at = 11;
 }
+
+// Subagent lifecycle EVENT frames (Phase 4, fifth slice). Fields are
+// flattened under the frame's type tag, matching the old wire (no nested
+// payload object). The GET rows above reuse the nested schema; these mirror
+// the frame shape. Counts narrow to int32 and stay JSON numbers; args cross
+// as raw JSON bytes like tool call arguments.
+message SubagentStartEvent {
+  string subagent_id = 1;
+  optional string parent_tool_call_id = 2;
+  string name = 3;
+  string role = 4;
+  string prompt = 5;
+  int32 max_turns = 6;
+}
+
+message SubagentActivityEvent {
+  string subagent_id = 1;
+  int32 turn_index = 2;
+  optional string tool_call_id = 3;
+  optional string tool_name = 4;
+  bytes args = 5;
+  string status = 6;
+  optional string error = 7;
+}
+
+message SubagentEndEvent {
+  string subagent_id = 1;
+  string status = 2;
+  optional string summary = 3;
+  optional string error = 4;
+  int32 total_turns = 5;
+}

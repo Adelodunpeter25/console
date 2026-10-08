@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
@@ -201,6 +202,55 @@ func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionReques
 	}
 	if b.Submit {
 		out.Submit = true
+	}
+	return out
+}
+
+// Subagent lifecycle converters. Fields stay flattened under the frame's
+// type tag (no nested payload object), matching the old wire. Args re-encode
+// from their parsed form (encoding/json sorts map keys), and null args stay
+// absent.
+func subagentStartToProto(v loop.SubagentStartInfo) *consolev1.SubagentStartEvent {
+	out := &consolev1.SubagentStartEvent{
+		SubagentId: v.SubagentID, Name: v.Name, Role: v.Role,
+		Prompt: v.Prompt, MaxTurns: int32(v.MaxTurns),
+	}
+	if v.ParentToolCall != "" {
+		out.ParentToolCallId = &v.ParentToolCall
+	}
+	return out
+}
+
+func subagentActivityToProto(v loop.SubagentActivityInfo) *consolev1.SubagentActivityEvent {
+	out := &consolev1.SubagentActivityEvent{
+		SubagentId: v.SubagentID, TurnIndex: int32(v.TurnIndex), Status: v.Status,
+	}
+	if v.ToolCallID != "" {
+		out.ToolCallId = &v.ToolCallID
+	}
+	if v.ToolName != "" {
+		out.ToolName = &v.ToolName
+	}
+	if v.Args != nil {
+		if raw, err := json.Marshal(v.Args); err == nil && string(raw) != "null" {
+			out.Args = raw
+		}
+	}
+	if v.Error != "" {
+		out.Error = &v.Error
+	}
+	return out
+}
+
+func subagentEndToProto(v loop.SubagentEndInfo) *consolev1.SubagentEndEvent {
+	out := &consolev1.SubagentEndEvent{
+		SubagentId: v.SubagentID, Status: v.Status, TotalTurns: int32(v.TotalTurns),
+	}
+	if v.Summary != "" {
+		out.Summary = &v.Summary
+	}
+	if v.Error != "" {
+		out.Error = &v.Error
 	}
 	return out
 }
@@ -660,13 +710,19 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		}
 		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": json.RawMessage(raw)}, false
 	case loop.EventTodoUpdate:
-		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": nonNilTodos(e.Items), "action": e.Action}, false
-	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
-		body, ok := subagentWire(e)
-		if !ok {
+		items := make([]*consolev1.TodoItem, 0, len(e.Items))
+		for _, item := range e.Items {
+			items = append(items, &consolev1.TodoItem{
+				Id: int32(item.ID), Content: item.Content, Status: item.Status,
+			})
+		}
+		data, err := marshalProtoList(items)
+		if err != nil {
 			return "", nil, true
 		}
-		return string(e.Kind), body, false
+		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": data, "action": e.Action}, false
+	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
+		return SubagentFrame(e)
 	case loop.EventError:
 		raw, err := protoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})
 		if err != nil {
@@ -680,26 +736,33 @@ func wireFrame(e loop.Event) (string, any, bool) {
 	}
 }
 
-// subagentWire flattens a subagent lifecycle payload under its type tag.
-func subagentWire(e loop.Event) (any, bool) {
-	raw, err := json.Marshal(e.Subagent)
+// subagentFrame marshals one subagent lifecycle payload. The old helper
+// round-tripped through a map to flatten it; the schema carries the flat
+// shape directly, so the map dance is gone.
+func SubagentFrame(e loop.Event) (string, any, bool) {
+	var msg proto.Message
+	switch v := e.Subagent.(type) {
+	case loop.SubagentStartInfo:
+		msg = subagentStartToProto(v)
+	case loop.SubagentActivityInfo:
+		msg = subagentActivityToProto(v)
+	case loop.SubagentEndInfo:
+		msg = subagentEndToProto(v)
+	default:
+		return "", nil, true
+	}
+	raw, err := protoMarshal.Marshal(msg)
 	if err != nil {
-		return nil, false
+		return "", nil, true
 	}
-	var body map[string]any
-	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, false
+	// Flatten: splice the payload object into the frame envelope alongside
+	// the type tag, which is what clients decode.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return "", nil, true
 	}
-	body["type"] = string(e.Kind)
-	return body, true
-}
-
-// nonNilTodos keeps the todo list as [] (never null) for the desktop card.
-func nonNilTodos(items []types.TodoItem) []types.TodoItem {
-	if items == nil {
-		return []types.TodoItem{}
-	}
-	return items
+	fields["type"], _ = json.Marshal(string(e.Kind))
+	return string(e.Kind), fields, false
 }
 
 func parseSince(raw string) (int64, error) {

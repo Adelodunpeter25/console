@@ -986,6 +986,263 @@ func (x *QueuedPrompt) GetCreatedAt() string {
 	return ""
 }
 
+// Subagent lifecycle EVENT frames (Phase 4, fifth slice). Fields are
+// flattened under the frame's type tag, matching the old wire (no nested
+// payload object). The GET rows above reuse the nested schema; these mirror
+// the frame shape. Counts narrow to int32 and stay JSON numbers; args cross
+// as raw JSON bytes like tool call arguments.
+type SubagentStartEvent struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SubagentId       string                 `protobuf:"bytes,1,opt,name=subagent_id,json=subagentId,proto3" json:"subagent_id,omitempty"`
+	ParentToolCallId *string                `protobuf:"bytes,2,opt,name=parent_tool_call_id,json=parentToolCallId,proto3,oneof" json:"parent_tool_call_id,omitempty"`
+	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Role             string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	Prompt           string                 `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	MaxTurns         int32                  `protobuf:"varint,6,opt,name=max_turns,json=maxTurns,proto3" json:"max_turns,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SubagentStartEvent) Reset() {
+	*x = SubagentStartEvent{}
+	mi := &file_console_v1_session_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubagentStartEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubagentStartEvent) ProtoMessage() {}
+
+func (x *SubagentStartEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubagentStartEvent.ProtoReflect.Descriptor instead.
+func (*SubagentStartEvent) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SubagentStartEvent) GetSubagentId() string {
+	if x != nil {
+		return x.SubagentId
+	}
+	return ""
+}
+
+func (x *SubagentStartEvent) GetParentToolCallId() string {
+	if x != nil && x.ParentToolCallId != nil {
+		return *x.ParentToolCallId
+	}
+	return ""
+}
+
+func (x *SubagentStartEvent) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SubagentStartEvent) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *SubagentStartEvent) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *SubagentStartEvent) GetMaxTurns() int32 {
+	if x != nil {
+		return x.MaxTurns
+	}
+	return 0
+}
+
+type SubagentActivityEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SubagentId    string                 `protobuf:"bytes,1,opt,name=subagent_id,json=subagentId,proto3" json:"subagent_id,omitempty"`
+	TurnIndex     int32                  `protobuf:"varint,2,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
+	ToolCallId    *string                `protobuf:"bytes,3,opt,name=tool_call_id,json=toolCallId,proto3,oneof" json:"tool_call_id,omitempty"`
+	ToolName      *string                `protobuf:"bytes,4,opt,name=tool_name,json=toolName,proto3,oneof" json:"tool_name,omitempty"`
+	Args          []byte                 `protobuf:"bytes,5,opt,name=args,proto3" json:"args,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	Error         *string                `protobuf:"bytes,7,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubagentActivityEvent) Reset() {
+	*x = SubagentActivityEvent{}
+	mi := &file_console_v1_session_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubagentActivityEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubagentActivityEvent) ProtoMessage() {}
+
+func (x *SubagentActivityEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubagentActivityEvent.ProtoReflect.Descriptor instead.
+func (*SubagentActivityEvent) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SubagentActivityEvent) GetSubagentId() string {
+	if x != nil {
+		return x.SubagentId
+	}
+	return ""
+}
+
+func (x *SubagentActivityEvent) GetTurnIndex() int32 {
+	if x != nil {
+		return x.TurnIndex
+	}
+	return 0
+}
+
+func (x *SubagentActivityEvent) GetToolCallId() string {
+	if x != nil && x.ToolCallId != nil {
+		return *x.ToolCallId
+	}
+	return ""
+}
+
+func (x *SubagentActivityEvent) GetToolName() string {
+	if x != nil && x.ToolName != nil {
+		return *x.ToolName
+	}
+	return ""
+}
+
+func (x *SubagentActivityEvent) GetArgs() []byte {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *SubagentActivityEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SubagentActivityEvent) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+type SubagentEndEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SubagentId    string                 `protobuf:"bytes,1,opt,name=subagent_id,json=subagentId,proto3" json:"subagent_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Summary       *string                `protobuf:"bytes,3,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
+	Error         *string                `protobuf:"bytes,4,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	TotalTurns    int32                  `protobuf:"varint,5,opt,name=total_turns,json=totalTurns,proto3" json:"total_turns,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubagentEndEvent) Reset() {
+	*x = SubagentEndEvent{}
+	mi := &file_console_v1_session_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubagentEndEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubagentEndEvent) ProtoMessage() {}
+
+func (x *SubagentEndEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubagentEndEvent.ProtoReflect.Descriptor instead.
+func (*SubagentEndEvent) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SubagentEndEvent) GetSubagentId() string {
+	if x != nil {
+		return x.SubagentId
+	}
+	return ""
+}
+
+func (x *SubagentEndEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SubagentEndEvent) GetSummary() string {
+	if x != nil && x.Summary != nil {
+		return *x.Summary
+	}
+	return ""
+}
+
+func (x *SubagentEndEvent) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *SubagentEndEvent) GetTotalTurns() int32 {
+	if x != nil {
+		return x.TotalTurns
+	}
+	return 0
+}
+
 var File_console_v1_session_proto protoreflect.FileDescriptor
 
 const file_console_v1_session_proto_rawDesc = "" +
@@ -1102,7 +1359,42 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\t_model_idB\v\n" +
 	"\t_providerB\x10\n" +
 	"\x0e_approval_modeB\x11\n" +
-	"\x0f_thinking_levelBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x0f_thinking_level\"\xde\x01\n" +
+	"\x12SubagentStartEvent\x12\x1f\n" +
+	"\vsubagent_id\x18\x01 \x01(\tR\n" +
+	"subagentId\x122\n" +
+	"\x13parent_tool_call_id\x18\x02 \x01(\tH\x00R\x10parentToolCallId\x88\x01\x01\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12\x16\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x1b\n" +
+	"\tmax_turns\x18\x06 \x01(\x05R\bmaxTurnsB\x16\n" +
+	"\x14_parent_tool_call_id\"\x90\x02\n" +
+	"\x15SubagentActivityEvent\x12\x1f\n" +
+	"\vsubagent_id\x18\x01 \x01(\tR\n" +
+	"subagentId\x12\x1d\n" +
+	"\n" +
+	"turn_index\x18\x02 \x01(\x05R\tturnIndex\x12%\n" +
+	"\ftool_call_id\x18\x03 \x01(\tH\x00R\n" +
+	"toolCallId\x88\x01\x01\x12 \n" +
+	"\ttool_name\x18\x04 \x01(\tH\x01R\btoolName\x88\x01\x01\x12\x12\n" +
+	"\x04args\x18\x05 \x01(\fR\x04args\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12\x19\n" +
+	"\x05error\x18\a \x01(\tH\x02R\x05error\x88\x01\x01B\x0f\n" +
+	"\r_tool_call_idB\f\n" +
+	"\n" +
+	"_tool_nameB\b\n" +
+	"\x06_error\"\xbc\x01\n" +
+	"\x10SubagentEndEvent\x12\x1f\n" +
+	"\vsubagent_id\x18\x01 \x01(\tR\n" +
+	"subagentId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
+	"\asummary\x18\x03 \x01(\tH\x00R\asummary\x88\x01\x01\x12\x19\n" +
+	"\x05error\x18\x04 \x01(\tH\x01R\x05error\x88\x01\x01\x12\x1f\n" +
+	"\vtotal_turns\x18\x05 \x01(\x05R\n" +
+	"totalTurnsB\n" +
+	"\n" +
+	"\b_summaryB\b\n" +
+	"\x06_errorBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_session_proto_rawDescOnce sync.Once
@@ -1116,7 +1408,7 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
@@ -1129,14 +1421,17 @@ var file_console_v1_session_proto_goTypes = []any{
 	(*SubagentActivityItem)(nil),           // 8: console.v1.SubagentActivityItem
 	(*SubagentInfo)(nil),                   // 9: console.v1.SubagentInfo
 	(*QueuedPrompt)(nil),                   // 10: console.v1.QueuedPrompt
-	(*ImageAttachment)(nil),                // 11: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),              // 12: console.v1.BrowserAnnotation
+	(*SubagentStartEvent)(nil),             // 11: console.v1.SubagentStartEvent
+	(*SubagentActivityEvent)(nil),          // 12: console.v1.SubagentActivityEvent
+	(*SubagentEndEvent)(nil),               // 13: console.v1.SubagentEndEvent
+	(*ImageAttachment)(nil),                // 14: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 15: console.v1.BrowserAnnotation
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
 	8,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	11, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
-	12, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	14, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	15, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
 	4,  // [4:4] is the sub-list for method output_type
 	4,  // [4:4] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -1155,13 +1450,16 @@ func file_console_v1_session_proto_init() {
 	file_console_v1_session_proto_msgTypes[8].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[9].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[10].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[11].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[12].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
