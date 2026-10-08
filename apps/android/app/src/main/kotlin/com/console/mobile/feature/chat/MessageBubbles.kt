@@ -264,7 +264,9 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
             Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (open) {
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+            // Arguments and output sit on a darker inset than the row's card, like a
+            // terminal pane under its title bar.
+            Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Output).padding(top = 4.dp, bottom = 12.dp)) {
                 // A diff replaces the raw arguments — the diff already shows the
                 // new content, which is what the arguments were for.
                 if (diffs.isNotEmpty()) {
@@ -329,6 +331,7 @@ private fun ReadFileResult(raw: String, filePath: String?) {
             language = language,
             modifier = Modifier.fillMaxWidth().height(height),
             showLineNumbers = false,
+            gutterColor = NewTheme.Output,
         )
     }
 }

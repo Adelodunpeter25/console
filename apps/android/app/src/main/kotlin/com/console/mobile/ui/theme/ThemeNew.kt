@@ -38,7 +38,12 @@ object NewTheme {
     /** Desktop's accent, the orange-brown (theme.accent, dark). Category headings, links. */
     val Accent = Color(0xFFE2795B)
 
+    /** True black, for screens that should sit on nothing (the file browser). */
+    val Black = Color(0xFF000000)
+
     // ---- Chat
+    /** Tool arguments and results: darker than the [Card] they sit in, like terminal output. */
+    val Output = Color(0xFF000000)
     /** The user's message bubble: desktop's warm brown (theme.user_bubble, dark). */
     val UserBubble = Color(0xFF2A2520)
     /** Text on [UserBubble]: desktop's on_inverse, a warm off-white that reads on the brown. */

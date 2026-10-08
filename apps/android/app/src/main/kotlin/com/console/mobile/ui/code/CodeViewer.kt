@@ -34,7 +34,7 @@ import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
  * sits directly on the screen (no boxed card). Used by the file viewer,
  * chat code blocks and the diff viewer.
  */
-class ConsoleColorScheme : EditorColorScheme() {
+class ConsoleColorScheme(gutter: androidx.compose.ui.graphics.Color = NewTheme.Background) : EditorColorScheme() {
     init {
         applyDefault()
         val s = ConsoleColors.Syntax
@@ -53,8 +53,8 @@ class ConsoleColorScheme : EditorColorScheme() {
         // of bleeding through the pinned line numbers. LINE_NUMBER_PANEL is
         // what 0.21.1 paints for the pinned gutter; BACKGROUND covers the rest.
         // Both match the screen so it still looks uniform.
-        setColor(LINE_NUMBER_BACKGROUND, NewTheme.Background.toArgb())
-        setColor(LINE_NUMBER_PANEL, NewTheme.Background.toArgb())
+        setColor(LINE_NUMBER_BACKGROUND, gutter.toArgb())
+        setColor(LINE_NUMBER_PANEL, gutter.toArgb())
         setColor(LINE_NUMBER_PANEL_TEXT, NewTheme.TextMuted.copy(alpha = 0.6f).toArgb())
         setColor(LINE_NUMBER_CURRENT, NewTheme.TextSecondary.toArgb())
         setColor(LINE_DIVIDER, NewTheme.Divider.toArgb())
@@ -174,8 +174,10 @@ fun CodeViewer(
     fontSizeSp: Float = ConsoleDimens.CodeFontSizeSp,
     addLines: Set<Int> = emptySet(),
     removeLines: Set<Int> = emptySet(),
+    /** What the viewer sits on, so the pinned line-number gutter blends in. */
+    gutterColor: androidx.compose.ui.graphics.Color = NewTheme.Background,
 ) {
-    val colorScheme = remember { ConsoleColorScheme() }
+    val colorScheme = remember(gutterColor) { ConsoleColorScheme(gutterColor) }
     val soraLanguage = remember(language, addLines, removeLines) {
         ConsoleLanguage(language, addLines, removeLines)
     }

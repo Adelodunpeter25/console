@@ -190,7 +190,7 @@ fun FilesScreen(onBack: () -> Unit) {
             if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
         } ?: sel
         val subtitle = listOfNotNull(project?.name?.takeIf { it.isNotBlank() }, relativePath).joinToString(" · ")
-        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
             PageHeader(title = fileName, subtitle = subtitle, centerTitle = false, onBack = { selectedPath = null })
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                 when {
@@ -216,7 +216,7 @@ fun FilesScreen(onBack: () -> Unit) {
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
         PageHeader(
             title = "Files",
             subtitle = project?.name,
@@ -264,35 +264,31 @@ fun FilesScreen(onBack: () -> Unit) {
                     } else if (results.isEmpty()) {
                         EmptyView(title = "No results", description = "No files match \"$searchQuery\".", icon = TablerIcons.Outline.Search, modifier = Modifier.fillMaxSize())
                     } else {
-                        TreeCard {
-                            LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
-                                items(results, key = { it.path }) { r ->
-                                    TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
-                                }
+                        LazyColumn(state = resultsListState, modifier = Modifier.fillMaxSize()) {
+                            items(results, key = { it.path }) { r ->
+                                TreeRowEntry(entry = r, depth = 0, selected = false, expanded = false, onPressDir = { toggleDir(r.path) }, onPressFile = { selectFile(r.path, null) })
                             }
                         }
                     }
                 }
-                else -> TreeCard {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(flattenTree(entries, expanded, childrenByPath), key = { it.key }) { row ->
-                            when (row.kind) {
-                                TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                    Text("Loading…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
-                                }
-                                TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
-                                TreeKind.Entry -> {
-                                    val e = row.entry!!
-                                    val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
-                                    if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
-                                        Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                                            Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
-                                        }
-                                    } else {
-                                        TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(flattenTree(entries, expanded, childrenByPath), key = { it.key }) { row ->
+                        when (row.kind) {
+                            TreeKind.Loading -> Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                Text("Loading…", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
+                            }
+                            TreeKind.Empty -> Text("(empty)", color = NewTheme.TextMuted, fontSize = 13.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, modifier = Modifier.padding(start = (16 + row.depth * 18).dp, top = 2.dp, bottom = 8.dp))
+                            TreeKind.Entry -> {
+                                val e = row.entry!!
+                                val isLoadingDir = e.is_dir && loadingDirs.contains(e.path)
+                                if (isLoadingDir && !childrenByPath.containsKey(e.path)) {
+                                    Row(modifier = Modifier.fillMaxWidth().padding(start = (16 + row.depth * 18).dp).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                        Text(e.name, color = NewTheme.TextSecondary, fontSize = 15.sp, modifier = Modifier.padding(start = 8.dp))
                                     }
+                                } else {
+                                    TreeRowEntry(entry = e, depth = row.depth, selected = selectedPath == e.path, expanded = expanded.contains(e.path), onPressDir = { toggleDir(e.path) }, onPressFile = { selectFile(e.path, e.size) })
                                 }
                             }
                         }
@@ -328,14 +324,6 @@ private fun flattenTree(roots: List<FsTreeEntry>, expanded: Set<String>, childre
     }
     visit(roots, 0)
     return out
-}
-
-/** The file list sits in one rounded card, like a [Section] without a heading. */
-@Composable
-private fun TreeCard(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 16.dp).clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card)) {
-        content()
-    }
 }
 
 @Composable
@@ -378,6 +366,8 @@ private fun CodePreview(content: String, path: String?) {
         language = language,
         modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
         showLineNumbers = true,
+        // The screen is pure black, so the pinned gutter has to be too.
+        gutterColor = NewTheme.Black,
     )
 }
 
