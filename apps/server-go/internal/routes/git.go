@@ -21,6 +21,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// gitStatusDebounce is the minimum gap between status recomputations pushed
+// to a watch stream.
+const gitStatusDebounce = 1500 * time.Millisecond
+
 func gitFileEntryToProto(f types.GitFileEntry) *consolev1.GitFileEntry {
 	additions := uint32(f.Additions)
 	deletions := uint32(f.Deletions)
@@ -81,15 +85,25 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 			}
 			sendStatus()
 
-			debounce := time.NewTimer(400 * time.Millisecond)
+			// Leading-edge throttle: the first change schedules one refresh
+			// gitStatusDebounce later and further changes in that window fold
+			// into it. Builds and pushes emit events continuously, so a trailing
+			// debounce that resets on each one would never fire, and a short one
+			// would spawn git constantly.
+			debounce := time.NewTimer(gitStatusDebounce)
 			debounce.Stop()
+			pending := false
 			ticker := time.NewTicker(15 * time.Second)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-events:
-					debounce.Reset(400 * time.Millisecond)
+					if !pending {
+						pending = true
+						debounce.Reset(gitStatusDebounce)
+					}
 				case <-debounce.C:
+					pending = false
 					sendStatus()
 				case <-ticker.C:
 					if err := sse.Send("ping", ""); err != nil {
