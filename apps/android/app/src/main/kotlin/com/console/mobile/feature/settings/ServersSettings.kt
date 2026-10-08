@@ -51,7 +51,6 @@ import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -87,7 +86,7 @@ fun ServersSettings(onBack: () -> Unit) {
         probes = results
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         if (editing != null) {
             val envId = editing!!.takeIf { it != "__create__" }
             val editingEnv = envState.environments.firstOrNull { it.id == envId }
@@ -163,29 +162,13 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
     val isActive = env != null && envState.activeId == env.id
     val canDelete = env != null && !(isActive && envState.environments.size == 1)
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = ConsoleColors.CardAlt,
-        unfocusedContainerColor = ConsoleColors.CardAlt,
-        focusedBorderColor = ConsoleColors.Border,
-        unfocusedBorderColor = ConsoleColors.BorderSubtle,
-        focusedTextColor = ConsoleColors.TextPrimary,
-        unfocusedTextColor = ConsoleColors.TextPrimary,
-        cursorColor = ConsoleColors.TextPrimary,
-        focusedPlaceholderColor = ConsoleColors.TextMuted,
-        unfocusedPlaceholderColor = ConsoleColors.TextMuted,
-        focusedLabelColor = ConsoleColors.TextSecondary,
-        unfocusedLabelColor = ConsoleColors.TextSecondary,
-    )
-
     Column(modifier = modifier) {
-        Text("Name", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
-        OutlinedTextField(value = name, onValueChange = { name = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("My server") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp))
-        Text("Backend URL", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
-        OutlinedTextField(value = url, onValueChange = { url = it; if (status != "testing" && status != "saving") status = "idle" }, placeholder = { Text("http://192.168.1.X:3000") }, singleLine = true, colors = fieldColors, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth())
-        PillButton(
+        SettingsField("Name", name, { name = it; if (status != "testing" && status != "saving") status = "idle" }, "My server")
+        SettingsField("Backend URL", url, { url = it; if (status != "testing" && status != "saving") status = "idle" }, "http://192.168.1.X:3000")
+        SettingsButton(
             text = if (status == "testing") "Testing…" else "Test connection",
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@PillButton
+                val normalized = normalizeBackendUrl(url) ?: return@SettingsButton
                 status = "testing"
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) {
@@ -200,29 +183,21 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
             },
             enabled = url.isNotBlank() && status != "testing",
             loading = status == "testing",
-            variant = PillButtonVariant.Outline,
-            fullWidth = true,
-            cornerRadius = 12.dp,
-            verticalPadding = 10.dp,
-            modifier = Modifier.padding(top = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         )
-        if (status == "test-ok") Text("Connection OK", color = Color(0xFF34D399), fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-        else if (status == "test-fail") Text("Could not reach the backend", color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+        if (status == "test-ok") Text("Connection OK", color = NewTheme.Success, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        else if (status == "test-fail") Text("Could not reach the backend", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         if (env != null && !isActive) {
-            PillButton(
+            SettingsButton(
                 text = "Set as active",
                 onClick = {
                     scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.activateEnvironment(env.id) } }
                     onDone()
                 },
-                variant = PillButtonVariant.Outline,
-                fullWidth = true,
-                cornerRadius = 12.dp,
-                verticalPadding = 10.dp,
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
             )
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 20.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
             val doSave: () -> Unit = {
                 val normalized = normalizeBackendUrl(url)
                 if (normalized == null) {
@@ -257,17 +232,16 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     }
                 }
             }
-            PillButton(
+            SettingsButton(
                 text = if (env != null) "Save changes" else "Save",
                 onClick = doSave,
+                kind = SettingsButtonKind.Primary,
                 enabled = url.isNotBlank() && status != "saving",
                 loading = status == "saving",
-                cornerRadius = 12.dp,
-                verticalPadding = 12.dp,
                 modifier = Modifier.weight(1f),
             )
             if (env != null) {
-                PillButton(
+                SettingsButton(
                     text = "Delete",
                     onClick = {
                         confirmAlert("Delete environment", "Remove \"${env.name}\" from your environments?", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
@@ -275,10 +249,8 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                             onDone()
                         })))
                     },
+                    kind = SettingsButtonKind.Danger,
                     enabled = canDelete,
-                    variant = PillButtonVariant.Destructive,
-                    cornerRadius = 12.dp,
-                    verticalPadding = 12.dp,
                     modifier = Modifier.weight(1f).padding(start = 12.dp),
                 )
             }

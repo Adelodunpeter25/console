@@ -50,7 +50,6 @@ import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
 import console.v1.UsageReport
 import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
 
 /**
  * Port of screens/settings/usage-settings.tsx + usage-provider-card + usage-limit-row.
@@ -74,13 +73,13 @@ fun UsageSettings(onBack: () -> Unit) {
     )
     val isLoading = usageState.loading && usageState.reports.isEmpty()
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         ScreenHeader(
             title = "Usage",
             onBack = onBack,
             actions = {
                 IconButton(onClick = { AppContainer.usageRepository.loadAllUsage(force = true) }, modifier = Modifier.size(36.dp)) {
-                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(16.dp))
+                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = NewTheme.TextPrimary, modifier = Modifier.size(16.dp))
                 }
             },
         )
@@ -88,7 +87,7 @@ fun UsageSettings(onBack: () -> Unit) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    Text("Loading quota…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+                    Text("Loading quota…", color = NewTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
                 }
             }
         } else {

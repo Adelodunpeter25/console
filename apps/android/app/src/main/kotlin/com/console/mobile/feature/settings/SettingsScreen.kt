@@ -39,7 +39,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 
 enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
@@ -62,7 +61,7 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when (val s = section) {
             null -> SettingsLanding(onBack = onBackToHome, onOpen = { section = it })
             SettingsSection.Servers -> ServersSettings(onBack = { section = null })

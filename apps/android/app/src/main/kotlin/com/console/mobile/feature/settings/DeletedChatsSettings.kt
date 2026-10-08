@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -48,7 +48,7 @@ import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +74,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         ScreenHeader(
             title = "Deleted Chats",
             onBack = onBack,
@@ -94,7 +94,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             }
                         })))
                     }, modifier = Modifier.size(36.dp)) {
-                        Icon(TablerIcons.Outline.Restore, contentDescription = "Restore all", tint = ConsoleColors.TextPrimary, modifier = Modifier.size(17.dp))
+                        Icon(TablerIcons.Outline.Restore, contentDescription = "Restore all", tint = NewTheme.TextPrimary, modifier = Modifier.size(17.dp))
                     }
                     IconButton(onClick = {
                         confirmAlert("Delete All Chats Permanently", "All ${deleted.size} deleted chats and their entire message history will be permanently removed. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete All", destructive = true, onPress = {
@@ -110,38 +110,36 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                             }
                         })))
                     }, enabled = busyId == null, modifier = Modifier.size(36.dp)) {
-                        Icon(TablerIcons.Outline.Trash, contentDescription = "Delete all", tint = ConsoleColors.Destructive, modifier = Modifier.size(17.dp))
+                        Icon(TablerIcons.Outline.Trash, contentDescription = "Delete all", tint = NewTheme.Danger, modifier = Modifier.size(17.dp))
                     }
                 }
             } else null,
         )
         if (projectState.deletedLoading && deleted.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    Text("Loading deleted chats…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                }
-            }
+            SettingsLoading("Loading deleted chats…", Modifier.fillMaxSize())
         } else if (projectState.error != null && deleted.isEmpty()) {
-            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp)) })
+            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp)) })
         } else if (deleted.isEmpty()) {
-            EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+            EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                items(deleted, key = { it.id }) { item ->
-                    DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
-                        val title = item.title.ifBlank { "Untitled Chat" }
-                        confirmAlert("Delete Chat Permanently", "\"$title\" and its message history will be permanently deleted. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
-                            busyId = item.id
-                            scope.launch {
-                                try {
-                                    withContext(Dispatchers.IO) { AppContainer.projectRepository.permanentlyDeleteSession(item.id) }
-                                } catch (e: Exception) {
-                                    confirmAlert("Failed", e.message ?: "Unable to delete chat.")
-                                } finally { busyId = null }
-                            }
-                        })))
-                    })
+            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+                SettingsCategory("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
+                    deleted.forEachIndexed { index, item ->
+                        DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
+                            val title = item.title.ifBlank { "Untitled Chat" }
+                            confirmAlert("Delete Chat Permanently", "\"$title\" and its message history will be permanently deleted. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
+                                busyId = item.id
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.permanentlyDeleteSession(item.id) }
+                                    } catch (e: Exception) {
+                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
+                                    } finally { busyId = null }
+                                }
+                            })))
+                        })
+                        if (index < deleted.lastIndex) SettingsDivider()
+                    }
                 }
             }
         }
@@ -150,35 +148,13 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
 
 @Composable
 private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(shape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, shape).padding(14.dp)) {
-        Text(item.title.ifBlank { "Untitled Chat" }, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
+        Text(item.title.ifBlank { "Untitled Chat" }, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val ts = item.deleted_at ?: item.updated_at
-        Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.weight(1f))
-            PillButton(
-                text = "Restore",
-                onClick = onRestore,
-                enabled = !busy,
-                loading = busy,
-                icon = TablerIcons.Outline.Refresh,
-                variant = PillButtonVariant.Outline,
-                cornerRadius = 8.dp,
-                horizontalPadding = 12.dp,
-                verticalPadding = 6.dp,
-            )
-            PillButton(
-                text = "Delete",
-                onClick = onDelete,
-                enabled = !busy,
-                icon = TablerIcons.Outline.Trash,
-                variant = PillButtonVariant.Destructive,
-                cornerRadius = 8.dp,
-                horizontalPadding = 12.dp,
-                verticalPadding = 6.dp,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+        Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+        Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            SettingsButton("Restore", onRestore, enabled = !busy, loading = busy, icon = TablerIcons.Outline.Refresh, compact = true)
+            SettingsButton("Delete", onDelete, kind = SettingsButtonKind.Danger, enabled = !busy, icon = TablerIcons.Outline.Trash, compact = true)
         }
     }
 }

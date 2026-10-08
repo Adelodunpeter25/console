@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,7 +48,7 @@ import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -85,7 +89,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
 
     LaunchedEffect(Unit) { browse(null) }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         ScreenHeader(
             title = "Add Project",
             subtitle = currentPath,
@@ -102,7 +106,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                     Icon(
                         imageVector = if (showHidden) TablerIcons.Outline.Eye else TablerIcons.Outline.EyeOff,
                         contentDescription = if (showHidden) "Hide hidden files" else "Show hidden files",
-                        tint = if (showHidden) ConsoleColors.TextPrimary else ConsoleColors.TextMuted,
+                        tint = if (showHidden) NewTheme.TextPrimary else NewTheme.TextMuted,
                         modifier = Modifier.size(20.dp),
                     )
                 }
@@ -110,38 +114,36 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
         )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                        Text("Browsing…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
-                    }
-                }
+                loading -> SettingsLoading("Browsing…", Modifier.fillMaxSize())
                 error != null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = ConsoleColors.Destructive, modifier = Modifier.size(32.dp))
-                        Text("Couldn't list that folder", color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
-                        Text(error ?: "Browse failed.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-                        PillButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
+                        Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp))
+                        Text("Couldn't list that folder", color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
+                        Text(error ?: "Browse failed.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                        SettingsButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
                     }
                 }
-                else -> Column(modifier = Modifier.fillMaxSize()) {
+                else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                     // "Up one level" must stay reachable when there is nothing
                     // else to tap: in a folder with no subfolders it is the only
                     // way back out, since the header back button leaves the screen.
                     if (parentPath != null) {
-                        UpOneLevelRow(onClick = { browse(parentPath) })
+                        Spacer(Modifier.height(8.dp))
+                        Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card)) {
+                            UpOneLevelRow(onClick = { browse(parentPath) })
+                        }
                     }
                     if (dirs.isEmpty()) {
-                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(32.dp)) })
+                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
                     } else {
-                        LazyColumn(modifier = Modifier.weight(1f)) {
-                            items(dirs, key = { it.path }) { d ->
-                                Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(ConsoleColors.CardAlt).border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                                        Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp))
-                                    }
-                                    Text(d.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                        SettingsCategory("Folders") {
+                            dirs.forEachIndexed { index, d ->
+                                Row(modifier = Modifier.fillMaxWidth().clickable { browse(d.path) }.padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(TablerIcons.Outline.Folder, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(24.dp))
+                                    Text(d.name, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 16.dp))
+                                    Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
                                 }
+                                if (index < dirs.lastIndex) SettingsDivider(startInset = 58.dp)
                             }
                         }
                     }
@@ -149,13 +151,13 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
             }
         }
         // Footer: current folder + use-it button. No typing anywhere.
-        Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Card).padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 24.dp)) {
-            Text("Selected folder", color = ConsoleColors.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Text(currentPath ?: "…", color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
-            PillButton(
+        Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = NewTheme.CardRadius, topEnd = NewTheme.CardRadius)).background(NewTheme.Card).padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 24.dp)) {
+            Text("Selected folder", color = NewTheme.Accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(currentPath ?: "…", color = NewTheme.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+            SettingsButton(
                 text = "Use this folder",
                 onClick = {
-                    val target = currentPath ?: return@PillButton
+                    val target = currentPath ?: return@SettingsButton
                     adding = true
                     scope.launch {
                         try {
@@ -166,10 +168,11 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         } finally { adding = false }
                     }
                 },
+                kind = SettingsButtonKind.Primary,
                 enabled = currentPath != null && !adding,
                 loading = adding,
-                fullWidth = true,
                 icon = TablerIcons.Outline.Check,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -180,10 +183,10 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
 @Composable
 private fun UpOneLevelRow(onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(16.dp).padding(end = 4.dp))
-        Text("Up one level", color = ConsoleColors.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(22.dp))
+        Text("Up one level", color = NewTheme.TextSecondary, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }

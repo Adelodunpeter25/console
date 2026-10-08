@@ -43,7 +43,7 @@ import com.console.mobile.data.model.ROLE_VISION
 import com.console.mobile.ui.components.picker.ModelPickerSheet
 import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.components.ScreenHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
 
 /** Role -> (label, description), mirroring the desktop Models page. */
@@ -81,59 +81,51 @@ fun ModelsSettings(onBack: () -> Unit) {
         pending = next
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         ScreenHeader(title = "Models", onBack = onBack)
 
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-            Text("Model roles", color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
             Text(
                 "Choose the model used for each harness role. Unset roles use the chat model.",
-                color = ConsoleColors.TextSecondary, fontSize = 12.sp,
-                modifier = Modifier.padding(horizontal = 4.dp).padding(bottom = 16.dp),
+                color = NewTheme.TextSecondary, fontSize = 14.sp,
+                modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
             )
 
             if (providerState.loadingRoles && loaded.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                }
+                SettingsLoading()
                 return@Column
             }
 
-            val shape = RoundedCornerShape(16.dp)
-            Column(
-                modifier = Modifier.fillMaxWidth().clip(shape)
-                    .background(ConsoleColors.Surface)
-                    .border(1.dp, ConsoleColors.Border, shape)
-                    .padding(16.dp),
-            ) {
-                ROLE_SPECS.forEach { spec ->
+            SettingsCategory("Model roles") {
+                ROLE_SPECS.forEachIndexed { index, spec ->
                     RolePickerRow(
                         spec = spec,
                         ref = refFor(spec.role),
                         onOpen = { sheetRole = spec.role },
                         onClear = { setRef(spec.role, null) },
                     )
+                    if (index < ROLE_SPECS.lastIndex) SettingsDivider()
                 }
-                SaveButton(
-                    enabled = dirty,
-                    saving = providerState.savingRoles,
-                    onClick = {
-                        scope.launch {
-                            val saved = AppContainer.providerRepository.saveModelRoles(
-                                MODEL_ROLES.associateWith { drafts[it] },
-                            )
-                            // Only drop the pending overlay once the server has
-                            // accepted it; a failed save keeps the user's edits.
-                            if (saved) pending = null
-                        }
-                    },
-                )
-                if (providerState.savingRoles) {
-                    Text("Saving…", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-                providerState.rolesError?.let { error ->
-                    Text(error, color = ConsoleColors.Destructive, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                }
+            }
+            SettingsButton(
+                text = if (providerState.savingRoles) "Saving…" else "Save model roles",
+                kind = SettingsButtonKind.Primary,
+                enabled = dirty && !providerState.savingRoles,
+                loading = providerState.savingRoles,
+                onClick = {
+                    scope.launch {
+                        val saved = AppContainer.providerRepository.saveModelRoles(
+                            MODEL_ROLES.associateWith { drafts[it] },
+                        )
+                        // Only drop the pending overlay once the server has
+                        // accepted it; a failed save keeps the user's edits.
+                        if (saved) pending = null
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            )
+            providerState.rolesError?.let { error ->
+                Text(error, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp))
             }
         }
     }
@@ -167,55 +159,31 @@ private fun RolePickerRow(
 ) {
     val (provider, modelId) = splitRef(ref)
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(spec.label, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text(spec.description, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-            Row(
-                modifier = Modifier.padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Text(spec.label, color = NewTheme.TextPrimary, fontSize = 17.sp)
+            Text(spec.description, color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 1.dp))
+            Row(modifier = Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (modelId != null) {
-                    ProviderIcon(provider = provider ?: "", sizeDp = 14)
+                    ProviderIcon(provider = provider ?: "", sizeDp = 16)
                     Text(
                         formatModelName(modelId),
-                        color = ConsoleColors.TextPrimary, fontSize = 12.sp, maxLines = 1,
+                        color = NewTheme.Accent, fontSize = 14.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 6.dp),
                     )
                 } else {
-                    Text("Uses chat model", color = ConsoleColors.TextMuted, fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                    Text("Uses chat model", color = NewTheme.TextGhost, fontSize = 14.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                 }
             }
         }
         if (ref != null) {
-            IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                Icon(TablerIcons.Outline.X, contentDescription = "Clear ${spec.label}", tint = ConsoleColors.TextMuted, modifier = Modifier.size(16.dp))
+            IconButton(onClick = onClear, modifier = Modifier.size(36.dp)) {
+                Icon(TablerIcons.Outline.X, contentDescription = "Clear ${spec.label}", tint = NewTheme.TextMuted, modifier = Modifier.size(18.dp))
             }
         }
-    }
-}
-
-@Composable
-private fun SaveButton(enabled: Boolean, saving: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clip(shape)
-            .background(if (enabled && !saving) ConsoleColors.Primary else Color.White.copy(alpha = 0.08f))
-            .clickable(enabled = enabled && !saving, onClick = onClick)
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "Save model roles",
-            color = if (enabled && !saving) ConsoleColors.TextDark else ConsoleColors.TextMuted,
-            fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-        )
     }
 }
 

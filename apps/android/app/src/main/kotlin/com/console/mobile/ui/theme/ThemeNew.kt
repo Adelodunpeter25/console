@@ -27,6 +27,8 @@ object NewTheme {
     val TextMuted = Color(0xFF71717A)
     /** Placeholder dots and anything that should barely register (desktop text_ghost). */
     val TextGhost = Color(0xFF575757)
+    /** Label on a filled primary button. */
+    val OnPrimary = Color(0xFF000000)
 
     // ---- Brand
     /** Desktop's accent, the orange-brown (theme.accent, dark). Category headings, links. */
@@ -38,6 +40,11 @@ object NewTheme {
     val Danger = Color(0xFFE2726A)
     /** Meter blue (theme.gauge): a healthy bar or ring. */
     val Gauge = Color(0xFF3B82F6)
+
+    // ---- Buttons
+    /** Primary action fill (white, like the send button). */
+    val Primary = Color(0xFFFFFFFF)
+    val PrimaryDisabled = Color.White.copy(alpha = 0.12f)
 
     // ---- Shapes
     val CardRadius = 26.dp

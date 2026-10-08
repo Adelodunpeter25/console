@@ -35,28 +35,29 @@ import com.console.mobile.data.model.displayName
 import com.console.mobile.data.model.needsAuth
 import com.console.mobile.data.model.isConnected
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.PillButtonVariant
+import com.console.mobile.feature.settings.SettingsButton
+import com.console.mobile.feature.settings.SettingsButtonKind
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 private fun mcpStatusColor(status: String): Color = when (status) {
-    "connected" -> Color(0xFF4ADE80)
-    "connecting" -> Color(0xFF60A5FA)
-    "needs_auth" -> Color(0xFFFBBF24)
-    "error" -> ConsoleColors.Destructive
-    else -> ConsoleColors.TextSecondary
+    "connected" -> NewTheme.Success
+    "connecting" -> NewTheme.Gauge
+    "needs_auth" -> NewTheme.Warning
+    "error" -> NewTheme.Danger
+    else -> NewTheme.TextMuted
 }
 
 private fun mcpStatusLabel(server: McpServerEntry): String = when (server.status) {
-    "connected" -> "Connected (${server.tools.size} tools)"
+    "connected" -> "Connected · ${server.tools.size} tools"
     "connecting" -> "Connecting…"
-    "needs_auth" -> "Needs Auth"
+    "needs_auth" -> "Needs authorization"
     "error" -> "Error: ${server.error ?: "connect failed"}"
     else -> "Disconnected"
 }
 
+/** One server as a row inside the Servers card: name and status on top, actions underneath. */
 @Composable
 internal fun McpServerCard(
     server: McpServerEntry,
@@ -67,106 +68,62 @@ internal fun McpServerCard(
     onDelete: () -> Unit,
 ) {
     var expanded by remember(server.id) { mutableStateOf(false) }
-    val shape = RoundedCornerShape(16.dp)
-    val statusColor = mcpStatusColor(server.status)
     val target = when (server.transport) {
         "http" -> server.url.orEmpty()
         else -> listOfNotNull(server.command, server.args.joinToString(" ").ifBlank { null }).joinToString(" ")
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(shape)
-            .background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, shape).padding(14.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                server.displayName,
-                color = ConsoleColors.TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            McpBadge(text = server.transport.orEmpty(), tint = ConsoleColors.TextSecondary)
-            McpBadge(text = mcpStatusLabel(server), tint = statusColor)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(server.displayName, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(mcpStatusLabel(server), color = mcpStatusColor(server.status), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+            }
+            if (!server.transport.isNullOrBlank()) {
+                Text(
+                    server.transport.orEmpty(), color = NewTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.07f)).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
         }
         if (target.isNotBlank()) {
-            Text(
-                target,
-                color = ConsoleColors.TextSecondary,
-                fontSize = 12.sp,
-                fontFamily = ConsoleMonoFamily,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp),
-            )
+            Text(target, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
         }
         if (server.tools.isNotEmpty()) {
             Row(
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     if (expanded) TablerIcons.Outline.ChevronDown else TablerIcons.Outline.ChevronRight,
-                    contentDescription = null,
-                    tint = ConsoleColors.TextSecondary,
-                    modifier = Modifier.size(14.dp),
+                    contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp),
                 )
-                Text("${server.tools.size} Advertised Tools", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                Text("${server.tools.size} advertised tools", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
             }
             if (expanded) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(8.dp))
-                        .background(ConsoleColors.Background).padding(8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(NewTheme.ChipRadius))
+                        .background(NewTheme.Background).padding(12.dp),
                 ) {
                     server.tools.forEach { tool ->
-                        Text(tool.name, color = ConsoleColors.TextPrimary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(tool.name, color = NewTheme.TextPrimary, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         tool.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                            Text(desc, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp))
+                            Text(desc, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 6.dp))
                         }
                     }
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val connectLabel = when {
                 server.needsAuth -> "Authorize"
                 server.isConnected -> "Reconnect"
                 else -> "Connect"
             }
-            PillButton(
-                text = connectLabel,
-                onClick = onConnect,
-                enabled = !busy,
-                loading = busy,
-                icon = TablerIcons.Outline.PlugConnected,
-                variant = PillButtonVariant.Outline,
-                cornerRadius = 8.dp,
-                horizontalPadding = 10.dp,
-                verticalPadding = 5.dp,
-            )
-            if (server.isConnected) {
-                PillButton(
-                    text = "Disconnect",
-                    onClick = onDisconnect,
-                    enabled = !busy,
-                    variant = PillButtonVariant.Outline,
-                    cornerRadius = 8.dp,
-                    horizontalPadding = 10.dp,
-                    verticalPadding = 5.dp,
-                )
-            }
-            PillButton(
-                text = "Edit",
-                onClick = onEdit,
-                enabled = !busy,
-                variant = PillButtonVariant.Outline,
-                cornerRadius = 8.dp,
-                horizontalPadding = 10.dp,
-                verticalPadding = 5.dp,
-            )
-            PillButton(
+            SettingsButton(connectLabel, onConnect, enabled = !busy, loading = busy, icon = TablerIcons.Outline.PlugConnected, compact = true)
+            if (server.isConnected) SettingsButton("Disconnect", onDisconnect, enabled = !busy, compact = true)
+            SettingsButton("Edit", onEdit, enabled = !busy, compact = true)
+            SettingsButton(
                 text = "Delete",
                 onClick = {
                     confirmAlert(
@@ -178,27 +135,11 @@ internal fun McpServerCard(
                         ),
                     )
                 },
+                kind = SettingsButtonKind.Danger,
                 enabled = !busy,
-                variant = PillButtonVariant.Destructive,
-                cornerRadius = 8.dp,
-                horizontalPadding = 10.dp,
-                verticalPadding = 5.dp,
                 icon = TablerIcons.Outline.Trash,
+                compact = true,
             )
         }
     }
 }
-
-@Composable
-private fun McpBadge(text: String, tint: Color) {
-    Text(
-        text,
-        color = tint,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Medium,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(4.dp)).background(tint.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 2.dp),
-    )
-}
-

@@ -44,7 +44,6 @@ import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.ProviderIcon
 import kotlinx.coroutines.Dispatchers
@@ -69,7 +68,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
         AppContainer.authRepository.loadStatus()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(ConsoleColors.Background)) {
+    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         ScreenHeader(title = "Account", onBack = onBack)
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
             Text("Sign in to AI providers to use their models in chat.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
