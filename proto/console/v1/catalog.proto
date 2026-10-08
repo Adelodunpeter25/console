@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Provider/model catalog (unscoped domains pass). Served by
+// GET /api/providers (the catalog) and GET /api/providers/:id/models (one
+// provider's live list).
+//
+// Shape notes:
+// - context_window is uint32 so it stays a JSON number; the desktop picker
+//   formats it and Android divides it into "272k"/"1M" text.
+// - supports_images and the thinking levels omit when zero/empty, matching
+//   the old omitempty. Thinking levels stay plain strings — the
+//   ThinkingLevel enum is client-side, converted at the boundary.
+// - models never marshals to null. A provider with no models used to emit
+//   `null` and desktop needed a null-tolerant deserializer for it; an empty
+//   repeated field now omits the key, which decodes to an empty list.
+message Model {
+  string id = 1;
+  string provider = 2;
+  uint32 context_window = 3;
+  bool supports_images = 4;
+  repeated string supported_thinking_levels = 5;
+  optional string default_thinking_level = 6;
+}
+
+message ProviderCatalogEntry {
+  string name = 1;
+  string display_name = 2;
+  string description = 3;
+  repeated Model models = 4;
+  string auth_method = 5;
+}
+
+message ProviderModelsResponse {
+  string provider = 1;
+  repeated Model models = 2;
+}
