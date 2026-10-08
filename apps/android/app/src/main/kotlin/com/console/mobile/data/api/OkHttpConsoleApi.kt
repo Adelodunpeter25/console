@@ -86,6 +86,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
     private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
     private val gitBranchesAdapter = wireMoshi.adapter(GitBranchesResponse::class.java)
+    private val contextAdapter = wireMoshi.adapter(console.v1.ContextSnapshot::class.java)
     private val gitCheckoutAdapter = wireMoshi.adapter(GitCheckoutRequest::class.java)
     private val fsBrowseAdapter = wireMoshi.adapter(FsBrowseResult::class.java)
     private val fsTreeAdapter = wireMoshi.adapter(FsDirectoryTree::class.java)
@@ -394,6 +395,23 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val element = http.unwrap(raw, JsonElement.serializer(), "list git branches")
         if (element is JsonNull) return null
         return gitBranchesAdapter.fromJson(element.toString())
+    }
+
+    override suspend fun getSessionContext(sessionId: String): console.v1.ContextSnapshot? {
+        val raw = http.get("/api/sessions/${enc(sessionId)}/context")
+        val element = http.unwrap(raw, JsonElement.serializer(), "get session context")
+        if (element is JsonNull) return null
+        return contextAdapter.fromJson(element.toString())
+    }
+
+    override suspend fun attachWorktree(sessionId: String, branch: String?, baseBranch: String?): SessionHeader {
+        val body = kotlinx.serialization.json.buildJsonObject {
+            if (!branch.isNullOrBlank()) put("branch", kotlinx.serialization.json.JsonPrimitive(branch))
+            if (!baseBranch.isNullOrBlank()) put("baseBranch", kotlinx.serialization.json.JsonPrimitive(baseBranch))
+        }.toString()
+        val raw = http.post("/api/sessions/${enc(sessionId)}/worktree", body)
+        val element = http.unwrap(raw, JsonElement.serializer(), "attach worktree")
+        return sessionAdapter.fromJson(element.toString()) ?: throw ApiException("Failed to attach worktree")
     }
 
     override suspend fun checkoutBranch(repoPath: String, branch: String) {

@@ -153,6 +153,17 @@ class ChatRepository(
         }
     }
 
+    /** One-off fetch so the ring has a value before the first live update. */
+    fun loadContext(sessionId: String) {
+        scope.launch {
+            try {
+                val snap = withContext(Dispatchers.IO) { api.getSessionContext(sessionId) } ?: return@launch
+                chats.update(sessionId) { if (it.context == null) it.copy(context = snap) else it }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     fun loadMessages(sessionId: String, messages: List<AgentMessage>) {
         if (messages.isEmpty()) return
         val withIds = ensureMessageIds(messages)
@@ -277,6 +288,7 @@ class ChatRepository(
             modelId = view.sessionModelId,
             provider = view.sessionProvider,
             approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
+            thinkingLevel = providerRepo?.validThinkingLevel(view.sessionProvider, view.sessionModelId, view.thinkingLevel) ?: view.thinkingLevel.takeIf { providerRepo == null },
             attachments = attachments,
             contextFiles = mentionPaths(prompt),
         )

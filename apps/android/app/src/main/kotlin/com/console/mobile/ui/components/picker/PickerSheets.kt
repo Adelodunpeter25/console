@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -30,6 +31,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -167,11 +169,19 @@ fun ModelPickerSheet(
     selectedProvider: String?,
     onDismiss: () -> Unit,
     onSelect: (String, String?) -> Unit,
+    /** Committed thinking level; null with [onSelectThinking] null hides the section. */
+    selectedThinking: String? = null,
+    /** Disabled while a run is active — a change would only apply to the next turn. */
+    thinkingLocked: Boolean = false,
+    onSelectThinking: ((model: String, provider: String?, level: String) -> Unit)? = null,
 ) {
     val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var search by remember { mutableStateOf("") }
     var showFavorites by remember { mutableStateOf(false) }
+    // The model the user is looking at, separate from the committed one, so the
+    // thinking levels below re-filter as they move through the list.
+    var highlighted by remember { mutableStateOf<Pair<String, String?>?>(null) }
     var activeProvider by remember(providerState.providers) {
         mutableStateOf(selectedProvider ?: providerState.providers.firstOrNull()?.name)
     }
@@ -201,6 +211,22 @@ fun ModelPickerSheet(
         val model = modelsByProvider[provider]?.firstOrNull { it.id == modelId } ?: return@mapNotNull null
         val entry = providerState.providers.firstOrNull { it.name == provider }
         FavoriteEntry(provider, model, entry?.display_name?.ifBlank { provider } ?: provider)
+    }
+
+    val highlightedId = highlighted?.first ?: selectedModel
+    val highlightedProvider = highlighted?.second ?: selectedProvider
+    val highlightedModel: Model? = highlightedProvider?.let { providerState.modelsByProvider[it] }
+        ?.firstOrNull { it.id == highlightedId }
+        ?: providerState.modelsByProvider.values.flatten().firstOrNull { it.id == highlightedId }
+    val thinkingChoices = if (onSelectThinking == null) emptyList()
+    else com.console.mobile.core.chat.thinkingOptions(highlightedModel?.supported_thinking_levels.orEmpty())
+
+    // With a thinking section, a model that offers levels is only highlighted —
+    // the user commits by choosing a level (or "Use this model"). A model with
+    // no levels has nothing more to ask, so it commits straight away.
+    fun pick(model: Model, provider: String?) {
+        highlighted = model.id to provider
+        if (onSelectThinking == null || thinkingLocked || model.supported_thinking_levels.isEmpty()) onSelect(model.id, provider)
     }
 
     fun toggleFavorite(providerId: String, modelId: String) {
@@ -288,9 +314,9 @@ fun ModelPickerSheet(
                                 // Provider is not shown as a tab here, so it
                                 // belongs on the row (desktop parity).
                                 subtitle = "${entry.providerLabel} · ${formatContextWindow(entry.model.context_window)} context",
-                                selected = entry.model.id == selectedModel && entry.provider == selectedProvider,
+                                selected = entry.model.id == highlightedId && entry.provider == highlightedProvider,
                                 trailing = { starFor(entry.provider, entry.model.id) },
-                            ) { onSelect(entry.model.id, entry.provider) }
+                            ) { pick(entry.model, entry.provider) }
                         }
                     }
                 }
@@ -313,11 +339,32 @@ fun ModelPickerSheet(
                                     // the id under it repeated itself — the context
                                     // window is the useful second line (desktop parity).
                                     subtitle = "${formatContextWindow(m.context_window)} context",
-                                    selected = m.id == selectedModel,
+                                    selected = m.id == highlightedId,
                                     trailing = { starFor(providerId, m.id) },
-                                ) { onSelect(m.id, activeProvider) }
+                                ) { pick(m, activeProvider) }
                             }
                         }
+                }
+            }
+            if (onSelectThinking != null && highlightedId != null && thinkingChoices.isNotEmpty()) {
+                HorizontalDivider(color = ConsoleColors.BorderSubtle, modifier = Modifier.padding(vertical = 12.dp))
+                PickerSheetTitle("Thinking")
+                if (thinkingLocked) {
+                    Text("Applies to the next message — locked while a run is active.", color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                }
+                val committedHere = highlightedId == selectedModel && highlightedProvider == selectedProvider
+                val current = if (committedHere) selectedThinking else null
+                val effective = current?.takeIf { l -> thinkingChoices.any { it.value == l } }
+                    ?: highlightedModel?.default_thinking_level?.takeIf { l -> thinkingChoices.any { it.value == l } }
+                    ?: thinkingChoices.first().value
+                Column(modifier = Modifier.alpha(if (thinkingLocked) 0.45f else 1f)) {
+                    thinkingChoices.forEach { opt ->
+                        PickerRow(
+                            title = opt.label,
+                            subtitle = opt.description.takeIf { it.isNotBlank() },
+                            selected = opt.value == effective,
+                        ) { if (!thinkingLocked) onSelectThinking(highlightedId, highlightedProvider, opt.value) }
+                    }
                 }
             }
         }
@@ -344,6 +391,54 @@ fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (S
                         subtitle = m.description.takeIf { it.isNotBlank() },
                         selected = m.value.value == current,
                     ) { onSelect(m.value.value) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Branch picker for a chat's project. "New worktree" is an action, not a
+ * selection, so it sits apart from the branch list behind a divider.
+ *
+ * [locked] covers a run in flight and a chat that already has messages: a
+ * branch switch mid-stream would only land on the next turn, and a worktree
+ * can only be attached to a message-less session.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BranchPickerSheet(
+    branches: List<console.v1.GitBranchInfo>?,
+    loading: Boolean,
+    locked: Boolean,
+    lockedReason: String?,
+    worktreeBranch: String?,
+    canStartWorktree: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+    onNewWorktree: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = ConsoleColors.Background) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 40.dp)) {
+            PickerSheetTitle("Branch")
+            if (locked && !lockedReason.isNullOrBlank()) {
+                Text(lockedReason, color = ConsoleColors.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+            }
+            Column(modifier = Modifier.alpha(if (locked) 0.45f else 1f)) {
+                if (worktreeBranch == null && canStartWorktree) {
+                    PickerRow(title = "New worktree", subtitle = "Work in an isolated copy on its own branch") {
+                        if (!locked) onNewWorktree()
+                    }
+                    HorizontalDivider(color = ConsoleColors.BorderSubtle, modifier = Modifier.padding(vertical = 8.dp))
+                }
+                when {
+                    loading && branches == null -> PickerPlaceholder(spinner = true)
+                    branches.isNullOrEmpty() -> PickerPlaceholder("No branches found")
+                    else -> LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(branches, key = { it.name }) { b ->
+                            PickerRow(title = b.name, selected = b.current) { if (!locked) onSelect(b.name) }
+                        }
+                    }
                 }
             }
         }

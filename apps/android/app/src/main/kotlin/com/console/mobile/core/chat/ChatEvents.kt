@@ -12,6 +12,7 @@ import com.console.mobile.data.model.ToolResultMessage
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.AgentAssistantMessage as WireAssistantMessage
+import console.v1.ContextSnapshot
 import console.v1.ModelStreamPart
 import console.v1.TodoItem
 import console.v1.ToolCall as WireToolCall
@@ -24,6 +25,7 @@ private val partJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().ada
 private val wireMoshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
 private val toolCallJson = wireMoshi.adapter(WireToolCall::class.java)
 private val toolResultJson = wireMoshi.adapter(WireToolResult::class.java)
+private val contextJson = wireMoshi.adapter(ContextSnapshot::class.java)
 private val turnJson = wireMoshi.adapter(WireAssistantMessage::class.java)
 
 private fun decodeToolCall(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolCall? =
@@ -195,6 +197,10 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
         "permissionRequest" -> session // structured payload handled at store layer; keep reducer total
         "askQuestion" -> session
         "todoUpdate" -> session.copy(todoItems = event.items?.mapNotNull { runCatching { todoJson.fromJson(it.toString()) }.getOrNull() } ?: emptyList())
+        "contextUpdate" -> {
+            val snap = event.context?.let { runCatching { contextJson.fromJson(it.toString()) }.getOrNull() }
+            if (snap == null) session else session.copy(context = snap)
+        }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
             val msg = event.error?.message ?: "Unknown agent error"

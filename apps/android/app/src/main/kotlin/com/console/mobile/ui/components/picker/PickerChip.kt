@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -32,13 +33,15 @@ fun PickerChip(
     label: String,
     modifier: Modifier = Modifier,
     provider: String? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = modifier.clip(RoundedCornerShape(8.dp))
+        modifier = modifier.alpha(if (enabled) 1f else 0.45f)
+            .clip(RoundedCornerShape(8.dp))
             .background(ConsoleColors.CardAlt)
             .border(1.dp, ConsoleColors.BorderSubtle, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

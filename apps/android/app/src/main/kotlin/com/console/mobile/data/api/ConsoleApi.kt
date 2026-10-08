@@ -77,6 +77,9 @@ interface ConsoleApi {
     suspend fun getGitStatus(path: String): GitStatusSummary?
     suspend fun listBranches(repoPath: String): GitBranchesResponse?
     suspend fun checkoutBranch(repoPath: String, branch: String)
+    suspend fun getSessionContext(sessionId: String): console.v1.ContextSnapshot?
+    /** Turn a message-less session into a worktree session, branching off its cwd. */
+    suspend fun attachWorktree(sessionId: String, branch: String?, baseBranch: String?): SessionHeader
     // providers / config
     suspend fun getProviders(): List<ProviderCatalogEntry>
     suspend fun getProviderModels(providerId: String): List<Model>

@@ -83,7 +83,6 @@ fun Composer(
     val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
 
     var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
-    var visualLines by remember(sessionId) { mutableStateOf(1) }
     if (fieldValue.text != value) {
         fieldValue = fieldValue.copy(text = value, selection = TextRange(minOf(fieldValue.selection.start, value.length)))
     }
@@ -146,13 +145,13 @@ fun Composer(
     // by the keyboard itself — otherwise the gap doubles when typing.
     Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
+        ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
         }
         ComposerInput(
             value = value,
             fieldValue = fieldValue,
-            visualLines = visualLines,
             mentionVisual = mentionVisual,
             onFieldValueChange = { new ->
                 // Chip-atomic backspace: a single delete ending inside a
@@ -201,9 +200,9 @@ fun Composer(
                 }
                 onChange(nextText)
             },
-            onVisualLinesChange = { visualLines = it },
             onCoordinatesChange = { fieldCoordinates = it },
             attach = { pickImages() },
+            sessionId = sessionId,
             running = running,
             canSend = canSend,
             onSend = onSend,
@@ -238,7 +237,7 @@ fun Composer(
                 null -> {}
             }
         }
-        ComposerBottomStrip(sessionId = sessionId, projectLocked = projectLocked, onAddProject = onAddProject)
+        ComposerBottomStrip(sessionId = sessionId)
     }
 }
 
@@ -247,35 +246,26 @@ fun Composer(
 private fun ComposerInput(
     value: String,
     fieldValue: TextFieldValue,
-    visualLines: Int,
     mentionVisual: MentionVisual,
     onFieldValueChange: (TextFieldValue) -> Unit,
-    onVisualLinesChange: (Int) -> Unit,
     onCoordinatesChange: (LayoutCoordinates) -> Unit,
     attach: () -> Unit,
+    sessionId: String,
     running: Boolean,
     canSend: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
-    // Rounded rect as soon as the bubble grows past one *visual* line.
-    // Keying off "\n" alone missed word-wrap, which adds no newline char,
-    // so wrapped text kept the pill while shift+enter flipped to the rect.
-    val bubbleShape = if (visualLines > 1) RoundedCornerShape(20.dp) else CircleShape
-    Row(
+    // A constant rounded rect: the old pill-to-rect morph keyed off the visual
+    // line count and made the bubble jump shape while typing.
+    val bubbleShape = RoundedCornerShape(20.dp)
+    Column(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(ConsoleColors.Card)
             .border(1.dp, ConsoleColors.Border, bubbleShape)
             .onGloballyPositioned(onCoordinatesChange)
             .padding(horizontal = 6.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.Bottom,
     ) {
-        Box(
-            modifier = Modifier.size(37.dp).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
-        }
         var mentionLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
         var fieldHeightPx by remember { mutableStateOf(0) }
         // The editable field cannot host icon glyphs, so mention icons ride
@@ -284,10 +274,9 @@ private fun ComposerInput(
         // where slot coordinates would no longer line up.
         Box(
             modifier = Modifier
-                .align(Alignment.CenterVertically)
-                .weight(1f)
-                .padding(horizontal = 4.dp)
-                .heightIn(max = 120.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .heightIn(max = 80.dp)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
         ) {
@@ -303,10 +292,7 @@ private fun ComposerInput(
                 cursorBrush = SolidColor(ConsoleColors.TextPrimary),
                 visualTransformation = mentionVisual.asTransformation(),
                 maxLines = 6,
-                onTextLayout = {
-                    mentionLayout = it
-                    onVisualLinesChange(it.lineCount)
-                },
+                onTextLayout = { mentionLayout = it },
                 decorationBox = { innerTextField ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         val layout = mentionLayout
@@ -366,25 +352,41 @@ private fun ComposerInput(
                 }
             }
         }
-        if (running) {
-            // Same 35dp footprint as the send button so the composer doesn't
-            // resize mid-send, and destructive red so the control's meaning
-            // is readable at a glance rather than only from a tiny glyph.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
-                modifier = Modifier.size(35.dp).clip(CircleShape).background(ConsoleColors.Destructive)
-                    .clickable(onClickLabel = "Stop", onClick = onStop),
+                modifier = Modifier.size(35.dp).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
                 contentAlignment = Alignment.Center,
             ) {
-                androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
+                androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
             }
-        } else {
-            Box(
-                modifier = Modifier.size(35.dp).clip(CircleShape)
-                    .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
-                    .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
+            // Fills the gap so send/stop stays pinned right; the chip truncates
+            // rather than pushing the button off a narrow screen.
+            Box(modifier = Modifier.weight(1f).padding(horizontal = 4.dp), contentAlignment = Alignment.CenterEnd) {
+                ModelThinkingChip(sessionId = sessionId, running = running)
+            }
+            if (running) {
+                // Same 35dp footprint as the send button so the composer doesn't
+                // resize mid-send, and destructive red so the control's meaning
+                // is readable at a glance rather than only from a tiny glyph.
+                Box(
+                    modifier = Modifier.size(35.dp).clip(CircleShape).background(ConsoleColors.Destructive)
+                        .clickable(onClickLabel = "Stop", onClick = onStop),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
+                }
+            } else {
+                Box(
+                    modifier = Modifier.size(35.dp).clip(CircleShape)
+                        .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
+                        .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
+                }
             }
         }
     }

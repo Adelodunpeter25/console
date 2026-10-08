@@ -30,6 +30,7 @@ data class UpdateSessionDto(
     val modelId: String? = null,
     val provider: String? = null,
     val approvalMode: String? = null,
+    val thinkingLevel: String? = null,
 )
 
 @Serializable
@@ -38,6 +39,9 @@ data class RunPromptDto(
     val modelId: String? = null,
     val provider: String? = null,
     val approvalMode: String? = null,
+    // The run request carries its own level; the server does not fall back to
+    // the one saved on the session, so the picker's choice has to ride along.
+    val thinkingLevel: String? = null,
     val attachments: List<ImageAttachment> = emptyList(),
     val contextFiles: List<String> = emptyList(),
 )

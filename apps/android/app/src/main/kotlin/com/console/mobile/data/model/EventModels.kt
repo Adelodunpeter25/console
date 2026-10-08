@@ -39,6 +39,9 @@ data class AgentSessionEvent(
     // decoded with Moshi in ChatEvents like todo items.
     val calls: List<JsonElement>? = null,
     val request: JsonElement? = null,
+    // contextUpdate payload: raw until consumed; console.v1.ContextSnapshot,
+    // decoded with Moshi in ChatEvents.
+    val context: JsonElement? = null,
     val result: JsonElement? = null,
     val results: List<JsonElement>? = null,
     // Wire TodoItems arrive here as raw JSON (Phase 4 will schema the
