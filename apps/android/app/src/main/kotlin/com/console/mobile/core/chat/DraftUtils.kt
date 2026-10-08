@@ -177,3 +177,13 @@ fun projectForSession(
     if (cwd.isNullOrEmpty()) return null
     return projects.firstOrNull { p -> p.path.isNotEmpty() && (p.path == cwd || cwd.startsWith(p.path + "/")) }
 }
+
+/**
+ * Branch shown on a Home row. A worktree chat runs on its own branch, so that
+ * wins; the project's branch is the main checkout's and is only right for chats
+ * working in it.
+ */
+fun sessionBranch(worktreeBranch: String?, projectId: String?, projectBranches: Map<String, String>): String? {
+    worktreeBranch?.takeIf { it.isNotBlank() }?.let { return it }
+    return projectId?.let { projectBranches[it] }?.ifBlank { null }
+}

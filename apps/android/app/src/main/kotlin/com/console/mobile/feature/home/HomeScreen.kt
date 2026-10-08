@@ -51,6 +51,7 @@ import com.console.mobile.core.chat.buildGroupedProjectSections
 import com.console.mobile.core.chat.draftPreview
 import com.console.mobile.core.chat.formatProjectTitle
 import com.console.mobile.core.chat.isDraftSession
+import com.console.mobile.core.chat.sessionBranch
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
 import console.v1.SessionHeader
@@ -117,8 +118,7 @@ fun HomeScreen(
         val proj = projectState.projects.firstOrNull { p ->
             (p.path.isNotEmpty() && s.cwd.isNotEmpty() && (p.path == s.cwd || s.cwd.startsWith(p.path + "/"))) || p.id == s.project_id
         }
-        val key = proj?.id ?: s.project_id ?: return null
-        return branches[key]?.ifBlank { null }
+        return sessionBranch(s.worktree?.branch, proj?.id ?: s.project_id, branches)
     }
 
     fun onRefresh() {

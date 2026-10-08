@@ -241,6 +241,8 @@ fun Composer(
     }
 }
 
+private val INPUT_LINE_HEIGHT = 19.sp
+
 /** The input bubble: attach button, text field, and send/stop. */
 @Composable
 private fun ComposerInput(
@@ -259,6 +261,9 @@ private fun ComposerInput(
     // A constant rounded rect: the old pill-to-rect morph keyed off the visual
     // line count and made the bubble jump shape while typing.
     val bubbleShape = RoundedCornerShape(20.dp)
+    // Three lines tall from the start so the bubble doesn't grow as you type.
+    // Derived from the text's own line height so it tracks the system font size.
+    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 3).toDp() }
     Column(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(ConsoleColors.Card)
@@ -276,7 +281,7 @@ private fun ComposerInput(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 6.dp)
-                .heightIn(max = 80.dp)
+                .heightIn(min = inputMinHeight, max = maxOf(80.dp, inputMinHeight))
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
         ) {
@@ -287,7 +292,7 @@ private fun ComposerInput(
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
                     fontSize = 14.sp,
-                    lineHeight = 19.sp,
+                    lineHeight = INPUT_LINE_HEIGHT,
                 ),
                 cursorBrush = SolidColor(ConsoleColors.TextPrimary),
                 visualTransformation = mentionVisual.asTransformation(),

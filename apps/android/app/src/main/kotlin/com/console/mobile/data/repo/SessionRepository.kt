@@ -147,9 +147,10 @@ class SessionRepository(
         }
 
     /** Turn a message-less session into a worktree session; the header carries the new cwd/branch. */
-    suspend fun attachWorktree(sessionId: String) {
+    suspend fun attachWorktree(sessionId: String): SessionHeader {
         val header = withContext(Dispatchers.IO) { api.attachWorktree(sessionId, null, null) }
         applyHeader(sessionId, header)
+        return header
     }
 
     fun refreshHeader(sessionId: String) {

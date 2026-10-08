@@ -172,7 +172,10 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
                 branchSheet = false
                 scope.launch {
                     try {
-                        AppContainer.sessionRepository.attachWorktree(sessionId)
+                        val header = AppContainer.sessionRepository.attachWorktree(sessionId)
+                        // The Home list reads its own copy of the header; without this it
+                        // keeps showing the project's branch until the list reloads.
+                        AppContainer.projectStateHolder.patchSession(sessionId, header)
                     } catch (_: Exception) {
                     }
                 }
