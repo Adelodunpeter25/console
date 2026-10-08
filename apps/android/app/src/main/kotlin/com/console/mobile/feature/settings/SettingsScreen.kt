@@ -2,9 +2,7 @@ package com.console.mobile.feature.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,42 +88,55 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
     ScreenHeader(title = "Settings", onBack = { onBack() })
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 32.dp)) {
-        val signedIn = authState.status?.values?.any { it.logged_in } == true
-        LandingRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
-        LandingRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
-        LandingRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
-        val roles = providerState.modelRoles.count { it.value.isNotBlank() }
-        LandingRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
-        val n = projectState.projects.size
-        LandingRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
-        val d = projectState.deletedSessions.size
-        LandingRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
-        LandingRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
+    val signedIn = authState.status?.values?.any { it.logged_in } == true
+    val roles = providerState.modelRoles.count { it.value.isNotBlank() }
+    val n = projectState.projects.size
+    val d = projectState.deletedSessions.size
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+        SettingsCategory("Connections") {
+            LandingRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
+            LandingRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
+            LandingRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+        }
+        SettingsCategory("AI & tools") {
+            LandingRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
+            LandingRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
+        }
+        SettingsCategory("Projects & chats") {
+            LandingRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
+            LandingRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+        }
+    }
+}
+
+private val CategoryBlue = Color(0xFF5B8DEF)
+
+/** A blue category heading over one rounded card holding its rows. */
+@Composable
+private fun SettingsCategory(title: String, content: @Composable () -> Unit) {
+    Text(
+        title, color = CategoryBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
+    )
+    val shape = RoundedCornerShape(26.dp)
+    // The card clips its rows, so the first and last row's press ripple follows the rounded corners.
+    Column(modifier = Modifier.fillMaxWidth().clip(shape).background(ConsoleColors.SurfaceCard)) {
+        content()
     }
 }
 
 @Composable
 private fun LandingRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp).clip(shape)
-            .background(ConsoleColors.Card)
-            .border(1.dp, ConsoleColors.Border, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(ConsoleColors.SurfaceElevated),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = ConsoleColors.TextPrimary)
+        Icon(icon, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(24.dp))
+        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+            Text(title, color = ConsoleColors.TextPrimary, fontSize = 17.sp)
+            Text(summary, color = ConsoleColors.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 1.dp))
         }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(title, color = ConsoleColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-        }
-        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted)
+        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
     }
 }
