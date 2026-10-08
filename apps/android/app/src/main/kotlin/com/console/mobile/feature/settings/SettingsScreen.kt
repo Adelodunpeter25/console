@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +40,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 
 enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
 
@@ -109,22 +109,6 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     }
 }
 
-private val CategoryBlue = Color(0xFF5B8DEF)
-
-/** A blue category heading over one rounded card holding its rows. */
-@Composable
-private fun SettingsCategory(title: String, content: @Composable () -> Unit) {
-    Text(
-        title, color = CategoryBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 8.dp),
-    )
-    val shape = RoundedCornerShape(26.dp)
-    // The card clips its rows, so the first and last row's press ripple follows the rounded corners.
-    Column(modifier = Modifier.fillMaxWidth().clip(shape).background(ConsoleColors.SurfaceCard)) {
-        content()
-    }
-}
-
 @Composable
 private fun LandingRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
     Row(
@@ -132,11 +116,11 @@ private fun LandingRow(icon: ImageVector, title: String, summary: String, onClic
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = ConsoleColors.TextPrimary, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(24.dp))
         Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-            Text(title, color = ConsoleColors.TextPrimary, fontSize = 17.sp)
-            Text(summary, color = ConsoleColors.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 1.dp))
+            Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp)
+            Text(summary, color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 1.dp))
         }
-        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(20.dp))
+        Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
     }
 }

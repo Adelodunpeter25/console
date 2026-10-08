@@ -52,6 +52,7 @@ import com.console.mobile.ui.components.PillButtonVariant
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,59 +100,53 @@ fun ServersSettings(onBack: () -> Unit) {
                 actions = {
                     IconButton(onClick = { editing = "__create__" }, modifier = Modifier.size(40.dp)) {
                         Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, CircleShape),
+                            modifier = Modifier.size(40.dp).clip(CircleShape).background(NewTheme.Card),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(TablerIcons.Outline.Plus, contentDescription = "Add environment", tint = ConsoleColors.TextPrimary)
+                            Icon(TablerIcons.Outline.Plus, contentDescription = "Add environment", tint = NewTheme.TextPrimary)
                         }
                     }
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                val cardShape = RoundedCornerShape(16.dp)
-                Column(modifier = Modifier.fillMaxWidth().clip(cardShape).background(ConsoleColors.Card).border(1.dp, ConsoleColors.Border, cardShape).padding(horizontal = 4.dp, vertical = 4.dp)) {
+                SettingsCategory("Environments") {
                     if (envState.environments.isEmpty()) {
-                        Text("No environments yet. Add a backend URL to get started.", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp))
+                        SettingsNote("No environments yet. Add a backend URL to get started.")
                     } else {
-                        envState.environments.forEach { env ->
+                        envState.environments.forEachIndexed { index, env ->
                             val probe = probes[env.id]
                             val isActive = env.id == envState.activeId
                             Row(
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { editing = env.id }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                modifier = Modifier.fillMaxWidth().clickable { editing = env.id }.padding(horizontal = 18.dp, vertical = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(when (probe) { null -> Color(0xFF52525B); true -> Color(0xFF34D399); else -> Color(0xFFF87171) }))
-                                Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                                // Reachability: grey until probed, then green/red.
+                                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(when (probe) { null -> NewTheme.TextGhost; true -> NewTheme.Success; else -> NewTheme.Danger }))
+                                Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(env.name, color = ConsoleColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(env.name, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                         if (isActive) {
-                                            Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color(0xFF34D399).copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                                                Text("Active", color = Color(0xFF34D399), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                            Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(NewTheme.Success.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
+                                                Text("Active", color = NewTheme.Success, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     }
-                                    Text(urlHostPort(env.url), color = ConsoleColors.TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                    Text(urlHostPort(env.url), color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
                                 }
-                                Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(18.dp))
+                                Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
                             }
+                            if (index < envState.environments.lastIndex) SettingsDivider(startInset = 44.dp)
                         }
                     }
                 }
                 if (envState.activeId != null) {
-                    PillButton(
-                        text = "Disconnect backend",
-                        onClick = {
+                    SettingsCategory("Connection") {
+                        SettingsActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.Danger) {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))
-                        },
-                        variant = PillButtonVariant.Destructive,
-                        icon = TablerIcons.Outline.LinkOff,
-                        fullWidth = true,
-                        cornerRadius = 16.dp,
-                        verticalPadding = 12.dp,
-                        modifier = Modifier.padding(top = 16.dp),
-                    )
+                        }
+                    }
                 }
             }
         }

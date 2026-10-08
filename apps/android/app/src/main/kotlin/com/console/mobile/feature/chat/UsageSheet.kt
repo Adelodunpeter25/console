@@ -37,18 +37,8 @@ import com.console.mobile.core.util.usageResetLabel
 import com.console.mobile.core.util.usedPercent
 import com.console.mobile.ui.components.picker.PickerSheetTitle
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
-
-// Desktop's meter colours (theme.gauge / warning / danger, dark theme).
-private val GaugeBlue = Color(0xFF3B82F6)
-private val WarningAmber = Color(0xFFE0B36A)
-private val DangerRed = Color(0xFFE2726A)
-
-internal fun UsageTone.color(): Color = when (this) {
-    UsageTone.Normal -> GaugeBlue
-    UsageTone.Warning -> WarningAmber
-    UsageTone.Danger -> DangerRed
-}
 
 /**
  * The desktop usage popover as a sheet: context occupancy first, then the

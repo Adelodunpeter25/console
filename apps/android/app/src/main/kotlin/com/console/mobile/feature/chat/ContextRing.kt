@@ -23,6 +23,7 @@ import com.console.mobile.core.chat.contextPercent
 import com.console.mobile.core.util.UsageTone
 import com.console.mobile.core.util.ringTone
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.color
 import console.v1.ContextSnapshot
 
 /**
