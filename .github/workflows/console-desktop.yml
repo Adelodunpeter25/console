@@ -39,15 +39,17 @@ jobs:
           workspaces: apps/desktop
           key: ${{ matrix.rust-target }}
 
-      # CEF distribution (~150MB first run): the `cef` crate downloads it
-      # into CEF_PATH on first build; build.sh --cef then bundles the
-      # framework + helpers into the .app. Cached per target triple —
-      # x64 and arm64 need different frameworks. Keyed on console-ui's
-      # Cargo.toml so a `cef` version bump refetches instead of mixing.
+      # CEF distribution (~150MB first run): the `cef` crate's build script
+      # downloads it into $CEF_PATH when that env var is set (otherwise it
+      # lands in the cargo target dir, uncached and invisible to step 4b of
+      # build.sh). build.sh --cef then bundles framework + helpers into
+      # the .app. Cached per target triple — x64 and arm64 need different
+      # frameworks. Keyed on console-ui's Cargo.toml so a `cef` version
+      # bump refetches instead of mixing.
       - name: Cache CEF distribution
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/cef
+          path: /Users/runner/.local/share/cef
           key: cef-${{ matrix.rust-target }}-${{ hashFiles('apps/desktop/crates/console-ui/Cargo.toml') }}
 
       # Intel cross-compiles from the Apple Silicon runner via the universal
@@ -55,6 +57,10 @@ jobs:
       # natively on the runner. --locked fails loudly on dependency drift
       # instead of silently floating to a broken graph.
       - name: Package Console.app
+        env:
+          # Must match the cache path above and build.sh's default: this is
+          # what tells the `cef` crate where to download/look.
+          CEF_PATH: /Users/runner/.local/share/cef
         run: >
           bash apps/desktop/scripts/build.sh
           --mode prod
