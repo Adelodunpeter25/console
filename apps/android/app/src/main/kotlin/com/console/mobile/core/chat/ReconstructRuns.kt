@@ -79,16 +79,54 @@ fun withLiveRun(
         )
     }
     val last = base.last()
+    // Tool calls share their call id between history and the stream; text and
+    // thinking events get per-source ids, so they're matched on content.
     val known = last.events.mapTo(HashSet()) { it.id }
-    val extra = live?.events?.filterNot { it.id in known }.orEmpty()
+    val knownText = last.events.mapNotNullTo(HashSet()) {
+        when (it) {
+            is ActivityEvent.Text -> it.text
+            is ActivityEvent.Thinking -> it.text
+            else -> null
+        }
+    }
+    val extra = live?.events?.filterNot {
+        it.id in known || (it is ActivityEvent.Text && it.text in knownText) ||
+            (it is ActivityEvent.Thinking && it.text in knownText)
+    }.orEmpty()
+    val liveResults = live?.events.orEmpty()
+        .filterIsInstance<ActivityEvent.ToolCallEvent>()
+        .mapNotNull { e -> e.result?.let { e.id to it } }
+        .toMap()
     val reopened = last.copy(
         runId = live?.runId ?: last.runId,
         startedAt = live?.startedAt ?: last.startedAt ?: nowMs,
         elapsedMs = 0,
         status = RunStatus.Working,
-        events = last.events + extra,
+        events = last.events.map { e ->
+            if (e is ActivityEvent.ToolCallEvent && e.result == null) e.copy(result = liveResults[e.id]) else e
+        } + extra,
     )
     return base.dropLast(1) + reopened
+}
+
+/**
+ * Merge a freshly fetched history page into a session whose run is live.
+ *
+ * The server's page wins: it holds the prompt and every finished turn under
+ * server ids. Local copies are dropped because the prompt sent from this
+ * device carries a client id that never matches, and keeping both rendered
+ * the prompt twice and shifted every run onto the wrong message.
+ *
+ * The only local rows kept are assistant turns that streamed in after the
+ * page was served — those follow the last local row the server also has,
+ * and their ids are server turn ids, so they can't duplicate anything.
+ */
+fun mergeLiveHistory(server: List<AgentMessage>, local: List<AgentMessage>): List<AgentMessage> {
+    val serverIds = server.mapNotNullTo(HashSet()) { it.id }
+    val lastShared = local.indexOfLast { it.id != null && it.id in serverIds }
+    if (lastShared < 0) return server
+    val tail = local.drop(lastShared + 1).filter { it !is UserMessage && it.id !in serverIds }
+    return server + tail
 }
 
 private fun applyPending(run: RunActivityState, results: Map<String, ToolResult>): RunActivityState {

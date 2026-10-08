@@ -13,6 +13,7 @@ import com.console.mobile.core.chat.newMessageId
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.toChatSnapshot
 import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.core.chat.mergeLiveHistory
 import com.console.mobile.core.chat.withLiveRun
 import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
@@ -162,21 +163,12 @@ class ChatRepository(
         if (messages.isEmpty()) return
         val withIds = ensureMessageIds(messages)
         chats.update(sessionId) { current ->
-            // A live stream owns the run state and the streaming buffers, but the
-            // history page still has to land. Bailing out here left the
-            // transcript blank whenever a run was already active on entry, which
-            // is exactly when attach had just set running — a losing race between
-            // the detail fetch and the attach, which both start on entry.
+            // The server's history is the source of truth even mid-run; the live
+            // stream only owns the in-flight buffers and the newest run's
+            // activity, which is re-paired with the latest prompt here.
             if (current.running) {
-                val seen = current.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
-                val fresh = withIds.filterNot { m -> messageKey(m) in seen }
-                if (fresh.isEmpty()) current else {
-                    // The attach may have opened its run before history
-                    // arrived; re-pair it with the newest prompt now that the
-                    // prompt is actually in the list.
-                    val merged = fresh + current.messages
-                    current.copy(messages = merged, runs = withLiveRun(merged, current.runs))
-                }
+                val merged = mergeLiveHistory(withIds, current.messages)
+                current.copy(messages = merged, runs = withLiveRun(merged, current.runs))
             } else {
                 current.copy(
                     messages = withIds,
