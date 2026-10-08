@@ -13,43 +13,13 @@ data class AskQuestionRequest(
     val batchId: String? = null,
 )
 
-@Serializable
-data class SubagentStartEvent(
-    val type: String = "subagentStart",
-    val subagentId: String,
-    val parentToolCallId: String,
-    val name: String,
-    val role: String,
-    val prompt: String,
-    val maxTurns: Int,
-)
-
-@Serializable
-data class SubagentActivityEvent(
-    val type: String = "subagentActivity",
-    val subagentId: String,
-    val turnIndex: Int,
-    val toolCallId: String,
-    val toolName: String,
-    val args: JsonElement? = null,
-    val status: String,
-    val error: String? = null,
-)
-
-@Serializable
-data class SubagentEndEvent(
-    val type: String = "subagentEnd",
-    val subagentId: String,
-    val status: String,
-    val summary: String? = null,
-    val error: String? = null,
-    val totalTurns: Int,
-)
-
 // Subagent rows moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): counts narrow to int32 and stay JSON numbers,
 // activity args cross as raw JSON bytes. Start/activity/end EVENT
-// frames stay hand-shaped until the event stream migrates.
+// frames are schema'd too (console.v1.SubagentStartEvent etc.) and
+// stay flattened under the frame's type tag; Android reads subagent
+// rows from GET /subagents, so the flat frames are covered by the
+// golden fixtures instead of a decode path here.
 
 /** Agent session SSE event. */
 @Serializable
