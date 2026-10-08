@@ -1,9 +1,11 @@
 package com.console.mobile
 
 import com.console.mobile.core.chat.ActivityEvent
+import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.mergeLiveHistory
+import com.console.mobile.core.chat.prependOlderMessages
 import com.console.mobile.core.chat.withLiveRun
 import com.console.mobile.data.model.AssistantMessage
 import com.console.mobile.data.model.TextPart
@@ -88,5 +90,30 @@ class LiveRunTest {
         )
         val runs = withLiveRun(withText, listOf(live), nowMs = 10)
         assertEquals(2, runs[1].events.size)
+    }
+
+    @Test
+    fun olderPageDuringLiveRunKeepsLiveActivityUnderNewestPrompt() {
+        // Re-entry state: newest page in memory, live run collecting tool calls.
+        val live = RunActivityState(
+            runId = "live", startedAt = 3, status = RunStatus.Working,
+            events = listOf(ActivityEvent.ToolCallEvent("t1", ToolCall(id = "t1", name = "read_file"))),
+        )
+        val newestPage = history.drop(2) // u2, a2
+        val session = ChatSessionState(
+            messages = newestPage,
+            running = true,
+            runs = withLiveRun(newestPage, listOf(live)),
+        )
+        // The auto-load at the top of the list pulls in u1, a1.
+        val after = prependOlderMessages(session, history.take(2))
+
+        val prompts = after.messages.filterIsInstance<UserMessage>()
+        // One run per prompt, live one paired with the newest.
+        assertEquals(prompts.size, after.runs.size)
+        assertEquals("live", after.runs.last().runId)
+        assertEquals(RunStatus.Working, after.runs.last().status)
+        assertEquals(listOf("t1"), after.runs.last().events.map { it.id })
+        assertEquals(RunStatus.Completed, after.runs.first().status)
     }
 }

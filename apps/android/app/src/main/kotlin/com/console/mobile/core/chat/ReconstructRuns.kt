@@ -129,6 +129,38 @@ fun mergeLiveHistory(server: List<AgentMessage>, local: List<AgentMessage>): Lis
     return server + tail
 }
 
+/**
+ * Stable identity for deduping a prepended page against messages already
+ * held. Prefers the server id and falls back to the timestamp, which is what
+ * the server injects for rows stored without one.
+ */
+private fun messageKey(m: AgentMessage): String = m.id ?: "t${m.createdAt ?: 0L}"
+
+/**
+ * Prepend an older page. Runs are rebuilt from the whole list because
+ * [reconstructRuns] walks messages in order, so runs assembled from a
+ * partial tail would misattribute older tool calls.
+ */
+fun prependOlderMessages(session: ChatSessionState, older: List<AgentMessage>): ChatSessionState {
+    // A message that arrived on the first page can also arrive in a later page
+    // if the stream appended it after that page was served, which would render
+    // it twice. Ids win; createdAt is the fallback for rows stored without one.
+    val seen = session.messages.mapTo(HashSet()) { messageKey(it) }
+    val fresh = older.filterNot { messageKey(it) in seen }
+    if (fresh.isEmpty()) return session
+    val merged = ensureMessageIds(fresh) + session.messages
+    val streaming = session.running || session.runs.lastOrNull()?.status == RunStatus.Working
+    // Runs pair with prompts by position, so a live run must be rebuilt too:
+    // keeping the old list left fewer runs than prompts after the prepend, and
+    // the live run slid up under an older prompt — every later tool call and
+    // committed text then rendered there instead of under the newest prompt.
+    val rebuilt = if (streaming) withLiveRun(merged, session.runs) else reconstructRuns(merged)
+    // A page can straddle a run (assistant/tool rows whose user turn is still
+    // on an unfetched page), and then reconstruct yields nothing — keep what
+    // we had rather than blanking the transcript.
+    return session.copy(messages = merged, runs = rebuilt.ifEmpty { session.runs })
+}
+
 private fun applyPending(run: RunActivityState, results: Map<String, ToolResult>): RunActivityState {
     if (results.isEmpty()) return run
     val updated = run.events.map { e ->

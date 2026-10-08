@@ -14,6 +14,7 @@ import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.chat.toChatSnapshot
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.mergeLiveHistory
+import com.console.mobile.core.chat.prependOlderMessages
 import com.console.mobile.core.chat.withLiveRun
 import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.data.api.ConsoleApi
@@ -49,13 +50,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-
-/**
- * Stable identity for deduping a prepended page against messages already
- * held. Prefers the server id and falls back to the timestamp, which is what
- * the server injects for rows stored without one.
- */
-private fun messageKey(m: AgentMessage): String = m.id ?: "t${m.createdAt ?: 0L}"
 
 class ChatRepository(
     private val api: ConsoleApi,
@@ -200,28 +194,7 @@ class ChatRepository(
      */
     fun prependMessages(sessionId: String, older: List<AgentMessage>) {
         if (older.isEmpty()) return
-        chats.update(sessionId) {
-            // A message that arrived on the first page can also arrive in a
-            // later page if the stream appended it after that page was served,
-            // which would render it twice. Ids win; createdAt is the fallback
-            // for rows the server stored without one.
-            val seen = it.messages.mapTo(HashSet<String>()) { m -> messageKey(m) }
-            val fresh = older.filterNot { m -> messageKey(m) in seen }
-            if (fresh.isEmpty()) return@update it
-            val merged = ensureMessageIds(fresh) + it.messages
-            // Rebuild whenever nothing is streaming, not merely when `runs` is
-            // empty. A run reconstructed from the newest page alone has no tool
-            // calls for history that predates it, so its "Worked for Ns" header
-            // never appeared; `ifEmpty` locked that in, and pulling the older
-            // pages in could never repair it. Rebuilding still has to yield to a
-            // live stream, whose run state the reducer owns.
-            val streaming = it.running || it.runs.lastOrNull()?.status == RunStatus.Working
-            val rebuilt = if (streaming) it.runs else reconstructRuns(merged)
-            // A page can straddle a run (assistant/tool rows whose user turn is
-            // still on an unfetched page), and then reconstruct yields nothing —
-            // keep what we had rather than blanking the transcript.
-            it.copy(messages = merged, runs = rebuilt.ifEmpty { it.runs })
-        }
+        chats.update(sessionId) { prependOlderMessages(it, older) }
     }
 
     fun handleEvent(sessionId: String, event: AgentSessionEvent) {
