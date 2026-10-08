@@ -32,7 +32,7 @@ const RefreshSkewMs = 5 * 60_000
 // defaultCodeVersion is the pinned fallback Claude Code CLI version on the
 // Anthropic wire, used until (if ever) a server rejection names a newer
 // required one — see AdoptRequiredClaudeCodeVersion.
-const defaultCodeVersion = "2.1.291"
+const defaultCodeVersion = "2.1.294"
 
 // SDKVersion is the @anthropic-ai/sdk version bundled by Claude Code.
 const SDKVersion = "0.112.1"
