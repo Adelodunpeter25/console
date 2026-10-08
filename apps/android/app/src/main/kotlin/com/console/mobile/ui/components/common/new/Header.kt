@@ -24,8 +24,9 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Settings
 val PageHeaderHeight = 60.dp
 
 /**
- * Screen header: optional back button, a title with an optional subtitle, then
- * the screen's [actions] and an optional settings cog.
+ * Screen header: optional back button, a left-aligned title with an optional
+ * subtitle, then the screen's [actions] and an optional settings cog. Every screen
+ * uses the same left alignment, so there is no option to centre the title.
  *
  * The row has a fixed height so the back button and title sit at the same spot
  * on every screen — sizing from content made headers with a subtitle taller,
@@ -42,7 +43,6 @@ fun PageHeader(
     showSettings: Boolean = false,
     onSettingsPress: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
-    centerTitle: Boolean = true,
 ) {
     Row(
         modifier = modifier.fillMaxWidth().height(PageHeaderHeight).padding(horizontal = 16.dp),
@@ -53,14 +53,14 @@ fun PageHeader(
         }
         Column(
             modifier = Modifier.weight(1f),
-            horizontalAlignment = if (centerTitle) Alignment.CenterHorizontally else Alignment.Start,
+            horizontalAlignment = Alignment.Start,
         ) {
             Text(
                 text = title,
                 color = NewTheme.TextPrimary,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
+                textAlign = TextAlign.Start,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -69,7 +69,7 @@ fun PageHeader(
                     text = subtitle,
                     color = NewTheme.TextSecondary,
                     fontSize = 12.sp,
-                    textAlign = if (centerTitle) TextAlign.Center else TextAlign.Start,
+                    textAlign = TextAlign.Start,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

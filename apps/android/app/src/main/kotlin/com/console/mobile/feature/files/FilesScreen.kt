@@ -191,7 +191,7 @@ fun FilesScreen(onBack: () -> Unit) {
         } ?: sel
         val subtitle = listOfNotNull(project?.name?.takeIf { it.isNotBlank() }, relativePath).joinToString(" · ")
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
-            PageHeader(title = fileName, subtitle = subtitle, centerTitle = false, onBack = { selectedPath = null })
+            PageHeader(title = fileName, subtitle = subtitle, onBack = { selectedPath = null })
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
                 when {
                     block != null -> Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(20.dp)) {

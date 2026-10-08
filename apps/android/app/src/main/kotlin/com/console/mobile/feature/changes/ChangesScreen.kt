@@ -158,7 +158,7 @@ fun ChangesScreen(onBack: () -> Unit) {
     if (sel != null) {
         val change = files.firstOrNull { it.path == sel }
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-            PageHeader(title = baseOf(sel), subtitle = stripRepoPrefix(sel, repoPath), centerTitle = false, onBack = { selectedPath = null })
+            PageHeader(title = baseOf(sel), subtitle = stripRepoPrefix(sel, repoPath), onBack = { selectedPath = null })
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                 if (change != null) {
                     SectionCard(modifier = Modifier.padding(bottom = 16.dp)) {

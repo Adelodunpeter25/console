@@ -102,7 +102,7 @@ fun ChatScreen(
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-            PageHeader(title = "Chat", centerTitle = false, onBack = { onBackToHome() })
+            PageHeader(title = "Chat", onBack = { onBackToHome() })
             EmptyView(title = "No session selected", description = "Pick a chat from Home to get started.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize())
         }
         return
@@ -313,7 +313,6 @@ fun ChatScreen(
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         PageHeader(
             title = chatTitle,
-            centerTitle = false,
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()

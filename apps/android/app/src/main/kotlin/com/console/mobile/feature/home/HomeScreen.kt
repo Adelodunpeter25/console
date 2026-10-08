@@ -172,7 +172,6 @@ fun HomeScreen(
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         PageHeader(
             title = "Console",
-            centerTitle = false,
             showSettings = true,
             onSettingsPress = onOpenSettings,
             actions = { EnvironmentSwitcher() },
