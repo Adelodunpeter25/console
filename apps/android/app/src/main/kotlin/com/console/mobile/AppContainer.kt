@@ -309,13 +309,13 @@ object AppContainer {
                 try {
                     notificationRepository.notifications().collect { event ->
                         val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
-                            appStateHolder.state.value.selectedSessionId == event.sessionId
+                            appStateHolder.state.value.selectedSessionId == event.session_id
                         if (!viewingSame) {
                             LocalNotificationPresenter.showNotification(
                                 app,
                                 event.title,
                                 event.body,
-                                event.sessionId,
+                                event.session_id,
                                 event.subtitle,
                             )
                         }

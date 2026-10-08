@@ -2,7 +2,9 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApiClient
 import com.console.mobile.data.api.ConsoleJson
-import com.console.mobile.data.model.NotificationEvent
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.NotificationEvent
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,11 @@ class NotificationRepository(
     /**
      * Subscribes to backend notifications via GET /api/notifications/stream SSE.
      */
+    // NotificationEvent is a shared-schema type (console.v1); the stream has
+    // no envelope, so the frame decodes straight off the SSE line.
+    private val notificationAdapter = Moshi.Builder().add(WireJsonAdapterFactory()).build()
+        .adapter(NotificationEvent::class.java)
+
     fun notifications(): Flow<NotificationEvent> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
         val url = "$baseUrl/api/notifications/stream"
@@ -68,8 +75,8 @@ class NotificationRepository(
                                 val raw = l.substring(5).trim()
                                 if (raw.isNotEmpty()) {
                                     try {
-                                        val notif = ConsoleJson.decodeFromString(NotificationEvent.serializer(), raw)
-                                        trySend(notif)
+                                        val notif = notificationAdapter.fromJson(raw)
+                                        if (notif != null) trySend(notif)
                                     } catch (_: Exception) {
                                     }
                                 }

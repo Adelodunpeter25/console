@@ -11,8 +11,9 @@ object TodoStatus {
     const val COMPLETED = "completed"
 }
 
-@Serializable
-data class NotificationEvent(val type: String = "notification", val kind: String, val sessionId: String, val title: String, val subtitle: String = "", val body: String)
+// NotificationEvent moved to the shared protobuf schema
+// (console.v1.NotificationEvent from proto/console/v1): the SSE stream has
+// no envelope, so the frame decodes straight off the wire.
 
 // Usage quota types moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): trimmed to what the UI renders, with unit/status as
