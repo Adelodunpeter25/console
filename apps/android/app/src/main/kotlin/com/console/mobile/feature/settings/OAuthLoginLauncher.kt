@@ -71,7 +71,7 @@ object OAuthLoginLauncher {
      */
     suspend fun login(context: Context, authRepo: AuthRepository, provider: String) {
         val result = authRepo.getLoginUrl(provider)
-        val port = redirectPort(result.redirectUri)
+        val port = redirectPort(result.redirect_uri)
 
         withContext(Dispatchers.IO) {
             // Bind before opening the browser so a fast redirect can't be missed.
@@ -86,7 +86,7 @@ object OAuthLoginLauncher {
                         // without this; the tab lands in a new task instead.
                         tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    tab.launchUrl(context, Uri.parse(result.authUrl))
+                    tab.launchUrl(context, Uri.parse(result.auth_url))
                 }
                 val callback = awaitCallback(server, result.state)
                 authRepo.submitCallback(provider, callback.code, callback.state)

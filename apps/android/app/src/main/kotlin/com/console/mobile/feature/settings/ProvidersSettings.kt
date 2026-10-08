@@ -84,7 +84,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                     }
                     providers.forEachIndexed { i, p ->
                         val status = authState.status?.get(p.name)
-                        val loggedIn = status?.loggedIn == true
+                        val loggedIn = status?.logged_in == true
                         val busy = loggingIn == p.name
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {

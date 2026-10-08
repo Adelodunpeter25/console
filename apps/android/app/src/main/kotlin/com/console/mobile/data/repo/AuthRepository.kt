@@ -28,7 +28,7 @@ class AuthRepository(
                 // sends all four, but an absent one must still read as logged
                 // out rather than crash the settings page.
                 fun ProviderAuthStatus?.orLoggedOut(): ProviderAuthStatus =
-                    this ?: ProviderAuthStatus.Builder().setLoggedIn(false).build()
+                    this ?: ProviderAuthStatus(logged_in = false)
                 val antigravity = status.antigravity.orLoggedOut()
                 val statusMap = mapOf(
                     "antigravity" to antigravity,
