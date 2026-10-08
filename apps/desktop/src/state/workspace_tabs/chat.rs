@@ -474,13 +474,13 @@ impl ConsoleDesktopApp {
             return Vec::new();
         };
 
-        // Check live fetched models first
+        // Check live fetched models first. Levels cross as plain strings;
+        // unknown values are skipped (console_core::model_thinking_levels).
         if let Some(models) = self.models_by_provider.get(&selected.provider) {
             if let Some(m) = models.iter().find(|m| m.id == selected.model_id) {
-                if let Some(ref levels) = m.supported_thinking_levels {
-                    if !levels.is_empty() {
-                        return levels.clone();
-                    }
+                let levels = console_core::model_thinking_levels(m);
+                if !levels.is_empty() {
+                    return levels;
                 }
             }
         }
@@ -488,10 +488,9 @@ impl ConsoleDesktopApp {
         // Check static catalog models
         if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider) {
             if let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id) {
-                if let Some(ref levels) = m.supported_thinking_levels {
-                    if !levels.is_empty() {
-                        return levels.clone();
-                    }
+                let levels = console_core::model_thinking_levels(m);
+                if !levels.is_empty() {
+                    return levels;
                 }
             }
         }

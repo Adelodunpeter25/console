@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protos = [
         proto_root.join("console/v1/common.proto"),
         proto_root.join("console/v1/assist.proto"),
+        proto_root.join("console/v1/device.proto"),
         proto_root.join("console/v1/favorites.proto"),
         proto_root.join("console/v1/fs.proto"),
         proto_root.join("console/v1/git.proto"),
@@ -23,6 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/session.proto"),
         proto_root.join("console/v1/event.proto"),
         proto_root.join("console/v1/notification.proto"),
+        proto_root.join("console/v1/catalog.proto"),
         proto_root.join("console/v1/settings.proto"),
         proto_root.join("console/v1/terminal.proto"),
         proto_root.join("console/v1/usage.proto"),

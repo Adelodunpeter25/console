@@ -30,7 +30,7 @@ pub fn provider_svg_path(provider: &str) -> &'static str {
 }
 
 /// Human-size context window: 1_000_000 -> "1M", 272_000 -> "272k".
-pub fn format_context_window(context_window: usize) -> String {
+pub fn format_context_window(context_window: u32) -> String {
     if context_window >= 1_000_000 {
         format!("{}M", context_window / 1_000_000)
     } else {

@@ -24,6 +24,10 @@ name = "assist_json_test"
 path = "tests/assist_json_test.rs"
 
 [[test]]
+name = "device_json_test"
+path = "tests/device_json_test.rs"
+
+[[test]]
 name = "favorites_json_test"
 path = "tests/favorites_json_test.rs"
 
@@ -106,3 +110,7 @@ path = "tests/fs_json_test.rs"
 [[test]]
 name = "git_json_test"
 path = "tests/git_json_test.rs"
+
+[[test]]
+name = "catalog_test"
+path = "tests/catalog_test.rs"

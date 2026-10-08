@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -52,55 +52,37 @@ impl ThinkingLevel {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Model {
-    pub id: String,
-    pub provider: String,
-    pub context_window: usize,
-    pub supports_images: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supported_thinking_levels: Option<Vec<ThinkingLevel>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_thinking_level: Option<ThinkingLevel>,
+/// Canonical wire types from the shared protobuf schema
+/// (proto/console/v1/catalog.proto). context_window narrows to u32 and
+/// stays a JSON number; thinking levels stay plain strings on the wire, so
+/// [`Model::supported_thinking_levels`] and
+/// [`Model::default_thinking_level`] convert them to the client-side
+/// [`ThinkingLevel`] enum, skipping unknown strings.
+pub use console_proto::{Model, ProviderCatalogEntry, ProviderModelsResponse};
+
+/// Thinking levels a catalog model supports, as client-side enums.
+/// Unknown/absent levels are skipped; an empty list means "no declared
+/// levels", which callers fall back to per-provider defaults for.
+pub fn model_thinking_levels(model: &Model) -> Vec<ThinkingLevel> {
+    model
+        .supported_thinking_levels
+        .iter()
+        .filter_map(|raw| ThinkingLevel::from_str(raw))
+        .collect()
+}
+
+/// The model's default thinking level, if it names one the client knows.
+pub fn model_default_thinking_level(model: &Model) -> Option<ThinkingLevel> {
+    model
+        .default_thinking_level
+        .as_deref()
+        .and_then(ThinkingLevel::from_str)
 }
 
 // Canonical wire type from the shared protobuf schema (proto/console/v1).
 // prost field names match the old hand-written struct, so call sites are
 // unchanged. serde impls come from pbjson (protojson naming).
 pub use console_proto::ModelFavorite;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderCatalogEntry {
-    pub name: String,
-    pub display_name: String,
-    pub description: String,
-    /// A backend with an empty model list may emit `null`; that must decode
-    /// to empty, never fail the whole catalog response.
-    #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub models: Vec<Model>,
-    pub auth_method: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderModelsResponse {
-    pub provider: String,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub models: Vec<Model>,
-}
-
-/// `#[serde(default)]` only covers missing fields — explicit `null` needs a
-/// custom deserializer to land on the default instead of erroring.
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de> + Default,
-{
-    let opt = Option::<T>::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_default())
-}
 
 /// The provider/model pair a session runs on. Selected in the UI picker and
 /// persisted onto the session header, so it lives beside the catalog types
