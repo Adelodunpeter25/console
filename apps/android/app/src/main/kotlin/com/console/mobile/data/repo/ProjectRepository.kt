@@ -20,6 +20,8 @@ class ProjectRepository(
     private val projectState: ProjectStateHolder,
     private val sessionState: SessionStateHolder,
     private val appState: AppStateHolder,
+    /** Called once a session is gone for good, so chat state (and its draft) can be dropped. */
+    private val onSessionGone: (String) -> Unit = {},
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     fun loadProjects() {
@@ -113,10 +115,17 @@ class ProjectRepository(
     }
 
     suspend fun deleteSession(id: String) = withContext(Dispatchers.IO) {
-        api.deleteSession(id)
+        try {
+            api.deleteSession(id)
+        } catch (e: com.console.mobile.data.api.ApiException) {
+            // Already gone server-side (deleted from the desktop): the local row
+            // and its draft are all that's left, and those still need clearing.
+            if (e.code != "404") throw e
+        }
         withContext(Dispatchers.Main.immediate) {
             projectState.removeSession(id)
             sessionState.clearStatus(id)
+            onSessionGone(id)
             if (appState.state.value.selectedSessionId == id) {
                 appState.setSelectedSessionId(null)
             }
@@ -138,6 +147,7 @@ class ProjectRepository(
         api.permanentlyDeleteSession(id)
         withContext(Dispatchers.Main.immediate) {
             projectState.removeDeleted(id)
+            onSessionGone(id)
         }
     }
 

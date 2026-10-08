@@ -2,6 +2,8 @@ package com.console.mobile
 
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
+import com.console.mobile.data.model.encodeKillFrame
+import com.console.mobile.data.model.encodeResizeFrame
 import console.v1.TerminalClientMessage
 import console.v1.TerminalKill
 import console.v1.TerminalResize
@@ -71,5 +73,13 @@ class TerminalFixtureTest {
         assertTrue("unexpected encoding: $resize", resize.contains("\"cols\":100"))
         val kill = killAdapter.toJson(TerminalKill())
         assertEquals("{}", kill)
+    }
+
+    // Regression: the app used to send the bare TerminalResize, which the server
+    // rejects as "Unknown terminal frame type", leaving the PTY at 80x24.
+    @Test
+    fun controlFramesMatchTheSharedClientFixtures() {
+        assertEquals(fixture("resize.json"), encodeResizeFrame(100, 30))
+        assertEquals(fixture("kill.json"), encodeKillFrame())
     }
 }

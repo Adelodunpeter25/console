@@ -371,6 +371,17 @@ class ChatRepository(
 
     fun clear(sessionId: String) = chats.clear(sessionId)
 
+    /**
+     * The session no longer exists: stop its stream and drop everything held
+     * locally, including the unsent draft. The draft is what keeps a deleted
+     * chat in the list — the grouping builds a "Drafts" row from any local draft
+     * even when the server has no such session.
+     */
+    fun discard(sessionId: String) {
+        controllers.remove(sessionId)?.cancel()
+        chats.remove(sessionId)
+    }
+
     private fun getOrCreate(sessionId: String, bodyJson: String): RunStreamController {
         return controllers.getOrPut(sessionId) {
             RunStreamController(sessionId, object : RunStreamController.Deps {

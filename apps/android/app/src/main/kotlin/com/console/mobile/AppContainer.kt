@@ -216,6 +216,8 @@ object AppContainer {
             projectState = projectStateHolder,
             sessionState = sessionStateHolder,
             appState = appStateHolder,
+            // chatRepository is built later; the lambda only runs on delete.
+            onSessionGone = { chatRepository.discard(it) },
         )
         providerRepository = ProviderRepository(
             api = consoleApi,
