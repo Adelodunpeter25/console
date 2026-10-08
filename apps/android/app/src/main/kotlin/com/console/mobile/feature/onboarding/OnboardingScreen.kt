@@ -6,14 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,23 +16,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.ui.theme.ConsoleColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.theme.NewTheme
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.input.KeyboardType
 
 /**
  * Port of OnboardingScreen in apps/mobile/index.tsx.
@@ -54,59 +49,34 @@ fun OnboardingScreen(onConnected: () -> Unit) {
     var saving by remember { mutableStateOf(false) }
     var testState by remember { mutableStateOf("idle") } // idle|testing|success|error
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = ConsoleColors.Card,
-        unfocusedContainerColor = ConsoleColors.Card,
-        focusedBorderColor = ConsoleColors.Border,
-        unfocusedBorderColor = ConsoleColors.Border,
-        focusedTextColor = ConsoleColors.TextPrimary,
-        unfocusedTextColor = ConsoleColors.TextPrimary,
-        cursorColor = ConsoleColors.TextPrimary,
-        focusedPlaceholderColor = ConsoleColors.TextMuted,
-        unfocusedPlaceholderColor = ConsoleColors.TextMuted,
-        focusedLabelColor = ConsoleColors.TextSecondary,
-        unfocusedLabelColor = ConsoleColors.TextSecondary,
-    )
-
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp, vertical = 48.dp),
+        modifier = Modifier.fillMaxSize().background(NewTheme.Background).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Console Mobile", color = ConsoleColors.TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text("Console Mobile", color = NewTheme.TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Text(
             "Enter your Console server URL to connect.",
-            color = ConsoleColors.TextSecondary,
-            fontSize = 14.sp,
+            color = NewTheme.TextSecondary,
+            fontSize = 15.sp,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp, bottom = 40.dp),
+            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
-        Text("Name", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp))
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            placeholder = { Text("My server") },
-            singleLine = true,
-            colors = fieldColors,
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        )
-        OutlinedTextField(
+        TextInput("Name", name, { name = it }, "My server")
+        TextInput(
+            label = "Server URL",
             value = url,
             onValueChange = { url = it; if (testState == "success" || testState == "error") testState = "idle" },
-            placeholder = { Text("http://192.168.1.X:3000") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            colors = fieldColors,
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            placeholder = "http://192.168.1.X:3000",
+            keyboardType = KeyboardType.Uri,
         )
-        Button(
+        ActionButton(
+            text = "Connect",
             onClick = {
                 val normalized = normalizeBackendUrl(url)
                 if (normalized == null) {
                     confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.")
-                    return@Button
+                    return@ActionButton
                 }
                 saving = true
                 scope.launch {
@@ -122,17 +92,20 @@ fun OnboardingScreen(onConnected: () -> Unit) {
                     }
                 }
             },
+            kind = ActionButtonKind.Primary,
             enabled = !saving && url.isNotBlank(),
-            shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black, disabledContainerColor = Color.White.copy(alpha = 0.5f)),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-        ) {
-            if (saving) CircularProgressIndicator(color = Color.Black, strokeWidth = 2.dp, modifier = Modifier.padding(4.dp))
-            else Text("Connect", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-        OutlinedButton(
+            loading = saving,
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        )
+        ActionButton(
+            text = when (testState) {
+                "success" -> "✓ Connection successful"
+                "error" -> "✕ Connection failed — try again"
+                "testing" -> "Testing…"
+                else -> "Test connection"
+            },
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@OutlinedButton
+                val normalized = normalizeBackendUrl(url) ?: return@ActionButton
                 testState = "testing"
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { probeBackend(normalized) }
@@ -140,20 +113,13 @@ fun OnboardingScreen(onConnected: () -> Unit) {
                 }
             },
             enabled = url.isNotBlank() && testState != "testing",
-            shape = RoundedCornerShape(999.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (testState == "testing") CircularProgressIndicator(color = ConsoleColors.TextSecondary, strokeWidth = 2.dp, modifier = Modifier.padding(4.dp))
-            else Text(
-                when (testState) {
-                    "success" -> "✓ Connection successful"
-                    "error" -> "✕ Connection failed — try again"
-                    else -> "Test Connection"
-                },
-                color = ConsoleColors.TextSecondary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-            )
+            loading = testState == "testing",
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        )
+        // The result is also coloured, so a quick glance tells success from failure.
+        when (testState) {
+            "success" -> Text("Reachable", color = NewTheme.Success, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+            "error" -> Text("Could not reach the server", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }

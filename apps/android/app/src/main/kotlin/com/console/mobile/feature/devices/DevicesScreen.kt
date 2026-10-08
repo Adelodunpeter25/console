@@ -61,9 +61,8 @@ import com.console.mobile.data.model.isBooted
 import com.console.mobile.data.model.isBooting
 import com.console.mobile.data.model.isIos
 import console.v1.DeviceDescriptor
-import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.common.new.PageHeader
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronLeft
@@ -82,6 +81,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.TintPill
 
 private class AndroidBridge(private val onStatus: (String) -> Unit) {
     @JavascriptInterface
@@ -166,72 +167,61 @@ fun DevicesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ConsoleColors.Background),
+            .background(NewTheme.Background),
     ) {
         PageHeader(title = "Devices", onBack = onBack)
-        // Top Toolbar
+        // Top toolbar: one raised card holding the picker and the device controls.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(ConsoleColors.Surface)
-                .border(1.dp, ConsoleColors.BorderSubtle)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(NewTheme.FieldRadius))
+                .background(NewTheme.Card)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Dropdown trigger
             Box(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ConsoleColors.SurfaceElevated)
-                        .border(1.dp, ConsoleColors.Border, RoundedCornerShape(6.dp))
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(NewTheme.ChipRadius))
+                        .background(NewTheme.Raised)
                         .clickable { dropdownExpanded = true }
-                        .padding(horizontal = 10.dp),
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = TablerIcons.Outline.DeviceMobile,
                         contentDescription = null,
-                        tint = ConsoleColors.TextMuted,
+                        tint = NewTheme.TextMuted,
                         modifier = Modifier.size(15.dp),
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = selectedDevice?.let { "${it.displayName} · ${it.platform}" } ?: "Select device",
-                        color = ConsoleColors.TextPrimary,
+                        color = NewTheme.TextPrimary,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
                     selectedDevice?.let { dev ->
+                        // Same status colours as the chat list: working = accent, ready = green.
                         val badgeColor = when {
-                            isBooting -> ConsoleColors.StatusRunning
-                            dev.isBooted -> ConsoleColors.StatusReady
-                            else -> ConsoleColors.TextMuted
+                            isBooting -> NewTheme.Accent
+                            dev.isBooted -> NewTheme.Success
+                            else -> NewTheme.TextMuted
                         }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(badgeColor.copy(alpha = 0.12f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                        ) {
-                            Text(
-                                text = if (isBooting) "Booting" else if (dev.isBooted) "Ready" else dev.state,
-                                color = badgeColor,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                        Spacer(Modifier.width(6.dp))
+                        TintPill(if (isBooting) "Booting" else if (dev.isBooted) "Ready" else dev.state, badgeColor)
+                        Spacer(Modifier.width(8.dp))
                     }
                     Icon(
                         imageVector = TablerIcons.Outline.ChevronDown,
                         contentDescription = null,
-                        tint = ConsoleColors.TextMuted,
+                        tint = NewTheme.TextMuted,
                         modifier = Modifier.size(13.dp),
                     )
                 }
@@ -239,11 +229,11 @@ fun DevicesScreen(
                 DropdownMenu(
                     expanded = dropdownExpanded,
                     onDismissRequest = { dropdownExpanded = false },
-                    modifier = Modifier.background(ConsoleColors.SurfaceElevated),
+                    modifier = Modifier.background(NewTheme.Raised),
                 ) {
                     if (devices.isEmpty()) {
                         DropdownMenuItem(
-                            text = { Text("No devices found", color = ConsoleColors.TextMuted, fontSize = 12.sp) },
+                            text = { Text("No devices found", color = NewTheme.TextMuted, fontSize = 12.sp) },
                             onClick = { dropdownExpanded = false },
                         )
                     } else {
@@ -257,13 +247,13 @@ fun DevicesScreen(
                                     ) {
                                         Text(
                                             text = "${dev.displayName} · ${dev.platform}",
-                                            color = ConsoleColors.TextPrimary,
+                                            color = NewTheme.TextPrimary,
                                             fontSize = 12.sp,
                                             fontWeight = if (selectedDevice?.id == dev.id) FontWeight.Bold else FontWeight.Normal,
                                         )
                                         Text(
                                             text = dev.state,
-                                            color = if (dev.isBooted) ConsoleColors.StatusReady else ConsoleColors.TextMuted,
+                                            color = if (dev.isBooted) NewTheme.Success else NewTheme.TextMuted,
                                             fontSize = 10.sp,
                                         )
                                     }
@@ -281,12 +271,12 @@ fun DevicesScreen(
             // Refresh button
             IconButton(
                 onClick = { scope.launch { repo.refreshDevices() } },
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(40.dp),
             ) {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = ConsoleColors.TextPrimary)
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = NewTheme.TextPrimary)
                 } else {
-                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = ConsoleColors.TextSecondary, modifier = Modifier.size(15.dp))
+                    Icon(TablerIcons.Outline.Refresh, contentDescription = "Refresh", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -302,12 +292,12 @@ fun DevicesScreen(
                     }
                 },
                 enabled = canBoot,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(40.dp),
             ) {
                 Icon(
                     TablerIcons.Outline.PlayerPlay,
                     contentDescription = "Boot device",
-                    tint = if (canBoot) ConsoleColors.TextPrimary else ConsoleColors.TextMuted.copy(alpha = 0.4f),
+                    tint = if (canBoot) NewTheme.TextPrimary else NewTheme.TextMuted.copy(alpha = 0.4f),
                     modifier = Modifier.size(15.dp),
                 )
             }
@@ -326,12 +316,12 @@ fun DevicesScreen(
                     }
                 },
                 enabled = canStop,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(40.dp),
             ) {
                 Icon(
                     TablerIcons.Outline.PlayerStop,
                     contentDescription = "Shut down simulator",
-                    tint = if (canStop) ConsoleColors.Destructive else ConsoleColors.TextMuted.copy(alpha = 0.4f),
+                    tint = if (canStop) NewTheme.Danger else NewTheme.TextMuted.copy(alpha = 0.4f),
                     modifier = Modifier.size(15.dp),
                 )
             }
@@ -340,30 +330,17 @@ fun DevicesScreen(
         // Main content area
         val dev = selectedDevice
         if (dev == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                EmptyState(
-                    title = "No device selected",
-                    description = "Pick an iOS simulator or Android emulator from the dropdown above.",
-                    icon = {
-                        Icon(
-                            imageVector = TablerIcons.Outline.DeviceMobile,
-                            contentDescription = null,
-                            tint = ConsoleColors.TextMuted,
-                            modifier = Modifier.size(32.dp),
-                        )
-                    },
-                )
-            }
+            EmptyView(
+                title = "No device selected",
+                description = "Pick an iOS simulator or Android emulator from the dropdown above.",
+                icon = TablerIcons.Outline.DeviceMobile,
+                modifier = Modifier.fillMaxSize(),
+            )
         } else {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(ConsoleColors.Background),
+                    .background(NewTheme.Background),
             ) {
                 // Video stream surface (WebView)
                 Box(
@@ -426,9 +403,8 @@ fun DevicesScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Card(
-                            shape = RoundedCornerShape(10.dp),
-                            colors = CardDefaults.cardColors(containerColor = ConsoleColors.SurfaceElevated),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ConsoleColors.Border),
+                            shape = RoundedCornerShape(NewTheme.FieldRadius),
+                            colors = CardDefaults.cardColors(containerColor = NewTheme.Card),
                             modifier = Modifier.padding(vertical = 12.dp),
                         ) {
                             Column(
@@ -513,7 +489,7 @@ private fun StreamStatusOverlay(device: DeviceDescriptor, status: String, isBoot
     Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Text(
             text = message,
-            color = if (isError) ConsoleColors.Destructive else ConsoleColors.TextSecondary,
+            color = if (isError) NewTheme.Danger else NewTheme.TextSecondary,
             fontSize = 13.sp,
         )
     }
@@ -527,16 +503,16 @@ private fun RailButton(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .size(40.dp)
+            .clip(RoundedCornerShape(NewTheme.ChipRadius))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = tooltip,
-            tint = ConsoleColors.TextSecondary,
-            modifier = Modifier.size(15.dp),
+            tint = NewTheme.TextSecondary,
+            modifier = Modifier.size(19.dp),
         )
     }
 }

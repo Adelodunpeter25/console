@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -32,6 +34,7 @@ fun TextInput(
     placeholder: String,
     singleLine: Boolean = true,
     monospace: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
 ) {
     Section(label) {
         TextField(
@@ -39,6 +42,7 @@ fun TextInput(
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
             singleLine = singleLine,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             textStyle = TextStyle(
                 color = NewTheme.TextPrimary, fontSize = 16.sp,
                 fontFamily = if (monospace) ConsoleMonoFamily else null,

@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.contextPercent
 import com.console.mobile.core.util.UsageTone
 import com.console.mobile.core.util.ringTone
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.color
 import console.v1.ContextSnapshot
 
@@ -55,7 +55,7 @@ fun ContextRing(snapshot: ContextSnapshot?, onClick: () -> Unit, modifier: Modif
         }
         if (pct != null) {
             // The arc carries the blue; the number only takes on a colour once it matters.
-            Text("$pct%", color = if (tone == UsageTone.Normal) ConsoleColors.TextSecondary else tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 5.dp))
+            Text("$pct%", color = if (tone == UsageTone.Normal) NewTheme.TextSecondary else tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 5.dp))
         }
     }
 }
