@@ -38,7 +38,8 @@ fun ComposerBottomStrip(sessionId: String) {
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
     var approvalSheet by remember { mutableStateOf(false) }
-    HoldComposerOpen(approvalSheet)
+    var usageSheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(approvalSheet || usageSheet)
 
     // A value before the first live update, so the ring isn't blank on entry.
     LaunchedEffect(sessionId) { AppContainer.chatRepository.loadContext(sessionId) }
@@ -56,7 +57,11 @@ fun ComposerBottomStrip(sessionId: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         PickerChip(icon = TablerIcons.Outline.Shield, label = modeLabel) { approvalSheet = true }
-        ContextRing(snapshot = chatSessions[sessionId]?.context)
+        ContextRing(snapshot = chatSessions[sessionId]?.context, onClick = { usageSheet = true })
+    }
+
+    if (usageSheet) {
+        UsageSheet(sessionId = sessionId, onDismiss = { usageSheet = false })
     }
 
     if (approvalSheet) {
