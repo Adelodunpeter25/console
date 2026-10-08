@@ -97,10 +97,10 @@ func TestMessageProtoMatchesFixtures(t *testing.T) {
 	}
 }
 
-func TestMixedShapeHistoryReplays(t *testing.T) {
-	// Pre-migration rows (role-keyed) and canonical rows (oneof) decode
-	// through the same replay path. Drop the legacy row once dev stores
-	// turn over.
+func TestCanonicalHistoryReplays(t *testing.T) {
+	// Only canonical rows (oneof) decode through the replay path.
+	// Pre-migration role-keyed rows no longer decode: unparseable rows
+	// are skipped, matching the old role-probe leniency.
 	canonical, err := loop.ToProtoBytes(loop.UserMessage{Role: loop.RoleUser, Content: "new"})
 	if err != nil {
 		t.Fatal(err)
@@ -108,15 +108,15 @@ func TestMixedShapeHistoryReplays(t *testing.T) {
 	stored := []json.RawMessage{
 		json.RawMessage(`{"role":"user","content":"old"}`),
 		json.RawMessage(canonical),
+		json.RawMessage(`not json at all`),
+		json.RawMessage(``),
 	}
 	history := run.DecodeHistory(stored)
-	if len(history) != 2 {
-		t.Fatalf("replayed %d, want 2", len(history))
+	if len(history) != 1 {
+		t.Fatalf("replayed %d, want 1", len(history))
 	}
-	for i, want := range []string{"old", "new"} {
-		user, ok := history[i].(loop.UserMessage)
-		if !ok || user.Content != want {
-			t.Fatalf("row %d: %+v", i, history[i])
-		}
+	user, ok := history[0].(loop.UserMessage)
+	if !ok || user.Content != "new" {
+		t.Fatalf("row 0: %+v", history[0])
 	}
 }
