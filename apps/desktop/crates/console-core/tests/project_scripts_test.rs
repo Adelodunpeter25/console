@@ -7,6 +7,7 @@ use console_core::{
     script_run_is_terminal,
 };
 
+// Decodes a script definition, including the "" shortcut the wire uses for unset.
 #[test]
 fn test_project_script_decode() {
     let json = r#"{
@@ -29,6 +30,7 @@ fn test_project_script_decode() {
     assert!(!script.persistent);
 }
 
+// Decodes the scripts list response for a project, including the "missing" source.
 #[test]
 fn test_scripts_result_decode() {
     let json = r#"{"projectId": "proj-1", "scripts": [], "source": "missing"}"#;
