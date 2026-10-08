@@ -65,7 +65,7 @@ fun ComposerBottomStrip(sessionId: String, projectLocked: Boolean, onAddProject:
         item {
             PickerChip(
                 icon = if (projectLocked) TablerIcons.Outline.Lock else TablerIcons.Outline.Folder,
-                label = selectedProject?.name ?: "Select Folder",
+                label = selectedProject?.name ?: if (view?.sessionCwd.isNullOrEmpty()) "Select Folder" else "No project",
                 modifier = Modifier.padding(end = 8.dp),
             ) {
                 if (!projectLocked) {
