@@ -534,7 +534,6 @@ impl ConsoleDesktopApp {
             }),
         };
 
-        let is_worktree = worktree.is_some();
         cx.spawn(async move |entity, cx| {
             let result = client
                 .sessions
@@ -563,14 +562,6 @@ impl ConsoleDesktopApp {
                         }
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
                         this.open_chat_tab_in_pane(&pane_id, new_session.id.clone(), &title);
-                        // A worktree session keeps its parent's project_id, so
-                        // the pane's branch state still describes the main
-                        // checkout. Reload it against the worktree's own cwd
-                        // (same as the footer's "New worktree…" flow) so the
-                        // footer shows the new branch and lists it.
-                        if is_worktree {
-                            this.reload_branches_for_pane(pane_id.clone(), new_session.cwd.clone(), cx);
-                        }
                         this.sync_workspace_webviews(cx);
                         this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);

@@ -218,6 +218,7 @@ impl ConsoleDesktopApp {
                 branches: self.branches.clone(),
                 branch_loaded: self.branch_loaded,
                 branch_is_git_repository: self.branch_is_git_repository,
+                branch_cwd: None,
                 branch_pending: self.branch_pending,
                 project_menu,
                 branch_menu,

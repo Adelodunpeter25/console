@@ -320,6 +320,7 @@ impl ConsoleDesktopApp {
                                                 branches.is_git_repository;
                                             if let Some(state) =
                                                 this.workspace_pane_states.get_mut(&active_id)
+                                                && state.branch_cwd.is_none()
                                             {
                                                 state.branches = Rc::new(branches.branches);
                                                 state.branch_loaded = true;

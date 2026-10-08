@@ -195,36 +195,13 @@ impl ConsoleDesktopApp {
                 }
             }
 
-            match client.git.list_branches(Some(&path)).await {
-                Ok(branches) => cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if let Some(state) =
-                                this.workspace_pane_states.get_mut(&pane_id_for_result)
-                            {
-                                state.branches = Rc::new(branches.branches);
-                                state.branch_loaded = true;
-                                state.branch_is_git_repository = branches.is_git_repository;
-                            }
-                            cx.notify();
-                        });
-                    }
-                }),
-                Err(_) => cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if let Some(state) =
-                                this.workspace_pane_states.get_mut(&pane_id_for_result)
-                            {
-                                Rc::make_mut(&mut state.branches).clear();
-                                state.branch_loaded = true;
-                                state.branch_is_git_repository = false;
-                            }
-                            cx.notify();
-                        });
-                    }
-                }),
-            }
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.reload_branches_for_pane(pane_id_for_result, path, cx)
+                    });
+                }
+            });
         })
         .detach();
     }
@@ -426,14 +403,22 @@ impl ConsoleDesktopApp {
         branch: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(path) = self
-            .selected_project_for_pane(&pane_id)
-            .map(|project| project.path.clone())
-        else {
+        // Switch in the session's own folder: a worktree session's cwd is its
+        // worktree, not the project's main checkout.
+        let session_cwd = self
+            .active_session_for_pane(&pane_id)
+            .and_then(|sid| self.sessions.iter().find(|s| s.id == sid))
+            .map(|s| s.cwd.clone())
+            .filter(|cwd| !cwd.is_empty());
+        let Some(path) = session_cwd.or_else(|| {
+            self.selected_project_for_pane(&pane_id)
+                .map(|project| project.path.clone())
+        }) else {
             return;
         };
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
             state.branch_pending = true;
+            state.branch_cwd = Some(path.clone());
         }
         cx.notify();
 
@@ -548,15 +533,6 @@ impl ConsoleDesktopApp {
                                     t.set_messages(Vec::new(), cx);
                                 });
 
-                                // The worktree session shares its parent's
-                                // project_id (so it stays grouped in the
-                                // sidebar), which means apply_session_header
-                                // leaves the pane's branch state pointed at
-                                // the original checkout. Reload it against
-                                // the worktree's own cwd so the dropdown
-                                // shows the new branch instead of stale
-                                // state from the main checkout.
-                                this.reload_branches_for_pane(pane_id, new_session.cwd, cx);
                             }
                             Err(error) => {
                                 this.set_error(
@@ -607,11 +583,6 @@ impl ConsoleDesktopApp {
                                     cx,
                                 );
                                 this.clear_error_for_pane(&pane_id, cx);
-                                this.reload_branches_for_pane(
-                                    pane_id,
-                                    updated_session.cwd,
-                                    cx,
-                                );
                             }
                             Err(error) => {
                                 this.set_error(
@@ -633,6 +604,7 @@ impl ConsoleDesktopApp {
     pub(crate) fn reload_branches_for_pane(&mut self, pane_id: String, cwd: String, cx: &mut Context<Self>) {
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
             state.branch_loaded = false;
+            state.branch_cwd = Some(cwd.clone());
         }
         let branch_client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -641,10 +613,14 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                            state.branch_loaded = true;
-                            if let Ok(branches) = result {
-                                state.branches = Rc::new(branches.branches);
-                                state.branch_is_git_repository = branches.is_git_repository;
+                            // The pane may have moved to another folder while
+                            // this was in flight; only the latest request wins.
+                            if state.branch_cwd.as_deref() == Some(cwd.as_str()) {
+                                state.branch_loaded = true;
+                                if let Ok(branches) = result {
+                                    state.branches = Rc::new(branches.branches);
+                                    state.branch_is_git_repository = branches.is_git_repository;
+                                }
                             }
                         }
                         cx.notify();

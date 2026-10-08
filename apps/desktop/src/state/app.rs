@@ -749,6 +749,7 @@ impl ConsoleDesktopApp {
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,
                 branch_is_git_repository: app.branch_is_git_repository,
+                branch_cwd: None,
                 branch_pending: app.branch_pending,
                 project_menu: app.project_menu.clone(),
                 branch_menu: app.branch_menu.clone(),

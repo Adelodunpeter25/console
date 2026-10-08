@@ -421,6 +421,20 @@ impl ConsoleDesktopApp {
         // persists `cwd` when the workspace changes), then by project id.
         self.sync_project_from_session_for_pane(pane_id, header, cx);
 
+        // The footer's branches describe the session's own folder (a worktree
+        // session's cwd differs from its project path), so keep them loaded
+        // against that — skipped when already loaded for this folder.
+        if !header.cwd.is_empty()
+            && !self.pending_project_override.contains_key(&header.id)
+            && self.pane_project_id(pane_id).is_some()
+            && self
+                .workspace_pane_states
+                .get(pane_id)
+                .is_some_and(|state| state.branch_cwd.as_deref() != Some(header.cwd.as_str()))
+        {
+            self.reload_branches_for_pane(pane_id.to_string(), header.cwd.clone(), cx);
+        }
+
         // Fetch usage data for the current provider
         self.maybe_fetch_usage(&header.id, cx);
         self.fetch_context_usage(&header.id, cx);
@@ -486,38 +500,7 @@ impl ConsoleDesktopApp {
             return;
         };
 
-        let client = self.client.clone();
-        let entity = cx.entity().downgrade();
-        let pane_id = pane_id.to_string();
-        cx.spawn(async move |_entity, cx| {
-            match client.git.list_branches(Some(&project.path)).await {
-                Ok(branches) => cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                state.branches = Rc::new(branches.branches);
-                                state.branch_loaded = true;
-                                state.branch_is_git_repository = branches.is_git_repository;
-                            }
-                            cx.notify();
-                        });
-                    }
-                }),
-                Err(_) => cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
-                                Rc::make_mut(&mut state.branches).clear();
-                                state.branch_loaded = true;
-                                state.branch_is_git_repository = false;
-                            }
-                            cx.notify();
-                        });
-                    }
-                }),
-            }
-        })
-        .detach();
+        self.reload_branches_for_pane(pane_id.to_string(), project.path.clone(), cx);
         cx.notify();
     }
 
@@ -688,45 +671,15 @@ impl ConsoleDesktopApp {
                 target_project_id.clone(),
             );
 
-            // Refresh git branch info for the new project
+            // Refresh git branch info for the new project — against the
+            // session's own folder, which for a worktree chat is its worktree.
             if let Some(project) = &target_project {
-                let client = self.client.clone();
-                let entity = cx.entity().downgrade();
-                let pane_id = active_pane_id.clone();
-                let path = project.path.clone();
-                cx.spawn(async move |_entity, cx| {
-                    match client.git.list_branches(Some(&path)).await {
-                        Ok(branches) => cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    if let Some(state) =
-                                        this.workspace_pane_states.get_mut(&pane_id)
-                                    {
-                                        state.branches = Rc::new(branches.branches);
-                                        state.branch_loaded = true;
-                                        state.branch_is_git_repository = branches.is_git_repository;
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                        }),
-                        Err(_) => cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    if let Some(state) =
-                                        this.workspace_pane_states.get_mut(&pane_id)
-                                    {
-                                        Rc::make_mut(&mut state.branches).clear();
-                                        state.branch_loaded = true;
-                                        state.branch_is_git_repository = false;
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                        }),
-                    }
-                })
-                .detach();
+                let cwd = target_session
+                    .as_ref()
+                    .map(|s| s.cwd.clone())
+                    .filter(|cwd| !cwd.is_empty())
+                    .unwrap_or_else(|| project.path.clone());
+                self.reload_branches_for_pane(active_pane_id.clone(), cwd, cx);
             }
             self.persist_layout();
             self.persist_workspaces();

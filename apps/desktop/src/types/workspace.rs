@@ -35,6 +35,10 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) branches: Rc<Vec<GitBranchInfo>>,
     pub(crate) branch_loaded: bool,
     pub(crate) branch_is_git_repository: bool,
+    /// Folder `branches` was loaded for (the session's own cwd, which for a
+    /// worktree session differs from its project path). A response for any
+    /// other folder is stale and dropped.
+    pub(crate) branch_cwd: Option<String>,
     pub(crate) branch_pending: bool,
     pub(crate) project_menu: ContextMenuHandle,
     pub(crate) branch_menu: ContextMenuHandle,
