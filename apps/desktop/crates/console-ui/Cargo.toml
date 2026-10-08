@@ -126,3 +126,7 @@ path = "tests/browser/agent_driver_test.rs"
 [[test]]
 name = "browser_visibility_test"
 path = "tests/browser/visibility_test.rs"
+
+[[test]]
+name = "watch_streams_test"
+path = "tests/inspector/watch_streams_test.rs"

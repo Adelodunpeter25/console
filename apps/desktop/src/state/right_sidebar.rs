@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use console_ui::{AuxiliaryTab, InspectorTab, PrimaryTab};
+use console_ui::{AuxiliaryTab, InspectorTab, InspectorWatches, PrimaryTab};
 use gpui::{AppContext, Context};
 
 use super::types::WorkspaceTerminalState;
@@ -26,6 +26,7 @@ impl ConsoleDesktopApp {
         self.right_sidebar_visible = !self.right_sidebar_visible;
         self.sync_inspector_webviews(cx);
         self.persist_layout();
+        self.sync_inspector_watchers(cx);
         self.maybe_refresh_inspector(cx);
         cx.notify();
     }
@@ -38,6 +39,7 @@ impl ConsoleDesktopApp {
         self.right_sidebar_visible = visible;
         self.sync_inspector_webviews(cx);
         self.persist_layout();
+        self.sync_inspector_watchers(cx);
         self.maybe_refresh_inspector(cx);
         cx.notify();
     }
@@ -417,6 +419,7 @@ impl ConsoleDesktopApp {
         }
         self.inspector_active_tab = tab;
         self.sync_inspector_webviews(cx);
+        self.sync_inspector_watchers(cx);
         match tab {
             InspectorTab::Primary(PrimaryTab::AllFiles) => self.fetch_inspector_fs_tree(cx),
             InspectorTab::Primary(PrimaryTab::Changes) => {
@@ -540,6 +543,7 @@ impl ConsoleDesktopApp {
         self.inspector_open_auxiliary_tabs
             .push(AuxiliaryTab::Subagents);
         self.inspector_active_tab = InspectorTab::Auxiliary(AuxiliaryTab::Subagents);
+        self.sync_inspector_watchers(cx);
         self.fetch_inspector_subagents(cx);
         self.persist_layout();
         cx.notify();
@@ -576,6 +580,8 @@ impl ConsoleDesktopApp {
         let (session_id, cwd) = self.active_inspector_target();
 
         if cwd.is_none() && session_id.is_none() {
+            self.inspector_fs_watch = None;
+            self.inspector_git_watch = None;
             self.inspector_tree = Rc::new(Vec::new());
             self.inspector_working_changes = Rc::new(Vec::new());
             self.inspector_session_changes = Rc::new(Vec::new());
@@ -588,8 +594,38 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
         self.fetch_inspector_subagents(cx);
-        self.ensure_inspector_fs_watcher(cx);
-        self.ensure_inspector_git_watcher(cx);
+        self.sync_inspector_watchers(cx);
+    }
+
+    /// Reconcile the two watch streams with what is on screen: both are
+    /// dropped (closing their SSE connections) while the sidebar is hidden,
+    /// and otherwise each runs only while the tab that renders its data is
+    /// active. Every path that changes visibility, the active tab, or the
+    /// target goes through here, so there is never more than one stream of
+    /// each kind. Reopening restarts them because dropping clears the stored
+    /// target that `ensure_*` compares against.
+    pub fn sync_inspector_watchers(&mut self, cx: &mut Context<Self>) {
+        let watches = if self.right_sidebar_visible {
+            self.inspector_active_tab.watches()
+        } else {
+            InspectorWatches { fs: false, git: false }
+        };
+        if watches.fs {
+            self.ensure_inspector_fs_watcher(cx);
+        } else {
+            self.inspector_fs_watch = None;
+        }
+        if watches.git {
+            self.ensure_inspector_git_watcher(cx);
+        } else {
+            self.inspector_git_watch = None;
+        }
+    }
+
+    /// True while the Files tree is on screen (sidebar visible and the Files
+    /// tab active) — the only time an fs-driven refetch is worth issuing.
+    fn inspector_tree_visible(&self) -> bool {
+        self.right_sidebar_visible && self.inspector_active_tab.watches().fs
     }
 
     pub fn ensure_inspector_fs_watcher(&mut self, cx: &mut Context<Self>) {
@@ -619,7 +655,7 @@ impl ConsoleDesktopApp {
                             app.update(cx, |this, cx| {
                                 // Git working changes arrive on their own
                                 // watch stream now; fs events only refresh the tree.
-                                if this.right_sidebar_visible {
+                                if this.inspector_tree_visible() {
                                     this.schedule_inspector_fs_tree_fetch(cx);
                                 }
                             });
@@ -682,7 +718,7 @@ impl ConsoleDesktopApp {
     /// triggered a full depth-25 directory listing. Coalesce each burst into
     /// a single fetch ~300ms after the last event.
     pub fn schedule_inspector_fs_tree_fetch(&mut self, cx: &mut Context<Self>) {
-        if self.fs_tree_fetch_pending {
+        if self.fs_tree_fetch_pending || !self.inspector_tree_visible() {
             return;
         }
         self.fs_tree_fetch_pending = true;
@@ -694,7 +730,7 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.fs_tree_fetch_pending = false;
-                        if this.right_sidebar_visible {
+                        if this.inspector_tree_visible() {
                             this.fetch_inspector_fs_tree(cx);
                         }
                     });

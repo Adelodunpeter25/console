@@ -53,6 +53,26 @@ pub enum InspectorTab {
     Auxiliary(AuxiliaryTab),
 }
 
+/// Which live watch streams an inspector tab consumes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct InspectorWatches {
+    /// fs watch: drives the Files tab's tree.
+    pub fs: bool,
+    /// git status watch: drives the Changes tab's working changes.
+    pub git: bool,
+}
+
+impl InspectorTab {
+    /// The single tab-to-stream decision: a stream runs only while the tab
+    /// that renders its data is the active inspector tab.
+    pub fn watches(self) -> InspectorWatches {
+        InspectorWatches {
+            fs: self == Self::Primary(PrimaryTab::AllFiles),
+            git: self == Self::Primary(PrimaryTab::Changes),
+        }
+    }
+}
+
 impl Default for InspectorTab {
     fn default() -> Self {
         Self::Primary(PrimaryTab::AllFiles)
