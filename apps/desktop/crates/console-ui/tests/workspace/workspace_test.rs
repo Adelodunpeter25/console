@@ -288,3 +288,32 @@ fn test_tab_strip_follow_initial_state() {
     let follow = console_ui::workspace::TabStripFollow::new();
     assert_eq!(follow.scroll_handle.offset().x, gpui::px(0.0));
 }
+
+#[test]
+fn test_browser_ids_lists_only_browser_tabs() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Browser {
+            browser_id: "browser-1".into(),
+            url: String::new(),
+            title: "One".into(),
+            project_id: None,
+            last_active_at_ms: None,
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "s1".into(),
+            title: "Chat".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: None,
+        },
+    );
+    assert_eq!(ops::browser_ids(&root), vec!["browser-1".to_string()]);
+    assert!(ops::browser_ids(&WorkspaceNode::leaf("empty")).is_empty());
+}

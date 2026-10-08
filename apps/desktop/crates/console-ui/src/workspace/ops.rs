@@ -243,6 +243,19 @@ pub fn find_tab(root: &WorkspaceNode, tab_id: &str) -> Option<WorkspaceTabConfig
     None
 }
 
+/// Ids of every browser tab in the tree. Used to find browser views that no
+/// open or stashed workspace references any more.
+pub fn browser_ids(root: &WorkspaceNode) -> Vec<String> {
+    root.leaves()
+        .iter()
+        .flat_map(|leaf| leaf.tabs.iter())
+        .filter_map(|tab| match tab {
+            console_core::WorkspaceTabConfig::Browser { browser_id, .. } => Some(browser_id.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
 /// File paths backing every file/diff tab in the tree. Used to evict cached
 /// file contents and viewer state for tabs that are no longer open anywhere.
 pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {

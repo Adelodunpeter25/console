@@ -655,6 +655,9 @@ impl ConsoleDesktopApp {
         }
         self.project_workspace_roots
             .remove(&Some(project_id.clone()));
+        // The removed project's stashed workspace is gone, so any browser
+        // tab it held is now unreferenced: close those views.
+        self.sweep_unreferenced_browser_views(cx);
         for state in self.workspace_pane_states.values_mut() {
             if state.selected_project_id.as_deref() == Some(&project_id) {
                 state.selected_project_id = None;

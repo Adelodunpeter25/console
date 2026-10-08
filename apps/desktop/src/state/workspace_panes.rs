@@ -119,6 +119,31 @@ impl ConsoleDesktopApp {
         self.persist_workspaces();
     }
 
+    /// Close and forget every browser view that no workspace references — not
+    /// the open one, nor any stashed project workspace. A tab can leave the
+    /// tree without going through `dispose_closed_tab` (e.g. a removed
+    /// project's whole stashed workspace is discarded), which would otherwise
+    /// leave its hidden webview running until restart. Closing is the same
+    /// deferred teardown a normal tab close uses.
+    pub(crate) fn sweep_unreferenced_browser_views(&mut self, cx: &mut Context<Self>) {
+        let mut referenced: std::collections::HashSet<String> =
+            workspace_ops::browser_ids(&self.workspace_root).into_iter().collect();
+        for root in self.project_workspace_roots.values() {
+            referenced.extend(workspace_ops::browser_ids(root));
+        }
+        let orphans: Vec<String> = self
+            .browser_views
+            .keys()
+            .filter(|id| !referenced.contains(*id))
+            .cloned()
+            .collect();
+        for id in orphans {
+            if let Some(view) = self.browser_views.remove(&id) {
+                view.update(cx, |browser, cx| browser.close(cx));
+            }
+        }
+    }
+
     /// Release resources owned by a tab leaving the current tree: terminal
     /// views (dropping the entity cancels its tasks and releases the PTY —
     /// otherwise closed terminals leak shell processes until restart) and
