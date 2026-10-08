@@ -4,11 +4,13 @@
 package routes
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -26,16 +28,20 @@ const (
 func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
 	handleCommands := func(c *fiber.Ctx) error {
 		cwd := resolveSessionCwd(c, sessions)
-		commands := []types.SlashCommandInfo{
+		commands := []*consolev1.SlashCommandInfo{
 			{Name: initCommandName, Description: initCommandDescription, Builtin: true},
 			{Name: computerUseCommandName, Description: computerUseCommandDescription, Builtin: true},
 		}
 		for _, skill := range skills.Discover(cwd) {
-			commands = append(commands, types.SlashCommandInfo{
+			commands = append(commands, &consolev1.SlashCommandInfo{
 				Name: skill.Name, Description: skill.Description, Builtin: false,
 			})
 		}
-		return c.JSON(fiber.Map{"success": true, "data": commands})
+		data, err := marshalProtoList(commands)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	}
 
 	handleSearch := func(c *fiber.Ctx) error {
@@ -61,9 +67,24 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 		if items == nil {
 			items = []types.FileSearchResult{}
 		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
-			"root": root, "query": query, "items": items,
-		}})
+		// query echoes the *raw* query, not the "." an empty one searched
+		// with — clients show it back to the user verbatim.
+		protoItems := make([]*consolev1.FileSearchResult, 0, len(items))
+		for _, it := range items {
+			protoItems = append(protoItems, &consolev1.FileSearchResult{
+				RelativePath: it.RelativePath, AbsolutePath: it.AbsolutePath,
+				IsDir: it.IsDir, Score: it.Score,
+			})
+		}
+		raw, err := protoMarshal.Marshal(&consolev1.AssistFileSearchResponse{
+			Root:  root,
+			Query: query,
+			Items: protoItems,
+		})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	}
 
 	app.Get("/api/assist/:sessionId/commands", handleCommands)

@@ -1,5 +1,6 @@
 package com.console.mobile.data.api
 
+import com.squareup.moshi.JsonAdapter
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -103,6 +104,31 @@ class HttpTransport(
             return null as T
         }
         return json.decodeFromJsonElement(dataSerializer, data)
+    }
+
+    /** Like [unwrapOrRaw], but decodes `data` with a Wire JsonAdapter — for
+     *  shared-protobuf payloads that kotlinx cannot serialize. */
+    fun <T> unwrapOrRawAdapter(raw: String, adapter: JsonAdapter<T>, action: String): T {
+        val root = try {
+            json.parseToJsonElement(raw)
+        } catch (_: Exception) {
+            throw ApiException("Failed to $action")
+        }
+        val data = if (root is JsonObject && root.containsKey("success") && root.containsKey("data")) {
+            val success = (root["success"] as? JsonPrimitive)?.booleanOrNull ?: true
+            if (!success) {
+                throw ApiException((root["error"] as? JsonPrimitive)?.contentOrNull ?: "Failed to $action")
+            }
+            root["data"]!!
+        } else {
+            root
+        }
+        if (data is JsonPrimitive && data.contentOrNull == null) {
+            @Suppress("UNCHECKED_CAST")
+            return null as T
+        }
+        return adapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to $action")
     }
 
     /** Decode envelope-or-raw payloads (fs/assist return `data ?? body`). */

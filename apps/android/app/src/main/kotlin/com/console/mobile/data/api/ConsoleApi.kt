@@ -6,7 +6,6 @@ import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
-import com.console.mobile.data.model.FileSearchResponse
 import console.v1.FileSearchResult
 import console.v1.FsBrowseResult
 import console.v1.FsDirectoryTree
@@ -29,7 +28,6 @@ import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
 import console.v1.SessionHeader
-import com.console.mobile.data.model.SlashCommandInfo
 import console.v1.SubagentInfo
 import console.v1.TodoItem
 import console.v1.UsageReport
@@ -90,8 +88,8 @@ interface ConsoleApi {
     suspend fun handleCallback(payload: OAuthCallbackDto)
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
-    suspend fun listSlashCommands(sessionId: String?): List<SlashCommandInfo>
-    suspend fun assistSearchFiles(sessionId: String?, query: String, root: String?): FileSearchResponse
+    suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>
+    suspend fun assistSearchFiles(sessionId: String?, query: String, root: String?): console.v1.AssistFileSearchResponse
     // usage
     suspend fun getProviderUsage(providerId: String): UsageReport?
     suspend fun getAllUsage(): Map<String, UsageReport?>

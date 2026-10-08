@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import console.v1.FileSearchResult
-import com.console.mobile.data.model.SlashCommandInfo
+import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
 import com.console.mobile.ui.theme.ConsoleMonoFamily

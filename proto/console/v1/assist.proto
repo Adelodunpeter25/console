@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+import "console/v1/fs.proto";
+
+// Composer assist support (/api/assist/*): slash-command autocomplete
+// (builtins + discovered skills) and @-mention file search scoped to the
+// session cwd.
+//
+// Notes:
+// - items reuse FileSearchResult from fs.proto rather than redefining it.
+//   That message is already canonical (mobile decodes console.v1
+//   FileSearchResult inside a hand-written wrapper today), so this domain
+//   only adds the envelope.
+// - search_query carries the *raw* query, not the one searched with. An
+//   empty query ("@" with nothing typed) searches "." but echoes "" back,
+//   and clients echo that verbatim, so it must stay a present-but-empty
+//   string rather than collapsing to absent.
+// - builtin is a plain bool and query a plain string: protojson omits false
+//   and "", so a discovered skill emits no builtin key and a bare "@" emits
+//   no query key. Both decode as the zero value on every client, which is
+//   what the old hand-shaped JSON meant, so this is a compatible trim —
+//   notably builtin:false disappears where it used to be present.
+// - builtin command names, descriptions, the search root, and the includeDirs
+//   flag stay server-side / URL query strings; they are not schema.
+message SlashCommandInfo {
+  string name = 1;
+  string description = 2;
+  bool builtin = 3;
+}
+
+// Response of GET /api/assist/:sessionId/search (and its /search and
+// /files aliases).
+message AssistFileSearchResponse {
+  string root = 1;
+  string query = 2;
+  repeated FileSearchResult items = 3;
+}

@@ -46,7 +46,7 @@ import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
-import com.console.mobile.data.model.SlashCommandInfo
+import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons

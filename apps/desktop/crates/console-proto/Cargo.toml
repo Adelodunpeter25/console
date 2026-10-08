@@ -20,6 +20,10 @@ name = "version_json_test"
 path = "tests/version_json_test.rs"
 
 [[test]]
+name = "assist_json_test"
+path = "tests/assist_json_test.rs"
+
+[[test]]
 name = "favorites_json_test"
 path = "tests/favorites_json_test.rs"
 

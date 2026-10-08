@@ -10,9 +10,10 @@ import com.console.mobile.data.model.CreateSessionDto
 import com.console.mobile.data.model.DeviceActionRequest
 import com.console.mobile.data.model.DeviceDescriptor
 import com.console.mobile.data.model.DeviceDiagnostics
-import com.console.mobile.data.model.FileSearchResponse
 import console.v1.CreateDirRequest
+import console.v1.AssistFileSearchResponse
 import console.v1.FileSearchResult
+import console.v1.SlashCommandInfo
 import console.v1.FsBrowseResult
 import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
@@ -41,7 +42,6 @@ import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
 import console.v1.SessionHeader
-import com.console.mobile.data.model.SlashCommandInfo
 import console.v1.SubagentInfo
 import console.v1.TodoItem
 import com.console.mobile.data.model.UpdateSessionDto
@@ -88,6 +88,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val fsTreeAdapter = wireMoshi.adapter(FsDirectoryTree::class.java)
     private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
     private val fileSearchAdapter = wireMoshi.adapter(FileSearchResult::class.java)
+    private val slashCommandAdapter = wireMoshi.adapter(SlashCommandInfo::class.java)
+    private val assistSearchAdapter = wireMoshi.adapter(AssistFileSearchResponse::class.java)
     private val fsFileContentAdapter = wireMoshi.adapter(FsFileContent::class.java)
     private val writeFileAdapter = wireMoshi.adapter(WriteFileRequest::class.java)
     private val createDirAdapter = wireMoshi.adapter(CreateDirRequest::class.java)
@@ -440,24 +442,16 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun listSlashCommands(sessionId: String?): List<SlashCommandInfo> {
         val path = if (sessionId != null) "/api/assist/${enc(sessionId)}/commands" else "/api/assist/commands"
         val raw = http.get(path)
-        return http.unwrapOrRaw(raw, ListSerializer(SlashCommandInfo.serializer()), "list slash commands")
+        val items = http.unwrapOrRaw(raw, JsonArray.serializer(), "list slash commands")
+        return items.mapNotNull { slashCommandAdapter.fromJson(it.toString()) }
     }
 
-    override suspend fun assistSearchFiles(sessionId: String?, query: String, root: String?): FileSearchResponse {
+    override suspend fun assistSearchFiles(sessionId: String?, query: String, root: String?): AssistFileSearchResponse {
         val path = if (sessionId != null) "/api/assist/${enc(sessionId)}/search" else "/api/assist/search"
         val params = mutableMapOf("q" to query)
         if (root != null) params["root"] = root
         val raw = http.get(path, params)
-        // Wrapper stays hand-written until assist migrates: decode the
-        // envelope manually and only the items via the shared Wire type.
-        val obj = http.unwrapOrRaw(raw, JsonObject.serializer(), "assist search")
-        return FileSearchResponse(
-            root = obj["root"]?.jsonPrimitive?.contentOrNull ?: "",
-            query = obj["query"]?.jsonPrimitive?.contentOrNull ?: "",
-            items = obj["items"]?.jsonArray?.mapNotNull { item ->
-                fileSearchAdapter.fromJson(item.toString())
-            } ?: emptyList(),
-        )
+        return http.unwrapOrRawAdapter(raw, assistSearchAdapter, "assist search")
     }
 
     // Same reasoning as the git endpoints: an empty/null usage result must mean

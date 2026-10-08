@@ -1,11 +1,9 @@
 // Assist + usage wire types.
 package types
 
-type SlashCommandInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Builtin     bool   `json:"builtin"`
-}
+// SlashCommandInfo moved to the shared protobuf schema
+// (console.v1.SlashCommandInfo from proto/console/v1/assist.proto): the
+// /api/assist/*/commands route emits the generated type now.
 
 // NotificationEvent moved to the shared protobuf schema
 // (console.v1.NotificationEvent from proto/console/v1): the bus, builders,

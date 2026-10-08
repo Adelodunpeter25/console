@@ -1,0 +1,1 @@
+[{"name":"init","description":"Generate a console.toml with project run scripts for the Run tab","builtin":true},{"name":"computer-use","description":"Drive the computer: read app windows and operate them with keyboard and mouse","builtin":true},{"name":"find-skills","description":"Helps users discover and install agent skills when they ask them to"}]

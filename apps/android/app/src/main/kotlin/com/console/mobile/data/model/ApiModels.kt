@@ -110,19 +110,11 @@ data class AnswerQuestionDto(val requestId: String, val answer: JsonElement)
 @Serializable
 data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
 
-@Serializable
-data class SlashCommandInfo(val name: String, val description: String, val builtin: Boolean)
-
-// Items are the shared Wire type (console.v1); the wrapper itself stays
-// hand-written until the assist domain migrates, decoded manually in
-// OkHttpConsoleApi.assistSearchFiles. Deliberately NOT @Serializable:
-// kotlinx cannot serialize Wire types, so manual decoding keeps misuse a
-// compile error instead of a runtime one.
-data class FileSearchResponse(
-    val root: String,
-    val query: String,
-    val items: List<console.v1.FileSearchResult> = emptyList(),
-)
+// SlashCommandInfo and FileSearchResponse moved to the shared protobuf schema
+// (console.v1 from proto/console/v1/assist.proto): SlashCommandInfo is now
+// console.v1.SlashCommandInfo and the search envelope console.v1.AssistFileSearchResponse.
+// Wire types are decoded through WireJsonAdapterFactory in OkHttpConsoleApi, not
+// kotlinx, so these deliberately stay non-@Serializable.
 
 // ProjectInfo moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): timestamps now arrive as protojson strings, so the
