@@ -60,7 +60,7 @@ import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
@@ -245,7 +245,7 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
-    Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
         // Kept in composition while collapsed (just zero-height) so a sheet it owns
         // and its loaded branch list survive the composer folding up.
@@ -396,8 +396,7 @@ private fun ComposerInput(
     val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
     Box(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
-            .background(ConsoleColors.Card)
-            .border(1.dp, ConsoleColors.Border, bubbleShape)
+            .background(NewTheme.Card)
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }
@@ -423,11 +422,11 @@ private fun ComposerInput(
                 onValueChange = onFieldValueChange,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { onFocusChange(it.isFocused) },
                 textStyle = androidx.compose.ui.text.TextStyle(
-                    color = ConsoleColors.TextPrimary,
+                    color = NewTheme.TextPrimary,
                     fontSize = 14.sp,
                     lineHeight = INPUT_LINE_HEIGHT,
                 ),
-                cursorBrush = SolidColor(ConsoleColors.TextPrimary),
+                cursorBrush = SolidColor(NewTheme.Accent),
                 visualTransformation = mentionVisual.asTransformation(),
                 maxLines = 6,
                 onTextLayout = { mentionLayout = it },
@@ -460,7 +459,7 @@ private fun ComposerInput(
                             }
                         }
                         if (value.isEmpty()) {
-                            Text("Ask anything…", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+                            Text("Ask anything…", color = NewTheme.TextMuted, fontSize = 14.sp)
                         }
                         innerTextField()
                     }
@@ -501,7 +500,7 @@ private fun ComposerInput(
                         modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
                         contentAlignment = Alignment.Center,
                     ) {
-                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
                     }
                     // Fills the gap so the chips stay clear of the send button; the model
                     // chip truncates rather than pushing anything off a narrow screen.
@@ -546,20 +545,20 @@ private fun SendStopButton(
         // mid-send, and destructive red so the control's meaning is readable at
         // a glance rather than only from a tiny glyph.
         Box(
-            modifier = modifier.size(SEND_SIZE).clip(CircleShape).background(ConsoleColors.Destructive)
+            modifier = modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Danger)
                 .clickable(onClickLabel = "Stop", onClick = onStop),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
+            androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = NewTheme.OnPrimary, modifier = Modifier.size(14.dp))
         }
     } else {
         Box(
             modifier = modifier.size(SEND_SIZE).clip(CircleShape)
-                .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
+                .background(if (canSend) NewTheme.Primary else NewTheme.PrimaryDisabled)
                 .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
+            androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted, modifier = Modifier.size(15.dp))
         }
     }
 }

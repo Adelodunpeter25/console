@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownHighlightedCodeBlock
@@ -34,7 +35,7 @@ import dev.snipme.highlights.model.SyntaxTheme
 private val BodyStyle = TextStyle(
     fontSize = 15.sp,
     lineHeight = 23.sp,
-    color = ConsoleColors.TextPrimary,
+    color = NewTheme.TextPrimary,
 )
 
 private val CodeStyle = TextStyle(
@@ -57,7 +58,7 @@ private val ConsoleSyntaxTheme = SyntaxTheme(
     comment = ConsoleColors.Syntax.Comment.rgb(),
     metadata = ConsoleColors.Syntax.Builtin.rgb(),
     multilineComment = ConsoleColors.Syntax.Comment.rgb(),
-    punctuation = ConsoleColors.TextSecondary.rgb(),
+    punctuation = NewTheme.TextSecondary.rgb(),
     mark = ConsoleColors.Syntax.Type.rgb(),
 )
 
@@ -92,11 +93,11 @@ fun MarkdownText(content: String, modifier: Modifier = Modifier, streaming: Bool
             modifier = Modifier.fillMaxWidth(),
             components = components,
             colors = markdownColor(
-                text = ConsoleColors.TextPrimary,
-                codeBackground = ConsoleColors.Card,
+                text = NewTheme.TextPrimary,
+                codeBackground = NewTheme.Card,
                 inlineCodeBackground = Color.White.copy(alpha = 0.08f),
-                dividerColor = ConsoleColors.Border,
-                tableBackground = ConsoleColors.Card,
+                dividerColor = NewTheme.Divider,
+                tableBackground = NewTheme.Card,
             ),
             typography = markdownTypography(
                 h1 = BodyStyle.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold),
@@ -112,7 +113,7 @@ fun MarkdownText(content: String, modifier: Modifier = Modifier, streaming: Bool
                 list = BodyStyle,
                 code = CodeStyle,
                 inlineCode = CodeStyle.copy(color = Color(0xFFFDBA74), lineHeight = 23.sp),
-                quote = BodyStyle.copy(color = ConsoleColors.TextSecondary),
+                quote = BodyStyle.copy(color = NewTheme.TextSecondary),
                 table = BodyStyle.copy(fontSize = 13.sp, lineHeight = 19.sp),
                 textLink = TextLinkStyles(
                     style = SpanStyle(color = Color(0xFF7DD3FC), textDecoration = TextDecoration.Underline),
@@ -134,7 +135,7 @@ fun MarkdownText(content: String, modifier: Modifier = Modifier, streaming: Bool
             animations = markdownAnimations(animateTextSize = { this }),
         )
         if (streaming) {
-            Text("▍", color = ConsoleColors.TextMuted, fontSize = 14.sp)
+            Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
         }
     }
 }

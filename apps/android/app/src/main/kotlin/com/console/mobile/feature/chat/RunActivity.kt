@@ -2,7 +2,6 @@ package com.console.mobile.feature.chat
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +44,7 @@ import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.getToolLabel
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.delay
 
 private sealed interface RenderGroup {
@@ -108,14 +107,14 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isWorking) {
-                CircularProgressIndicator(color = ConsoleColors.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(12.dp))
+                CircularProgressIndicator(color = NewTheme.Accent, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
             }
-            Text(summary, color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = if (isWorking) 6.dp else 0.dp))
+            Text(summary, color = NewTheme.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = if (isWorking) 8.dp else 0.dp))
             // Collapsed points right (there is more to see), expanded points up.
-            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(14.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(14.dp))
         }
         // Always drawn, collapsed or not — one rule closing each run block.
-        HorizontalDivider(color = ConsoleColors.BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(vertical = 4.dp))
+        HorizontalDivider(color = NewTheme.Divider, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(vertical = 4.dp))
         if (expanded) {
             val groups = groupEvents(activity.events)
             groups.forEach { g ->
@@ -155,15 +154,14 @@ fun ToolGroupRow(
     val byId = results.associateBy { it.toolCallId }
     val anyRunning = calls.any { byId[it.id] == null }
     val anyError = calls.any { byId[it.id]?.isError == true }
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(NewTheme.FieldRadius)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp)
             .clip(shape)
-            .background(Color.White.copy(alpha = 0.02f))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+            .background(NewTheme.Card)
     ) {
         Row(
             modifier = Modifier
@@ -175,18 +173,18 @@ fun ToolGroupRow(
             Icon(
                 getToolIcon(toolName),
                 contentDescription = null,
-                tint = ConsoleColors.TextSecondary,
+                tint = NewTheme.TextSecondary,
                 modifier = Modifier.size(13.dp).padding(end = 6.dp),
             )
             Text(
                 getToolLabel(toolName),
-                color = ConsoleColors.TextSecondary,
+                color = NewTheme.TextSecondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
             )
             Text(
                 "· ${calls.size} calls",
-                color = ConsoleColors.TextMuted,
+                color = NewTheme.TextMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(start = 6.dp),
             )
@@ -198,12 +196,12 @@ fun ToolGroupRow(
                 Icon(
                     TablerIcons.Outline.AlertTriangle,
                     contentDescription = null,
-                    tint = Color(0xFFF87171),
+                    tint = NewTheme.Danger,
                     modifier = Modifier.size(13.dp),
                 )
             } else if (anyRunning) {
                 CircularProgressIndicator(
-                    color = ConsoleColors.TextMuted,
+                    color = NewTheme.TextMuted,
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(13.dp),
                 )
@@ -211,14 +209,14 @@ fun ToolGroupRow(
                 Icon(
                     TablerIcons.Outline.Check,
                     contentDescription = null,
-                    tint = Color(0xFF34D399),
+                    tint = NewTheme.Success,
                     modifier = Modifier.size(13.dp),
                 )
             }
             Icon(
                 if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown,
                 contentDescription = null,
-                tint = ConsoleColors.TextMuted,
+                tint = NewTheme.TextMuted,
                 modifier = Modifier.size(13.dp).padding(start = 4.dp),
             )
         }
@@ -244,12 +242,12 @@ private fun CollapsibleThinking(text: String) {
     var expanded by remember { mutableStateOf(false) }
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         Row(modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(12.dp))
-            Text("Thought", color = ConsoleColors.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
-            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextMuted, modifier = Modifier.size(13.dp))
+            Icon(TablerIcons.Outline.Sparkles, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(14.dp))
+            Text("Thought", color = NewTheme.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp))
+            Icon(if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
         }
         if (expanded && text.isNotEmpty()) {
-            Text(text, color = ConsoleColors.TextSecondary, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 18.dp))
+            Text(text, color = NewTheme.TextSecondary, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(start = 18.dp))
         }
     }
 }

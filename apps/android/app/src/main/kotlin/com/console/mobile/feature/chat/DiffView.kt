@@ -31,6 +31,7 @@ import com.console.mobile.core.util.DiffLineType
 import com.console.mobile.core.util.DiffResult
 import com.console.mobile.core.util.getFileName
 import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /**
@@ -50,7 +51,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
         modifier = Modifier.fillMaxWidth(),
     ) {
         if (!filePath.isNullOrBlank()) {
-            Text(getFileName(filePath), color = ConsoleColors.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+            Text(getFileName(filePath), color = NewTheme.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
         val visible = if (!expanded && diff.lines.size > maxCollapsedLines) diff.lines.take(maxCollapsedLines) else diff.lines
         Column(
@@ -68,7 +69,7 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
                         DiffLineType.Removed -> "- ${line.text}"
                         else -> "  ${line.text}"
                     },
-                    color = ConsoleColors.TextPrimary,
+                    color = NewTheme.TextPrimary,
                     fontSize = 12.sp,
                     fontFamily = ConsoleMonoFamily,
                     softWrap = false,
@@ -80,8 +81,8 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(TablerIcons.Outline.ChevronDown, contentDescription = null, tint = ConsoleColors.TextSecondary)
-                        Text("Show ${diff.lines.size - maxCollapsedLines} more lines", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                        Icon(TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextSecondary)
+                        Text("Show ${diff.lines.size - maxCollapsedLines} more lines", color = NewTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
             }
@@ -89,8 +90,8 @@ fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int 
             Row(modifier = Modifier.fillMaxWidth().clickable { expanded = false }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = ConsoleColors.TextSecondary)
-                        Text("Show less", color = ConsoleColors.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
+                        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextSecondary)
+                        Text("Show less", color = NewTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
             }

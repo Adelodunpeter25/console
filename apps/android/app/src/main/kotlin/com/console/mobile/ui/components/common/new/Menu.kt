@@ -1,6 +1,5 @@
-package com.console.mobile.ui.components
+package com.console.mobile.ui.components.common.new
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
@@ -16,15 +15,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 
 /**
- * Shared dropdown / overflow menu. A Material 3 [DropdownMenu] restyled to the
- * app's look: rounded corners, elevated dark surface and a hairline border.
- * Anchor it inside the same Box as the trigger so it drops down from it.
+ * Overflow / dropdown menu: a Material 3 [DropdownMenu] on the raised surface with
+ * the card radius and no border. Anchor it inside the same Box as its trigger so
+ * it drops down from it.
  */
 @Composable
-fun ConsoleDropdownMenu(
+fun OverflowMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -34,31 +33,30 @@ fun ConsoleDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        containerColor = ConsoleColors.SurfaceElevated,
+        shape = RoundedCornerShape(NewTheme.FieldRadius),
+        containerColor = NewTheme.Raised,
         tonalElevation = 0.dp,
         shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, ConsoleColors.Border),
         content = content,
     )
 }
 
-/** A single row for [ConsoleDropdownMenu]: optional leading icon + label. */
+/** A single row for [OverflowMenu]: optional leading icon and a label. */
 @Composable
-fun ConsoleDropdownMenuItem(
+fun OverflowMenuItem(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     destructive: Boolean = false,
 ) {
-    val tint = if (destructive) ConsoleColors.Destructive else ConsoleColors.TextPrimary
+    val tint = if (destructive) NewTheme.Danger else NewTheme.TextPrimary
     DropdownMenuItem(
-        text = { Text(label, color = tint, fontSize = 14.sp, fontWeight = FontWeight.Medium) },
+        text = { Text(label, color = tint, fontSize = 16.sp, fontWeight = FontWeight.Normal) },
         onClick = onClick,
         modifier = modifier,
-        leadingIcon = icon?.let { { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp)) } },
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        leadingIcon = icon?.let { { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) } },
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         colors = MenuDefaults.itemColors(),
     )
 }

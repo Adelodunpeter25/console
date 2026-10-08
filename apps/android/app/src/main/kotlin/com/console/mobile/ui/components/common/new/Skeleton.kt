@@ -74,3 +74,27 @@ fun SkeletonLoader(
         if (isLoading) skeleton() else content()
     }
 }
+
+/**
+ * The chat transcript while it loads: a user bubble, an assistant reply, a short
+ * user message and a tool row, in the proportions the real thing takes.
+ */
+@Composable
+fun ChatLoadingSkeleton(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth().padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            SkeletonBlock(modifier = Modifier.fillMaxWidth(0.6f), height = 48.dp, radius = 20.dp)
+        }
+        Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth(0.85f)) {
+            SkeletonBlock(width = 112.dp)
+            SkeletonBlock(height = 80.dp, radius = NewTheme.FieldRadius)
+        }
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            SkeletonBlock(modifier = Modifier.fillMaxWidth(0.4f), height = 40.dp, radius = 20.dp)
+        }
+        Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            SkeletonBlock(height = 48.dp, radius = NewTheme.FieldRadius)
+            SkeletonBlock(modifier = Modifier.fillMaxWidth(0.8f), height = 64.dp, radius = NewTheme.FieldRadius)
+        }
+    }
+}

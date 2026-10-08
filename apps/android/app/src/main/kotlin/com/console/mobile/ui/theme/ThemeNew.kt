@@ -38,6 +38,14 @@ object NewTheme {
     /** Desktop's accent, the orange-brown (theme.accent, dark). Category headings, links. */
     val Accent = Color(0xFFE2795B)
 
+    // ---- Chat
+    /** The user's message bubble: desktop's warm brown (theme.user_bubble, dark). */
+    val UserBubble = Color(0xFF2A2520)
+    /** Text on [UserBubble]: desktop's on_inverse, a warm off-white that reads on the brown. */
+    val OnUserBubble = Color(0xFFF4EDE5)
+    /** Inline surfaces inside the transcript (tool rows, thinking blocks). */
+    val Inline = Color.White.copy(alpha = 0.04f)
+
     // ---- Status (desktop success / warning / danger / gauge)
     val Success = Color(0xFF62C987)
     val Warning = Color(0xFFE0B36A)

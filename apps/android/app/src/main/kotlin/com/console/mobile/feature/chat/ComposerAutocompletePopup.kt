@@ -34,7 +34,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.theme.ConsoleColors
+import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /** Floating suggestion list anchored above [anchor] (the composer input), with a real dp gap. */
@@ -59,9 +59,9 @@ fun ComposerAutocompletePopup(anchor: LayoutCoordinates, gap: Dp = 10.dp, conten
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(ConsoleColors.Card)
-                .border(1.dp, ConsoleColors.Border, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(NewTheme.FieldRadius))
+                // Raised, not Card: the popup floats over cards and bubbles and has no border to set it apart.
+                .background(NewTheme.Raised)
                 .heightIn(max = 260.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
@@ -72,9 +72,9 @@ fun ComposerAutocompletePopup(anchor: LayoutCoordinates, gap: Dp = 10.dp, conten
 @Composable
 fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Text("/${command.name}", color = ConsoleColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("/${command.name}", color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (command.description.isNotBlank()) {
-            Text(command.description, color = ConsoleColors.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+            Text(command.description, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
         }
     }
 }
@@ -99,7 +99,7 @@ fun FileMentionSuggestionRow(file: FileSearchResult, onClick: () -> Unit) {
             Text(filename, color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
         }
         if (file.relative_path != filename) {
-            Text(file.relative_path, color = ConsoleColors.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+            Text(file.relative_path, color = NewTheme.TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }

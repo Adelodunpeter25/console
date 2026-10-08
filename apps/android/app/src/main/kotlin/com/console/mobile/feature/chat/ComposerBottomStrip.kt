@@ -25,6 +25,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import io.github.lyxnx.compose.ui.tablericons.outline.Shield
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.theme.NewTheme
 
 /**
  * Approval mode on the left, context ring on the right. Everything else that
@@ -94,6 +95,7 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
         icon = TablerIcons.Outline.Robot,
         label = modelId?.let { com.console.mobile.core.util.formatModelName(it) } ?: "Default Model",
         provider = provider,
+        surface = NewTheme.Raised,
         modifier = modifier,
     ) {
         AppContainer.providerRepository.loadProviders()
@@ -142,6 +144,7 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
         icon = TablerIcons.Outline.Brain,
         label = "$step ${current.replaceFirstChar { it.uppercase() }}",
         enabled = !running,
+        surface = NewTheme.Raised,
         modifier = modifier,
     ) {
         val next = com.console.mobile.core.chat.nextThinkingLevel(supported, current) ?: return@PickerChip
