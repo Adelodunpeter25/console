@@ -42,9 +42,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.feature.settings.mcp.McpEditorForm
 import com.console.mobile.feature.settings.mcp.McpOAuthLauncher
 import com.console.mobile.feature.settings.mcp.McpServerCard
-import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.launch
 import com.console.mobile.ui.components.common.new.ActionButton
@@ -54,6 +52,8 @@ import com.console.mobile.ui.components.common.new.Banner
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /**
  * MCP servers settings, mirroring the desktop `mcp_page.rs`: server cards
@@ -88,10 +88,10 @@ fun McpSettings(onBack: () -> Unit) {
         if (editing != null) {
             val serverId = editing!!.takeIf { it != "__create__" }
             val server = mcpState.servers.firstOrNull { it.id == serverId }
-            ScreenHeader(title = if (serverId != null) "Edit MCP server" else "Add MCP server", onBack = { editing = null })
+            PageHeader(title = if (serverId != null) "Edit MCP server" else "Add MCP server", onBack = { editing = null })
             McpEditorForm(server = server, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
         } else {
-            ScreenHeader(
+            PageHeader(
                 title = "MCP Servers",
                 onBack = onBack,
                 actions = { AddButton("Add MCP server") { editing = "__create__" } },
@@ -130,12 +130,10 @@ fun McpSettings(onBack: () -> Unit) {
 
 @Composable
 private fun McpEmptyState(onAdd: () -> Unit) {
-    EmptyState(
+    EmptyView(
         title = "No MCP servers configured",
         description = "Add local stdio commands or remote HTTP servers to equip the harness with dynamic tools.",
-        icon = {
-            Icon(TablerIcons.Outline.Server, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(36.dp))
-        },
+        icon = TablerIcons.Outline.Server, iconTint = NewTheme.TextMuted,
         action = {
             ActionButton(text = "Add your first MCP server", onClick = onAdd, kind = ActionButtonKind.Primary)
         },

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,10 +46,12 @@ fun ActionButton(
     loading: Boolean = false,
     icon: ImageVector? = null,
     compact: Boolean = false,
+    /** Fill for non-primary kinds. Pass [NewTheme.Raised] when the button sits on a card or dialog. */
+    surface: Color = NewTheme.Card,
 ) {
     val fill = when {
         kind == ActionButtonKind.Primary -> if (enabled) NewTheme.Primary else NewTheme.PrimaryDisabled
-        else -> NewTheme.Card
+        else -> surface
     }
     val content = when {
         kind == ActionButtonKind.Primary -> if (enabled) NewTheme.OnPrimary else NewTheme.TextMuted
@@ -72,15 +75,21 @@ fun ActionButton(
     }
 }
 
-/** Round "+" for a screen header, to add an item (environment, server, folder). */
+/** A round, card-coloured icon button: the back button, "+" and settings cog in headers. */
 @Composable
-fun AddButton(contentDescription: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+fun CircleIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = onClick, modifier = modifier.size(40.dp)) {
         Box(
             modifier = Modifier.size(40.dp).clip(CircleShape).background(NewTheme.Card),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(TablerIcons.Outline.Plus, contentDescription = contentDescription, tint = NewTheme.TextPrimary)
+            Icon(icon, contentDescription = contentDescription, tint = NewTheme.TextPrimary)
         }
     }
+}
+
+/** Round "+" for a screen header, to add an item (environment, server, folder). */
+@Composable
+fun AddButton(contentDescription: String, onClick: () -> Unit) {
+    CircleIconButton(TablerIcons.Outline.Plus, contentDescription, onClick)
 }

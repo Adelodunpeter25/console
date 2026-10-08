@@ -49,7 +49,6 @@ import com.console.mobile.data.store.Environment
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +64,7 @@ import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /**
  * Port of screens/settings/environments-settings.tsx + components/environments/environment-editor.tsx.
@@ -97,10 +97,10 @@ fun ServersSettings(onBack: () -> Unit) {
         if (editing != null) {
             val envId = editing!!.takeIf { it != "__create__" }
             val editingEnv = envState.environments.firstOrNull { it.id == envId }
-            ScreenHeader(title = if (envId != null) "Edit environment" else "Add environment", onBack = { editing = null })
+            PageHeader(title = if (envId != null) "Edit environment" else "Add environment", onBack = { editing = null })
             EnvironmentEditorForm(env = editingEnv, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
         } else {
-            ScreenHeader(
+            PageHeader(
                 title = "Connection",
                 onBack = onBack,
                 actions = {

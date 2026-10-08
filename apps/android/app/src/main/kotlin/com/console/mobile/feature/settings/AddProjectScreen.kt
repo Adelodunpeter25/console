@@ -44,9 +44,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Eye
 import io.github.lyxnx.compose.ui.tablericons.outline.EyeOff
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
@@ -58,6 +56,8 @@ import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /**
  * Full-screen folder picker for adding a project. Starts at the server's home
@@ -95,7 +95,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
     LaunchedEffect(Unit) { browse(null) }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = "Add Project",
             subtitle = currentPath,
             onBack = onBack,
@@ -139,7 +139,7 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         }
                     }
                     if (dirs.isEmpty()) {
-                        EmptyState(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
+                        EmptyView(title = "No subfolders", description = "This folder has no subfolders. You can still add it as a project below.", icon = TablerIcons.Outline.FolderOpen, iconTint = NewTheme.TextMuted)
                     } else {
                         Section("Folders") {
                             dirs.forEachIndexed { index, d ->

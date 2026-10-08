@@ -38,10 +38,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.common.new.NavRow
 import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.PageHeader
 
 enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
 
@@ -88,7 +88,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     // to be in state before the list renders.
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
-    ScreenHeader(title = "Settings", onBack = { onBack() })
+    PageHeader(title = "Settings", onBack = { onBack() })
     val signedIn = authState.status?.values?.any { it.logged_in } == true
     val roles = providerState.modelRoles.count { it.value.isNotBlank() }
     val n = projectState.projects.size

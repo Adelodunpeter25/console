@@ -49,11 +49,13 @@ import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.color
 import console.v1.UsageLimit
 import console.v1.UsageReport
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.MeterBar
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.SkeletonLoader
+import com.console.mobile.ui.components.common.new.SectionSkeleton
 
 /**
  * Port of screens/settings/usage-settings.tsx + usage-provider-card + usage-limit-row.
@@ -78,7 +80,7 @@ fun UsageSettings(onBack: () -> Unit) {
     val isLoading = usageState.loading && usageState.reports.isEmpty()
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = "Usage",
             onBack = onBack,
             actions = {
@@ -87,14 +89,17 @@ fun UsageSettings(onBack: () -> Unit) {
                 }
             },
         )
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    Text("Loading quota…", color = NewTheme.TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+        SkeletonLoader(
+            loading = isLoading,
+            modifier = Modifier.fillMaxSize(),
+            skeleton = {
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    SectionSkeleton(rows = 2)
+                    SectionSkeleton(rows = 2)
+                    SectionSkeleton(rows = 2)
                 }
-            }
-        } else {
+            },
+        ) {
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = {

@@ -42,8 +42,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import com.console.mobile.AppContainer
 import console.v1.ProjectInfo
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.EmptyState
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +51,8 @@ import com.console.mobile.ui.components.common.new.AddButton
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /**
  * Port of screens/settings/projects-settings.tsx + screens/projects/add-project-screen.tsx.
@@ -67,7 +67,7 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
     LaunchedEffect(Unit) { AppContainer.projectRepository.loadProjects() }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = "Projects",
             onBack = onBack,
             actions = { AddButton("Add folder", onAddProject) },
@@ -75,13 +75,13 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
         if (projectState.loading && projectState.projects.isEmpty()) {
             LoadingState("Loading projects…", Modifier.fillMaxSize())
         } else if (projectState.error != null && projectState.projects.isEmpty()) {
-            EmptyState(
+            EmptyView(
                 title = "Couldn't load projects",
                 description = projectState.error ?: "Failed to load projects.",
-                icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp)) },
+                icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger,
             )
         } else if (projectState.projects.isEmpty()) {
-            EmptyState(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = { Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
+            EmptyView(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = TablerIcons.Outline.FolderOpen, iconTint = NewTheme.TextMuted)
         } else {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                 val n = projectState.projects.size

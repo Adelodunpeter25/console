@@ -42,7 +42,6 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.ProviderIcon
@@ -52,6 +51,8 @@ import kotlinx.coroutines.withContext
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.SectionSkeleton
 
 /**
  * Port of screens/settings/account-settings.tsx. Named ProvidersSettings: this
@@ -72,13 +73,11 @@ fun ProvidersSettings(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        ScreenHeader(title = "Account", onBack = onBack)
+        PageHeader(title = "Account", onBack = onBack)
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
             Text("Sign in to AI providers to use their models in chat.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
             if (providerState.loadingProviders && providerState.providers.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                }
+                SectionSkeleton(rows = 4)
             } else {
                 val providers = providerState.providers.filter { it.auth_method != "none" }
                 Section("Providers") {

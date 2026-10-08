@@ -43,10 +43,8 @@ import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
 import console.v1.SessionHeader
 import com.console.mobile.ui.components.ConfirmButton
-import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.PillButton
 import com.console.mobile.ui.components.PillButtonVariant
-import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +55,8 @@ import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.PageHeader
 
 /** Port of screens/settings/deleted-chats-settings.tsx. */
 @Composable
@@ -80,7 +80,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        ScreenHeader(
+        PageHeader(
             title = "Deleted Chats",
             onBack = onBack,
             actions = if (deleted.isNotEmpty()) {
@@ -123,9 +123,9 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
         if (projectState.deletedLoading && deleted.isEmpty()) {
             LoadingState("Loading deleted chats…", Modifier.fillMaxSize())
         } else if (projectState.error != null && deleted.isEmpty()) {
-            EmptyState(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = { Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp)) })
+            EmptyView(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger)
         } else if (deleted.isEmpty()) {
-            EmptyState(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = { Icon(TablerIcons.Outline.Message, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(32.dp)) })
+            EmptyView(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = TablerIcons.Outline.Message, iconTint = NewTheme.TextMuted)
         } else {
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                 Section("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {

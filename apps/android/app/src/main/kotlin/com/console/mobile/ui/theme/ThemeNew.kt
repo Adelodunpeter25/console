@@ -17,9 +17,13 @@ object NewTheme {
     val Background = Color(0xFF0A0A0B)
     /** Grouped cards: raised a step above the background, no border. */
     val Card = Color(0xFF1C1C1E)
+    /** A step above [Card], for controls sitting on a card (dialog buttons, tiles). */
+    val Raised = Color(0xFF2A2A2D)
     /** Inputs sitting on top of a card or the background. */
     val Field = Color(0xFF121316)
     val Divider = Color.White.copy(alpha = 0.06f)
+    /** Placeholder blocks while content loads: a step lighter than [Card] so they read on it. */
+    val Skeleton = Raised
 
     // ---- Text
     val TextPrimary = Color(0xFFFFFFFF)
