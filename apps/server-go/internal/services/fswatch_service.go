@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -22,7 +23,16 @@ type FsWatchService struct {
 	debounce map[string]*time.Timer
 	subs     map[chan types.FsChangeEvent]string // chan -> project path filter
 	closed   bool
+
+	// changeVersion bumps on every non-ignored filesystem event so callers can
+	// cache directory listings and drop them as soon as anything changes.
+	changeVersion atomic.Uint64
 }
+
+// Version returns a counter that increases whenever a watched, non-ignored
+// path changes. A cached listing taken at version N is still valid while
+// Version() == N.
+func (s *FsWatchService) Version() uint64 { return s.changeVersion.Load() }
 
 func NewFsWatchService() (*FsWatchService, error) {
 	w, err := fsnotify.NewWatcher()
@@ -63,6 +73,7 @@ func (s *FsWatchService) loop() {
 		if utils.IsPathIgnored(rel) {
 			continue
 		}
+		s.changeVersion.Add(1)
 		// New directories get their own watches for recursion.
 		if event.Op&fsnotify.Create != 0 {
 			if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
