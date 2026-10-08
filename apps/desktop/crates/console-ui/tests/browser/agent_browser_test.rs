@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use console_ui::browser::cef::agent_browser::{
     BuildError, Installer, PACKAGE_SPEC, RunError, build_invocation, extract_marked,
-    installer_order, is_valid_target_id, parse_output, run,
+    installer_order, is_valid_target_id, parse_output, prepend_path, run,
 };
 
 const TARGET: &str = "294474B9957CEF672F9BFB2130A4B9D5";
@@ -312,4 +312,22 @@ fn finds_the_active_target_from_a_tab_listing() {
     let steps = console_ui::browser::cef::agent_browser::parse_output_for(none, false).unwrap();
     assert_eq!(parse_active_target(&steps), None);
     assert_eq!(parse_active_target(&[]), None);
+}
+
+// A GUI-launched app has no shell PATH, so the node directory goes in front
+// and the inherited entries stay behind it in order.
+#[test]
+fn prepend_path_puts_node_dir_first() {
+    let joined = prepend_path(Path::new("/mise/node/bin"), Some("/usr/bin:/bin".as_ref())).unwrap();
+    let dirs: Vec<_> = std::env::split_paths(&joined).collect();
+    assert_eq!(
+        dirs,
+        vec![PathBuf::from("/mise/node/bin"), PathBuf::from("/usr/bin"), PathBuf::from("/bin")]
+    );
+}
+
+#[test]
+fn prepend_path_without_existing_path_is_just_the_dir() {
+    let joined = prepend_path(Path::new("/mise/node/bin"), None).unwrap();
+    assert_eq!(std::env::split_paths(&joined).collect::<Vec<_>>(), vec![PathBuf::from("/mise/node/bin")]);
 }

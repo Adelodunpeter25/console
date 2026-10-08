@@ -358,11 +358,19 @@ pub fn run(
     invocation: &Invocation,
     timeout: Duration,
 ) -> Result<Vec<StepResult>, RunError> {
-    let mut child = Command::new(binary)
+    let mut command = Command::new(binary);
+    command
         .args(&invocation.args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    // agent-browser is a `#!/usr/bin/env node` script: without `node` on PATH
+    // (a GUI-launched app doesn't see mise/nvm/bun shells) it dies with
+    // "env: node: No such file or directory".
+    if let Some(path) = path_with_node() {
+        command.env("PATH", path);
+    }
+    let mut child = command
         .spawn()
         .map_err(|err| RunError::Failed(format!("could not start {}: {err}", binary.display())))?;
 
@@ -495,6 +503,37 @@ fn which_in_login_shell(name: &str) -> Option<PathBuf> {
         .ok()?;
     let found = PathBuf::from(extract_marked(&String::from_utf8_lossy(&output.stdout), MARKER)?);
     is_executable(&found).then_some(found)
+}
+
+/// `dir` placed in front of the `existing` search path.
+pub fn prepend_path(dir: &Path, existing: Option<&std::ffi::OsStr>) -> Option<std::ffi::OsString> {
+    let mut paths = vec![dir.to_path_buf()];
+    if let Some(existing) = existing {
+        paths.extend(std::env::split_paths(existing));
+    }
+    std::env::join_paths(paths).ok()
+}
+
+/// Directory holding `node`, found once and reused: the login-shell lookup
+/// spawns an interactive shell, which is too slow to repeat per browser call.
+/// A failed lookup is not cached, so installing node later still works.
+fn node_dir() -> Option<PathBuf> {
+    static CACHE: Mutex<Option<PathBuf>> = Mutex::new(None);
+    let mut cached = CACHE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if cached.is_none() {
+        *cached = find_tool("node").and_then(|node| node.parent().map(Path::to_path_buf));
+    }
+    cached.clone()
+}
+
+/// A `PATH` that lets `#!/usr/bin/env node` resolve, or `None` when the
+/// inherited `PATH` already has `node` (or none can be found).
+fn path_with_node() -> Option<std::ffi::OsString> {
+    let existing = std::env::var_os("PATH");
+    if existing.as_deref().and_then(|path| which_in("node", path)).is_some() {
+        return None;
+    }
+    prepend_path(&node_dir()?, existing.as_deref())
 }
 
 fn well_known_dirs() -> Vec<PathBuf> {
