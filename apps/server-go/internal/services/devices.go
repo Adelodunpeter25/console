@@ -17,7 +17,9 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/sim-go/sdk"
+	"google.golang.org/protobuf/encoding/protojson"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -55,34 +57,33 @@ func deviceState(d sdk.Device) string {
 	return "shutdown"
 }
 
-func toDescriptor(d sdk.Device) types.DeviceDescriptor {
-	out := types.DeviceDescriptor{ID: d.ID, Name: d.Name, Platform: d.Platform, State: deviceState(d), IsAvailable: true}
+func toDescriptor(d sdk.Device) *consolev1.DeviceDescriptor {
+	out := &consolev1.DeviceDescriptor{Id: d.ID, Name: d.Name, Platform: d.Platform, State: deviceState(d), IsAvailable: true}
 	if d.OS != "" && d.OS != "?" {
-		v := d.OS
-		out.OSVersion = &v
+		out.OsVersion = &d.OS
 	}
 	return out
 }
 
-func (s *DeviceService) List(ctx context.Context) ([]types.DeviceDescriptor, error) {
+func (s *DeviceService) List(ctx context.Context) ([]*consolev1.DeviceDescriptor, error) {
 	devs, err := s.client.ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]types.DeviceDescriptor, 0, len(devs))
+	out := make([]*consolev1.DeviceDescriptor, 0, len(devs))
 	for _, d := range devs {
 		out = append(out, toDescriptor(d))
 	}
 	return out, nil
 }
 
-func (s *DeviceService) Diagnostics(ctx context.Context) types.DeviceDiagnostics {
+func (s *DeviceService) Diagnostics(ctx context.Context) *consolev1.DeviceDiagnostics {
 	d := s.client.Doctor(ctx)
-	out := types.DeviceDiagnostics{
+	out := &consolev1.DeviceDiagnostics{
 		XcodeInstalled:     d.XcodeInstalled,
 		SimctlAvailable:    d.SimctlAvailable,
-		AndroidSDKFound:    d.ADBAvailable || d.EmulatorAvail,
-		ADBAvailable:       d.ADBAvailable,
+		AndroidSdkFound:    d.ADBAvailable || d.EmulatorAvail,
+		AdbAvailable:       d.ADBAvailable,
 		EmulatorAvailable:  d.EmulatorAvail,
 		DiskFreeBytes:      d.DiskFreeBytes,
 		HasEnoughDiskSpace: d.HasEnoughDiskGB,
@@ -172,22 +173,22 @@ func pixel(v *float64) int {
 
 // Interact dispatches a one-shot REST action. Unknown actions are treated
 // as hardware buttons (home, back, power, volume_up, ...).
-func (s *DeviceService) Interact(ctx context.Context, platform, id string, a types.DeviceAction) error {
+func (s *DeviceService) Interact(ctx context.Context, platform, id string, a *consolev1.DeviceActionRequest) error {
 	switch a.Action {
 	case "tap":
 		return s.client.Tap(ctx, platform, id, pixel(a.X), pixel(a.Y))
 	case "swipe":
 		ms := 300
 		if a.DurationMs != nil {
-			ms = *a.DurationMs
+			ms = int(a.GetDurationMs())
 		}
 		return s.client.Swipe(ctx, platform, id, pixel(a.X), pixel(a.Y), pixel(a.EndX), pixel(a.EndY), ms)
 	case "text", "type":
-		return s.client.Type(ctx, platform, id, a.Text)
+		return s.client.Type(ctx, platform, id, a.GetText())
 	case "key":
-		return s.client.Key(ctx, platform, id, a.Key)
+		return s.client.Key(ctx, platform, id, a.GetKey())
 	case "appearance":
-		mode := strings.ToLower(a.Appearance)
+		mode := strings.ToLower(a.GetAppearance())
 		if mode == "" || mode == "toggle" {
 			// Flip the device's real mode; schedule-based Android values
 			// (auto, custom_*) count as light so the toggle goes dark.
@@ -295,8 +296,8 @@ func writePacket(conn StreamConn, p sdk.Packet) error {
 	var tag byte
 	switch p.Kind {
 	case sdk.PacketMeta:
-		b, err := json.Marshal(types.DeviceStreamMeta{
-			Type: "meta", Width: p.Meta.Width, Height: p.Meta.Height,
+		b, err := protojson.Marshal(&consolev1.DeviceStreamMeta{
+			Type: "meta", Width: int32(p.Meta.Width), Height: int32(p.Meta.Height),
 			Name: p.Meta.Name, Codec: p.Meta.Codec,
 		})
 		if err != nil {

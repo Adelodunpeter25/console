@@ -9,7 +9,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use console_core::{ConsoleClient, DeviceActionRequest, DeviceDescriptor, DeviceState};
+use console_core::{
+    ConsoleClient, DeviceActionRequest, DeviceDescriptor, device_display_name, device_platform,
+    device_state_is_booted, device_state_label,
+};
 use gpui::{
     AnyElement, App, AppContext, Context, Entity, FocusHandle, Focusable, HitboxBehavior,
     InteractiveElement, IntoElement, ParentElement, Render, SharedString,
@@ -270,12 +273,12 @@ impl DeviceViewer {
             return;
         };
         // Only booted devices can stream; the server 404s otherwise.
-        if !device.state.is_booted() {
+        if !device_state_is_booted(&device.state) {
             host.evaluate_script(PlayerConfig::stop_script());
             self.stream_status = None;
             return;
         }
-        let config = PlayerConfig::for_device(&base, &device.id, device.platform_kind().as_str());
+        let config = PlayerConfig::for_device(&base, &device.id, device_platform(&device).as_str());
         host.set_visible(true);
         host.evaluate_script(&config.start_script());
         self.stream_status = Some("connecting".to_string());
@@ -309,7 +312,7 @@ impl DeviceViewer {
         }
         let client = self.client.clone();
         let view = cx.entity().downgrade();
-        let platform = device.platform_kind().as_str().to_string();
+        let platform = device_platform(&device).as_str().to_string();
         let id = device.id.clone();
         let action = action.to_string();
         // Empty appearance asks the server to flip the device's real mode.
@@ -355,7 +358,7 @@ impl DeviceViewer {
         cx.notify();
         let client = self.client.clone();
         let view = cx.entity().downgrade();
-        let platform = device.platform_kind().as_str().to_string();
+        let platform = device_platform(&device).as_str().to_string();
         let id = device.id.clone();
         cx.spawn(async move |_, cx| {
             let result = client.devices.boot(&id, &platform).await;
@@ -410,7 +413,7 @@ impl DeviceViewer {
                                 .find(|d| &d.id == id)
                                 .map(|d| d.name.clone());
                             devices.iter().find(|d| {
-                                d.state.is_booted()
+                                device_state_is_booted(&d.state)
                                     && (&d.id == id || Some(&d.name) == name.as_ref())
                             })
                         });
@@ -458,7 +461,7 @@ impl DeviceViewer {
         cx.notify();
         let client = self.client.clone();
         let view = cx.entity().downgrade();
-        let platform = device.platform_kind().as_str().to_string();
+        let platform = device_platform(&device).as_str().to_string();
         let id = device.id.clone();
         cx.spawn(async move |_, cx| {
             let shutdown = client.devices.shutdown(&id, &platform).await;
@@ -486,9 +489,9 @@ impl DeviceViewer {
         let Some(device) = self.selected() else {
             return;
         };
-        let name = device.display_name();
+        let name = device_display_name(&device);
         let client = self.client.clone();
-        let platform = device.platform_kind().as_str().to_string();
+        let platform = device_platform(&device).as_str().to_string();
         let id = device.id.clone();
         let handler = self.on_screenshot.clone();
         let window_handle = window.window_handle();
@@ -661,7 +664,7 @@ impl DeviceViewer {
         let theme = Theme::current(cx);
         let selected_label = self
             .selected()
-            .map(|d| format!("{} · {}", d.display_name(), d.platform_kind().label()))
+            .map(|d| format!("{} · {}", device_display_name(&d), device_platform(&d).label()))
             .unwrap_or_else(|| "Select device".to_string());
         let status = self.status_text();
         let devices = self.devices.clone();
@@ -721,9 +724,9 @@ impl DeviceViewer {
                             let id = device.id.clone();
                             let label = format!(
                                 "{} · {} · {}",
-                                device.display_name(),
-                                device.platform_kind().label(),
-                                device.state.label()
+                                device_display_name(&device),
+                                device_platform(&device).label(),
+                                device_state_label(&device.state)
                             );
                             let selected = selected_id.as_deref() == Some(&device.id);
                             let pending_select = pending_select.clone();
@@ -756,11 +759,11 @@ impl DeviceViewer {
             return Some("Stopping".to_string());
         }
         if let Some(device) = self.selected() {
-            if device.state == DeviceState::Booting || Some(&device.id) == self.booting_id.as_ref()
+            if device.state == "booting" || Some(&device.id) == self.booting_id.as_ref()
             {
                 return Some("Booting".to_string());
             }
-            if device.state.is_booted() {
+            if device_state_is_booted(&device.state) {
                 return Some(
                     self.stream_status
                         .clone()
@@ -774,7 +777,7 @@ impl DeviceViewer {
                         .unwrap_or_else(|| "Ready".to_string()),
                 );
             }
-            return Some(device.state.label().to_string());
+            return Some(device_state_label(&device.state).to_string());
         }
         None
     }
@@ -782,7 +785,7 @@ impl DeviceViewer {
     fn render_toolbar(&self, cx: &mut Context<Self>) -> gpui::Div {
         let theme = Theme::current(cx);
         let has_device = self.selected().is_some();
-        let booted = self.selected().is_some_and(|d| d.state.is_booted());
+        let booted = self.selected().is_some_and(|d| device_state_is_booted(&d.state));
         let is_booting =
             self.booting_id.as_ref() == self.selected_id.as_ref() && self.booting_id.is_some();
         let is_stopping = self.shutting_down_id.as_ref() == self.selected_id.as_ref()
@@ -843,7 +846,7 @@ impl DeviceViewer {
     ) -> gpui::Stateful<gpui::Div> {
         let is_ios = self
             .selected()
-            .is_some_and(|d| d.platform_kind() == console_core::DevicePlatform::Ios);
+            .is_some_and(|d| device_platform(&d) == console_core::DevicePlatform::Ios);
         div()
             .id("device-right-rail-container")
             .flex_none()
@@ -1022,7 +1025,7 @@ impl Render for DeviceViewer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
         let has_device = self.selected_id.is_some();
-        let booted = self.selected().is_some_and(|d| d.state.is_booted());
+        let booted = self.selected().is_some_and(|d| device_state_is_booted(&d.state));
         self.reconcile_focus(window, cx);
         div()
             .id("device-viewer")

@@ -1,6 +1,17 @@
 //! Device hardware models (device listing, diagnostics, lifecycle).
+//!
+//! The wire types are now shared protobuf (console_proto, see
+//! proto/console/v1/device.proto) and re-exported below. `platform` and
+//! `state` stay plain strings on the wire — open vocabularies the clients
+//! branch on directly — so DevicePlatform / DeviceState remain hand-written
+//! UI-side enums, reached through the boundary helpers at the bottom.
 
 use serde::{Deserialize, Serialize};
+
+pub use console_proto::{
+    DeviceActionRequest, DeviceDescriptor, DeviceDiagnostics, DeviceOpenAppRequest,
+    DeviceOpenAppResponse, DeviceStreamMeta,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -47,83 +58,40 @@ impl DeviceState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceDescriptor {
-    pub id: String,
-    pub name: String,
-    pub platform: String,
-    pub state: DeviceState,
-    pub model: Option<String>,
-    pub os_version: Option<String>,
-    pub is_available: bool,
-}
+/// Boundary helpers: the wire carries strings, the UI wants enums.
 
-impl DeviceDescriptor {
-    pub fn platform_kind(&self) -> DevicePlatform {
-        if self.platform.eq_ignore_ascii_case("android") {
-            DevicePlatform::Android
-        } else {
-            DevicePlatform::Ios
-        }
-    }
-
-    pub fn display_name(&self) -> String {
-        if self.name.is_empty() {
-            self.id.clone()
-        } else {
-            self.name.clone()
-        }
+/// The device's platform as a UI-side enum. Anything that isn't "android" is
+/// treated as iOS, matching the old `platform_kind`.
+pub fn device_platform(device: &DeviceDescriptor) -> DevicePlatform {
+    if device.platform.eq_ignore_ascii_case("android") {
+        DevicePlatform::Android
+    } else {
+        DevicePlatform::Ios
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceDiagnostics {
-    #[serde(default)]
-    pub xcode_installed: bool,
-    #[serde(default)]
-    pub xcode_version: Option<String>,
-    #[serde(default)]
-    pub simctl_available: bool,
-    #[serde(default)]
-    pub android_sdk_found: bool,
-    #[serde(default)]
-    pub adb_available: bool,
-    #[serde(default)]
-    pub emulator_available: bool,
-    #[serde(default)]
-    pub disk_free_bytes: u64,
-    #[serde(default)]
-    pub has_enough_disk_space: bool,
-    #[serde(default)]
-    pub errors: Vec<String>,
+/// True when the device's state is "booted" (case-insensitive, matching the
+/// old enum deserialization of a lowercase wire value).
+pub fn device_state_is_booted(state: &str) -> bool {
+    state.eq_ignore_ascii_case("booted")
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceActionRequest {
-    pub action: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub x: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub y: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_x: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_y: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<String>,
+/// The UI label for a device state. Unrecognized values fall back to the raw
+/// string so a new simulator state still renders something honest.
+pub fn device_state_label(state: &str) -> String {
+    match state.to_ascii_lowercase().as_str() {
+        "booted" => DeviceState::Booted.label().to_owned(),
+        "shutdown" => DeviceState::Shutdown.label().to_owned(),
+        "booting" => DeviceState::Booting.label().to_owned(),
+        _ => state.to_owned(),
+    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DeviceOpenAppRequest {
-    pub app: String,
+/// The label to show for a device: its name, falling back to its id.
+pub fn device_display_name(device: &DeviceDescriptor) -> String {
+    if device.name.is_empty() {
+        device.id.clone()
+    } else {
+        device.name.clone()
+    }
 }

@@ -34,9 +34,11 @@ const (
 //     empty query ("@" with nothing typed) searches "." but echoes "" back,
 //     and clients echo that verbatim, so it must stay a present-but-empty
 //     string rather than collapsing to absent.
-//   - builtin is a plain bool: protojson omits false, which is the correct
-//     wire shape for "discovered skill" — the old hand-shaped JSON always
-//     emitted it, so fixtures for builtin:true cases must include it.
+//   - builtin is a plain bool and query a plain string: protojson omits false
+//     and "", so a discovered skill emits no builtin key and a bare "@" emits
+//     no query key. Both decode as the zero value on every client, which is
+//     what the old hand-shaped JSON meant, so this is a compatible trim —
+//     notably builtin:false disappears where it used to be present.
 //   - builtin command names, descriptions, the search root, and the includeDirs
 //     flag stay server-side / URL query strings; they are not schema.
 type SlashCommandInfo struct {

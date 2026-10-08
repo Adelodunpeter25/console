@@ -2,9 +2,9 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
-import com.console.mobile.data.model.DeviceActionRequest
-import com.console.mobile.data.model.DeviceDescriptor
-import com.console.mobile.data.model.DeviceDiagnostics
+import console.v1.DeviceActionRequest
+import console.v1.DeviceDescriptor
+import console.v1.DeviceDiagnostics
 import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

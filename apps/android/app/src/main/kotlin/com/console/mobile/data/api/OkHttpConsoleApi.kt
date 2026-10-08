@@ -7,9 +7,9 @@ import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.AuthStatusShim
 import com.console.mobile.data.model.CreateSessionDto
-import com.console.mobile.data.model.DeviceActionRequest
-import com.console.mobile.data.model.DeviceDescriptor
-import com.console.mobile.data.model.DeviceDiagnostics
+import console.v1.DeviceActionRequest
+import console.v1.DeviceDescriptor
+import console.v1.DeviceDiagnostics
 import console.v1.CreateDirRequest
 import console.v1.AssistFileSearchResponse
 import console.v1.FileSearchResult
@@ -22,7 +22,7 @@ import console.v1.WriteFileRequest
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry
-import com.console.mobile.data.model.Model
+import console.v1.Model
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.ConsoleSettings
@@ -37,7 +37,9 @@ import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
-import com.console.mobile.data.model.ProviderCatalogEntry
+import console.v1.Model
+import console.v1.ProviderCatalogEntry
+import console.v1.ProviderModelsResponse
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
@@ -75,6 +77,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
     private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
     private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
+    private val providerCatalogAdapter = wireMoshi.adapter(ProviderCatalogEntry::class.java)
+    private val providerModelsAdapter = wireMoshi.adapter(ProviderModelsResponse::class.java)
     private val sessionChangeAdapter = wireMoshi.adapter(SessionFileChange::class.java)
     private val queuedPromptAdapter = wireMoshi.adapter(QueuedPrompt::class.java)
     private val subagentAdapter = wireMoshi.adapter(SubagentInfo::class.java)
@@ -89,6 +93,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
     private val fileSearchAdapter = wireMoshi.adapter(FileSearchResult::class.java)
     private val slashCommandAdapter = wireMoshi.adapter(SlashCommandInfo::class.java)
+    private val deviceAdapter = wireMoshi.adapter(DeviceDescriptor::class.java)
+    private val deviceDiagnosticsAdapter = wireMoshi.adapter(DeviceDiagnostics::class.java)
+    private val deviceActionAdapter = wireMoshi.adapter(DeviceActionRequest::class.java)
     private val assistSearchAdapter = wireMoshi.adapter(AssistFileSearchResponse::class.java)
     private val fsFileContentAdapter = wireMoshi.adapter(FsFileContent::class.java)
     private val writeFileAdapter = wireMoshi.adapter(WriteFileRequest::class.java)
@@ -402,12 +409,19 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getProviders(): List<ProviderCatalogEntry> {
         val raw = http.get("/api/providers")
-        return http.unwrap(raw, ListSerializer(ProviderCatalogEntry.serializer()), "list providers")
+        // Envelope stays kotlinx; the catalog items are Wire types.
+        val element = http.unwrap(raw, JsonElement.serializer(), "list providers")
+        val array = element as? JsonArray ?: throw ApiException("Failed to list providers")
+        return array.map { item ->
+            providerCatalogAdapter.fromJson(item.toString())
+                ?: throw ApiException("Failed to list providers")
+        }
     }
 
     override suspend fun getProviderModels(providerId: String): List<Model> {
         val raw = http.get("/api/providers/${enc(providerId)}/models")
-        return http.unwrapOrRaw(raw, ProviderModelsResponse.serializer(), "list provider models").models
+        val element = http.unwrapOrRaw(raw, JsonElement.serializer(), "list provider models")
+        return providerModelsAdapter.fromJson(element.toString())?.models.orEmpty()
     }
 
     override suspend fun getApprovalModes(): List<ApprovalModeOption> {
@@ -568,12 +582,13 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun getDevices(): List<DeviceDescriptor> {
         val raw = http.get("/api/devices")
-        return http.unwrap(raw, ListSerializer(DeviceDescriptor.serializer()), "load devices")
+        val items = http.unwrapOrRaw(raw, JsonArray.serializer(), "load devices")
+        return items.mapNotNull { deviceAdapter.fromJson(it.toString()) }
     }
 
     override suspend fun getDeviceDiagnostics(): DeviceDiagnostics {
         val raw = http.get("/api/devices/diagnostics")
-        return http.unwrap(raw, DeviceDiagnostics.serializer(), "load device diagnostics")
+        return http.unwrapOrRawAdapter(raw, deviceDiagnosticsAdapter, "load device diagnostics")
     }
 
     override suspend fun bootDevice(id: String, platform: String) {
@@ -587,7 +602,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun interactDevice(id: String, platform: String, action: DeviceActionRequest) {
-        val body = http.encodeBody(DeviceActionRequest.serializer(), action)
+        // Wire type: encoded through Moshi, not kotlinx.
+        val body = deviceActionAdapter.toJson(action)
         val raw = http.post("/api/devices/${enc(id)}/interact?platform=${enc(platform)}", body)
         ensureOk(raw, "interact with device")
     }
@@ -612,4 +628,4 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 }
 
 @kotlinx.serialization.Serializable
-private data class ProviderModelsResponse(val provider: String, val models: List<Model> = emptyList())
+

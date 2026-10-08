@@ -55,8 +55,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
-import com.console.mobile.data.model.DeviceActionRequest
-import com.console.mobile.data.model.DeviceDescriptor
+import console.v1.DeviceActionRequest
+import com.console.mobile.data.model.displayName
+import com.console.mobile.data.model.isBooted
+import com.console.mobile.data.model.isBooting
+import com.console.mobile.data.model.isIos
+import console.v1.DeviceDescriptor
 import com.console.mobile.ui.components.EmptyState
 import com.console.mobile.ui.components.ScreenHeader
 import com.console.mobile.ui.theme.ConsoleColors

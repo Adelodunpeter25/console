@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Device simulators (/api/devices/*): listing, diagnostics, lifecycle, and
+// one-shot interaction. Desktop + mobile.
+//
+// Trimmed from the old shapes, per audit:
+// - platform and state stay plain strings. They are an open vocabulary
+//   (ios | android; booted | shutdown | booting) and the clients already
+//   branch on them as strings; a proto enum would emit "DEVICE_PLATFORM_IOS"
+//   and force a rename on every side for no gain.
+// - model / os_version / xcode_version stay optional strings: absent and empty
+//   are genuinely different ("unknown" vs "empty"), and the old clients
+//   already read them as Option/null.
+// - disk_free_bytes is uint64 — a disk can exceed 4 GB, so it stays an
+//   int64-equivalent and encodes as a protojson string. Note the mobile data
+//   class had this as a JSON number; it moves to a string on the wire.
+// - interact coordinates are double, matching the JSON number the old clients
+//   sent; duration_ms is uint32 (no gesture runs 4B ms), so it stays a JSON
+//   number with no wire change.
+// - the binary stream frame tags (description/key/delta) are transport
+//   framing, not schema: they never cross a JSON boundary and stay Go
+//   constants.
+// - screenshot bytes and the live H.264 socket stay raw/binary transport.
+message DeviceDescriptor {
+  string id = 1;
+  string name = 2;
+  string platform = 3;
+  string state = 4;
+  optional string model = 5;
+  optional string os_version = 6;
+  bool is_available = 7;
+}
+
+message DeviceDiagnostics {
+  bool xcode_installed = 1;
+  optional string xcode_version = 2;
+  bool simctl_available = 3;
+  bool android_sdk_found = 4;
+  bool adb_available = 5;
+  bool emulator_available = 6;
+  uint64 disk_free_bytes = 7;
+  bool has_enough_disk_space = 8;
+  repeated string errors = 9;
+}
+
+// A one-shot REST interaction. Live touch input goes over the stream socket
+// instead; tap/swipe coordinates here are device pixels. Every coordinate is
+// optional because which ones apply depends on the action.
+message DeviceActionRequest {
+  string action = 1;
+  optional double x = 2;
+  optional double y = 3;
+  optional double end_x = 4;
+  optional double end_y = 5;
+  optional uint32 duration_ms = 6;
+  optional string text = 7;
+  optional string key = 8;
+  optional string appearance = 9;
+}
+
+message DeviceOpenAppRequest {
+  string app = 1;
+}
+
+message DeviceOpenAppResponse {
+  string output = 1;
+}
+
+// The first text frame on a device stream socket. Lives in the schema because
+// the desktop player and the mobile web player both parse this JSON by hand.
+message DeviceStreamMeta {
+  string type = 1; // always "meta"
+  int32 width = 2;
+  int32 height = 3;
+  string name = 4;
+  string codec = 5;
+}

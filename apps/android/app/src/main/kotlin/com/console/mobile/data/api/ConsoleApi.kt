@@ -17,13 +17,14 @@ import console.v1.GitStatusSummary
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import com.console.mobile.data.model.McpServerEntry
-import com.console.mobile.data.model.Model
+import console.v1.Model
 import console.v1.ModelFavorite
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProjectInfo
 import console.v1.QueuedPrompt
-import com.console.mobile.data.model.ProviderCatalogEntry
+import console.v1.Model
+import console.v1.ProviderCatalogEntry
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
@@ -109,11 +110,11 @@ interface ConsoleApi {
     /** PATCH /api/settings — a null reference clears the role. */
     suspend fun updateModelRoles(roles: Map<String, String?>): ConsoleSettings
     // devices
-    suspend fun getDevices(): List<com.console.mobile.data.model.DeviceDescriptor>
-    suspend fun getDeviceDiagnostics(): com.console.mobile.data.model.DeviceDiagnostics
+    suspend fun getDevices(): List<console.v1.DeviceDescriptor>
+    suspend fun getDeviceDiagnostics(): console.v1.DeviceDiagnostics
     suspend fun bootDevice(id: String, platform: String)
     suspend fun shutdownDevice(id: String, platform: String)
-    suspend fun interactDevice(id: String, platform: String, action: com.console.mobile.data.model.DeviceActionRequest)
+    suspend fun interactDevice(id: String, platform: String, action: console.v1.DeviceActionRequest)
 }
 
 @kotlinx.serialization.Serializable

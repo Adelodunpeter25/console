@@ -12,8 +12,8 @@ import (
 	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 const (
@@ -49,11 +49,19 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 		if err != nil {
 			return deviceFail(c, err)
 		}
-		return deviceOK(c, devs)
+		data, err := marshalProtoList(devs)
+		if err != nil {
+			return deviceFail(c, errors.New("encode failed"))
+		}
+		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
 	h.Get("/diagnostics", func(c *fiber.Ctx) error {
-		return deviceOK(c, svc.Diagnostics(c.Context()))
+		raw, err := protoMarshal.Marshal(svc.Diagnostics(c.Context()))
+		if err != nil {
+			return deviceFail(c, errors.New("encode failed"))
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	h.Post("/shutdown-all", func(c *fiber.Ctx) error {
@@ -78,23 +86,27 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 	})
 
 	h.Post("/:id/open-app", func(c *fiber.Ctx) error {
-		var body types.DeviceOpenAppRequest
-		if err := json.Unmarshal(c.Body(), &body); err != nil {
+		var body consolev1.DeviceOpenAppRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
 			return deviceFail(c, errors.Join(services.ErrDeviceBadRequest, err))
 		}
-		out, err := svc.OpenApp(c.Context(), c.Query("platform"), c.Params("id"), body.App)
+		out, err := svc.OpenApp(c.Context(), c.Query("platform"), c.Params("id"), body.GetApp())
 		if err != nil {
 			return deviceFail(c, err)
 		}
-		return deviceOK(c, fiber.Map{"output": out})
+		raw, err := protoMarshal.Marshal(&consolev1.DeviceOpenAppResponse{Output: out})
+		if err != nil {
+			return deviceFail(c, errors.New("encode failed"))
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
 	h.Post("/:id/interact", func(c *fiber.Ctx) error {
-		var action types.DeviceAction
-		if err := json.Unmarshal(c.Body(), &action); err != nil {
+		var action consolev1.DeviceActionRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &action); err != nil {
 			return deviceFail(c, errors.Join(services.ErrDeviceBadRequest, err))
 		}
-		if err := svc.Interact(c.Context(), c.Query("platform"), c.Params("id"), action); err != nil {
+		if err := svc.Interact(c.Context(), c.Query("platform"), c.Params("id"), &action); err != nil {
 			return deviceFail(c, err)
 		}
 		return deviceOK(c, fiber.Map{})
