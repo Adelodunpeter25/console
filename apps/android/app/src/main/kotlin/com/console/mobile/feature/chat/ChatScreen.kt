@@ -215,7 +215,14 @@ fun ChatScreen(
     LaunchedEffect(listState) {
         launch {
             listState.interactionSource.interactions.collect {
-                if (it is DragInteraction.Start) following = false
+                if (it is DragInteraction.Start) {
+                    following = false
+                    // The user took over the list: put the keyboard away, as the file
+                    // search does. Keyed on the drag, not on isScrollInProgress, which is
+                    // also true while the list auto-follows streamed text and would close
+                    // the keyboard mid-typing.
+                    keyboardController?.hide()
+                }
             }
         }
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
