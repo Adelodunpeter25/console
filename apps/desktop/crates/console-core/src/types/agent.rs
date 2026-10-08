@@ -434,6 +434,11 @@ pub use console_proto::TodoItem;
 /// counts narrow to i32 and stay JSON numbers; timestamps encode as strings.
 pub use console_proto::{SubagentActivityItem, SubagentInfo};
 
+// Canonical wire types from the shared protobuf schema for the subagent
+// lifecycle EVENT frames: fields stay flattened under the frame's type tag
+// (no nested payload object), matching the old wire.
+pub use console_proto::{SubagentActivityEvent, SubagentEndEvent, SubagentStartEvent};
+
 /// Canonical wire type from the shared protobuf schema
 /// (proto/console/v1/session.proto). The queueUpdated SSE frame stays
 /// hand-shaped until the event stream migrates, but its nested queuedPrompt

@@ -771,14 +771,18 @@ impl ConsoleDesktopApp {
             AgentSessionEvent::TodoUpdate { items, .. } => {
                 self.set_todo_items_for_session(run_session_id, items);
             }
-            AgentSessionEvent::SubagentStart {
-                subagent_id,
-                parent_tool_call_id,
-                name,
-                role,
-                prompt,
-                max_turns,
-            } => {
+            AgentSessionEvent::SubagentStart { event } => {
+                let console_core::SubagentStartEvent {
+                    subagent_id,
+                    parent_tool_call_id,
+                    name,
+                    role,
+                    prompt,
+                    max_turns,
+                } = event.clone();
+                // Wire optionals are absent when the server omits them; the
+                // session rows below use plain strings.
+                let parent_tool_call_id = parent_tool_call_id.unwrap_or_default();
                 let list = self
                     .session_subagents
                     .entry(run_session_id.to_string())
@@ -807,17 +811,18 @@ impl ConsoleDesktopApp {
                     });
                 }
             }
-            AgentSessionEvent::SubagentActivity {
-                subagent_id,
-                turn_index,
-                tool_call_id,
-                tool_name,
-                args,
-                status,
-                error,
-            } => {
-                // Event counts are usize; the wire narrows to i32.
-                let turn_index = turn_index as i32;
+            AgentSessionEvent::SubagentActivity { event } => {
+                let console_core::SubagentActivityEvent {
+                    subagent_id,
+                    turn_index,
+                    tool_call_id,
+                    tool_name,
+                    args,
+                    status,
+                    error,
+                } = event.clone();
+                let tool_call_id = tool_call_id.unwrap_or_default();
+                let tool_name = tool_name.unwrap_or_default();
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
                     if let Some(subagent) =
@@ -841,11 +846,7 @@ impl ConsoleDesktopApp {
                                     tool_call_id,
                                     tool_name,
                                     summary: None,
-                                    args: args
-                                        .map(|v| {
-                                            serde_json::to_vec(&v).unwrap_or_default()
-                                        })
-                                        .unwrap_or_default(),
+                                    args,
                                     status,
                                     error,
                                 });
@@ -853,13 +854,14 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
-            AgentSessionEvent::SubagentEnd {
-                subagent_id,
-                status,
-                summary,
-                error,
-                total_turns,
-            } => {
+            AgentSessionEvent::SubagentEnd { event } => {
+                let console_core::SubagentEndEvent {
+                    subagent_id,
+                    status,
+                    summary,
+                    error,
+                    total_turns,
+                } = event.clone();
                 if let Some(list) = self.session_subagents.get_mut(run_session_id) {
                     let list_mut = Rc::make_mut(list);
                     if let Some(subagent) =

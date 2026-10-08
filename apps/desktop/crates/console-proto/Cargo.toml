@@ -80,6 +80,10 @@ name = "event_requests_test"
 path = "tests/event_requests_test.rs"
 
 [[test]]
+name = "event_subagents_test"
+path = "tests/event_subagents_test.rs"
+
+[[test]]
 name = "session_headers_test"
 path = "tests/session_headers_test.rs"
 
