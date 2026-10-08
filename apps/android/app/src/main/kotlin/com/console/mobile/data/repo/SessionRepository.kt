@@ -172,6 +172,7 @@ class SessionRepository(
                 approvalMode = header.approval_mode ?: ApprovalMode.AlwaysAsk.value,
                 thinkingLevel = header.thinking_level?.takeIf { it.isNotBlank() },
                 worktreeBranch = header.worktree?.branch?.takeIf { it.isNotBlank() },
+                projectId = header.project_id?.takeIf { it.isNotBlank() },
             ),
         )
         sessions.setStatus(sessionId, com.console.mobile.data.model.SessionStatus.fromValue(header.status))

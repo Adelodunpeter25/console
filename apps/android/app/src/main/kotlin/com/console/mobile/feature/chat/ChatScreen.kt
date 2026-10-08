@@ -43,6 +43,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
+import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
@@ -194,7 +195,8 @@ fun ChatScreen(
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
-            val match = projectState.projects.firstOrNull { p -> p.path == cwd || cwd.startsWith(p.path + "/") || p.path.endsWith(cwd) }
+            val match = projectForSession(projectState.projects, view?.projectId, cwd)
+                ?: projectState.projects.firstOrNull { p -> p.path.endsWith(cwd) }
             if (match != null) AppContainer.appStateHolder.setSelectedProjectId(match.id)
         }
         AppContainer.appStateHolder.setActiveTab(tab)

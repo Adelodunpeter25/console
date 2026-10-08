@@ -162,3 +162,18 @@ fun buildGroupedProjectSections(
     val sortedSections = sections.sortedByDescending { it.latestAt }
     return if (draftSection != null) listOf(draftSection) + sortedSections else sortedSections
 }
+
+/**
+ * The project a chat belongs to. The server's project link wins; the folder
+ * is only a fallback for chats without one. Folder matching alone fails for a
+ * worktree chat, whose cwd sits in the worktree directory, not under the project.
+ */
+fun projectForSession(
+    projects: List<ProjectInfo>,
+    projectId: String?,
+    cwd: String?,
+): ProjectInfo? {
+    if (!projectId.isNullOrBlank()) projects.firstOrNull { it.id == projectId }?.let { return it }
+    if (cwd.isNullOrEmpty()) return null
+    return projects.firstOrNull { p -> p.path.isNotEmpty() && (p.path == cwd || cwd.startsWith(p.path + "/")) }
+}

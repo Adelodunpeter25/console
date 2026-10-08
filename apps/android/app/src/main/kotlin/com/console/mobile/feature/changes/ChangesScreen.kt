@@ -42,6 +42,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
+import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.util.ChangesRow
 import com.console.mobile.core.util.baseOf
 import com.console.mobile.core.util.buildRows
@@ -75,9 +76,8 @@ fun ChangesScreen(onBack: () -> Unit) {
 
     val sessionId = appState.selectedSessionId
     val sessionCwd = sessionId?.let { sessionViews[it]?.sessionCwd }
-    val project = projectState.projects.firstOrNull { p ->
-        sessionCwd?.let { cwd -> p.path == cwd || cwd.startsWith(p.path + "/") } == true
-    } ?: projectState.projects.firstOrNull { it.id == appState.selectedProjectId } ?: projectState.projects.firstOrNull()
+    val project = projectForSession(projectState.projects, sessionId?.let { sessionViews[it]?.projectId }, sessionCwd)
+        ?: projectState.projects.firstOrNull { it.id == appState.selectedProjectId } ?: projectState.projects.firstOrNull()
     val repoPath = sessionCwd ?: project?.path
 
     val files = sessionId?.let { sessionChanges[it].orEmpty() }.orEmpty()

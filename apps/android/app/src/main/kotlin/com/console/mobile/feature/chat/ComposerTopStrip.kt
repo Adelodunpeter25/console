@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
+import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.picker.BranchPickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
@@ -41,9 +42,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     var projectSheet by remember { mutableStateOf(false) }
     var branchSheet by remember { mutableStateOf(false) }
 
-    val selectedProject = projects.firstOrNull { p ->
-        cwd?.isNotEmpty() == true && (p.path == cwd || cwd.startsWith(p.path + "/"))
-    }
+    val selectedProject = projectForSession(projects, view?.projectId, cwd)
 
     // null = not fetched yet, empty list with isRepo=false = not a git repo.
     var branches by remember(cwd) { mutableStateOf<List<GitBranchInfo>?>(null) }
