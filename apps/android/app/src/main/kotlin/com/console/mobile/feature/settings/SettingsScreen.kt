@@ -1,5 +1,6 @@
 package com.console.mobile.feature.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ enum class SettingsSection { Servers, Providers, Usage, Models, Projects, Delete
 @Composable
 fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
     var section by remember { mutableStateOf<SettingsSection?>(null) }
+    BackHandler(enabled = section != null) { section = null }
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
 
     // Env switcher "Add" flow jumps straight into Servers.

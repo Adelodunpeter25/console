@@ -1,5 +1,6 @@
 package com.console.mobile.feature.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -56,6 +57,7 @@ import kotlinx.coroutines.launch
 fun McpSettings(onBack: () -> Unit) {
     val mcpState by AppContainer.mcpStateHolder.state.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<String?>(null) } // null=list, "__create__"=create, else server id
+    BackHandler(enabled = editing != null) { editing = null }
     var connectingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current

@@ -1,5 +1,6 @@
 package com.console.mobile.feature.files
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,6 +97,7 @@ fun FilesScreen(onBack: () -> Unit) {
     var childrenByPath by remember { mutableStateOf<Map<String, List<FsTreeEntry>>>(emptyMap()) }
     var loadingDirs by remember { mutableStateOf(setOf<String>()) }
     var selectedPath by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = selectedPath != null) { selectedPath = null }
     var selectedSize by remember { mutableStateOf<Long?>(null) }
     var fileContent by remember { mutableStateOf<String?>(null) }
     var fileLoading by remember { mutableStateOf(false) }

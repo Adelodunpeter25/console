@@ -1,5 +1,6 @@
 package com.console.mobile.feature.changes
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,6 +85,7 @@ fun ChangesScreen(onBack: () -> Unit) {
     var error by remember(sessionId) { mutableStateOf<String?>(null) }
     var collapsed by remember(sessionId) { mutableStateOf(setOf<String>()) }
     var selectedPath by remember(sessionId) { mutableStateOf<String?>(null) }
+    BackHandler(enabled = selectedPath != null) { selectedPath = null }
     var selectedTurn by remember(sessionId) { mutableStateOf(0) }
     var diffText by remember { mutableStateOf<String?>(null) }
     var diffLoading by remember { mutableStateOf(false) }
