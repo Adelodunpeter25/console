@@ -170,7 +170,7 @@ fun Composer(
     // can never drift out of step with each other.
     val expansion by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 20, easing = FastOutSlowInEasing),
         label = "composerExpansion",
     )
     fun focusField() {
