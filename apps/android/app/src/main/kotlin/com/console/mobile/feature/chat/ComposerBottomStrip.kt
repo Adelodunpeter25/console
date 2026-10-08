@@ -38,6 +38,7 @@ fun ComposerBottomStrip(sessionId: String) {
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
     var approvalSheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(approvalSheet)
 
     // A value before the first live update, so the ring isn't blank on entry.
     LaunchedEffect(sessionId) { AppContainer.chatRepository.loadContext(sessionId) }
@@ -80,6 +81,7 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
     var sheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(sheet)
     val modelId = view?.sessionModelId?.ifBlank { null }
     val provider = view?.sessionProvider
 

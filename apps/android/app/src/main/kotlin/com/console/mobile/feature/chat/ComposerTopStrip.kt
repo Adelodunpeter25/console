@@ -41,6 +41,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
     val projects = projectState.projects
     var projectSheet by remember { mutableStateOf(false) }
     var branchSheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(projectSheet || branchSheet)
 
     val selectedProject = projectForSession(projects, view?.projectId, cwd)
 

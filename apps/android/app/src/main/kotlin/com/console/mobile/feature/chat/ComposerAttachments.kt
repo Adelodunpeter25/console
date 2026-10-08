@@ -57,17 +57,24 @@ private const val VISIBLE_ATTACHMENTS = 4
  * is dropped rather than failing the whole pick; everything else is kept.
  */
 @Composable
-fun rememberAttachmentPicker(sessionId: String): () -> Unit {
+fun rememberAttachmentPicker(sessionId: String, hold: ComposerHold? = null): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        // The result callback fires for a cancelled pick too (empty list), so this
+        // always pairs with the acquire below.
+        hold?.release()
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
             val list = withContext(Dispatchers.IO) { uris.mapNotNull { readAttachment(context, it) } }
             if (list.isNotEmpty()) AppContainer.chatRepository.addAttachments(sessionId, list)
         }
     }
-    return { launcher.launch("image/*") }
+    return {
+        // The picker is a separate screen: keep the composer open behind it.
+        hold?.acquire()
+        launcher.launch("image/*")
+    }
 }
 
 private fun readAttachment(context: Context, uri: Uri): ImageAttachment? = try {

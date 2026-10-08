@@ -190,6 +190,7 @@ fun ChatScreen(
         header?.title?.ifBlank { "Chat" } ?: "Chat"
     }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
 
@@ -222,6 +223,9 @@ fun ChatScreen(
                     // also true while the list auto-follows streamed text and would close
                     // the keyboard mid-typing.
                     keyboardController?.hide()
+                    // Also drop focus: an unfocused composer folds back to the pill, giving
+                    // the transcript the room while you read.
+                    focusManager.clearFocus()
                 }
             }
         }

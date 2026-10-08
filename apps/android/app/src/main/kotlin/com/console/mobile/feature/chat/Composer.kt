@@ -1,6 +1,18 @@
 package com.console.mobile.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -139,13 +151,60 @@ fun Composer(
         applySuggestion("@${file.relative_path} ", replaceFrom)
     }
 
-    val pickImages = rememberAttachmentPicker(sessionId)
+    // Collapsed to a one-line pill until the field is focused. Things the composer
+    // launches (sheets, the image picker) steal window focus; [hold] keeps it open
+    // for as long as they are showing so it doesn't fold up underneath them.
+    val hold = remember { ComposerHold() }
+    val pickImages = rememberAttachmentPicker(sessionId, hold)
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    // The user's intent, not raw focus. A sheet or the picker steals window focus,
+    // which would otherwise look like "the user left"; focus changes seen while
+    // something is held are ignored, so intent survives and is restored after.
+    var wantsOpen by remember(sessionId) { mutableStateOf(false) }
+    val expanded = wantsOpen || hold.held
+    // One value drives every part of the morph (corner, heights, strips), so they
+    // can never drift out of step with each other.
+    val expansion by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "composerExpansion",
+    )
+    fun focusField() {
+        try {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        } catch (_: Exception) {
+            // Not attached yet; the next tap will do it.
+        }
+    }
+    val onFieldFocusChange: (Boolean) -> Unit = { hasFocus ->
+        if (!hold.held) wantsOpen = hasFocus
+    }
+    // Whatever was holding the composer open has closed; if the user was typing,
+    // hand focus back so they are typing again rather than facing a stale pill.
+    LaunchedEffect(hold.held) {
+        if (!hold.held && wantsOpen) focusField()
+    }
+    // Sending is the end of composing: fold back to the pill so the reply has room.
+    val sendAndCollapse = {
+        wantsOpen = false
+        focusManager.clearFocus()
+        onSend()
+    }
 
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
+    CompositionLocalProvider(LocalComposerHold provides hold) {
     Column(modifier = Modifier.fillMaxWidth().background(ConsoleColors.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
         if (topBanner != null) topBanner()
-        ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+        // Kept in composition while collapsed (just zero-height) so a sheet it owns
+        // and its loaded branch list survive the composer folding up.
+        Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+            ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+        }
+        // Attachments are content, not configuration, so they stay visible collapsed.
         if (attachments.isNotEmpty()) {
             AttachmentStrip(sessionId = sessionId, attachments = attachments)
         }
@@ -205,8 +264,12 @@ fun Composer(
             sessionId = sessionId,
             running = running,
             canSend = canSend,
-            onSend = onSend,
+            onSend = sendAndCollapse,
             onStop = onStop,
+            expansion = expansion,
+            focusRequester = focusRequester,
+            onFocusChange = onFieldFocusChange,
+            onTapBubble = ::focusField,
         )
         val anchor = fieldCoordinates
         if (anchor != null) {
@@ -237,13 +300,16 @@ fun Composer(
                 null -> {}
             }
         }
-        ComposerBottomStrip(sessionId = sessionId)
+        Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
+            ComposerBottomStrip(sessionId = sessionId)
+        }
+    }
     }
 }
 
 private val INPUT_LINE_HEIGHT = 19.sp
 
-/** The input bubble: attach button, text field, and send/stop. */
+/** The input bubble: one-line pill when idle, full composer when focused. */
 @Composable
 private fun ComposerInput(
     value: String,
@@ -257,21 +323,39 @@ private fun ComposerInput(
     canSend: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    /** 0 = collapsed pill, 1 = fully expanded. */
+    expansion: Float,
+    focusRequester: FocusRequester,
+    onFocusChange: (Boolean) -> Unit,
+    onTapBubble: () -> Unit,
 ) {
-    // A constant rounded rect: the old pill-to-rect morph keyed off the visual
-    // line count and made the bubble jump shape while typing.
-    val bubbleShape = RoundedCornerShape(20.dp)
-    // Two lines of text from the start (three lines with the button row), so the
-    // bubble doesn't grow as you type.
-    // Derived from the text's own line height so it tracks the system font size.
-    val inputMinHeight = with(androidx.compose.ui.platform.LocalDensity.current) { (INPUT_LINE_HEIGHT * 2).toDp() }
-    Column(
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // Derived from the text's own line height so everything tracks the system font size.
+    val lineDp = with(density) { INPUT_LINE_HEIGHT.toDp() }
+    // Collapsed, the field row is exactly as tall as the send button so the pill
+    // sits level with it; the padding that centres the line shrinks to the
+    // normal 6dp as it expands.
+    val collapsedPad = ((SEND_SIZE - lineDp) / 2).coerceAtLeast(6.dp)
+    val fieldVPad = androidx.compose.ui.unit.lerp(collapsedPad, 6.dp, expansion)
+    // One line when collapsed; two lines of text (three with the button row) when
+    // expanded, growing to the same maximum as before as you type.
+    val fieldMinHeight = androidx.compose.ui.unit.lerp(lineDp, lineDp * 2, expansion)
+    val fieldMaxHeight = androidx.compose.ui.unit.lerp(lineDp, maxOf(80.dp, lineDp * 2), expansion)
+    // Collapsed, the send button sits at the end of the same row, so text must stop short of it.
+    val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
+    // Pill when collapsed, the rounded rect when expanded; radii larger than half
+    // the height are clamped, so 26dp reads as a full pill at any font scale.
+    val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
+    Box(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(ConsoleColors.Card)
             .border(1.dp, ConsoleColors.Border, bubbleShape)
             .onGloballyPositioned(onCoordinatesChange)
+            // The whole pill is the tap target, not just the sliver of text.
+            .pointerInput(Unit) { detectTapGestures { onTapBubble() } }
             .padding(horizontal = 6.dp, vertical = 6.dp),
     ) {
+        Column {
         var mentionLayout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
         var fieldHeightPx by remember { mutableStateOf(0) }
         // The editable field cannot host icon glyphs, so mention icons ride
@@ -281,15 +365,15 @@ private fun ComposerInput(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-                .heightIn(min = inputMinHeight, max = maxOf(80.dp, inputMinHeight))
+                .padding(start = 8.dp, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
+                .heightIn(min = fieldMinHeight, max = fieldMaxHeight)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
         ) {
             BasicTextField(
                 value = fieldValue,
                 onValueChange = onFieldValueChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { onFocusChange(it.isFocused) },
                 textStyle = androidx.compose.ui.text.TextStyle(
                     color = ConsoleColors.TextPrimary,
                     fontSize = 14.sp,
@@ -358,48 +442,76 @@ private fun ComposerInput(
                 }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            // Attach and the chips only exist once expanded; the send button below is
+            // the one control that is always there, so it lives outside this row.
+            Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
+                    }
+                    // Fills the gap so the chips stay clear of the send button; the model
+                    // chip truncates rather than pushing anything off a narrow screen.
+                    Row(
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
+                        ThinkingChip(sessionId = sessionId, running = running)
+                    }
+                    // Reserves the slot the send button floats over.
+                    Spacer(Modifier.size(SEND_SIZE))
+                }
+            }
+        }
+        // Pinned bottom-end: beside the text when collapsed, at the end of the
+        // action row when expanded. The bubble's height animates and the button
+        // rides its bottom edge, so it slides into place with no separate animation.
+        SendStopButton(
+            running = running,
+            canSend = canSend,
+            onSend = onSend,
+            onStop = onStop,
+            modifier = Modifier.align(Alignment.BottomEnd),
+        )
+    }
+}
+
+private val SEND_SIZE = 35.dp
+
+@Composable
+private fun SendStopButton(
+    running: Boolean,
+    canSend: Boolean,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (running) {
+        // Same footprint as the send button so the composer doesn't resize
+        // mid-send, and destructive red so the control's meaning is readable at
+        // a glance rather than only from a tiny glyph.
+        Box(
+            modifier = modifier.size(SEND_SIZE).clip(CircleShape).background(ConsoleColors.Destructive)
+                .clickable(onClickLabel = "Stop", onClick = onStop),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier.size(35.dp).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
-                contentAlignment = Alignment.Center,
-            ) {
-                androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = ConsoleColors.TextSecondary, modifier = Modifier.size(20.dp))
-            }
-            // Fills the gap so send/stop stays pinned right; the chip truncates
-            // rather than pushing the button off a narrow screen.
-            Row(
-                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Model shrinks first (its label truncates); the thinking chip is short and stays whole.
-                ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
-                ThinkingChip(sessionId = sessionId, running = running)
-            }
-            if (running) {
-                // Same 35dp footprint as the send button so the composer doesn't
-                // resize mid-send, and destructive red so the control's meaning
-                // is readable at a glance rather than only from a tiny glyph.
-                Box(
-                    modifier = Modifier.size(35.dp).clip(CircleShape).background(ConsoleColors.Destructive)
-                        .clickable(onClickLabel = "Stop", onClick = onStop),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
-                }
-            } else {
-                Box(
-                    modifier = Modifier.size(35.dp).clip(CircleShape)
-                        .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
-                        .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
-                }
-            }
+            androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = Color.Black, modifier = Modifier.size(14.dp))
+        }
+    } else {
+        Box(
+            modifier = modifier.size(SEND_SIZE).clip(CircleShape)
+                .background(if (canSend) Color.White else Color.White.copy(alpha = 0.08f))
+                .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) Color.Black else ConsoleColors.TextMuted, modifier = Modifier.size(15.dp))
         }
     }
 }
