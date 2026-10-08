@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -74,6 +75,7 @@ import kotlin.math.roundToInt
  * slash-command / @file autocomplete. The chips below live in
  * [ComposerBottomStrip], attachments in [ComposerAttachments].
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun Composer(
     sessionId: String,
@@ -168,7 +170,7 @@ fun Composer(
     // can never drift out of step with each other.
     val expansion by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
         label = "composerExpansion",
     )
     fun focusField() {
@@ -178,6 +180,20 @@ fun Composer(
         } catch (_: Exception) {
             // Not attached yet; the next tap will do it.
         }
+    }
+    // Back (or any keyboard dismissal) hides the IME without taking focus from the
+    // field, so focus alone would leave the composer stuck open. Fold on the
+    // visible -> hidden transition only: right after a tap the keyboard is still
+    // on its way up and also reads as "hidden", which must not count as a close.
+    // A held composer (sheet/picker open) hides the keyboard on purpose; just note it.
+    val imeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible && !hold.held) {
+            wantsOpen = false
+            focusManager.clearFocus()
+        }
+        imeWasVisible = imeVisible
     }
     val onFieldFocusChange: (Boolean) -> Unit = { hasFocus ->
         if (!hold.held) wantsOpen = hasFocus
