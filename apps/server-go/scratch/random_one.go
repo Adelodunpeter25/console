@@ -14,6 +14,8 @@ func BucketName(seed int64) string {
 		return "beta"
 	case v < 80:
 		return "gamma"
+	case v < 95:
+		return "delta"
 	default:
 		return "omega"
 	}

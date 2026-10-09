@@ -9,14 +9,14 @@ func TagList(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		if v := strings.TrimSpace(p); v != "" {
-			out = append(out, strings.ToLower(v))
+		if v := strings.ToLower(strings.TrimSpace(p)); v != "" {
+			out = append(out, v)
 		}
 	}
 	return out
 }
 
-// JoinTags renders tags back into a single spaced string.
+// JoinTags renders tags back into a single comma separated string.
 func JoinTags(tags []string) string {
-	return strings.Join(tags, " ")
+	return strings.Join(tags, ", ")
 }
