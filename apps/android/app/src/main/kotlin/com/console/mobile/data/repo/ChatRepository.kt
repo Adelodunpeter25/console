@@ -58,6 +58,7 @@ class ChatRepository(
     private val streamClient: ChatStreamClient,
     private val chats: ChatStateHolder,
     private val sessions: SessionStateHolder,
+    private val projectState: com.console.mobile.data.store.ProjectStateHolder? = null,
     private val persistence: ChatPersistence? = null,
     private val providerRepo: ProviderRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
@@ -237,6 +238,13 @@ class ChatRepository(
                 val req = parsePermission(event) ?: return
                 chats.update(sessionId) {
                     it.copy(pendingPermissions = it.pendingPermissions + PendingPermission(req))
+                }
+                return
+            }
+            "sessionTitleUpdated" -> {
+                val title = event.title?.trim()
+                if (!title.isNullOrEmpty()) {
+                    projectState?.updateSessionTitle(sessionId, title)
                 }
                 return
             }

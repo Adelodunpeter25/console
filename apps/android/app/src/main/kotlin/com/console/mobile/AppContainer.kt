@@ -257,6 +257,7 @@ object AppContainer {
             streamClient = streamClient,
             chats = chatStateHolder,
             sessions = sessionStateHolder,
+            projectState = projectStateHolder,
             persistence = chatPersistence,
             providerRepo = providerRepository,
         )

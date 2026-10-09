@@ -188,8 +188,8 @@ fun ChatScreen(
     val subagents = chat.subagents
     val hasSubagents = subagents.isNotEmpty()
 
-    val chatTitle = remember(sessionId, messages) {
-        val header = AppContainer.projectStateHolder.state.value.sessions.firstOrNull { it.id == sessionId }
+    val chatTitle = remember(sessionId, messages, projectState.sessions) {
+        val header = projectState.sessions.firstOrNull { it.id == sessionId }
         header?.title?.ifBlank { "Chat" } ?: "Chat"
     }
     val keyboardController = LocalSoftwareKeyboardController.current

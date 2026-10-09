@@ -39,6 +39,13 @@ class ProjectStateHolder(initial: ProjectState = ProjectState()) {
     fun patchSession(id: String, patch: SessionHeader) {
         _state.value = _state.value.copy(sessions = _state.value.sessions.map { if (it.id == id) patch else it })
     }
+    fun updateSessionTitle(id: String, title: String) {
+        _state.value = _state.value.copy(
+            sessions = _state.value.sessions.map {
+                if (it.id == id) it.copy(title = title) else it
+            }
+        )
+    }
     fun removeSession(id: String) { _state.value = _state.value.copy(sessions = _state.value.sessions.filter { it.id != id }) }
     fun setDeleted(v: List<SessionHeader>) {
         _state.value = _state.value.copy(deletedSessions = v, deletedLoading = false, error = null)
