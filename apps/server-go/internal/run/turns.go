@@ -328,7 +328,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 			if header.ProjectID != nil {
 				pid = *header.ProjectID
 			}
-			toolList = append(toolList, tools.NewProjectScriptsTool(pid, s.projectScriptsService()))
+			toolList = append(toolList, tools.NewProjectScriptsTool(pid, sessionScopedScripts{svc: s.projectScriptsService(), cwd: header.Cwd}))
 		case "browser":
 			toolList = append(toolList, tools.NewBrowserTool(s.decisions.BrowserHandlerFor(sessionID, hub)))
 		default:

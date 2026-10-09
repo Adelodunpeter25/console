@@ -97,7 +97,7 @@ func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 	}
 
 	app.Get("/api/projects/:projectId/scripts", func(c *fiber.Ctx) error {
-		result, err := scripts.List(c.Params("projectId"))
+		result, err := scripts.ListIn(c.Params("projectId"), c.Query("cwd"))
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
@@ -111,7 +111,7 @@ func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 	})
 
 	app.Post("/api/projects/:projectId/scripts/:scriptId/runs", func(c *fiber.Ctx) error {
-		run, err := scripts.Run(c.Params("projectId"), c.Params("scriptId"))
+		run, err := scripts.RunIn(c.Params("projectId"), c.Params("scriptId"), c.Query("cwd"))
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}

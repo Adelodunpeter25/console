@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -125,13 +126,54 @@ func NewProjectScriptsService(projects *ProjectService, ports *PortRegistry) *Pr
 	}
 }
 
+// resolveScriptRoot picks the folder scripts read console.toml from and run
+// in: the project's own folder, or — when cwd names one of that project's git
+// worktrees — that worktree, so a worktree chat runs its own checkout instead
+// of main's. Anything else (empty, a subfolder, an unrelated path, a
+// non-repo) falls back to the project folder, so a client can never point a
+// script at an arbitrary directory.
+func resolveScriptRoot(projectPath, cwd string) string {
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		return projectPath
+	}
+	want := canonicalPath(cwd)
+	if want == canonicalPath(projectPath) {
+		return projectPath
+	}
+	infos, err := NewWorktreeService().WorktreeList(projectPath)
+	if err != nil {
+		return projectPath
+	}
+	for _, info := range infos {
+		if canonicalPath(info.Path) == want {
+			return info.Path
+		}
+	}
+	return projectPath
+}
+
+func canonicalPath(p string) string {
+	p = filepath.Clean(p)
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return p
+}
+
 // List parses [scripts.scripts] from console.toml (2s cache).
 func (s *ProjectScriptsService) List(projectID string) (types.ProjectScriptsResult, error) {
+	return s.ListIn(projectID, "")
+}
+
+// ListIn is List for a specific checkout: cwd may be the project folder or
+// one of its worktrees (see resolveScriptRoot).
+func (s *ProjectScriptsService) ListIn(projectID, cwd string) (types.ProjectScriptsResult, error) {
 	project, err := s.projects.Get(projectID)
 	if err != nil {
 		return types.ProjectScriptsResult{}, fmt.Errorf("Project '%s' not found.", projectID)
 	}
-	return s.loadProjectScripts(projectID, project.Path)
+	return s.loadProjectScripts(projectID, resolveScriptRoot(project.Path, cwd))
 }
 
 func (s *ProjectScriptsService) loadProjectScripts(projectID, projectRoot string) (types.ProjectScriptsResult, error) {
@@ -165,11 +207,18 @@ func (s *ProjectScriptsService) loadProjectScripts(projectID, projectRoot string
 
 // Run starts a script as a detached process group in the project dir.
 func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun, error) {
+	return s.RunIn(projectID, scriptID, "")
+}
+
+// RunIn is Run for a specific checkout: console.toml is read from, and the
+// command runs in, the project folder or the named worktree of it.
+func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.ScriptRun, error) {
 	project, err := s.projects.Get(projectID)
 	if err != nil {
 		return types.ScriptRun{}, fmt.Errorf("Project '%s' not found.", projectID)
 	}
-	config, err := s.loadProjectScripts(projectID, project.Path)
+	root := resolveScriptRoot(project.Path, cwd)
+	config, err := s.loadProjectScripts(projectID, root)
 	if err != nil {
 		return types.ScriptRun{}, err
 	}
@@ -202,7 +251,7 @@ func (s *ProjectScriptsService) Run(projectID, scriptID string) (types.ScriptRun
 	}
 
 	cmd := exec.Command("sh", "-c", script.Command)
-	cmd.Dir = project.Path
+	cmd.Dir = root
 	cmd.Env = BuildScriptEnv()
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group
