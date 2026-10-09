@@ -144,13 +144,10 @@ class ChatRepository(
     }
 
     fun loadSubagents(sessionId: String) {
-        val current = chats.get(sessionId)
-        if (current.subagents.isNotEmpty()) return
         scope.launch {
             try {
                 val subagents = withContext(Dispatchers.IO) { api.getSubagents(sessionId) }
-                val fresh = chats.get(sessionId)
-                if (fresh.subagents.isEmpty()) {
+                if (subagents.isNotEmpty()) {
                     setSubagents(sessionId, subagents)
                 }
             } catch (_: Exception) {

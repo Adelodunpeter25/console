@@ -14,10 +14,13 @@ import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.AgentAssistantMessage as WireAssistantMessage
 import console.v1.ContextSnapshot
 import console.v1.ModelStreamPart
+import console.v1.SubagentActivityItem
+import console.v1.SubagentInfo
 import console.v1.TodoItem
 import console.v1.ToolCall as WireToolCall
 import console.v1.ToolResult as WireToolResult
 import com.console.mobile.data.model.toUi
+import okio.ByteString.Companion.encodeUtf8
 import java.util.UUID
 
 private val todoJson = Moshi.Builder().add(WireJsonAdapterFactory()).build().adapter(TodoItem::class.java)
@@ -205,6 +208,95 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
         "queueUpdated" -> {
             val queued = event.queuedPrompt?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
             session.copy(queuedPrompt = queued)
+        }
+        "subagentStart" -> {
+            val sid = event.subagentId ?: return session
+            val existing = session.subagents.firstOrNull { it.subagent_id == sid }
+            val updatedList = if (existing != null) {
+                session.subagents.map { s ->
+                    if (s.subagent_id == sid) {
+                        s.copy(
+                            name = event.name ?: s.name,
+                            role = event.role ?: s.role,
+                            prompt = event.prompt ?: s.prompt,
+                            max_turns = event.maxTurns ?: s.max_turns,
+                            status = "running",
+                        )
+                    } else s
+                }
+            } else {
+                session.subagents + SubagentInfo(
+                    subagent_id = sid,
+                    parent_tool_call_id = event.parentToolCallId ?: "",
+                    name = event.name ?: "",
+                    role = event.role ?: "",
+                    prompt = event.prompt ?: "",
+                    max_turns = event.maxTurns ?: 0,
+                    current_turn = 1,
+                    status = "running",
+                    activities = emptyList(),
+                    created_at = System.currentTimeMillis(),
+                    updated_at = System.currentTimeMillis(),
+                )
+            }
+            session.copy(subagents = updatedList)
+        }
+        "subagentActivity" -> {
+            val sid = event.subagentId ?: return session
+            val turn = event.turnIndex ?: 1
+            val callId = event.toolCallId ?: ""
+            val toolName = event.toolName ?: ""
+            val status = event.status ?: "running"
+            val rawArgs = event.args?.toString() ?: ""
+            val argsBytes = rawArgs.encodeUtf8()
+
+            val updatedList = session.subagents.map { s ->
+                if (s.subagent_id == sid) {
+                    val acts = s.activities.toMutableList()
+                    val existingIdx = acts.indexOfFirst { it.tool_call_id == callId }
+                    if (existingIdx >= 0) {
+                        val currentAct = acts[existingIdx]
+                        acts[existingIdx] = currentAct.copy(
+                            status = status,
+                            error = event.error?.message ?: currentAct.error,
+                        )
+                    } else {
+                        acts.add(
+                            SubagentActivityItem(
+                                turn_index = turn,
+                                tool_call_id = callId,
+                                tool_name = toolName,
+                                status = status,
+                                args = argsBytes,
+                                error = event.error?.message,
+                            )
+                        )
+                    }
+                    s.copy(
+                        current_turn = maxOf(s.current_turn, turn),
+                        activities = acts,
+                        updated_at = System.currentTimeMillis(),
+                    )
+                } else s
+            }
+            session.copy(subagents = updatedList)
+        }
+        "subagentEnd" -> {
+            val sid = event.subagentId ?: return session
+            val status = event.status ?: "completed"
+            val total = event.totalTurns
+            val summary = event.summary
+            val updatedList = session.subagents.map { s ->
+                if (s.subagent_id == sid) {
+                    s.copy(
+                        status = status,
+                        summary = summary ?: s.summary,
+                        current_turn = total ?: s.current_turn,
+                        updated_at = System.currentTimeMillis(),
+                    )
+                } else s
+            }
+            session.copy(subagents = updatedList)
         }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
