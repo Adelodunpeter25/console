@@ -69,39 +69,39 @@ import kotlinx.serialization.json.putJsonObject
 class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     // Moshi JSON layer for Wire types (shared protobuf schema). kotlinx stays
     // for the {success, data} envelope and all non-wire types.
-    private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
-    private val favoriteAdapter = wireMoshi.adapter(ModelFavorite::class.java)
-    private val setFavoriteAdapter = wireMoshi.adapter(SetFavoriteRequest::class.java)
-    private val settingsAdapter = wireMoshi.adapter(ConsoleSettings::class.java)
-    private val projectAdapter = wireMoshi.adapter(ProjectInfo::class.java)
-    private val usageReportAdapter = wireMoshi.adapter(UsageReport::class.java)
-    private val sessionAdapter = wireMoshi.adapter(SessionHeader::class.java)
-    private val providerCatalogAdapter = wireMoshi.adapter(ProviderCatalogEntry::class.java)
-    private val providerModelsAdapter = wireMoshi.adapter(ProviderModelsResponse::class.java)
-    private val sessionChangeAdapter = wireMoshi.adapter(SessionFileChange::class.java)
-    private val queuedPromptAdapter = wireMoshi.adapter(QueuedPrompt::class.java)
-    private val subagentAdapter = wireMoshi.adapter(SubagentInfo::class.java)
-    private val messageMoshi = wireMoshi.adapter(console.v1.AgentMessage::class.java)
-    private val todoAdapter = wireMoshi.adapter(TodoItem::class.java)
-    private val gitDiffAdapter = wireMoshi.adapter(GitDiffResponse::class.java)
-    private val gitStatusAdapter = wireMoshi.adapter(GitStatusSummary::class.java)
-    private val gitBranchesAdapter = wireMoshi.adapter(GitBranchesResponse::class.java)
-    private val contextAdapter = wireMoshi.adapter(console.v1.ContextSnapshot::class.java)
-    private val gitCheckoutAdapter = wireMoshi.adapter(GitCheckoutRequest::class.java)
-    private val fsBrowseAdapter = wireMoshi.adapter(FsBrowseResult::class.java)
-    private val fsTreeAdapter = wireMoshi.adapter(FsDirectoryTree::class.java)
-    private val fsEntryAdapter = wireMoshi.adapter(FsTreeEntry::class.java)
-    private val fileSearchAdapter = wireMoshi.adapter(FileSearchResult::class.java)
-    private val slashCommandAdapter = wireMoshi.adapter(SlashCommandInfo::class.java)
-    private val authStatusAdapter = wireMoshi.adapter(AuthStatusResponse::class.java)
-    private val loginUrlAdapter = wireMoshi.adapter(OAuthLoginUrlResponse::class.java)
-    private val deviceAdapter = wireMoshi.adapter(DeviceDescriptor::class.java)
-    private val deviceDiagnosticsAdapter = wireMoshi.adapter(DeviceDiagnostics::class.java)
-    private val deviceActionAdapter = wireMoshi.adapter(DeviceActionRequest::class.java)
-    private val assistSearchAdapter = wireMoshi.adapter(AssistFileSearchResponse::class.java)
-    private val fsFileContentAdapter = wireMoshi.adapter(FsFileContent::class.java)
-    private val writeFileAdapter = wireMoshi.adapter(WriteFileRequest::class.java)
-    private val createDirAdapter = wireMoshi.adapter(CreateDirRequest::class.java)
+    private val wireMoshi: Moshi by lazy { Moshi.Builder().add(WireJsonAdapterFactory()).build() }
+    private val favoriteAdapter by lazy { wireMoshi.adapter(ModelFavorite::class.java) }
+    private val setFavoriteAdapter by lazy { wireMoshi.adapter(SetFavoriteRequest::class.java) }
+    private val settingsAdapter by lazy { wireMoshi.adapter(ConsoleSettings::class.java) }
+    private val projectAdapter by lazy { wireMoshi.adapter(ProjectInfo::class.java) }
+    private val usageReportAdapter by lazy { wireMoshi.adapter(UsageReport::class.java) }
+    private val sessionAdapter by lazy { wireMoshi.adapter(SessionHeader::class.java) }
+    private val providerCatalogAdapter by lazy { wireMoshi.adapter(ProviderCatalogEntry::class.java) }
+    private val providerModelsAdapter by lazy { wireMoshi.adapter(ProviderModelsResponse::class.java) }
+    private val sessionChangeAdapter by lazy { wireMoshi.adapter(SessionFileChange::class.java) }
+    private val queuedPromptAdapter by lazy { wireMoshi.adapter(QueuedPrompt::class.java) }
+    private val subagentAdapter by lazy { wireMoshi.adapter(SubagentInfo::class.java) }
+    private val messageMoshi by lazy { wireMoshi.adapter(console.v1.AgentMessage::class.java) }
+    private val todoAdapter by lazy { wireMoshi.adapter(TodoItem::class.java) }
+    private val gitDiffAdapter by lazy { wireMoshi.adapter(GitDiffResponse::class.java) }
+    private val gitStatusAdapter by lazy { wireMoshi.adapter(GitStatusSummary::class.java) }
+    private val gitBranchesAdapter by lazy { wireMoshi.adapter(GitBranchesResponse::class.java) }
+    private val contextAdapter by lazy { wireMoshi.adapter(console.v1.ContextSnapshot::class.java) }
+    private val gitCheckoutAdapter by lazy { wireMoshi.adapter(GitCheckoutRequest::class.java) }
+    private val fsBrowseAdapter by lazy { wireMoshi.adapter(FsBrowseResult::class.java) }
+    private val fsTreeAdapter by lazy { wireMoshi.adapter(FsDirectoryTree::class.java) }
+    private val fsEntryAdapter by lazy { wireMoshi.adapter(FsTreeEntry::class.java) }
+    private val fileSearchAdapter by lazy { wireMoshi.adapter(FileSearchResult::class.java) }
+    private val slashCommandAdapter by lazy { wireMoshi.adapter(SlashCommandInfo::class.java) }
+    private val authStatusAdapter by lazy { wireMoshi.adapter(AuthStatusResponse::class.java) }
+    private val loginUrlAdapter by lazy { wireMoshi.adapter(OAuthLoginUrlResponse::class.java) }
+    private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
+    private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
+    private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
+    private val assistSearchAdapter by lazy { wireMoshi.adapter(AssistFileSearchResponse::class.java) }
+    private val fsFileContentAdapter by lazy { wireMoshi.adapter(FsFileContent::class.java) }
+    private val writeFileAdapter by lazy { wireMoshi.adapter(WriteFileRequest::class.java) }
+    private val createDirAdapter by lazy { wireMoshi.adapter(CreateDirRequest::class.java) }
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {

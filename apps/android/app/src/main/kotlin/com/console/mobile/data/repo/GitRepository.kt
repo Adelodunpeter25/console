@@ -8,7 +8,10 @@ import console.v1.ProjectInfo
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -39,26 +42,34 @@ class GitRepository(
     }
 
     suspend fun fetchBranchesForProjects(projects: List<ProjectInfo>): Map<String, String> = withContext(Dispatchers.IO) {
-        val result = mutableMapOf<String, String>()
-        for (project in projects) {
-            try {
-                val status = api.getGitStatus(project.path)
-                if (status != null && status.branch.isNotBlank()) {
-                    result[project.id] = status.branch
+        if (projects.isEmpty()) return@withContext emptyMap()
+        coroutineScope {
+            projects.map { project ->
+                async {
+                    try {
+                        val status = api.getGitStatus(project.path)
+                        if (status != null && status.branch.isNotBlank()) {
+                            project.id to status.branch
+                        } else {
+                            null
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
-            } catch (_: Exception) {
-            }
+            }.awaitAll().filterNotNull().toMap()
         }
-        result
     }
 
     /**
      * Watches git status changes via GET /api/git/status/watch?path=... SSE.
      */
-    private val gitStatusMoshi = com.squareup.moshi.Moshi.Builder()
-        .add(com.squareup.wire.WireJsonAdapterFactory())
-        .build()
-        .adapter(GitStatusSummary::class.java)
+    private val gitStatusMoshi by lazy {
+        com.squareup.moshi.Moshi.Builder()
+            .add(com.squareup.wire.WireJsonAdapterFactory())
+            .build()
+            .adapter(GitStatusSummary::class.java)
+    }
 
     fun watchStatus(path: String): Flow<GitStatusSummary> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
