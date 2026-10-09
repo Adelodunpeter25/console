@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
-import io.github.lyxnx.compose.ui.tablericons.outline.LinkOff
+import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
@@ -145,7 +145,7 @@ fun ServersSettings(onBack: () -> Unit) {
                 }
                 if (envState.activeId != null) {
                     Section("Connection") {
-                        ActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.TextPrimary) {
+                        ActionRow(icon = TablerIcons.Outline.PlugConnected, title = "Disconnect backend", tint = NewTheme.TextPrimary) {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))

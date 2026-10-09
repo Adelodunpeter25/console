@@ -30,11 +30,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
-import io.github.lyxnx.compose.ui.tablericons.outline.ChartLine
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
+import io.github.lyxnx.compose.ui.tablericons.outline.TrendingUp
 import io.github.lyxnx.compose.ui.tablericons.outline.UserCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.Wifi
 import com.console.mobile.AppContainer
@@ -88,7 +88,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     // to be in state before the list renders.
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
-    PageHeader(title = "Settings", onBack = { onBack() }, newDesign = true)
+    PageHeader(title = "Settings", onBack = { onBack() })
     val signedIn = authState.status?.values?.any { it.logged_in } == true
     val roles = providerState.modelRoles.count { it.value.isNotBlank() }
     val n = projectState.projects.size
@@ -97,7 +97,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
         Section("Connections") {
             NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
             NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
-            NavRow(icon = TablerIcons.Outline.ChartLine, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+            NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
         }
         Section("AI & tools") {
             NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
