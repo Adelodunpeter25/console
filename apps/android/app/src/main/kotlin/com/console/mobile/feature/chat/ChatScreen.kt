@@ -313,129 +313,133 @@ fun ChatScreen(
         anchor = null
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
-                !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight))
-                else -> {
-                    LazyColumn(
-                        state = listState,
-                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 12.dp),
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                    ) {
-                    itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
-                        MessageBubbleItem(item = msg)
-                        val runIdx = userRunMap[index]
-                        if (runIdx != null && runIdx < runs.size) {
-                            RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
-                        }
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        when {
+            loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
+            !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight, bottom = 80.dp))
+            else -> {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 120.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                ) {
+                itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
+                    MessageBubbleItem(item = msg)
+                    val runIdx = userRunMap[index]
+                    if (runIdx != null && runIdx < runs.size) {
+                        RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
                     }
-                    // Streaming footer: unattached latest run + live bubble.
-                    if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
-                        item(key = "streaming") {
-                            AssistantBubble(textContent = chat.streamingText.ifBlank { null }, thinkingContent = chat.streamingThinking.ifBlank { null }, isStreaming = true, createdAt = null)
-                        }
-                    } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
-                        item(key = "unattached-run") {
-                            RunActivity(activity = runs.last(), running = true, cwd = cwd)
-                        }
+                }
+                // Streaming footer: unattached latest run + live bubble.
+                if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
+                    item(key = "streaming") {
+                        AssistantBubble(textContent = chat.streamingText.ifBlank { null }, thinkingContent = chat.streamingThinking.ifBlank { null }, isStreaming = true, createdAt = null)
                     }
+                } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
+                    item(key = "unattached-run") {
+                        RunActivity(activity = runs.last(), running = true, cwd = cwd)
                     }
-                    ScrollThumb(
-                        state = listState,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp),
+                }
+                }
+                ScrollThumb(
+                    state = listState,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = PageHeaderHeight, bottom = 80.dp),
+                )
+            }
+        }
+        if (showScrollBottom) {
+            androidx.compose.material3.FloatingActionButton(
+                onClick = {
+                    following = true
+                    scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp),
+                containerColor = NewTheme.Raised,
+                contentColor = NewTheme.TextPrimary,
+            ) {
+                Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
+            }
+        }
+
+        // Blurred progressive header overlay
+        PageHeader(
+            title = chatTitle,
+            blurred = true,
+            modifier = Modifier.align(Alignment.TopCenter),
+            onBack = {
+                AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
+                onBackToHome()
+            },
+            actions = {
+                HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
+                Box(modifier = Modifier.padding(start = 4.dp)) {
+                    HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
+                    OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                        OverflowMenuItem(
+                            label = "Open diff",
+                            icon = TablerIcons.Outline.BrandGit,
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Changes)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open devices",
+                            icon = TablerIcons.Outline.DeviceMobile,
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Devices)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open terminal",
+                            icon = TablerIcons.Outline.Terminal2,
+                            onClick = {
+                                overflowMenu = false
+                                jumpToProjectTab(MobileTab.Terminal)
+                            },
+                        )
+                    }
+                }
+            },
+        )
+
+        // Bottom interaction or floating composer overlay
+        Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            if (hasPending) {
+                Column {
+                    if (hasActiveTodos) {
+                        TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
+                    }
+                    if (hasSubagents) {
+                        SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
+                    }
+                    InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
+                }
+            } else {
+                Column {
+                    if (hasActiveTodos) {
+                        TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
+                    }
+                    if (hasSubagents) {
+                        SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
+                    }
+                    Composer(
+                        sessionId = sessionId,
+                        value = chat.input,
+                        onChange = { AppContainer.chatRepository.setInput(sessionId, it) },
+                        running = chat.running,
+                        projectLocked = hasMessages,
+                        onAddProject = onAddProject,
+                        onSend = {
+                            keyboardController?.hide()
+                            AppContainer.chatRepository.sendMessage(sessionId)
+                            following = true
+                            scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                        },
+                        onStop = { AppContainer.chatRepository.abort(sessionId) },
                     )
                 }
-            }
-            if (showScrollBottom) {
-                androidx.compose.material3.FloatingActionButton(
-                    onClick = {
-                        following = true
-                        scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                    containerColor = NewTheme.Raised,
-                    contentColor = NewTheme.TextPrimary,
-                ) {
-                    Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
-                }
-            }
-
-            // Blurred progressive header overlay
-            PageHeader(
-                title = chatTitle,
-                blurred = true,
-                modifier = Modifier.align(Alignment.TopCenter),
-                onBack = {
-                    AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                    onBackToHome()
-                },
-                actions = {
-                    HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
-                    Box(modifier = Modifier.padding(start = 4.dp)) {
-                        HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
-                        OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
-                            OverflowMenuItem(
-                                label = "Open diff",
-                                icon = TablerIcons.Outline.BrandGit,
-                                onClick = {
-                                    overflowMenu = false
-                                    jumpToProjectTab(MobileTab.Changes)
-                                },
-                            )
-                            OverflowMenuItem(
-                                label = "Open devices",
-                                icon = TablerIcons.Outline.DeviceMobile,
-                                onClick = {
-                                    overflowMenu = false
-                                    jumpToProjectTab(MobileTab.Devices)
-                                },
-                            )
-                            OverflowMenuItem(
-                                label = "Open terminal",
-                                icon = TablerIcons.Outline.Terminal2,
-                                onClick = {
-                                    overflowMenu = false
-                                    jumpToProjectTab(MobileTab.Terminal)
-                                },
-                            )
-                        }
-                    }
-                },
-            )
-        }
-        if (hasPending) {
-            if (hasActiveTodos) {
-                TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
-            }
-            if (hasSubagents) {
-                SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
-            }
-            InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
-        } else {
-            Column {
-                if (hasActiveTodos) {
-                    TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
-                }
-                if (hasSubagents) {
-                    SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
-                }
-                Composer(
-                    sessionId = sessionId,
-                    value = chat.input,
-                    onChange = { AppContainer.chatRepository.setInput(sessionId, it) },
-                    running = chat.running,
-                    projectLocked = hasMessages,
-                    onAddProject = onAddProject,
-                    onSend = {
-                        keyboardController?.hide()
-                        AppContainer.chatRepository.sendMessage(sessionId)
-                        following = true
-                        scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
-                    },
-                    onStop = { AppContainer.chatRepository.abort(sessionId) },
-                )
             }
         }
     }
