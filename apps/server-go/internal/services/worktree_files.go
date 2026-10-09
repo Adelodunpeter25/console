@@ -19,18 +19,18 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 // worktreeIncludeFile is the committed, tool-agnostic pattern file read
 // from the source checkout's root (Claude Code reads the same file).
 const worktreeIncludeFile = ".worktreeinclude"
 
-// skippedWorktreeSegs are never carried over even when matched: large,
-// regenerable dependency and build output that would slow creation down
-// and drag stale state into a fresh worktree.
-var skippedWorktreeSegs = []string{
-	"node_modules", "build", "dist", "target", ".gradle", ".next",
-}
+// Carry-over skips anything utils.IsPathIgnored reports (dependency,
+// build output, caches, IDE state — the same set tree and search ignore):
+// large, regenerable, and liable to drag stale state into a fresh
+// worktree, even when explicitly matched.
 
 // includePattern is one parsed .worktreeinclude line: gitignore syntax
 // plus the Console `link:` extension (symlink instead of copy).
@@ -163,19 +163,6 @@ func gitIsIgnored(top, p string) bool {
 	return err == nil
 }
 
-// hasSkippedSeg reports whether rel passes through dependency or build
-// output that is never carried over, even when matched.
-func hasSkippedSeg(rel string) bool {
-	for _, seg := range strings.Split(rel, "/") {
-		for _, skip := range skippedWorktreeSegs {
-			if seg == skip {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // copyWorktreeFile snapshots the source-checkout file rel into the new
 // worktree, preserving mode bits. Never overwrites an existing dest.
 func copyWorktreeFile(top, wtPath, rel string) error {
@@ -244,7 +231,7 @@ func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) 
 		if !p.link || p.negate || p.hasMagic() {
 			continue
 		}
-		if hasSkippedSeg(p.literal) || !gitIsIgnored(top, p.literal) {
+		if utils.IsPathIgnored(p.literal) || !gitIsIgnored(top, p.literal) {
 			continue
 		}
 		if err := linkWorktreePath(top, wtPath, p.literal); err != nil {
@@ -260,7 +247,7 @@ func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) 
 	}
 	for _, rel := range strings.Split(out, "\x00") {
 		rel = strings.TrimSpace(rel)
-		if rel == "" || hasSkippedSeg(rel) {
+		if rel == "" || utils.IsPathIgnored(rel) {
 			continue
 		}
 		op := 0 // 1 = copy, 2 = link
