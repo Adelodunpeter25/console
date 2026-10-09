@@ -2,8 +2,10 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import console.v1.AuthStatusResponse
+import console.v1.GitHubAuthStatus
 import console.v1.OAuthLoginUrlResponse
 import console.v1.ProviderAuthStatus
+import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
@@ -39,14 +41,17 @@ class AuthRepository(
                 val projectIds = mapOf(
                     "antigravity" to antigravity.configured_project_id,
                 )
-                authState.set(
-                    AuthState(
+                authState.patch {
+                    it.copy(
                         status = statusMap,
                         loading = false,
                         error = null,
                         projectIds = projectIds,
-                    ),
-                )
+                        // Local-only on the server: a revoked token still reads
+                        // connected until the next git failure or re-login.
+                        github = status.github ?: GitHubAuthStatus(connected = false),
+                    )
+                }
             } catch (e: Exception) {
                 // Keep the last known status/projectIds. Overwriting them with
                 // all-loggedOut made one transient 500 look like every provider
@@ -66,6 +71,35 @@ class AuthRepository(
             api.handleCallback(OAuthCallbackDto(provider = provider, code = code, state = state))
         }
         loadStatus()
+    }
+
+    /**
+     * Validate and store a GitHub personal access token so the server's git
+     * (agent runs and terminals) can reach private repositories. The server
+     * answers with the username only; the token is never kept here. Throws the
+     * server's message on failure (invalid token, GitHub unreachable).
+     */
+    suspend fun connectGitHub(token: String) {
+        authState.patch { it.copy(githubBusy = true) }
+        try {
+            val status = withContext(Dispatchers.IO) { api.connectGitHub(GitHubTokenDto(token.trim())) }
+            authState.patch { it.copy(github = status, githubBusy = false) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(githubBusy = false) }
+            throw e
+        }
+    }
+
+    /** Remove the stored GitHub token from the server. */
+    suspend fun disconnectGitHub() {
+        authState.patch { it.copy(githubBusy = true) }
+        try {
+            withContext(Dispatchers.IO) { api.disconnectGitHub() }
+            authState.patch { it.copy(github = GitHubAuthStatus(connected = false), githubBusy = false) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(githubBusy = false) }
+            throw e
+        }
     }
 
     suspend fun saveProjectId(provider: String, projectId: String?) {

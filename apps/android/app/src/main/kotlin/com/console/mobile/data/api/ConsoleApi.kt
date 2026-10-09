@@ -88,6 +88,10 @@ interface ConsoleApi {
     suspend fun getAuthStatus(): console.v1.AuthStatusResponse
     suspend fun getLoginUrl(payload: OAuthLoginUrlDto): console.v1.OAuthLoginUrlResponse
     suspend fun handleCallback(payload: OAuthCallbackDto)
+    // github git credential (personal access token)
+    suspend fun connectGitHub(payload: com.console.mobile.data.model.GitHubTokenDto): console.v1.GitHubAuthStatus
+    suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus
+    suspend fun disconnectGitHub()
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
     suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>

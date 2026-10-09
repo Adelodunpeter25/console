@@ -107,6 +107,10 @@ internal fun decodeBase64(data: String): ByteArray = try {
 @Serializable
 data class OAuthLoginUrlDto(val provider: String)
 
+/** Body of POST /api/auth/github/pat. The token is sent once and never kept. */
+@Serializable
+data class GitHubTokenDto(val token: String)
+
 @Serializable
 data class OAuthCallbackDto(val provider: String, val code: String, val state: String? = null)
 

@@ -36,6 +36,7 @@ import console.v1.QueuedPrompt
 import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
+import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProviderCatalogEntry
 import console.v1.ProviderModelsResponse
@@ -95,6 +96,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val slashCommandAdapter by lazy { wireMoshi.adapter(SlashCommandInfo::class.java) }
     private val authStatusAdapter by lazy { wireMoshi.adapter(AuthStatusResponse::class.java) }
     private val loginUrlAdapter by lazy { wireMoshi.adapter(OAuthLoginUrlResponse::class.java) }
+    private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
@@ -456,6 +458,21 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun handleCallback(payload: OAuthCallbackDto) {
         val raw = http.post("/api/auth/login/callback", http.encodeBody(OAuthCallbackDto.serializer(), payload))
         http.unwrap(raw, JsonElement.serializer(), "handle auth callback")
+    }
+
+    override suspend fun connectGitHub(payload: GitHubTokenDto): console.v1.GitHubAuthStatus {
+        val raw = http.post("/api/auth/github/pat", http.encodeBody(GitHubTokenDto.serializer(), payload))
+        return http.unwrapOrRawAdapter(raw, githubStatusAdapter, "connect GitHub")
+    }
+
+    override suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus {
+        val raw = http.get("/api/auth/github/status")
+        return http.unwrapOrRawAdapter(raw, githubStatusAdapter, "get GitHub status")
+    }
+
+    override suspend fun disconnectGitHub() {
+        val raw = http.post("/api/auth/github/logout")
+        http.unwrapOrRaw(raw, JsonElement.serializer(), "disconnect GitHub")
     }
 
     override suspend fun saveProjectId(provider: String, projectId: String?) {

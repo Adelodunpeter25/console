@@ -1,6 +1,7 @@
 package com.console.mobile.data.store
 
 import console.v1.FsTreeEntry
+import console.v1.GitHubAuthStatus
 import console.v1.McpServerStatus as McpServerEntry
 import console.v1.ProviderAuthStatus
 import console.v1.UsageReport
@@ -17,6 +18,10 @@ data class AuthState(
     val error: String? = null,
     val projectIds: Map<String, String?> = emptyMap(),
     val savingProjectId: Boolean = false,
+    /** GitHub git credential (a personal access token, not a chat provider). */
+    val github: GitHubAuthStatus? = null,
+    /** True while a token is being validated or removed. */
+    val githubBusy: Boolean = false,
 )
 
 class AuthStateHolder(initial: AuthState = AuthState()) {
