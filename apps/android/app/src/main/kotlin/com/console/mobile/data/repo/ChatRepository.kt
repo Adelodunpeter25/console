@@ -41,6 +41,7 @@ import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
 import com.console.mobile.data.stream.ChatStreamClient
 import com.console.mobile.data.stream.RunStreamController
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -157,6 +158,17 @@ class ChatRepository(
         }
     }
 
+    /** Load any staged next-turn prompt into state on session open. */
+    fun loadQueuedPrompt(sessionId: String) {
+        scope.launch {
+            try {
+                val queued = withContext(Dispatchers.IO) { api.getQueuedPrompt(sessionId) }
+                chats.update(sessionId) { it.copy(queuedPrompt = queued) }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     /** One-off fetch so the ring has a value before the first live update. */
     fun loadContext(sessionId: String) {
         scope.launch {
@@ -235,11 +247,15 @@ class ChatRepository(
         }
     }
 
-    /** Send a prompt — appends the user bubble then opens POST /run SSE. */
+    /** Send a prompt — appends the user bubble then opens POST /run SSE (or queues if running). */
     fun sendMessage(sessionId: String, promptOverride: String? = null) {
         val session = chats.get(sessionId)
         val prompt = (promptOverride ?: session.input).trim()
-        if (prompt.isEmpty() || session.running) return
+        if (prompt.isEmpty()) return
+        if (session.running) {
+            queuePrompt(sessionId, prompt)
+            return
+        }
         val view = sessions.getView(sessionId)
         val attachments = session.attachments
 
@@ -319,6 +335,113 @@ class ChatRepository(
             }
             chats.update(sessionId) { abortSessionRun(it) }
             sessions.setStatus(sessionId, SessionStatus.Done)
+        }
+    }
+
+    /** Stage prompt to run right after the active turn settles (POST /api/sessions/:id/queue). */
+    fun queuePrompt(sessionId: String, promptText: String? = null) {
+        val session = chats.get(sessionId)
+        val prompt = (promptText ?: session.input).trim()
+        if (prompt.isEmpty()) return
+        val view = sessions.getView(sessionId)
+        val attachments = session.attachments
+
+        // Clear local input so user can type subsequent notes
+        chats.update(sessionId) {
+            it.copy(
+                input = "",
+                draftUpdatedAt = null,
+                attachments = emptyList(),
+            )
+        }
+
+        val body = RunPromptDto(
+            prompt = prompt,
+            modelId = view.sessionModelId,
+            provider = view.sessionProvider,
+            approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
+            thinkingLevel = providerRepo?.validThinkingLevel(view.sessionProvider, view.sessionModelId, view.thinkingLevel) ?: view.thinkingLevel.takeIf { providerRepo == null },
+            attachments = attachments,
+            contextFiles = mentionPaths(prompt),
+        )
+        scope.launch {
+            try {
+                val queued = withContext(Dispatchers.IO) { api.queuePrompt(sessionId, body) }
+                chats.update(sessionId) { it.copy(queuedPrompt = queued) }
+            } catch (e: Exception) {
+                // Restore draft on failure
+                chats.update(sessionId) {
+                    it.copy(
+                        input = prompt,
+                        attachments = attachments,
+                    )
+                }
+            }
+        }
+    }
+
+    /** Discard staged prompt from server (DELETE /api/sessions/:id/queue). */
+    fun deleteQueuedPrompt(sessionId: String) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+                chats.update(sessionId) { it.copy(queuedPrompt = null) }
+            } catch (_: Exception) {}
+        }
+    }
+
+    /** Pop queued prompt back into composer for editing. */
+    fun editQueuedPrompt(sessionId: String) {
+        val session = chats.get(sessionId)
+        val q = session.queuedPrompt ?: return
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+            } catch (_: Exception) {}
+            chats.update(sessionId) { current ->
+                val attachments = q.attachments.map {
+                    ImageAttachment(
+                        id = UUID.randomUUID().toString(),
+                        bytes = android.util.Base64.decode(it.data_, android.util.Base64.DEFAULT),
+                        mimeType = it.mime_type,
+                    )
+                }
+                current.copy(
+                    queuedPrompt = null,
+                    input = q.prompt,
+                    attachments = attachments,
+                    draftUpdatedAt = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    /** Steer active turn immediately with the queued prompt (POST /api/sessions/:id/steer). */
+    fun steerQueuedPrompt(sessionId: String) {
+        val session = chats.get(sessionId)
+        val q = session.queuedPrompt ?: return
+        val view = sessions.getView(sessionId)
+        val attachments = q.attachments.map {
+            ImageAttachment(
+                id = UUID.randomUUID().toString(),
+                bytes = android.util.Base64.decode(it.data_, android.util.Base64.DEFAULT),
+                mimeType = it.mime_type,
+            )
+        }
+        val body = RunPromptDto(
+            prompt = q.prompt,
+            modelId = q.model_id ?: view.sessionModelId,
+            provider = q.provider ?: view.sessionProvider,
+            approvalMode = q.approval_mode ?: view.approvalMode.takeIf { it.isNotBlank() },
+            thinkingLevel = q.thinking_level ?: view.thinkingLevel.takeIf { providerRepo == null },
+            attachments = attachments,
+            contextFiles = q.context_files,
+        )
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { api.steerRun(sessionId, body) }
+                chats.update(sessionId) { it.copy(queuedPrompt = null) }
+            } catch (_: Exception) {}
         }
     }
 

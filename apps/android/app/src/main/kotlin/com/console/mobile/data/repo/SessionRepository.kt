@@ -78,6 +78,7 @@ class SessionRepository(
             applyHeader(sessionId, detail.header)
             chatRepo.loadMessages(sessionId, detail.messages)
             chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
+            chatRepo.loadQueuedPrompt(sessionId)
             detail.header
         } catch (e: Exception) {
             android.util.Log.w("SessionRepository", "loadDetail($sessionId) failed; chat keeps empty state", e)

@@ -48,6 +48,7 @@ data class ChatSessionState(
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),
     val runs: List<RunActivityState> = emptyList(),
+    val queuedPrompt: console.v1.QueuedPrompt? = null,
     // Context-window occupancy for the footer ring; null until first known.
     val context: ContextSnapshot? = null,
     val attachments: List<ImageAttachment> = emptyList(),
@@ -75,6 +76,7 @@ data class ChatSnapshot(
     val subagents: List<SubagentInfo> = emptyList(),
     val running: Boolean = false,
     val runs: List<RunActivityState> = emptyList(),
+    val queuedPrompt: console.v1.QueuedPrompt? = null,
 )
 
 fun createChatSessionState(): ChatSessionState = ChatSessionState()

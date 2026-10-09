@@ -27,6 +27,7 @@ private val toolCallJson = wireMoshi.adapter(WireToolCall::class.java)
 private val toolResultJson = wireMoshi.adapter(WireToolResult::class.java)
 private val contextJson = wireMoshi.adapter(ContextSnapshot::class.java)
 private val turnJson = wireMoshi.adapter(WireAssistantMessage::class.java)
+private val queuedPromptJson = wireMoshi.adapter(console.v1.QueuedPrompt::class.java)
 
 private fun decodeToolCall(raw: kotlinx.serialization.json.JsonElement): com.console.mobile.data.model.ToolCall? =
     runCatching { toolCallJson.fromJson(raw.toString()) }.getOrNull()?.toUi()
@@ -201,6 +202,10 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             val snap = event.context?.let { runCatching { contextJson.fromJson(it.toString()) }.getOrNull() }
             if (snap == null) session else session.copy(context = snap)
         }
+        "queueUpdated" -> {
+            val queued = event.queuedPrompt?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
+            session.copy(queuedPrompt = queued)
+        }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
             val msg = event.error?.message ?: "Unknown agent error"
@@ -244,5 +249,6 @@ fun toChatSnapshot(session: ChatSessionState): ChatSnapshot {
         subagents = session.subagents,
         running = session.running,
         runs = session.runs,
+        queuedPrompt = session.queuedPrompt,
     )
 }
