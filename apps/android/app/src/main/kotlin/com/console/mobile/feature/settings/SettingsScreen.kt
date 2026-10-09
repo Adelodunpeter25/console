@@ -88,7 +88,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     // to be in state before the list renders.
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
-    PageHeader(title = "Settings", onBack = { onBack() })
+    PageHeader(title = "Settings", onBack = { onBack() }, newDesign = true)
     val signedIn = authState.status?.values?.any { it.logged_in } == true
     val roles = providerState.modelRoles.count { it.value.isNotBlank() }
     val n = projectState.projects.size
