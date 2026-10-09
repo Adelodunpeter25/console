@@ -119,7 +119,7 @@ func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 	})
 
 	app.Get("/api/projects/:projectId/scripts/runs", func(c *fiber.Ctx) error {
-		data, err := marshalProtoList(scriptRunsToProto(scripts.ListRuns(c.Params("projectId"))))
+		data, err := marshalProtoList(scriptRunsToProto(scripts.ListRunsIn(c.Params("projectId"), c.Query("cwd"))))
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}

@@ -20,6 +20,11 @@ const scriptMaxOutput = 256 * 1024
 
 type managedRun struct {
 	types.ScriptRun
+	// root is the checkout the run started in (the project folder or one of
+	// its worktrees). Kept server-side only: it scopes the "already running"
+	// guard and the run list per checkout, so the same script can run in two
+	// worktrees at once.
+	root        string
 	process     *exec.Cmd
 	mu          sync.Mutex
 	subscribers map[chan types.ScriptRunEvent]bool
@@ -236,7 +241,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 	s.mu.Lock()
 	candidates := make([]*managedRun, 0, len(s.runs))
 	for _, run := range s.runs {
-		if run.ProjectID == projectID && run.ScriptID == scriptID {
+		if run.ProjectID == projectID && run.ScriptID == scriptID && run.root == root {
 			candidates = append(candidates, run)
 		}
 	}
@@ -273,6 +278,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 			Label: script.Label, Persistent: script.Persistent,
 			Status: "running", StartedAt: nowISO(),
 		},
+		root:        root,
 		process:     cmd,
 		subscribers: make(map[chan types.ScriptRunEvent]bool),
 	}
@@ -353,11 +359,27 @@ func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, st
 }
 
 func (s *ProjectScriptsService) ListRuns(projectID string) []types.ScriptRun {
+	return s.listRuns(projectID, nil)
+}
+
+// ListRunsIn lists the runs that started in one checkout — the project folder
+// or the named worktree (see resolveScriptRoot) — so a client showing a
+// worktree's scripts never sees, or adopts, another checkout's runs.
+func (s *ProjectScriptsService) ListRunsIn(projectID, cwd string) []types.ScriptRun {
+	project, err := s.projects.Get(projectID)
+	if err != nil {
+		return []types.ScriptRun{}
+	}
+	root := resolveScriptRoot(project.Path, cwd)
+	return s.listRuns(projectID, &root)
+}
+
+func (s *ProjectScriptsService) listRuns(projectID string, root *string) []types.ScriptRun {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]types.ScriptRun, 0)
 	for _, run := range s.runs {
-		if run.ProjectID == projectID {
+		if run.ProjectID == projectID && (root == nil || run.root == *root) {
 			out = append(out, run.snapshot())
 		}
 	}

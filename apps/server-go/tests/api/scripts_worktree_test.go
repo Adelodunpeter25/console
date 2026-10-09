@@ -58,3 +58,48 @@ func TestScriptsIgnoreFoldersOutsideTheProject(t *testing.T) {
 		}
 	}
 }
+
+// The same script can run in the project folder and in a worktree at once,
+// each guarded and listed per checkout.
+func TestSameScriptRunsInTwoCheckoutsAtOnce(t *testing.T) {
+	svc, projectID, root := newScriptService(t)
+	gitIn(t, root, "init", "-b", "main")
+	writeConsoleToml(t, root, "[scripts.serve]\nlabel = \"Serve\"\ncommand = \"sleep 30\"\npersistent = true\n")
+	gitIn(t, root, "add", "console.toml")
+	gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init")
+	worktree := filepath.Join(t.TempDir(), "wt")
+	gitIn(t, root, "worktree", "add", "-b", "feature", worktree)
+
+	mainRun, err := svc.RunIn(projectID, "serve", "")
+	if err != nil {
+		t.Fatalf("run in main: %v", err)
+	}
+	t.Cleanup(func() { svc.Stop(projectID, mainRun.RunID) })
+
+	// Same script, other checkout: allowed.
+	wtRun, err := svc.RunIn(projectID, "serve", worktree)
+	if err != nil {
+		t.Fatalf("run in worktree while main runs: %v", err)
+	}
+	t.Cleanup(func() { svc.Stop(projectID, wtRun.RunID) })
+
+	// Same script, same checkout: still refused.
+	if _, err := svc.RunIn(projectID, "serve", ""); err == nil {
+		t.Fatal("a second run in the same checkout must be refused")
+	}
+	if _, err := svc.RunIn(projectID, "serve", worktree); err == nil {
+		t.Fatal("a second run in the same worktree must be refused")
+	}
+
+	// Each checkout lists only its own run.
+	if runs := svc.ListRunsIn(projectID, ""); len(runs) != 1 || runs[0].RunID != mainRun.RunID {
+		t.Fatalf("main runs: %+v", runs)
+	}
+	if runs := svc.ListRunsIn(projectID, worktree); len(runs) != 1 || runs[0].RunID != wtRun.RunID {
+		t.Fatalf("worktree runs: %+v", runs)
+	}
+	// The unscoped list (agent/legacy clients) still sees both.
+	if runs := svc.ListRuns(projectID); len(runs) != 2 {
+		t.Fatalf("all runs: %+v", runs)
+	}
+}

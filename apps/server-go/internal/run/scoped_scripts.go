@@ -26,7 +26,7 @@ func (p sessionScopedScripts) Stop(projectID, runID string) bool {
 }
 
 func (p sessionScopedScripts) ListRuns(projectID string) []types.ScriptRun {
-	return p.svc.ListRuns(projectID)
+	return p.svc.ListRunsIn(projectID, p.cwd)
 }
 
 func (p sessionScopedScripts) GetRun(projectID, runID string) *types.ScriptRun {
