@@ -5,10 +5,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,9 +39,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
@@ -173,8 +179,16 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming: Boolean, createdAt: Long?) {
+fun AssistantBubble(
+    textContent: String?,
+    thinkingContent: String?,
+    isStreaming: Boolean,
+    createdAt: Long?,
+    fileChanges: List<SessionFileChange> = emptyList(),
+    onOpenChange: ((SessionFileChange) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val hasContent = !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty()
     val showTyping = isStreaming && !hasContent
@@ -194,7 +208,21 @@ fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming:
                 Text("Done", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
             }
         }
-        if (!isStreaming && (createdAt != null || !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty())) {
+        if (!isStreaming && fileChanges.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+            ) {
+                fileChanges.forEach { change ->
+                    TurnChangeChip(
+                        change = change,
+                        onClick = { onOpenChange?.invoke(change) },
+                    )
+                }
+            }
+        }
+        if (!isStreaming && (createdAt != null || !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty() || fileChanges.isNotEmpty())) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp, start = 2.dp)) {
                 Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = NewTheme.TextMuted, fontSize = 12.sp)
                 val copyable = buildList {
@@ -203,6 +231,40 @@ fun AssistantBubble(textContent: String?, thinkingContent: String?, isStreaming:
                 }.joinToString("\n\n")
                 if (copyable.isNotEmpty()) CopyButton(text = copyable, context = context)
             }
+        }
+    }
+}
+
+@Composable
+fun TurnChangeChip(
+    change: SessionFileChange,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val name = remember(change.path) { getFileName(change.path) }
+    val isDeleted = change.status == "deleted"
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(NewTheme.Card)
+            .border(1.dp, NewTheme.Divider, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FileIcon(filename = name, sizeDp = 13, modifier = Modifier.padding(end = 6.dp))
+        Text(
+            text = name,
+            color = if (isDeleted) NewTheme.TextMuted else NewTheme.TextPrimary,
+            fontSize = 12.sp,
+            fontFamily = ConsoleMonoFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textDecoration = if (isDeleted) TextDecoration.LineThrough else null,
+        )
+        if (change.additions > 0 || change.deletions > 0) {
+            Spacer(modifier = Modifier.size(6.dp))
+            DiffSummaryBadge(addedCount = change.additions, removedCount = change.deletions)
         }
     }
 }
@@ -407,7 +469,11 @@ private fun appendPretty(element: kotlinx.serialization.json.JsonElement, indent
 
 /** Renders one agent message: user / assistant / toolResult(suppressed). */
 @Composable
-fun MessageBubbleItem(item: AgentMessage) {
+fun MessageBubbleItem(
+    item: AgentMessage,
+    fileChanges: List<SessionFileChange> = emptyList(),
+    onOpenChange: ((SessionFileChange) -> Unit)? = null,
+) {
     when (item) {
         is UserMessage -> UserBubble(content = item.content, createdAt = item.createdAt, attachments = item.attachments)
         is ToolResultMessage -> {}
@@ -416,8 +482,15 @@ fun MessageBubbleItem(item: AgentMessage) {
             if (hasToolCalls) return
             val text = item.content.filterIsInstance<TextPart>().joinToString("\n\n") { it.text }
             val thinking = item.content.filterIsInstance<ThinkingPart>().joinToString("\n\n") { it.text }
-            if (text.isBlank() && thinking.isBlank()) return
-            AssistantBubble(textContent = text.ifBlank { null }, thinkingContent = thinking.ifBlank { null }, isStreaming = false, createdAt = item.createdAt)
+            if (text.isBlank() && thinking.isBlank() && fileChanges.isEmpty()) return
+            AssistantBubble(
+                textContent = text.ifBlank { null },
+                thinkingContent = thinking.ifBlank { null },
+                isStreaming = false,
+                createdAt = item.createdAt,
+                fileChanges = fileChanges,
+                onOpenChange = onOpenChange,
+            )
         }
     }
 }
