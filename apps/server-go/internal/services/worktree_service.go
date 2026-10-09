@@ -81,7 +81,13 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error 
 		return fmt.Errorf("%w: base branch %q", ErrUnknownBaseBranch, base)
 	}
 	_, err := runGit(repoDir, "worktree", "add", "-b", branch, path, base)
-	return err
+	if err != nil {
+		return err
+	}
+	// Best-effort files-to-copy (see worktree_files.go): never fail
+	// creation over a carry-over.
+	s.carryWorktreeFilesBestEffort(repoDir, path)
+	return nil
 }
 
 // resolveDefaultBranch returns the remote ref to branch new worktrees from.
