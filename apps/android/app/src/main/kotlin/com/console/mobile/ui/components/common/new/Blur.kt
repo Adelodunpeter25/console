@@ -3,6 +3,7 @@ package com.console.mobile.ui.components.common.new
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -29,7 +30,6 @@ fun BlurredHeaderContainer(
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier.fillMaxWidth().height(height)) {
-        // Blur background scrim (content itself is not blurred)
         Box(
             modifier = Modifier
                 .matchParentSize()
@@ -48,7 +48,43 @@ fun BlurredHeaderContainer(
                     )
                 ),
         )
-        // Foreground sharp header controls
+        content()
+    }
+}
+
+/**
+ * A shared frosted/progressive blur container for bottom strips (such as the chat composer).
+ *
+ * Renders a bottom-anchored blur scrim with a top-to-bottom progressive fade:
+ * completely transparent at the very top (so messages smoothly dissolve as they enter)
+ * and rich dark background over the bottom interactive controls.
+ */
+@Composable
+fun BlurredBottomBar(
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = NewTheme.Background,
+    blurRadius: Dp = 20.dp,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .then(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        Modifier.blur(blurRadius)
+                    } else {
+                        Modifier
+                    }
+                )
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to backgroundColor.copy(alpha = 0.70f),
+                        0.35f to backgroundColor.copy(alpha = 0.92f),
+                        1.0f to backgroundColor,
+                    )
+                ),
+        )
         content()
     }
 }

@@ -60,6 +60,7 @@ import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
+import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
@@ -245,22 +246,31 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
-    Column(modifier = Modifier.fillMaxWidth().background(NewTheme.Background).windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)).padding(horizontal = 10.dp).padding(top = 8.dp, bottom = 8.dp)) {
-        if (topBanner != null) topBanner()
-        // Kept in composition while collapsed (just zero-height) so a sheet it owns
-        // and its loaded branch list survive the composer folding up.
-        Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
-            ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
-        }
-        // Attachments are content, not configuration, so they stay visible collapsed.
-        if (attachments.isNotEmpty()) {
-            AttachmentStrip(sessionId = sessionId, attachments = attachments)
-        }
-        ComposerInput(
-            value = value,
-            fieldValue = fieldValue,
-            mentionVisual = mentionVisual,
-            onFieldValueChange = { new ->
+    BlurredBottomBar(
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .padding(top = 8.dp, bottom = 8.dp),
+        ) {
+            if (topBanner != null) topBanner()
+            // Kept in composition while collapsed (just zero-height) so a sheet it owns
+            // and its loaded branch list survive the composer folding up.
+            Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+            }
+            // Attachments are content, not configuration, so they stay visible collapsed.
+            if (attachments.isNotEmpty()) {
+                AttachmentStrip(sessionId = sessionId, attachments = attachments)
+            }
+            ComposerInput(
+                value = value,
+                fieldValue = fieldValue,
+                mentionVisual = mentionVisual,
+                onFieldValueChange = { new ->
                 // Chip-atomic backspace: a single delete ending inside a
                 // confirmed mention removes the whole `@path` instead of
                 // one character (which would drop back to plain text).
@@ -351,6 +361,7 @@ fun Composer(
         Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
             ComposerBottomStrip(sessionId = sessionId)
         }
+    }
     }
     }
 }
