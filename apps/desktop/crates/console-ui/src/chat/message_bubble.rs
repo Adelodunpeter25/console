@@ -561,6 +561,8 @@ impl RenderOnce for AssistantMessageBubble {
                             .flex()
                             .items_center()
                             .gap(px(1.0))
+                            .invisible()
+                            .group_hover(group_name, |element| element.visible())
                             .when_some(timestamp, |element, timestamp| {
                                 element.child(
                                     div()
