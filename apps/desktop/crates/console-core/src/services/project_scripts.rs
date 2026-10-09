@@ -8,6 +8,22 @@ use crate::types::{ApiResponse, ProjectScriptsResult, ScriptRun, ScriptRunEvent}
 use crate::utils::{HttpTransport, SseStreamReader};
 use anyhow::{Context, Result, anyhow};
 
+/// `/api/projects/{id}/scripts{suffix}`, with the checkout to read and run
+/// in as `?cwd=` when given. The server only honours the project's own folder
+/// or one of its git worktrees, so this is a hint, never a free path.
+pub fn scripts_endpoint(project_id: &str, suffix: &str, cwd: Option<&str>) -> String {
+    let mut url = format!(
+        "/api/projects/{}/scripts{}",
+        urlencoding::encode(project_id),
+        suffix
+    );
+    if let Some(cwd) = cwd.filter(|cwd| !cwd.is_empty()) {
+        url.push_str("?cwd=");
+        url.push_str(&urlencoding::encode(cwd));
+    }
+    url
+}
+
 #[derive(Clone)]
 pub struct ProjectScriptsService {
     transport: HttpTransport,
@@ -19,17 +35,20 @@ impl ProjectScriptsService {
     }
 
     fn endpoint(project_id: &str, suffix: &str) -> String {
-        format!(
-            "/api/projects/{}/scripts{}",
-            urlencoding::encode(project_id),
-            suffix
-        )
+        scripts_endpoint(project_id, suffix, None)
     }
 
     /// List the normalized script definitions for a project. A project
     /// without `console.toml` returns an empty list with `source: "missing"`.
-    pub async fn list(&self, project_id: &str) -> Result<ProjectScriptsResult> {
-        let url = self.transport.url(&Self::endpoint(project_id, "")).await;
+    pub async fn list(
+        &self,
+        project_id: &str,
+        cwd: Option<&str>,
+    ) -> Result<ProjectScriptsResult> {
+        let url = self
+            .transport
+            .url(&scripts_endpoint(project_id, "", cwd))
+            .await;
         let response = self
             .transport
             .client()
@@ -65,12 +84,18 @@ impl ProjectScriptsService {
 
     /// Start a script by id. The server loads the command from its own
     /// parsed `console.toml`.
-    pub async fn start_run(&self, project_id: &str, script_id: &str) -> Result<ScriptRun> {
+    pub async fn start_run(
+        &self,
+        project_id: &str,
+        script_id: &str,
+        cwd: Option<&str>,
+    ) -> Result<ScriptRun> {
         let url = self
             .transport
-            .url(&Self::endpoint(
+            .url(&scripts_endpoint(
                 project_id,
                 &format!("/{}/runs", urlencoding::encode(script_id)),
+                cwd,
             ))
             .await;
         let response = self

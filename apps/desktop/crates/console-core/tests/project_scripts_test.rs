@@ -96,3 +96,17 @@ fn test_run_events_parse_oneof_shape() {
         _ => panic!("wrong variant"),
     }
 }
+
+// The checkout goes on the wire as a percent-encoded `?cwd=`; an absent or
+// empty one leaves the URL exactly as before (project folder).
+#[test]
+fn test_scripts_endpoint_cwd_query() {
+    use console_core::services::project_scripts::scripts_endpoint;
+
+    assert_eq!(scripts_endpoint("p1", "", None), "/api/projects/p1/scripts");
+    assert_eq!(scripts_endpoint("p1", "", Some("")), "/api/projects/p1/scripts");
+    assert_eq!(
+        scripts_endpoint("p1", "/dev/runs", Some("/Users/me/console/worktrees/a b")),
+        "/api/projects/p1/scripts/dev/runs?cwd=%2FUsers%2Fme%2Fconsole%2Fworktrees%2Fa%20b"
+    );
+}

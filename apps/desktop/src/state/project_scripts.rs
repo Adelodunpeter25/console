@@ -30,6 +30,10 @@ pub struct ProjectScriptsPanelState {
     /// `"console.toml"` or `"missing"`, straight from the list response.
     pub source: String,
     pub loaded: bool,
+    /// The checkout `scripts` were read from (a worktree's folder, or `None`
+    /// for the project's own). Switching to a chat in a different checkout
+    /// makes this stale, which triggers a reload.
+    pub cwd: Option<String>,
     pub loading: bool,
     pub error: Option<String>,
     /// Latest run per script id.
@@ -92,6 +96,26 @@ impl ConsoleDesktopApp {
         })
     }
 
+    /// The checkout the active chat works in — its worktree, or the project
+    /// folder. Scripts must read `console.toml` from and run in this folder, or
+    /// a worktree chat would run `main`'s code. `None` outside a chat tab,
+    /// which lets the server use the project's own folder.
+    pub fn active_scripts_cwd(&self) -> Option<String> {
+        let pane_id = self.active_pane_id.as_deref().unwrap_or("pane-main");
+        let leaf = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == pane_id)?;
+        let tab_id = leaf.active_tab_id.as_deref()?;
+        let session_id = tab_id.strip_prefix("chat:")?;
+        self.sessions
+            .iter()
+            .find(|s| s.id == session_id)
+            .map(|s| s.cwd.clone())
+            .filter(|cwd| !cwd.is_empty())
+    }
+
     /// Fetch script definitions (once per project) and reconnect to any runs
     /// the server still holds. Cheap guards make this safe to call on every
     /// render while the bottom panel is visible.
@@ -99,10 +123,11 @@ impl ConsoleDesktopApp {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
         };
+        let cwd = self.active_scripts_cwd();
         let loaded = self
             .project_scripts_by_project
             .get(&project_id)
-            .is_some_and(|state| state.loading || state.loaded);
+            .is_some_and(|state| state.loading || (state.loaded && state.cwd == cwd));
         if loaded {
             return;
         }
@@ -137,8 +162,9 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
+        let cwd = self.active_scripts_cwd();
         cx.spawn(async move |entity, cx| {
-            let list = client.scripts.list(&project_id).await;
+            let list = client.scripts.list(&project_id, cwd.as_deref()).await;
             let runs = client
                 .scripts
                 .list_runs(&project_id)
@@ -216,6 +242,7 @@ impl ConsoleDesktopApp {
                             }
                             state.loading = false;
                             state.loaded = true;
+                            state.cwd = cwd.clone();
                             state
                                 .runs
                                 .iter()
@@ -349,10 +376,11 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let project_id_clone = project_id.clone();
         let script_id_owned = script_id.to_string();
+        let cwd = self.active_scripts_cwd();
         cx.spawn(async move |entity, cx| {
             let started = client
                 .scripts
-                .start_run(&project_id_clone, &script_id_owned)
+                .start_run(&project_id_clone, &script_id_owned, cwd.as_deref())
                 .await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
