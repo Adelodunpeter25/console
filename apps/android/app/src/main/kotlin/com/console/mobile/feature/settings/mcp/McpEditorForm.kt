@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,7 +117,7 @@ internal fun McpEditorForm(server: McpServerEntry?, onDone: () -> Unit, modifier
         }
     }
 
-    Column(modifier = modifier) {
+    Column(modifier = modifier.imePadding()) {
         Field("Server name / ID", name, { name = it }, "e.g. atlassian, filesystem")
         ChoiceGroup(
             label = "Transport",

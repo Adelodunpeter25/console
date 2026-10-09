@@ -40,6 +40,7 @@ import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.CircleIconButton
 
 private fun mcpStatusColor(status: String): Color = when (status) {
     "connected" -> NewTheme.Success
@@ -114,7 +115,11 @@ internal fun McpServerCard(
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             val connectLabel = when {
                 server.needsAuth -> "Authorize"
                 server.isConnected -> "Reconnect"
@@ -123,8 +128,9 @@ internal fun McpServerCard(
             ActionButton(connectLabel, onConnect, enabled = !busy, loading = busy, icon = TablerIcons.Outline.PlugConnected, compact = true)
             if (server.isConnected) ActionButton("Disconnect", onDisconnect, enabled = !busy, compact = true)
             ActionButton("Edit", onEdit, enabled = !busy, compact = true)
-            ActionButton(
-                text = "Delete",
+            CircleIconButton(
+                icon = TablerIcons.Outline.Trash,
+                contentDescription = "Delete",
                 onClick = {
                     confirmAlert(
                         title = "Delete MCP server?",
@@ -135,10 +141,9 @@ internal fun McpServerCard(
                         ),
                     )
                 },
-                kind = ActionButtonKind.Danger,
                 enabled = !busy,
-                icon = TablerIcons.Outline.Trash,
-                compact = true,
+                tint = NewTheme.Danger,
+                background = NewTheme.Raised,
             )
         }
     }

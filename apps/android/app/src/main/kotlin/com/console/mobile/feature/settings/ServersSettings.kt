@@ -145,7 +145,7 @@ fun ServersSettings(onBack: () -> Unit) {
                 }
                 if (envState.activeId != null) {
                     Section("Connection") {
-                        ActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.Danger) {
+                        ActionRow(icon = TablerIcons.Outline.LinkOff, title = "Disconnect backend", tint = NewTheme.TextPrimary) {
                             confirmAlert("Disconnect Backend", "Are you sure you want to disconnect? This removes all environments and connection data, like a clean install.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Disconnect", destructive = true, onPress = {
                                 scope.launch { withContext(Dispatchers.IO) { AppContainer.environmentsRepository.deactivate() } }
                             })))

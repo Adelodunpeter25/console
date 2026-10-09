@@ -77,13 +77,21 @@ fun ActionButton(
 
 /** A round, card-coloured icon button: the back button, "+" and settings cog in headers. */
 @Composable
-fun CircleIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    IconButton(onClick = onClick, modifier = modifier.size(40.dp)) {
+fun CircleIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = NewTheme.TextPrimary,
+    background: Color = NewTheme.Card,
+    enabled: Boolean = true,
+) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(40.dp)) {
         Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(NewTheme.Card),
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(background),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = contentDescription, tint = NewTheme.TextPrimary)
+            Icon(icon, contentDescription = contentDescription, tint = if (enabled) tint else NewTheme.TextMuted)
         }
     }
 }
