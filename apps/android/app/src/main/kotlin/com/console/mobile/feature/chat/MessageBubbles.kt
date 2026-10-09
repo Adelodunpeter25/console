@@ -91,6 +91,8 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList()) {
     val context = LocalContext.current
     var preview by remember { mutableStateOf<ImagePart?>(null) }
+    var expanded by remember(content) { mutableStateOf(false) }
+    var hasOverflow by remember(content) { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
         androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
             Column(
@@ -109,8 +111,21 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                 }
                 if (content.isNotEmpty()) {
                     val mentions = remember(content) { parseFileMentions(content) }
+                    val maxLines = if (expanded) Int.MAX_VALUE else 4
                     if (mentions.isEmpty()) {
-                        Text(content, color = NewTheme.OnUserBubble, fontSize = 16.sp, lineHeight = 23.sp)
+                        Text(
+                            content,
+                            color = NewTheme.OnUserBubble,
+                            fontSize = 16.sp,
+                            lineHeight = 23.sp,
+                            maxLines = maxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { textLayoutResult ->
+                                if (!expanded) {
+                                    hasOverflow = textLayoutResult.hasVisualOverflow || textLayoutResult.lineCount > 4
+                                }
+                            },
+                        )
                     } else {
                         val (annotated, inlineContent) = mentionAnnotatedString(content, mentions)
                         Text(
@@ -119,6 +134,24 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                             color = NewTheme.OnUserBubble,
                             fontSize = 16.sp,
                             lineHeight = 23.sp,
+                            maxLines = maxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { textLayoutResult ->
+                                if (!expanded) {
+                                    hasOverflow = textLayoutResult.hasVisualOverflow || textLayoutResult.lineCount > 4
+                                }
+                            },
+                        )
+                    }
+                    if (hasOverflow) {
+                        Text(
+                            text = if (expanded) "Show less" else "… Show more",
+                            color = NewTheme.Accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .clickable { expanded = !expanded },
                         )
                     }
                 }
