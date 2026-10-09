@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -35,6 +37,8 @@ fun TextInput(
     singleLine: Boolean = true,
     monospace: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** Mask the text and ask the keyboard not to learn or suggest it (tokens, passwords). */
+    secret: Boolean = false,
 ) {
     Section(label) {
         TextField(
@@ -42,7 +46,11 @@ fun TextInput(
             onValueChange = onValueChange,
             placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
             singleLine = singleLine,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (secret) KeyboardType.Password else keyboardType,
+                autoCorrectEnabled = if (secret) false else null,
+            ),
             textStyle = TextStyle(
                 color = NewTheme.TextPrimary, fontSize = 16.sp,
                 fontFamily = if (monospace) ConsoleMonoFamily else null,

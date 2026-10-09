@@ -133,6 +133,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                     }
                 }
             }
+            GitHubAccountSection()
             val err = authState.error
             if (err != null) {
                 Text(err, color = NewTheme.Danger, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
