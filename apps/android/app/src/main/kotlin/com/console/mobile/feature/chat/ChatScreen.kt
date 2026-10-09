@@ -3,6 +3,7 @@ package com.console.mobile.feature.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,11 +54,13 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.BlurredHeaderContainer
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.OverflowMenu
 import com.console.mobile.ui.components.common.new.OverflowMenuItem
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.common.new.ScrollThumb
 
 /** Scroll position to restore after older messages are prepended. */
@@ -311,51 +314,16 @@ fun ChatScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(
-            title = chatTitle,
-            onBack = {
-                AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                onBackToHome()
-            },
-            actions = {
-                HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
-                Box(modifier = Modifier.padding(start = 4.dp)) {
-                    HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
-                    OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
-                        OverflowMenuItem(
-                            label = "Open diff",
-                            icon = TablerIcons.Outline.BrandGit,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Changes)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open devices",
-                            icon = TablerIcons.Outline.DeviceMobile,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Devices)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open terminal",
-                            icon = TablerIcons.Outline.Terminal2,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Terminal)
-                            },
-                        )
-                    }
-                }
-            },
-        )
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
-                loadingMessages && !hasMessages -> ChatLoadingSkeleton()
-                !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize())
+                loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
+                !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight))
                 else -> {
-                    LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 12.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    ) {
                     itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
                         MessageBubbleItem(item = msg)
                         val runIdx = userRunMap[index]
@@ -392,6 +360,51 @@ fun ChatScreen(
                 ) {
                     Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
                 }
+            }
+
+            // Blurred progressive header overlay
+            BlurredHeaderContainer(
+                modifier = Modifier.align(Alignment.TopCenter),
+            ) {
+                PageHeader(
+                    title = chatTitle,
+                    onBack = {
+                        AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
+                        onBackToHome()
+                    },
+                    actions = {
+                        HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
+                        Box(modifier = Modifier.padding(start = 4.dp)) {
+                            HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
+                            OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                                OverflowMenuItem(
+                                    label = "Open diff",
+                                    icon = TablerIcons.Outline.BrandGit,
+                                    onClick = {
+                                        overflowMenu = false
+                                        jumpToProjectTab(MobileTab.Changes)
+                                    },
+                                )
+                                OverflowMenuItem(
+                                    label = "Open devices",
+                                    icon = TablerIcons.Outline.DeviceMobile,
+                                    onClick = {
+                                        overflowMenu = false
+                                        jumpToProjectTab(MobileTab.Devices)
+                                    },
+                                )
+                                OverflowMenuItem(
+                                    label = "Open terminal",
+                                    icon = TablerIcons.Outline.Terminal2,
+                                    onClick = {
+                                        overflowMenu = false
+                                        jumpToProjectTab(MobileTab.Terminal)
+                                    },
+                                )
+                            }
+                        }
+                    },
+                )
             }
         }
         if (hasPending) {
