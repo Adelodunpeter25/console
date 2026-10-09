@@ -41,8 +41,6 @@ import console.v1.UsageLimit
 import com.console.mobile.ui.components.common.new.MeterBar
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.Note
-import com.console.mobile.ui.components.common.new.Section
-import com.console.mobile.ui.components.common.new.SectionDivider
 
 /**
  * The desktop usage popover as a sheet: context occupancy first, then the
@@ -84,15 +82,20 @@ fun UsageSheet(sessionId: String, onDismiss: () -> Unit) {
         }
 
         // ---- Provider limits
-        Section("Usage limits") {
-            when {
-                loading && report == null -> Note("Loading usage data…")
-                report == null -> Note("No quota limits reported for this provider.")
-                report.limits.isEmpty() -> Note("No active rate limit windows.")
-                else -> report.limits.forEachIndexed { i, limit ->
-                    if (i > 0) SectionDivider()
-                    LimitRow(limit)
-                }
+        Text(
+            "Usage limits",
+            color = NewTheme.Accent,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 4.dp).padding(top = 22.dp, bottom = 8.dp),
+        )
+        when {
+            loading && report == null -> Note("Loading usage data…")
+            report == null -> Note("No quota limits reported for this provider.")
+            report.limits.isEmpty() -> Note("No active rate limit windows.")
+            else -> report.limits.forEachIndexed { i, limit ->
+                if (i > 0) Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).height(1.dp).background(NewTheme.Divider))
+                LimitRow(limit)
             }
         }
     }
@@ -108,7 +111,7 @@ private fun LimitRow(limit: UsageLimit) {
         limit.scope?.tier?.takeIf { it.isNotBlank() },
         limit.scope?.model_id?.takeIf { it.isNotBlank() },
     ).joinToString(" · ")
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(limit.label, color = NewTheme.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 8.dp))
             if (reset != null) {
