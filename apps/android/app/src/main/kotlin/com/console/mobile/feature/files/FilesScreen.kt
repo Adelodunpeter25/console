@@ -60,7 +60,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.PageHeader
@@ -222,7 +222,7 @@ fun FilesScreen(onBack: () -> Unit) {
             subtitle = project?.name,
             onBack = onBack,
             actions = {
-                CircleIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = {
+                HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = {
                     scope.launch {
                         entriesLoading = true
                         try {

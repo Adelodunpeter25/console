@@ -54,7 +54,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
-import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.OverflowMenu
 import com.console.mobile.ui.components.common.new.OverflowMenuItem
@@ -318,9 +318,9 @@ fun ChatScreen(
                 onBackToHome()
             },
             actions = {
-                CircleIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
-                Box(modifier = Modifier.padding(start = 8.dp)) {
-                    CircleIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
+                HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
+                Box(modifier = Modifier.padding(start = 4.dp)) {
+                    HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
                     OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
                         OverflowMenuItem(
                             label = "Open diff",

@@ -85,7 +85,7 @@ fun PageHeader(
             Row(verticalAlignment = Alignment.CenterVertically, content = actions)
         }
         if (showSettings) {
-            CircleIconButton(TablerIcons.Outline.Settings, "Settings", { onSettingsPress?.invoke() }, Modifier.padding(start = 12.dp))
+            HeaderIconButton(TablerIcons.Outline.Settings, "Settings", { onSettingsPress?.invoke() }, Modifier.padding(start = 12.dp))
         }
     }
 }

@@ -53,7 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.console.mobile.ui.components.common.new.Banner
-import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.Note
@@ -195,7 +195,7 @@ fun ChangesScreen(onBack: () -> Unit) {
             title = "Changes",
             subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
             onBack = onBack,
-            actions = { CircleIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
+            actions = { HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
         )
         when {
             sessionId == null -> EmptyView(title = "No active session", description = "Open a chat to see its file changes.", icon = TablerIcons.Outline.GitBranch, modifier = Modifier.fillMaxSize())

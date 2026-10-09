@@ -96,8 +96,23 @@ fun CircleIconButton(
     }
 }
 
+/** A clean icon button for screen headers and toolbars. */
+@Composable
+fun HeaderIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = NewTheme.TextPrimary,
+    enabled: Boolean = true,
+) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(36.dp)) {
+        Icon(icon, contentDescription = contentDescription, tint = if (enabled) tint else NewTheme.TextMuted, modifier = Modifier.size(22.dp))
+    }
+}
+
 /** Round "+" for a screen header, to add an item (environment, server, folder). */
 @Composable
 fun AddButton(contentDescription: String, onClick: () -> Unit) {
-    CircleIconButton(TablerIcons.Outline.Plus, contentDescription, onClick)
+    HeaderIconButton(TablerIcons.Outline.Plus, contentDescription, onClick)
 }

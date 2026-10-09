@@ -51,7 +51,7 @@ import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
@@ -152,7 +152,7 @@ fun TerminalScreen(onBack: () -> Unit) {
             onBack = onBack,
             actions = if (term != null) {
                 {
-                    CircleIconButton(TablerIcons.Outline.Trash, "Restart shell", onClick = ::killAndRespawn)
+                    HeaderIconButton(TablerIcons.Outline.Trash, "Restart shell", onClick = ::killAndRespawn)
                 }
             } else null,
         )

@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
-import com.console.mobile.ui.components.common.new.CircleIconButton
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TextInput
 import com.console.mobile.ui.theme.NewTheme
@@ -84,7 +84,7 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
         }
     }
 
-    CircleIconButton(
+    HeaderIconButton(
         icon = TablerIcons.Outline.Server,
         contentDescription = "Switch environment",
         onClick = {

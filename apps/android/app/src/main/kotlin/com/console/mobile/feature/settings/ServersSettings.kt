@@ -55,6 +55,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
@@ -102,14 +103,11 @@ fun ServersSettings(onBack: () -> Unit) {
                 title = "Connection",
                 onBack = onBack,
                 actions = {
-                    IconButton(onClick = { editing = "__create__" }, modifier = Modifier.size(40.dp)) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(CircleShape).background(NewTheme.Card),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(TablerIcons.Outline.Plus, contentDescription = "Add environment", tint = NewTheme.TextPrimary)
-                        }
-                    }
+                    HeaderIconButton(
+                        icon = TablerIcons.Outline.Plus,
+                        contentDescription = "Add environment",
+                        onClick = { editing = "__create__" },
+                    )
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
