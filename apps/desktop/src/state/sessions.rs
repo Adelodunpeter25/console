@@ -945,6 +945,7 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
+                                this.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
                                 if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
                                     state.loaded_session_id = Some(session_id.clone());
                                 }

@@ -296,6 +296,18 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_diff_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
+        self.open_diff_tab_with_text(pane_id, path, None, cx);
+    }
+
+    /// Open a diff tab, optionally with a known diff body (a turn's recorded
+    /// change) so it shows exactly that diff instead of looking one up.
+    pub fn open_diff_tab_with_text(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        diff_override: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let title = format!(
             "Diff: {}",
             std::path::Path::new(&path)
@@ -341,17 +353,20 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let file_path = path.clone();
-        let session_change_diff = self
-            .inspector_session_changes
-            .iter()
-            .rfind(|c| {
-                c.path == file_path
-                    && c.diff_text
-                        .as_deref()
-                        .map(|d| !d.trim().is_empty())
-                        .unwrap_or(false)
-            })
-            .and_then(|c| c.diff_text.clone());
+        let session_change_diff = diff_override
+            .filter(|d| !d.trim().is_empty())
+            .or_else(|| {
+                self.inspector_session_changes
+                    .iter()
+                    .rfind(|c| {
+                        c.path == file_path
+                            && c.diff_text
+                                .as_deref()
+                                .map(|d| !d.trim().is_empty())
+                                .unwrap_or(false)
+                    })
+                    .and_then(|c| c.diff_text.clone())
+            });
         // Resolve against the pane's own chat checkout, not the globally
         // last-selected session. `selected_session_id` points at whichever
         // chat was touched last across every pane, so with a main-branch chat

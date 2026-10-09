@@ -1,5 +1,6 @@
 //! Waku-style transcript surface backed by `console-core::AgentMessage`.
 
+use console_core::types::SessionFileChange;
 use console_core::{
     AgentMessage, AssistantContentPart, AssistantMessage, ImageAttachment, ToolResult,
 };
@@ -84,6 +85,11 @@ pub struct TranscriptView {
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
+    /// The session's recorded file changes, grouped into per-turn chip rows
+    /// under each turn's final assistant message.
+    session_changes: Rc<Vec<SessionFileChange>>,
+    /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
+    on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
 }
 
 impl TranscriptView {
@@ -119,7 +125,87 @@ impl TranscriptView {
             on_open_file_raw: None,
             on_open_url_raw: None,
             link_handler: None,
+            session_changes: Rc::new(Vec::new()),
+            on_open_change: None,
         }
+    }
+
+    /// Wire clicks on a turn's changed-file chip (the app opens the diff tab).
+    pub fn set_on_open_change(
+        &mut self,
+        handler: impl Fn(String, Option<String>, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_open_change = Some(Rc::new(handler));
+    }
+
+    /// Replace the session's recorded file changes and re-measure the rows
+    /// whose chip rows appeared, changed or went away.
+    pub fn set_session_changes(
+        &mut self,
+        changes: Rc<Vec<SessionFileChange>>,
+        cx: &mut Context<Self>,
+    ) {
+        let before: Vec<usize> = self.rows_with_turn_changes();
+        self.session_changes = changes;
+        let after: Vec<usize> = self.rows_with_turn_changes();
+        if before.is_empty() && after.is_empty() {
+            return;
+        }
+        let mut affected: Vec<usize> = before;
+        affected.extend(after);
+        affected.sort_unstable();
+        affected.dedup();
+        for index in affected {
+            self.list_state.splice(index..index + 1, 1);
+        }
+        cx.notify();
+    }
+
+    fn rows_with_turn_changes(&self) -> Vec<usize> {
+        (0..self.messages.len())
+            .filter(|&index| !self.turn_changes_for_assistant(index).is_empty())
+            .collect()
+    }
+
+    /// File changes of the turn a settled assistant message closes. Only the
+    /// turn's last visible assistant message carries them: a turn is one user
+    /// message and everything the agent did until the next one.
+    fn turn_changes_for_assistant(&self, index: usize) -> Vec<SessionFileChange> {
+        if self.session_changes.is_empty() {
+            return Vec::new();
+        }
+        let Some(AgentMessage::Assistant { .. }) = self.messages.get(index) else {
+            return Vec::new();
+        };
+        if is_hidden_tool_transport(&self.messages[index]) {
+            return Vec::new();
+        }
+        let closes_turn = self.messages[index + 1..]
+            .iter()
+            .take_while(|message| !matches!(message, AgentMessage::User { .. }))
+            .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden_tool_transport(message));
+        if !closes_turn {
+            return Vec::new();
+        }
+        let user_id = self.messages[..index]
+            .iter()
+            .rev()
+            .find_map(|message| match message {
+                AgentMessage::User { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .flatten();
+        let Some(user_id) = user_id else {
+            return Vec::new();
+        };
+        // Server order is most recently updated first; chips read in the
+        // order the files were touched.
+        self.session_changes
+            .iter()
+            .rev()
+            .filter(|change| change.user_message_id == user_id)
+            .cloned()
+            .collect()
     }
 
     /// Wire the image-preview opener (the app opens its modal with the
@@ -1246,7 +1332,11 @@ fn transcript_row(
                 .collect();
             let thinking_state = view_ref.thinking_expanded.clone();
             let thinking_entity = entity.clone();
+            let turn_changes = view_ref.turn_changes_for_assistant(index);
+            let on_open_change = view_ref.on_open_change.clone();
             AssistantMessageBubble::new(presentation.content_parts)
+                .file_changes(turn_changes)
+                .on_open_change(on_open_change)
                 .copy_content(presentation.copy_content)
                 .link_handler(link_handler.clone())
                 .thinking_expanded(thinking_state)

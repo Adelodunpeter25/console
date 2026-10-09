@@ -13,6 +13,7 @@ use crate::utils::format_message_time;
 
 use super::ThinkingBlock;
 use base64::Engine as _;
+use console_core::types::SessionFileChange;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
     App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
@@ -317,7 +318,12 @@ pub struct AssistantMessageBubble {
     thinking_expanded: Option<Rc<RefCell<HashSet<String>>>>,
     on_thinking_toggle: Option<Rc<dyn Fn(String, bool, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
+    file_changes: Vec<SessionFileChange>,
+    on_open_change: Option<OpenChangeHandler>,
 }
+
+/// Opens the diff of one changed file: `(path, diff_text)`.
+pub type OpenChangeHandler = Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>;
 
 impl AssistantMessageBubble {
     pub fn new(content_parts: Rc<Vec<AssistantContentPart>>) -> Self {
@@ -333,7 +339,19 @@ impl AssistantMessageBubble {
             thinking_expanded: None,
             on_thinking_toggle: None,
             link_handler: None,
+            file_changes: Vec::new(),
+            on_open_change: None,
         }
+    }
+
+    pub fn file_changes(mut self, changes: Vec<SessionFileChange>) -> Self {
+        self.file_changes = changes;
+        self
+    }
+
+    pub fn on_open_change(mut self, handler: Option<OpenChangeHandler>) -> Self {
+        self.on_open_change = handler;
+        self
     }
 
     pub fn selection(mut self, selection: TranscriptSelection, row: impl Into<String>) -> Self {
@@ -417,6 +435,8 @@ impl RenderOnce for AssistantMessageBubble {
         let thinking_expanded = self.thinking_expanded.clone();
         let on_thinking_toggle = self.on_thinking_toggle.clone();
         let link_handler = self.link_handler.clone();
+        let file_changes = self.file_changes;
+        let on_open_change = self.on_open_change;
 
         div()
             .w_full()
@@ -511,29 +531,102 @@ impl RenderOnce for AssistantMessageBubble {
             // The live working indicator (dots + "Working for Ns") is the
             // single streaming signal, rendered as the transcript's trailing
             // row — no per-bubble "Working…" here.
+            // Always-visible footer: time + copy, then this turn's changed
+            // files as chips (turns without edits show just the first row).
             .child(
                 div()
-                    .h(px(27.0))
                     .flex()
-                    .items_center()
-                    .gap(px(1.0))
-                    .invisible()
-                    .group_hover(group_name, |element| element.visible())
-                    .when_some(timestamp, |element, timestamp| {
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .h(px(27.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(1.0))
+                            .when_some(timestamp, |element, timestamp| {
+                                element.child(
+                                    div()
+                                        .px(px(4.0))
+                                        .text_size(px(11.5))
+                                        .text_color(theme.text_ghost)
+                                        .child(timestamp),
+                                )
+                            })
+                            .child(copy_button(
+                                format!("copy-assistant-message-{}", self.selection_row),
+                                content_for_copy,
+                                theme.clone(),
+                                cx,
+                            )),
+                    )
+                    .when(!file_changes.is_empty(), |element| {
                         element.child(
                             div()
-                                .px(px(4.0))
-                                .text_size(px(11.5))
-                                .text_color(theme.text_ghost)
-                                .child(timestamp),
+                                .flex()
+                                .flex_wrap()
+                                .gap(px(6.0))
+                                .pb(px(4.0))
+                                .children(file_changes.iter().enumerate().map(|(i, change)| {
+                                    file_change_chip(
+                                        &format!("{}-{i}", self.selection_row),
+                                        change,
+                                        &theme,
+                                        on_open_change.clone(),
+                                    )
+                                })),
                         )
-                    })
-                    .child(copy_button(
-                        format!("copy-assistant-message-{}", self.selection_row),
-                        content_for_copy,
-                        theme,
-                        cx,
-                    )),
+                    }),
             )
     }
+}
+
+/// One changed-file chip: file-type icon, name, `+N −N`. A deleted file's
+/// name is struck through. Clicking opens that file's diff for the turn.
+fn file_change_chip(
+    key: &str,
+    change: &SessionFileChange,
+    theme: &Theme,
+    on_open: Option<OpenChangeHandler>,
+) -> gpui::Stateful<gpui::Div> {
+    let name = crate::primitives::file_icons::base_name(&change.path).to_string();
+    let deleted = change.status == "deleted";
+    let path = change.path.clone();
+    let diff_text = change.diff_text.clone();
+    div()
+        .id(ElementId::Name(format!("turn-change-{key}").into()))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(8.0))
+        .py(px(3.0))
+        .rounded(px(7.0))
+        .border_1()
+        .border_color(theme.border)
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.overlay))
+        .child(crate::primitives::file_icons::file_type_icon(&change.path, 14.0))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(if deleted { theme.text_tertiary } else { theme.text_secondary })
+                .when(deleted, |element| element.line_through())
+                .child(name),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .text_size(px(11.0))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .child(div().text_color(theme.success).child(format!("+{}", change.additions)))
+                .child(div().text_color(theme.danger).child(format!("-{}", change.deletions))),
+        )
+        .when_some(on_open, move |element, on_open| {
+            element.on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                (on_open)(path.clone(), diff_text.clone(), window, cx);
+            })
+        })
 }

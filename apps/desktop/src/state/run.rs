@@ -603,6 +603,7 @@ impl ConsoleDesktopApp {
                                             t.set_messages(detail.messages, cx);
                                         }
                                     });
+                                    this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
                                 }
                                 cx.notify();
                             });
@@ -1202,6 +1203,7 @@ impl ConsoleDesktopApp {
                                     }
                                     t.finish_streaming(cx);
                                 });
+                                this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
                             }
                             cx.notify();
                         });

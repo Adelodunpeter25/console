@@ -829,6 +829,50 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Fetch a session's recorded file changes and hand them to the pane's
+    /// transcript so each turn can show its changed-file chips. Also keeps
+    /// the inspector's list fresh when the session is the inspected one.
+    pub fn refresh_turn_changes_for_pane(
+        &mut self,
+        pane_id: &str,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let client = self.client.clone();
+        let pane_id = pane_id.to_string();
+        let session_id = session_id.to_string();
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.get_changes(&session_id, None).await {
+                Ok(changes) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if this.active_session_for_pane(&pane_id).as_deref()
+                                    != Some(session_id.as_str())
+                                {
+                                    return;
+                                }
+                                let changes = Rc::new(changes);
+                                if this.active_inspector_target().0.as_deref()
+                                    == Some(session_id.as_str())
+                                {
+                                    this.inspector_session_changes = changes.clone();
+                                }
+                                this.transcript_for_pane(&pane_id)
+                                    .update(cx, |t, cx| t.set_session_changes(changes, cx));
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    log::warn!("Failed to fetch turn changes: {}", err);
+                }
+            }
+        })
+        .detach();
+    }
+
     pub fn set_inspector_changes_scope(
         &mut self,
         scope: console_core::types::ChangesScope,

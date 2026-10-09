@@ -22,6 +22,38 @@ pub(crate) fn wire_preview_image(
     });
 }
 
+/// Open a turn's changed-file chip as a diff tab in the pane's workspace.
+pub(crate) fn wire_open_change_for_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: String,
+) {
+    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+            });
+        }
+    });
+}
+
+pub(crate) fn wire_open_change_for_active_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+) {
+    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                let pane_id = this
+                    .active_pane_id
+                    .clone()
+                    .unwrap_or_else(|| "pane-main".to_string());
+                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+            });
+        }
+    });
+}
+
 pub(crate) fn wire_open_file_for_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,

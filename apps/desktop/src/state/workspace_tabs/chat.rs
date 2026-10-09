@@ -104,6 +104,11 @@ impl ConsoleDesktopApp {
                 entity.clone(),
                 pane_id_owned.clone(),
             );
+            super::super::transcript_wiring::wire_open_change_for_pane(
+                transcript,
+                entity.clone(),
+                pane_id_owned.clone(),
+            );
         });
         let submit_pane_id = pane_id.to_string();
         let edit_pane_id = pane_id.to_string();
