@@ -72,13 +72,19 @@ must be indistinguishable from today's behavior.
   ```
   .env*
   link: apps/android/key.properties
-  link: apps/android/keystore/**
+  link: apps/android/keystore/
   ```
   `storeFile` in `key.properties` is relative to `apps/android`, so linking
-  the `keystore` dir keeps it resolving.
-- Add `keystore/` to `apps/android/.gitignore` (today only `*.keystore` is
-  covered, which is why linked/copied keystores need a per-worktree
-  `info/exclude` entry). Committed once, works in every worktree.
+  the `keystore` dir keeps it resolving. The dir form (not `keystore/**`)
+  links the whole directory, so a rotated key shows up in every worktree;
+  it requires the dir itself to be gitignored (next point), since
+  carry-over only touches gitignored paths.
+- Add bare `keystore` (no trailing slash) to `apps/android/.gitignore`
+  (today only `*.keystore` is covered, which is why linked/copied keystores
+  need a per-worktree `info/exclude` entry). Bare, because a `keystore/`
+  dir-only pattern does not match a whole-dir symlink of that name in new
+  worktrees — verified via `git check-ignore`. Committed once, works in
+  every worktree.
 - `Makefile:dev-mobile` and `console.toml:dev-mobile` abort with an
   actionable message when `key.properties` is absent — backstop for
   hand-run `git worktree add`, which bypasses the server hook. Verify via

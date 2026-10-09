@@ -24,6 +24,13 @@ dev-console: build-server
 ##   Installs debug APK and launches the app on Android emulator/device
 ##   Requires Android SDK and emulator running or device connected via adb
 dev-mobile:
+	@if [ ! -f apps/android/key.properties ]; then \
+		echo "error: apps/android/key.properties is missing." >&2; \
+		echo "Fresh worktrees don't include gitignored signing files, and Gradle would silently fall back to a throwaway debug key." >&2; \
+		echo "Link it (and apps/android/keystore) from your main checkout, then verify:" >&2; \
+		echo "  cd apps/android && ./gradlew :app:signingReport -q  # debug must show 'Config: release'" >&2; \
+		exit 1; \
+	fi
 	cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile.dev/com.console.mobile.MainActivity
 
 ## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)

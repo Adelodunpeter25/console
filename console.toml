@@ -9,7 +9,7 @@ persistent = true
 
 [scripts.dev-mobile]
 label = "Dev Mobile"
-command = "cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile.dev/com.console.mobile.MainActivity"
+command = "test -f apps/android/key.properties || { echo 'error: apps/android/key.properties is missing. Fresh worktrees skip gitignored signing files; link it (and apps/android/keystore) from your main checkout, then check signingReport shows Config: release for debug.' >&2; exit 1; }; cd apps/android && ./gradlew installDebug && adb shell am start -n com.console.mobile.dev/com.console.mobile.MainActivity"
 shortcut = "cmd-shift-m"
 persistent = false
 

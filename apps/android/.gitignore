@@ -20,4 +20,7 @@ keystore.properties
 upload-keystore.jks
 *.jks
 *.keystore
+# Bare (no trailing slash): also hides a whole-dir symlink of this name in
+# new worktrees, which a `keystore/` dir-only pattern would not match.
+keystore
 .kotlin/
