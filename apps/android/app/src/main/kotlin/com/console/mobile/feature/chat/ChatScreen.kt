@@ -15,22 +15,26 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
@@ -45,23 +49,31 @@ import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.core.util.getFileName
+import com.console.mobile.core.util.parseUnifiedDiff
+import com.console.mobile.data.model.AssistantMessage
 import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.model.UserMessage
 import com.console.mobile.data.store.MobileTab
-import com.console.mobile.ui.components.common.new.PageHeader
-import com.console.mobile.ui.theme.NewTheme
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.FileIcon
+import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.BlurredHeaderContainer
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.OverflowMenu
 import com.console.mobile.ui.components.common.new.OverflowMenuItem
+import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.common.new.ScrollThumb
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.theme.NewTheme
+import console.v1.SessionFileChange
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /** Scroll position to restore after older messages are prepended. */
 private data class ListAnchor(
@@ -102,6 +114,13 @@ fun ChatScreen(
     val sessionStatuses by AppContainer.sessionStateHolder.statuses.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
+    val sessionChangesMap by AppContainer.sessionStateHolder.sessionChanges.collectAsStateWithLifecycle()
+    val sessionChanges = sessionId?.let { sessionChangesMap[it] }.orEmpty()
+
+    var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
+    var inspectingDiffText by remember { mutableStateOf<String?>(null) }
+    var inspectingDiffLoading by remember { mutableStateOf(false) }
+    var inspectingDiffError by remember { mutableStateOf<String?>(null) }
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -133,11 +152,46 @@ fun ChatScreen(
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
+            launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
             detail.await()
         }
         loadingMessages = false
         if (header?.status == "working") {
             AppContainer.chatRepository.attachServerRun(sessionId)
+        }
+    }
+
+    // Refresh file changes when an active run settles.
+    LaunchedEffect(chat.running) {
+        if (!chat.running) {
+            AppContainer.sessionRepository.loadSessionChanges(sessionId)
+        }
+    }
+
+    LaunchedEffect(inspectingChange) {
+        val change = inspectingChange
+        if (change == null) {
+            inspectingDiffText = null
+            inspectingDiffLoading = false
+            inspectingDiffError = null
+            return@LaunchedEffect
+        }
+        if (!change.diff_text.isNullOrEmpty()) {
+            inspectingDiffText = change.diff_text
+            inspectingDiffLoading = false
+            inspectingDiffError = null
+            return@LaunchedEffect
+        }
+        inspectingDiffLoading = true
+        inspectingDiffText = null
+        inspectingDiffError = null
+        try {
+            val d = AppContainer.sessionRepository.loadChangeDiff(sessionId, change.path, change.turn_index)
+            inspectingDiffText = d
+        } catch (e: Exception) {
+            inspectingDiffError = e.message ?: "Failed to load diff."
+        } finally {
+            inspectingDiffLoading = false
         }
     }
 
@@ -170,6 +224,31 @@ fun ChatScreen(
             if (m is com.console.mobile.data.model.UserMessage) {
                 if (userCount < runs.size) map[i] = userCount
                 userCount++
+            }
+        }
+        map
+    }
+    val assistantTurnChanges = remember(displayMessages, sessionChanges) {
+        val map = mutableMapOf<Int, List<SessionFileChange>>()
+        if (sessionChanges.isEmpty()) return@remember map
+
+        displayMessages.forEachIndexed { i, msg ->
+            if (msg is AssistantMessage) {
+                val closesTurn = displayMessages.subList(i + 1, displayMessages.size)
+                    .takeWhile { it !is UserMessage }
+                    .none { it is AssistantMessage }
+                if (closesTurn) {
+                    val userMsg = displayMessages.subList(0, i).findLast { it is UserMessage } as? UserMessage
+                    val userId = userMsg?.id
+                    if (!userId.isNullOrEmpty()) {
+                        val turnChanges = sessionChanges
+                            .filter { it.user_message_id == userId }
+                            .reversed()
+                        if (turnChanges.isNotEmpty()) {
+                            map[i] = turnChanges
+                        }
+                    }
+                }
             }
         }
         map
@@ -324,7 +403,11 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 ) {
                 itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
-                    MessageBubbleItem(item = msg)
+                    MessageBubbleItem(
+                        item = msg,
+                        fileChanges = assistantTurnChanges[index].orEmpty(),
+                        onOpenChange = { inspectingChange = it },
+                    )
                     val runIdx = userRunMap[index]
                     if (runIdx != null && runIdx < runs.size) {
                         RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
@@ -454,6 +537,52 @@ fun ChatScreen(
             AppContainer.appStateHolder.setActiveTab(MobileTab.SubagentDetails)
             onOpenSubagentDetails(id)
         })
+    }
+
+    val currentChange = inspectingChange
+    if (currentChange != null) {
+        BaseSheet(
+            onDismiss = { inspectingChange = null },
+            title = getFileName(currentChange.path),
+        ) {
+            val relPath = remember(currentChange.path, cwd) {
+                if (cwd != null && currentChange.path.startsWith(cwd)) {
+                    currentChange.path.removePrefix(cwd).trimStart('/')
+                } else currentChange.path
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FileIcon(filename = currentChange.path, sizeDp = 18, modifier = Modifier.padding(end = 8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(relPath, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                DiffSummaryBadge(addedCount = currentChange.additions, removedCount = currentChange.deletions)
+            }
+            SectionCard(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                when {
+                    inspectingDiffLoading -> {
+                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = NewTheme.TextPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                    inspectingDiffError != null -> {
+                        Text(inspectingDiffError ?: "Failed to load diff", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                    }
+                    !inspectingDiffText.isNullOrEmpty() -> {
+                        DiffView(
+                            diff = parseUnifiedDiff(inspectingDiffText ?: ""),
+                            filePath = currentChange.path,
+                            maxCollapsedLines = 80,
+                        )
+                    }
+                    else -> {
+                        Text("No diff available for this file.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+                    }
+                }
+            }
+        }
     }
 
     // Consume streaming errors surfaced as messages — scroll already follows.
