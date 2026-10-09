@@ -1,24 +1,18 @@
 package com.console.mobile.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -30,12 +24,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.console.mobile.AppContainer
+import com.console.mobile.core.chat.ChatSessionState
+import com.console.mobile.core.chat.createChatSessionState
+import com.console.mobile.core.chat.projectForSession
+import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.store.MobileTab
+import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.HeaderIconButton
+import com.console.mobile.ui.components.common.new.OverflowMenu
+import com.console.mobile.ui.components.common.new.OverflowMenuItem
+import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
+import com.console.mobile.ui.components.common.new.ScrollThumb
+import com.console.mobile.ui.theme.NewTheme
+import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
@@ -44,56 +52,11 @@ import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
-import com.console.mobile.AppContainer
-import com.console.mobile.core.chat.ChatSessionState
-import com.console.mobile.core.chat.createChatSessionState
-import com.console.mobile.core.chat.projectForSession
-import com.console.mobile.core.chat.reconstructRuns
-import com.console.mobile.core.util.getFileName
-import com.console.mobile.core.util.parseUnifiedDiff
-import com.console.mobile.data.model.AssistantMessage
-import com.console.mobile.data.model.SessionStatus
-import com.console.mobile.data.model.UserMessage
-import com.console.mobile.data.store.MobileTab
-import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.components.common.new.BaseSheet
-import com.console.mobile.ui.components.common.new.BlurredHeaderContainer
-import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
-import com.console.mobile.ui.components.common.new.HeaderIconButton
-import com.console.mobile.ui.components.common.new.EmptyView
-import com.console.mobile.ui.components.common.new.OverflowMenu
-import com.console.mobile.ui.components.common.new.OverflowMenuItem
-import com.console.mobile.ui.components.common.new.PageHeader
-import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.common.new.ScrollThumb
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.theme.NewTheme
-import console.v1.SessionFileChange
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-
-/** Scroll position to restore after older messages are prepended. */
-private data class ListAnchor(
-    val index: Int,
-    val offset: Int,
-    val sizeBefore: Int,
-)
-
-/**
- * Scrolls to the true end of the list. Jumping to the last item only aligns
- * its top with the viewport, which leaves a tall or growing last row's bottom
- * off screen, so ask for an oversized offset that the list clamps at the end.
- */
-private suspend fun LazyListState.scrollToBottom() {
-    val last = layoutInfo.totalItemsCount - 1
-    if (last < 0) return
-    // One call, so there's no idle gap between "jumped" and "reached the end"
-    // for the drag/settle tracking to misread as the user leaving the bottom.
-    scrollToItem(last, Int.MAX_VALUE)
-}
 
 /**
  * Port of screens/chat/chat-screen.tsx.
@@ -118,9 +81,6 @@ fun ChatScreen(
     val sessionChanges = sessionId?.let { sessionChangesMap[it] }.orEmpty()
 
     var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
-    var inspectingDiffText by remember { mutableStateOf<String?>(null) }
-    var inspectingDiffLoading by remember { mutableStateOf(false) }
-    var inspectingDiffError by remember { mutableStateOf<String?>(null) }
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -130,7 +90,7 @@ fun ChatScreen(
         return
     }
 
-    val chat: ChatSessionState = chatSessions[sessionId] ?: com.console.mobile.core.chat.createChatSessionState()
+    val chat: ChatSessionState = chatSessions[sessionId] ?: createChatSessionState()
     var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
     var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
@@ -138,16 +98,9 @@ fun ChatScreen(
     var subagentSelected by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
-    // Load detail + hydrate todos/subagents on entry; attach to server run if working.
-    // The three fetches are independent, so they run concurrently instead of
-    // as three sequential round trips — that latency was most of the wait on
-    // opening a session.
+    // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
         loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
-        // loadDetail used to be fire-and-forget, so the status read after this
-        // block came from the session list rather than from the detail response
-        // and was routinely stale — the attach then never fired on a session
-        // that was in fact running. Awaiting it makes the status below real.
         val header = coroutineScope {
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
@@ -168,36 +121,8 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(inspectingChange) {
-        val change = inspectingChange
-        if (change == null) {
-            inspectingDiffText = null
-            inspectingDiffLoading = false
-            inspectingDiffError = null
-            return@LaunchedEffect
-        }
-        if (!change.diff_text.isNullOrEmpty()) {
-            inspectingDiffText = change.diff_text
-            inspectingDiffLoading = false
-            inspectingDiffError = null
-            return@LaunchedEffect
-        }
-        inspectingDiffLoading = true
-        inspectingDiffText = null
-        inspectingDiffError = null
-        try {
-            val d = AppContainer.sessionRepository.loadChangeDiff(sessionId, change.path, change.turn_index)
-            inspectingDiffText = d
-        } catch (e: Exception) {
-            inspectingDiffError = e.message ?: "Failed to load diff."
-        } finally {
-            inspectingDiffLoading = false
-        }
-    }
-
     // A run can also start after entry — the desktop app, another device, or a
-    // queued prompt — and the chat screen is where its output belongs. Watching
-    // the status (rather than sampling it once) is what makes that show up live.
+    // queued prompt — and the chat screen is where its output belongs.
     LaunchedEffect(sessionId) {
         AppContainer.sessionStateHolder.statuses
             .map { it[sessionId] }
@@ -211,12 +136,9 @@ fun ChatScreen(
 
     val messages = chat.messages
     val displayMessages = visibleMessages(messages)
-    // Key on chat.runs too: turnEnd/turnStart/toolExecutionEnd mutate runs without
-    // touching messages, and those mutations drive status + elapsed time.
     val runs = remember(messages, chat.runs) {
         if (chat.runs.isNotEmpty()) chat.runs else reconstructRuns(messages)
     }
-    // Map user-message index → run (tool turns are filtered from display list).
     val userRunMap = remember(displayMessages, runs) {
         val map = mutableMapOf<Int, Int>()
         var userCount = 0
@@ -229,29 +151,7 @@ fun ChatScreen(
         map
     }
     val assistantTurnChanges = remember(displayMessages, sessionChanges) {
-        val map = mutableMapOf<Int, List<SessionFileChange>>()
-        if (sessionChanges.isEmpty()) return@remember map
-
-        displayMessages.forEachIndexed { i, msg ->
-            if (msg is AssistantMessage) {
-                val closesTurn = displayMessages.subList(i + 1, displayMessages.size)
-                    .takeWhile { it !is UserMessage }
-                    .none { it is AssistantMessage }
-                if (closesTurn) {
-                    val userMsg = displayMessages.subList(0, i).findLast { it is UserMessage } as? UserMessage
-                    val userId = userMsg?.id
-                    if (!userId.isNullOrEmpty()) {
-                        val turnChanges = sessionChanges
-                            .filter { it.user_message_id == userId }
-                            .reversed()
-                        if (turnChanges.isNotEmpty()) {
-                            map[i] = turnChanges
-                        }
-                    }
-                }
-            }
-        }
-        map
+        buildAssistantTurnChangesMap(displayMessages, sessionChanges)
     }
     val latestUserIndex = remember(displayMessages) {
         displayMessages.indexOfLast { it is com.console.mobile.data.model.UserMessage }
@@ -278,7 +178,7 @@ fun ChatScreen(
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
-            val match = projectForSession(projectState.projects, view?.projectId, cwd)
+            val match = projectForSession(projectState.projects, view.projectId, cwd)
                 ?: projectState.projects.firstOrNull { p -> p.path.endsWith(cwd) }
             if (match != null) AppContainer.appStateHolder.setSelectedProjectId(match.id)
         }
@@ -287,26 +187,13 @@ fun ChatScreen(
     }
 
     val displaySize = displayMessages.size
-
-    // Whether the list is pinned to the bottom. An explicit flag rather than
-    // something inferred from the last visible index: the last row is a tall,
-    // growing item (user message + run activity), so "last index visible" says
-    // nothing about whether its bottom is on screen. The user taking over with
-    // a drag turns it off; once scrolling settles it is re-derived from whether
-    // there is anything left below, so scrolling back down resumes following.
     var following by remember(sessionId) { mutableStateOf(true) }
     LaunchedEffect(listState) {
         launch {
             listState.interactionSource.interactions.collect {
                 if (it is DragInteraction.Start) {
                     following = false
-                    // The user took over the list: put the keyboard away, as the file
-                    // search does. Keyed on the drag, not on isScrollInProgress, which is
-                    // also true while the list auto-follows streamed text and would close
-                    // the keyboard mid-typing.
                     keyboardController?.hide()
-                    // Also drop focus: an unfocused composer folds back to the pill, giving
-                    // the transcript the room while you read.
                     focusManager.clearFocus()
                 }
             }
@@ -317,14 +204,6 @@ fun ChatScreen(
     }
     val showScrollBottom by remember { derivedStateOf { !following && listState.canScrollForward } }
 
-    // Stick to the bottom whenever the user is pinned there. Watches the list's
-    // real extent (row count + the last row's size) so it re-fires as streamed
-    // text, tool calls and run activity grow the bottom row — not just on
-    // discrete events. Deliberately not gated on the run being active: when a
-    // run finishes, the streaming footer is swapped for the persisted reply
-    // *after* `running` flips false, and gating on it left that final reply
-    // parked below the viewport. A pagination prepend can't trigger this,
-    // because the user has to be scrolled up (not following) to reach the top.
     LaunchedEffect(listState) {
         snapshotFlow {
             val info = listState.layoutInfo
@@ -337,11 +216,6 @@ fun ChatScreen(
         }
     }
 
-    // Opening a session lands on the newest page, so the list has to be jumped
-    // to the bottom once that page arrives. The auto-follow above can't do it:
-    // it's gated on an active run, and this case is an idle chat.
-    // Keyed on the message count so it fires exactly once per entry — a later
-    // prepend or append must not drag the user back down over their scroll.
     var settledInitialPage by remember(sessionId) { mutableStateOf(false) }
     LaunchedEffect(sessionId, displaySize) {
         if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
@@ -351,20 +225,8 @@ fun ChatScreen(
     }
 
     // --- Older-message pagination -------------------------------------------
-    // Opening a session only fetches the newest page, so the user scrolls to
-    // the top to walk backwards through history. Derived as a Boolean: a
-    // LaunchedEffect key needs a stable type, and a raw index would relaunch
-    // on every single index change.
     val atTop = listState.firstVisibleItemIndex <= 0
-
-    // Prepended rows push everything down, so the view would visibly lurch
-    // when the page lands. Snapshot which row the user was looking at plus the
-    // list size at that moment; once the size grows, shift by exactly the
-    // number of new rows and the same message stays under their thumb.
     var anchor by remember(sessionId) { mutableStateOf<ListAnchor?>(null) }
-    // Set when a page fails, so the effect below doesn't spin retrying against a
-    // failing backend while the user sits at the top. Deliberately not a key:
-    // writing it must not relaunch this effect. Leaving the top re-arms it.
     var autoLoadBlocked by remember(sessionId) { mutableStateOf(false) }
 
     LaunchedEffect(atTop, chat.hasMoreMessages, chat.loadingOlder) {
@@ -378,7 +240,6 @@ fun ChatScreen(
             offset = listState.firstVisibleItemScrollOffset,
             sizeBefore = displaySize,
         )
-        // Keep auto-follow from racing the anchor restore once the page lands.
         if (listState.canScrollForward) following = false
         if (!AppContainer.sessionRepository.loadOlder(sessionId)) autoLoadBlocked = true
     }
@@ -402,27 +263,26 @@ fun ChatScreen(
                     contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 120.dp),
                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 ) {
-                itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
-                    MessageBubbleItem(
-                        item = msg,
-                        fileChanges = assistantTurnChanges[index].orEmpty(),
-                        onOpenChange = { inspectingChange = it },
-                    )
-                    val runIdx = userRunMap[index]
-                    if (runIdx != null && runIdx < runs.size) {
-                        RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
+                    itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
+                        MessageBubbleItem(
+                            item = msg,
+                            fileChanges = assistantTurnChanges[index].orEmpty(),
+                            onOpenChange = { inspectingChange = it },
+                        )
+                        val runIdx = userRunMap[index]
+                        if (runIdx != null && runIdx < runs.size) {
+                            RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
+                        }
                     }
-                }
-                // Streaming footer: unattached latest run + live bubble.
-                if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
-                    item(key = "streaming") {
-                        AssistantBubble(textContent = chat.streamingText.ifBlank { null }, thinkingContent = chat.streamingThinking.ifBlank { null }, isStreaming = true, createdAt = null)
+                    if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
+                        item(key = "streaming") {
+                            AssistantBubble(textContent = chat.streamingText.ifBlank { null }, thinkingContent = chat.streamingThinking.ifBlank { null }, isStreaming = true, createdAt = null)
+                        }
+                    } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
+                        item(key = "unattached-run") {
+                            RunActivity(activity = runs.last(), running = true, cwd = cwd)
+                        }
                     }
-                } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
-                    item(key = "unattached-run") {
-                        RunActivity(activity = runs.last(), running = true, cwd = cwd)
-                    }
-                }
                 }
                 ScrollThumb(
                     state = listState,
@@ -431,7 +291,7 @@ fun ChatScreen(
             }
         }
         if (showScrollBottom) {
-            androidx.compose.material3.FloatingActionButton(
+            FloatingActionButton(
                 onClick = {
                     following = true
                     scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
@@ -444,7 +304,6 @@ fun ChatScreen(
             }
         }
 
-        // Blurred progressive header overlay
         PageHeader(
             title = chatTitle,
             blurred = true,
@@ -487,7 +346,6 @@ fun ChatScreen(
             },
         )
 
-        // Bottom interaction or floating composer overlay
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             if (hasPending) {
                 Column {
@@ -539,53 +397,13 @@ fun ChatScreen(
         })
     }
 
-    val currentChange = inspectingChange
-    if (currentChange != null) {
-        BaseSheet(
-            onDismiss = { inspectingChange = null },
-            title = getFileName(currentChange.path),
-        ) {
-            val relPath = remember(currentChange.path, cwd) {
-                if (cwd != null && currentChange.path.startsWith(cwd)) {
-                    currentChange.path.removePrefix(cwd).trimStart('/')
-                } else currentChange.path
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FileIcon(filename = currentChange.path, sizeDp = 18, modifier = Modifier.padding(end = 8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(relPath, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                DiffSummaryBadge(addedCount = currentChange.additions, removedCount = currentChange.deletions)
-            }
-            SectionCard(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-                when {
-                    inspectingDiffLoading -> {
-                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = NewTheme.TextPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                        }
-                    }
-                    inspectingDiffError != null -> {
-                        Text(inspectingDiffError ?: "Failed to load diff", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
-                    }
-                    !inspectingDiffText.isNullOrEmpty() -> {
-                        DiffView(
-                            diff = parseUnifiedDiff(inspectingDiffText ?: ""),
-                            filePath = currentChange.path,
-                            maxCollapsedLines = 80,
-                        )
-                    }
-                    else -> {
-                        Text("No diff available for this file.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
-                    }
-                }
-            }
-        }
-    }
+    ChatDiffSheet(
+        change = inspectingChange,
+        sessionId = sessionId,
+        cwd = cwd,
+        onDismiss = { inspectingChange = null },
+    )
 
-    // Consume streaming errors surfaced as messages — scroll already follows.
     @Suppress("UNUSED_EXPRESSION")
     LaunchedEffect(sessionStatuses[sessionId]) { }
 }
