@@ -98,3 +98,24 @@ fn unknown_project_folder_falls_back_to_the_project_workspace() {
     s.cwd = "/wt/a".into();
     assert_eq!(workspace_key_for_session(&s, None), Some("proj-1".to_string()));
 }
+
+#[test]
+fn dead_worktree_workspaces_are_those_no_live_chat_maps_to() {
+    use console_core::dead_worktree_workspace_keys;
+    use std::collections::HashSet;
+
+    let alive = worktree_workspace_key("proj-1", "/wt/alive");
+    let gone = worktree_workspace_key("proj-1", "/wt/gone");
+    let live: HashSet<String> = [alive.clone(), "proj-1".to_string()].into_iter().collect();
+
+    let dead = dead_worktree_workspace_keys(["proj-1", alive.as_str(), gone.as_str()], &live);
+    assert_eq!(dead, vec![gone]);
+}
+
+#[test]
+fn plain_project_workspaces_are_never_dead_even_with_no_chats() {
+    use console_core::dead_worktree_workspace_keys;
+    use std::collections::HashSet;
+
+    assert!(dead_worktree_workspace_keys(["proj-1", "proj-2"], &HashSet::new()).is_empty());
+}

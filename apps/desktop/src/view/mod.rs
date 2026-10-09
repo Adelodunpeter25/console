@@ -798,6 +798,9 @@ impl Render for ConsoleDesktopApp {
                                                 |t| t.id() == format!("chat:{}", id),
                                             );
                                         }
+                                        // Deleting a worktree's last chat removes the
+                                        // worktree's workspace with it.
+                                        this.sweep_dead_worktree_workspaces(cx);
                                         // Drop all run-derived state for the deleted
                                         // session, now keyed by session id.
                                         this.running_sessions.remove(&id);

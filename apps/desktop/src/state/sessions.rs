@@ -16,13 +16,27 @@ use super::user_prompt_history;
 impl ConsoleDesktopApp {
     pub fn load_sessions(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
+        // Chats known when the request left: one created while it was in
+        // flight is missing from a response that raced it.
+        let known_at_request: HashSet<String> =
+            self.sessions.iter().map(|s| s.id.clone()).collect();
         cx.spawn(
             async move |entity, cx| match client.sessions.list(None, None).await {
                 Ok(sessions) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
+                                let created_meanwhile = this
+                                    .sessions
+                                    .iter()
+                                    .any(|s| !known_at_request.contains(&s.id));
                                 this.sessions = Rc::new(sessions);
+                                // A worktree whose chats are all gone loses its
+                                // workspace too — unless the response may predate
+                                // a chat just created (it would look dead).
+                                if !created_meanwhile {
+                                    this.sweep_dead_worktree_workspaces(cx);
+                                }
                                 cx.notify();
                             });
                         }

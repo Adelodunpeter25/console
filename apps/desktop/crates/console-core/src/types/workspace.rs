@@ -365,3 +365,16 @@ pub fn workspace_key_for_session(
         None => Some(project_id.to_owned()),
     }
 }
+
+/// Worktree workspaces among `keys` that no live chat maps to any more — the
+/// worktree (or every chat in it) was deleted, so its workspace should go too.
+/// Plain project workspaces are never returned, however empty.
+pub fn dead_worktree_workspace_keys<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+    live: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    keys.into_iter()
+        .filter(|key| is_worktree_workspace_key(key) && !live.contains(*key))
+        .map(str::to_owned)
+        .collect()
+}

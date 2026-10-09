@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use console_core::WorkspaceTabConfig;
 use console_ui::workspace::{WorkspaceDrag, ops as workspace_ops};
 use gpui::{Context, Focusable as _, Window};
@@ -142,6 +144,122 @@ impl ConsoleDesktopApp {
                 view.update(cx, |browser, cx| browser.close(cx));
             }
         }
+    }
+
+    /// Drop every worktree workspace that no live chat maps to — its worktree
+    /// (or all its chats) was deleted — and with it that workspace's tabs,
+    /// terminals, split layout and remembered state. If the workspace on
+    /// screen is one of them, fall back to the project's own workspace.
+    /// Skipped until projects have loaded: a chat started inside an existing
+    /// worktree is only recognised as a worktree chat once its project's
+    /// folder is known, and sweeping earlier would discard live workspaces.
+    pub(crate) fn sweep_dead_worktree_workspaces(&mut self, cx: &mut Context<Self>) {
+        if self.projects.is_empty() {
+            return;
+        }
+        let live: std::collections::HashSet<String> = self
+            .sessions
+            .iter()
+            .filter_map(|session| self.workspace_key_for_header(session))
+            .collect();
+        let mut candidates: Vec<&str> = self
+            .project_workspace_roots
+            .keys()
+            .filter_map(|key| key.as_deref())
+            .collect();
+        if let Some(current) = self.selected_project_id.as_deref() {
+            candidates.push(current);
+        }
+        let mut dead = console_core::dead_worktree_workspace_keys(candidates, &live);
+        dead.sort();
+        dead.dedup();
+        if dead.is_empty() {
+            return;
+        }
+
+        let current_dead = self
+            .selected_project_id
+            .as_deref()
+            .is_some_and(|key| dead.iter().any(|d| d == key));
+        let mut removed_roots: Vec<console_core::WorkspaceNode> = Vec::new();
+        for key in &dead {
+            let path = self.workspace_path_for_key(key);
+            let slot = Some(key.clone());
+            if let Some(root) = self.project_workspace_roots.remove(&slot) {
+                removed_roots.push(root);
+            }
+            self.project_active_panes.remove(&slot);
+            if let Some(path) = path {
+                self.right_sidebar_terminals_by_cwd.remove(&path);
+                self.persisted_bottom_terminals.remove(&path);
+                self.persisted_script_tabs.remove(&path);
+            }
+        }
+
+        if current_dead {
+            let key = self.selected_project_id.clone().unwrap_or_default();
+            removed_roots.push(self.workspace_root.clone());
+            let project_slot = Some(console_core::project_id_of_workspace_key(&key).to_owned());
+            let pane_id = self
+                .active_pane_id
+                .clone()
+                .unwrap_or_else(|| "pane-main".to_string());
+            self.workspace_root = self
+                .project_workspace_roots
+                .get(&project_slot)
+                .cloned()
+                .unwrap_or_else(|| console_core::WorkspaceNode::leaf(&pane_id));
+            self.selected_project_id = project_slot.clone();
+            self.restore_active_pane(&project_slot);
+        }
+
+        // Any pane still pointing at a dead workspace goes back to its project.
+        for state in self.workspace_pane_states.values_mut() {
+            if let Some(key) = state.selected_project_id.clone() {
+                if dead.iter().any(|d| *d == key) {
+                    state.selected_project_id =
+                        Some(console_core::project_id_of_workspace_key(&key).to_owned());
+                    Rc::make_mut(&mut state.branches).clear();
+                    state.branch_loaded = false;
+                    state.branch_cwd = None;
+                }
+            }
+        }
+
+        // Kill terminals only the discarded workspaces used.
+        let mut still_used: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let terminal_ids = |root: &console_core::WorkspaceNode| -> Vec<String> {
+            root.leaves()
+                .iter()
+                .flat_map(|leaf| leaf.tabs.iter())
+                .filter_map(|tab| match tab {
+                    WorkspaceTabConfig::Terminal { terminal_id, .. } => Some(terminal_id.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        still_used.extend(terminal_ids(&self.workspace_root));
+        for root in self.project_workspace_roots.values() {
+            still_used.extend(terminal_ids(root));
+        }
+        for root in &removed_roots {
+            for terminal_id in terminal_ids(root) {
+                if !still_used.contains(&terminal_id) {
+                    if let Some(view) = self.terminals.remove(&terminal_id) {
+                        view.update(cx, |terminal, _| terminal.kill());
+                    }
+                }
+            }
+        }
+        self.sweep_unreferenced_browser_views(cx);
+        self.trim_file_caches();
+        self.sync_workspace_webviews(cx);
+        self.persist_layout();
+        self.persist_workspaces();
+        if current_dead {
+            self.maybe_refresh_inspector(cx);
+        }
+        cx.notify();
     }
 
     /// Release resources owned by a tab leaving the current tree: terminal
