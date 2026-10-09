@@ -145,7 +145,7 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                     }
                     if (hasOverflow) {
                         Text(
-                            text = if (expanded) "Show less" else "… Show more",
+                            text = if (expanded) "Show less" else "Show more",
                             color = NewTheme.Accent,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
