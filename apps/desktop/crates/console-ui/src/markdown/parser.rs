@@ -144,7 +144,10 @@ pub struct BlockTree {
 // ── Full parse ─────────────────────────────────────────────────────────────
 
 fn options() -> Options {
-    Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS
+    Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_MATH
 }
 
 /// Parse a whole source into a [`BlockTree`].
@@ -560,8 +563,49 @@ fn parse_inline_event(cursor: &mut Cursor, pieces: &mut Vec<InlinePiece>, style:
             text: if checked { "[x] " } else { "[ ] " }.to_owned(),
             style: style.clone(),
         }),
-        Event::End(_) | Event::Rule | Event::InlineMath(_) | Event::DisplayMath(_) => {}
+        Event::InlineMath(text) | Event::DisplayMath(text) => {
+            push_run(InlineRun {
+                text: format_math(&text),
+                style: style.clone(),
+            });
+        }
+        Event::End(_) | Event::Rule => {}
     }
+}
+
+fn format_math(text: &str) -> String {
+    let mut out = text.to_string();
+    let replacements = [
+        (r"\rightarrow", "→"),
+        (r"\leftarrow", "←"),
+        (r"\Rightarrow", "⇒"),
+        (r"\Leftarrow", "⇐"),
+        (r"\leftrightarrow", "↔"),
+        (r"\Leftrightarrow", "⇔"),
+        (r"\to", "→"),
+        (r"\le", "≤"),
+        (r"\ge", "≥"),
+        (r"\leq", "≤"),
+        (r"\geq", "≥"),
+        (r"\neq", "≠"),
+        (r"\ne", "≠"),
+        (r"\approx", "≈"),
+        (r"\times", "×"),
+        (r"\cdot", "·"),
+        (r"\pm", "±"),
+        (r"\mp", "∓"),
+        (r"\dots", "…"),
+        (r"\cdots", "…"),
+        (r"\in", "∈"),
+        (r"\notin", "∉"),
+        (r"\forall", "∀"),
+        (r"\exists", "∃"),
+        (r"\infty", "∞"),
+    ];
+    for (tex, rep) in replacements {
+        out = out.replace(tex, rep);
+    }
+    out
 }
 
 /// Sentence punctuation and unmatched closing delimiters are prose around a
