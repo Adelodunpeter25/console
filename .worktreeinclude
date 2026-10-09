@@ -1,5 +1,4 @@
 # Carried into every worktree Console creates.
-# See docs/plan/worktree-files-to-copy-plan.md.
 # Plain entries are copied (snapshot); `link:` entries are symlinked (live).
 .env*
 link: apps/android/key.properties
