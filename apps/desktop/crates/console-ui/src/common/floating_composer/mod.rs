@@ -58,11 +58,28 @@ pub enum BranchChoice {
     Project,
     /// A fresh worktree + branch, auto-named by the server.
     NewWorktree,
-    /// A fresh worktree cut from an existing branch.
+    /// An existing branch, worked on in the project folder itself: it is
+    /// checked out first (a no-op when it already is), like the footer's
+    /// branch picker. It never creates a worktree.
     FromBranch(String),
 }
 
 impl BranchChoice {
+    /// Only "New worktree" provisions a worktree; every other choice runs in
+    /// the project folder.
+    pub fn creates_worktree(&self) -> bool {
+        matches!(self, Self::NewWorktree)
+    }
+
+    /// The existing branch to check out in the project folder before the
+    /// session starts, if one was picked.
+    pub fn checkout_target(&self) -> Option<&str> {
+        match self {
+            Self::FromBranch(name) => Some(name),
+            _ => None,
+        }
+    }
+
     /// Label for the footer's branch chip.
     pub fn label(&self) -> String {
         match self {

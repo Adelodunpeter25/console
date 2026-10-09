@@ -112,3 +112,19 @@ fn view_with(rows: &[(&str, &str)], highlighted: usize, loading: bool) -> Autoco
         .collect();
     AutocompleteView::new(items, highlighted, loading)
 }
+
+// Only "New worktree" provisions a worktree. Picking an existing branch (even
+// `main`) works in the project folder, so it must never create one.
+#[test]
+fn only_new_worktree_creates_a_worktree() {
+    assert!(!BranchChoice::Project.creates_worktree());
+    assert!(BranchChoice::NewWorktree.creates_worktree());
+    assert!(!BranchChoice::FromBranch("main".into()).creates_worktree());
+}
+
+#[test]
+fn picking_an_existing_branch_checks_it_out_in_the_project() {
+    assert_eq!(BranchChoice::FromBranch("main".into()).checkout_target(), Some("main"));
+    assert_eq!(BranchChoice::Project.checkout_target(), None);
+    assert_eq!(BranchChoice::NewWorktree.checkout_target(), None);
+}

@@ -522,21 +522,39 @@ impl ConsoleDesktopApp {
         let card_model = submit.model.clone();
         let card_thinking = submit.thinking_level;
 
-        // Only a worktree request provisions anything; a plain project session
-        // sends no worktree key at all.
-        let worktree = match &submit.branch {
-            BranchChoice::Project => None,
-            // Server auto-derives a slugged branch name.
-            BranchChoice::NewWorktree => Some(CreateWorktreeSpec::default()),
-            // The picked branch is where the new branch starts, not its name —
-            // the server still mints a fresh branch name for the worktree.
-            BranchChoice::FromBranch(base) => Some(CreateWorktreeSpec {
-                base_branch: Some(base.clone()),
-                ..Default::default()
-            }),
-        };
+        // Only "New worktree" provisions anything; a plain project session
+        // sends no worktree key at all. Picking an existing branch works in
+        // the project folder on that branch (checked out first below).
+        let worktree = submit
+            .branch
+            .creates_worktree()
+            .then(CreateWorktreeSpec::default);
+        // Skip the checkout when the picked branch is already the one checked
+        // out in the project folder (the common "stay on main" case).
+        let checkout = submit
+            .branch
+            .checkout_target()
+            .filter(|name| !self.branches.iter().any(|b| b.current && b.name == *name))
+            .map(str::to_owned)
+            .zip(submit.cwd.clone());
 
         cx.spawn(async move |entity, cx| {
+            if let Some((branch, cwd)) = checkout.as_ref() {
+                if let Err(error) = client.git.checkout_branch(Some(cwd), branch).await {
+                    // Keep the card open with the prompt intact; nothing was
+                    // created, and the project folder stays on its branch.
+                    let message = format!("Unable to switch to {branch}: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.floating_composer.set_error(Some(message));
+                                cx.notify();
+                            });
+                        }
+                    });
+                    return;
+                }
+            }
             let result = client
                 .sessions
                 .create(CreateSessionDto {
@@ -564,6 +582,11 @@ impl ConsoleDesktopApp {
                         }
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
                         this.open_chat_tab_in_pane(&pane_id, new_session.id.clone(), &title);
+                        // The project folder's branch just changed, so the
+                        // footer's branch list is stale until it reloads.
+                        if let Some((_, cwd)) = checkout.clone() {
+                            this.reload_branches_for_pane(pane_id.clone(), cwd, cx);
+                        }
                         this.sync_workspace_webviews(cx);
                         this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);
