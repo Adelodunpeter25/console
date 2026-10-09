@@ -452,13 +452,63 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
                 val url = if (shown.startsWith("www.")) "https://$shown" else shown
                 if (linked) append(shown) else link(url) { append(shown) }
             }
-            // Everything else (HTML tags, `$..$` math, reference links, punctuation
+            GFMElementTypes.INLINE_MATH -> {
+                val raw = n.text(src)
+                val inner = raw.removePrefix("$$").removeSuffix("$$").removePrefix("$").removeSuffix("$").trim()
+                append(formatMath(inner))
+            }
+            // Everything else (HTML tags, reference links, punctuation
             // tokens, ...) is shown as its source text so nothing silently disappears.
-            else -> if (n.children.isEmpty()) append(src, n.startOffset, n.endOffset)
+            else -> if (n.children.isEmpty()) append(formatMathInRaw(src.substring(n.startOffset, n.endOffset)))
             else appendInline(n.children, src, linked)
         }
     }
 }
+
+private fun formatMath(text: String): String {
+    var out = text
+    MATH_REPLACEMENTS.forEach { (tex, replacement) ->
+        out = out.replace(tex, replacement)
+    }
+    return out
+}
+
+private fun formatMathInRaw(text: String): String {
+    if (!text.contains('$') && !text.contains('\\')) return text
+    var out = text
+    MATH_REPLACEMENTS.forEach { (tex, replacement) ->
+        out = out.replace("\$$tex\$", replacement).replace(tex, replacement)
+    }
+    return out
+}
+
+private val MATH_REPLACEMENTS = listOf(
+    "\\rightarrow" to "→",
+    "\\leftarrow" to "←",
+    "\\Rightarrow" to "⇒",
+    "\\Leftarrow" to "⇐",
+    "\\leftrightarrow" to "↔",
+    "\\Leftrightarrow" to "⇔",
+    "\\to" to "→",
+    "\\le" to "≤",
+    "\\ge" to "≥",
+    "\\leq" to "≤",
+    "\\geq" to "≥",
+    "\\neq" to "≠",
+    "\\ne" to "≠",
+    "\\approx" to "≈",
+    "\\times" to "×",
+    "\\cdot" to "·",
+    "\\pm" to "±",
+    "\\mp" to "∓",
+    "\\dots" to "…",
+    "\\cdots" to "…",
+    "\\in" to "∈",
+    "\\notin" to "∉",
+    "\\forall" to "∀",
+    "\\exists" to "∃",
+    "\\infty" to "∞",
+)
 
 private fun AnnotatedString.Builder.appendInlineLink(n: ASTNode, src: String, linked: Boolean) {
     val label = n.children.firstOrNull { it.type == MarkdownElementTypes.LINK_TEXT }
