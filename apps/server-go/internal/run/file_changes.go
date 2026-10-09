@@ -69,19 +69,27 @@ func (s *writeSnapshots) drop(sessionID string) {
 	delete(s.stores, sessionID)
 }
 
-// SnapshotWritePaths reads the current content of each path and stores it as
-// the "before" side of the diff for that session. Best-effort: an unreadable
-// path is stored as non-existent, which is right for files being created and
-// harmless for ones that turn out to be unreadable (the tool would fail too).
-//
-// Only whole-file overwrite tools need this — editFile carries
-// oldContent/newContent in its own arguments.
+// turnRef identifies the turn a file change belongs to: its zero-based
+// index (one turn per user message) and the id of that user message.
+type turnRef struct {
+	Index         int
+	UserMessageID string
+}
+
+// SnapshotWritePaths captures the turn baseline of each path: the content
+// it had before this turn first touched it. Later writes to the same path
+// in the turn keep the original baseline, so the recorded diff is the net
+// change of the whole turn. An unreadable path is stored as non-existent,
+// which is right for files being created.
 func (s *writeSnapshots) SnapshotWritePaths(sessionID string, paths []string) {
 	if s == nil || len(paths) == 0 {
 		return
 	}
 	for _, path := range paths {
 		if path == "" {
+			continue
+		}
+		if _, ok := s.get(sessionID, path); ok {
 			continue
 		}
 		snap := writeSnapshot{}
@@ -92,110 +100,59 @@ func (s *writeSnapshots) SnapshotWritePaths(sessionID string, paths []string) {
 	}
 }
 
-// generateAndRecordFileChange generates unified diffs for file operations
-// and records them in the session database.
+// generateAndRecordFileChange records the net change of every path a
+// successful write tool touched, diffing the turn baseline against the
+// file's current on-disk content.
 //
-// snapshots supplies pre-write content for whole-file overwrite tools. A nil
-// *writeSnapshots is valid and means "no snapshot available", degrading to
-// what the arguments alone can tell us.
+// snapshots supplies the turn baselines. A nil *writeSnapshots is valid and
+// means "no baseline available", which records the file as added.
 func (s *Service) generateAndRecordFileChange(
 	snapshots *writeSnapshots,
 	sessionID string,
 	toolName string,
 	args map[string]any,
 	isError bool,
-	turnIndex int,
+	turn turnRef,
 ) error {
 	if isError || toolName == "" || args == nil {
 		return nil
 	}
 
+	var paths []string
 	switch toolName {
-	case "writeFile", "write_file":
-		path, ok := args["path"].(string)
-		if !ok || path == "" {
-			return nil
+	case "writeFile", "write_file", "editFile", "edit_file", "replace_file_content":
+		if p, ok := args["path"].(string); ok && p != "" {
+			paths = append(paths, p)
+		} else if p, ok := args["targetFile"].(string); ok && p != "" {
+			paths = append(paths, p)
 		}
-		content, _ := args["content"].(string)
-		return s.recordWholeFileChange(snapshots, sessionID, path, content, turnIndex)
-
 	case "batchWrite", "batch_write":
-		files, ok := args["files"].([]any)
-		if !ok {
-			return nil
-		}
+		files, _ := args["files"].([]any)
 		for _, file := range files {
-			fileMap, ok := file.(map[string]any)
-			if !ok {
-				continue
-			}
-			path, ok := fileMap["path"].(string)
-			if !ok || path == "" {
-				continue
-			}
-			content, _ := fileMap["content"].(string)
-			if err := s.recordWholeFileChange(snapshots, sessionID, path, content, turnIndex); err != nil {
-				return err
+			if fileMap, ok := file.(map[string]any); ok {
+				if p, ok := fileMap["path"].(string); ok && p != "" {
+					paths = append(paths, p)
+				}
 			}
 		}
-		return nil
-
-	case "editFile", "edit_file", "replace_file_content":
-		// editFileInput uses "path", "oldContent", "newContent".
-		// Older/alternate tool schemas may use "targetFile", "targetContent",
-		// "replacementContent" — keep those as fallbacks.
-		var targetPath string
-		if p, ok := args["path"].(string); ok {
-			targetPath = p
-		} else if p, ok := args["targetFile"].(string); ok {
-			targetPath = p
-		}
-		if targetPath == "" {
-			return nil
-		}
-
-		var oldContent, newContent string
-		if tc, ok := args["oldContent"].(string); ok {
-			oldContent = tc
-		} else if tc, ok := args["targetContent"].(string); ok {
-			oldContent = tc
-		}
-		if rc, ok := args["newContent"].(string); ok {
-			newContent = rc
-		} else if rc, ok := args["replacementContent"].(string); ok {
-			newContent = rc
-		}
-
-		// For editFile the snippet is the changed region — diff it directly.
-		patch := createUnifiedDiff(targetPath, oldContent, newContent)
-		adds, dels := countDiffLines(patch)
-
-		return s.sessions.RecordFileChange(sessionID, types.SessionFileChange{
-			Path:      targetPath,
-			TurnIndex: turnIndex,
-			Status:    "modified",
-			Additions: adds,
-			Deletions: dels,
-			DiffText:  diffTextOrNil(patch),
-			UpdatedAt: 0,
-		})
 	}
-
+	for _, path := range paths {
+		if err := s.recordNetChange(snapshots, sessionID, path, turn); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-// recordWholeFileChange diffs a complete file write (write_file, or one entry
-// of a batchWrite) against the content captured before the tool ran.
+// recordNetChange diffs a path's turn baseline against its current content
+// and upserts the (path, turn) row.
 //
-// Status comes from the snapshot, not from a post-write read: "added" when
-// the file did not exist before, "modified" when it did. With no snapshot the
-// on-disk content is already the new content and reveals nothing about the
-// before state, so the change is recorded as added against empty rather than
-// diffing the file against itself into a fabricated empty patch.
-func (s *Service) recordWholeFileChange(
+// Status comes from the baseline: "added" when the file did not exist at
+// the start of the turn, "modified" when it did, "deleted" when it is gone.
+func (s *Service) recordNetChange(
 	snapshots *writeSnapshots,
-	sessionID, path, content string,
-	turnIndex int,
+	sessionID, path string,
+	turn turnRef,
 ) error {
 	oldContent, status := "", "added"
 	if snapshots != nil {
@@ -203,18 +160,26 @@ func (s *Service) recordWholeFileChange(
 			oldContent, status = snap.Content, "modified"
 		}
 	}
+	newContent := ""
+	data, err := os.ReadFile(path)
+	if err == nil {
+		newContent = string(data)
+	} else if status == "modified" {
+		status = "deleted"
+	}
 
-	patch := createUnifiedDiff(path, oldContent, content)
+	patch := createUnifiedDiff(path, oldContent, newContent)
 	adds, dels := countDiffLines(patch)
 
 	return s.sessions.RecordFileChange(sessionID, types.SessionFileChange{
-		Path:      path,
-		TurnIndex: turnIndex,
-		Status:    status,
-		Additions: adds,
-		Deletions: dels,
-		DiffText:  diffTextOrNil(patch),
-		UpdatedAt: 0,
+		Path:          path,
+		TurnIndex:     turn.Index,
+		UserMessageID: turn.UserMessageID,
+		Status:        status,
+		Additions:     adds,
+		Deletions:     dels,
+		DiffText:      diffTextOrNil(patch),
+		UpdatedAt:     0,
 	})
 }
 

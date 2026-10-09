@@ -78,6 +78,8 @@ message SessionFileChange {
   optional string diff_text = 6;
   bool reviewed = 7;
   int64 updated_at = 8;
+  // Id of the user message that started the turn (empty for legacy rows).
+  string user_message_id = 9;
 }
 
 message SessionFileChangeDiff {

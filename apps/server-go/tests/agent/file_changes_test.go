@@ -18,11 +18,15 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
@@ -251,8 +255,8 @@ func TestFailedWriteRecordsNothing(t *testing.T) {
 	}
 }
 
-// TestEditFileUsesArgumentSnippet confirms editFile is unaffected — it diffs
-// its own oldContent/newContent and needs no snapshot.
+// TestEditFileUsesArgumentSnippet confirms a single editFile records the
+// file's change against its turn baseline.
 func TestEditFileUsesArgumentSnippet(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "edit.ts")
 	if err := os.WriteFile(path, []byte("foo\nbar\n"), 0o644); err != nil {
@@ -274,15 +278,9 @@ func TestEditFileUsesArgumentSnippet(t *testing.T) {
 	}
 }
 
-// TestTwoWritesSamePathCollapseWithinATurn documents the turn-index
-// semantics that decide whether two writes to one path survive as separate
-// rows or overwrite each other.
-//
-// Every tool result in a run is stamped with `len(history)` captured once,
-// before the run starts (see turns.go). So all writes in one run share a
-// turn index, and the table's PRIMARY KEY (path, turn_index) upserts the
-// second write over the first — the run keeps only its final effect on that
-// path, which is the correct end state, not a lost update.
+// TestTwoWritesSamePathCollapseWithinATurn: two writes to one path in a
+// turn collapse to one row recording the net change of the turn — diffed
+// against the content the file had before the turn first touched it.
 func TestTwoWritesSamePathCollapseWithinATurn(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "twice.ts")
 	if err := os.WriteFile(path, []byte("v1\n"), 0o644); err != nil {
@@ -294,24 +292,56 @@ func TestTwoWritesSamePathCollapseWithinATurn(t *testing.T) {
 		callFor(t, "write_file", map[string]any{"path": path, "content": "v3\n"}),
 	)
 
-	// One row: same (path, turnIndex) key, so the last write wins.
 	if len(changes) != 1 {
 		t.Fatalf("same-path writes in one turn must collapse to 1 row, got %d: %+v", len(changes), changes)
 	}
-	// The snapshot is refreshed before each write, so the surviving row
-	// reflects the LAST write (v2 -> v3), not the pre-run content.
-	if changes[0].Deletions != 1 {
-		t.Fatalf("surviving row deletions = %d, want 1 (v2 removed)", changes[0].Deletions)
+	got := changes[0]
+	if got.Additions != 1 || got.Deletions != 1 {
+		t.Fatalf("net counts = +%d -%d, want +1 -1", got.Additions, got.Deletions)
 	}
-	if changes[0].DiffText == nil {
-		t.Fatal("surviving row must keep a diff body")
+	if got.DiffText == nil || !strings.Contains(*got.DiffText, "-v1") || !strings.Contains(*got.DiffText, "+v3") {
+		t.Fatalf("diff must be the turn's net change (v1 -> v3): %+v", got.DiffText)
 	}
-	if strings.Contains(*changes[0].DiffText, "-v1") {
-		t.Fatalf("diff must be against the previous write's output, not the pre-run content:\n%s", *changes[0].DiffText)
+	if strings.Contains(*got.DiffText, "v2") {
+		t.Fatalf("intermediate content must not appear in the net diff:\n%s", *got.DiffText)
 	}
-	if final, _ := os.ReadFile(path); string(final) != "v3\n" {
-		t.Fatalf("on-disk content = %q, want the last write's content", string(final))
+}
+
+// TestRepeatedEditsRecordNetChange: several editFile calls on one path in a
+// turn record the whole-file net change, not just the last snippet.
+func TestRepeatedEditsRecordNetChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "edits.ts")
+	if err := os.WriteFile(path, []byte("a\nb\nc\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
+
+	changes := runWrites(t,
+		tools.ToolCall{ID: "e1", Name: "editFile", Arguments: mustJSON(t, map[string]any{"path": path, "oldContent": "a\n", "newContent": "A\n"})},
+		tools.ToolCall{ID: "e2", Name: "editFile", Arguments: mustJSON(t, map[string]any{"path": path, "oldContent": "c\n", "newContent": "C\nD\n"})},
+	)
+
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 row, got %+v", changes)
+	}
+	got := changes[0]
+	if got.Status != "modified" {
+		t.Fatalf("status = %q, want modified", got.Status)
+	}
+	if got.Additions != 3 || got.Deletions != 2 {
+		t.Fatalf("net counts = +%d -%d, want +3 -2", got.Additions, got.Deletions)
+	}
+	if got.DiffText == nil || !strings.Contains(*got.DiffText, "-a") || !strings.Contains(*got.DiffText, "+D") {
+		t.Fatalf("net diff missing first or last edit:\n%v", got.DiffText)
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 // TestSamePathAcrossRunsKeepsBothRows is the counterpart: a new run sees a
@@ -359,9 +389,21 @@ func TestSamePathAcrossRunsKeepsBothRows(t *testing.T) {
 	if len(changes) != 2 {
 		t.Fatalf("two runs on one path must keep both rows, got %d: %+v", len(changes), changes)
 	}
-	// Distinct turn indices — this is the whole point of the column.
-	if changes[0].TurnIndex == changes[1].TurnIndex {
-		t.Fatalf("both rows share turn_index %d; they must differ", changes[0].TurnIndex)
+	// One turn per user message: the runs land on turns 0 and 1, each linked
+	// to the persisted user message that started it.
+	byTurn := map[int]types.SessionFileChange{}
+	for _, c := range changes {
+		byTurn[c.TurnIndex] = c
+	}
+	first, ok0 := byTurn[0]
+	second, ok1 := byTurn[1]
+	if !ok0 || !ok1 {
+		t.Fatalf("want turn indices 0 and 1, got %+v", changes)
+	}
+	userIDs := userMessageIDs(t, sessions, header.ID)
+	if len(userIDs) != 2 || first.UserMessageID != userIDs[0] || second.UserMessageID != userIDs[1] {
+		t.Fatalf("rows must link to their user messages: ids=%v first=%q second=%q",
+			userIDs, first.UserMessageID, second.UserMessageID)
 	}
 	// Each was a modification of content that existed.
 	for i, c := range changes {
@@ -369,4 +411,25 @@ func TestSamePathAcrossRunsKeepsBothRows(t *testing.T) {
 			t.Fatalf("row %d status = %q, want modified", i, c.Status)
 		}
 	}
+}
+
+// userMessageIDs returns the persisted user message ids of a session, oldest
+// first.
+func userMessageIDs(t *testing.T, sessions *services.SessionService, sessionID string) []string {
+	t.Helper()
+	loaded, err := sessions.Load(sessionID, 0, 0)
+	if err != nil || loaded == nil {
+		t.Fatalf("load session: %v", err)
+	}
+	var ids []string
+	for _, raw := range loaded.Messages {
+		var msg consolev1.AgentMessage
+		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(raw, &msg); err != nil {
+			continue
+		}
+		if msg.GetUser() != nil {
+			ids = append(ids, msg.GetId())
+		}
+	}
+	return ids
 }

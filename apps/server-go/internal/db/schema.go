@@ -117,6 +117,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 		CREATE TABLE IF NOT EXISTS session_file_changes (
 			path TEXT NOT NULL,
 			turn_index INTEGER NOT NULL DEFAULT 0,
+			user_message_id TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL,
 			additions INTEGER NOT NULL DEFAULT 0,
 			deletions INTEGER NOT NULL DEFAULT 0,
@@ -216,6 +217,20 @@ func InitSessionDB(db *sql.DB, path string) error {
 	}
 	if reviewedCount == 0 {
 		if _, err := db.Exec(`ALTER TABLE session_file_changes ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	// Additive migration: link file-change rows to the user message that
+	// started their turn.
+	var userMsgCount int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('session_file_changes') WHERE name = 'user_message_id'`,
+	).Scan(&userMsgCount); err != nil {
+		return err
+	}
+	if userMsgCount == 0 {
+		if _, err := db.Exec(`ALTER TABLE session_file_changes ADD COLUMN user_message_id TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err
 		}
 	}

@@ -23,15 +23,16 @@ func (s *Service) RecordFileChange(sessionID string, change types.SessionFileCha
 	}
 	now := utils.NowMillis()
 	_, err = conn.Exec(`
-		INSERT INTO session_file_changes (path, turn_index, status, additions, deletions, diff_text, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO session_file_changes (path, turn_index, user_message_id, status, additions, deletions, diff_text, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path, turn_index) DO UPDATE SET
+			user_message_id = excluded.user_message_id,
 			status = excluded.status,
 			additions = excluded.additions,
 			deletions = excluded.deletions,
 			diff_text = excluded.diff_text,
 			updated_at = excluded.updated_at`,
-		change.Path, change.TurnIndex, change.Status, change.Additions, change.Deletions,
+		change.Path, change.TurnIndex, change.UserMessageID, change.Status, change.Additions, change.Deletions,
 		change.DiffText, now)
 	return err
 }
@@ -51,7 +52,7 @@ func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]type
 		return nil, err
 	}
 
-	query := `SELECT path, turn_index, status, additions, deletions, diff_text, reviewed, updated_at FROM session_file_changes`
+	query := `SELECT path, turn_index, user_message_id, status, additions, deletions, diff_text, reviewed, updated_at FROM session_file_changes`
 	var args []any
 	if turnIndex >= 0 {
 		query += ` WHERE turn_index = ?`
@@ -70,7 +71,7 @@ func (s *Service) GetSessionFileChanges(sessionID string, turnIndex int) ([]type
 		var change types.SessionFileChange
 		var diffText sql.NullString
 		var reviewed int
-		if err := rows.Scan(&change.Path, &change.TurnIndex, &change.Status, &change.Additions,
+		if err := rows.Scan(&change.Path, &change.TurnIndex, &change.UserMessageID, &change.Status, &change.Additions,
 			&change.Deletions, &diffText, &reviewed, &change.UpdatedAt); err != nil {
 			return nil, err
 		}

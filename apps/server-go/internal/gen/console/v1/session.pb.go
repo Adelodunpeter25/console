@@ -465,15 +465,17 @@ func (x *SessionPermanentDeleteResponse) GetPermanentlyDeleted() bool {
 // The reviewed POST takes hand-built JSON and returns 204, so it needs no
 // messages; the diff payload is just the cached text.
 type SessionFileChange struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	TurnIndex     uint32                 `protobuf:"varint,2,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
-	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	Additions     uint32                 `protobuf:"varint,4,opt,name=additions,proto3" json:"additions,omitempty"`
-	Deletions     uint32                 `protobuf:"varint,5,opt,name=deletions,proto3" json:"deletions,omitempty"`
-	DiffText      *string                `protobuf:"bytes,6,opt,name=diff_text,json=diffText,proto3,oneof" json:"diff_text,omitempty"`
-	Reviewed      bool                   `protobuf:"varint,7,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
-	UpdatedAt     int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Path      string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	TurnIndex uint32                 `protobuf:"varint,2,opt,name=turn_index,json=turnIndex,proto3" json:"turn_index,omitempty"`
+	Status    string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Additions uint32                 `protobuf:"varint,4,opt,name=additions,proto3" json:"additions,omitempty"`
+	Deletions uint32                 `protobuf:"varint,5,opt,name=deletions,proto3" json:"deletions,omitempty"`
+	DiffText  *string                `protobuf:"bytes,6,opt,name=diff_text,json=diffText,proto3,oneof" json:"diff_text,omitempty"`
+	Reviewed  bool                   `protobuf:"varint,7,opt,name=reviewed,proto3" json:"reviewed,omitempty"`
+	UpdatedAt int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Id of the user message that started the turn (empty for legacy rows).
+	UserMessageId string `protobuf:"bytes,9,opt,name=user_message_id,json=userMessageId,proto3" json:"user_message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -562,6 +564,13 @@ func (x *SessionFileChange) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *SessionFileChange) GetUserMessageId() string {
+	if x != nil {
+		return x.UserMessageId
+	}
+	return ""
 }
 
 type SessionFileChangeDiff struct {
@@ -1289,7 +1298,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\brestored\x18\x02 \x01(\bR\brestored\"a\n" +
 	"\x1eSessionPermanentDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
-	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\x85\x02\n" +
+	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\xad\x02\n" +
 	"\x11SessionFileChange\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1d\n" +
 	"\n" +
@@ -1300,7 +1309,8 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\tdiff_text\x18\x06 \x01(\tH\x00R\bdiffText\x88\x01\x01\x12\x1a\n" +
 	"\breviewed\x18\a \x01(\bR\breviewed\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\b \x01(\x03R\tupdatedAtB\f\n" +
+	"updated_at\x18\b \x01(\x03R\tupdatedAt\x12&\n" +
+	"\x0fuser_message_id\x18\t \x01(\tR\ruserMessageIdB\f\n" +
 	"\n" +
 	"_diff_text\"4\n" +
 	"\x15SessionFileChangeDiff\x12\x1b\n" +

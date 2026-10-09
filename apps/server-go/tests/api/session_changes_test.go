@@ -46,7 +46,7 @@ func TestFileChangeProtoMatchesFixtures(t *testing.T) {
 	row := &consolev1.SessionFileChange{
 		Path: "src/a.ts", TurnIndex: 3, Status: "modified",
 		Additions: 10, Deletions: 2, DiffText: &diff,
-		Reviewed: true, UpdatedAt: 1700000000000,
+		Reviewed: true, UpdatedAt: 1700000000000, UserMessageId: "msg_1",
 	}
 	elements := []json.RawMessage{json.RawMessage(compactJSON(t, mustProtoBytes(t, row)))}
 	encoded, err := json.Marshal(elements)
@@ -64,7 +64,7 @@ func TestFileChangeProtoMatchesFixtures(t *testing.T) {
 	if err := unmarshal.Unmarshal([]byte(changesFixture(t, "changes.json")[1:len(changesFixture(t, "changes.json"))-1]), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.GetTurnIndex() != 3 || decoded.GetAdditions() != 10 {
+	if decoded.GetTurnIndex() != 3 || decoded.GetAdditions() != 10 || decoded.GetUserMessageId() != "msg_1" {
 		t.Fatalf("decoded: %+v", &decoded)
 	}
 }

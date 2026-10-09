@@ -192,6 +192,9 @@ type Agent struct {
 	// ToolStats counts calls, errors (by class), and result bytes per tool
 	// (never nil after New).
 	ToolStats *ToolStats
+	// UserMessageID, when set, is the id persisted for the run's user
+	// message, so callers can link side records (file changes) to it.
+	UserMessageID string
 }
 
 func New(provider Provider, executor *Executor, sessions *services.SessionService) *Agent {
@@ -218,8 +221,12 @@ func (a *Agent) run(ctx context.Context, sessionID string, history []any, user U
 		events.Fail(fmt.Errorf("encode user message: %w", err))
 		return
 	}
+	userID := a.UserMessageID
+	if userID == "" {
+		userID = newMessageID()
+	}
 	if err := a.persist(sessionID, types.AgentMessage{
-		ID:   newMessageID(),
+		ID:   userID,
 		Role: string(RoleUser),
 		Data: userBytes,
 	}); err != nil {

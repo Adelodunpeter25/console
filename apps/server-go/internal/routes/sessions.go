@@ -54,7 +54,7 @@ func subagentToProto(s types.SubagentInfo) *consolev1.SubagentInfo {
 // wire type. Counts narrow to uint32 and stay JSON numbers.
 func sessionFileChangeToProto(c types.SessionFileChange) *consolev1.SessionFileChange {
 	out := &consolev1.SessionFileChange{
-		Path: c.Path, TurnIndex: uint32(c.TurnIndex), Status: c.Status,
+		Path: c.Path, TurnIndex: uint32(c.TurnIndex), UserMessageId: c.UserMessageID, Status: c.Status,
 		Additions: uint32(c.Additions), Deletions: uint32(c.Deletions),
 		Reviewed: c.Reviewed, UpdatedAt: c.UpdatedAt,
 	}

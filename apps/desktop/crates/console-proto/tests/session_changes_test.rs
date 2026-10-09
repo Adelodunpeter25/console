@@ -24,6 +24,7 @@ fn decodes_golden_changes_fixture() {
     assert_eq!(change.diff_text.as_deref(), Some("--- a\n"));
     assert!(change.reviewed);
     assert_eq!(change.updated_at, 1700000000000);
+    assert_eq!(change.user_message_id, "msg_1");
 }
 
 #[test]

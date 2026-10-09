@@ -173,6 +173,13 @@ pub fn filter_changes_for_scope(
         return Vec::new();
     }
     let latest_turn = changes.iter().map(|c| c.turn_index).max().unwrap_or(0);
+    // Turns that edited nothing have no rows, so "previous" is the most
+    // recent turn below the latest that has changes, not `latest - 1`.
+    let previous_turn = changes
+        .iter()
+        .map(|c| c.turn_index)
+        .filter(|&t| t < latest_turn)
+        .max();
     match scope {
         ChangesScope::AllTurns => {
             let mut seen = std::collections::HashSet::new();
@@ -187,17 +194,14 @@ pub fn filter_changes_for_scope(
             .filter(|c| c.turn_index == latest_turn)
             .cloned()
             .collect(),
-        ChangesScope::PreviousTurn => {
-            if latest_turn == 0 {
-                Vec::new()
-            } else {
-                changes
-                    .iter()
-                    .filter(|c| c.turn_index == latest_turn - 1)
-                    .cloned()
-                    .collect()
-            }
-        }
+        ChangesScope::PreviousTurn => match previous_turn {
+            Some(previous) => changes
+                .iter()
+                .filter(|c| c.turn_index == previous)
+                .cloned()
+                .collect(),
+            None => Vec::new(),
+        },
     }
 }
 

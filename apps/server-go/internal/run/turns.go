@@ -134,15 +134,28 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 	return staged, true
 }
 
-// wholeFileWritePaths returns the files a tool call is about to overwrite in
-// full. Only these need a pre-write snapshot: editFile carries its own
-// oldContent/newContent arguments, and read-only tools touch nothing.
+// countUserMessages returns how many user messages a decoded history holds,
+// which is the zero-based index of the next turn.
+func countUserMessages(history []any) int {
+	n := 0
+	for _, msg := range history {
+		if _, ok := msg.(loop.UserMessage); ok {
+			n++
+		}
+	}
+	return n
+}
+
+// writePaths returns the files a tool call is about to modify. Each gets a
+// baseline snapshot on its first touch in the turn so the recorded change
+// is the net effect of the whole turn; read-only tools touch nothing.
 //
 // Unparseable or empty argument payloads yield no paths, which simply means
 // the later recording step falls back to argument-only information.
-func wholeFileWritePaths(call tools.ToolCall) []string {
+func writePaths(call tools.ToolCall) []string {
 	switch call.Name {
-	case "writeFile", "write_file", "batchWrite", "batch_write":
+	case "writeFile", "write_file", "batchWrite", "batch_write",
+		"editFile", "edit_file", "replace_file_content":
 	default:
 		return nil
 	}
@@ -153,8 +166,9 @@ func wholeFileWritePaths(call tools.ToolCall) []string {
 	// write_file, or "files"[].path for batchWrite. Read both shapes so one
 	// unmarshal serves either tool.
 	var in struct {
-		Path  string `json:"path"`
-		Files []struct {
+		Path       string `json:"path"`
+		TargetFile string `json:"targetFile"`
+		Files      []struct {
 			Path string `json:"path"`
 		} `json:"files"`
 	}
@@ -164,6 +178,8 @@ func wholeFileWritePaths(call tools.ToolCall) []string {
 	var paths []string
 	if in.Path != "" {
 		paths = append(paths, in.Path)
+	} else if in.TargetFile != "" {
+		paths = append(paths, in.TargetFile)
 	}
 	for _, f := range in.Files {
 		if f.Path != "" {
@@ -294,6 +310,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	}
 
 	history := DecodeHistory(loaded.Messages)
+	// A turn is one user message: its index is how many user messages the
+	// session already holds (compaction never rewrites stored history).
+	turn := turnRef{Index: countUserMessages(history), UserMessageID: "msg_" + randomHex(16)}
+	// File baselines are per turn: the first touch of a path in this turn
+	// captures its "before" side, so repeated edits record the net change.
+	s.snapshots.drop(sessionID)
 	prompt := s.prompts.get(sessionID, systemprompt.BuildOptions{
 		Cwd:          header.Cwd,
 		Model:        modelID,
@@ -408,10 +430,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	// tool is about to touch, so the change diff recorded from the result
 	// event (which fires after the write) still has a real "before" side.
 	executor.OnBeforeExecute = func(call tools.ToolCall, _ tools.Tool) {
-		s.snapshots.SnapshotWritePaths(sessionID, wholeFileWritePaths(call))
+		s.snapshots.SnapshotWritePaths(sessionID, writePaths(call))
 	}
 	agent := loop.New(provider, executor, s.sessions)
 	agent.Usage = usage
+	agent.UserMessageID = turn.UserMessageID
 	agent.ToolDefs = registry.Definitions
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
@@ -470,12 +493,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 
 		// Track file changes on tool execution results
 		if event.Kind == loop.EventToolResult && event.Result != nil {
-			turnIndex := len(history) // Approximate turn index from history length
 			var args map[string]any
 			if len(event.Result.Args) > 0 {
 				_ = json.Unmarshal(event.Result.Args, &args)
 			}
-			_ = s.generateAndRecordFileChange(s.snapshots, sessionID, event.Result.ToolName, args, event.Result.IsError, turnIndex)
+			_ = s.generateAndRecordFileChange(s.snapshots, sessionID, event.Result.ToolName, args, event.Result.IsError, turn)
 		}
 
 		turner.translate(event)
