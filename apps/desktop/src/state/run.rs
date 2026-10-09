@@ -376,7 +376,7 @@ impl ConsoleDesktopApp {
         let approval_mode = Some(self.pane_approval_mode(&run_pane_id).value().to_string());
         let thinking_level = self.pane_thinking_level(&run_pane_id);
         let active_sid = self.active_session_for_pane(&run_pane_id);
-        let session_project_id = self.pane_project_id(&run_pane_id);
+        let session_project_id = self.pane_real_project_id(&run_pane_id);
         let session_cwd = self
             .selected_project_for_pane(&run_pane_id)
             .map(|project| project.path.clone());

@@ -218,9 +218,14 @@ impl ConsoleDesktopApp {
         let approval_mode = self.pane_approval_mode(&pane_id);
         let thinking_level = self.pane_thinking_level(&pane_id);
         let selected_model = self.pane_selected_model(&pane_id);
-        let session_project_id = self
-            .pane_project_id(&pane_id)
-            .or_else(|| self.selected_project_id.clone());
+        // The real project id goes to the server; the cwd is the pane's
+        // checkout, so a new chat in a worktree workspace starts in that
+        // worktree instead of the project's main folder.
+        let session_project_id = self.pane_real_project_id(&pane_id).or_else(|| {
+            self.selected_project_id
+                .as_deref()
+                .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
+        });
         let session_cwd = self
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())

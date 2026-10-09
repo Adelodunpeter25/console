@@ -42,9 +42,11 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        let project_id = self
-            .pane_project_id(&pane_id)
-            .or_else(|| self.selected_project_id.clone());
+        let project_id = self.pane_real_project_id(&pane_id).or_else(|| {
+            self.selected_project_id
+                .as_deref()
+                .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
+        });
 
         // The card is the only consumer of this state while it's open, so
         // refresh the branch list for whatever project it's about to show.

@@ -233,17 +233,32 @@ impl ConsoleDesktopApp {
     /// and the Option+1–9 shortcuts so both switch content, not just the tab
     /// highlight.
     pub fn activate_workspace_tab(&mut self, pane_id: &str, tab_id: &str, cx: &mut Context<Self>) {
+        // A chat tab saved in the wrong workspace (e.g. a worktree chat that
+        // predates per-worktree workspaces) is moved to its own workspace
+        // instead of being shown in this one.
+        if let Some(sid) = tab_id.strip_prefix("chat:") {
+            if let Some(target) = self.target_workspace_for_session(sid) {
+                if self.selected_project_id.as_deref() != Some(target.as_str()) {
+                    self.select_and_open_session(sid.to_string(), cx);
+                    return;
+                }
+            }
+        }
         let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
         self.select_workspace_tab(pane_id, tab_id);
         self.sync_workspace_webviews(cx);
         if let Some(sid) = tab_id.strip_prefix("chat:") {
             super::macos_notifications::clear_for_session(sid);
             self.selected_session_id = Some(sid.to_string());
-            if let Some(session) = self.sessions.iter().find(|s| s.id == sid) {
-                if let Some(pid) = &session.project_id {
-                    if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                        state.selected_project_id = Some(pid.clone());
-                    }
+            // The pane's workspace key: the project, or project + worktree.
+            let key = self
+                .sessions
+                .iter()
+                .find(|s| s.id == sid)
+                .and_then(|session| self.workspace_key_for_header(session));
+            if let Some(key) = key {
+                if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                    state.selected_project_id = Some(key);
                 }
             }
             let transcript_has_messages =
@@ -364,13 +379,14 @@ impl ConsoleDesktopApp {
         }
         self.active_pane_id = Some(pane_id.to_string());
         self.selected_session_id = self.active_session_for_pane(pane_id);
-        if let Some(session_id) = &self.selected_session_id {
-            if let Some(session) = self.sessions.iter().find(|s| &s.id == session_id) {
-                if let Some(pid) = &session.project_id {
-                    if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                        state.selected_project_id = Some(pid.clone());
-                    }
-                }
+        let key = self
+            .selected_session_id
+            .as_deref()
+            .and_then(|session_id| self.sessions.iter().find(|s| s.id == session_id))
+            .and_then(|session| self.workspace_key_for_header(session));
+        if let Some(key) = key {
+            if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+                state.selected_project_id = Some(key);
             }
         }
         self.maybe_refresh_inspector(cx);
@@ -468,7 +484,7 @@ impl ConsoleDesktopApp {
         let WorkspaceTabConfig::Chat { session_id, .. } = &drag.tab else {
             return false;
         };
-        let target_project_id = self.target_project_for_session(session_id).map(|p| p.id);
+        let target_project_id = self.target_workspace_for_session(session_id);
         if target_project_id != self.selected_project_id {
             self.select_and_open_session(session_id.clone(), cx);
             return true;

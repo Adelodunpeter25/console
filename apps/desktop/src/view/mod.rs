@@ -205,6 +205,7 @@ impl Render for ConsoleDesktopApp {
                 }) => {
                     let folder = project_id
                         .as_deref()
+                        .map(console_core::project_id_of_workspace_key)
                         .and_then(|pid| {
                             self.projects
                                 .iter()
@@ -212,7 +213,7 @@ impl Render for ConsoleDesktopApp {
                                 .map(|p| p.name.clone())
                         })
                         .or_else(|| {
-                            self.pane_project_id(active_pane_id).and_then(|pid| {
+                            self.pane_real_project_id(active_pane_id).and_then(|pid| {
                                 self.projects
                                     .iter()
                                     .find(|p| p.id == pid)

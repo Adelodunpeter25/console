@@ -173,10 +173,15 @@ impl ConsoleDesktopApp {
                     .find(|leaf| leaf.id == pid)
                     .and_then(|leaf| leaf.active_tab_id.clone())
             });
-            let proj_info = proj_id_opt
+            let proj_info = proj_id_opt.as_ref().and_then(|key| {
+                let pid = console_core::project_id_of_workspace_key(key);
+                self.projects.iter().find(|p| p.id == pid)
+            });
+            // A worktree workspace's folder is its worktree, not the project's.
+            let cwd = proj_id_opt
                 .as_ref()
-                .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
-            let cwd = proj_info.map(|p| p.path.clone());
+                .and_then(|key| self.workspace_path_for_key(key))
+                .or_else(|| proj_info.map(|p| p.path.clone()));
             let (term_count, term_active_idx) = cwd
                 .as_ref()
                 .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))
@@ -239,11 +244,16 @@ impl ConsoleDesktopApp {
                 .find(|l| l.id == pid)
                 .and_then(|l| l.active_tab_id.clone())
         });
-        let cur_proj = self
+        let cur_proj = self.selected_project_id.as_ref().and_then(|key| {
+            let pid = console_core::project_id_of_workspace_key(key);
+            self.projects.iter().find(|p| p.id == pid)
+        });
+        let cur_cwd = self
             .selected_project_id
             .as_ref()
-            .and_then(|pid| self.projects.iter().find(|p| &p.id == pid));
-        let cur_cwd = cur_proj.map(|p| p.path.clone()).or_else(|| {
+            .and_then(|key| self.workspace_path_for_key(key))
+            .or_else(|| cur_proj.map(|p| p.path.clone()))
+            .or_else(|| {
             let (_, cwd) = self.active_inspector_target();
             cwd
         });

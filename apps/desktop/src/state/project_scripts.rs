@@ -90,10 +90,14 @@ impl ConsoleDesktopApp {
             }
             None => None,
         };
-        from_tab.or_else(|| {
-            self.selected_project_for_pane(pane_id)
-                .map(|p| p.id.clone())
-        })
+        from_tab
+            .or_else(|| {
+                self.selected_project_for_pane(pane_id)
+                    .map(|p| p.id.clone())
+            })
+            // Tabs carry the workspace key; the scripts routes want the real
+            // project id (the worktree folder travels separately as `cwd`).
+            .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
     }
 
     /// The checkout the active chat works in — its worktree, or the project
@@ -179,7 +183,11 @@ impl ConsoleDesktopApp {
                         // describe the project the panel shows.
                         let active_pid = this
                             .active_scripts_project_id()
-                            .or_else(|| this.selected_project_id.clone());
+                            .or_else(|| {
+                            this.selected_project_id
+                                .as_deref()
+                                .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
+                        });
 
                         let running: Vec<(String, String, String)> = {
                             let Some(state) = this.project_scripts_by_project.get_mut(&project_id)
@@ -484,7 +492,11 @@ impl ConsoleDesktopApp {
     pub fn sync_active_shortcuts_to_active_project(&mut self) {
         let active_pid = self
             .active_scripts_project_id()
-            .or_else(|| self.selected_project_id.clone());
+            .or_else(|| {
+                self.selected_project_id
+                    .as_deref()
+                    .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
+            });
         let Some(active_pid) = active_pid else {
             self.active_project_shortcuts.clear();
             return;

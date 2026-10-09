@@ -9,10 +9,63 @@ use gpui::Context;
 use super::ConsoleDesktopApp;
 
 impl ConsoleDesktopApp {
-    pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<&ProjectInfo> {
+    /// The project behind a pane's workspace. In a worktree workspace the
+    /// returned `path` is the worktree's folder, not the project's main
+    /// checkout, so everything that reads it — terminals, file tree, search,
+    /// quick open, new chats — follows the checkout the workspace is for.
+    pub(crate) fn selected_project_for_pane(&self, pane_id: &str) -> Option<ProjectInfo> {
+        let key = self.pane_project_id(pane_id)?;
+        let (project_id, worktree) = console_core::split_workspace_key(&key);
+        let mut project = self.projects.iter().find(|p| p.id == project_id)?.clone();
+        if let Some(path) = worktree {
+            project.path = path.to_owned();
+        }
+        Some(project)
+    }
+
+    /// The real project id behind a pane's workspace key. Server calls and
+    /// project lookups need this; the workspace key itself also encodes which
+    /// worktree the pane is in.
+    pub(crate) fn pane_real_project_id(&self, pane_id: &str) -> Option<String> {
         self.pane_project_id(pane_id)
-            .as_ref()
-            .and_then(|id| self.projects.iter().find(|project| &project.id == id))
+            .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
+    }
+
+    /// The folder a workspace key stands for: the worktree path, or the
+    /// project's registered folder.
+    pub(crate) fn workspace_path_for_key(&self, key: &str) -> Option<String> {
+        match console_core::split_workspace_key(key) {
+            (_, Some(path)) => Some(path.to_owned()),
+            (project_id, None) => self
+                .projects
+                .iter()
+                .find(|p| p.id == project_id)
+                .map(|p| p.path.clone()),
+        }
+    }
+
+    /// The workspace a session's tabs live in: its worktree's workspace when
+    /// it runs outside the project folder, else the project's. Falls back to
+    /// what the header alone says while projects are still loading.
+    pub(crate) fn workspace_key_for_header(&self, session: &console_core::SessionHeader) -> Option<String> {
+        let project = session
+            .project_id
+            .as_deref()
+            .and_then(|id| self.projects.iter().find(|p| p.id == id))
+            .or_else(|| {
+                (!session.cwd.is_empty())
+                    .then(|| self.projects.iter().find(|p| p.path == session.cwd))
+                    .flatten()
+            });
+        match project {
+            Some(project) => Some(
+                match console_core::session_checkout_path(session, Some(&project.path)) {
+                    Some(path) => console_core::worktree_workspace_key(&project.id, path),
+                    None => project.id.clone(),
+                },
+            ),
+            None => console_core::workspace_key_for_session(session, None),
+        }
     }
 
     pub fn select_project_for_pane(
@@ -124,7 +177,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| pane_id.clone());
-        let Some(project) = self.selected_project_for_pane(&effective_pane).cloned() else {
+        let Some(project) = self.selected_project_for_pane(&effective_pane) else {
             return;
         };
 
@@ -483,7 +536,7 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        let session_project_id = self.pane_project_id(&pane_id);
+        let session_project_id = self.pane_real_project_id(&pane_id);
         let approval_mode = self.pane_approval_mode(&pane_id);
         let thinking_level = self.pane_thinking_level(&pane_id);
         let selected_model = self.pane_selected_model(&pane_id);
@@ -650,16 +703,28 @@ impl ConsoleDesktopApp {
 
     pub fn remove_project(&mut self, project_id: String, cx: &mut Context<Self>) {
         Rc::make_mut(&mut self.projects).retain(|p| p.id != project_id);
-        if self.selected_project_id.as_deref() == Some(&project_id) {
+        if self
+            .selected_project_id
+            .as_deref()
+            .is_some_and(|k| console_core::project_id_of_workspace_key(k) == project_id)
+        {
             self.selected_project_id = None;
         }
-        self.project_workspace_roots
-            .remove(&Some(project_id.clone()));
-        // The removed project's stashed workspace is gone, so any browser
+        let belongs = |key: &Option<String>| {
+            key.as_deref()
+                .is_some_and(|k| console_core::project_id_of_workspace_key(k) == project_id)
+        };
+        self.project_workspace_roots.retain(|key, _| !belongs(key));
+        self.project_active_panes.retain(|key, _| !belongs(key));
+        // The removed project's stashed workspaces are gone, so any browser
         // tab it held is now unreferenced: close those views.
         self.sweep_unreferenced_browser_views(cx);
         for state in self.workspace_pane_states.values_mut() {
-            if state.selected_project_id.as_deref() == Some(&project_id) {
+            if state
+                .selected_project_id
+                .as_deref()
+                .is_some_and(|k| console_core::project_id_of_workspace_key(k) == project_id)
+            {
                 state.selected_project_id = None;
                 state.branches = Rc::new(Vec::new());
                 state.branch_loaded = false;

@@ -508,7 +508,7 @@ impl ConsoleDesktopApp {
         let pane_approval_mode = self.pane_approval_mode(&pane_id);
         let pane_thinking_level = self.pane_thinking_level(&pane_id);
         let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(&pane_id);
-        let pane_project_id = self.pane_project_id(&pane_id);
+        let pane_project_id = self.pane_real_project_id(&pane_id);
         let pane_branches = self.pane_branches(&pane_id);
         let pane_branch_loaded = self.pane_branch_loaded(&pane_id);
         let pane_is_git_repository = self.pane_is_git_repository(&pane_id);

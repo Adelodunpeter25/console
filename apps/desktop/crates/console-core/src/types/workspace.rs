@@ -326,12 +326,42 @@ pub fn is_worktree_workspace_key(key: &str) -> bool {
     split_workspace_key(key).1.is_some()
 }
 
-/// The workspace a session's tabs belong in: its worktree's workspace when it
-/// runs in one, else its project's. `None` for a chat with no project.
-pub fn workspace_key_for_session(session: &crate::types::session::SessionHeader) -> Option<String> {
+/// A path without trailing separators, so `/a/b` and `/a/b/` compare equal.
+fn trim_path(path: &str) -> &str {
+    let trimmed = path.trim_end_matches('/');
+    if trimmed.is_empty() { path } else { trimmed }
+}
+
+/// The folder a session works in when it is not its project's own: the worktree
+/// the server provisioned for it, else its `cwd` when that differs from the
+/// project folder (a chat started inside an existing worktree has no worktree
+/// record, only a `cwd`). `None` when the session just uses the project folder.
+pub fn session_checkout_path<'a>(
+    session: &'a crate::types::session::SessionHeader,
+    project_path: Option<&str>,
+) -> Option<&'a str> {
+    if let Some(path) = session.worktree.as_ref().map(|w| w.path.as_str()) {
+        if !path.is_empty() {
+            return Some(trim_path(path));
+        }
+    }
+    let cwd = trim_path(session.cwd.as_str());
+    let project_path = trim_path(project_path?);
+    (!cwd.is_empty() && cwd != project_path).then_some(cwd)
+}
+
+/// The workspace a session's tabs belong in: its own checkout's workspace when
+/// it runs outside the project folder, else its project's. `None` for a chat
+/// with no project. `project_path` is the project's registered folder, needed
+/// to tell a worktree chat from a plain one when the server sent no worktree
+/// record; pass `None` while projects are not loaded yet.
+pub fn workspace_key_for_session(
+    session: &crate::types::session::SessionHeader,
+    project_path: Option<&str>,
+) -> Option<String> {
     let project_id = session.project_id.as_deref()?;
-    match session.worktree.as_ref().map(|w| w.path.as_str()) {
-        Some(path) if !path.is_empty() => Some(worktree_workspace_key(project_id, path)),
-        _ => Some(project_id.to_owned()),
+    match session_checkout_path(session, project_path) {
+        Some(path) => Some(worktree_workspace_key(project_id, path)),
+        None => Some(project_id.to_owned()),
     }
 }

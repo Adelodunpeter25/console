@@ -484,8 +484,24 @@ impl ConsoleDesktopApp {
                     .as_deref()
                     .and_then(|id| self.projects.iter().find(|project| &project.id == id))
             });
-        let target_id = resolved.map(|project| project.id.clone());
-        if target_id == self.pane_project_id(pane_id) {
+        let target_id = resolved.map(|project| {
+            match console_core::session_checkout_path(header, Some(&project.path)) {
+                Some(path) => console_core::worktree_workspace_key(&project.id, path),
+                None => project.id.clone(),
+            }
+        });
+        // Same project (worktree or not): the pane's workspace already fits
+        // this chat. Switching workspaces is `switch_workspace_for_session`'s
+        // job, never a side effect of applying a header.
+        let same_project = |a: &Option<String>, b: &Option<String>| match (a, b) {
+            (Some(a), Some(b)) => {
+                console_core::project_id_of_workspace_key(a)
+                    == console_core::project_id_of_workspace_key(b)
+            }
+            (None, None) => true,
+            _ => false,
+        };
+        if same_project(&target_id, &self.pane_project_id(pane_id)) {
             return;
         }
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
@@ -531,6 +547,24 @@ impl ConsoleDesktopApp {
             .iter()
             .find(|p| !target_session.cwd.is_empty() && p.path == target_session.cwd)
             .cloned()
+    }
+
+    /// The workspace key a session opens in: its worktree's workspace when it
+    /// runs in one, else its project's. A project the user just picked in the
+    /// footer wins (and means the project's own folder), like it does for
+    /// `target_project_for_session`.
+    pub(crate) fn target_workspace_for_session(&self, session_id: &str) -> Option<String> {
+        let project = self.target_project_for_session(session_id)?;
+        if self.pending_project_override.contains_key(session_id) {
+            return Some(project.id);
+        }
+        let session = self.sessions.iter().find(|s| s.id == session_id)?;
+        Some(
+            match console_core::session_checkout_path(session, Some(&project.path)) {
+                Some(path) => console_core::worktree_workspace_key(&project.id, path),
+                None => project.id,
+            },
+        )
     }
 
     /// Reconcile a folder-change confirmation from the server: adopt the
@@ -589,21 +623,20 @@ impl ConsoleDesktopApp {
         self.active_pane_id = remembered.or(current).or(first);
     }
 
-    pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
-        super::macos_notifications::clear_for_session(&id);
-        let active_pane_id = self
-            .active_pane_id
-            .clone()
-            .unwrap_or_else(|| "pane-main".to_string());
-        let prev_sid = self
-            .active_session_for_pane(&active_pane_id)
-            .map(|s| s.to_string());
-
-        self.save_transcript_scroll_position(cx);
-
+    /// Put the app in the workspace `id`'s chat belongs to — its project's, or
+    /// its worktree's — stashing the workspace it leaves and restoring (or
+    /// creating) the target. Returns whether the workspace changed. Does not
+    /// open the chat tab or load messages; callers do that themselves.
+    pub(crate) fn switch_workspace_for_session(
+        &mut self,
+        id: &str,
+        active_pane_id: &str,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
-        let target_project = self.target_project_for_session(&id);
-        let target_project_id = target_project.as_ref().map(|p| p.id.clone());
+        let target_project = self.target_project_for_session(id);
+        // The workspace key: the project id, or project + worktree path.
+        let target_project_id = self.target_workspace_for_session(id);
 
         // A workspace switch occurs if target_project_id differs from current project,
         // or if switching from an unassociated workspace into a project when tabs are already open.
@@ -641,7 +674,7 @@ impl ConsoleDesktopApp {
 
             // Switch active project
             self.selected_project_id = target_project_id.clone();
-            if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+            if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                 state.selected_project_id = target_project_id.clone();
                 Rc::make_mut(&mut state.branches).clear();
                 state.branch_loaded = target_project.is_none();
@@ -656,7 +689,7 @@ impl ConsoleDesktopApp {
             {
                 self.workspace_root = saved_root;
             } else {
-                self.workspace_root = console_core::WorkspaceNode::leaf(&active_pane_id);
+                self.workspace_root = console_core::WorkspaceNode::leaf(active_pane_id);
             }
             // Back on this workspace's remembered split focus before opening.
             self.restore_active_pane(&target_project_id);
@@ -679,13 +712,13 @@ impl ConsoleDesktopApp {
                     .map(|s| s.cwd.clone())
                     .filter(|cwd| !cwd.is_empty())
                     .unwrap_or_else(|| project.path.clone());
-                self.reload_branches_for_pane(active_pane_id.clone(), cwd, cx);
+                self.reload_branches_for_pane(active_pane_id.to_string(), cwd, cx);
             }
             self.persist_layout();
             self.persist_workspaces();
         } else if self.selected_project_id.is_none() && target_project_id.is_some() {
             self.selected_project_id = target_project_id.clone();
-            if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+            if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                 state.selected_project_id = target_project_id.clone();
             }
             self.persist_layout();
@@ -706,8 +739,8 @@ impl ConsoleDesktopApp {
             // project: pin pane + global to explicit None and persist.
             if target_project_id.is_none() {
                 let mut changed = false;
-                if self.pane_project_id(&active_pane_id).is_some() {
-                    if let Some(state) = self.workspace_pane_states.get_mut(&active_pane_id) {
+                if self.pane_project_id(active_pane_id).is_some() {
+                    if let Some(state) = self.workspace_pane_states.get_mut(active_pane_id) {
                         state.selected_project_id = None;
                         std::rc::Rc::make_mut(&mut state.branches).clear();
                         state.branch_loaded = true;
@@ -725,6 +758,24 @@ impl ConsoleDesktopApp {
                 }
             }
         }
+
+        is_different_project
+    }
+
+    pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
+        super::macos_notifications::clear_for_session(&id);
+        let active_pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let prev_sid = self
+            .active_session_for_pane(&active_pane_id)
+            .map(|s| s.to_string());
+
+        self.save_transcript_scroll_position(cx);
+
+        let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
+        let is_different_project = self.switch_workspace_for_session(&id, &active_pane_id, cx);
 
         self.selected_session_id = Some(id.clone());
         let title = target_session

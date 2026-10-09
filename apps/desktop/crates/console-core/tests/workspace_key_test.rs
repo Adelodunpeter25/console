@@ -9,6 +9,7 @@ use console_core::{
 fn session(project_id: Option<&str>, worktree: Option<&str>) -> SessionHeader {
     SessionHeader {
         id: "s1".into(),
+        cwd: worktree.unwrap_or("/repo").into(),
         project_id: project_id.map(str::to_owned),
         worktree: worktree.map(|path| SessionWorktree {
             path: path.into(),
@@ -46,27 +47,54 @@ fn a_path_that_itself_looks_like_a_key_still_splits_on_the_first_separator() {
 
 #[test]
 fn session_in_a_worktree_gets_the_worktree_workspace() {
-    let key = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a"))).unwrap();
+    let key = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a")), Some("/repo")).unwrap();
     assert_eq!(key, worktree_workspace_key("proj-1", "/wt/a"));
 }
 
 #[test]
 fn two_worktrees_of_one_project_get_different_workspaces() {
-    let a = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a")));
-    let b = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/b")));
+    let a = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a")), Some("/repo"));
+    let b = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/b")), Some("/repo"));
     assert_ne!(a, b);
 }
 
 #[test]
 fn session_without_a_worktree_stays_in_its_project_workspace() {
     assert_eq!(
-        workspace_key_for_session(&session(Some("proj-1"), None)),
+        workspace_key_for_session(&session(Some("proj-1"), None), Some("/repo")),
         Some("proj-1".to_string())
     );
 }
 
 #[test]
 fn session_without_a_project_has_no_workspace_key() {
-    assert_eq!(workspace_key_for_session(&session(None, Some("/wt/a"))), None);
-    assert_eq!(workspace_key_for_session(&session(None, None)), None);
+    assert_eq!(workspace_key_for_session(&session(None, Some("/wt/a")), Some("/repo")), None);
+    assert_eq!(workspace_key_for_session(&session(None, None), None), None);
+}
+
+// A chat started inside an existing worktree has no worktree record from the
+// server, only a cwd that differs from the project folder — still its own
+// workspace.
+#[test]
+fn chat_in_an_existing_worktree_is_keyed_by_its_cwd() {
+    let mut s = session(Some("proj-1"), None);
+    s.cwd = "/wt/a/".into();
+    assert_eq!(
+        workspace_key_for_session(&s, Some("/repo")),
+        Some(worktree_workspace_key("proj-1", "/wt/a"))
+    );
+}
+
+#[test]
+fn trailing_slash_on_the_project_folder_does_not_make_a_new_workspace() {
+    let mut s = session(Some("proj-1"), None);
+    s.cwd = "/repo/".into();
+    assert_eq!(workspace_key_for_session(&s, Some("/repo")), Some("proj-1".to_string()));
+}
+
+#[test]
+fn unknown_project_folder_falls_back_to_the_project_workspace() {
+    let mut s = session(Some("proj-1"), None);
+    s.cwd = "/wt/a".into();
+    assert_eq!(workspace_key_for_session(&s, None), Some("proj-1".to_string()));
 }

@@ -770,7 +770,7 @@ impl ConsoleDesktopApp {
             .sessions
             .iter()
             .find(|s| s.id == session_id);
-        let known_project_id = known_session.map(|s| s.project_id.clone());
+        let known_project_id = known_session.map(|s| self.workspace_key_for_header(s));
         let project_id = known_project_id
             .clone()
             .unwrap_or_else(|| self.pane_project_id(pane_id));

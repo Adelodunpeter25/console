@@ -267,23 +267,13 @@ impl ConsoleDesktopApp {
                             app.update(cx, |this, cx| {
                                 this.projects = Rc::new(projects);
                                 if this.selected_project_id.is_none() {
+                                    // The workspace key, so a restored worktree chat
+                                    // lands in its worktree's workspace.
                                     this.selected_project_id = this
-                                        .sessions
-                                        .iter()
-                                        .find(|session| {
-                                            Some(&session.id) == this.selected_session_id.as_ref()
-                                        })
-                                        .and_then(|session| {
-                                            session.project_id.clone().or_else(|| {
-                                                this.projects
-                                                    .iter()
-                                                    .find(|p| {
-                                                        !session.cwd.is_empty()
-                                                            && p.path == session.cwd
-                                                    })
-                                                    .map(|p| p.id.clone())
-                                            })
-                                        });
+                                        .selected_session_id
+                                        .as_deref()
+                                        .and_then(|sid| this.sessions.iter().find(|s| s.id == sid))
+                                        .and_then(|session| this.workspace_key_for_header(session));
                                 }
                                 let active_id = this
                                     .active_pane_id
