@@ -290,3 +290,48 @@ pub fn split_node(
         children: [Box::new(left), Box::new(right)],
     })
 }
+
+
+/// Separator between a project id and a worktree path inside a workspace key.
+/// Project ids are random ids that never contain it, so the first occurrence
+/// always splits the two.
+const WORKTREE_KEY_SEP: &str = "::wt::";
+
+/// The workspace key for a git worktree of `project_id`. A plain project's
+/// workspace keeps using the bare project id, so saved layouts keep working;
+/// only worktrees get this composite key, which gives each checkout its own
+/// tabs, terminals, files and diffs while the chat still belongs to the project.
+pub fn worktree_workspace_key(project_id: &str, worktree_path: &str) -> String {
+    format!("{project_id}{WORKTREE_KEY_SEP}{worktree_path}")
+}
+
+/// Split a workspace key into its real project id and, for a worktree
+/// workspace, the worktree path.
+pub fn split_workspace_key(key: &str) -> (&str, Option<&str>) {
+    match key.split_once(WORKTREE_KEY_SEP) {
+        Some((project_id, path)) if !path.is_empty() => (project_id, Some(path)),
+        Some((project_id, _)) => (project_id, None),
+        None => (key, None),
+    }
+}
+
+/// The real project id behind a workspace key (the key itself for a plain
+/// project, the part before the worktree path otherwise).
+pub fn project_id_of_workspace_key(key: &str) -> &str {
+    split_workspace_key(key).0
+}
+
+/// Whether `key` names a worktree workspace rather than a plain project.
+pub fn is_worktree_workspace_key(key: &str) -> bool {
+    split_workspace_key(key).1.is_some()
+}
+
+/// The workspace a session's tabs belong in: its worktree's workspace when it
+/// runs in one, else its project's. `None` for a chat with no project.
+pub fn workspace_key_for_session(session: &crate::types::session::SessionHeader) -> Option<String> {
+    let project_id = session.project_id.as_deref()?;
+    match session.worktree.as_ref().map(|w| w.path.as_str()) {
+        Some(path) if !path.is_empty() => Some(worktree_workspace_key(project_id, path)),
+        _ => Some(project_id.to_owned()),
+    }
+}
