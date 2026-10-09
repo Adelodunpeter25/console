@@ -363,49 +363,47 @@ fun ChatScreen(
             }
 
             // Blurred progressive header overlay
-            BlurredHeaderContainer(
+            PageHeader(
+                title = chatTitle,
+                blurred = true,
                 modifier = Modifier.align(Alignment.TopCenter),
-            ) {
-                PageHeader(
-                    title = chatTitle,
-                    onBack = {
-                        AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                        onBackToHome()
-                    },
-                    actions = {
-                        HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
-                        Box(modifier = Modifier.padding(start = 4.dp)) {
-                            HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
-                            OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
-                                OverflowMenuItem(
-                                    label = "Open diff",
-                                    icon = TablerIcons.Outline.BrandGit,
-                                    onClick = {
-                                        overflowMenu = false
-                                        jumpToProjectTab(MobileTab.Changes)
-                                    },
-                                )
-                                OverflowMenuItem(
-                                    label = "Open devices",
-                                    icon = TablerIcons.Outline.DeviceMobile,
-                                    onClick = {
-                                        overflowMenu = false
-                                        jumpToProjectTab(MobileTab.Devices)
-                                    },
-                                )
-                                OverflowMenuItem(
-                                    label = "Open terminal",
-                                    icon = TablerIcons.Outline.Terminal2,
-                                    onClick = {
-                                        overflowMenu = false
-                                        jumpToProjectTab(MobileTab.Terminal)
-                                    },
-                                )
-                            }
+                onBack = {
+                    AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
+                    onBackToHome()
+                },
+                actions = {
+                    HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
+                    Box(modifier = Modifier.padding(start = 4.dp)) {
+                        HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
+                        OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
+                            OverflowMenuItem(
+                                label = "Open diff",
+                                icon = TablerIcons.Outline.BrandGit,
+                                onClick = {
+                                    overflowMenu = false
+                                    jumpToProjectTab(MobileTab.Changes)
+                                },
+                            )
+                            OverflowMenuItem(
+                                label = "Open devices",
+                                icon = TablerIcons.Outline.DeviceMobile,
+                                onClick = {
+                                    overflowMenu = false
+                                    jumpToProjectTab(MobileTab.Devices)
+                                },
+                            )
+                            OverflowMenuItem(
+                                label = "Open terminal",
+                                icon = TablerIcons.Outline.Terminal2,
+                                onClick = {
+                                    overflowMenu = false
+                                    jumpToProjectTab(MobileTab.Terminal)
+                                },
+                            )
                         }
-                    },
-                )
-            }
+                    }
+                },
+            )
         }
         if (hasPending) {
             if (hasActiveTodos) {

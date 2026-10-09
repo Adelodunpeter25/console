@@ -53,6 +53,7 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 
 /**
  * MCP servers settings, mirroring the desktop `mcp_page.rs`: server cards
@@ -90,38 +91,48 @@ fun McpSettings(onBack: () -> Unit) {
             PageHeader(title = if (serverId != null) "Edit MCP server" else "Add MCP server", onBack = { editing = null })
             McpEditorForm(server = server, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
         } else {
-            PageHeader(
-                title = "MCP Servers",
-                onBack = onBack,
-                actions = { AddButton("Add MCP server") { editing = "__create__" } },
-            )
-            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                Text(
-                    "Connect external tools and services via local stdio or remote HTTP servers.",
-                    color = NewTheme.TextSecondary,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
-                )
-                mcpState.error?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
-                if (mcpState.loading && mcpState.servers.isEmpty()) {
-                    LoadingState("Loading MCP servers…")
-                } else if (mcpState.servers.isEmpty()) {
-                    McpEmptyState { editing = "__create__" }
-                } else {
-                    Section("Servers") {
-                        mcpState.servers.forEachIndexed { index, server ->
-                            McpServerCard(
-                                server = server,
-                                busy = server.id in connectingIds || server.id in mcpState.busyServerIds,
-                                onConnect = { connect(server.id) },
-                                onDisconnect = { AppContainer.mcpRepository.disconnectServer(server.id) },
-                                onEdit = { editing = server.id },
-                                onDelete = { AppContainer.mcpRepository.deleteServer(server.id) },
-                            )
-                            if (index < mcpState.servers.lastIndex) SectionDivider()
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp)
+                        .padding(top = PageHeaderHeight, bottom = 40.dp),
+                ) {
+                    Text(
+                        "Connect external tools and services via local stdio or remote HTTP servers.",
+                        color = NewTheme.TextSecondary,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp),
+                    )
+                    mcpState.error?.let { Banner(it, modifier = Modifier.padding(top = 16.dp)) }
+                    if (mcpState.loading && mcpState.servers.isEmpty()) {
+                        LoadingState("Loading MCP servers…")
+                    } else if (mcpState.servers.isEmpty()) {
+                        McpEmptyState { editing = "__create__" }
+                    } else {
+                        Section("Servers") {
+                            mcpState.servers.forEachIndexed { index, server ->
+                                McpServerCard(
+                                    server = server,
+                                    busy = server.id in connectingIds || server.id in mcpState.busyServerIds,
+                                    onConnect = { connect(server.id) },
+                                    onDisconnect = { AppContainer.mcpRepository.disconnectServer(server.id) },
+                                    onEdit = { editing = server.id },
+                                    onDelete = { AppContainer.mcpRepository.deleteServer(server.id) },
+                                )
+                                if (index < mcpState.servers.lastIndex) SectionDivider()
+                            }
                         }
                     }
                 }
+                PageHeader(
+                    title = "MCP Servers",
+                    blurred = true,
+                    onBack = onBack,
+                    actions = { AddButton("Add MCP server") { editing = "__create__" } },
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
             }
         }
     }

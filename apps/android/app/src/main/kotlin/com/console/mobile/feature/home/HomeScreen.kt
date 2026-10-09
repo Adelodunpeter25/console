@@ -7,6 +7,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,6 +61,7 @@ import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.common.new.SearchBar
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import kotlinx.coroutines.Dispatchers
@@ -170,53 +172,58 @@ fun HomeScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(
-            title = "Console",
-            showSettings = true,
-            onSettingsPress = onOpenSettings,
-            actions = { EnvironmentSwitcher() },
-        )
-        PullToRefreshBox(
-            isRefreshing = refreshing,
-            onRefresh = ::onRefresh,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-        ) {
-            if (isLoading) {
-                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    SectionSkeleton(rows = 3)
-                    SectionSkeleton(rows = 2)
-                }
-            } else if (sections.isEmpty() && projectState.error != null) {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    item {
-                        EmptyView(
-                            title = "Couldn't load chats",
-                            description = projectState.error ?: "Failed to load chat sessions.",
-                            icon = TablerIcons.Outline.AlertTriangle,
-                            iconTint = NewTheme.Danger,
-                        )
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = ::onRefresh,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (isLoading) {
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = PageHeaderHeight + 8.dp)) {
+                        SectionSkeleton(rows = 3)
+                        SectionSkeleton(rows = 2)
                     }
-                }
-            } else if (sections.isEmpty()) {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    item {
-                        EmptyView(
-                            title = if (searchQuery.isNotBlank()) "No matching sessions" else "No chat sessions",
-                            description = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"." else "Start a new chat or select a project folder to get started.",
-                            icon = if (searchQuery.isNotBlank()) TablerIcons.Outline.Search else TablerIcons.Outline.Message,
-                        )
+                } else if (sections.isEmpty() && projectState.error != null) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    ) {
+                        item {
+                            EmptyView(
+                                title = "Couldn't load chats",
+                                description = projectState.error ?: "Failed to load chat sessions.",
+                                icon = TablerIcons.Outline.AlertTriangle,
+                                iconTint = NewTheme.Danger,
+                            )
+                        }
                     }
-                }
-            } else {
-                val listState = rememberLazyListState()
-                // A new query is a different list of rows, so the old offset
-                // lands somewhere arbitrary (or out of bounds once results
-                // shrink). Jump to the top so the first match is visible as
-                // the user types. Instant rather than animated — the content
-                // is swapped out, so a scroll animation would be a lie.
-                LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    sections.forEachIndexed { sIdx, section ->
+                } else if (sections.isEmpty()) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    ) {
+                        item {
+                            EmptyView(
+                                title = if (searchQuery.isNotBlank()) "No matching sessions" else "No chat sessions",
+                                description = if (searchQuery.isNotBlank()) "No chats found matching \"$searchQuery\"." else "Start a new chat or select a project folder to get started.",
+                                icon = if (searchQuery.isNotBlank()) TablerIcons.Outline.Search else TablerIcons.Outline.Message,
+                            )
+                        }
+                    }
+                } else {
+                    val listState = rememberLazyListState()
+                    // A new query is a different list of rows, so the old offset
+                    // lands somewhere arbitrary (or out of bounds once results
+                    // shrink). Jump to the top so the first match is visible as
+                    // the user types. Instant rather than animated — the content
+                    // is swapped out, so a scroll animation would be a lie.
+                    LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                    ) {
+                        sections.forEachIndexed { sIdx, section ->
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 4.dp),
@@ -281,6 +288,15 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+            PageHeader(
+                title = "Console",
+                blurred = true,
+                showSettings = true,
+                onSettingsPress = onOpenSettings,
+                actions = { EnvironmentSwitcher() },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
         SearchBar(
             value = searchQuery,

@@ -64,6 +64,7 @@ import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.LoadingState
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.common.new.SearchInput
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
@@ -190,9 +191,13 @@ fun FilesScreen(onBack: () -> Unit) {
             if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
         } ?: sel
         val subtitle = listOfNotNull(project?.name?.takeIf { it.isNotBlank() }, relativePath).joinToString(" · ")
-        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
-            PageHeader(title = fileName, subtitle = subtitle, onBack = { selectedPath = null })
-            Box(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+        Box(modifier = Modifier.fillMaxSize().background(NewTheme.Black)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = PageHeaderHeight, bottom = 16.dp),
+            ) {
                 when {
                     block != null -> Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(20.dp)) {
                         Text(block.title, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -212,6 +217,14 @@ fun FilesScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            PageHeader(
+                title = fileName,
+                subtitle = subtitle,
+                blurred = true,
+                backgroundColor = NewTheme.Black,
+                onBack = { selectedPath = null },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
         return
     }
@@ -220,6 +233,8 @@ fun FilesScreen(onBack: () -> Unit) {
         PageHeader(
             title = "Files",
             subtitle = project?.name,
+            blurred = true,
+            backgroundColor = NewTheme.Black,
             onBack = onBack,
             actions = {
                 HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = {

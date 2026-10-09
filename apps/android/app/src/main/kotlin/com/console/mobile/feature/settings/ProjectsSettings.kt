@@ -53,6 +53,8 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
+import androidx.compose.foundation.layout.Box
 
 /**
  * Port of screens/settings/projects-settings.tsx + screens/projects/add-project-screen.tsx.
@@ -66,24 +68,32 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
 
     LaunchedEffect(Unit) { AppContainer.projectRepository.loadProjects() }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(
-            title = "Projects",
-            onBack = onBack,
-            actions = { AddButton("Add folder", onAddProject) },
-        )
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         if (projectState.loading && projectState.projects.isEmpty()) {
-            LoadingState("Loading projects…", Modifier.fillMaxSize())
+            LoadingState("Loading projects…", Modifier.fillMaxSize().padding(top = PageHeaderHeight))
         } else if (projectState.error != null && projectState.projects.isEmpty()) {
             EmptyView(
                 title = "Couldn't load projects",
                 description = projectState.error ?: "Failed to load projects.",
                 icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger,
+                modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight),
             )
         } else if (projectState.projects.isEmpty()) {
-            EmptyView(title = "No project folders", description = "Add a project folder from your host filesystem to start creating sessions.", icon = TablerIcons.Outline.FolderOpen, iconTint = NewTheme.TextMuted)
+            EmptyView(
+                title = "No project folders",
+                description = "Add a project folder from your host filesystem to start creating sessions.",
+                icon = TablerIcons.Outline.FolderOpen,
+                iconTint = NewTheme.TextMuted,
+                modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight),
+            )
         } else {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = PageHeaderHeight, bottom = 32.dp),
+            ) {
                 val n = projectState.projects.size
                 Section("$n project folder${if (n == 1) "" else "s"}") {
                     projectState.projects.forEachIndexed { index, proj ->
@@ -104,6 +114,13 @@ fun ProjectsSettings(onBack: () -> Unit, onAddProject: () -> Unit) {
                 }
             }
         }
+        PageHeader(
+            title = "Projects",
+            blurred = true,
+            onBack = onBack,
+            actions = { AddButton("Add folder", onAddProject) },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 

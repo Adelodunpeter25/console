@@ -48,6 +48,7 @@ import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -157,9 +158,14 @@ fun ChangesScreen(onBack: () -> Unit) {
     val sel = selectedPath
     if (sel != null) {
         val change = files.firstOrNull { it.path == sel }
-        Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-            PageHeader(title = baseOf(sel), subtitle = stripRepoPrefix(sel, repoPath), onBack = { selectedPath = null })
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+        Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = PageHeaderHeight, bottom = 32.dp),
+            ) {
                 if (change != null) {
                     SectionCard(modifier = Modifier.padding(bottom = 16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)) {
@@ -186,23 +192,30 @@ fun ChangesScreen(onBack: () -> Unit) {
                     else -> Note("No diff available for this file.")
                 }
             }
+            PageHeader(
+                title = baseOf(sel),
+                subtitle = stripRepoPrefix(sel, repoPath),
+                blurred = true,
+                onBack = { selectedPath = null },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
         return
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(
-            title = "Changes",
-            subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
-            onBack = onBack,
-            actions = { HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
-        )
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when {
-            sessionId == null -> EmptyView(title = "No active session", description = "Open a chat to see its file changes.", icon = TablerIcons.Outline.GitBranch, modifier = Modifier.fillMaxSize())
-            loading -> Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) { SectionSkeleton(rows = 4) }
-            error != null -> EmptyView(title = "Couldn't load changes", description = error ?: "Failed to load session changes.", icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
-            rows.isEmpty() -> EmptyView(title = "No file changes yet", description = "Files this session touches will show up here.", icon = TablerIcons.Outline.GitBranch, modifier = Modifier.fillMaxSize())
-            else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            sessionId == null -> EmptyView(title = "No active session", description = "Open a chat to see its file changes.", icon = TablerIcons.Outline.GitBranch, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight))
+            loading -> Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = PageHeaderHeight)) { SectionSkeleton(rows = 4) }
+            error != null -> EmptyView(title = "Couldn't load changes", description = error ?: "Failed to load session changes.", icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight))
+            rows.isEmpty() -> EmptyView(title = "No file changes yet", description = "Files this session touches will show up here.", icon = TablerIcons.Outline.GitBranch, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight))
+            else -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = PageHeaderHeight, bottom = 24.dp),
+            ) {
                 // One card per folder: the folder is the heading, its files are the rows.
                 // The rows arrive flat (Folder, File, File, Folder, …), so regroup them.
                 var i = 0
@@ -238,6 +251,14 @@ fun ChangesScreen(onBack: () -> Unit) {
                 }
             }
         }
+        PageHeader(
+            title = "Changes",
+            subtitle = "${totals.files} files  +${totals.additions} -${totals.deletions}",
+            blurred = true,
+            onBack = onBack,
+            actions = { HeaderIconButton(TablerIcons.Outline.Refresh, "Refresh", onClick = ::refresh) },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 

@@ -3,6 +3,7 @@ package com.console.mobile.feature.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +43,7 @@ import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.common.new.NavRow
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 
 enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
 
@@ -88,24 +90,37 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     // to be in state before the list renders.
     LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
 
-    PageHeader(title = "Settings", onBack = { onBack() })
     val signedIn = authState.status?.values?.any { it.logged_in } == true
     val roles = providerState.modelRoles.count { it.value.isNotBlank() }
     val n = projectState.projects.size
     val d = projectState.deletedSessions.size
-    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-        Section("Connections") {
-            NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
-            NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
-            NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = PageHeaderHeight, bottom = 32.dp),
+        ) {
+            Section("Connections") {
+                NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
+                NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
+                NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+            }
+            Section("AI & tools") {
+                NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
+                NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
+            }
+            Section("Projects & chats") {
+                NavRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
+                NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+            }
         }
-        Section("AI & tools") {
-            NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
-            NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
-        }
-        Section("Projects & chats") {
-            NavRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
-            NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
-        }
+        PageHeader(
+            title = "Settings",
+            blurred = true,
+            onBack = { onBack() },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }

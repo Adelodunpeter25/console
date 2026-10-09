@@ -55,6 +55,8 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
+import androidx.compose.foundation.layout.Box
 
 /** Port of screens/settings/deleted-chats-settings.tsx. */
 @Composable
@@ -77,9 +79,56 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        if (projectState.deletedLoading && deleted.isEmpty()) {
+            LoadingState("Loading deleted chats…", Modifier.fillMaxSize().padding(top = PageHeaderHeight))
+        } else if (projectState.error != null && deleted.isEmpty()) {
+            EmptyView(
+                title = "Couldn't load deleted chats",
+                description = projectState.error ?: "Failed to load deleted chats.",
+                icon = TablerIcons.Outline.AlertTriangle,
+                iconTint = NewTheme.Danger,
+                modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight),
+            )
+        } else if (deleted.isEmpty()) {
+            EmptyView(
+                title = "No deleted chats",
+                description = "Chats you delete will appear here until permanently purged.",
+                icon = TablerIcons.Outline.Message,
+                iconTint = NewTheme.TextMuted,
+                modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight),
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = PageHeaderHeight, bottom = 32.dp),
+            ) {
+                Section("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
+                    deleted.forEachIndexed { index, item ->
+                        DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
+                            val title = item.title.ifBlank { "Untitled Chat" }
+                            confirmAlert("Delete Chat Permanently", "\"$title\" and its message history will be permanently deleted. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
+                                busyId = item.id
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.permanentlyDeleteSession(item.id) }
+                                    } catch (e: Exception) {
+                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
+                                    } finally { busyId = null }
+                                }
+                            })))
+                        })
+                        if (index < deleted.lastIndex) SectionDivider()
+                    }
+                }
+            }
+        }
         PageHeader(
             title = "Deleted Chats",
+            blurred = true,
             onBack = onBack,
             actions = if (deleted.isNotEmpty()) {
                 {
@@ -117,35 +166,8 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                     }
                 }
             } else null,
+            modifier = Modifier.align(Alignment.TopCenter),
         )
-        if (projectState.deletedLoading && deleted.isEmpty()) {
-            LoadingState("Loading deleted chats…", Modifier.fillMaxSize())
-        } else if (projectState.error != null && deleted.isEmpty()) {
-            EmptyView(title = "Couldn't load deleted chats", description = projectState.error ?: "Failed to load deleted chats.", icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger)
-        } else if (deleted.isEmpty()) {
-            EmptyView(title = "No deleted chats", description = "Chats you delete will appear here until permanently purged.", icon = TablerIcons.Outline.Message, iconTint = NewTheme.TextMuted)
-        } else {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                Section("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
-                    deleted.forEachIndexed { index, item ->
-                        DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
-                            val title = item.title.ifBlank { "Untitled Chat" }
-                            confirmAlert("Delete Chat Permanently", "\"$title\" and its message history will be permanently deleted. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
-                                busyId = item.id
-                                scope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.permanentlyDeleteSession(item.id) }
-                                    } catch (e: Exception) {
-                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
-                                    } finally { busyId = null }
-                                }
-                            })))
-                        })
-                        if (index < deleted.lastIndex) SectionDivider()
-                    }
-                }
-            }
-        }
     }
 }
 
