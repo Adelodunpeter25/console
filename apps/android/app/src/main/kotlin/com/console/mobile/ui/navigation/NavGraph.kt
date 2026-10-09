@@ -3,15 +3,11 @@ package com.console.mobile.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,17 +36,6 @@ import com.console.mobile.ui.theme.NewTheme
 fun AppNavGraph() {
     val navController = rememberNavController()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
-    var booted by remember { mutableStateOf(false) }
-
-    // EnvironmentsRepository init already applied the persisted active URL.
-    LaunchedEffect(Unit) { booted = true }
-
-    if (!booted) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = NewTheme.TextPrimary)
-        }
-        return
-    }
 
     if (appState.backendUrl.isNullOrBlank()) {
         OnboardingScreen(onConnected = {})

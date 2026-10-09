@@ -65,9 +65,13 @@ class ChatRepository(
 
     init {
         persistence?.let { p ->
-            val cached = p.load()
-            if (cached.isNotEmpty()) chats.setAll(cached)
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
+                val cached = p.load()
+                if (cached.isNotEmpty()) {
+                    withContext(Dispatchers.Main.immediate) {
+                        chats.setAll(cached)
+                    }
+                }
                 chats.sessions.collect { current ->
                     p.scheduleSave(current)
                 }
