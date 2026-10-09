@@ -538,6 +538,23 @@ impl RenderOnce for AssistantMessageBubble {
                     .flex()
                     .flex_col()
                     .gap(px(4.0))
+                    .when(!file_changes.is_empty(), |element| {
+                        element.child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .gap(px(6.0))
+                                .pt(px(4.0))
+                                .children(file_changes.iter().enumerate().map(|(i, change)| {
+                                    file_change_chip(
+                                        &format!("{}-{i}", self.selection_row),
+                                        change,
+                                        &theme,
+                                        on_open_change.clone(),
+                                    )
+                                })),
+                        )
+                    })
                     .child(
                         div()
                             .h(px(27.0))
@@ -559,24 +576,7 @@ impl RenderOnce for AssistantMessageBubble {
                                 theme.clone(),
                                 cx,
                             )),
-                    )
-                    .when(!file_changes.is_empty(), |element| {
-                        element.child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap(px(6.0))
-                                .pb(px(4.0))
-                                .children(file_changes.iter().enumerate().map(|(i, change)| {
-                                    file_change_chip(
-                                        &format!("{}-{i}", self.selection_row),
-                                        change,
-                                        &theme,
-                                        on_open_change.clone(),
-                                    )
-                                })),
-                        )
-                    }),
+                    ),
             )
     }
 }
@@ -602,7 +602,7 @@ fn file_change_chip(
         .py(px(3.0))
         .rounded(px(7.0))
         .border_1()
-        .border_color(theme.border)
+        .border_color(theme.border_strong)
         .cursor_pointer()
         .hover(|style| style.bg(theme.overlay))
         .child(crate::primitives::file_icons::file_type_icon(&change.path, 14.0))

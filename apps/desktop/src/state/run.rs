@@ -601,6 +601,8 @@ impl ConsoleDesktopApp {
                                     this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                         if detail.messages.len() >= t.message_count() {
                                             t.set_messages(detail.messages, cx);
+                                        } else {
+                                            t.adopt_user_message_ids(&detail.messages, cx);
                                         }
                                     });
                                     this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
@@ -1200,6 +1202,8 @@ impl ConsoleDesktopApp {
                                 this.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
                                     if detail.messages.len() >= t.message_count() {
                                         t.set_messages(detail.messages, cx);
+                                    } else {
+                                        t.adopt_user_message_ids(&detail.messages, cx);
                                     }
                                     t.finish_streaming(cx);
                                 });

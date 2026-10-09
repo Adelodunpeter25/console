@@ -138,6 +138,33 @@ impl TranscriptView {
         self.on_open_change = Some(Rc::new(handler));
     }
 
+    /// Copy server-assigned ids onto this transcript's user messages that
+    /// still lack one (the optimistic prompt of a live run). Pairs user
+    /// messages from the tail, since the canonical page always ends at the
+    /// same latest message. Per-turn file changes are keyed by that id.
+    pub fn adopt_user_message_ids(&mut self, canonical: &[AgentMessage], cx: &mut Context<Self>) {
+        let mut canonical_ids = canonical.iter().rev().filter_map(|message| match message {
+            AgentMessage::User { id, .. } => Some(id.clone()),
+            _ => None,
+        });
+        let mut changed = false;
+        for message in self.messages.iter_mut().rev() {
+            let AgentMessage::User { id, .. } = message else {
+                continue;
+            };
+            let Some(canonical_id) = canonical_ids.next() else {
+                break;
+            };
+            if id.is_none() && canonical_id.is_some() {
+                *id = canonical_id;
+                changed = true;
+            }
+        }
+        if changed {
+            cx.notify();
+        }
+    }
+
     /// Replace the session's recorded file changes and re-measure the rows
     /// whose chip rows appeared, changed or went away.
     pub fn set_session_changes(
