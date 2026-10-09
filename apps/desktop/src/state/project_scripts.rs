@@ -30,10 +30,6 @@ pub struct ProjectScriptsPanelState {
     /// `"console.toml"` or `"missing"`, straight from the list response.
     pub source: String,
     pub loaded: bool,
-    /// The checkout `scripts` were read from (a worktree's folder, or `None`
-    /// for the project's own). Switching to a chat in a different checkout
-    /// makes this stale, which triggers a reload.
-    pub cwd: Option<String>,
     pub loading: bool,
     pub error: Option<String>,
     /// Latest run per script id.
@@ -56,8 +52,11 @@ fn snapshot_output(run: &ScriptRun) -> String {
 }
 
 impl ConsoleDesktopApp {
-    /// Project id behind the active pane: the active tab's project wins,
-    /// falling back to the pane's selected project.
+    /// The key script state is stored under: the active chat/tab's workspace
+    /// key — the project id, or project + worktree path — so each checkout
+    /// has its own scripts, runs and output and can run the same script as
+    /// another checkout at the same time. Use `scripts_server_target` to get
+    /// the real project id and checkout folder for server calls.
     pub fn active_scripts_project_id(&self) -> Option<String> {
         let pane_id = self.active_pane_id.as_deref().unwrap_or("pane-main");
         let leaf = self
@@ -79,7 +78,8 @@ impl ConsoleDesktopApp {
                 .sessions
                 .iter()
                 .find(|s| &s.id == session_id)
-                .and_then(|s| s.project_id.clone())
+                // The chat's workspace key (project, or project + worktree).
+                .and_then(|s| self.workspace_key_for_header(s))
                 .or(project_id.clone()),
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
@@ -90,34 +90,15 @@ impl ConsoleDesktopApp {
             }
             None => None,
         };
-        from_tab
-            .or_else(|| {
-                self.selected_project_for_pane(pane_id)
-                    .map(|p| p.id.clone())
-            })
-            // Tabs carry the workspace key; the scripts routes want the real
-            // project id (the worktree folder travels separately as `cwd`).
-            .map(|key| console_core::project_id_of_workspace_key(&key).to_owned())
+        from_tab.or_else(|| self.pane_project_id(pane_id))
     }
 
-    /// The checkout the active chat works in — its worktree, or the project
-    /// folder. Scripts must read `console.toml` from and run in this folder, or
-    /// a worktree chat would run `main`'s code. `None` outside a chat tab,
-    /// which lets the server use the project's own folder.
-    pub fn active_scripts_cwd(&self) -> Option<String> {
-        let pane_id = self.active_pane_id.as_deref().unwrap_or("pane-main");
-        let leaf = self
-            .workspace_root
-            .leaves()
-            .into_iter()
-            .find(|l| l.id == pane_id)?;
-        let tab_id = leaf.active_tab_id.as_deref()?;
-        let session_id = tab_id.strip_prefix("chat:")?;
-        self.sessions
-            .iter()
-            .find(|s| s.id == session_id)
-            .map(|s| s.cwd.clone())
-            .filter(|cwd| !cwd.is_empty())
+    /// The server-side project id and checkout folder behind a scripts key
+    /// (see `active_scripts_project_id`): the routes want the real project id,
+    /// with the worktree folder as `cwd` when the key is a worktree's.
+    fn scripts_server_target(key: &str) -> (String, Option<String>) {
+        let (project_id, worktree) = console_core::split_workspace_key(key);
+        (project_id.to_owned(), worktree.map(str::to_owned))
     }
 
     /// Fetch script definitions (once per project) and reconnect to any runs
@@ -127,11 +108,10 @@ impl ConsoleDesktopApp {
         let Some(project_id) = self.active_scripts_project_id() else {
             return;
         };
-        let cwd = self.active_scripts_cwd();
         let loaded = self
             .project_scripts_by_project
             .get(&project_id)
-            .is_some_and(|state| state.loading || (state.loaded && state.cwd == cwd));
+            .is_some_and(|state| state.loading || state.loaded);
         if loaded {
             return;
         }
@@ -166,12 +146,17 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
-        let cwd = self.active_scripts_cwd();
+        // `project_id` is the scripts key; the server wants the real project
+        // and, for a worktree, its folder.
+        let (server_project_id, cwd) = Self::scripts_server_target(&project_id);
         cx.spawn(async move |entity, cx| {
-            let list = client.scripts.list(&project_id, cwd.as_deref()).await;
+            let list = client
+                .scripts
+                .list(&server_project_id, cwd.as_deref())
+                .await;
             let runs = client
                 .scripts
-                .list_runs(&project_id)
+                .list_runs(&server_project_id, cwd.as_deref())
                 .await
                 .unwrap_or_default();
             let _ = cx.update(|cx| {
@@ -183,11 +168,7 @@ impl ConsoleDesktopApp {
                         // describe the project the panel shows.
                         let active_pid = this
                             .active_scripts_project_id()
-                            .or_else(|| {
-                            this.selected_project_id
-                                .as_deref()
-                                .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
-                        });
+                            .or_else(|| this.selected_project_id.clone());
 
                         let running: Vec<(String, String, String)> = {
                             let Some(state) = this.project_scripts_by_project.get_mut(&project_id)
@@ -250,7 +231,6 @@ impl ConsoleDesktopApp {
                             }
                             state.loading = false;
                             state.loaded = true;
-                            state.cwd = cwd.clone();
                             state
                                 .runs
                                 .iter()
@@ -288,11 +268,7 @@ impl ConsoleDesktopApp {
         let valid_ids: std::collections::HashSet<&str> =
             state.scripts.iter().map(|s| s.id.as_str()).collect();
 
-        let cwd = self
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-            .map(|p| p.path.clone());
+        let cwd = self.workspace_path_for_key(project_id);
 
         let mut changed = false;
 
@@ -384,11 +360,11 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let project_id_clone = project_id.clone();
         let script_id_owned = script_id.to_string();
-        let cwd = self.active_scripts_cwd();
+        let (server_project_id, cwd) = Self::scripts_server_target(&project_id);
         cx.spawn(async move |entity, cx| {
             let started = client
                 .scripts
-                .start_run(&project_id_clone, &script_id_owned, cwd.as_deref())
+                .start_run(&server_project_id, &script_id_owned, cwd.as_deref())
                 .await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
@@ -461,8 +437,9 @@ impl ConsoleDesktopApp {
         cx.notify();
 
         let client = self.client.clone();
+        let (server_project_id, _) = Self::scripts_server_target(&project_id);
         cx.spawn(async move |entity, cx| {
-            if let Err(err) = client.scripts.stop_run(&project_id, &run_id).await {
+            if let Err(err) = client.scripts.stop_run(&server_project_id, &run_id).await {
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
@@ -492,11 +469,7 @@ impl ConsoleDesktopApp {
     pub fn sync_active_shortcuts_to_active_project(&mut self) {
         let active_pid = self
             .active_scripts_project_id()
-            .or_else(|| {
-                self.selected_project_id
-                    .as_deref()
-                    .map(|key| console_core::project_id_of_workspace_key(key).to_owned())
-            });
+            .or_else(|| self.selected_project_id.clone());
         let Some(active_pid) = active_pid else {
             self.active_project_shortcuts.clear();
             return;
@@ -558,12 +531,13 @@ impl ConsoleDesktopApp {
         let seq = self.project_script_stream_seq;
         let client = self.client.clone();
         let project_id_owned = project_id.to_string();
+        let (server_project_id, _) = Self::scripts_server_target(project_id);
         let script_id_owned = script_id.to_string();
         let run_id_owned = run_id.to_string();
         let task = cx.spawn(async move |entity, cx| {
             if let Ok(run) = client
                 .scripts
-                .get_run(&project_id_owned, &run_id_owned)
+                .get_run(&server_project_id, &run_id_owned)
                 .await
             {
                 let _ = cx.update(|cx| {
@@ -582,7 +556,7 @@ impl ConsoleDesktopApp {
             let mut terminal_seen = false;
             match client
                 .scripts
-                .stream_run(&project_id_owned, &run_id_owned)
+                .stream_run(&server_project_id, &run_id_owned)
                 .await
             {
                 Ok(mut stream) => {
@@ -635,7 +609,7 @@ impl ConsoleDesktopApp {
             if !terminal_seen {
                 match client
                     .scripts
-                    .get_run(&project_id_owned, &run_id_owned)
+                    .get_run(&server_project_id, &run_id_owned)
                     .await
                 {
                     Ok(run) => {

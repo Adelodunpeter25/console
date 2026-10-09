@@ -716,6 +716,12 @@ impl ConsoleDesktopApp {
         };
         self.project_workspace_roots.retain(|key, _| !belongs(key));
         self.project_active_panes.retain(|key, _| !belongs(key));
+        let script_key_belongs =
+            |key: &str| console_core::project_id_of_workspace_key(key) == project_id;
+        self.project_scripts_by_project
+            .retain(|key, _| !script_key_belongs(key));
+        self.project_script_streams
+            .retain(|(key, _), _| !script_key_belongs(key));
         // The removed project's stashed workspaces are gone, so any browser
         // tab it held is now unreferenced: close those views.
         self.sweep_unreferenced_browser_views(cx);

@@ -125,10 +125,14 @@ impl ProjectScriptsService {
 
     /// List runs the server retains for a project (including active ones,
     /// so a reopened desktop can reconnect).
-    pub async fn list_runs(&self, project_id: &str) -> Result<Vec<ScriptRun>> {
+    pub async fn list_runs(
+        &self,
+        project_id: &str,
+        cwd: Option<&str>,
+    ) -> Result<Vec<ScriptRun>> {
         let url = self
             .transport
-            .url(&Self::endpoint(project_id, "/runs"))
+            .url(&scripts_endpoint(project_id, "/runs", cwd))
             .await;
         let response = self
             .transport

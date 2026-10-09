@@ -189,6 +189,11 @@ impl ConsoleDesktopApp {
                 removed_roots.push(root);
             }
             self.project_active_panes.remove(&slot);
+            // Its scripts, run output and live run streams go with it
+            // (dropping a stream's task closes its connection).
+            self.project_scripts_by_project.remove(key);
+            self.project_script_streams
+                .retain(|(stream_key, _), _| stream_key != key);
             if let Some(path) = path {
                 self.right_sidebar_terminals_by_cwd.remove(&path);
                 self.persisted_bottom_terminals.remove(&path);
