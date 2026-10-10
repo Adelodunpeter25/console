@@ -28,9 +28,8 @@ const (
 // Notes:
 //   - email is optional: a credential can carry a token with no account email,
 //     so absent and empty are genuinely different.
-//   - project_id is optional for the same reason. The project-id routes answer
-//     null when unset (not "" and not absent) — see ProjectIDResponse, whose
-//     field must therefore be `optional` so the null survives protojson.
+//   - project_id is optional for the same reason. See ProjectIDResponse for the
+//     null → absent trim on the project-id routes.
 //   - the desktop's ProviderAuthStatus also carries project_id and
 //     configured_project_id. Those are read by the clients but never populated
 //     by /api/auth/status, so they stay optional and read as None.
@@ -374,9 +373,14 @@ func (x *OAuthCallbackResponse) GetUserEmail() string {
 	return ""
 }
 
-// Response of GET /api/auth/project-id/:provider. project_id is `optional` on
-// purpose: the route answers null when unset, and protojson emits null for a
-// present-but-empty optional string, so clients keep the unset/"" distinction.
+// Response of GET /api/auth/project-id/:provider.
+//
+// project_id is optional. NOTE this is a deliberate wire trim: the route used
+// to answer `{"projectId": null}` when unset, and protojson omits an unset
+// optional entirely, so the key is now absent. Both clients read it as a
+// defaulting Option (`#[serde(default)]` / Wire null), so null and absent
+// already meant the same thing to them — no behavior change, just a smaller
+// payload.
 type ProjectIDResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProjectId     *string                `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
