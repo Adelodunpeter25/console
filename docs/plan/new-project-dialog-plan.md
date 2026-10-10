@@ -21,9 +21,10 @@ a server-side operation launched from the dialog itself.
   create directories, but it is scoped to worktrees and is explicitly *not*
   wired to routes or sessions yet (per its own header comment).
 - The desktop has no create-project dialog of any kind.
-- Git auth for private repos comes from the credentials plan
-  (`docs/plan/github-git-credentials-plan.md`): token in
-  `~/.console/github-creds.json`, injected via `GIT_CONFIG_*`
+- Git auth for private repos: token stored by
+  `internal/providers/github` (`LoadCredential`/`SaveCredential`; the file
+  resolves via `utils.GitHubCredentialsPath()`, overridable with
+  `GITHUB_CREDENTIALS_PATH`), injected as a `GIT_CONFIG_*`
   credential-helper env. Public clones need no auth.
   **This shipped already** — `internal/gitconfig.Configure()` injects three
   `GIT_CONFIG_*` triples at boot (called first in `serve.Run`, before the first
@@ -177,8 +178,8 @@ the full suite.
 - Creating new GitHub repos from console (clone or blank-local only).
 - Repo list browsing / picking (paste-a-URL only in v1).
 - Project templates / scaffolding of any kind.
-- Worktrees (clone once per project, then one worktree per session — see
-  `docs/plan/worktrees-plan.md`; explicitly not tangled in).
+- Worktrees (clone once per project, then one worktree per session; explicitly
+  not tangled in — `WorktreeService` already exists and stays untouched).
 
 ## 8 Open Questions
 - ~~Clone progress mechanism~~ — **resolved**: synchronous + busy state, no
