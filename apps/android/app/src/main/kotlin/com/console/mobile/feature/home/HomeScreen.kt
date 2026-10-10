@@ -220,13 +220,13 @@ fun HomeScreen(
                     LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 16.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 4.dp),
+                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = if (sIdx == 0) 4.dp else 14.dp, bottom = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {

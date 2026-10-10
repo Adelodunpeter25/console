@@ -31,7 +31,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Settings
 
 /** Standard header row height: a 40dp control plus 10dp above and below. */
-val PageHeaderHeight = 60.dp
+val PageHeaderHeight = 52.dp
 
 /**
  * Screen header: optional back button, a left-aligned title with an optional
