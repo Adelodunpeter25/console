@@ -128,6 +128,9 @@ class ProjectRepository(
             onSessionGone(id)
             if (appState.state.value.selectedSessionId == id) {
                 appState.setSelectedSessionId(null)
+                if (appState.state.value.activeTab == com.console.mobile.data.store.MobileTab.Chat) {
+                    appState.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.console.mobile.feature.chat
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
@@ -81,6 +82,11 @@ fun ChatScreen(
     val sessionChanges = sessionId?.let { sessionChangesMap[it] }.orEmpty()
 
     var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
+
+    BackHandler {
+        AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
+        onBackToHome()
+    }
 
     if (sessionId == null) {
         Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
