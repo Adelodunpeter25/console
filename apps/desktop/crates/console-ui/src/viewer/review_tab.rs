@@ -10,12 +10,17 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
 };
 
-use crate::chat::diff_view::DiffView;
 use crate::markdown::render::MONO_FAMILY;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{base_name, file_type_icon};
 use crate::theme::Theme;
 use crate::utils::short_parent_dir;
+use crate::viewer::diff_viewer::{DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff};
+
+/// Longest a file's diff grows inside the review tab before it scrolls
+/// internally. The editor diff view lays out every row it is given room for,
+/// so an unbounded height would render a huge diff's rows all at once.
+const REVIEW_DIFF_MAX_HEIGHT: f32 = 800.0;
 
 #[derive(IntoElement)]
 pub struct ReviewTab {
@@ -45,7 +50,7 @@ impl ReviewTab {
 }
 
 impl RenderOnce for ReviewTab {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let scoped = console_core::types::filter_changes_for_scope(&self.changes, self.scope);
         let total_additions: u32 = scoped.iter().map(|c| c.additions).sum();
@@ -131,11 +136,32 @@ impl RenderOnce for ReviewTab {
                                 let on_toggle_reviewed = on_toggle_reviewed.clone();
                                 let reviewed = entry.reviewed;
 
-                                let diff_result = entry
-                                    .diff_text
-                                    .as_deref()
-                                    .map(console_core::utils::diff::parse_unified_diff)
-                                    .unwrap_or_default();
+                                // One cached editor diff view per file and turn.
+                                // The key carries the row's update time and diff
+                                // length, so a changed diff builds a fresh view.
+                                let editor_diff: Option<EditorDiff> = if is_collapsed {
+                                    None
+                                } else {
+                                    entry
+                                        .diff_text
+                                        .as_deref()
+                                        .filter(|text| !text.trim().is_empty())
+                                        .map(|text| {
+                                            let key = format!(
+                                                "review-diff-{}-{}-{}-{}",
+                                                entry.path,
+                                                entry.turn_index,
+                                                entry.updated_at,
+                                                text.len()
+                                            );
+                                            let state = window.use_keyed_state(
+                                                gpui::ElementId::Name(key.into()),
+                                                cx,
+                                                |_, cx| build_editor_diff(text, &entry.path, &theme, cx),
+                                            );
+                                            state.read(cx).clone()
+                                        })
+                                };
 
                                 div()
                                     .flex()
@@ -277,23 +303,18 @@ impl RenderOnce for ReviewTab {
                                                     ),
                                             ),
                                     )
-                                    .when(!is_collapsed, |el| {
+                                    .when_some(editor_diff, |el, diff| {
+                                        let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT)
+                                            .min(REVIEW_DIFF_MAX_HEIGHT);
                                         el.child(
-                                            div()
-                                                .px(px(16.0))
-                                                .pb(px(12.0))
-                                                .child(
-                                                    DiffView::new(
-                                                        format!(
-                                                            "review-{}-{}",
-                                                            entry.path, entry.turn_index
-                                                        ),
-                                                        diff_result,
-                                                    )
-                                                    .file_path(entry.path.clone())
-                                                    .full_height(true)
-                                                    .hide_header(true),
-                                                ),
+                                            div().px(px(16.0)).pb(px(12.0)).child(
+                                                div()
+                                                    .w_full()
+                                                    .h(px(height))
+                                                    .rounded(px(6.0))
+                                                    .overflow_hidden()
+                                                    .child(DiffViewer::new(diff.view)),
+                                            ),
                                         )
                                     })
                             }))
