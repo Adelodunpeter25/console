@@ -4,6 +4,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use super::change_chips::{OpenChangeHandler, ToggleChangesHandler, turn_change_chips};
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
@@ -321,15 +322,8 @@ pub struct AssistantMessageBubble {
     file_changes: Vec<SessionFileChange>,
     on_open_change: Option<OpenChangeHandler>,
     changes_expanded: bool,
-    on_toggle_changes: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_toggle_changes: Option<ToggleChangesHandler>,
 }
-
-/// A turn's changed-file row shows this many chips collapsed; beyond
-/// `COLLAPSED_CHIPS + 1` files the rest fold into one "+N more" chip.
-const COLLAPSED_CHIPS: usize = 3;
-
-/// Opens the diff of one changed file: `(path, diff_text)`.
-pub type OpenChangeHandler = Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>;
 
 impl AssistantMessageBubble {
     pub fn new(content_parts: Rc<Vec<AssistantContentPart>>) -> Self {
@@ -357,7 +351,10 @@ impl AssistantMessageBubble {
         self
     }
 
-    pub fn on_toggle_changes(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+    pub fn on_toggle_changes(
+        mut self,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
         self.on_toggle_changes = Some(Rc::new(handler));
         self
     }
@@ -455,34 +452,16 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
-        // Up to COLLAPSED_CHIPS + 1 files show as-is (a "+1 more" chip would
-        // hide no more than the file it replaces). Beyond that the rest fold
-        // into a toggle chip; once expanded, that chip stays and collapses.
-        let foldable = file_changes.len() > COLLAPSED_CHIPS + 1;
-        let shown = if foldable && !self.changes_expanded {
-            COLLAPSED_CHIPS
-        } else {
-            file_changes.len()
-        };
-        let mut chips: Vec<gpui::Stateful<gpui::Div>> = file_changes
-            .iter()
-            .take(shown)
-            .enumerate()
-            .map(|(i, change)| {
-                let key = format!("{}-{i}", self.selection_row);
-                let chip = file_change_chip(&key, change, &theme, on_open_change.clone());
-                super::diff_popover::with_diff_popover(chip, &key, change, &theme, window, cx)
-            })
-            .collect();
-        if foldable {
-            chips.push(more_changes_chip(
-                &self.selection_row,
-                file_changes.len() - COLLAPSED_CHIPS,
-                self.changes_expanded,
-                &theme,
-                self.on_toggle_changes.clone(),
-            ));
-        }
+        let chips = turn_change_chips(
+            &self.selection_row,
+            &file_changes,
+            self.changes_expanded,
+            on_open_change,
+            self.on_toggle_changes.clone(),
+            &theme,
+            window,
+            cx,
+        );
 
         div()
             .w_full()
@@ -577,23 +556,14 @@ impl RenderOnce for AssistantMessageBubble {
             // The live working indicator (dots + "Working for Ns") is the
             // single streaming signal, rendered as the transcript's trailing
             // row — no per-bubble "Working…" here.
-            // Always-visible footer: time + copy, then this turn's changed
-            // files as chips (turns without edits show just the first row).
+            // Footer: this turn's changed-file chips (always visible), then
+            // time + copy (hover only).
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(4.0))
-                    .when(!chips.is_empty(), |element| {
-                        element.child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap(px(6.0))
-                                .pt(px(4.0))
-                                .children(chips),
-                        )
-                    })
+                    .children(chips)
                     .child(
                         div()
                             .h(px(27.0))
@@ -620,99 +590,4 @@ impl RenderOnce for AssistantMessageBubble {
                     ),
             )
     }
-}
-
-/// One changed-file chip: file-type icon, name, `+N −N`. A deleted file's
-/// name is struck through. Clicking opens that file's diff for the turn.
-fn file_change_chip(
-    key: &str,
-    change: &SessionFileChange,
-    theme: &Theme,
-    on_open: Option<OpenChangeHandler>,
-) -> gpui::Stateful<gpui::Div> {
-    let name = crate::primitives::file_icons::base_name(&change.path).to_string();
-    let deleted = change.status == "deleted";
-    let path = change.path.clone();
-    let diff_text = change.diff_text.clone();
-    div()
-        .id(ElementId::Name(format!("turn-change-{key}").into()))
-        .flex()
-        .items_center()
-        .gap(px(6.0))
-        .px(px(8.0))
-        .py(px(3.0))
-        .rounded(px(7.0))
-        .border_1()
-        .border_color(theme.border_strong)
-        .cursor_pointer()
-        .hover(|style| style.bg(theme.overlay))
-        .child(crate::primitives::file_icons::file_type_icon(&change.path, 14.0))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .text_color(if deleted { theme.text_tertiary } else { theme.text_secondary })
-                .when(deleted, |element| element.line_through())
-                .child(name),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(4.0))
-                .text_size(px(11.0))
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .child(div().text_color(theme.success).child(format!("+{}", change.additions)))
-                .child(div().text_color(theme.danger).child(format!("-{}", change.deletions))),
-        )
-        .when_some(on_open, move |element, on_open| {
-            element.on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                (on_open)(path.clone(), diff_text.clone(), window, cx);
-            })
-        })
-}
-
-/// The fold toggle after a long chip row: "+N more" while collapsed, and the
-/// same chip reading "Show less" once expanded. No hover popover.
-fn more_changes_chip(
-    key: &str,
-    hidden: usize,
-    expanded: bool,
-    theme: &Theme,
-    on_toggle: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-) -> gpui::Stateful<gpui::Div> {
-    use crate::primitives::{IconName, app_icon};
-    div()
-        .id(ElementId::Name(format!("turn-change-more-{key}").into()))
-        .flex()
-        .items_center()
-        .gap(px(6.0))
-        .px(px(8.0))
-        .py(px(3.0))
-        .rounded(px(7.0))
-        .border_1()
-        .border_color(theme.border_strong)
-        .cursor_pointer()
-        .hover(|style| style.bg(theme.overlay))
-        .child(app_icon(
-            if expanded { IconName::Minus } else { IconName::Plus },
-            12.0,
-            theme.text_tertiary,
-        ))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .text_color(theme.text_secondary)
-                .child(if expanded {
-                    "Show less".to_string()
-                } else {
-                    format!("{hidden} more")
-                }),
-        )
-        .when_some(on_toggle, |element, on_toggle| {
-            element.on_click(move |_, window, cx| {
-                cx.stop_propagation();
-                (on_toggle)(window, cx);
-            })
-        })
 }

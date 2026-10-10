@@ -1,3 +1,4 @@
+pub mod change_chips;
 pub mod diff_popover;
 pub mod diff_view;
 pub mod interaction_card;
