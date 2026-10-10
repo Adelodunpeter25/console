@@ -208,6 +208,11 @@ func (s *SessionService) SoftDelete(sessionID string) (bool, error) {
 		return deleted, err
 	}
 	if wt, wtErr := s.inner.WorktreeOf(sessionID); wtErr == nil && wt != nil {
+		// Shared worktree (a fork claims the same path): never pull the
+		// directory while another owner remains.
+		if owners, err := s.inner.CountWorktreeOwners(wt.Path, sessionID); err != nil || owners > 0 {
+			return true, nil
+		}
 		if dirty, dirtyErr := s.wt.IsDirty(wt.Path); dirtyErr == nil && !dirty {
 			_ = s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, false)
 		}
@@ -234,6 +239,10 @@ func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
 	if wt != nil {
 		// Owned worktree goes first: dirty blocks the whole delete.
 		// Branch follows the same safe rule — unmerged branches are kept.
+		// A shared worktree (fork) stays: only the last owner removes it.
+		if owners, err := s.inner.CountWorktreeOwners(wt.Path, sessionID); err == nil && owners > 0 {
+			return s.inner.PermanentDelete(sessionID)
+		}
 		if err := s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, false); err != nil {
 			return false, err
 		}
@@ -245,6 +254,20 @@ func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
 // included) for orphan detection.
 func (s *SessionService) OwnedWorktreePaths() ([]string, error) {
 	return s.inner.OwnedWorktreePaths()
+}
+
+// Fork duplicates a session's history through messageID (inclusive) into a
+// new idle session sharing the same cwd/worktree. See session.Fork for the
+// copy scope.
+func (s *SessionService) Fork(sourceID, messageID string) (types.SessionHeader, error) {
+	header, err := s.inner.Fork(sourceID, messageID)
+	if err != nil {
+		return types.SessionHeader{}, err
+	}
+	if header.Cwd != "" && manager != nil {
+		manager.Prewarm(header.Cwd)
+	}
+	return header, nil
 }
 
 func (s *SessionService) UpdateTitle(sessionID, title string) error {

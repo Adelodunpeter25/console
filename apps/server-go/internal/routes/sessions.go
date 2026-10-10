@@ -328,6 +328,38 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return sendSessionHeader(c, header)
 	})
 
+	// POST /api/sessions/:id/fork — duplicate history through messageId
+	// (inclusive) into a new idle session sharing cwd/worktree.
+	h.Post("/:id/fork", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		var body struct {
+			MessageID string `json:"messageId"`
+		}
+		if len(c.Body()) > 0 {
+			if err := json.Unmarshal(c.Body(), &body); err != nil {
+				return sessionError(c, fiber.StatusBadRequest, "Invalid request body.")
+			}
+		}
+		if body.MessageID == "" {
+			return sessionError(c, fiber.StatusBadRequest, "messageId is required")
+		}
+		if runs.IsActive(id) {
+			return sessionError(c, fiber.StatusConflict, "Session has an active run.")
+		}
+		header, err := sessions.Fork(id, body.MessageID)
+		if err != nil {
+			switch {
+			case errors.Is(err, session.ErrForkSessionNotFound):
+				return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+			case errors.Is(err, session.ErrForkMessageNotFound):
+				return sessionError(c, fiber.StatusNotFound, "Message not found.")
+			default:
+				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+		}
+		return sendSessionHeader(c, header)
+	})
+
 	// DELETE /api/sessions/:id — soft delete.
 	h.Delete("/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
