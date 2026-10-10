@@ -1569,7 +1569,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
 /// `TextRun`s that tile `code` exactly, colored by tree-sitter/lumis syntax highlighting.
 /// Every run shares one font, so the shaped width of a line is identical with or without
 /// highlighting — the property that makes coloring safe to defer.
-fn code_runs(
+pub(crate) fn code_runs(
     code: &str,
     lang: Option<&'static syntax::Language>,
     code_font: &Font,

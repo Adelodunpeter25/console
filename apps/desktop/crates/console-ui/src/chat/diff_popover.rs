@@ -11,14 +11,16 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use console_core::types::SessionFileChange;
-use console_core::utils::diff::parse_unified_diff;
+use console_core::utils::diff::{DiffResult, parse_unified_diff};
 use console_core::utils::file_kind::{FileKind, file_kind_for_path};
 use gpui::{
     App, Bounds, Div, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
-    ScrollHandle, Stateful, StatefulInteractiveElement, Styled, Window, canvas, deferred, div, px,
+    ScrollHandle, Stateful, StatefulInteractiveElement, Styled, TextRun, Window, canvas, deferred,
+    div, px,
 };
 
 use crate::chat::DiffView;
+use crate::chat::diff_view::highlight_diff;
 use crate::primitives::menu::{FloatingSurface, MenuAlign};
 use crate::theme::Theme;
 
@@ -38,6 +40,15 @@ struct PopoverHover {
     /// The chip's bounds as of the last frame, so the card can sit above it.
     bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     scroll: ScrollHandle,
+    /// Parsed and syntax-highlighted diff, built the first time the card
+    /// opens so the per-frame render only clones it.
+    prepared: Option<Prepared>,
+}
+
+#[derive(Clone)]
+struct Prepared {
+    diff: DiffResult,
+    highlights: Option<Rc<Vec<Vec<TextRun>>>>,
 }
 
 impl PopoverHover {
@@ -49,6 +60,7 @@ impl PopoverHover {
             generation: 0,
             bounds: Rc::new(Cell::new(None)),
             scroll: ScrollHandle::new(),
+            prepared: None,
         }
     }
 }
@@ -166,10 +178,22 @@ pub fn with_diff_popover(
         .shadow_md()
         .on_hover(move |hovered, _, cx| set_hover(&card_state, None, Some(*hovered), cx))
         .child(match body {
-            Body::Diff(text) => DiffView::new(format!("popover-{key}"), parse_unified_diff(&text))
-                .hide_header(true)
-                .scroll_handle(scroll)
-                .into_any_element(),
+            Body::Diff(text) => {
+                let prepared = state.update(cx, |s, _| {
+                    s.prepared
+                        .get_or_insert_with(|| {
+                            let diff = parse_unified_diff(&text);
+                            let highlights = highlight_diff(&diff, &change.path, theme);
+                            Prepared { diff, highlights }
+                        })
+                        .clone()
+                });
+                DiffView::new(format!("popover-{key}"), prepared.diff)
+                    .hide_header(true)
+                    .scroll_handle(scroll)
+                    .highlights(prepared.highlights)
+                    .into_any_element()
+            }
             Body::Note(note) => div()
                 .px(px(8.0))
                 .py(px(6.0))

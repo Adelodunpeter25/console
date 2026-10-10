@@ -320,7 +320,13 @@ pub struct AssistantMessageBubble {
     link_handler: Option<LinkHandler>,
     file_changes: Vec<SessionFileChange>,
     on_open_change: Option<OpenChangeHandler>,
+    changes_expanded: bool,
+    on_toggle_changes: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
+
+/// A turn's changed-file row shows this many chips collapsed; beyond
+/// `COLLAPSED_CHIPS + 1` files the rest fold into one "+N more" chip.
+const COLLAPSED_CHIPS: usize = 3;
 
 /// Opens the diff of one changed file: `(path, diff_text)`.
 pub type OpenChangeHandler = Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>;
@@ -341,7 +347,19 @@ impl AssistantMessageBubble {
             link_handler: None,
             file_changes: Vec::new(),
             on_open_change: None,
+            changes_expanded: false,
+            on_toggle_changes: None,
         }
+    }
+
+    pub fn changes_expanded(mut self, expanded: bool) -> Self {
+        self.changes_expanded = expanded;
+        self
+    }
+
+    pub fn on_toggle_changes(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_toggle_changes = Some(Rc::new(handler));
+        self
     }
 
     pub fn file_changes(mut self, changes: Vec<SessionFileChange>) -> Self {
@@ -437,8 +455,18 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
-        let chips: Vec<gpui::Stateful<gpui::Div>> = file_changes
+        // Up to COLLAPSED_CHIPS + 1 files show as-is (a "+1 more" chip would
+        // hide no more than the file it replaces). Beyond that the rest fold
+        // into a toggle chip; once expanded, that chip stays and collapses.
+        let foldable = file_changes.len() > COLLAPSED_CHIPS + 1;
+        let shown = if foldable && !self.changes_expanded {
+            COLLAPSED_CHIPS
+        } else {
+            file_changes.len()
+        };
+        let mut chips: Vec<gpui::Stateful<gpui::Div>> = file_changes
             .iter()
+            .take(shown)
             .enumerate()
             .map(|(i, change)| {
                 let key = format!("{}-{i}", self.selection_row);
@@ -446,6 +474,15 @@ impl RenderOnce for AssistantMessageBubble {
                 super::diff_popover::with_diff_popover(chip, &key, change, &theme, window, cx)
             })
             .collect();
+        if foldable {
+            chips.push(more_changes_chip(
+                &self.selection_row,
+                file_changes.len() - COLLAPSED_CHIPS,
+                self.changes_expanded,
+                &theme,
+                self.on_toggle_changes.clone(),
+            ));
+        }
 
         div()
             .w_full()
@@ -631,6 +668,51 @@ fn file_change_chip(
             element.on_click(move |_, window, cx| {
                 cx.stop_propagation();
                 (on_open)(path.clone(), diff_text.clone(), window, cx);
+            })
+        })
+}
+
+/// The fold toggle after a long chip row: "+N more" while collapsed, and the
+/// same chip reading "Show less" once expanded. No hover popover.
+fn more_changes_chip(
+    key: &str,
+    hidden: usize,
+    expanded: bool,
+    theme: &Theme,
+    on_toggle: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+) -> gpui::Stateful<gpui::Div> {
+    use crate::primitives::{IconName, app_icon};
+    div()
+        .id(ElementId::Name(format!("turn-change-more-{key}").into()))
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(8.0))
+        .py(px(3.0))
+        .rounded(px(7.0))
+        .border_1()
+        .border_color(theme.border_strong)
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.overlay))
+        .child(app_icon(
+            if expanded { IconName::Minus } else { IconName::Plus },
+            12.0,
+            theme.text_tertiary,
+        ))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .text_color(theme.text_secondary)
+                .child(if expanded {
+                    "Show less".to_string()
+                } else {
+                    format!("{hidden} more")
+                }),
+        )
+        .when_some(on_toggle, |element, on_toggle| {
+            element.on_click(move |_, window, cx| {
+                cx.stop_propagation();
+                (on_toggle)(window, cx);
             })
         })
 }

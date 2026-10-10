@@ -90,6 +90,10 @@ pub struct TranscriptView {
     session_changes: Rc<Vec<SessionFileChange>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
+    /// Turns (by their user message id) whose changed-file row is expanded
+    /// past the collapsed chip count. Lives here so virtualized rows that
+    /// remount keep their state.
+    expanded_turn_changes: Rc<RefCell<HashSet<String>>>,
 }
 
 impl TranscriptView {
@@ -127,7 +131,20 @@ impl TranscriptView {
             link_handler: None,
             session_changes: Rc::new(Vec::new()),
             on_open_change: None,
+            expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
         }
+    }
+
+    /// Expand or collapse one turn's changed-file row and re-measure it.
+    fn toggle_turn_changes(&mut self, row: usize, turn_id: String, cx: &mut Context<Self>) {
+        {
+            let mut expanded = self.expanded_turn_changes.borrow_mut();
+            if !expanded.remove(&turn_id) {
+                expanded.insert(turn_id);
+            }
+        }
+        self.list_state.splice(row..row + 1, 1);
+        cx.notify();
     }
 
     /// Wire clicks on a turn's changed-file chip (the app opens the diff tab).
@@ -1360,9 +1377,22 @@ fn transcript_row(
             let thinking_state = view_ref.thinking_expanded.clone();
             let thinking_entity = entity.clone();
             let turn_changes = view_ref.turn_changes_for_assistant(index);
+            let turn_id = turn_changes
+                .first()
+                .map(|change| change.user_message_id.clone())
+                .unwrap_or_default();
+            let changes_expanded = view_ref.expanded_turn_changes.borrow().contains(&turn_id);
             let on_open_change = view_ref.on_open_change.clone();
+            let toggle_entity = entity.clone();
             AssistantMessageBubble::new(presentation.content_parts)
                 .file_changes(turn_changes)
+                .changes_expanded(changes_expanded)
+                .on_toggle_changes(move |_window, cx| {
+                    if let Some(view) = toggle_entity.upgrade() {
+                        let turn_id = turn_id.clone();
+                        view.update(cx, |view, cx| view.toggle_turn_changes(index, turn_id, cx));
+                    }
+                })
                 .on_open_change(on_open_change)
                 .copy_content(presentation.copy_content)
                 .link_handler(link_handler.clone())
