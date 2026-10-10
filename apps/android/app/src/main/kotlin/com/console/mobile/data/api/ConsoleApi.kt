@@ -45,6 +45,8 @@ interface ConsoleApi {
     suspend fun deleteSession(id: String)
     suspend fun restoreSession(id: String)
     suspend fun permanentlyDeleteSession(id: String)
+    /** POST /api/sessions/:id/fork — duplicate history through messageId into a new idle session. */
+    suspend fun forkSession(id: String, messageId: String): SessionHeader
     suspend fun getTodos(id: String): List<TodoItem>
     suspend fun getSubagents(id: String): List<SubagentInfo>
     suspend fun getChanges(id: String): List<SessionFileChange>

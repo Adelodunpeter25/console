@@ -414,6 +414,41 @@ impl SessionService {
         }
     }
 
+    /// `POST /api/sessions/:id/fork` — duplicate history through
+    /// `message_id` (inclusive) into a new idle session sharing cwd/worktree.
+    pub async fn fork(&self, id: &str, message_id: &str) -> Result<SessionHeader> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/fork", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&ForkSessionDto {
+                message_id: message_id.to_owned(),
+            })
+            .send()
+            .await
+            .context("Failed to fork session")?;
+
+        let body: ApiResponse<SessionHeader> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse fork session response")?;
+        if body.success {
+            body.data
+                .ok_or_else(|| anyhow!("Forked session data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to fork session".into())
+            ))
+        }
+    }
+
     pub async fn delete(&self, id: &str) -> Result<()> {
         let url = self.transport.url(&format!("/api/sessions/{}", id)).await;
         let resp = self

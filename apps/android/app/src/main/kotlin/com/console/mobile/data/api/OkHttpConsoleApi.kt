@@ -176,6 +176,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         ensureOk(raw, "permanently delete session")
     }
 
+    override suspend fun forkSession(id: String, messageId: String): SessionHeader {
+        val body = buildJsonObject { put("messageId", messageId) }.toString()
+        val raw = http.post("/api/sessions/${enc(id)}/fork", body)
+        val element = http.unwrap(raw, JsonElement.serializer(), "fork session")
+        return sessionAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to fork session")
+    }
+
     override suspend fun getTodos(id: String): List<TodoItem> {
         val raw = http.get("/api/sessions/${enc(id)}/todos")
         val element = http.unwrap(raw, JsonElement.serializer(), "get session todos")

@@ -154,6 +154,16 @@ class ProjectRepository(
         }
     }
 
+    /** Fork a session through messageId; the new idle session is prepended like a fresh chat. */
+    suspend fun forkSession(id: String, messageId: String): SessionHeader = withContext(Dispatchers.IO) {
+        val forked = api.forkSession(id, messageId)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.prependSession(forked)
+            sessionState.setStatus(forked.id, com.console.mobile.data.model.SessionStatus.fromValue(forked.status))
+        }
+        forked
+    }
+
     fun refreshSessionHeader(sessionId: String) {
         scope.launch {
             try {

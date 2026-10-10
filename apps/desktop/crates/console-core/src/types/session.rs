@@ -130,6 +130,14 @@ pub struct UpdateSessionDto {
     pub thinking_level: Option<ThinkingLevel>,
 }
 
+/// Request body for `POST /api/sessions/:id/fork` — the message to fork
+/// through (inclusive). Hand-built like the other session POST bodies.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkSessionDto {
+    pub message_id: String,
+}
+
 /// Canonical wire type from the shared protobuf schema
 /// (proto/console/v1/session.proto). Counts narrow to u32 and stay JSON
 /// numbers; updated_at encodes as a protojson string.
