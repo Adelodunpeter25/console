@@ -27,7 +27,10 @@ pub use model_favorites::ModelFavoriteService;
 pub use notification::NotificationService;
 pub use local_forward::{LocalForward, LocalForwardManager};
 pub use port::PortService;
-pub use project::ProjectService;
+pub use project::{
+    GithubNotConnected, ProjectService, clone_project_body, init_project_body,
+    is_github_not_connected,
+};
 pub use project_scripts::ProjectScriptsService;
 pub use provider::ProviderService;
 pub use run::RunService;
