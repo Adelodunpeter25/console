@@ -1,6 +1,5 @@
 pub mod change_chips;
 pub mod diff_popover;
-pub mod diff_view;
 pub mod interaction_card;
 pub mod markdown_helpers;
 pub mod message_bubble;
@@ -10,7 +9,6 @@ pub mod transcript_view;
 pub mod working_indicator;
 
 pub use console_core::{ActivityEvent, ToolCallEntry};
-pub use diff_view::DiffView;
 pub use interaction_card::{PermissionInteractionCard, QuestionInteractionCard};
 pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};
 pub use thinking_block::ThinkingBlock;

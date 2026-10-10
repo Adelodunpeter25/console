@@ -19,7 +19,8 @@ use gpui::{
 };
 
 use crate::chat::markdown_helpers::{assistant_ctx, compact_ctx, render_selectable_markdown};
-use crate::chat::{DiffView, ThinkingBlock, WorkingIndicator};
+use crate::chat::{ThinkingBlock, WorkingIndicator};
+use crate::viewer::diff_viewer::{EditorDiff, build_editor_diff_from_parsed, file_diff_block};
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
@@ -30,6 +31,9 @@ use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
 // `format_elapsed` was unified into `format_working_elapsed` (C); kept
 // re-exported so older imports keep resolving.
 pub use crate::utils::time::format_working_elapsed as format_elapsed;
+
+/// Tallest an edit row's diff grows before it scrolls inside the row.
+const EDIT_DIFF_MAX_HEIGHT: f32 = 240.0;
 
 /// Persistent disclosure state owned by a transcript entity.
 #[derive(Clone, Default)]
@@ -48,6 +52,10 @@ pub struct ToolCallsState {
     /// targets several files, so this holds one diff per written file rather
     /// than a single one; a `writeFile` yields a one-element vec.
     pub diff_cache: HashMap<String, (serde_json::Value, Vec<FileDiff>)>,
+    /// Editor diff views for open file tool calls, keyed by call id and
+    /// rebuilt when the call's arguments change. Owned here so virtualization
+    /// does not rebuild them (and reset their scroll) when a row remounts.
+    pub editor_diffs: HashMap<String, (serde_json::Value, Vec<EditorDiff>)>,
 }
 
 impl ToolCallsState {
@@ -58,6 +66,7 @@ impl ToolCallsState {
         self.thinking_expanded.clear();
         self.markdown_views.clear();
         self.diff_cache.clear();
+        self.editor_diffs.clear();
     }
 }
 
@@ -335,12 +344,42 @@ impl ToolCalls {
         group.entries.iter().all(|entry| entry.result.is_some())
     }
 
+    /// The editor diff views for a file call's diffs, built once per
+    /// arguments value and reused while the row stays open.
+    fn editor_diffs_for(
+        &self,
+        call_id: &str,
+        arguments: &serde_json::Value,
+        diffs: &[FileDiff],
+        theme: &Theme,
+        cx: &mut App,
+    ) -> Vec<EditorDiff> {
+        if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id) {
+            if cached_args == arguments && cached.len() == diffs.len() {
+                return cached.clone();
+            }
+        }
+        let built: Vec<EditorDiff> = diffs
+            .iter()
+            .map(|file_diff| {
+                build_editor_diff_from_parsed(&file_diff.diff, &file_diff.path, theme, cx)
+            })
+            .collect();
+        self.state
+            .borrow_mut()
+            .editor_diffs
+            .insert(call_id.to_string(), (arguments.clone(), built.clone()));
+        built
+    }
+
     fn call_row(
         &self,
         entry: ToolCallEntry,
         theme: Theme,
         first: bool,
         on_action: Option<Rc<dyn Fn(ToolCallsAction, &mut Window, &mut App) + 'static>>,
+        _window: &mut Window,
+        cx: &mut App,
     ) -> AnyElement {
         let call_id = entry.call.id.clone();
         let open = self.state.borrow().expanded_calls.contains(&call_id);
@@ -520,6 +559,11 @@ impl ToolCalls {
             );
 
         if open {
+            let editor_diffs = if has_diff {
+                self.editor_diffs_for(&call_id, &entry.call.arguments, &diffs, &theme, cx)
+            } else {
+                Vec::new()
+            };
             row = row.child(
                 div()
                     .px(px(10.0))
@@ -527,15 +571,15 @@ impl ToolCalls {
                     .flex()
                     .flex_col()
                     .gap(px(6.0))
-                    .children(diffs.iter().enumerate().map(|(i, file_diff)| {
-                        let mut view = DiffView::new(
-                            format!("{call_id}-{i}"),
-                            file_diff.diff.clone(),
-                        );
-                        if !file_diff.path.is_empty() {
-                            view = view.file_path(file_diff.path.clone());
-                        }
-                        view
+                    .children(diffs.iter().zip(editor_diffs).map(|(file_diff, editor)| {
+                        file_diff_block(
+                            &file_diff.path,
+                            file_diff.diff.added,
+                            file_diff.diff.removed,
+                            editor,
+                            EDIT_DIFF_MAX_HEIGHT,
+                            &theme,
+                        )
                     }))
                     .when(!has_diff, |element| {
                         let arguments = serde_json::to_string_pretty(&entry.call.arguments)
@@ -567,6 +611,8 @@ impl ToolCalls {
         group: ToolGroup,
         theme: Theme,
         on_action: Option<Rc<dyn Fn(ToolCallsAction, &mut Window, &mut App) + 'static>>,
+        window: &mut Window,
+        cx: &mut App,
     ) -> AnyElement {
         let group_key = format!("group:{}", group.entries[0].call.id);
         let open = self.state.borrow().expanded_calls.contains(&group_key);
@@ -660,7 +706,7 @@ impl ToolCalls {
                     .border_color(theme.border)
                     .pl(px(10.0))
                     .children(group.entries.into_iter().enumerate().map(|(index, entry)| {
-                        self.call_row(entry, theme, index == 0, on_action.clone())
+                        self.call_row(entry, theme, index == 0, on_action.clone(), window, cx)
                     })),
             );
         }
@@ -729,7 +775,7 @@ impl ToolCalls {
     /// Build the expanded timeline: thinking/text events render individually,
     /// and consecutive tool calls of the same name collapse into one group.
     /// Mirrors the desktop app's `groupEvents` pass.
-    fn timeline_children(&self, theme: Theme) -> Vec<AnyElement> {
+    fn timeline_children(&self, theme: Theme, window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
         let is_streaming = self.working;
         let mut children: Vec<AnyElement> = Vec::new();
         let mut pending: Vec<ToolCallEntry> = Vec::new();
@@ -737,24 +783,30 @@ impl ToolCalls {
             match event {
                 ActivityEvent::Thinking { id, text } => {
                     if !pending.is_empty() {
-                        children.extend(self.flush_tool_groups(&mut pending, theme));
+                        children.extend(self.flush_tool_groups(&mut pending, theme, window, cx));
                     }
                     children.push(self.thinking_row(id, text, theme, is_streaming));
                 }
                 ActivityEvent::Text { id, text } => {
                     if !pending.is_empty() {
-                        children.extend(self.flush_tool_groups(&mut pending, theme));
+                        children.extend(self.flush_tool_groups(&mut pending, theme, window, cx));
                     }
                     children.push(self.text_row(id, text, theme, is_streaming));
                 }
                 ActivityEvent::ToolCall(entry) => pending.push(entry.clone()),
             }
         }
-        children.extend(self.flush_tool_groups(&mut pending, theme));
+        children.extend(self.flush_tool_groups(&mut pending, theme, window, cx));
         children
     }
 
-    fn flush_tool_groups(&self, pending: &mut Vec<ToolCallEntry>, theme: Theme) -> Vec<AnyElement> {
+    fn flush_tool_groups(
+        &self,
+        pending: &mut Vec<ToolCallEntry>,
+        theme: Theme,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Vec<AnyElement> {
         if pending.is_empty() {
             return Vec::new();
         }
@@ -768,9 +820,11 @@ impl ToolCalls {
                         theme,
                         true,
                         self.on_action.clone(),
+                        window,
+                        cx,
                     )
                 } else {
-                    self.group_row(group, theme, self.on_action.clone())
+                    self.group_row(group, theme, self.on_action.clone(), window, cx)
                 }
             })
             .collect::<Vec<_>>();
@@ -780,7 +834,7 @@ impl ToolCalls {
 }
 
 impl RenderOnce for ToolCalls {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         if self.events.is_empty() {
             return div().into_any_element();
         }
@@ -870,7 +924,7 @@ impl RenderOnce for ToolCalls {
             container = container.child(
                 div()
                     .overflow_hidden()
-                    .children(self.timeline_children(theme)),
+                    .children(self.timeline_children(theme, window, cx)),
             );
         }
 
