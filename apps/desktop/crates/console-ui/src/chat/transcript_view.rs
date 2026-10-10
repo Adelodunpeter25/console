@@ -14,6 +14,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::chat::change_chips::{TurnChange, TurnChanges};
 use crate::chat::{
     ActivityEvent, AssistantMessageBubble, ToolCallEntry, ToolCalls, ToolCallsAction,
     ToolCallsState, UserMessageBubble, WorkingIndicator,
@@ -85,9 +86,10 @@ pub struct TranscriptView {
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
-    /// The session's recorded file changes, grouped into per-turn chip rows
-    /// under each turn's final assistant message.
-    session_changes: Rc<Vec<SessionFileChange>>,
+    /// The session's recorded file changes grouped by the user message that
+    /// started each turn, built once per fetch. A turn's chip row under its
+    /// final assistant message is a lookup here, never a scan or a copy.
+    turn_changes: HashMap<String, Rc<TurnChanges>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
@@ -131,7 +133,7 @@ impl TranscriptView {
             on_open_file_raw: None,
             on_open_url_raw: None,
             link_handler: None,
-            session_changes: Rc::new(Vec::new()),
+            turn_changes: HashMap::new(),
             on_open_change: None,
             on_fork: None,
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
@@ -202,7 +204,7 @@ impl TranscriptView {
         cx: &mut Context<Self>,
     ) {
         let before: Vec<usize> = self.rows_with_turn_changes();
-        self.session_changes = changes;
+        self.turn_changes = group_turn_changes(&changes);
         let after: Vec<usize> = self.rows_with_turn_changes();
         if before.is_empty() && after.is_empty() {
             return;
@@ -219,29 +221,29 @@ impl TranscriptView {
 
     fn rows_with_turn_changes(&self) -> Vec<usize> {
         (0..self.messages.len())
-            .filter(|&index| !self.turn_changes_for_assistant(index).is_empty())
+            .filter(|&index| self.turn_changes_for_assistant(index).is_some())
             .collect()
     }
 
     /// File changes of the turn a settled assistant message closes. Only the
     /// turn's last visible assistant message carries them: a turn is one user
     /// message and everything the agent did until the next one.
-    fn turn_changes_for_assistant(&self, index: usize) -> Vec<SessionFileChange> {
-        if self.session_changes.is_empty() {
-            return Vec::new();
+    fn turn_changes_for_assistant(&self, index: usize) -> Option<Rc<TurnChanges>> {
+        if self.turn_changes.is_empty() {
+            return None;
         }
         let Some(AgentMessage::Assistant { .. }) = self.messages.get(index) else {
-            return Vec::new();
+            return None;
         };
         if is_hidden_tool_transport(&self.messages[index]) {
-            return Vec::new();
+            return None;
         }
         let closes_turn = self.messages[index + 1..]
             .iter()
             .take_while(|message| !matches!(message, AgentMessage::User { .. }))
             .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden_tool_transport(message));
         if !closes_turn {
-            return Vec::new();
+            return None;
         }
         let user_id = self.messages[..index]
             .iter()
@@ -251,17 +253,7 @@ impl TranscriptView {
                 _ => None,
             })
             .flatten();
-        let Some(user_id) = user_id else {
-            return Vec::new();
-        };
-        // Server order is most recently updated first; chips read in the
-        // order the files were touched.
-        self.session_changes
-            .iter()
-            .rev()
-            .filter(|change| change.user_message_id == user_id)
-            .cloned()
-            .collect()
+        self.turn_changes.get(&user_id?).cloned()
     }
 
     /// Wire the image-preview opener (the app opens its modal with the
@@ -1391,8 +1383,8 @@ fn transcript_row(
             let thinking_entity = entity.clone();
             let turn_changes = view_ref.turn_changes_for_assistant(index);
             let turn_id = turn_changes
-                .first()
-                .map(|change| change.user_message_id.clone())
+                .as_ref()
+                .map(|turn| turn.user_message_id.clone())
                 .unwrap_or_default();
             let changes_expanded = view_ref.expanded_turn_changes.borrow().contains(&turn_id);
             let on_open_change = view_ref.on_open_change.clone();
@@ -1505,4 +1497,33 @@ fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
         ) => !r1.is_empty() && !r2.is_empty() && r1[0].tool_call_id == r2[0].tool_call_id,
         _ => false,
     }
+}
+
+/// Group the session's file changes by the user message that started their
+/// turn. The server sends rows most recently updated first; each turn's files
+/// are reversed so chips read in the order the agent touched them. Rows with
+/// no user message id (nothing links them to a turn) are dropped.
+fn group_turn_changes(changes: &[SessionFileChange]) -> HashMap<String, Rc<TurnChanges>> {
+    let mut grouped: HashMap<String, Vec<TurnChange>> = HashMap::new();
+    for change in changes.iter().rev() {
+        if change.user_message_id.is_empty() {
+            continue;
+        }
+        grouped
+            .entry(change.user_message_id.clone())
+            .or_default()
+            .push(TurnChange::from_change(change));
+    }
+    grouped
+        .into_iter()
+        .map(|(user_message_id, files)| {
+            (
+                user_message_id.clone(),
+                Rc::new(TurnChanges {
+                    user_message_id,
+                    files,
+                }),
+            )
+        })
+        .collect()
 }

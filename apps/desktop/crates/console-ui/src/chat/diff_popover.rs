@@ -12,16 +12,19 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use console_core::types::SessionFileChange;
+use super::change_chips::TurnChange;
 use console_core::utils::file_kind::{FileKind, file_kind_for_path};
 use gpui::{
     App, Bounds, Div, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
-    Stateful, StatefulInteractiveElement, Styled, Window, canvas, deferred, div, px,
+    Stateful, StatefulInteractiveElement, Styled, Window, canvas, deferred, div,
+    prelude::FluentBuilder, px,
 };
 
 use crate::primitives::menu::{FloatingSurface, MenuAlign};
 use crate::theme::Theme;
-use crate::viewer::diff_viewer::{DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff};
+use crate::viewer::diff_viewer::{
+    DIFF_LINE_HEIGHT, DiffViewer, EditorDiff, build_editor_diff_capped,
+};
 
 const SHOW_DELAY: Duration = Duration::from_millis(300);
 const HIDE_DELAY: Duration = Duration::from_millis(150);
@@ -30,6 +33,10 @@ const CARD_WIDTH: f32 = 560.0;
 /// line count, up to this height; longer diffs scroll inside.
 const CARD_DIFF_MAX_HEIGHT: f32 = 260.0;
 const CARD_GAP: f32 = 6.0;
+/// A hover preview only builds this many diff lines. Past it the card says
+/// how much was left out; the full diff is one click away. Bounds the work of
+/// the frame the card first opens on, however large the stored diff is.
+const PREVIEW_MAX_LINES: usize = 400;
 
 /// Hover bookkeeping for one chip, kept across frames.
 struct PopoverHover {
@@ -41,9 +48,10 @@ struct PopoverHover {
     generation: u64,
     /// The chip's bounds as of the last frame, so the card can sit above it.
     bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
-    /// The diff view for this chip, built the first time the card opens.
-    /// Kept so its scroll position survives re-renders.
-    diff: Option<EditorDiff>,
+    /// The diff view for this chip, built the first time the card opens, and
+    /// the diff's true line count. Kept so its scroll position survives
+    /// re-renders.
+    diff: Option<(EditorDiff, usize)>,
 }
 
 impl PopoverHover {
@@ -59,14 +67,16 @@ impl PopoverHover {
     }
 }
 
-enum Body {
-    Diff(String),
+/// What a card shows. Borrows the diff text from the chip's data, so
+/// deciding whether a chip has a popover copies nothing.
+enum Body<'a> {
+    Diff(&'a str),
     Note(String),
 }
 
-fn body_for(change: &SessionFileChange) -> Option<Body> {
+fn body_for(change: &TurnChange) -> Option<Body<'_>> {
     if let Some(text) = change.diff_text.as_deref().filter(|t| !t.trim().is_empty()) {
-        return Some(Body::Diff(text.to_string()));
+        return Some(Body::Diff(text));
     }
     match file_kind_for_path(&change.path) {
         FileKind::RasterImage | FileKind::Blocked => {
@@ -122,7 +132,7 @@ fn set_hover(
 pub fn with_diff_popover(
     chip: Stateful<Div>,
     key: &str,
-    change: &SessionFileChange,
+    change: &TurnChange,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
@@ -174,24 +184,50 @@ pub fn with_diff_popover(
         .child(match body {
             Body::Diff(text) => {
                 let existing = state.read(cx).diff.clone();
-                let diff = match existing {
-                    Some(diff) => diff,
+                let (diff, total_lines) = match existing {
+                    Some(built) => built,
                     None => {
-                        let diff = build_editor_diff(&text, &change.path, theme, cx);
-                        state.update(cx, |s, _| s.diff = Some(diff.clone()));
-                        diff
+                        let built = build_editor_diff_capped(
+                            text,
+                            &change.path,
+                            theme,
+                            PREVIEW_MAX_LINES,
+                            cx,
+                        );
+                        state.update(cx, |s, _| s.diff = Some(built.clone()));
+                        built
                     }
                 };
                 // Exact height for short diffs (plus a little breathing
                 // room), capped so long ones scroll inside the card.
                 let height = (diff.line_count as f32 * DIFF_LINE_HEIGHT + 8.0)
                     .min(CARD_DIFF_MAX_HEIGHT);
+                let left_out = total_lines.saturating_sub(diff.line_count);
                 div()
-                    .w_full()
-                    .h(px(height))
-                    .rounded(px(6.0))
-                    .overflow_hidden()
-                    .child(DiffViewer::new(diff.view))
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .w_full()
+                            .h(px(height))
+                            .rounded(px(6.0))
+                            .overflow_hidden()
+                            .child(DiffViewer::new(diff.view)),
+                    )
+                    .when(left_out > 0, |element| {
+                        element.child(
+                            div()
+                                .px(px(8.0))
+                                .pt(px(5.0))
+                                .pb(px(2.0))
+                                .text_size(px(11.0))
+                                .text_color(theme.text_tertiary)
+                                .child(format!(
+                                    "Showing the first {} of {} lines — click the file to open the full diff",
+                                    diff.line_count, total_lines
+                                )),
+                        )
+                    })
                     .into_any_element()
             }
             Body::Note(note) => div()

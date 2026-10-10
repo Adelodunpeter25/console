@@ -87,6 +87,26 @@ pub fn build_editor_diff(raw: &str, path: &str, theme: &Theme, cx: &mut App) -> 
     build_from_result(editor_diff_result(raw), path, theme, cx)
 }
 
+/// [`build_editor_diff`] keeping only the first `max_lines` diff lines, for
+/// previews. Returns the view and the diff's true line count, so the caller
+/// can say how much was left out. Truncating before the view is built keeps
+/// the widest-line scan and the first-open work bounded for huge diffs.
+pub fn build_editor_diff_capped(
+    raw: &str,
+    path: &str,
+    theme: &Theme,
+    max_lines: usize,
+    cx: &mut App,
+) -> (EditorDiff, usize) {
+    let mut parsed = parse_unified_diff(raw);
+    let total = parsed.lines.len();
+    parsed.lines.truncate(max_lines);
+    (
+        build_from_result(editor_diff_from_parsed(&parsed), path, theme, cx),
+        total,
+    )
+}
+
 /// [`build_editor_diff`] for a diff that is already parsed.
 pub fn build_editor_diff_from_parsed(
     parsed: &console_core::DiffResult,

@@ -4,7 +4,9 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::change_chips::{OpenChangeHandler, ToggleChangesHandler, turn_change_chips};
+use super::change_chips::{
+    OpenChangeHandler, ToggleChangesHandler, TurnChanges, turn_change_chips,
+};
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
@@ -15,7 +17,6 @@ use crate::utils::format_message_time;
 
 use super::ThinkingBlock;
 use base64::Engine as _;
-use console_core::types::SessionFileChange;
 use console_core::{AssistantContentPart, ImageAttachment};
 use gpui::{
     App, ElementId, IntoElement, ParentElement, RenderOnce, Styled, Window, div, img, prelude::*,
@@ -326,7 +327,7 @@ pub struct AssistantMessageBubble {
     thinking_expanded: Option<Rc<RefCell<HashSet<String>>>>,
     on_thinking_toggle: Option<Rc<dyn Fn(String, bool, &mut Window, &mut App) + 'static>>,
     link_handler: Option<LinkHandler>,
-    file_changes: Vec<SessionFileChange>,
+    file_changes: Option<Rc<TurnChanges>>,
     on_open_change: Option<OpenChangeHandler>,
     changes_expanded: bool,
     on_toggle_changes: Option<ToggleChangesHandler>,
@@ -348,7 +349,7 @@ impl AssistantMessageBubble {
             thinking_expanded: None,
             on_thinking_toggle: None,
             link_handler: None,
-            file_changes: Vec::new(),
+            file_changes: None,
             on_open_change: None,
             changes_expanded: false,
             on_toggle_changes: None,
@@ -368,7 +369,7 @@ impl AssistantMessageBubble {
         self
     }
 
-    pub fn file_changes(mut self, changes: Vec<SessionFileChange>) -> Self {
+    pub fn file_changes(mut self, changes: Option<Rc<TurnChanges>>) -> Self {
         self.file_changes = changes;
         self
     }
@@ -472,16 +473,18 @@ impl RenderOnce for AssistantMessageBubble {
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
         let fork_action = self.fork_message_id.zip(self.on_fork).filter(|_| !is_streaming);
-        let chips = turn_change_chips(
-            &self.selection_row,
-            &file_changes,
-            self.changes_expanded,
-            on_open_change,
-            self.on_toggle_changes.clone(),
-            &theme,
-            window,
-            cx,
-        );
+        let chips = file_changes.as_ref().and_then(|turn| {
+            turn_change_chips(
+                &self.selection_row,
+                turn,
+                self.changes_expanded,
+                on_open_change,
+                self.on_toggle_changes.clone(),
+                &theme,
+                window,
+                cx,
+            )
+        });
 
         div()
             .w_full()

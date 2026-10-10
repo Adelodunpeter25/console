@@ -20,6 +20,36 @@ use super::diff_popover::with_diff_popover;
 /// "+1 more" chip would hide no more than the file it replaces).
 const COLLAPSED_CHIPS: usize = 3;
 
+/// One changed file of a turn, copied out of the server row once when the
+/// session's changes arrive. Rows hold these behind an `Rc`, so rendering a
+/// turn's chips each frame never copies a diff body.
+pub struct TurnChange {
+    pub path: String,
+    pub status: String,
+    pub additions: u32,
+    pub deletions: u32,
+    pub diff_text: Option<String>,
+}
+
+impl TurnChange {
+    pub fn from_change(change: &SessionFileChange) -> Self {
+        Self {
+            path: change.path.clone(),
+            status: change.status.clone(),
+            additions: change.additions,
+            deletions: change.deletions,
+            diff_text: change.diff_text.clone(),
+        }
+    }
+}
+
+/// Every changed file of one turn, in the order the agent touched them.
+pub struct TurnChanges {
+    /// The user message that started the turn; the fold state is keyed by it.
+    pub user_message_id: String,
+    pub files: Vec<TurnChange>,
+}
+
 /// Opens the diff of one changed file: `(path, diff_text)`.
 pub type OpenChangeHandler = Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>;
 
@@ -29,7 +59,7 @@ pub type ToggleChangesHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
 /// Build the chip row for one turn, or `None` when it changed no files.
 pub fn turn_change_chips(
     key: &str,
-    changes: &[SessionFileChange],
+    turn: &Rc<TurnChanges>,
     expanded: bool,
     on_open: Option<OpenChangeHandler>,
     on_toggle: Option<ToggleChangesHandler>,
@@ -37,29 +67,27 @@ pub fn turn_change_chips(
     window: &mut Window,
     cx: &mut App,
 ) -> Option<impl IntoElement + use<>> {
-    if changes.is_empty() {
+    let count = turn.files.len();
+    if count == 0 {
         return None;
     }
-    let foldable = changes.len() > COLLAPSED_CHIPS + 1;
+    let foldable = count > COLLAPSED_CHIPS + 1;
     let shown = if foldable && !expanded {
         COLLAPSED_CHIPS
     } else {
-        changes.len()
+        count
     };
-    let mut chips: Vec<Stateful<gpui::Div>> = changes
-        .iter()
-        .take(shown)
-        .enumerate()
-        .map(|(i, change)| {
-            let chip_key = format!("{key}-{i}");
-            let chip = file_change_chip(&chip_key, change, theme, on_open.clone());
-            with_diff_popover(chip, &chip_key, change, theme, window, cx)
+    let mut chips: Vec<Stateful<gpui::Div>> = (0..shown)
+        .map(|index| {
+            let chip_key = format!("{key}-{index}");
+            let chip = file_change_chip(&chip_key, turn, index, theme, on_open.clone());
+            with_diff_popover(chip, &chip_key, &turn.files[index], theme, window, cx)
         })
         .collect();
     if foldable {
         chips.push(more_changes_chip(
             key,
-            changes.len() - COLLAPSED_CHIPS,
+            count - COLLAPSED_CHIPS,
             expanded,
             theme,
             on_toggle,
@@ -79,14 +107,17 @@ pub fn turn_change_chips(
 /// name is struck through. Clicking opens that file's diff for the turn.
 fn file_change_chip(
     key: &str,
-    change: &SessionFileChange,
+    turn: &Rc<TurnChanges>,
+    index: usize,
     theme: &Theme,
     on_open: Option<OpenChangeHandler>,
 ) -> Stateful<gpui::Div> {
+    let change = &turn.files[index];
     let name = base_name(&change.path).to_string();
     let deleted = change.status == "deleted";
-    let path = change.path.clone();
-    let diff_text = change.diff_text.clone();
+    // The click handler holds the turn, not copies of the path and diff;
+    // those are only cloned if the chip is actually clicked.
+    let turn = turn.clone();
     div()
         .id(ElementId::Name(format!("turn-change-{key}").into()))
         .flex()
@@ -132,7 +163,8 @@ fn file_change_chip(
         .when_some(on_open, move |element, on_open| {
             element.on_click(move |_, window, cx| {
                 cx.stop_propagation();
-                (on_open)(path.clone(), diff_text.clone(), window, cx);
+                let change = &turn.files[index];
+                (on_open)(change.path.clone(), change.diff_text.clone(), window, cx);
             })
         })
 }
