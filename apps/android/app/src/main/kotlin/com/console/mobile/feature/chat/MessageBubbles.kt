@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -336,9 +337,11 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
         Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
             if (isFileTargetTool(call.name) && filePath != null) {
                 // File rows carry the real file-type icon, like desktop.
-                FileIcon(filename = filePath, sizeDp = 13, modifier = Modifier.padding(end = 6.dp))
+                FileIcon(filename = filePath, sizeDp = 16)
+                Spacer(Modifier.width(8.dp))
             } else {
-                Icon(getToolIcon(call.name), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(14.dp).padding(end = 6.dp))
+                Icon(getToolIcon(call.name), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
             }
             Text(getToolLabel(call.name), color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (!summary.isNullOrEmpty()) {
@@ -348,15 +351,17 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
             }
             if (diffs.isNotEmpty()) {
                 DiffSummaryBadge(addedCount = added, removedCount = removed)
+                Spacer(Modifier.width(6.dp))
             }
             if (result == null) {
-                CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(13.dp))
+                CircularProgressIndicator(color = NewTheme.TextMuted, strokeWidth = 2.dp, modifier = Modifier.size(15.dp))
             } else if (result.isError) {
-                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(14.dp))
+                Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(15.dp))
             } else {
-                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(14.dp))
+                Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.Success, modifier = Modifier.size(15.dp))
             }
-            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(4.dp))
+            Icon(if (open) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(15.dp))
         }
         if (open) {
             // Arguments and output sit on a darker inset than the row's card, like a

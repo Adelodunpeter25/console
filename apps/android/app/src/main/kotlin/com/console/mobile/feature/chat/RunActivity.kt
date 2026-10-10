@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -174,8 +175,9 @@ fun ToolGroupRow(
                 getToolIcon(toolName),
                 contentDescription = null,
                 tint = NewTheme.TextSecondary,
-                modifier = Modifier.size(13.dp).padding(end = 6.dp),
+                modifier = Modifier.size(16.dp),
             )
+            Spacer(Modifier.width(8.dp))
             Text(
                 getToolLabel(toolName),
                 color = NewTheme.TextSecondary,
@@ -197,27 +199,28 @@ fun ToolGroupRow(
                     TablerIcons.Outline.AlertTriangle,
                     contentDescription = null,
                     tint = NewTheme.Danger,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             } else if (anyRunning) {
                 CircularProgressIndicator(
                     color = NewTheme.TextMuted,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             } else {
                 Icon(
                     TablerIcons.Outline.Check,
                     contentDescription = null,
                     tint = NewTheme.Success,
-                    modifier = Modifier.size(13.dp),
+                    modifier = Modifier.size(15.dp),
                 )
             }
+            Spacer(Modifier.width(4.dp))
             Icon(
                 if (expanded) TablerIcons.Outline.ChevronUp else TablerIcons.Outline.ChevronDown,
                 contentDescription = null,
                 tint = NewTheme.TextMuted,
-                modifier = Modifier.size(13.dp).padding(start = 4.dp),
+                modifier = Modifier.size(15.dp),
             )
         }
         if (expanded) {
