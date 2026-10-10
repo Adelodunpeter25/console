@@ -54,6 +54,38 @@ pub(crate) fn wire_open_change_for_active_pane(
     });
 }
 
+/// Fork the pane's session through the clicked assistant message.
+pub(crate) fn wire_fork_for_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: String,
+) {
+    transcript.set_on_fork(move |message_id, _window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.fork_session_for_pane(pane_id.clone(), message_id, cx);
+            });
+        }
+    });
+}
+
+pub(crate) fn wire_fork_for_active_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+) {
+    transcript.set_on_fork(move |message_id, _window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                let pane_id = this
+                    .active_pane_id
+                    .clone()
+                    .unwrap_or_else(|| "pane-main".to_string());
+                this.fork_session_for_pane(pane_id, message_id, cx);
+            });
+        }
+    });
+}
+
 pub(crate) fn wire_open_file_for_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,

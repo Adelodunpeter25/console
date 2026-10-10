@@ -266,6 +266,7 @@ impl ConsoleDesktopApp {
                     transcript,
                     entity.clone(),
                 );
+                super::transcript_wiring::wire_fork_for_active_pane(transcript, entity.clone());
             });
         }
         let model_menu = ContextMenuHandle::new(cx).on_toggle({

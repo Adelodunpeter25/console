@@ -274,6 +274,15 @@ fun ChatScreen(
                             item = msg,
                             fileChanges = assistantTurnChanges[index].orEmpty(),
                             onOpenChange = { inspectingChange = it },
+                            onFork = { messageId ->
+                                scope.launch {
+                                    try {
+                                        val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
+                                        AppContainer.appStateHolder.setSelectedSessionId(forked.id)
+                                    } catch (_: Exception) {
+                                    }
+                                }
+                            },
                         )
                         val runIdx = userRunMap[index]
                         if (runIdx != null && runIdx < runs.size) {

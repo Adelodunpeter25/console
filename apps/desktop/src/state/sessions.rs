@@ -909,6 +909,51 @@ impl ConsoleDesktopApp {
         self.load_session_messages_for_pane(pane_id, session_id, cx);
     }
 
+    /// Fork the pane's session through one assistant message into a new idle
+    /// chat sharing cwd/worktree, then open the fork in that pane. No-op
+    /// while the session is running (the server rejects active runs).
+    pub fn fork_session_for_pane(
+        &mut self,
+        pane_id: String,
+        message_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        if self.is_session_running(&session_id) {
+            return;
+        }
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.fork(&session_id, &message_id).await {
+                Ok(header) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let new_id = header.id.clone();
+                                Rc::make_mut(&mut this.sessions).insert(0, header);
+                                this.active_pane_id = Some(pane_id.clone());
+                                this.select_and_open_session(new_id, cx);
+                            });
+                        }
+                    });
+                }
+                Err(error) => {
+                    let message = format!("Unable to fork session: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, message, cx)
+                            });
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
+    }
+
     /// Load a chat into one pane without replacing another pane's transcript.
     /// Uses tail pagination (limit 50) for fast initial paint; older pages
     /// auto-chain while the user holds at the top so the first prompt is

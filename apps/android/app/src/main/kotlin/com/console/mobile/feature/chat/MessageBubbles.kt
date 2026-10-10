@@ -51,6 +51,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
+import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.argumentPath
@@ -189,6 +190,8 @@ fun AssistantBubble(
     createdAt: Long?,
     fileChanges: List<SessionFileChange> = emptyList(),
     onOpenChange: ((SessionFileChange) -> Unit)? = null,
+    messageId: String? = null,
+    onFork: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val hasContent = !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty()
@@ -226,6 +229,7 @@ fun AssistantBubble(
         if (!isStreaming && (createdAt != null || !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty() || fileChanges.isNotEmpty())) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp, start = 2.dp)) {
                 Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = NewTheme.TextMuted, fontSize = 12.sp)
+                if (onFork != null && messageId != null) ForkButton(onClick = { onFork.invoke(messageId) })
                 val copyable = buildList {
                     if (!thinkingContent.isNullOrEmpty()) add("Thought:\n$thinkingContent")
                     if (!textContent.isNullOrEmpty()) add(textContent)
@@ -271,8 +275,7 @@ fun TurnChangeChip(
 }
 
 @Composable
-private fun CopyButton(text: String, context: Context) {
-    var copied by remember(text) { mutableStateOf(false) }
+private fun CopyButton(text: String, context: Context) {    var copied by remember(text) { mutableStateOf(false) }
     IconButton(onClick = {
         try {
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -282,6 +285,13 @@ private fun CopyButton(text: String, context: Context) {
     }, modifier = Modifier.size(24.dp)) {
         if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = NewTheme.Success, modifier = Modifier.size(13.dp))
         else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
+    }
+}
+
+@Composable
+private fun ForkButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(24.dp)) {
+        Icon(TablerIcons.Outline.GitBranch, contentDescription = "Fork chat from here", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
     }
 }
 
@@ -478,6 +488,7 @@ fun MessageBubbleItem(
     item: AgentMessage,
     fileChanges: List<SessionFileChange> = emptyList(),
     onOpenChange: ((SessionFileChange) -> Unit)? = null,
+    onFork: ((String) -> Unit)? = null,
 ) {
     when (item) {
         is UserMessage -> UserBubble(content = item.content, createdAt = item.createdAt, attachments = item.attachments)
@@ -495,6 +506,8 @@ fun MessageBubbleItem(
                 createdAt = item.createdAt,
                 fileChanges = fileChanges,
                 onOpenChange = onOpenChange,
+                messageId = item.id,
+                onFork = onFork,
             )
         }
     }

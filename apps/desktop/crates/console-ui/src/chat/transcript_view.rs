@@ -90,6 +90,8 @@ pub struct TranscriptView {
     session_changes: Rc<Vec<SessionFileChange>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
+    /// Forks the session through one assistant message: `(message_id)`.
+    on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     /// Turns (by their user message id) whose changed-file row is expanded
     /// past the collapsed chip count. Lives here so virtualized rows that
     /// remount keep their state.
@@ -131,6 +133,7 @@ impl TranscriptView {
             link_handler: None,
             session_changes: Rc::new(Vec::new()),
             on_open_change: None,
+            on_fork: None,
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
         }
     }
@@ -153,6 +156,15 @@ impl TranscriptView {
         handler: impl Fn(String, Option<String>, &mut Window, &mut App) + 'static,
     ) {
         self.on_open_change = Some(Rc::new(handler));
+    }
+
+    /// Wire assistant-message fork clicks (the app forks the session through
+    /// the clicked message and opens the new chat).
+    pub fn set_on_fork(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_fork = Some(Rc::new(handler));
     }
 
     /// Copy server-assigned ids onto this transcript's user messages that
@@ -1358,6 +1370,7 @@ fn transcript_row(
         AgentMessage::Assistant {
             content,
             created_at,
+            id,
             ..
         } => {
             let presentation = view_ref.assistant_presentation(index, content);
@@ -1383,6 +1396,7 @@ fn transcript_row(
                 .unwrap_or_default();
             let changes_expanded = view_ref.expanded_turn_changes.borrow().contains(&turn_id);
             let on_open_change = view_ref.on_open_change.clone();
+            let on_fork = view_ref.on_fork.clone();
             let toggle_entity = entity.clone();
             AssistantMessageBubble::new(presentation.content_parts)
                 .file_changes(turn_changes)
@@ -1394,6 +1408,8 @@ fn transcript_row(
                     }
                 })
                 .on_open_change(on_open_change)
+                .fork_message_id(id.clone())
+                .on_fork(on_fork)
                 .copy_content(presentation.copy_content)
                 .link_handler(link_handler.clone())
                 .thinking_expanded(thinking_state)

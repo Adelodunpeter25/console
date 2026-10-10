@@ -9,6 +9,7 @@ use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
 use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
+use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use crate::utils::format_message_time;
 
@@ -306,12 +307,18 @@ impl RenderOnce for UserMessageBubble {
 
 // ─── Assistant message ────────────────────────────────────────────────────────
 
+/// Fork handler: the server-assigned id of the assistant message to fork
+/// through (inclusive).
+pub type ForkHandler = Rc<dyn Fn(String, &mut Window, &mut App) + 'static>;
+
 #[derive(IntoElement)]
 pub struct AssistantMessageBubble {
     pub content_parts: Rc<Vec<AssistantContentPart>>,
     pub is_streaming: bool,
     pub created_at: Option<i64>,
     content_for_copy: Option<gpui::SharedString>,
+    fork_message_id: Option<String>,
+    on_fork: Option<ForkHandler>,
     markdown_views: Vec<Option<Rc<RefCell<MarkdownView>>>>,
     selection: Option<TranscriptSelection>,
     selection_row: String,
@@ -332,6 +339,8 @@ impl AssistantMessageBubble {
             is_streaming: false,
             created_at: None,
             content_for_copy: None,
+            fork_message_id: None,
+            on_fork: None,
             markdown_views: Vec::new(),
             selection: None,
             selection_row: "assistant-message".to_owned(),
@@ -382,6 +391,16 @@ impl AssistantMessageBubble {
 
     pub fn copy_content(mut self, content: gpui::SharedString) -> Self {
         self.content_for_copy = Some(content);
+        self
+    }
+
+    pub fn fork_message_id(mut self, id: Option<String>) -> Self {
+        self.fork_message_id = id;
+        self
+    }
+
+    pub fn on_fork(mut self, handler: Option<ForkHandler>) -> Self {
+        self.on_fork = handler;
         self
     }
 
@@ -452,6 +471,7 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
+        let fork_action = self.fork_message_id.zip(self.on_fork).filter(|_| !is_streaming);
         let chips = turn_change_chips(
             &self.selection_row,
             &file_changes,
@@ -581,6 +601,14 @@ impl RenderOnce for AssistantMessageBubble {
                                         .child(timestamp),
                                 )
                             })
+                            .when_some(fork_action, |element, (message_id, on_fork)| {
+                                element.child(fork_button(
+                                    message_id,
+                                    on_fork,
+                                    theme.clone(),
+                                    cx,
+                                ))
+                            })
                             .child(copy_button(
                                 format!("copy-assistant-message-{}", self.selection_row),
                                 content_for_copy,
@@ -590,4 +618,37 @@ impl RenderOnce for AssistantMessageBubble {
                     ),
             )
     }
+}
+
+/// Fork icon button matching [`copy_button`]'s size and hover treatment.
+/// Clicking forks the session through `message_id`; no clipboard involved.
+fn fork_button(
+    message_id: String,
+    on_fork: ForkHandler,
+    theme: Theme,
+    _cx: &mut App,
+) -> impl IntoElement {
+    div()
+        .id(ElementId::Name(
+            format!("fork-assistant-message-{message_id}").into(),
+        ))
+        .size(px(27.0))
+        .rounded(px(8.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_default()
+        .hover(|element| element.bg(theme.overlay_strong))
+        .on_click(move |_, window, cx| {
+            (on_fork)(message_id.clone(), window, cx);
+            cx.stop_propagation();
+        })
+        .child(
+            div()
+                .size(px(14.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(app_icon(IconName::Fork, 14.0, theme.text_ghost)),
+        )
 }
