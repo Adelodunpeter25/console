@@ -165,29 +165,9 @@ Guardrails: reads scoped to the owning session (a session must not read another 
 - Content arrives only when the agent calls `shell.read`. Attach-after-a-failed-build should therefore cost the model *zero* tokens until it decides the log matters.
 - **Verification**: manual — attach terminal, ask a question answerable without the log (model must not have read it), then ask "what failed?" (model calls `shell.read`, gets the tail).
 
-### Phase 5 — Server: `console` tool (JS kernel) — the broader "full control of the desktop app" direction
-Not required for attachments, but it is the natural home for the rest of the control surface, and it subsumes the two current control tools.
-
-The precedent already exists in this codebase: `computer` + `computer_reset` (`internal/services/cua/js_tools.go`) replaced 56 per-tool schemas (~28K tokens re-sent every turn) with two fixed 2-field schemas, documenting the driver API as methods in the `/computer-use` skill so it reaches the model once. Do the same for the app's own control surface:
-
-- `console` (TierExec, JS kernel bound to one session, mirroring `computerTool`: embed the declarative tool, override `Execute`) + `console_reset` (TierRead, clears the kernel).
-- Preinstalled `console` object; API documented in a `console-control` skill rather than in schemas.
-- Folds in the existing tools, which stay as native fast paths over the same services:
-  ```js
-  console.scripts.list() / run(id, {wait_ms}) / status(run_id) / stop(run_id)
-  console.ports.list() / forward(port) / unforward(port)
-  console.terminals.read(ref, {tail, cursor})   // delegates to the same impl as shell.read
-  // and the genuinely-new app-control surface:
-  console.sessions.create(...) / console.tabs.* / console.panes.* / console.mcp.load(group)
-  console.ui.notify(...) / openDiff(...) / focusPane(...)
-  ```
-- Token win is immediate: `DefaultToolNames` (`systemprompt/builder.go:38`) currently ships `ports` and `project_scripts` schemas on every turn; the kernel collapses them to one schema. See `harness-token-efficiency.md` Task 4.4 for the existing lazy-MCP precedent.
-- Write-side operations (`terminals.write`, `sessions.create`) are TierExec and must respect the existing approval-mode gating; the kernel does not bypass permissions.
-- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleKernel -v` — kernel state persists across calls, `console_reset` clears it, `console.scripts.run` matches `project_scripts` behavior, variables do not leak between sessions.
-
-### Phase 6 — Mobile parity (deferrable) + cleanup
+### Phase 5 — Mobile parity (deferrable) + cleanup
 - Mirror DirLink/Shell chips in the native Android composer (`apps/android`), or explicitly defer.
-- Docs: consolidate the tool-surface section into `docs/plan/harness-token-efficiency.md` (this plan supersedes no existing section; `docs/harness-features.md` referenced by the earlier draft does not exist).
+- Docs: a short section describing the `<attachments>` block and the `shell.read` tool (`docs/harness-features.md` referenced by the earlier draft does not exist; add it or fold into an existing doc).
 - **Verification**: existing relevant test file passes; no full-suite run.
 
 ---
@@ -199,7 +179,6 @@ The precedent already exists in this codebase: `computer` + `computer_reset` (`i
 - **`shell.read` `Tail` vs `Cursor` mutual exclusion.** Recommend allowing both (`tail` sets the initial cursor) rather than erroring, since "last 200 lines" is the overwhelmingly common ask.
 - Should `extraDirs` persist per-session or per-project? Recommend per-session v1 (simpler, matches the `cwd` lock model).
 - Cap sizes: 5 dirs — tunable later. The terminal 8KB cap is **gone**; it was an artifact of the snapshot design and is replaced by `shell.read`'s `limit`.
-- Does `console` (Phase 5) eventually replace `project_scripts`/`ports` outright, or coexist as fast paths? Recommend coexist indefinitely — native tools are cheaper per call, the kernel is cheaper per turn.
 
 ---
 
@@ -216,5 +195,4 @@ The precedent already exists in this codebase: `computer` + `computer_reset` (`i
 | Link dir validation | `go test ./tests/sessions/ -run TestLinkedDirs -v` | rejects relative/missing/duplicate/>5 |
 | Read allowed, write denied | same package | grep/read OK in linked dir; edit/write outside cwd errors |
 | Prompt block location | same package | `<linked_dirs>` in `Setup`, absent from `StableSystem` |
-| Console kernel | `go test ./tests/tools/ -run TestConsoleKernel -v` | state persists, resets, session-isolated |
 | End-to-end desktop | manual | link + terminal chips reach agent with no paste and no injected content |
