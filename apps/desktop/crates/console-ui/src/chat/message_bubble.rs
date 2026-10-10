@@ -408,7 +408,7 @@ impl AssistantMessageBubble {
 }
 
 impl RenderOnce for AssistantMessageBubble {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let content_for_copy = self.content_for_copy.unwrap_or_else(|| {
             self.content_parts
@@ -437,6 +437,15 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
+        let chips: Vec<gpui::Stateful<gpui::Div>> = file_changes
+            .iter()
+            .enumerate()
+            .map(|(i, change)| {
+                let key = format!("{}-{i}", self.selection_row);
+                let chip = file_change_chip(&key, change, &theme, on_open_change.clone());
+                super::diff_popover::with_diff_popover(chip, &key, change, &theme, window, cx)
+            })
+            .collect();
 
         div()
             .w_full()
@@ -538,21 +547,14 @@ impl RenderOnce for AssistantMessageBubble {
                     .flex()
                     .flex_col()
                     .gap(px(4.0))
-                    .when(!file_changes.is_empty(), |element| {
+                    .when(!chips.is_empty(), |element| {
                         element.child(
                             div()
                                 .flex()
                                 .flex_wrap()
                                 .gap(px(6.0))
                                 .pt(px(4.0))
-                                .children(file_changes.iter().enumerate().map(|(i, change)| {
-                                    file_change_chip(
-                                        &format!("{}-{i}", self.selection_row),
-                                        change,
-                                        &theme,
-                                        on_open_change.clone(),
-                                    )
-                                })),
+                                .children(chips),
                         )
                     })
                     .child(

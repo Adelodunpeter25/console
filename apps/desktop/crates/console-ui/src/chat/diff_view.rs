@@ -58,6 +58,13 @@ impl DiffView {
         self.hide_header = hide_header;
         self
     }
+
+    /// Use a caller-owned scroll handle so the scroll position survives
+    /// re-renders (a fresh handle is created per render otherwise).
+    pub fn scroll_handle(mut self, handle: ScrollHandle) -> Self {
+        self.scroll_handle = handle;
+        self
+    }
 }
 
 impl RenderOnce for DiffView {

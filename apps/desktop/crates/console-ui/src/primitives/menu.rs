@@ -555,7 +555,7 @@ fn resolve_floating_placement(
 /// `Anchored` element lifecycle, but resolves placement from the trigger's
 /// rectangle instead of a single point so vertical flips remain attached to
 /// the correct edge.
-struct FloatingSurface {
+pub(crate) struct FloatingSurface {
     child: AnyElement,
     trigger: Bounds<Pixels>,
     preferred: MenuAlign,
@@ -563,12 +563,12 @@ struct FloatingSurface {
     margin: Pixels,
 }
 
-struct FloatingSurfaceState {
+pub(crate) struct FloatingSurfaceState {
     child_layout_id: LayoutId,
 }
 
 impl FloatingSurface {
-    fn new(
+    pub(crate) fn new(
         child: AnyElement,
         trigger: Bounds<Pixels>,
         preferred: MenuAlign,

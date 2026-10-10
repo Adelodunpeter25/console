@@ -1,3 +1,4 @@
+pub mod diff_popover;
 pub mod diff_view;
 pub mod interaction_card;
 pub mod markdown_helpers;
