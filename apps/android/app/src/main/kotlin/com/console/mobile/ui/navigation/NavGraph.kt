@@ -60,7 +60,7 @@ fun AppNavGraph() {
 
     // Keep nav in sync when Home opens a chat / subagent details programmatically.
     LaunchedEffect(appState.activeTab, appState.selectedSessionId) {
-        if (appState.activeTab.name == "Chat") {
+        if (appState.activeTab == com.console.mobile.data.store.MobileTab.Chat && !appState.selectedSessionId.isNullOrBlank()) {
             val current = backStackEntry?.destination?.route ?: ""
             if (!current.contains("RouteChat", ignoreCase = true)) {
                 navController.navigate(RouteChat) { launchSingleTop = true }

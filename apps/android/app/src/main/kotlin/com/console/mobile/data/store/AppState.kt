@@ -42,6 +42,12 @@ class AppStateHolder(initial: AppState = AppState()) {
     }
 
     fun clearSelections() {
-        _state.value = _state.value.copy(selectedProjectId = null, selectedSessionId = null, selectedSubagentId = null)
+        val cur = _state.value
+        _state.value = cur.copy(
+            activeTab = if (cur.activeTab == MobileTab.Chat) MobileTab.Home else cur.activeTab,
+            selectedProjectId = null,
+            selectedSessionId = null,
+            selectedSubagentId = null,
+        )
     }
 }
