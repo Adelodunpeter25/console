@@ -9,6 +9,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,7 +46,20 @@ func sendProject(c *fiber.Ctx, p types.ProjectInfo) error {
 	return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 }
 
-func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService) {
+// failProjectBootstrap maps a bootstrap failure to a status the dialog can
+// act on. The split that matters is ErrGitHubNotConnected getting its own
+// 409: the client shows "connect in Accounts" for it, whereas a 400 would be
+// read as a typo in the URL field and the user would edit the wrong thing.
+// Everything else is a plain 400 — the error text is already written to be
+// displayed verbatim.
+func failProjectBootstrap(c *fiber.Ctx, err error) error {
+	if errors.Is(err, services.ErrGitHubNotConnected) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"success": false, "error": err.Error()})
+	}
+	return fail400(c, err)
+}
+
+func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService, bootstrap *services.ProjectBootstrapService) {
 	app.Get("/api/projects", func(c *fiber.Ctx) error {
 		list, err := projects.List()
 		if err != nil {
@@ -74,6 +88,69 @@ func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService) {
 		project, err := projects.Create(services.CreateProjectOptions{
 			Name: strings.TrimSpace(filepath.Base(abs)), Dir: abs,
 		})
+		if err != nil {
+			return fail400(c, err)
+		}
+		return sendProject(c, project)
+	})
+
+	// POST /api/projects/init — create a blank project: the server makes
+	// <parentDir>/<name>, runs `git init`, and registers the result.
+	//
+	// Bootstrap and registration are kept in this order deliberately: the
+	// directory is real before the row exists, so a failure mid-way leaves an
+	// unregistered folder (invisible, recoverable) rather than a DB row
+	// pointing at a directory that was never created (broken, and it would
+	// make the project unusable on next open).
+	app.Post("/api/projects/init", func(c *fiber.Ctx) error {
+		var body consolev1.InitProjectRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
+			return fail400(c, fmt.Errorf("Invalid body."))
+		}
+		if strings.TrimSpace(body.Name) == "" {
+			return fail400(c, fmt.Errorf("Field 'name' is required."))
+		}
+		if strings.TrimSpace(body.ParentDir) == "" {
+			return fail400(c, fmt.Errorf("Field 'parentDir' is required."))
+		}
+		dir, err := bootstrap.InitBlank(body.ParentDir, body.Name)
+		if err != nil {
+			return fail400(c, err)
+		}
+		project, err := projects.Create(services.CreateProjectOptions{Name: body.Name, Dir: dir})
+		if err != nil {
+			return fail400(c, err)
+		}
+		return sendProject(c, project)
+	})
+
+	// POST /api/projects/clone — clone a remote repo, then register it.
+	//
+	// Synchronous by design (see docs/plan/new-project-dialog-plan.md): there
+	// is no job handle to stream progress or cancel against, so the dialog
+	// shows a busy state for the duration of the request.
+	app.Post("/api/projects/clone", func(c *fiber.Ctx) error {
+		var body consolev1.CloneProjectRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
+			return fail400(c, fmt.Errorf("Invalid body."))
+		}
+		if strings.TrimSpace(body.Url) == "" {
+			return fail400(c, fmt.Errorf("Field 'url' is required."))
+		}
+		if strings.TrimSpace(body.ParentDir) == "" {
+			return fail400(c, fmt.Errorf("Field 'parentDir' is required."))
+		}
+		dir, err := bootstrap.Clone(body.Url, body.ParentDir, body.GetName())
+		if err != nil {
+			return failProjectBootstrap(c, err)
+		}
+		// An explicit name is the user's choice; without one the folder name
+		// came from the URL, which is also the best display name.
+		name := body.GetName()
+		if strings.TrimSpace(name) == "" {
+			name = filepath.Base(dir)
+		}
+		project, err := projects.Create(services.CreateProjectOptions{Name: name, Dir: dir})
 		if err != nil {
 			return fail400(c, err)
 		}

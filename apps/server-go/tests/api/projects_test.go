@@ -70,7 +70,7 @@ func TestProjectRoutesRoundTrip(t *testing.T) {
 	t.Cleanup(manager.Close)
 	svc := services.NewProjectService(manager)
 	app := fiber.New()
-	routes.RegisterProjectRoutes(app, svc)
+	routes.RegisterProjectRoutes(app, svc, services.NewProjectBootstrapService())
 
 	get := func() (int, map[string]any) {
 		req := httptest.NewRequest("GET", "/api/projects", nil)
