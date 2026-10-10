@@ -27,6 +27,11 @@ type Executor struct {
 	// tool's input files are still untouched. Used by the run service to
 	// capture pre-write content for the session file-change diff. Optional.
 	OnBeforeExecute func(call tools.ToolCall, tool tools.Tool)
+	// Guard, when set, confines write-capable tool calls to the session's
+	// project root and fills in glob/grep roots that would otherwise resolve
+	// against the server's launch directory. It rewrites the arguments it
+	// approves, so the tool acts on the exact path that was checked. Optional.
+	Guard *permissions.Guard
 }
 
 func NewExecutor(registry *tools.Registry, mode permissions.Mode, approver Approver) *Executor {
@@ -81,6 +86,15 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 
 	if ctx.Err() != nil {
 		return e.errResult(call, abortedMessage), nil
+	}
+	// The guard runs before OnBeforeExecute so a rejected call never triggers
+	// a snapshot of files it was not going to touch.
+	if e.Guard != nil {
+		args, err := e.Guard.Check(call)
+		if err != nil {
+			return e.errResult(call, err.Error()), nil
+		}
+		call.Arguments = args
 	}
 	if e.OnBeforeExecute != nil {
 		e.OnBeforeExecute(call, tool)

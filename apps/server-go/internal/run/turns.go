@@ -322,6 +322,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		ApprovalMode: systemprompt.ApprovalMode(mode),
 	})
 
+	// The session cwd is the only root a run may write to. NewGuard returns
+	// nil when the header carries no cwd, which leaves the turn unguarded
+	// rather than failing it.
+	guard := permissions.NewGuard(header.Cwd)
+
 	askHandler := s.decisions.AskHandlerFor(sessionID, hub)
 	onTodoUpdate := func(items []types.TodoItem, action string) {
 		hub.Broadcast(loop.Event{Kind: loop.EventTodoUpdate, Items: items, Action: action})
@@ -394,6 +399,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
+		Guard:        guard,
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
@@ -426,6 +432,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		}
 	}
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
+	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result
 	// event (which fires after the write) still has a real "before" side.

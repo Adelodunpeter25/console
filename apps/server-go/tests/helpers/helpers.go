@@ -6,6 +6,7 @@ package helpers
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -64,10 +65,33 @@ func NewRunSessions(t *testing.T) *services.SessionService {
 }
 
 // CreateRunSession creates a scratch session for run tests.
+// TempDir returns a fresh temp directory with symlinks resolved. The path
+// guard hands tools the symlink-resolved path it verified, so tests that
+// compare a recorded path against the one they asked for must build it from a
+// resolved directory (on macOS t.TempDir returns /var/... while the real path
+// is /private/var/...).
+func TempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir: %v", err)
+	}
+	return dir
+}
+
+// CreateRunSession creates a run session in a fresh temp directory.
 func CreateRunSession(t *testing.T, sessions *services.SessionService) types.SessionHeader {
 	t.Helper()
+	return CreateRunSessionIn(t, sessions, t.TempDir())
+}
+
+// CreateRunSessionIn creates a run session whose cwd is dir. Runs confine
+// writes to the session root, so a test that writes files must create the
+// session in the same directory it writes to.
+func CreateRunSessionIn(t *testing.T, sessions *services.SessionService, dir string) types.SessionHeader {
+	t.Helper()
 	header, err := sessions.Create(types.CreateSessionOptions{
-		Cwd: t.TempDir(), ModelID: "mock-model", Provider: "mock",
+		Cwd: dir, ModelID: "mock-model", Provider: "mock",
 	})
 	if err != nil {
 		t.Fatal(err)

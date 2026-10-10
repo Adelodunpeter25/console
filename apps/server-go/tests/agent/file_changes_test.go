@@ -54,15 +54,17 @@ func (p *toolCallingProvider) RunTurn(ctx context.Context, req loop.TurnRequest,
 }
 
 // runWrites runs a session through a provider that issues the given tool
-// calls, then returns the recorded file changes.
-func runWrites(t *testing.T, calls ...tools.ToolCall) []types.SessionFileChange {
+// calls, then returns the recorded file changes. dir must be the directory the
+// calls write into: the session is created there so the writes land inside its
+// project root.
+func runWrites(t *testing.T, dir string, calls ...tools.ToolCall) []types.SessionFileChange {
 	t.Helper()
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return &toolCallingProvider{calls: calls}, nil
 	}
-	header := helpers.CreateRunSession(t, sessions)
+	header := helpers.CreateRunSessionIn(t, sessions, dir)
 
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "go", Provider: "mock", ModelID: "m", ApprovalMode: string(permissions.FullAccess)})
 	if err != nil {
@@ -89,7 +91,7 @@ func callFor(t *testing.T, name string, args map[string]any) tools.ToolCall {
 // TestWriteFileOverwriteRecordsRealDiff is the core regression: overwriting
 // an existing file must be "modified" with a real before/after diff.
 func TestWriteFileOverwriteRecordsRealDiff(t *testing.T) {
-	dir := t.TempDir()
+	dir := helpers.TempDir(t)
 	path := filepath.Join(dir, "app.ts")
 	const before = "line one\nline two\nline three\n"
 	const after = "line one\nline TWO\nline three\n"
@@ -97,7 +99,7 @@ func TestWriteFileOverwriteRecordsRealDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": after,
 	}))
 
@@ -126,10 +128,11 @@ func TestWriteFileOverwriteRecordsRealDiff(t *testing.T) {
 
 // TestWriteFileNewFileIsAdded covers the create path.
 func TestWriteFileNewFileIsAdded(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fresh.ts")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "fresh.ts")
 	const content = "alpha\nbeta\n"
 
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": content,
 	}))
 
@@ -151,7 +154,7 @@ func TestWriteFileNewFileIsAdded(t *testing.T) {
 // gets its own pre-write snapshot, so overwrites are "modified" with real
 // deletions while genuine new files stay "added".
 func TestBatchWriteOverwriteIsModified(t *testing.T) {
-	dir := t.TempDir()
+	dir := helpers.TempDir(t)
 	existing := filepath.Join(dir, "existing.ts")
 	created := filepath.Join(dir, "created.ts")
 
@@ -163,7 +166,7 @@ func TestBatchWriteOverwriteIsModified(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t, callFor(t, "batchWrite", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "batchWrite", map[string]any{
 		"files": []any{
 			map[string]any{"path": existing, "content": afterExisting},
 			map[string]any{"path": created, "content": createdContent},
@@ -213,13 +216,14 @@ func TestBatchWriteOverwriteIsModified(t *testing.T) {
 // a genuine diff of equal text is empty, so the row reports zero counts rather
 // than fabricating additions.
 func TestWriteFileIdenticalRewriteIsNoOpDiff(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "same.ts")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "same.ts")
 	const content = "identical\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": content,
 	}))
 
@@ -239,14 +243,14 @@ func TestWriteFileIdenticalRewriteIsNoOpDiff(t *testing.T) {
 // (a write that failed on disk changed nothing).
 func TestFailedWriteRecordsNothing(t *testing.T) {
 	// A path whose parent is an existing *file* makes os.MkdirAll fail.
-	dir := t.TempDir()
+	dir := helpers.TempDir(t)
 	blocker := filepath.Join(dir, "blocker")
 	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	impossible := filepath.Join(blocker, "child.ts")
 
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": impossible, "content": "x",
 	}))
 
@@ -258,12 +262,13 @@ func TestFailedWriteRecordsNothing(t *testing.T) {
 // TestEditFileUsesArgumentSnippet confirms a single editFile records the
 // file's change against its turn baseline.
 func TestEditFileUsesArgumentSnippet(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "edit.ts")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "edit.ts")
 	if err := os.WriteFile(path, []byte("foo\nbar\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t, callFor(t, "editFile", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "editFile", map[string]any{
 		"path": path, "oldContent": "foo\n", "newContent": "baz\n",
 	}))
 
@@ -282,12 +287,13 @@ func TestEditFileUsesArgumentSnippet(t *testing.T) {
 // turn collapse to one row recording the net change of the turn — diffed
 // against the content the file had before the turn first touched it.
 func TestTwoWritesSamePathCollapseWithinATurn(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "twice.ts")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "twice.ts")
 	if err := os.WriteFile(path, []byte("v1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t,
+	changes := runWrites(t, dir,
 		callFor(t, "write_file", map[string]any{"path": path, "content": "v2\n"}),
 		callFor(t, "write_file", map[string]any{"path": path, "content": "v3\n"}),
 	)
@@ -310,12 +316,13 @@ func TestTwoWritesSamePathCollapseWithinATurn(t *testing.T) {
 // TestRepeatedEditsRecordNetChange: several editFile calls on one path in a
 // turn record the whole-file net change, not just the last snippet.
 func TestRepeatedEditsRecordNetChange(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "edits.ts")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "edits.ts")
 	if err := os.WriteFile(path, []byte("a\nb\nc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	changes := runWrites(t,
+	changes := runWrites(t, dir,
 		tools.ToolCall{ID: "e1", Name: "editFile", Arguments: mustJSON(t, map[string]any{"path": path, "oldContent": "a\n", "newContent": "A\n"})},
 		tools.ToolCall{ID: "e2", Name: "editFile", Arguments: mustJSON(t, map[string]any{"path": path, "oldContent": "c\n", "newContent": "C\nD\n"})},
 	)
@@ -351,9 +358,10 @@ func mustJSON(t *testing.T, v any) []byte {
 func TestSamePathAcrossRunsKeepsBothRows(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	header := helpers.CreateRunSession(t, sessions)
+	dir := helpers.TempDir(t)
+	header := helpers.CreateRunSessionIn(t, sessions, dir)
 
-	path := filepath.Join(t.TempDir(), "across.ts")
+	path := filepath.Join(dir, "across.ts")
 	if err := os.WriteFile(path, []byte("first\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

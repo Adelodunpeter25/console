@@ -63,7 +63,8 @@ func writeCallArgs(t *testing.T, path, content string) json.RawMessage {
 func TestApprovalAllowRunsTool(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	target := filepath.Join(t.TempDir(), "hello.txt")
+	header := helpers.CreateRunSession(t, sessions)
+	target := filepath.Join(header.Cwd, "hello.txt")
 	svc.Lookup = func(id string) (loop.Provider, error) {
 		return &helpers.MockProvider{Turns: []func() []loop.Event{
 			func() []loop.Event {
@@ -74,7 +75,6 @@ func TestApprovalAllowRunsTool(t *testing.T) {
 			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 		}}, nil
 	}
-	header := helpers.CreateRunSession(t, sessions)
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)

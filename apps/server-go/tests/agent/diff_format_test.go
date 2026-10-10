@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 // parsedHunk is one "@@" block of a unified diff, with the counts the header
@@ -198,7 +200,8 @@ func TestRecordedDiffRoundTripsThroughViewerParser(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "f.txt")
+			dir := helpers.TempDir(t)
+			path := filepath.Join(dir, "f.txt")
 			if tc.before != "" {
 				if err := os.WriteFile(path, []byte(tc.before), 0o644); err != nil {
 					t.Fatal(err)
@@ -206,7 +209,7 @@ func TestRecordedDiffRoundTripsThroughViewerParser(t *testing.T) {
 			}
 			after := tc.after
 
-			changes := runWrites(t, callFor(t, "write_file", map[string]any{
+			changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 				"path": path, "content": after,
 			}))
 			if len(changes) != 1 {
@@ -254,11 +257,12 @@ func TestDistantEditsProduceSeparateHunks(t *testing.T) {
 	afterLines[4] = "FIRST CHANGE"   // near the top
 	afterLines[34] = "SECOND CHANGE" // near the bottom
 
-	path := filepath.Join(t.TempDir(), "big.txt")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "big.txt")
 	if err := os.WriteFile(path, []byte(before.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": strings.Join(afterLines, "\n"),
 	}))
 	if len(changes) != 1 {
@@ -297,11 +301,12 @@ func TestRepeatedLinesDoNotTriggerAutoJunk(t *testing.T) {
 		after.WriteString("}\n")
 	}
 
-	path := filepath.Join(t.TempDir(), "braces.js")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "braces.js")
 	if err := os.WriteFile(path, []byte(before.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": after.String(),
 	}))
 	if len(changes) != 1 {
@@ -337,11 +342,12 @@ func TestLargeFileDiffIsNotTruncated(t *testing.T) {
 	afterLines := strings.Split(after.String(), "\n")
 	afterLines[lines-2] = "TAIL CHANGE" // last content line, well past any 5000 cap
 
-	path := filepath.Join(t.TempDir(), "large.txt")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "large.txt")
 	if err := os.WriteFile(path, []byte(before.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changes := runWrites(t, callFor(t, "write_file", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "write_file", map[string]any{
 		"path": path, "content": strings.Join(afterLines, "\n"),
 	}))
 	if len(changes) != 1 {
@@ -360,11 +366,12 @@ func TestLargeFileDiffIsNotTruncated(t *testing.T) {
 // TestEditFileDiffIsViewerParsable applies the same format contract to the
 // editFile path, which diffs its own argument snippet rather than a snapshot.
 func TestEditFileDiffIsViewerParsable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "edit.txt")
+	dir := helpers.TempDir(t)
+	path := filepath.Join(dir, "edit.txt")
 	if err := os.WriteFile(path, []byte("a\nb\nc\nd\ne\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	changes := runWrites(t, callFor(t, "editFile", map[string]any{
+	changes := runWrites(t, dir, callFor(t, "editFile", map[string]any{
 		"path": path, "oldContent": "b\nc\n", "newContent": "B\nC\nD\n",
 	}))
 	if len(changes) != 1 {

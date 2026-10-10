@@ -37,7 +37,10 @@ type SubagentContext struct {
 	// act with more permission than the run that spawned it. Zero value means
 	// always-ask, which is the safe default for a run that did not say.
 	ApprovalMode permissions.Mode
-	Approver     Approver
+	// Guard is the parent run's path guard. A subagent holds the same tools,
+	// so it must be confined to the same project root; nil means unguarded.
+	Guard    *permissions.Guard
+	Approver Approver
 	// OnEvent receives subagent lifecycle events (start/activity/end).
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
@@ -153,7 +156,9 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	if mode == "" {
 		mode = permissions.AlwaysAsk
 	}
-	agent := New(c.Provider, NewExecutor(registry, mode, c.Approver), nil)
+	executor := NewExecutor(registry, mode, c.Approver)
+	executor.Guard = c.Guard
+	agent := New(c.Provider, executor, nil)
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
 	agent.Model = c.Model
