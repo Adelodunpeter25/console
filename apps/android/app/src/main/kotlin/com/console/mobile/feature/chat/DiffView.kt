@@ -50,12 +50,17 @@ private val RemovedLineBg = Color(0x15F87171)
  * 3-column layout: line number gutter, +/- symbol, and syntax-colored text.
  */
 @Composable
-fun DiffView(diff: DiffResult, filePath: String? = null, maxCollapsedLines: Int = 60) {
+fun DiffView(
+    diff: DiffResult,
+    filePath: String? = null,
+    maxCollapsedLines: Int = 60,
+    showFileHeader: Boolean = true,
+) {
     var expanded by remember(filePath, diff.lines.size) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
-        if (!filePath.isNullOrBlank()) {
+        if (showFileHeader && !filePath.isNullOrBlank()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

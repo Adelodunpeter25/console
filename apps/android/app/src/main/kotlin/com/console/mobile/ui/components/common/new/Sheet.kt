@@ -47,12 +47,13 @@ fun BaseSheet(
     onDismiss: () -> Unit,
     title: String? = null,
     scrollable: Boolean = true,
+    containerColor: Color = NewTheme.Background,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = NewTheme.Background,
+        containerColor = containerColor,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()

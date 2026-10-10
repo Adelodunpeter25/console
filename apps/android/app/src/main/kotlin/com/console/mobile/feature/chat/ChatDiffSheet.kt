@@ -67,42 +67,27 @@ fun ChatDiffSheet(
     BaseSheet(
         onDismiss = onDismiss,
         title = getFileName(change.path),
+        containerColor = NewTheme.Black,
     ) {
-        val relPath = remember(change.path, cwd) {
-            if (cwd != null && change.path.startsWith(cwd)) {
-                change.path.removePrefix(cwd).trimStart('/')
-            } else change.path
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FileIcon(filename = change.path, sizeDp = 18, modifier = Modifier.padding(end = 8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(relPath, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        when {
+            loading -> {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = NewTheme.TextPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
             }
-            DiffSummaryBadge(addedCount = change.additions, removedCount = change.deletions)
-        }
-        SectionCard(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
-            when {
-                loading -> {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NewTheme.TextPrimary, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                    }
-                }
-                error != null -> {
-                    Text(error ?: "Failed to load diff", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
-                }
-                !diffText.isNullOrEmpty() -> {
-                    DiffView(
-                        diff = parseUnifiedDiff(diffText ?: ""),
-                        filePath = change.path,
-                        maxCollapsedLines = 80,
-                    )
-                }
-                else -> {
-                    Text("No diff available for this file.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
-                }
+            error != null -> {
+                Text(error ?: "Failed to load diff", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
+            }
+            !diffText.isNullOrEmpty() -> {
+                DiffView(
+                    diff = parseUnifiedDiff(diffText ?: ""),
+                    filePath = change.path,
+                    maxCollapsedLines = 120,
+                    showFileHeader = false,
+                )
+            }
+            else -> {
+                Text("No diff available for this file.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(16.dp))
             }
         }
     }
