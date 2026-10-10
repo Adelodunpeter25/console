@@ -28,6 +28,28 @@ message CreateProjectRequest {
   string path = 1;
 }
 
+// POST /api/projects/init — create a blank project: the server makes
+// <parent_dir>/<name>, runs `git init` in it, and registers the result.
+// Neither field is interpreted client-side; the server owns the target dir so
+// the dialog cannot register a path it never created.
+message InitProjectRequest {
+  string name = 1;
+  string parent_dir = 2;
+}
+
+// POST /api/projects/clone — clone a remote repo into
+// <parent_dir>/<name> (defaulting <name> to the URL's last path segment),
+// then register it. No `depth` field: v1 always clones in full, because a
+// shallow clone cannot be repaired without the user knowing to unshallow it.
+// SSH-style GitHub URLs are rewritten to HTTPS by the injected
+// url.https://github.com/.insteadOf config, so `git@github.com:org/repo`
+// needs no separate handling here.
+message CloneProjectRequest {
+  string url = 1;
+  string parent_dir = 2;
+  optional string name = 3;
+}
+
 message DeleteProjectResponse {
   string id = 1;
   bool deleted = 2;

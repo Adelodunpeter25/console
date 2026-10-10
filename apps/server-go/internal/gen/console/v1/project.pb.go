@@ -153,6 +153,129 @@ func (x *CreateProjectRequest) GetPath() string {
 	return ""
 }
 
+// POST /api/projects/init — create a blank project: the server makes
+// <parent_dir>/<name>, runs `git init` in it, and registers the result.
+// Neither field is interpreted client-side; the server owns the target dir so
+// the dialog cannot register a path it never created.
+type InitProjectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	ParentDir     string                 `protobuf:"bytes,2,opt,name=parent_dir,json=parentDir,proto3" json:"parent_dir,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InitProjectRequest) Reset() {
+	*x = InitProjectRequest{}
+	mi := &file_console_v1_project_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InitProjectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InitProjectRequest) ProtoMessage() {}
+
+func (x *InitProjectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_project_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InitProjectRequest.ProtoReflect.Descriptor instead.
+func (*InitProjectRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_project_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *InitProjectRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *InitProjectRequest) GetParentDir() string {
+	if x != nil {
+		return x.ParentDir
+	}
+	return ""
+}
+
+// POST /api/projects/clone — clone a remote repo into
+// <parent_dir>/<name> (defaulting <name> to the URL's last path segment),
+// then register it. No `depth` field: v1 always clones in full, because a
+// shallow clone cannot be repaired without the user knowing to unshallow it.
+// SSH-style GitHub URLs are rewritten to HTTPS by the injected
+// url.https://github.com/.insteadOf config, so `git@github.com:org/repo`
+// needs no separate handling here.
+type CloneProjectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	ParentDir     string                 `protobuf:"bytes,2,opt,name=parent_dir,json=parentDir,proto3" json:"parent_dir,omitempty"`
+	Name          *string                `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloneProjectRequest) Reset() {
+	*x = CloneProjectRequest{}
+	mi := &file_console_v1_project_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloneProjectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloneProjectRequest) ProtoMessage() {}
+
+func (x *CloneProjectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_project_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloneProjectRequest.ProtoReflect.Descriptor instead.
+func (*CloneProjectRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_project_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CloneProjectRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *CloneProjectRequest) GetParentDir() string {
+	if x != nil {
+		return x.ParentDir
+	}
+	return ""
+}
+
+func (x *CloneProjectRequest) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
 type DeleteProjectResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -163,7 +286,7 @@ type DeleteProjectResponse struct {
 
 func (x *DeleteProjectResponse) Reset() {
 	*x = DeleteProjectResponse{}
-	mi := &file_console_v1_project_proto_msgTypes[2]
+	mi := &file_console_v1_project_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +298,7 @@ func (x *DeleteProjectResponse) String() string {
 func (*DeleteProjectResponse) ProtoMessage() {}
 
 func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_project_proto_msgTypes[2]
+	mi := &file_console_v1_project_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +311,7 @@ func (x *DeleteProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectResponse.ProtoReflect.Descriptor instead.
 func (*DeleteProjectResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_project_proto_rawDescGZIP(), []int{2}
+	return file_console_v1_project_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeleteProjectResponse) GetId() string {
@@ -220,7 +343,17 @@ const file_console_v1_project_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\"*\n" +
 	"\x14CreateProjectRequest\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\"A\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\"G\n" +
+	"\x12InitProjectRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"parent_dir\x18\x02 \x01(\tR\tparentDir\"h\n" +
+	"\x13CloneProjectRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x1d\n" +
+	"\n" +
+	"parent_dir\x18\x02 \x01(\tR\tparentDir\x12\x17\n" +
+	"\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01B\a\n" +
+	"\x05_name\"A\n" +
 	"\x15DeleteProjectResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\adeleted\x18\x02 \x01(\bR\adeletedBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
@@ -237,11 +370,13 @@ func file_console_v1_project_proto_rawDescGZIP() []byte {
 	return file_console_v1_project_proto_rawDescData
 }
 
-var file_console_v1_project_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_console_v1_project_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_console_v1_project_proto_goTypes = []any{
 	(*ProjectInfo)(nil),           // 0: console.v1.ProjectInfo
 	(*CreateProjectRequest)(nil),  // 1: console.v1.CreateProjectRequest
-	(*DeleteProjectResponse)(nil), // 2: console.v1.DeleteProjectResponse
+	(*InitProjectRequest)(nil),    // 2: console.v1.InitProjectRequest
+	(*CloneProjectRequest)(nil),   // 3: console.v1.CloneProjectRequest
+	(*DeleteProjectResponse)(nil), // 4: console.v1.DeleteProjectResponse
 }
 var file_console_v1_project_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -256,13 +391,14 @@ func file_console_v1_project_proto_init() {
 	if File_console_v1_project_proto != nil {
 		return
 	}
+	file_console_v1_project_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_project_proto_rawDesc), len(file_console_v1_project_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
