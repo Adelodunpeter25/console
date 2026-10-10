@@ -5,7 +5,6 @@ import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.AuthStatusResponse
 import console.v1.GitHubAuthStatus
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,7 +27,9 @@ class GitHubAuthFixtureTest {
     @Test
     fun decodesGoldenGitHubStatusFixture() {
         val status = statusAdapter.fromJson(fixture("github_status.json"))!!
-        assertTrue(status.connected)
+        // `connected` has explicit presence on the wire, so it decodes to
+        // Boolean? rather than Boolean.
+        assertEquals(true, status.connected)
         assertEquals("adelodunpeter", status.username)
         assertEquals(listOf("repo", "workflow"), status.scopes)
     }
@@ -36,7 +37,7 @@ class GitHubAuthFixtureTest {
     @Test
     fun disconnectedStatusHasNoUsernameOrScopes() {
         val status = statusAdapter.fromJson("""{"connected":false}""")!!
-        assertFalse(status.connected)
+        assertEquals(false, status.connected)
         assertNull(status.username)
         assertTrue(status.scopes.isEmpty())
     }
@@ -45,7 +46,7 @@ class GitHubAuthFixtureTest {
     fun fineGrainedTokensReportNoScopesAndStillConnect() {
         // Fine-grained PATs return no scope header, so an empty list is normal.
         val status = statusAdapter.fromJson("""{"connected":true,"username":"octocat"}""")!!
-        assertTrue(status.connected)
+        assertEquals(true, status.connected)
         assertTrue(status.scopes.isEmpty())
     }
 
@@ -54,7 +55,7 @@ class GitHubAuthFixtureTest {
         val body = """{"claude":{"logged_in":false},"github":{"connected":true,"username":"octocat"}}"""
         val parsed = authStatusAdapter.fromJson(body)!!
         assertEquals("octocat", parsed.github?.username)
-        assertTrue(parsed.github!!.connected)
+        assertEquals(true, parsed.github!!.connected)
     }
 
     @Test

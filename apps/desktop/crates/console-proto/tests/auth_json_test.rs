@@ -26,7 +26,9 @@ fn decodes_golden_status_fixture() {
     // devin is reserved: reported but never logged in, so a client never has
     // to tell "logged out" apart from "not reported".
     assert!(!msg.devin.as_ref().unwrap().logged_in);
-    assert!(!msg.github.as_ref().unwrap().connected);
+    // `connected` has explicit presence (optional bool), so it is Some(false)
+    // rather than a missing field when GitHub is logged out.
+    assert_eq!(msg.github.as_ref().unwrap().connected, Some(false));
 }
 
 #[test]
@@ -76,7 +78,7 @@ fn decodes_golden_project_id_fixtures() {
 fn decodes_golden_github_status_fixture() {
     let msg: GitHubAuthStatus =
         serde_json::from_str(fixture("github_status.json").trim()).expect("decode github status");
-    assert!(msg.connected);
+    assert_eq!(msg.connected, Some(true));
     assert_eq!(msg.username.as_deref(), Some("adelodunpeter"));
     assert_eq!(msg.scopes, vec!["repo".to_string(), "workflow".to_string()]);
 }

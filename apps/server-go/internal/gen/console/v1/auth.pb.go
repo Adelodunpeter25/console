@@ -113,10 +113,15 @@ func (x *ProviderAuthStatus) GetConfiguredProjectId() string {
 }
 
 type GitHubAuthStatus struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Connected     bool                   `protobuf:"varint,1,opt,name=connected,proto3" json:"connected,omitempty"`
-	Username      *string                `protobuf:"bytes,2,opt,name=username,proto3,oneof" json:"username,omitempty"`
-	Scopes        []string               `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// `optional` (explicit presence) rather than a bare bool. protojson omits
+	// an implicit-presence false, so a bare bool would drop `connected` entirely
+	// when logged out and the payload would arrive as `{}` — leaving a client
+	// unable to tell "disconnected" from "server did not report". Same reasoning
+	// as AuthStatusResponse keeping every provider present.
+	Connected     *bool    `protobuf:"varint,1,opt,name=connected,proto3,oneof" json:"connected,omitempty"`
+	Username      *string  `protobuf:"bytes,2,opt,name=username,proto3,oneof" json:"username,omitempty"`
+	Scopes        []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -152,8 +157,8 @@ func (*GitHubAuthStatus) Descriptor() ([]byte, []int) {
 }
 
 func (x *GitHubAuthStatus) GetConnected() bool {
-	if x != nil {
-		return x.Connected
+	if x != nil && x.Connected != nil {
+		return *x.Connected
 	}
 	return false
 }
@@ -599,11 +604,13 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\x15configured_project_id\x18\x04 \x01(\tH\x02R\x13configuredProjectId\x88\x01\x01B\b\n" +
 	"\x06_emailB\r\n" +
 	"\v_project_idB\x18\n" +
-	"\x16_configured_project_id\"v\n" +
-	"\x10GitHubAuthStatus\x12\x1c\n" +
-	"\tconnected\x18\x01 \x01(\bR\tconnected\x12\x1f\n" +
-	"\busername\x18\x02 \x01(\tH\x00R\busername\x88\x01\x01\x12\x16\n" +
-	"\x06scopes\x18\x03 \x03(\tR\x06scopesB\v\n" +
+	"\x16_configured_project_id\"\x89\x01\n" +
+	"\x10GitHubAuthStatus\x12!\n" +
+	"\tconnected\x18\x01 \x01(\bH\x00R\tconnected\x88\x01\x01\x12\x1f\n" +
+	"\busername\x18\x02 \x01(\tH\x01R\busername\x88\x01\x01\x12\x16\n" +
+	"\x06scopes\x18\x03 \x03(\tR\x06scopesB\f\n" +
+	"\n" +
+	"_connectedB\v\n" +
 	"\t_username\"\xb0\x02\n" +
 	"\x12AuthStatusResponse\x12@\n" +
 	"\vantigravity\x18\x01 \x01(\v2\x1e.console.v1.ProviderAuthStatusR\vantigravity\x124\n" +

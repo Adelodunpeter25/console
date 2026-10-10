@@ -80,7 +80,7 @@ func TestAuthProjectIDFixtures(t *testing.T) {
 // collapse into "".
 func TestAuthGithubStatusFixture(t *testing.T) {
 	checkAuthFixture(t, "github_status.json", &consolev1.GitHubAuthStatus{
-		Connected: true, Username: proto.String("adelodunpeter"),
+		Connected: proto.Bool(true), Username: proto.String("adelodunpeter"),
 		Scopes: []string{"repo", "workflow"},
 	})
 }

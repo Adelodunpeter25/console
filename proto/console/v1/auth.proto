@@ -35,7 +35,12 @@ message ProviderAuthStatus {
 }
 
 message GitHubAuthStatus {
-  bool connected = 1;
+  // `optional` (explicit presence) rather than a bare bool. protojson omits
+  // an implicit-presence false, so a bare bool would drop `connected` entirely
+  // when logged out and the payload would arrive as `{}` — leaving a client
+  // unable to tell "disconnected" from "server did not report". Same reasoning
+  // as AuthStatusResponse keeping every provider present.
+  optional bool connected = 1;
   optional string username = 2;
   repeated string scopes = 3;
 }

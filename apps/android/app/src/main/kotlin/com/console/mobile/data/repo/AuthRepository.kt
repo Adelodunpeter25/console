@@ -49,7 +49,10 @@ class AuthRepository(
                         projectIds = projectIds,
                         // Local-only on the server: a revoked token still reads
                         // connected until the next git failure or re-login.
-                        github = status.github ?: GitHubAuthStatus(connected = false),
+                        // `connected` has explicit presence on
+                        // the wire, so the not-reported default is null; every
+                        // reader treats null as "not connected".
+                        github = status.github ?: GitHubAuthStatus(),
                     )
                 }
             } catch (e: Exception) {
@@ -95,7 +98,7 @@ class AuthRepository(
         authState.patch { it.copy(githubBusy = true) }
         try {
             withContext(Dispatchers.IO) { api.disconnectGitHub() }
-            authState.patch { it.copy(github = GitHubAuthStatus(connected = false), githubBusy = false) }
+            authState.patch { it.copy(github = GitHubAuthStatus(), githubBusy = false) }
         } catch (e: Exception) {
             authState.patch { it.copy(githubBusy = false) }
             throw e

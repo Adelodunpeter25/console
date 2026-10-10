@@ -232,7 +232,10 @@ func providerAuthToProto(s auth.ProviderAuthStatus) *consolev1.ProviderAuthStatu
 }
 
 func githubStatusToProto(s auth.GitHubAuthStatus) *consolev1.GitHubAuthStatus {
-	out := &consolev1.GitHubAuthStatus{Connected: s.Connected}
+	// Always set, even when false: `connected` has explicit presence precisely
+	// so a logged-out status is reported as `connected: false` rather than
+	// being dropped from the payload altogether.
+	out := &consolev1.GitHubAuthStatus{Connected: &s.Connected}
 	if s.Username != "" {
 		out.Username = &s.Username
 	}
