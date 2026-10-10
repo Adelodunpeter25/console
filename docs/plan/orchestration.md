@@ -1,0 +1,254 @@
+# Orchestration — the `console` kernel
+
+Replaces the `project_scripts` and `ports` agent tools with a single JavaScript kernel that gives the agent a control plane over the desktop app: run project scripts, manage ports, spawn sessions, inspect and steer them, and eventually drive the UI.
+
+The precedent is already in this codebase. `computer` + `computer_reset` (`internal/services/cua/js_tools.go`) replaced 56 per-tool schemas — roughly 28K tokens re-sent on **every** turn — with two fixed two-field schemas, documenting the driver API as methods in the `/computer-use` skill so it reaches the model once. `console` applies that same move to the app's own control surface. Today `DefaultToolNames` (`internal/agent/systemprompt/builder.go:38`) still ships the `ports` and `project_scripts` schemas on every turn.
+
+Target: `internal/services/console/` (kernel), `internal/agent/tools/console_tool.go`, `internal/run/turns.go` (binding), `internal/services/session/` (spawn surface).
+
+---
+
+## 0. Non-Goals
+
+- **Not a general "do anything" tool.** The kernel is an API surface over existing services, not a scripting escape hatch over the machine. Anything reachable must also be reachable through a typed Go path.
+- **No bypass of approval gating.** Kernel write operations are `TierExec`/`TierWrite` and resolve through the same `permissions.Resolve` path as every other tool. The kernel is a transport, not a permission bypass.
+- **No prompt-pollution by default.** API methods are documented in a skill, not in schemas. Only the two-field tool definition ships per turn.
+- **Not a replacement for the ephemeral `subagent` tool** (Level 0 below). They serve different purposes and both ship.
+- No change to the desktop UI layer in v1. Driving panes/tabs is deferred until the session-control surface is proven.
+
+---
+
+## 1. What Already Exists (verified)
+
+Most of this is parameterization, not new construction. Grounded inventory:
+
+**Spawn knobs exist as a struct.** `CreateSessionOptions` (`internal/types/session.go:31`) is already exactly the tuple this plan needs:
+
+```go
+Cwd, ProjectID, ModelID, Provider, ApprovalMode, ThinkingLevel, Worktree{Branch, BaseBranch}
+```
+
+**Session lifecycle operations exist.** All on `session.Service`: `Create`, `Fork(sourceID, messageID)`, `SoftDelete`, `PermanentDelete`, `Restore`, `UpdateModel`, `UpdateThinkingLevel`, `UpdateApprovalMode`, `UpdateCwd`, `GetSubagents`, `AttachWorktree`.
+
+**A working nested-agent runner exists.** `internal/agent/loop/subagent.go` — nested run, lifecycle events (`EventSubagentStart`/`Activity`/`End`), usage tracking via `UsageTracker`, recursion blocked by stripping `subagent` from the nested tool set. Its input is only `{prompt, name, role}`; model, provider, tools, setup and approval mode are all hardcoded from `SubagentContext` in `internal/run/turns.go:378`.
+
+**Kernel binding pattern exists.** `computerTool` embeds the declarative `tools.Tool` (for name/description/schema) and overrides `Execute` to bind one session's kernel — `internal/services/cua/js_tools.go:44`. `console` mirrors it.
+
+**Port ownership is already modeled.** `PortOwner{Kind, ID}` plus `ObserveOutput` / `RemoveOwner`, with script runs registering themselves (`project_scripts_service.go:295`). Preserve this exactly; do not reimplement.
+
+---
+
+## 2. Design Principles
+
+1. **Organize around sessions, not features.** Scripts, ports, and spawned tasks are not separate subsystems — they are things a *session owns*. A session already has `(model, provider, cwd, approval mode, thinking level)`, which is precisely `CreateSessionOptions`. Make that tuple the spine of the API rather than parallel `sessions.*` / `scripts.*` / `ports.*` namespaces.
+2. **Reuse, never reimplement.** The kernel wraps the same services the existing tools call. `console.scripts.run` must produce identical behavior to `project_scripts` `start`, including worktree scoping (`resolveScriptRoot`) and port-owner cleanup on exit.
+3. **The permission ceiling is inviolable.** See §4.
+4. **Make the API discoverable, not guessable.** See §5.
+5. **Cheap per turn, rich per call.** One small schema on every turn; the full API is loaded once via a skill, on demand.
+6. **Isolated work means worktrees, not raw `cwd`.** See §6.
+7. **Fail loud and specifically.** An unknown model ID names the valid ones; a dead session names its ID and status.
+
+---
+
+## 3. API Surface (proposed)
+
+```js
+// Discovery — cheap, read-tier, always safe (§5)
+console.models()                        // ids, providers, supported thinking levels
+console.approvalModes()
+console.sessions.list({ status, project_id })
+
+// Delegation (§4)
+console.spawn({
+  prompt, title,
+  model, provider, thinking_level,
+  approval_mode,                       // clamped to parent — result reports the clamp
+  worktree: { branch, base_branch },   // isolation via worktree, not raw cwd
+}) -> { session_id }
+
+// Session control
+console.sessions.read(session_id)      // transcript / status / result
+console.sessions.fork(session_id, message_id)
+console.sessions.delete(session_id)    // soft by default; never self; gated
+console.sessions.set_model(session_id, model, provider)
+console.sessions.set_approval(session_id, mode)   // clamped to the *owning* run
+console.sessions.abort(session_id)
+
+// Scripts + ports — same impl as the tools being replaced
+console.scripts.list()
+console.scripts.run(id, { wait_ms })
+console.scripts.status(run_id)
+console.scripts.stop(run_id)
+console.ports.list()
+console.ports.forward(port)
+console.ports.unforward(port)
+```
+
+Deferred to a later phase: `console.tabs.*`, `console.panes.*`, `console.mcp.load(group)`, `console.ui.notify/openDiff/focusPane`.
+
+---
+
+## 4. The Delegation Ladder
+
+The single most important distinction in this plan. Three levels, and only the third is what "spawn a task" usually means:
+
+| Level | Shape | Persists? | User-visible? |
+| :--- | :--- | :--- | :--- |
+| **0 — today** | `subagent(prompt, name, role)` — inherits model, provider, cwd, tools, mode | No | No |
+| **1 — knobbed** | ephemeral, but model/provider/thinking/mode overridable | No | No |
+| **2 — real task** | `console.spawn()` → creates an actual `Session` | Yes | **Yes** |
+
+Level 0 and 1 agents persist nothing — the `subagent.go` header says so explicitly, and they are assigned an in-memory `randomSubSession()` id. They vanish when the run ends. That is fine for "investigate this function and report back."
+
+Level 2 is a different product surface: the session lands in the sidebar, can be opened, resumed, forked, and audited. **Anything the agent delegates that the user might want to inspect later must be Level 2.** Ephemeral delegation should never be the default for long-running work.
+
+### The permission ceiling
+
+The existing invariant in `subagent.go:35-38` is explicit and must survive:
+
+> *"A subagent inherits its parent's tools, so it must inherit the parent's authority too: it may not act with more permission than the run that spawned it."*
+
+Exposing `approval_mode` as a parameter breaks that invariant unless it is enforced. Rule:
+
+```
+effective = min(parent_mode, requested_mode)
+```
+
+with an ordering of `plan-mode < always-ask < accept-edits < full-access`. An `always-ask` parent can never produce a `full-access` child, no matter what it requests.
+
+**Clamp silently, then report the clamp in the result.** If the clamp is silent the model retries the identical call several times, burning turns. The result should read: `requested full-access, clamped to accept-edits (parent ceiling)`.
+
+The same ceiling applies to `console.sessions.set_approval`: a session may only be moved *down* from the ceiling of the run invoking it, never up.
+
+---
+
+## 5. Discovery Surface
+
+Models fail in expensive ways when they guess. `console.models()` returns valid ids, providers, and per-model `SupportedThinkingLevels` (`internal/types/model.go:15`); `console.approvalModes()` returns the valid modes and their ordering. This converts "invalid model id" and "unknown approval mode" from mid-turn failures into knowledge the agent has before it acts.
+
+Read-tier, no arguments, trivially cheap. Highest ratio of capability to cost in the whole plan.
+
+---
+
+## 6. Why `cwd` Is Deferred Behind Worktrees
+
+Arbitrary per-agent `cwd` is the one requested capability that is **not** cheap, for a structural reason:
+
+- `read_file`, `write_file`, `list_dir`, `glob`, `grep` are package-level `var` singletons (`internal/agent/tools/file_tools.go:56`+) built by `DefaultTools()` with nothing injected.
+- They resolve paths straight into `os.Stat` / `os.ReadFile`. `read_file` has no cwd resolution at all.
+- The server never calls `os.Chdir` (only `internal/bench/runner.go` does), so there is no implicit boundary.
+- `bash` accepts an arbitrary `cwd` argument with no validation (`bash_tools.go:61-68`).
+
+So `session.cwd` is today mostly *prompt metadata* plus script scoping — it does not bind the file tools. Making per-agent cwd real means converting the file tools from singletons into per-run constructed instances bound to a root. That is a real refactor with a real blast radius, and it should be its own project.
+
+**v1 recommendation:** honor isolation only through `worktree`. `CreateWorktreeSpec{Branch, BaseBranch}` and `AttachWorktree` are already implemented. A spawned task gets a genuine directory, a genuine session, and no chance of two agents stomping each other's files in an overlapping tree.
+
+**Caveat to verify before scoping:** the desktop may always launch the server with the project root as its process cwd, which would make the practical damage smaller than the code implies. Check this before sizing the refactor.
+
+---
+
+## 7. Cost and Recursion Guards
+
+`subagent` currently cannot recurse — the nested tool set strips it (`subagent.go:143`). Once a session can spawn sessions that can spawn agents, unbounded fan-out becomes possible. Required:
+
+- **Depth cap** — 2. Deeper nesting buys nothing a well-written Level 2 prompt doesn't.
+- **Per-spawn token budget**, enforced and reported in the spawn result.
+- **Concurrency cap** on live spawned sessions.
+- **Usage rollup** — `UsageTracker` already collects subagent usage; spawned sessions should surface in the parent's total so the run's cost is attributable.
+
+---
+
+## 8. Prerequisites — Security Findings
+
+These are load-bearing for this plan and were found while designing it. Both should be fixed before, or alongside, the kernel.
+
+### 8.1 There is no filesystem boundary
+
+A session created in `~/Developer/Projects/test` can **edit files anywhere on disk**, including `~/Developer/Projects/real-project`, if the model is told to. The chain:
+
+- `permissions.Resolve(mode, tier)` (`permissions/permissions.go:42`) takes only a mode and a tier. No path, no cwd, not even the tool arguments.
+- `Executor.Execute` (`loop/executor.go:39-106`) resolves permission then executes, inspecting nothing about the arguments in between.
+- The file tools are unguarded singletons; `write_file` also creates parent directories automatically.
+- `bash` accepts any `cwd`.
+
+Per-mode effect — the only control anywhere is the tier-based approval dialog:
+
+| Mode | Write outside the project dir |
+| :--- | :--- |
+| `always-ask` | Allowed, but prompts with the path visible |
+| `accept-edits` | Allowed silently |
+| `full-access` | Allowed silently |
+| `plan-mode` | Allowed silently ← see 8.2 |
+
+### 8.2 Plan mode's read-only guarantee is prompt-only
+
+`permissions.go:44` treats `PlanMode` as `FullAccess` for all tiers. The code comment concedes it: the restriction on writes and exec "is communicated to the model only via the system prompt instructions, not enforced as a hard deny here."
+
+A control that reads to the user as a guarantee but is only a suggestion to the model. `Resolve` should hard-deny `TierWrite` and `TierExec` in plan mode — a small change that converts a promise into an enforced rule.
+
+### 8.3 Boundary design for the kernel
+
+The boundary should be **path-based inside the kernel**, not tier-based, because spawning makes the mismatch dangerous: a `full-access` parent can spawn a Level 2 session on another project with no record beyond the sidebar entry. Concretely:
+
+- Writes allowed only within the session's `cwd + extraDirs`; reads within a separate, wider read allowlist.
+- `console.spawn` records the target root on the session so the audit trail shows where it was allowed to write.
+- Symlink escapes must be resolved before the check, or the boundary is trivially bypassed.
+
+---
+
+## 9. Phased Implementation
+
+### Phase 1 — Kernel skeleton + `ports` (smallest slice)
+- `internal/services/console/`: manager, per-session runtime, `console` + `console_reset` tools bound via the `computerTool` pattern.
+- Port methods wrapping `PortRegistry` unchanged. Remove `ports` from `DefaultToolNames`.
+- `console-control` skill carrying the API documentation.
+- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleKernel -v` — kernel state persists across calls, `console_reset` clears it, variables do not leak between sessions.
+
+### Phase 2 — `project_scripts`
+- Script methods over `ProjectScriptsService`, preserving worktree scoping and port-owner cleanup exactly.
+- Add the cursor pagination the service lacks (`capOutput` retains only the last 256KB with no offset), shared with `shell.read` from the attachments plan.
+- Remove `project_scripts` from `DefaultToolNames`.
+- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleScripts -v` — behavior identical to the removed tool; cursor round-trips.
+
+### Phase 3 — Discovery + session control
+- `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`.
+- Delete: soft by default, permanent gated, **never the currently-running session**, and confirm when the session owns a worktree.
+
+### Phase 4 — `console.spawn` (Level 2)
+- Session creation through the existing `session.Service`, worktree-scoped.
+- Permission ceiling + clamp reporting (§4), depth cap, token budget, concurrency cap.
+- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleSpawn -v` — clamp enforced in both directions; budget and depth caps hold; spawned session appears in `sessions.list`.
+
+### Phase 5 — `console.sessions.fork`
+- Wraps the existing `Fork(sourceID, messageID)`. High value: "branch this conversation at message 40 and try a different approach there."
+
+### Phase 6 — Security prerequisites landed
+- Path boundary for the kernel (§8.3); `PlanMode` hard deny (§8.2). Independent of the kernel, valuable on their own.
+
+---
+
+## 10. Open Questions
+
+- **Does `shell.read` stay native?** Recommendation: yes. It is read-tier and hot, and a native tool is cheaper per call and always present without loading a skill. `console` absorbs the *control* plane (`ports`, `project_scripts`, sessions); `shell.read` stays a thin native reader over the same implementation. Needs a decision.
+- **Should Level 1 (knobbed ephemeral subagents) exist at all**, or should `subagent` jump straight to inheriting-only (Level 0) with everything else routed through `console.spawn` (Level 2)? Fewer overlapping mechanisms is appealing, but Level 1 is the cheap path for "quick side question" delegation.
+- **How long should spawned sessions live?** Indefinitely (user prunes) or TTL-reaped? `ExpiredDeletedSessions(cutoffMillis)` already exists for soft-deleted sessions and could be reused.
+- **Does the kernel survive a session reload?** A JS kernel holds variables that do not persist to disk. Decide whether `console` is documented as ephemeral state, or whether kernels are checkpointed.
+- **Is a UI-driving surface wanted at all** (`console.ui.*`)? It is the most powerful and the least bounded. Worth deciding before building rather than after.
+
+---
+
+## 11. Verification Matrix
+
+| Test Case | Method | Expected Outcome |
+| :--- | :--- | :--- |
+| Kernel lifecycle | `go test ./tests/tools/ -run TestConsoleKernel -v` | state persists; `console_reset` clears; session-isolated |
+| Scripts parity | `go test ./tests/tools/ -run TestConsoleScripts -v` | identical to removed `project_scripts` tool |
+| Ports parity | same | identical to removed `ports` tool |
+| Discovery | same | invalid model id discoverable before use |
+| Permission ceiling | `go test ./tests/tools/ -run TestConsoleSpawn -v` | `min(parent, requested)`; clamp reported, not silent |
+| Spawn isolation | same | spawned session confined to its worktree root |
+| Recursion + budget | same | depth cap 2; budget enforced; usage rolled up |
+| Delete safety | same | soft by default; self-delete refused; worktree deletion confirmed |
+| Path boundary | same | write outside root denied in every mode |
+| Plan mode deny | `go test ./tests/agent/ -run TestPlanModeDeny -v` | `TierWrite`/`TierExec` hard-denied |
+| Token savings | bench | `ports` + `project_scripts` schemas gone from every request |
