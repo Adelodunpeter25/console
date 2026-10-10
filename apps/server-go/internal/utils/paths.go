@@ -9,13 +9,36 @@ import (
 )
 
 // IgnoredPaths lists directory and file names ignored by tree and search.
+//
+// Entries are matched exactly against a whole path segment, case-insensitively
+// (see IsPathIgnored). Patterns therefore cannot be expressed here — a
+// `cmake-build-debug` entry would never match its `cmake-build-release`
+// sibling — so only literal segment names belong in this list.
 var IgnoredPaths = []string{
-	"node_modules", ".git", ".hg", ".svn", "dist", "build", ".next",
-	".turbo", ".vite", ".vite-temp", ".cache", "coverage", ".ds_store",
-	"thumbs.db", ".gemini", "target", "tmp", ".parcel-cache", "out",
-	".output", ".expo", ".gradle", "bin", "obj",
-	".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".tox",
-	".idea", ".vscode", ".terraform", ".yarn",
+	// Version control.
+	".git", ".hg", ".svn",
+
+	// JS / TS: dependencies, bundler caches, framework build output.
+	"node_modules", "bower_components", ".pnpm-store", ".yarn", ".pnp.cjs",
+	"dist", "build", "out", "tmp", ".next", ".nuxt", ".svelte-kit",
+	".turbo", ".nx", ".vite", ".vite-temp", ".cache", ".parcel-cache",
+	".eslintcache", ".output", ".expo",
+
+	// Native: Cargo target, C/C++ build trees, Android NDK output.
+	"target", "bin", "obj", ".cxx", ".externalNativeBuild",
+
+	// Android / Gradle / Kotlin.
+	".gradle", ".kotlin",
+
+	// Python: virtualenvs, interpreter caches, coverage output.
+	".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache",
+	".ruff_cache", ".tox", "htmlcov", ".ipynb_checkpoints",
+
+	// IaC, editors, and assistants.
+	".terraform", ".idea", ".vscode", ".gemini",
+
+	// OS cruft and coverage reports.
+	".ds_store", "thumbs.db", "coverage",
 }
 
 // IsPathIgnored reports whether any path segment is an ignored entry.
