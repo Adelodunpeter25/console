@@ -52,6 +52,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
 import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
+import io.github.lyxnx.compose.ui.tablericons.outline.Minus
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.argumentPath
@@ -213,15 +215,26 @@ fun AssistantBubble(
             }
         }
         if (!isStreaming && fileChanges.isNotEmpty()) {
+            var expandedChanges by remember(fileChanges) { mutableStateOf(false) }
+            val foldable = fileChanges.size > 4
+            val visibleChanges = if (foldable && !expandedChanges) fileChanges.take(3) else fileChanges
+
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
             ) {
-                fileChanges.forEach { change ->
+                visibleChanges.forEach { change ->
                     TurnChangeChip(
                         change = change,
                         onClick = { onOpenChange?.invoke(change) },
+                    )
+                }
+                if (foldable) {
+                    MoreChangesChip(
+                        expanded = expandedChanges,
+                        remainingCount = fileChanges.size - 3,
+                        onClick = { expandedChanges = !expandedChanges },
                     )
                 }
             }
@@ -271,6 +284,38 @@ fun TurnChangeChip(
             Spacer(modifier = Modifier.size(6.dp))
             DiffSummaryBadge(addedCount = change.additions, removedCount = change.deletions)
         }
+    }
+}
+
+@Composable
+fun MoreChangesChip(
+    expanded: Boolean,
+    remainingCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(NewTheme.Card)
+            .border(1.dp, NewTheme.Divider, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = if (expanded) TablerIcons.Outline.Minus else TablerIcons.Outline.Plus,
+            contentDescription = null,
+            tint = NewTheme.TextSecondary,
+            modifier = Modifier.size(13.dp).padding(end = 4.dp),
+        )
+        Text(
+            text = if (expanded) "Show less" else "$remainingCount more",
+            color = NewTheme.TextSecondary,
+            fontSize = 12.sp,
+            fontFamily = ConsoleMonoFamily,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
