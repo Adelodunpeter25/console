@@ -9,12 +9,32 @@ fun parseUnifiedDiff(diff: String): DiffResult {
     val out = mutableListOf<DiffLine>()
     var added = 0
     var removed = 0
+    var oldLineNo = 1
+    var newLineNo = 1
     for (l in diff.split("\n")) {
-        if (l.startsWith("+++") || l.startsWith("---") || l.startsWith("@@") || l.startsWith("diff ") || l.startsWith("index ")) continue
+        if (l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ")) continue
+        if (l.startsWith("@@")) {
+            // e.g. @@ -1,5 +1,6 @@
+            val match = Regex("""@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@""").find(l)
+            if (match != null) {
+                oldLineNo = match.groupValues[1].toIntOrNull() ?: 1
+                newLineNo = match.groupValues[2].toIntOrNull() ?: 1
+            }
+            continue
+        }
         when {
-            l.startsWith("+") -> { out.add(DiffLine(DiffLineType.Added, l.substring(1))); added++ }
-            l.startsWith("-") -> { out.add(DiffLine(DiffLineType.Removed, l.substring(1))); removed++ }
-            else -> out.add(DiffLine(DiffLineType.Context, if (l.startsWith(" ")) l.substring(1) else l))
+            l.startsWith("+") -> {
+                out.add(DiffLine(DiffLineType.Added, l.substring(1), newLineNo = newLineNo++))
+                added++
+            }
+            l.startsWith("-") -> {
+                out.add(DiffLine(DiffLineType.Removed, l.substring(1), oldLineNo = oldLineNo++))
+                removed++
+            }
+            else -> {
+                val text = if (l.startsWith(" ")) l.substring(1) else l
+                out.add(DiffLine(DiffLineType.Context, text, oldLineNo = oldLineNo++, newLineNo = newLineNo++))
+            }
         }
     }
     return DiffResult(out, added, removed)
