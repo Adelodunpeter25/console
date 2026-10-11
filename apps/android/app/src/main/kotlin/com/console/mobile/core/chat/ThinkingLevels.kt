@@ -37,15 +37,19 @@ fun thinkingStepLabel(supported: List<String>, current: String?): String? {
  * (`apps/desktop/crates/console-ui/src/common/thinking_stepper.rs`).
  * Mobile is dark-only, so only the dark variants are mapped; `none` and
  * unknown levels fall back to the muted ghost tone.
+ *
+ * Returns a raw `0xAARRGGBB` Long for Compose's sRGB `Color(Long)`
+ * constructor — NOT a ULong, which `Color(ULong)` would misread as an
+ * already-packed color and crash in `toArgb` (see `Color.getColorSpace`).
  */
-fun thinkingLevelColorHex(level: String): ULong = when (level) {
-    "minimal" -> 0xFF2DD4BFuL // Mint / Teal
-    "low" -> 0xFF38BDF8uL // Sky Blue
-    "medium" -> 0xFF818CF8uL // Indigo
-    "high" -> 0xFFC084FCuL // Violet / Purple
-    "xhigh" -> 0xFFF472B6uL // Fuchsia / Magenta
-    "max" -> 0xFFFBBF24uL // Warm Amber / Gold
-    else -> 0xFF575757uL // Off / unknown: muted ghost
+fun thinkingLevelColorHex(level: String): Long = when (level) {
+    "minimal" -> 0xFF2DD4BF // Mint / Teal
+    "low" -> 0xFF38BDF8 // Sky Blue
+    "medium" -> 0xFF818CF8 // Indigo
+    "high" -> 0xFFC084FC // Violet / Purple
+    "xhigh" -> 0xFFF472B6 // Fuchsia / Magenta
+    "max" -> 0xFFFBBF24 // Warm Amber / Gold
+    else -> 0xFF575757 // Off / unknown: muted ghost
 }
 
 /** Whole-number percent (the server sends 0..100) for the ring; null until known. */

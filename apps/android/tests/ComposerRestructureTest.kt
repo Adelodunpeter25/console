@@ -45,14 +45,14 @@ class ComposerRestructureTest {
 
     @Test
     fun levelColorsMatchDesktopDarkMapping() {
-        assertEquals(0xFF2DD4BFuL, thinkingLevelColorHex("minimal"))
-        assertEquals(0xFF38BDF8uL, thinkingLevelColorHex("low"))
-        assertEquals(0xFF818CF8uL, thinkingLevelColorHex("medium"))
-        assertEquals(0xFFC084FCuL, thinkingLevelColorHex("high"))
-        assertEquals(0xFFF472B6uL, thinkingLevelColorHex("xhigh"))
-        assertEquals(0xFFFBBF24uL, thinkingLevelColorHex("max"))
-        assertEquals(0xFF575757uL, thinkingLevelColorHex("none"))
-        assertEquals(0xFF575757uL, thinkingLevelColorHex("bogus"))
+        assertEquals(0xFF2DD4BF, thinkingLevelColorHex("minimal"))
+        assertEquals(0xFF38BDF8, thinkingLevelColorHex("low"))
+        assertEquals(0xFF818CF8, thinkingLevelColorHex("medium"))
+        assertEquals(0xFFC084FC, thinkingLevelColorHex("high"))
+        assertEquals(0xFFF472B6, thinkingLevelColorHex("xhigh"))
+        assertEquals(0xFFFBBF24, thinkingLevelColorHex("max"))
+        assertEquals(0xFF575757, thinkingLevelColorHex("none"))
+        assertEquals(0xFF575757, thinkingLevelColorHex("bogus"))
     }
 
     @Test
