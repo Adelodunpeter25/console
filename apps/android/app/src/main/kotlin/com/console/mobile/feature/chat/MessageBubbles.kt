@@ -51,7 +51,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
-import io.github.lyxnx.compose.ui.tablericons.outline.GitBranch
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBearRight2
 import io.github.lyxnx.compose.ui.tablericons.outline.Minus
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
@@ -336,7 +336,7 @@ private fun CopyButton(text: String, context: Context) {    var copied by rememb
 @Composable
 private fun ForkButton(onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(24.dp)) {
-        Icon(TablerIcons.Outline.GitBranch, contentDescription = "Fork chat from here", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
+        Icon(TablerIcons.Outline.ArrowBearRight2, contentDescription = "Fork chat from here", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
     }
 }
 
