@@ -183,7 +183,7 @@ impl ConsoleDesktopApp {
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(gpui::Bounds {
                 origin: point(px(180.0), px(160.0)),
-                size: size(px(560.0), px(430.0)),
+                size: size(px(620.0), px(490.0)),
             })),
             titlebar: Some(TitlebarOptions {
                 title: Some("New Project".into()),
