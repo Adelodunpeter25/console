@@ -13,6 +13,53 @@ pub fn pick_image_file_blocking() -> Option<String> {
     pick_via_osascript_blocking()
 }
 
+/// Open the native folder picker via `osascript`. Returns `None` on cancel.
+///
+/// Same subprocess-and-background-thread approach as the file picker above,
+/// for the same reason: it shows its own modal and must not run on the GPUI
+/// main thread. `choose folder` yields an alias, so `POSIX path of` is what
+/// turns it into a path this app can use.
+pub fn pick_folder_blocking() -> Option<String> {
+    pick_folder_via_osascript_blocking()
+}
+
+fn pick_folder_via_osascript_blocking() -> Option<String> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        log::warn!("Native picker via osascript is macOS-only");
+        return None;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let script = r#"POSIX path of (choose folder with prompt "Select a folder")"#;
+
+        let output = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let path = path.trim_end_matches('/').to_string();
+            if path.is_empty() { None } else { Some(path) }
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let combined = format!("{stderr} {stdout}");
+            let cancelled = combined.contains("-128")
+                || combined.to_ascii_lowercase().contains("user canceled");
+            if cancelled {
+                None
+            } else {
+                log::warn!("osascript folder picker failed: {combined}");
+                None
+            }
+        }
+    }
+}
+
 fn pick_via_osascript_blocking() -> Option<String> {
     #[cfg(not(target_os = "macos"))]
     {

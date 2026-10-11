@@ -30,11 +30,14 @@ pub fn init(cx: &mut App) {
         // to our actions (same pattern Zed uses for Open / Go to File).
         Menu::new("File").items([
             MenuItem::action("New Window", NewWindow),
+            // Project actions sit together, and "Add" precedes "New":
+            // registering a folder that already exists is the common case, so
+            // it is the one reached for first.
             MenuItem::action("New Chat", NewChat),
+            MenuItem::action("Add Project…", AddProject),
+            MenuItem::action("New Project…", NewProject),
             MenuItem::action("New Terminal", NewTerminal),
             MenuItem::action("New Browser Tab", NewBrowser),
-            MenuItem::action("New Project…", NewProject),
-            MenuItem::action("Add Project…", AddProject),
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),
         Menu::new("Edit"),

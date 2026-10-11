@@ -62,8 +62,13 @@ impl NewProjectDialog {
             .map(|app_entity| cx.observe(&app_entity, |_this, _app, cx| cx.notify()));
 
         let name_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("my-project"));
+        // Read-only: the folder comes from Finder, never from typing. A
+        // mistyped path here would otherwise surface much later as an opaque
+        // server error instead of at the point of the mistake.
         let parent_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("Folder to create the project in")
+            ComposerInput::new(window, cx)
+                .placeholder("Choose a folder…")
+                .read_only(true)
         });
         let url_input =
             cx.new(|cx| ComposerInput::new(window, cx).placeholder("https://github.com/org/repo"));
@@ -96,6 +101,42 @@ impl NewProjectDialog {
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| app_state.close_new_project_dialog(cx));
         }
+    }
+
+    /// Open the native folder picker and print the chosen path into the folder
+    /// field.
+    ///
+    /// The picker is a blocking subprocess showing its own modal, so it runs on
+    /// the background executor — calling it on the GPUI thread would freeze the
+    /// window for as long as the panel is open. A cancel is a no-op: the previous
+    /// folder stays put rather than being cleared.
+    fn choose_folder(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            let picked = cx
+                .background_executor()
+                .spawn(async { crate::picker::pick_folder_blocking() })
+                .await;
+            let Some(path) = picked.filter(|path| !path.trim().is_empty()) else {
+                return;
+            };
+            let Some(dialog) = entity.upgrade() else {
+                return;
+            };
+            cx.update(|cx| {
+                dialog.update(cx, |this, cx| {
+                    this.parent_input
+                        .update(cx, |input, cx| input.set_content(path, cx));
+                    // A stale error would still describe the previous attempt.
+                    this.error = None;
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
     }
 
     fn fail(&mut self, kind: FailureKind, message: String, cx: &mut Context<Self>) {
@@ -206,6 +247,12 @@ impl Render for NewProjectDialog {
                 entity.update(cx, |this, cx| this.set_mode(NewProjectMode::Clone, cx));
             })
         };
+        let choose_folder: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = cx.entity();
+            Rc::new(move |_w, cx| {
+                entity.update(cx, |this, cx| this.choose_folder(cx));
+            })
+        };
         let cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = cx.entity();
             Rc::new(move |_w, cx| {
@@ -268,7 +315,12 @@ impl Render for NewProjectDialog {
                                 &theme,
                             )),
                     )
-                    .child(field("Folder", self.parent_input.clone(), &theme))
+                    .child(folder_field(
+                        self.parent_input.clone(),
+                        busy,
+                        choose_folder,
+                        &theme,
+                    ))
                     // The clone card asks for a URL; the blank card has no
                     // such field. Only one of these blocks is ever mounted, so
                     // the blank card cannot be submitted with a stale URL left
@@ -372,6 +424,11 @@ fn mode_card(
     }
 }
 
+/// A labelled field with a visible border around the input.
+///
+/// The border lives here rather than on the input itself: `ComposerInput`
+/// draws its own background, and restyling that shared widget would change
+/// every composer in the app to fix one dialog.
 fn field(label: &'static str, input: Entity<ComposerInput>, theme: &Theme) -> gpui::Div {
     div()
         .flex()
@@ -384,7 +441,78 @@ fn field(label: &'static str, input: Entity<ComposerInput>, theme: &Theme) -> gp
                 .text_color(theme.text_secondary)
                 .child(label),
         )
-        .child(input)
+        .child(
+            div()
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.surface)
+                .rounded(px(6.0))
+                .px(px(8.0))
+                .py(px(6.0))
+                .child(input),
+        )
+}
+
+/// The folder field: read-only path plus a button that opens Finder.
+///
+/// Split from `field` because it is the one field whose value is chosen rather
+/// than typed, and because the button needs to sit inside the border to read
+/// as part of the control.
+fn folder_field(
+    input: Entity<ComposerInput>,
+    disabled: bool,
+    on_choose: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    theme: &Theme,
+) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(theme.text_secondary)
+                .child("Folder"),
+        )
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.surface)
+                .rounded(px(6.0))
+                .px(px(8.0))
+                .py(px(6.0))
+                .child(div().flex_1().child(input))
+                .child({
+                    let choose = div()
+                        .id("new-project-choose-folder")
+                        .px(px(8.0))
+                        .py(px(3.0))
+                        .rounded(px(4.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.canvas)
+                        .text_size(px(11.5))
+                        .text_color(theme.text)
+                        .opacity(if disabled { 0.5 } else { 1.0 })
+                        .child("Choose…")
+                        .on_mouse_down(MouseButton::Left, move |_e, window, cx| {
+                            if !disabled {
+                                cx.stop_propagation();
+                                on_choose(window, cx);
+                            }
+                        });
+                    if disabled {
+                        choose.into_any_element()
+                    } else {
+                        choose.cursor_pointer().into_any_element()
+                    }
+                }),
+        )
 }
 
 /// Error text. The not-connected case gets a second line pointing at the
