@@ -515,13 +515,13 @@ private fun ComposerInput(
                     }
                     // Fills the gap so the chips stay clear of the send button; the model
                     // chip truncates rather than pushing anything off a narrow screen.
+                    ThinkingChip(sessionId = sessionId, running = running)
                     Row(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
-                        ThinkingChip(sessionId = sessionId, running = running)
                     }
                     // Reserves the slot the send button floats over.
                     Spacer(Modifier.size(SEND_SIZE))
