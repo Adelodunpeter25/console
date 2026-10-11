@@ -106,37 +106,26 @@ impl NewProjectDialog {
     /// Open the native folder picker and print the chosen path into the folder
     /// field.
     ///
-    /// The picker is a blocking subprocess showing its own modal, so it runs on
-    /// the background executor — calling it on the GPUI thread would freeze the
-    /// window for as long as the panel is open. A cancel is a no-op: the previous
-    /// folder stays put rather than being cleared.
+    /// Called straight from the UI thread on purpose: NSOpenPanel must run
+    /// there, and `runModal` keeps AppKit servicing events while this thread
+    /// is parked. Spawning it on the background executor is what used to
+    /// crash — see the module comment in picker.rs. A cancel is a no-op: the
+    /// previous folder stays put rather than being cleared.
     fn choose_folder(&mut self, cx: &mut Context<Self>) {
         if self.busy {
             return;
         }
-        let entity = cx.entity().downgrade();
-        cx.spawn(async move |_this, cx| {
-            let picked = cx
-                .background_executor()
-                .spawn(async { crate::picker::pick_folder_blocking() })
-                .await;
-            let Some(path) = picked.filter(|path| !path.trim().is_empty()) else {
-                return;
-            };
-            let Some(dialog) = entity.upgrade() else {
-                return;
-            };
-            cx.update(|cx| {
-                dialog.update(cx, |this, cx| {
-                    this.parent_input
-                        .update(cx, |input, cx| input.set_content(path, cx));
-                    // A stale error would still describe the previous attempt.
-                    this.error = None;
-                    cx.notify();
-                });
-            });
-        })
-        .detach();
+        let Some(path) = crate::picker::pick_folder_blocking() else {
+            return;
+        };
+        if path.trim().is_empty() {
+            return;
+        }
+        self.parent_input
+            .update(cx, |input, cx| input.set_content(path, cx));
+        // A stale error would still describe the previous attempt.
+        self.error = None;
+        cx.notify();
     }
 
     fn fail(&mut self, kind: FailureKind, message: String, cx: &mut Context<Self>) {

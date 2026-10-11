@@ -67,6 +67,13 @@ objc2-web-kit = { version = "0.3" }
 objc2-user-notifications = { version = "0.3" }
 block2 = { version = "0.6" }
 
+# Native file/folder pickers. Replaces the osascript subprocess path in
+# apps/desktop/src/picker.rs, which spawned an external process and parsed its
+# stdout. rfd drives NSOpenPanel/NSSavePanel directly through objc2.
+# IMPORTANT: it must be called on the main thread — see the comment in
+# picker.rs for why the background-thread attempt was wrong.
+rfd = "0.17"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

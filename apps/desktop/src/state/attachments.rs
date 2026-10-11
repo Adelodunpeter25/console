@@ -161,11 +161,10 @@ impl ConsoleDesktopApp {
         let pane_id = pane_id.to_string();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
-            let picked = cx
-                .background_executor()
-                .spawn(async move { crate::picker::pick_image_file_blocking() })
-                .await;
-            let Some(path) = picked else {
+            // The panel itself runs on this thread (NSOpenPanel must be on the
+            // main thread — see picker.rs), but decoding the image afterwards
+            // is real work and stays on the background executor.
+            let Some(path) = crate::picker::pick_image_file_blocking() else {
                 return;
             };
             if path.trim().is_empty() {
