@@ -42,8 +42,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.filled.Star
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Star
 import com.console.mobile.AppContainer
+import com.console.mobile.core.chat.thinkingLevelColorHex
 import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
@@ -294,6 +296,38 @@ fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (S
                     ) { onSelect(m.value.value) }
                     if (index < modes.lastIndex) SectionDivider()
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Thinking-level picker for the composer's brain button. One row per level
+ * the model declares, each with a brain glyph in desktop's per-level color.
+ */
+@Composable
+fun ThinkingLevelPickerSheet(
+    levels: List<String>,
+    current: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    BaseSheet(onDismiss = onDismiss, title = "Thinking Level") {
+        SectionCard {
+            levels.forEachIndexed { index, level ->
+                OptionRow(
+                    title = level.replaceFirstChar { it.uppercase() },
+                    selected = level == current,
+                    leading = {
+                        Icon(
+                            TablerIcons.Outline.Brain,
+                            contentDescription = null,
+                            tint = Color(thinkingLevelColorHex(level)),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    },
+                ) { onSelect(level) }
+                if (index < levels.lastIndex) SectionDivider()
             }
         }
     }

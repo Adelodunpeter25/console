@@ -5,6 +5,7 @@ import com.console.mobile.core.chat.applyChatEvent
 import com.console.mobile.core.chat.contextPercent
 import com.console.mobile.core.chat.effectiveThinkingLevel
 import com.console.mobile.core.chat.nextThinkingLevel
+import com.console.mobile.core.chat.thinkingLevelColorHex
 import com.console.mobile.core.chat.thinkingStepLabel
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.AgentSessionEvent
@@ -40,6 +41,18 @@ class ComposerRestructureTest {
         assertEquals("3/6", thinkingStepLabel(listOf("none", "minimal", "low", "medium", "high", "xhigh", "max"), "medium"))
         assertEquals("1/3", thinkingStepLabel(listOf("low", "medium", "high"), "low"))
         assertNull(thinkingStepLabel(listOf("low"), "high"))
+    }
+
+    @Test
+    fun levelColorsMatchDesktopDarkMapping() {
+        assertEquals(0xFF2DD4BFuL, thinkingLevelColorHex("minimal"))
+        assertEquals(0xFF38BDF8uL, thinkingLevelColorHex("low"))
+        assertEquals(0xFF818CF8uL, thinkingLevelColorHex("medium"))
+        assertEquals(0xFFC084FCuL, thinkingLevelColorHex("high"))
+        assertEquals(0xFFF472B6uL, thinkingLevelColorHex("xhigh"))
+        assertEquals(0xFFFBBF24uL, thinkingLevelColorHex("max"))
+        assertEquals(0xFF575757uL, thinkingLevelColorHex("none"))
+        assertEquals(0xFF575757uL, thinkingLevelColorHex("bogus"))
     }
 
     @Test

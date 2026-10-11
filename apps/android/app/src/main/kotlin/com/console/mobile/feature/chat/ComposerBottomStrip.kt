@@ -4,6 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,6 +27,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.picker.ApprovalModePickerSheet
+import com.console.mobile.ui.components.picker.ThinkingLevelPickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
@@ -119,9 +128,9 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Tap-to-cycle thinking chip, mirroring desktop's stepper. The levels come from
- * the model the backend reports; with none declared the chip is not shown.
- * Disabled during a run, where a change would only apply to the next turn.
+ * Brain icon-only button, colored per level like desktop's stepper. Tap opens
+ * a level picker sheet instead of cycling. Hidden when the model declares no
+ * levels. Disabled during a run, where a change would only apply to the next turn.
  */
 @Composable
 fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modifier) {
@@ -138,19 +147,37 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
         ?: providerState.providers.firstOrNull { it.name == provider }?.models?.firstOrNull { it.id == modelId }
     val supported = model?.supported_thinking_levels.orEmpty()
     val current = com.console.mobile.core.chat.effectiveThinkingLevel(supported, view?.thinkingLevel, model?.default_thinking_level) ?: return
-    val step = com.console.mobile.core.chat.thinkingStepLabel(supported, current) ?: return
+    var sheet by remember { mutableStateOf(false) }
+    HoldComposerOpen(sheet)
 
-    PickerChip(
-        icon = TablerIcons.Outline.Brain,
-        label = "$step ${current.replaceFirstChar { it.uppercase() }}",
-        enabled = !running,
-        surface = NewTheme.Raised,
-        modifier = modifier,
+    Row(
+        modifier = modifier.alpha(if (running) 0.45f else 1f)
+            .clip(RoundedCornerShape(NewTheme.ChipRadius))
+            .background(NewTheme.Raised)
+            .clickable(enabled = !running, onClick = { sheet = true })
+            .padding(horizontal = 9.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val next = com.console.mobile.core.chat.nextThinkingLevel(supported, current) ?: return@PickerChip
-        scope.launch {
-            AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = next))
-            AppContainer.sessionRepository.refreshHeader(sessionId)
-        }
+        Icon(
+            TablerIcons.Outline.Brain,
+            contentDescription = "Thinking level: $current",
+            tint = Color(com.console.mobile.core.chat.thinkingLevelColorHex(current)),
+            modifier = Modifier.size(14.dp),
+        )
+    }
+
+    if (sheet) {
+        ThinkingLevelPickerSheet(
+            levels = supported,
+            current = current,
+            onDismiss = { sheet = false },
+            onSelect = { level ->
+                sheet = false
+                scope.launch {
+                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(thinkingLevel = level))
+                    AppContainer.sessionRepository.refreshHeader(sessionId)
+                }
+            },
+        )
     }
 }

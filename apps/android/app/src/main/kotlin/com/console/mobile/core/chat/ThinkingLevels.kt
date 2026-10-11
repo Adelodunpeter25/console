@@ -32,6 +32,22 @@ fun thinkingStepLabel(supported: List<String>, current: String?): String? {
     return if (supported.first() == "none") "$index/${supported.size - 1}" else "${index + 1}/${supported.size}"
 }
 
+/**
+ * Brain-icon color per level, ported from desktop's `thinking_level_color`
+ * (`apps/desktop/crates/console-ui/src/common/thinking_stepper.rs`).
+ * Mobile is dark-only, so only the dark variants are mapped; `none` and
+ * unknown levels fall back to the muted ghost tone.
+ */
+fun thinkingLevelColorHex(level: String): ULong = when (level) {
+    "minimal" -> 0xFF2DD4BFuL // Mint / Teal
+    "low" -> 0xFF38BDF8uL // Sky Blue
+    "medium" -> 0xFF818CF8uL // Indigo
+    "high" -> 0xFFC084FCuL // Violet / Purple
+    "xhigh" -> 0xFFF472B6uL // Fuchsia / Magenta
+    "max" -> 0xFFFBBF24uL // Warm Amber / Gold
+    else -> 0xFF575757uL // Off / unknown: muted ghost
+}
+
 /** Whole-number percent (the server sends 0..100) for the ring; null until known. */
 fun contextPercent(usedTokens: Int, contextWindow: Int, percentUsed: Double): Int? {
     val pct = when {
