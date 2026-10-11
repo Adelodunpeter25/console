@@ -5,8 +5,8 @@
 //! desktop app registers its top-level menus during startup.
 
 use crate::keybindings::{
-    AddProject, NewBrowser, NewChat, NewTerminal, NewWindow, OpenSettings, QuickOpenFile,
-    ToggleLeftSidebar, ToggleRightSidebar,
+    AddProject, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow, OpenSettings,
+    QuickOpenFile, ToggleLeftSidebar, ToggleRightSidebar,
 };
 use gpui::{App, KeyBinding, Menu, MenuItem, actions};
 
@@ -33,6 +33,7 @@ pub fn init(cx: &mut App) {
             MenuItem::action("New Chat", NewChat),
             MenuItem::action("New Terminal", NewTerminal),
             MenuItem::action("New Browser Tab", NewBrowser),
+            MenuItem::action("New Project…", NewProject),
             MenuItem::action("Add Project…", AddProject),
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),

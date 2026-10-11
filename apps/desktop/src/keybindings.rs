@@ -25,6 +25,11 @@ actions!(
         NewBrowser,
         /// Open the project directory browser palette to add a project (cmd-o).
         AddProject,
+        /// Open the New Project dialog (blank or clone from GitHub). Menu-only
+        /// on purpose: it has no default shortcut because "add project" and
+        /// "new project" are different jobs and one keystroke should not be
+        /// ambiguous between them.
+        NewProject,
         /// Open the quick file search palette scoped to the active pane's project (cmd-p).
         QuickOpenFile,
         /// Toggle the command palette.
@@ -255,6 +260,18 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.open_project_browse(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &NewProject, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| this.open_new_project_dialog(window, cx));
                     })
                     .ok();
             });

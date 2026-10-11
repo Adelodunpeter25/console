@@ -1,6 +1,7 @@
 mod app_menu;
 mod assets;
 mod keybindings;
+mod new_project_dialog;
 mod persistence;
 mod picker;
 mod settings;

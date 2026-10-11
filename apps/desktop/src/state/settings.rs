@@ -1,4 +1,5 @@
 use super::ConsoleDesktopApp;
+use crate::new_project_dialog::NewProjectDialog;
 use crate::persistence::store::load_settings_window;
 use crate::settings_window::SettingsWindow;
 use console_core::ConsoleSettings;
@@ -158,6 +159,63 @@ impl ConsoleDesktopApp {
     pub fn close_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.settings_window_handle.take() {
             self.settings_window_view = None;
+            let _ = cx.update_window(handle, |_root, window, _cx| {
+                window.remove_window();
+            });
+        }
+    }
+
+    /// File ▸ New Project… — open (or focus) the new-project dialog.
+    ///
+    /// Opens as its own window rather than an overlay: the server call is
+    /// synchronous and a slow clone must not block the main window. Reopening
+    /// focuses the existing dialog so repeated menu clicks cannot stack
+    /// copies of it.
+    pub fn open_new_project_dialog(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(handle) = self.new_project_dialog_handle
+            && cx
+                .update_window(handle, |_root, window, _cx| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(gpui::Bounds {
+                origin: point(px(180.0), px(160.0)),
+                size: size(px(560.0), px(430.0)),
+            })),
+            titlebar: Some(TitlebarOptions {
+                title: Some("New Project".into()),
+                appears_transparent: true,
+                traffic_light_position: Some(point(px(14.0), px(14.0))),
+            }),
+            ..Default::default()
+        };
+
+        let entity = cx.entity().clone();
+        let app_entity = cx.entity().downgrade();
+
+        cx.defer(move |cx| {
+            let handle = cx
+                .open_window(options, |window, cx| {
+                    let view = cx.new(|cx| NewProjectDialog::new(app_entity, window, cx));
+                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                })
+                .ok();
+
+            if let Some(h) = handle {
+                entity.update(cx, |this, _cx| {
+                    this.new_project_dialog_handle = Some(h.into());
+                });
+            }
+        });
+    }
+
+    /// Close the new-project dialog. Safe to call when it is not open, so the
+    /// success path can end with it unconditionally.
+    pub fn close_new_project_dialog(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.new_project_dialog_handle.take() {
             let _ = cx.update_window(handle, |_root, window, _cx| {
                 window.remove_window();
             });

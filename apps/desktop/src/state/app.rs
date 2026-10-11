@@ -698,6 +698,7 @@ impl ConsoleDesktopApp {
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
             settings_window_view: None,
+            new_project_dialog_handle: None,
             main_window_handle: Some(window.window_handle().into()),
             is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,

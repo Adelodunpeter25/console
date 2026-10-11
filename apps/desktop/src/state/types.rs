@@ -356,6 +356,10 @@ pub struct ConsoleDesktopApp {
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
+    /// New Project dialog window (File ▸ New Project…). Tracked like the
+    /// settings window so a second menu click focuses the open dialog instead
+    /// of stacking copies.
+    pub new_project_dialog_handle: Option<gpui::AnyWindowHandle>,
     pub main_window_handle: Option<gpui::AnyWindowHandle>,
     /// True only for windows launched as the persisted main window.
     /// Secondary "New Window" windows never persist layout or bounds.

@@ -449,6 +449,26 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Adopt a project the server just created (blank init or clone) and
+    /// select it for the active pane.
+    ///
+    /// Separate from `add_project_from_path`: there is no path to register —
+    /// the server made the folder and already inserted the row, so this only
+    /// mirrors it into local state. Closing the dialog lives here too, so the
+    /// success path is one step and cannot half-finish.
+    pub fn adopt_bootstrapped_project(&mut self, project: ProjectInfo, cx: &mut Context<Self>) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        if !self.projects.iter().any(|p| p.id == project.id) {
+            Rc::make_mut(&mut self.projects).push(project.clone());
+        }
+        self.select_project_for_pane(pane_id, project.id, cx);
+        crate::window::broadcast_settings_refresh(cx);
+        self.close_new_project_dialog(cx);
+    }
+
     /// Check out a branch in the selected pane's project and refresh its branch list.
     pub fn checkout_branch_for_pane(
         &mut self,
