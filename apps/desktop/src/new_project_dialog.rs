@@ -106,26 +106,40 @@ impl NewProjectDialog {
     /// Open the native folder picker and print the chosen path into the folder
     /// field.
     ///
-    /// Called straight from the UI thread on purpose: NSOpenPanel must run
-    /// there, and `runModal` keeps AppKit servicing events while this thread
-    /// is parked. Spawning it on the background executor is what used to
-    /// crash — see the module comment in picker.rs. A cancel is a no-op: the
-    /// previous folder stays put rather than being cleared.
+    /// Async on purpose. A blocking `runModal`-based picker would spin a
+    /// nested AppKit loop that re-enters GPUI's dispatcher while this
+    /// `entity.update` still holds the `App` RefCell borrow, panicking on a
+    /// double borrow — see the module comment in picker.rs. Awaiting the
+    /// panel instead means no borrow is held while it is open.
     fn choose_folder(&mut self, cx: &mut Context<Self>) {
         if self.busy {
             return;
         }
-        let Some(path) = crate::picker::pick_folder_blocking() else {
-            return;
-        };
-        if path.trim().is_empty() {
-            return;
-        }
-        self.parent_input
-            .update(cx, |input, cx| input.set_content(path, cx));
-        // A stale error would still describe the previous attempt.
-        self.error = None;
-        cx.notify();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            // Opening the panel is synchronous and non-blocking (it just hands
+            // AppKit a completion handler); the await below is what yields, and
+            // it is polled by the dispatcher with no App borrow held. The
+            // `update` only exists to reach the `&mut App` needed to show it.
+            let picked = cx.update(|cx| crate::picker::pick_folder(cx));
+            let Some(path) = crate::picker::resolve_single_path(picked).await else {
+                // Cancelled: leave the previous folder and any error alone.
+                return;
+            };
+            let Some(dialog) = entity.upgrade() else {
+                return;
+            };
+            cx.update(|cx| {
+                dialog.update(cx, |this, cx| {
+                    this.parent_input
+                        .update(cx, |input, cx| input.set_content(path, cx));
+                    // A stale error would still describe the previous attempt.
+                    this.error = None;
+                    cx.notify();
+                });
+            });
+        })
+        .detach();
     }
 
     fn fail(&mut self, kind: FailureKind, message: String, cx: &mut Context<Self>) {

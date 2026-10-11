@@ -161,10 +161,12 @@ impl ConsoleDesktopApp {
         let pane_id = pane_id.to_string();
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_entity, cx| {
-            // The panel itself runs on this thread (NSOpenPanel must be on the
-            // main thread — see picker.rs), but decoding the image afterwards
-            // is real work and stays on the background executor.
-            let Some(path) = crate::picker::pick_image_file_blocking() else {
+            // The panel is awaited rather than blocked on: a runModal-based
+            // picker re-enters GPUI's dispatcher and double-borrows the App
+            // RefCell. Decoding the image afterwards is real work and stays
+            // on the background executor.
+            let picked = cx.update(|cx| crate::picker::pick_image_file(cx));
+            let Some(path) = crate::picker::resolve_single_path(picked).await else {
                 return;
             };
             if path.trim().is_empty() {
