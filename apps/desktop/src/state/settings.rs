@@ -281,34 +281,43 @@ impl ConsoleDesktopApp {
                     let on_choose: Rc<dyn Fn(String, &mut Window, &mut App)> = {
                         let dialog = dialog.clone();
                         let app = app_entity.clone();
-                        Rc::new(move |path, _window, cx| {
-                            let Some(app) = app.upgrade() else {
-                                return;
-                            };
+                        Rc::new(move |path, window, cx| {
                             if let Some(dialog) = dialog.upgrade() {
                                 dialog.update(cx, |this, cx| this.set_parent_dir(path, cx));
                             }
-                            app.update(cx, |this, cx| {
-                                this.close_file_browser(cx);
-                                // Put the dialog back in front so the folder it
-                                // now shows is what the user is left looking at.
-                                if let Some(handle) = this.new_project_dialog_handle {
-                                    let _ = cx.update_window(handle, |_r, window, _c| {
-                                        window.activate_window()
-                                    });
-                                }
-                            });
+                            // Close this window directly instead of routing
+                            // through the stored handle: removing a window via
+                            // `update_window` from inside its own event
+                            // dispatch never lands — the settings window
+                            // closes itself this way for the same reason.
+                            window.remove_window();
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.file_browser_window_handle = None;
+                                    // Put the dialog back in front so the folder
+                                    // it now shows is what the user is left
+                                    // looking at. A different window, so
+                                    // reaching it through its handle is fine.
+                                    if let Some(handle) = this.new_project_dialog_handle {
+                                        let _ = cx.update_window(handle, |_r, window, _c| {
+                                            window.activate_window()
+                                        });
+                                    }
+                                });
+                            }
                         })
                     };
 
                     let on_cancel: Rc<dyn Fn(&mut Window, &mut App)> = {
                         let app = app_entity.clone();
-                        Rc::new(move |_window, cx| {
-                            let Some(app) = app.upgrade() else {
-                                return;
-                            };
+                        Rc::new(move |window, cx| {
+                            window.remove_window();
                             // Leave the New Project dialog exactly as it was.
-                            app.update(cx, |this, cx| this.close_file_browser(cx));
+                            if let Some(app) = app.upgrade() {
+                                app.update(cx, |this, _cx| {
+                                    this.file_browser_window_handle = None;
+                                });
+                            }
                         })
                     };
 

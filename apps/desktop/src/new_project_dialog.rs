@@ -136,9 +136,19 @@ impl NewProjectDialog {
         }
     }
 
-    fn close(&self, cx: &mut Context<Self>) {
+    /// Close this dialog window directly: removing it through the stored
+    /// handle from inside its own event dispatch never lands — the settings
+    /// window closes itself this way for the same reason. Also drops an open
+    /// folder chooser, which would otherwise be orphaned with no dialog to
+    /// report back to.
+    fn close(&self, window: &mut Window, cx: &mut Context<Self>) {
+        window.remove_window();
         if let Some(app) = self.app.upgrade() {
-            app.update(cx, |app_state, cx| app_state.close_new_project_dialog(cx));
+            app.update(cx, |app_state, cx| {
+                app_state.new_project_dialog_handle = None;
+                app_state.new_project_dialog_view = None;
+                app_state.close_file_browser(cx);
+            });
         }
     }
 
@@ -252,8 +262,8 @@ impl Render for NewProjectDialog {
         };
         let cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = cx.entity();
-            Rc::new(move |_w, cx| {
-                entity.update(cx, |this, cx| this.close(cx));
+            Rc::new(move |window, cx| {
+                entity.update(cx, |this, cx| this.close(window, cx));
             })
         };
         let submit: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
@@ -270,9 +280,9 @@ impl Render for NewProjectDialog {
             // Enter submits from anywhere in the dialog; it never reaches the
             // inputs first because they live in their own focus scopes and
             // this handler only fires when the dialog itself holds focus.
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 match event.keystroke.key.as_str() {
-                    "escape" => this.close(cx),
+                    "escape" => this.close(window, cx),
                     "enter" => this.submit(cx),
                     _ => {}
                 }
