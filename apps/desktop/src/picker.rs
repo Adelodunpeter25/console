@@ -1,10 +1,17 @@
-//! Native file and folder pickers, delegated to GPUI's platform prompt.
+//! Native file picker, delegated to GPUI's platform prompt.
+//!
+//! IMAGES ONLY. A folder chooser deliberately does not live here: the New
+//! Project dialog needs a path on the *server's* filesystem, and a macOS
+//! panel browses the Mac — useless whenever the backend is a remote host. That
+//! flow uses an in-app browser over `/api/fs/browse` instead (see
+//! `new_project_dialog.rs`). Images are the opposite case: an attachment is
+//! read locally and uploaded, so the local panel is exactly right.
 //!
 //! `App::prompt_for_paths` drives `NSOpenPanel` through
 //! `beginWithCompletionHandler:` — the ASYNCHRONOUS AppKit API. That detail is
 //! the whole reason this file does not shell out or use `rfd`.
 //!
-//! DO NOT "simplify" these back to a blocking `rfd::FileDialog::pick_*`.
+//! DO NOT "simplify" this back to a blocking `rfd::FileDialog::pick_file`.
 //! Those call `runModal`, which spins a nested AppKit run loop on the main
 //! thread. That loop drains the main dispatch queue, which re-enters GPUI and
 //! polls its own queued tasks — including `BlinkCursor::blink`, which calls
@@ -19,9 +26,9 @@
 //! still under the held borrow.
 //!
 //! So the API is deliberately SPLIT, and the split is the fix:
-//!   - [`pick_folder`] / [`pick_image_file`] are SYNCHRONOUS. They only ask
-//!     AppKit to show the panel and return a receiver, so calling them inside
-//!     an `entity.update` is cheap and holds no borrow across any modal loop.
+//!   - [`pick_image_file`] is SYNCHRONOUS. It only asks AppKit to show the
+//!     panel and returns a receiver, so calling it inside an `entity.update`
+//!     is cheap and holds no borrow across any modal loop.
 //!   - [`resolve_single_path`] is the async half. Awaiting it yields, and the
 //!     dispatcher polls it later when no borrow is held.
 //! Callers must await the second half OFF the UI's current stack.
@@ -53,17 +60,6 @@ pub fn pick_image_file(cx: &mut App) -> PathReply {
         directories: false,
         multiple: false,
         prompt: Some("Select an image".into()),
-    })
-}
-
-/// Open the native folder picker. Returns once the panel is *shown* — not once
-/// it is dismissed. Await the result with [`resolve_single_path`].
-pub fn pick_folder(cx: &mut App) -> PathReply {
-    cx.prompt_for_paths(PathPromptOptions {
-        files: false,
-        directories: true,
-        multiple: false,
-        prompt: Some("Select a folder".into()),
     })
 }
 

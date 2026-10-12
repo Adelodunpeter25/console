@@ -115,11 +115,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Whether the token sheet / field is showing.
-    pub fn github_connect_form_open(&self) -> bool {
-        self.github_form_open
-    }
-
+    /// Show or hide the token field.
     pub fn set_github_form_open(&mut self, open: bool, cx: &mut Context<Self>) {
         self.github_form_open = open;
         // Closing the sheet must not leave the previous failure on screen.
