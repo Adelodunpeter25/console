@@ -29,6 +29,7 @@ pub struct SettingsWindow {
     pub(crate) model_saving: bool,
     pub(crate) model_error: Option<String>,
     pub(crate) mcp: crate::settings::mcp::McpTabState,
+    github_token_input: Entity<ComposerInput>,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -143,6 +144,22 @@ impl SettingsWindow {
 
         let mcp = crate::settings::mcp::McpTabState::new(app.clone(), window, cx);
 
+        // GitHub PAT field. Created up front (like the other settings inputs)
+        // so its entity identity is stable across renders — rebuilding it each
+        // render would drop focus and any half-typed token on every keystroke.
+        //
+        // Read-only is deliberate: the value is a credential that is POSTed
+        // once and never kept client-side, so there is nothing to edit later.
+        let github_token_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .read_only(true)
+                .placeholder("ghp_… or github_pat_…")
+        });
+        subscriptions.push(cx.subscribe(&github_token_input, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+            console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
+            _ => {}
+        }));
+
         Self {
             app,
             active_tab: initial_tab,
@@ -150,6 +167,7 @@ impl SettingsWindow {
             is_adding_env: false,
             editing_env_id: None,
             new_env_name_input,
+            github_token_input,
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
             model_vision_input,
@@ -206,6 +224,13 @@ impl SettingsWindow {
         }
         if tab == SettingsTab::Mcp {
             self.mcp.fetch_mcp_servers(cx);
+        }
+        if tab == SettingsTab::Providers {
+            if let Some(app_entity) = self.app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.refresh_github_status(cx);
+                });
+            }
         }
         cx.notify();
     }
@@ -274,11 +299,57 @@ impl Render for SettingsWindow {
                     })
                 };
 
+                let on_github_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                let next = !app_state.github_form_open;
+                                app_state.set_github_form_open(next, cx);
+                            });
+                        }
+                    })
+                };
+                let on_github_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    let input = self.github_token_input.clone();
+                    Rc::new(move |token: String, _w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            // Clear the field as soon as the token is handed
+                            // off: it is a credential, and nothing should keep
+                            // it on screen after submission.
+                            input.update(cx, |input, cx| input.set_content("", cx));
+                            app.update(cx, |app_state, cx| {
+                                app_state.connect_github(token, cx);
+                                app_state.set_github_form_open(false, cx);
+                            });
+                        }
+                    })
+                };
+                let on_github_disconnect: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.disconnect_github(cx));
+                        }
+                    })
+                };
+
                 ProvidersPage {
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
                     on_login,
+                    github: Some(console_ui::settings::GitHubSection {
+                        status: app.github_status.clone(),
+                        busy: app.github_busy,
+                        form_open: app.github_form_open,
+                        error: app.github_error.clone(),
+                        token_input: Some(self.github_token_input.clone()),
+                        on_toggle_form: on_github_toggle,
+                        on_submit: on_github_submit,
+                        on_disconnect: on_github_disconnect,
+                    }),
                 }
                 .into_any_element()
             }

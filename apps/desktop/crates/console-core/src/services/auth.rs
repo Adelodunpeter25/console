@@ -110,6 +110,108 @@ impl AuthService {
         }
     }
 
+    // --- GitHub git credentials -------------------------------------------
+    //
+    // GitHub is NOT an OAuth chat provider. It exists so the git CLI can reach
+    // private repositories from the server host, so it authenticates with a
+    // pasted personal access token rather than a browser flow. That matters for
+    // remote backends: the OAuth login below finishes on a loopback listener on
+    // *this* machine, whereas the PAT is POSTed to the server and works from
+    // anywhere.
+    //
+    // The token is sent once and never stored client-side — the server keeps it
+    // in <storage>/github-creds.json (mirrors providers/shared.CredentialPath
+    // permissions: dir 0700 / file 0600).
+
+    /// `GET /api/auth/github/status` — whether a usable token is stored, plus
+    /// the cached username and scopes.
+    pub async fn github_status(&self) -> Result<GitHubAuthStatus> {
+        let url = self.transport.url("/api/auth/github/status").await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to fetch GitHub status")?;
+
+        let body: ApiResponse<GitHubAuthStatus> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse GitHub status response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to fetch GitHub status".into())
+            ))
+        }
+    }
+
+    /// `POST /api/auth/github/pat` — validate a personal access token and, if
+    /// good, store it server-side. The token is never echoed back.
+    ///
+    /// The server distinguishes the two failure modes we care about: 400 for a
+    /// token GitHub rejected (fix the input) and 502 for GitHub being
+    /// unreachable (retry later). Both arrive here as an `Err`, so the UI shows
+    /// the server's wording verbatim rather than inventing one.
+    pub async fn connect_github(&self, token: &str) -> Result<GitHubAuthStatus> {
+        let url = self.transport.url("/api/auth/github/pat").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&serde_json::json!({ "token": token }))
+            .send()
+            .await
+            .context("Failed to connect GitHub")?;
+
+        let body: ApiResponse<GitHubAuthStatus> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse connect GitHub response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to connect GitHub".into())
+            ))
+        }
+    }
+
+    /// `POST /api/auth/github/logout` — remove the stored token. Idempotent.
+    pub async fn disconnect_github(&self) -> Result<()> {
+        let url = self.transport.url("/api/auth/github/logout").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to disconnect GitHub")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse disconnect GitHub response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to disconnect GitHub".into())
+            ))
+        }
+    }
+
     /// `POST /api/auth/project-id` — persist the Google Cloud project id for a
     /// provider. Pass `None` to clear it.
     pub async fn save_project_id(

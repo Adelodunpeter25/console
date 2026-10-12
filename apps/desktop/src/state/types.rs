@@ -342,6 +342,17 @@ pub struct ConsoleDesktopApp {
     pub agent_browser_tab: Option<String>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
+    /// GitHub git-credential state. Separate from `auth_status` because
+    /// GitHub authenticates by pasted token rather than OAuth — see
+    /// state/github.rs.
+    pub github_status: Option<console_core::types::GitHubAuthStatus>,
+    /// True while a PAT is being validated or removed, so the row can disable
+    /// its buttons rather than firing duplicate requests.
+    pub github_busy: bool,
+    /// Whether the token input is showing. Hidden once connected.
+    pub github_form_open: bool,
+    /// Server-authored failure text, shown verbatim. Cleared on any new action.
+    pub github_error: Option<String>,
     pub usage_reports:
         Option<Rc<std::collections::HashMap<String, Option<console_core::types::UsageReport>>>>,
     pub usage_loading: bool,

@@ -1,6 +1,7 @@
 //! Shared settings view-models and UI components.
 
 pub mod deleted_chats_page;
+pub mod github_section;
 pub mod keybindings_page;
 pub mod mcp_page;
 pub mod models_page;
@@ -11,6 +12,7 @@ pub mod settings_shell;
 pub mod usage_page;
 
 pub use deleted_chats_page::*;
+pub use github_section::*;
 pub use keybindings_page::*;
 pub use mcp_page::*;
 pub use models_page::*;

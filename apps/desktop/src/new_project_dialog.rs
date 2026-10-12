@@ -97,6 +97,24 @@ impl NewProjectDialog {
         cx.notify();
     }
 
+    /// Close the dialog and open Settings on the Providers tab, where the GitHub
+    /// token field lives.
+    ///
+    /// Closes this window first: leaving it open behind the settings window would
+    /// put a second window with a live form in front of the user after they return.
+    fn open_providers(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(app) = self.app.upgrade() {
+            app.update(cx, |app_state, cx| {
+                app_state.close_new_project_dialog(cx);
+                app_state.open_settings_tab(
+                    console_ui::settings::SettingsTab::Providers,
+                    window,
+                    cx,
+                );
+            });
+        }
+    }
+
     fn close(&self, cx: &mut Context<Self>) {
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| app_state.close_new_project_dialog(cx));
@@ -343,7 +361,7 @@ impl Render for NewProjectDialog {
                             ))
                     })
                     .child(match self.error.clone() {
-                        Some((kind, message)) => error_row(kind, &message, &theme),
+                        Some((kind, message)) => error_row(kind, &message, &theme, cx),
                         None => div(),
                     })
                     .child(
@@ -521,7 +539,12 @@ fn folder_field(
 /// Error text. The not-connected case gets a second line pointing at the
 /// screen that can actually fix it, because the server's message names
 /// Accounts but the dialog cannot navigate there itself.
-fn error_row(kind: FailureKind, message: &str, theme: &Theme) -> gpui::Div {
+fn error_row(
+    kind: FailureKind,
+    message: &str,
+    theme: &Theme,
+    cx: &mut Context<NewProjectDialog>,
+) -> gpui::Div {
     let mut row = div()
         .p(px(10.0))
         .rounded(px(6.0))
@@ -540,9 +563,47 @@ fn error_row(kind: FailureKind, message: &str, theme: &Theme) -> gpui::Div {
     if kind == FailureKind::NotConnected {
         row = row.child(
             div()
-                .text_size(px(11.5))
-                .text_color(theme.text_ghost)
-                .child("Open Settings ▸ Accounts to add a token, then try again. Public repositories can be cloned without one."),
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text_ghost)
+                        .child("Public repositories can be cloned without a token."),
+                )
+                .child({
+                    // A real button, not just prose: the fix lives in another
+                    // window, so telling the user where to go without offering
+                    // to take them there is a dead end.
+                    let open_providers: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                        let entity = cx.entity();
+                        Rc::new(move |window, cx| {
+                            entity.update(cx, |this, cx| this.open_providers(window, cx));
+                        })
+                    };
+                    div()
+                        .id("btn-new-project-open-providers")
+                        .px(px(8.0))
+                        .py(px(3.0))
+                        .rounded(px(4.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .cursor_pointer()
+                        .hover(|s| s.opacity(0.9))
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(theme.text)
+                                .child("Open GitHub settings"),
+                        )
+                        .on_mouse_down(MouseButton::Left, move |_e, window, cx| {
+                            cx.stop_propagation();
+                            open_providers(window, cx);
+                        })
+                        .into_any_element()
+                }),
         );
     }
     row

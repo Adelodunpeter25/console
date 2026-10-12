@@ -1,3 +1,4 @@
+use crate::settings::GitHubSection;
 use crate::theme::Theme;
 use console_core::types::{AuthStatusResponse, ProviderCatalogEntry, auth_status_for};
 use gpui::{
@@ -13,6 +14,10 @@ pub struct ProvidersPage {
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    /// GitHub git-credential state. Rendered below the LLM providers as a
+    /// sibling section — GitHub is not a chat provider and authenticates by
+    /// token, not OAuth.
+    pub github: Option<GitHubSection>,
 }
 
 impl RenderOnce for ProvidersPage {
@@ -173,5 +178,14 @@ impl RenderOnce for ProvidersPage {
                         }),
                 ),
             )
+            // GitHub sits below the LLM providers as a sibling section, not
+            // inside the provider list: it is a git credential, not a chat
+            // provider, and its auth method (pasted token) has no equivalent
+            // among the catalog entries above.
+            .child(match self.github {
+                Some(github) => div().mt(px(8.0)).child(github).into_any_element(),
+                None => div().into_any_element(),
+            })
+            .into_any_element()
     }
 }
