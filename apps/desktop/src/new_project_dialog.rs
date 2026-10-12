@@ -12,7 +12,6 @@
 
 use crate::state::ConsoleDesktopApp;
 use console_core::is_github_not_connected;
-use console_ui::common::FileBrowser;
 use console_ui::input::ComposerInput;
 use console_ui::theme::Theme;
 use gpui::{
@@ -49,13 +48,6 @@ pub struct NewProjectDialog {
     /// one. Never a locally-selected path: the backend may be a remote host
     /// where the Mac's folders do not exist.
     parent_dir: String,
-    /// Folder chooser, shown as a Finder-style popup over this window. Held as
-    /// its own entity so its listing survives the popup being opened, closed
-    /// and re-opened, and so the dialog's own render stays small.
-    ///
-    /// None only if the app entity was already gone when this was built, in
-    /// which case the dialog has nothing to talk to and is inert.
-    file_browser: Option<Entity<FileBrowser>>,
     /// Set while the server call is in flight. The call is synchronous, so
     /// this is the whole progress story: inputs and buttons go inert.
     busy: bool,
@@ -80,20 +72,6 @@ impl NewProjectDialog {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
-        let client = app.upgrade().map(|entity| entity.read(cx).client.clone());
-        let file_browser = client.as_ref().map(|client| {
-            cx.new(|cx| {
-                let browser = FileBrowser::new(client.clone(), window, cx);
-                browser
-            })
-        });
-
-        // Populate eagerly: the popup should show the server's home directory
-        // the first time it is opened rather than flashing "Loading…".
-        if let Some(browser) = file_browser.clone() {
-            browser.update(cx, |this, cx| this.open(None, cx));
-        }
-
         Self {
             app,
             focus_handle,
@@ -101,11 +79,35 @@ impl NewProjectDialog {
             name_input,
             url_input,
             parent_dir: String::new(),
-            file_browser,
             busy: false,
             error: None,
             _subscriptions: subscription.into_iter().collect(),
         }
+    }
+
+    /// Open the folder chooser in its own window.
+    ///
+    /// Deliberately NOT an overlay on this dialog: an overlay built during
+    /// render is rebuilt every frame so its open state never sticks, and one
+    /// owned by a separate window can surface behind it. The app owns the
+    /// chooser window and keeps this dialog open behind it.
+    fn choose_folder(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(app) = self.app.upgrade() {
+            app.update(cx, |app_state, cx| {
+                // Start where the previous choice was, else the server's home.
+                let start = (!self.parent_dir.is_empty()).then(|| self.parent_dir.clone());
+                app_state.open_file_browser(start, window, cx);
+            });
+        }
+    }
+
+    /// Take the folder the chooser confirmed. Public because the chooser
+    /// lives in another window and calls straight back in here.
+    pub fn set_parent_dir(&mut self, path: String, cx: &mut Context<Self>) {
+        self.parent_dir = path;
+        // A stale error would still describe the previous attempt.
+        self.error = None;
+        cx.notify();
     }
 
     fn set_mode(&mut self, mode: NewProjectMode, cx: &mut Context<Self>) {
@@ -138,18 +140,6 @@ impl NewProjectDialog {
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| app_state.close_new_project_dialog(cx));
         }
-    }
-
-    /// Commit the browser's chosen folder. Called from the popup's confirm
-    /// action; the browser itself does not write dialog state.
-    fn accept_folder(&mut self, cx: &mut Context<Self>) {
-        let Some(chosen) = self.file_browser.as_ref().and_then(|b| b.read(cx).chosen()) else {
-            return;
-        };
-        self.parent_dir = chosen;
-        // A stale error would still describe the previous attempt.
-        self.error = None;
-        cx.notify();
     }
 
     fn fail(&mut self, kind: FailureKind, message: String, cx: &mut Context<Self>) {
@@ -324,11 +314,9 @@ impl Render for NewProjectDialog {
                     )
                     .child(folder_field(
                         self.parent_dir.clone(),
-                        self.file_browser.clone(),
                         busy,
                         cx.entity().downgrade(),
                         &theme,
-                        cx,
                     ))
                     // The clone card asks for a URL; the blank card has no
                     // such field. Only one of these blocks is ever mounted, so
@@ -462,48 +450,54 @@ fn field(label: &'static str, input: Entity<ComposerInput>, theme: &Theme) -> gp
         )
 }
 
-/// Folder field: shows the chosen path and opens the browser popup.
+/// Folder field: shows the chosen path and opens the folder chooser.
 ///
 /// The path is a summary, not an editable field — it is a path on the
 /// SERVER's filesystem, so typing one by hand would invite the same mistake
-/// the popup exists to prevent. `Choose folder` opens a Finder-style overlay
-/// in this same window, leaving the dialog open behind it.
+/// the chooser exists to prevent. "Choose folder…" opens the chooser in its
+/// OWN window, which is what puts it in front; this dialog stays open behind.
 fn folder_field(
     chosen: String,
-    browser: Option<Entity<FileBrowser>>,
     disabled: bool,
     dialog: gpui::WeakEntity<NewProjectDialog>,
     theme: &Theme,
-    cx: &mut App,
 ) -> gpui::Div {
-    let path_label = if chosen.is_empty() {
+    let unset = chosen.is_empty();
+    let path_label = if unset {
         "No folder chosen yet".to_string()
     } else {
         chosen
     };
 
-    let trigger = {
-        let button = div()
-            .id("new-project-choose-folder")
-            .px(px(10.0))
-            .py(px(5.0))
-            .rounded(px(5.0))
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised)
-            .opacity(if disabled { 0.5 } else { 1.0 })
-            .child(
-                div()
-                    .text_size(px(11.5))
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(theme.text)
-                    .child("Choose folder…"),
-            );
-        if disabled {
-            button.into_any_element()
-        } else {
-            button.cursor_pointer().into_any_element()
-        }
+    let button = div()
+        .id("new-project-choose-folder")
+        .px(px(10.0))
+        .py(px(5.0))
+        .rounded(px(5.0))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.raised)
+        .opacity(if disabled { 0.5 } else { 1.0 })
+        .child(
+            div()
+                .text_size(px(11.5))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(theme.text)
+                .child("Choose folder…"),
+        );
+
+    let button = if disabled {
+        button.into_any_element()
+    } else {
+        button
+            .cursor_pointer()
+            .on_mouse_down(MouseButton::Left, move |_e, window, cx| {
+                cx.stop_propagation();
+                if let Some(dialog) = dialog.upgrade() {
+                    dialog.update(cx, |this, cx| this.choose_folder(window, cx));
+                }
+            })
+            .into_any_element()
     };
 
     div()
@@ -532,37 +526,14 @@ fn folder_field(
                     div()
                         .flex_1()
                         .text_size(px(11.5))
-                        .text_color(if path_label == "No folder chosen yet" {
+                        .text_color(if unset {
                             theme.text_ghost
                         } else {
                             theme.text_secondary
                         })
                         .child(path_label),
                 )
-                // Only wire the popup when there is a browser to show — it is
-                // absent only if the app entity was already gone at
-                // construction, in which case the dialog is dead anyway.
-                .child(match browser {
-                    Some(browser) => gpui_component::dialog::Dialog::new(cx)
-                        .w(px(460.0))
-                        .trigger(trigger)
-                        .overlay(true)
-                        .keyboard(true)
-                        .on_ok({
-                            let dialog = dialog.clone();
-                            move |_, _window, cx| {
-                                if let Some(dialog) = dialog.upgrade() {
-                                    dialog.update(cx, |this, cx| this.accept_folder(cx));
-                                }
-                                // Returning true closes the popup after the
-                                // chosen folder is committed.
-                                true
-                            }
-                        })
-                        .content(move |content, _window, _cx| content.child(browser.clone()))
-                        .into_any_element(),
-                    None => trigger,
-                }),
+                .child(button),
         )
 }
 

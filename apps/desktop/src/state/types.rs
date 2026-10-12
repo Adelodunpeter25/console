@@ -371,6 +371,15 @@ pub struct ConsoleDesktopApp {
     /// settings window so a second menu click focuses the open dialog instead
     /// of stacking copies.
     pub new_project_dialog_handle: Option<gpui::AnyWindowHandle>,
+    /// Folder-chooser window opened from the New Project dialog's "Choose
+    /// folder…" button. A separate window rather than an overlay on purpose:
+    /// an overlay owned by the dialog window can surface BEHIND it, and one
+    /// built during render is rebuilt every frame so it never appears at all.
+    pub file_browser_window_handle: Option<gpui::AnyWindowHandle>,
+    /// New Project dialog, so the folder chooser can report the chosen path
+    /// back without holding a window handle of its own.
+    pub new_project_dialog_view:
+        Option<gpui::WeakEntity<crate::new_project_dialog::NewProjectDialog>>,
     pub main_window_handle: Option<gpui::AnyWindowHandle>,
     /// True only for windows launched as the persisted main window.
     /// Secondary "New Window" windows never persist layout or bounds.

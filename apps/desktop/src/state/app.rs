@@ -703,6 +703,8 @@ impl ConsoleDesktopApp {
             settings_window_handle: None,
             settings_window_view: None,
             new_project_dialog_handle: None,
+            file_browser_window_handle: None,
+            new_project_dialog_view: None,
             main_window_handle: Some(window.window_handle().into()),
             is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,

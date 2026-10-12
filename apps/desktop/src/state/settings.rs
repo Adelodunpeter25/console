@@ -3,9 +3,11 @@ use crate::new_project_dialog::NewProjectDialog;
 use crate::persistence::store::load_settings_window;
 use crate::settings_window::SettingsWindow;
 use console_core::ConsoleSettings;
+use console_ui::common::FileBrowser;
 use gpui::{
-    AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
+    App, AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
 };
+use std::rc::Rc;
 
 impl ConsoleDesktopApp {
     /// Reload all server-backed settings-window data in this workspace.
@@ -197,16 +199,22 @@ impl ConsoleDesktopApp {
         let app_entity = cx.entity().downgrade();
 
         cx.defer(move |cx| {
+            let dialog_ref = std::cell::RefCell::new(None);
             let handle = cx
                 .open_window(options, |window, cx| {
                     let view = cx.new(|cx| NewProjectDialog::new(app_entity, window, cx));
+                    *dialog_ref.borrow_mut() = Some(view.downgrade());
                     cx.new(|cx| gpui_component::Root::new(view, window, cx))
                 })
                 .ok();
 
             if let Some(h) = handle {
+                // The weak view lets the folder chooser report its choice back
+                // without the dialog having to hold a window handle.
+                let dialog_view = dialog_ref.borrow().clone();
                 entity.update(cx, |this, _cx| {
                     this.new_project_dialog_handle = Some(h.into());
+                    this.new_project_dialog_view = dialog_view;
                 });
             }
         });
@@ -216,6 +224,115 @@ impl ConsoleDesktopApp {
     /// success path can end with it unconditionally.
     pub fn close_new_project_dialog(&mut self, cx: &mut Context<Self>) {
         if let Some(handle) = self.new_project_dialog_handle.take() {
+            self.new_project_dialog_view = None;
+            let _ = cx.update_window(handle, |_root, window, _cx| {
+                window.remove_window();
+            });
+        }
+    }
+
+    /// Open the folder chooser on behalf of the New Project dialog.
+    ///
+    /// Its own window rather than an overlay, and the dialog is explicitly
+    /// re-activated afterwards so the chooser cannot end up buried behind it —
+    /// the bug an in-window overlay had. The New Project dialog stays open
+    /// behind; only the chooser closes.
+    pub fn open_file_browser(
+        &mut self,
+        start_path: Option<String>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Already open: just bring it forward rather than stacking copies.
+        if let Some(handle) = self.file_browser_window_handle
+            && cx
+                .update_window(handle, |_root, window, _cx| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+
+        let Some(dialog) = self.new_project_dialog_view.clone() else {
+            // No dialog to report back to; opening a chooser would be a dead end.
+            return;
+        };
+
+        let app_entity = cx.entity().downgrade();
+        let client = self.client.clone();
+
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(gpui::Bounds {
+                origin: point(px(280.0), px(240.0)),
+                size: size(px(520.0), px(540.0)),
+            })),
+            titlebar: Some(TitlebarOptions {
+                title: Some("Choose a folder".into()),
+                appears_transparent: true,
+                traffic_light_position: Some(point(px(14.0), px(14.0))),
+            }),
+            ..Default::default()
+        };
+
+        let this_entity = cx.entity().clone();
+
+        cx.defer(move |cx| {
+            let handle = cx
+                .open_window(options, |window, cx| {
+                    let on_choose: Rc<dyn Fn(String, &mut Window, &mut App)> = {
+                        let dialog = dialog.clone();
+                        let app = app_entity.clone();
+                        Rc::new(move |path, _window, cx| {
+                            let Some(app) = app.upgrade() else {
+                                return;
+                            };
+                            if let Some(dialog) = dialog.upgrade() {
+                                dialog.update(cx, |this, cx| this.set_parent_dir(path, cx));
+                            }
+                            app.update(cx, |this, cx| {
+                                this.close_file_browser(cx);
+                                // Put the dialog back in front so the folder it
+                                // now shows is what the user is left looking at.
+                                if let Some(handle) = this.new_project_dialog_handle {
+                                    let _ = cx.update_window(handle, |_r, window, _c| {
+                                        window.activate_window()
+                                    });
+                                }
+                            });
+                        })
+                    };
+
+                    let on_cancel: Rc<dyn Fn(&mut Window, &mut App)> = {
+                        let app = app_entity.clone();
+                        Rc::new(move |_window, cx| {
+                            let Some(app) = app.upgrade() else {
+                                return;
+                            };
+                            // Leave the New Project dialog exactly as it was.
+                            app.update(cx, |this, cx| this.close_file_browser(cx));
+                        })
+                    };
+
+                    let view = cx.new(|cx| {
+                        let mut browser =
+                            FileBrowser::new(client.clone(), on_choose, on_cancel, window, cx);
+                        browser.open(start_path.clone(), cx);
+                        browser
+                    });
+                    cx.new(|cx| gpui_component::Root::new(view, window, cx))
+                })
+                .ok();
+
+            if let Some(h) = handle {
+                this_entity.update(cx, |this, _cx| {
+                    this.file_browser_window_handle = Some(h.into());
+                });
+            }
+        });
+    }
+
+    /// Close the folder chooser, leaving the New Project dialog untouched.
+    pub fn close_file_browser(&mut self, cx: &mut Context<Self>) {
+        if let Some(handle) = self.file_browser_window_handle.take() {
             let _ = cx.update_window(handle, |_root, window, _cx| {
                 window.remove_window();
             });
