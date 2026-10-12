@@ -42,8 +42,8 @@ import kotlinx.coroutines.launch
  * terminals) reach private repositories. So it has its own status, not the
  * provider catalog's, and its own paste sheet instead of an OAuth browser trip.
  *
- * The token is typed once, sent to the server, and dropped — only the
- * username comes back.
+ * The token is typed once, sent to the server, and dropped — what comes back
+ * is the username and, for a classic token, its scopes.
  */
 @Composable
 fun GitHubAccountSection() {
@@ -66,6 +66,22 @@ fun GitHubAccountSection() {
                     fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 1.dp),
                 )
+                // Scopes, as on desktop. Only shown when there are any: a
+                // fine-grained PAT legitimately reports none, and an empty
+                // "Scopes:" line would imply something is missing. `maxLines`
+                // guards a long classic-PAT scope list from pushing the row
+                // taller than its siblings.
+                val scopes = github?.scopes.orEmpty()
+                if (connected && scopes.isNotEmpty()) {
+                    Text(
+                        "Scopes: ${scopes.joinToString(", ")}",
+                        color = NewTheme.TextMuted,
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (connected) {
