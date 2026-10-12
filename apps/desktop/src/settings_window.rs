@@ -148,12 +148,12 @@ impl SettingsWindow {
         // so its entity identity is stable across renders — rebuilding it each
         // render would drop focus and any half-typed token on every keystroke.
         //
-        // Read-only is deliberate: the value is a credential that is POSTed
-        // once and never kept client-side, so there is nothing to edit later.
+        // Editable on purpose: this is where the token is entered. It is
+        // cleared the moment it is submitted (see on_github_submit), which is
+        // what keeps the credential from lingering client-side — a read-only
+        // field would block pasting entirely.
         let github_token_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .read_only(true)
-                .placeholder("ghp_… or github_pat_…")
+            ComposerInput::new(window, cx).placeholder("ghp_… or github_pat_…")
         });
         subscriptions.push(cx.subscribe(&github_token_input, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
             console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
