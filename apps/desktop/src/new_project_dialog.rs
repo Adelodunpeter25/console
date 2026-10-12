@@ -12,13 +12,12 @@
 
 use crate::state::ConsoleDesktopApp;
 use console_core::is_github_not_connected;
-use console_core::types::FsTreeEntry;
+use console_ui::common::FileBrowser;
 use console_ui::input::ComposerInput;
 use console_ui::theme::Theme;
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Window,
-    div, px,
+    KeyDownEvent, MouseButton, ParentElement, Render, Styled, Window, div, px,
 };
 use std::rc::Rc;
 
@@ -46,21 +45,17 @@ pub struct NewProjectDialog {
     name_input: Entity<ComposerInput>,
     url_input: Entity<ComposerInput>,
     /// The folder the project will be created in — a path on the SERVER's
-    /// filesystem, chosen from the browser below. Empty until the user picks
+    /// filesystem, chosen from the browser popup. Empty until the user picks
     /// one. Never a locally-selected path: the backend may be a remote host
     /// where the Mac's folders do not exist.
     parent_dir: String,
-    /// Folder the browser is currently listing. None until the first response
-    /// lands, at which point it is the server's home directory.
-    folder_path: Option<String>,
-    /// Parent of `folder_path`, rendered as the ".." row.
-    folder_parent: Option<String>,
-    /// Folders only — files are filtered out of the listing, since this picks
-    /// a directory and nothing else.
-    folder_entries: Vec<FsTreeEntry>,
-    /// Row highlighted by a single click. "Use this folder" commits this.
-    folder_selected: Option<String>,
-    folder_loading: bool,
+    /// Folder chooser, shown as a Finder-style popup over this window. Held as
+    /// its own entity so its listing survives the popup being opened, closed
+    /// and re-opened, and so the dialog's own render stays small.
+    ///
+    /// None only if the app entity was already gone when this was built, in
+    /// which case the dialog has nothing to talk to and is inert.
+    file_browser: Option<Entity<FileBrowser>>,
     /// Set while the server call is in flight. The call is synchronous, so
     /// this is the whole progress story: inputs and buttons go inert.
     busy: bool,
@@ -85,27 +80,32 @@ impl NewProjectDialog {
         let focus_handle = cx.focus_handle();
         window.focus(&focus_handle, cx);
 
-        let mut dialog = Self {
+        let client = app.upgrade().map(|entity| entity.read(cx).client.clone());
+        let file_browser = client.as_ref().map(|client| {
+            cx.new(|cx| {
+                let browser = FileBrowser::new(client.clone(), window, cx);
+                browser
+            })
+        });
+
+        // Populate eagerly: the popup should show the server's home directory
+        // the first time it is opened rather than flashing "Loading…".
+        if let Some(browser) = file_browser.clone() {
+            browser.update(cx, |this, cx| this.open(None, cx));
+        }
+
+        Self {
             app,
             focus_handle,
             mode: NewProjectMode::Blank,
             name_input,
             url_input,
             parent_dir: String::new(),
-            folder_path: None,
-            folder_parent: None,
-            folder_entries: Vec::new(),
-            folder_selected: None,
-            folder_loading: false,
+            file_browser,
             busy: false,
             error: None,
             _subscriptions: subscription.into_iter().collect(),
-        };
-        // Start at the server's home directory (browse(None) resolves it
-        // server-side), so the list is useful immediately without the user
-        // having to navigate anywhere first.
-        dialog.browse_folder(None, cx);
-        dialog
+        }
     }
 
     fn set_mode(&mut self, mode: NewProjectMode, cx: &mut Context<Self>) {
@@ -140,66 +140,10 @@ impl NewProjectDialog {
         }
     }
 
-    /// List `path` (server home when `None`) into the folder browser.
-    ///
-    /// This hits `/api/fs/browse`, which runs on the *server* — so the paths
-    /// shown are the ones that actually exist where the project will be
-    /// created. That is the whole point of this widget: a native macOS panel
-    /// would browse the Mac, which is the wrong filesystem whenever the
-    /// backend is a remote host.
-    fn browse_folder(&mut self, path: Option<String>, cx: &mut Context<Self>) {
-        let Some(app) = self.app.upgrade() else {
-            return;
-        };
-        let client = app.read(cx).client.clone();
-        self.folder_loading = true;
-        cx.notify();
-
-        let entity = cx.entity().downgrade();
-        cx.spawn(async move |_this, cx| {
-            let result = client.fs.browse(path.as_deref()).await;
-            let Some(dialog) = entity.upgrade() else {
-                return;
-            };
-            cx.update(|cx| {
-                dialog.update(cx, |this, cx| {
-                    this.folder_loading = false;
-                    match result {
-                        Ok(listing) => {
-                            this.folder_path = Some(listing.current_path);
-                            this.folder_parent = listing.parent_path;
-                            // Folders only: this widget exists to choose a
-                            // directory, so files would just be noise.
-                            this.folder_entries =
-                                listing.entries.into_iter().filter(|e| e.is_dir).collect();
-                        }
-                        // A browse failure must not silently empty the list —
-                        // that reads as "this folder has no subfolders".
-                        Err(error) => {
-                            this.error = Some((FailureKind::Message, error.to_string()));
-                        }
-                    }
-                    cx.notify();
-                });
-            });
-        })
-        .detach();
-    }
-
-    /// Single click: highlight a row without navigating.
-    fn select_folder(&mut self, path: String, cx: &mut Context<Self>) {
-        self.folder_selected = Some(path);
-        cx.notify();
-    }
-
-    /// Commit the highlighted folder (or the one being listed, when nothing is
-    /// highlighted) as the project folder.
-    fn use_folder(&mut self, cx: &mut Context<Self>) {
-        let chosen = self
-            .folder_selected
-            .clone()
-            .or_else(|| self.folder_path.clone());
-        let Some(chosen) = chosen else {
+    /// Commit the browser's chosen folder. Called from the popup's confirm
+    /// action; the browser itself does not write dialog state.
+    fn accept_folder(&mut self, cx: &mut Context<Self>) {
+        let Some(chosen) = self.file_browser.as_ref().and_then(|b| b.read(cx).chosen()) else {
             return;
         };
         self.parent_dir = chosen;
@@ -378,15 +322,13 @@ impl Render for NewProjectDialog {
                                 &theme,
                             )),
                     )
-                    .child(folder_browser(
-                        self.folder_path.clone(),
-                        self.folder_parent.clone(),
-                        self.folder_entries.clone(),
-                        self.folder_selected.clone(),
+                    .child(folder_field(
                         self.parent_dir.clone(),
-                        self.folder_loading,
+                        self.file_browser.clone(),
+                        busy,
                         cx.entity().downgrade(),
                         &theme,
+                        cx,
                     ))
                     // The clone card asks for a URL; the blank card has no
                     // such field. Only one of these blocks is ever mounted, so
@@ -520,234 +462,110 @@ fn field(label: &'static str, input: Entity<ComposerInput>, theme: &Theme) -> gp
         )
 }
 
-/// Inline folder browser for the SERVER's filesystem.
+/// Folder field: shows the chosen path and opens the browser popup.
 ///
-/// Replaces a text field plus a native panel on purpose: the backend may be a
-/// remote host, where a macOS folder picker would offer paths that do not
-/// exist where the project is actually created.
-///
-/// Interaction:
-/// - **single click** a row  → highlight it (this is what "Use this folder" takes)
-/// - **double click** a row  → list that folder
-/// - **..**                  → go to the parent directory
-/// - **Use this folder**     → commit the highlighted row, or the folder being
-///                             listed when nothing is highlighted
-#[allow(clippy::too_many_arguments)]
-fn folder_browser(
-    current: Option<String>,
-    parent: Option<String>,
-    entries: Vec<FsTreeEntry>,
-    selected: Option<String>,
+/// The path is a summary, not an editable field — it is a path on the
+/// SERVER's filesystem, so typing one by hand would invite the same mistake
+/// the popup exists to prevent. `Choose folder` opens a Finder-style overlay
+/// in this same window, leaving the dialog open behind it.
+fn folder_field(
     chosen: String,
-    loading: bool,
-    entity: gpui::WeakEntity<NewProjectDialog>,
+    browser: Option<Entity<FileBrowser>>,
+    disabled: bool,
+    dialog: gpui::WeakEntity<NewProjectDialog>,
     theme: &Theme,
+    cx: &mut App,
 ) -> gpui::Div {
-    let mut body = div().flex().flex_col().gap(px(6.0)).child(
-        // Header: what is listed, and what has been chosen. Showing the
-        // committed folder separately matters — it is the value the server
-        // will use, and it is often not the row currently highlighted.
-        div()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
+    let path_label = if chosen.is_empty() {
+        "No folder chosen yet".to_string()
+    } else {
+        chosen
+    };
+
+    let trigger = {
+        let button = div()
+            .id("new-project-choose-folder")
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(5.0))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised)
+            .opacity(if disabled { 0.5 } else { 1.0 })
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text_secondary)
-                            .child("Folder on the server"),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(11.0))
-                            .text_color(theme.text_ghost)
-                            .child(if chosen.is_empty() {
-                                "No folder chosen yet".to_string()
-                            } else {
-                                chosen.clone()
-                            }),
-                    ),
-            )
-            .child({
-                let use_entity = entity.clone();
-                let use_button = div()
-                    .id("btn-use-this-folder")
-                    .px(px(10.0))
-                    .py(px(4.0))
-                    .rounded(px(5.0))
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.raised)
-                    .child(
-                        div()
-                            .text_size(px(11.5))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child("Use this folder"),
-                    )
-                    .on_mouse_down(MouseButton::Left, move |_e, _w, cx| {
-                        cx.stop_propagation();
-                        if let Some(dialog) = use_entity.upgrade() {
-                            dialog.update(cx, |this, cx| this.use_folder(cx));
-                        }
-                    });
-                // Inert only before the first listing lands; after that there
-                // is always something to use (the folder being listed).
-                if loading && current.is_none() {
-                    use_button.opacity(0.5).into_any_element()
-                } else {
-                    use_button.cursor_pointer().into_any_element()
-                }
-            }),
-    );
+                    .text_size(px(11.5))
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(theme.text)
+                    .child("Choose folder…"),
+            );
+        if disabled {
+            button.into_any_element()
+        } else {
+            button.cursor_pointer().into_any_element()
+        }
+    };
 
-    // The listing, scrollable so a home directory with hundreds of entries does
-    // not push the URL and action rows off the dialog.
-    let mut list = div()
-        // `.id` is what makes the element stateful, and a stateful element is
-        // what provides `overflow_y_scroll` — without it the method does not
-        // exist on Div.
-        .id("new-project-folder-list")
+    div()
         .flex()
         .flex_col()
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.surface)
-        .rounded(px(6.0))
-        .overflow_y_scroll()
-        .max_h(px(150.0));
-
-    if let Some(parent) = parent.clone() {
-        list = list.child(folder_row(
-            "..",
-            "Parent folder",
-            false,
-            false,
-            Some(parent),
-            entity.clone(),
-            theme,
-        ));
-    }
-
-    // Borrowed rather than consumed: `folder_row` needs the name and path as
-    // separate `&str`s, and `entries.is_empty()` below must still be callable.
-    for entry in &entries {
-        let is_selected = selected.as_deref() == Some(entry.path.as_str());
-        list = list.child(folder_row(
-            &entry.name,
-            &entry.path,
-            is_selected,
-            true,
-            Some(entry.path.clone()),
-            entity.clone(),
-            theme,
-        ));
-    }
-
-    // Empty/loading states. Showing "No folders" while a request is in flight
-    // would flash before every navigation, so they are kept distinct.
-    if entries.is_empty() && parent.is_none() {
-        list = list.child(
-            div()
-                .px(px(8.0))
-                .py(px(10.0))
-                .text_size(px(11.5))
-                .text_color(theme.text_ghost)
-                .child(if loading {
-                    "Loading…"
-                } else {
-                    "No folders to show."
-                }),
-        );
-    }
-
-    body = body.child(list);
-
-    if let Some(current) = current {
-        body = body.child(
-            div()
-                .text_size(px(10.5))
-                .text_color(theme.text_ghost)
-                .child(format!(
-                    "Listing {current} — double-click a folder to open it"
-                )),
-        );
-    }
-
-    body
-}
-
-/// One row. `is_folder` is false only for the ".." row, which navigates on a
-/// single click instead of requiring a double: going up is a one-off action,
-/// and making it double-click-only would be needlessly fiddly.
-#[allow(clippy::too_many_arguments)]
-fn folder_row(
-    label: &str,
-    detail: &str,
-    selected: bool,
-    is_folder: bool,
-    path: Option<String>,
-    entity: gpui::WeakEntity<NewProjectDialog>,
-    theme: &Theme,
-) -> impl IntoElement {
-    let row = div()
-        .id(gpui::ElementId::from(format!("folder-row-{}", label)))
-        .px(px(8.0))
-        .py(px(5.0))
-        .flex()
-        .flex_col()
-        .gap(px(1.0))
-        .cursor_pointer()
-        .on_mouse_down(MouseButton::Left, {
-            let path = path.clone();
-            let entity = entity.clone();
-            move |event, _window, cx| {
-                cx.stop_propagation();
-                let Some(dialog) = entity.upgrade() else {
-                    return;
-                };
-                // A double click enters the folder; a single click only
-                // highlights it. The ".." row ignores the distinction.
-                if is_folder && event.click_count >= 2 {
-                    dialog.update(cx, |this, cx| this.browse_folder(path.clone(), cx));
-                } else if is_folder {
-                    dialog.update(cx, |this, cx| {
-                        this.select_folder(path.clone().unwrap_or_default(), cx)
-                    });
-                } else if let Some(parent) = path.clone() {
-                    dialog.update(cx, |this, cx| this.browse_folder(Some(parent), cx));
-                }
-            }
-        })
+        .gap(px(6.0))
         .child(
             div()
                 .text_size(px(12.0))
                 .font_weight(gpui::FontWeight::MEDIUM)
-                .text_color(if selected { theme.accent } else { theme.text })
-                .child(label.to_string()),
+                .text_color(theme.text_secondary)
+                .child("Folder on the server"),
         )
         .child(
             div()
-                .text_size(px(10.5))
-                .text_color(theme.text_ghost)
-                .child(detail.to_string()),
-        );
-
-    if selected {
-        row.bg(theme.overlay).into_any_element()
-    } else {
-        row.hover(|s| s.bg(theme.overlay)).into_any_element()
-    }
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.surface)
+                .rounded(px(6.0))
+                .px(px(8.0))
+                .py(px(6.0))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(11.5))
+                        .text_color(if path_label == "No folder chosen yet" {
+                            theme.text_ghost
+                        } else {
+                            theme.text_secondary
+                        })
+                        .child(path_label),
+                )
+                // Only wire the popup when there is a browser to show — it is
+                // absent only if the app entity was already gone at
+                // construction, in which case the dialog is dead anyway.
+                .child(match browser {
+                    Some(browser) => gpui_component::dialog::Dialog::new(cx)
+                        .w(px(460.0))
+                        .trigger(trigger)
+                        .overlay(true)
+                        .keyboard(true)
+                        .on_ok({
+                            let dialog = dialog.clone();
+                            move |_, _window, cx| {
+                                if let Some(dialog) = dialog.upgrade() {
+                                    dialog.update(cx, |this, cx| this.accept_folder(cx));
+                                }
+                                // Returning true closes the popup after the
+                                // chosen folder is committed.
+                                true
+                            }
+                        })
+                        .content(move |content, _window, _cx| content.child(browser.clone()))
+                        .into_any_element(),
+                    None => trigger,
+                }),
+        )
 }
 
-/// Error text. The not-connected case gets a second line pointing at the
 /// screen that can actually fix it, because the server's message names
 /// Accounts but the dialog cannot navigate there itself.
 fn error_row(
