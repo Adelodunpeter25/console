@@ -1,8 +1,6 @@
 //! Unit tests for shared path display helpers.
 
-use console_ui::utils::{
-    ParentDirDisplay, parent_dir, short_parent_dir, short_parent_dir_with,
-};
+use console_ui::utils::{ParentDirDisplay, parent_dir, short_parent_dir, short_parent_dir_with};
 
 #[test]
 fn parent_dir_handles_both_separators_and_bare_names() {
@@ -19,7 +17,10 @@ fn short_parent_dir_returns_empty_for_bare_filenames() {
 #[test]
 fn short_parent_dir_keeps_short_parents_whole() {
     assert_eq!(short_parent_dir("src/file.rs"), "src");
-    assert_eq!(short_parent_dir("apps/mobile/src/file.rs"), "apps/mobile/src");
+    assert_eq!(
+        short_parent_dir("apps/mobile/src/file.rs"),
+        "apps/mobile/src"
+    );
 }
 
 #[test]
@@ -44,8 +45,5 @@ fn short_parent_dir_with_honors_custom_tuning() {
         keep_segments: 1,
         max_len: 0,
     };
-    assert_eq!(
-        short_parent_dir_with("a/b/c/file.rs", &display),
-        "…/c"
-    );
+    assert_eq!(short_parent_dir_with("a/b/c/file.rs", &display), "…/c");
 }

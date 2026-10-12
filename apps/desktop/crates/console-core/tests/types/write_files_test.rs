@@ -5,7 +5,9 @@
 //! tests pin the desktop side to that behaviour: every written file yields its
 //! own diff, in call order.
 
-use console_core::utils::diff::{diff_lines, extract_write_args, extract_write_files, file_call_diffs};
+use console_core::utils::diff::{
+    diff_lines, extract_write_args, extract_write_files, file_call_diffs,
+};
 use serde_json::json;
 
 #[test]
@@ -158,7 +160,10 @@ fn trailing_newline_does_not_add_a_phantom_line() {
     // disagree on every file's addition count.
     let result = diff_lines("", "line1\nline2\n", 3);
 
-    assert_eq!(result.added, 2, "a trailing newline is not a line of content");
+    assert_eq!(
+        result.added, 2,
+        "a trailing newline is not a line of content"
+    );
     assert!(
         !result
             .lines

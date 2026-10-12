@@ -260,7 +260,10 @@ impl RenderOnce for RunPanel {
             let dot = status_dot_color(row.status.clone(), row.starting, &theme);
             let mut status_text =
                 script_row_status_label(row.status.clone(), row.starting).to_string();
-            if row.status.as_ref().is_some_and(|status| status != "running")
+            if row
+                .status
+                .as_ref()
+                .is_some_and(|status| status != "running")
                 && let Some(code) = row.exit_code
             {
                 status_text = format!("{status_text} ({code})");
@@ -302,11 +305,7 @@ impl RenderOnce for RunPanel {
                                     cx.stop_propagation();
                                     (on_open_log)(expand_id.clone(), window, cx);
                                 })
-                                .child(app_icon(
-                                    IconName::Plus,
-                                    12.0,
-                                    theme.text_tertiary,
-                                )),
+                                .child(app_icon(IconName::Plus, 12.0, theme.text_tertiary)),
                         )
                         .child(div().size(px(7.0)).flex_none().rounded_full().bg(dot))
                         .child(
@@ -424,18 +423,12 @@ impl RenderOnce for RunPanel {
                         .flex()
                         .flex_col()
                         .gap(px(6.0))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .justify_end()
-                                .child(copy_button(
-                                    format!("run-copy-{}", row.script_id),
-                                    row.output.clone(),
-                                    theme,
-                                    &mut *cx,
-                                )),
-                        )
+                        .child(div().flex().items_center().justify_end().child(copy_button(
+                            format!("run-copy-{}", row.script_id),
+                            row.output.clone(),
+                            theme,
+                            &mut *cx,
+                        )))
                         .child(
                             div()
                                 .h(px(220.0))

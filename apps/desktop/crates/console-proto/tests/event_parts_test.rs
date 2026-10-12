@@ -52,10 +52,9 @@ fn decodes_golden_tool_call_part() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let frame: Frame = serde_json::from_str(
-        r#"{"type":"modelStreamPart","part":{"text":"hi","futureField":1}}"#,
-    )
-    .expect("unknown fields must be ignored");
+    let frame: Frame =
+        serde_json::from_str(r#"{"type":"modelStreamPart","part":{"text":"hi","futureField":1}}"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(frame.kind, "modelStreamPart");
 }
 

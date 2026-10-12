@@ -35,9 +35,7 @@ fn decodes_golden_turn_frame() {
         .turn
         .content
         .iter()
-        .map(|p| {
-            serde_json::to_value(p).expect("part must serialize")
-        })
+        .map(|p| serde_json::to_value(p).expect("part must serialize"))
         .collect();
     assert!(render_content[0].get("text").is_some());
     assert_eq!(

@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use cef::application_mac::{CefAppProtocol, CrAppControlProtocol, CrAppProtocol};
 use objc2::runtime::{AnyClass, Bool};
-use objc2::{define_class, ffi, sel, ClassType, ProtocolType};
+use objc2::{ClassType, ProtocolType, define_class, ffi, sel};
 use objc2_app_kit::NSApplication;
 use objc2_foundation::MainThreadMarker;
 
@@ -108,7 +108,9 @@ pub(super) fn conform_ns_application() {
             ffi::class_addProtocol(target, proto);
         }
     } else {
-        log::debug!("CEF: CefAppProtocol not registered yet; methods injected without protocol registration");
+        log::debug!(
+            "CEF: CefAppProtocol not registered yet; methods injected without protocol registration"
+        );
     }
     if ok_is && ok_set {
         log::debug!("CEF: NSApplication conformance injected");

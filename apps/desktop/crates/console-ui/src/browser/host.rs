@@ -151,8 +151,8 @@ mod macos_host {
     use wry::WebViewExtMacOS;
     use wry::dpi::{LogicalPosition, LogicalSize};
 
-    use crate::browser::native_utils::{ResponderObserver, lower_below_scene_overlay};
     use super::{HostCallbacks, HostContent, NativeNavigationError};
+    use crate::browser::native_utils::{ResponderObserver, lower_below_scene_overlay};
 
     pub(super) struct NavigationDelegateIvars {
         on_start: Box<dyn Fn()>,
@@ -273,8 +273,7 @@ mod macos_host {
                 builder = builder.with_html(html);
             }
             if let Some(allow_navigation) = content.allow_navigation {
-                builder =
-                    builder.with_navigation_handler(move |url| allow_navigation(url));
+                builder = builder.with_navigation_handler(move |url| allow_navigation(url));
             }
             if let Some(on_ipc) = content.on_ipc {
                 builder = builder.with_ipc_handler(move |request: wry::http::Request<String>| {
@@ -282,8 +281,7 @@ mod macos_host {
                 });
             }
             if let Some(on_title) = content.on_title {
-                builder = builder
-                    .with_document_title_changed_handler(move |title| on_title(title));
+                builder = builder.with_document_title_changed_handler(move |title| on_title(title));
             }
             if let Some(on_new_window_url) = content.on_new_window_url {
                 builder = builder.with_new_window_req_handler(move |url, _features| {
@@ -392,8 +390,7 @@ mod macos_host {
             if len == 0 {
                 return None;
             }
-            let bytes =
-                unsafe { std::slice::from_raw_parts(bytes_ptr as *const u8, len) };
+            let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr as *const u8, len) };
             let url = std::str::from_utf8(bytes).ok()?;
             (!url.is_empty()).then(|| url.to_owned())
         }
@@ -431,9 +428,12 @@ mod macos_host {
 
         /// Capture the visible page as PNG. The completion handler fires on
         /// the main thread and writes into `slot`, which the caller polls.
-        pub fn take_snapshot(&self, slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>) {
+        pub fn take_snapshot(
+            &self,
+            slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+        ) {
             use block2::RcBlock;
-            use objc2_app_kit::{NSBitmapImageRep, NSBitmapImageFileType, NSImage};
+            use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
             use objc2_foundation::{NSDictionary, NSError};
             use objc2_web_kit::WKSnapshotConfiguration;
 
@@ -462,7 +462,8 @@ mod macos_host {
                 *slot.borrow_mut() = Some(result);
             });
             let Some(mtm) = MainThreadMarker::new() else {
-                *slot_for_error.borrow_mut() = Some(Err("Snapshot must run on the main thread".to_string()));
+                *slot_for_error.borrow_mut() =
+                    Some(Err("Snapshot must run on the main thread".to_string()));
                 return;
             };
             unsafe {
@@ -590,7 +591,10 @@ impl WebviewHost {
         None
     }
     pub fn evaluate_script(&self, _script: &str) {}
-    pub fn take_snapshot(&self, slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>) {
+    pub fn take_snapshot(
+        &self,
+        slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+    ) {
         *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));
     }
     pub fn open_devtools(&self) {}

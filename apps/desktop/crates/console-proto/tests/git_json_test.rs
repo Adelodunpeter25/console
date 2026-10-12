@@ -47,10 +47,9 @@ fn decodes_golden_diff_and_checkout_fixtures() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let msg: GitStatusSummary = serde_json::from_str(
-        r#"{"branch":"b","clean":true,"files":[],"futureField":1}"#,
-    )
-    .expect("unknown fields must be ignored");
+    let msg: GitStatusSummary =
+        serde_json::from_str(r#"{"branch":"b","clean":true,"files":[],"futureField":1}"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(msg.branch, "b");
 }
 
@@ -68,6 +67,9 @@ fn serializes_counts_as_numbers() {
         ..Default::default()
     })
     .expect("encode status");
-    assert!(raw.contains(r#""additions":12"#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""additions":12"#),
+        "unexpected encoding: {raw}"
+    );
     assert!(!raw.contains("clean"), "false bools must omit: {raw}");
 }

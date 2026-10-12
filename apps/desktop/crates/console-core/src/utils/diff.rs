@@ -273,10 +273,7 @@ pub fn extract_write_args(arguments: &serde_json::Value) -> Option<(String, Stri
 /// Returns an empty vec for calls that are not file tools, so callers can test
 /// the result for emptiness.
 pub fn file_call_diffs(name: &str, arguments: &serde_json::Value) -> Vec<FileDiff> {
-    if matches!(
-        name,
-        "editFile" | "edit_file" | "str_replace"
-    ) {
+    if matches!(name, "editFile" | "edit_file" | "str_replace") {
         return extract_edit_args(arguments)
             .map(|(old, new)| {
                 vec![FileDiff::new(

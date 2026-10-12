@@ -14,9 +14,7 @@ use gpui::{
     Styled, Window, canvas, div, list, prelude::*, px,
 };
 
-use crate::markdown::render::{
-    self, Ctx, Metrics, Palette, TranscriptSelection, plain_log_line,
-};
+use crate::markdown::render::{self, Ctx, Metrics, Palette, TranscriptSelection, plain_log_line};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
 
@@ -122,11 +120,7 @@ impl RenderOnce for LogsViewer {
                         .px(px(8.0))
                         .text_size(px(ctx.metrics.code_text_size))
                         .line_height(px(ctx.metrics.code_line_height))
-                        .child(plain_log_line(
-                            shown,
-                            theme.text_secondary,
-                            &ctx,
-                        ))
+                        .child(plain_log_line(shown, theme.text_secondary, &ctx))
                         .into_any_element()
                 })
                 .flex_1()

@@ -266,9 +266,14 @@ impl RenderOnce for RightSidebarBottomSplit {
                                                 !run_tab_active && idx == self.active_tab_index;
                                             let on_tab = on_tab.clone();
                                             let on_close = self.on_close_tab.clone();
-                                            let tab_id = format!("bottom-tab-{}", idx + terminal_index_offset);
-                                            let group_name =
-                                                format!("bottom-tab-group-{}", idx + terminal_index_offset);
+                                            let tab_id = format!(
+                                                "bottom-tab-{}",
+                                                idx + terminal_index_offset
+                                            );
+                                            let group_name = format!(
+                                                "bottom-tab-group-{}",
+                                                idx + terminal_index_offset
+                                            );
                                             // Terminal tabs sit after the pinned Run tab.
                                             let tab_index = idx + terminal_index_offset;
 
@@ -377,11 +382,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                             .on_click(move |_, window, cx| {
                                                 (on_refresh)(window, cx);
                                             })
-                                            .child(app_icon(
-                                                IconName::Refresh,
-                                                11.0,
-                                                theme.text,
-                                            )),
+                                            .child(app_icon(IconName::Refresh, 11.0, theme.text)),
                                     )
                                 },
                             )

@@ -664,7 +664,13 @@ impl DeviceViewer {
         let theme = Theme::current(cx);
         let selected_label = self
             .selected()
-            .map(|d| format!("{} · {}", device_display_name(&d), device_platform(&d).label()))
+            .map(|d| {
+                format!(
+                    "{} · {}",
+                    device_display_name(&d),
+                    device_platform(&d).label()
+                )
+            })
             .unwrap_or_else(|| "Select device".to_string());
         let status = self.status_text();
         let devices = self.devices.clone();
@@ -759,8 +765,7 @@ impl DeviceViewer {
             return Some("Stopping".to_string());
         }
         if let Some(device) = self.selected() {
-            if device.state == "booting" || Some(&device.id) == self.booting_id.as_ref()
-            {
+            if device.state == "booting" || Some(&device.id) == self.booting_id.as_ref() {
                 return Some("Booting".to_string());
             }
             if device_state_is_booted(&device.state) {
@@ -785,7 +790,9 @@ impl DeviceViewer {
     fn render_toolbar(&self, cx: &mut Context<Self>) -> gpui::Div {
         let theme = Theme::current(cx);
         let has_device = self.selected().is_some();
-        let booted = self.selected().is_some_and(|d| device_state_is_booted(&d.state));
+        let booted = self
+            .selected()
+            .is_some_and(|d| device_state_is_booted(&d.state));
         let is_booting =
             self.booting_id.as_ref() == self.selected_id.as_ref() && self.booting_id.is_some();
         let is_stopping = self.shutting_down_id.as_ref() == self.selected_id.as_ref()
@@ -1025,7 +1032,9 @@ impl Render for DeviceViewer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
         let has_device = self.selected_id.is_some();
-        let booted = self.selected().is_some_and(|d| device_state_is_booted(&d.state));
+        let booted = self
+            .selected()
+            .is_some_and(|d| device_state_is_booted(&d.state));
         self.reconcile_focus(window, cx);
         div()
             .id("device-viewer")

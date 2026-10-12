@@ -66,7 +66,9 @@ mod imp {
     }
 
     fn binary() -> Result<PathBuf, DriveError> {
-        let mut cached = BINARY.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut cached = BINARY
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(path) = cached.as_ref().filter(|path| path.is_file()) {
             return Ok(path.clone());
         }
@@ -90,7 +92,9 @@ mod imp {
         timeout: Duration,
     ) -> Result<Vec<DriveStep>, DriveError> {
         if !is_enabled() {
-            return Err(DriveError::Unavailable("agent-browser is disabled".to_string()));
+            return Err(DriveError::Unavailable(
+                "agent-browser is disabled".to_string(),
+            ));
         }
         let port = debug_port()
             .ok_or_else(|| DriveError::Unavailable("CEF debug port is not ready".to_string()))?;
@@ -223,7 +227,11 @@ pub fn run_js_commands(script: &str) -> Commands {
 /// Page text, or the text of `selector` when given.
 pub fn content_commands(selector: Option<&str>) -> Commands {
     let target = selector.filter(|s| !s.trim().is_empty()).unwrap_or("body");
-    vec![vec!["get".to_string(), "text".to_string(), target.to_string()]]
+    vec![vec![
+        "get".to_string(),
+        "text".to_string(),
+        target.to_string(),
+    ]]
 }
 
 /// One `wait` step per condition; all must hold. `url_contains` becomes a

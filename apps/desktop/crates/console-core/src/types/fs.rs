@@ -7,9 +7,9 @@
 // not schema. Same for GrepOptions, which builds those query strings.
 
 pub use console_proto::{
-    DirCreateResponse, DirDeleteResponse, FileDeleteResponse, FileSearchResult, FileWriteResponse,
-    FsBrowseResult, FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry, GrepMatch,
-    GrepMatchRange, GrepResult, WriteFileRequest, CreateDirRequest,
+    CreateDirRequest, DirCreateResponse, DirDeleteResponse, FileDeleteResponse, FileSearchResult,
+    FileWriteResponse, FsBrowseResult, FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry,
+    GrepMatch, GrepMatchRange, GrepResult, WriteFileRequest,
 };
 
 /// Content-search matching mode, mirrors the server's `fff.GrepMode`.

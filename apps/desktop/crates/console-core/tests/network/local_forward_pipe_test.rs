@@ -65,7 +65,11 @@ async fn bridge(ws: tokio_tungstenite::WebSocketStream<TcpStream>, target_port: 
                     break;
                 }
                 Ok(n) => {
-                    if sink.send(Message::Binary(buf[..n].to_vec().into())).await.is_err() {
+                    if sink
+                        .send(Message::Binary(buf[..n].to_vec().into()))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -187,11 +191,16 @@ async fn browser_http_survives_real_manager_forward() {
         .await
         .expect("browser connects to local forward");
     browser
-        .write_all(b"GET /assets/index-abc123.js HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .write_all(
+            b"GET /assets/index-abc123.js HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+        )
         .await
         .expect("browser sends request");
     let response = read_http_response(&mut browser).await;
-    assert!(response.contains("200 OK"), "expected HTTP 200, got: {response}");
+    assert!(
+        response.contains("200 OK"),
+        "expected HTTP 200, got: {response}"
+    );
     assert!(
         response.contains("target:/assets/index-abc123.js"),
         "expected path-preserving proxy, got: {response}"
@@ -205,7 +214,10 @@ async fn browser_http_survives_real_manager_forward() {
         .await
         .expect("browser sends root request");
     let root = read_http_response(&mut browser).await;
-    assert!(root.contains("<div id=root>app</div>"), "expected React root, got: {root}");
+    assert!(
+        root.contains("<div id=root>app</div>"),
+        "expected React root, got: {root}"
+    );
 
     manager.clear().await;
 }

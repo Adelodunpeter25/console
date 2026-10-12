@@ -35,7 +35,10 @@ fn worktree_spec_explicit_branch_round_trips() {
         }),
     };
     let json = serde_json::to_value(&dto).expect("serialize create dto");
-    assert_eq!(json.get("worktree"), Some(&serde_json::json!({"branch": "my-feature"})));
+    assert_eq!(
+        json.get("worktree"),
+        Some(&serde_json::json!({"branch": "my-feature"}))
+    );
 }
 
 #[test]

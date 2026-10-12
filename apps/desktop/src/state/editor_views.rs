@@ -76,8 +76,10 @@ impl ConsoleDesktopApp {
                 }
             });
             let view_clone = view.clone();
-            self.viewer_editor_views
-                .insert(path.to_string(), (len, hash, state.clone(), view_clone.clone()));
+            self.viewer_editor_views.insert(
+                path.to_string(),
+                (len, hash, state.clone(), view_clone.clone()),
+            );
             return view_clone;
         }
 
@@ -119,9 +121,15 @@ impl ConsoleDesktopApp {
             let mut removed = 0;
             for line in &diff_result.lines {
                 let (kind, is_add, is_rem) = match line.kind {
-                    console_core::DiffLineKind::Added => (editor_ui::DiffLineKind::Added, true, false),
-                    console_core::DiffLineKind::Removed => (editor_ui::DiffLineKind::Removed, false, true),
-                    console_core::DiffLineKind::Context => (editor_ui::DiffLineKind::Context, false, false),
+                    console_core::DiffLineKind::Added => {
+                        (editor_ui::DiffLineKind::Added, true, false)
+                    }
+                    console_core::DiffLineKind::Removed => {
+                        (editor_ui::DiffLineKind::Removed, false, true)
+                    }
+                    console_core::DiffLineKind::Context => {
+                        (editor_ui::DiffLineKind::Context, false, false)
+                    }
                 };
                 if is_add {
                     added += 1;
@@ -147,7 +155,11 @@ impl ConsoleDesktopApp {
             if *cached_len == len && *cached_hash == hash {
                 let (current_theme, current_wrap, current_font) = {
                     let diff_state = state.read(cx);
-                    (diff_state.theme(), diff_state.wrap_enabled(), diff_state.font().clone())
+                    (
+                        diff_state.theme(),
+                        diff_state.wrap_enabled(),
+                        diff_state.font().clone(),
+                    )
                 };
                 if current_theme != theme_preset || current_wrap || current_font != font_config {
                     state.update(cx, |diff_state, _cx| {
@@ -177,8 +189,10 @@ impl ConsoleDesktopApp {
                 }
             });
             let view_clone = view.clone();
-            self.viewer_diff_views
-                .insert(path.to_string(), (len, hash, state.clone(), view_clone.clone()));
+            self.viewer_diff_views.insert(
+                path.to_string(),
+                (len, hash, state.clone(), view_clone.clone()),
+            );
             return view_clone;
         }
 

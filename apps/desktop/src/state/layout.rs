@@ -254,9 +254,9 @@ impl ConsoleDesktopApp {
             .and_then(|key| self.workspace_path_for_key(key))
             .or_else(|| cur_proj.map(|p| p.path.clone()))
             .or_else(|| {
-            let (_, cwd) = self.active_inspector_target();
-            cwd
-        });
+                let (_, cwd) = self.active_inspector_target();
+                cwd
+            });
         let (cur_term_count, cur_term_active_idx) = cur_cwd
             .as_ref()
             .and_then(|c| self.right_sidebar_terminals_by_cwd.get(c))

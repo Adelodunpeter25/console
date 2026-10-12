@@ -8,16 +8,15 @@ use serde::{Deserialize, Serialize};
 // wire through from_proto constructors below — never derive wire serde.
 // Annotations exist only for replay markup server-side and are dropped here;
 // the desktop never reads them.
-pub use console_proto::{
-    AgentMessage as ProtoAgentMessage, AgentAssistantMessage as ProtoAssistantMessage,
-    AskQuestionRequest as ProtoAskQuestionRequest,
-    AssistantContentPart as ProtoContentPart, BrowserActionRequest as ProtoBrowserActionRequest,
-    ErrorPayload as ProtoErrorPayload, ImageAttachment as ProtoImageAttachment,
-    PermissionRequest as ProtoPermissionRequest,
-    ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
-};
 pub use console_proto::agent_message::Message as ProtoMessageEvent;
 pub use console_proto::assistant_content_part::Part as ProtoPartEvent;
+pub use console_proto::{
+    AgentAssistantMessage as ProtoAssistantMessage, AgentMessage as ProtoAgentMessage,
+    AskQuestionRequest as ProtoAskQuestionRequest, AssistantContentPart as ProtoContentPart,
+    BrowserActionRequest as ProtoBrowserActionRequest, ErrorPayload as ProtoErrorPayload,
+    ImageAttachment as ProtoImageAttachment, PermissionRequest as ProtoPermissionRequest,
+    ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,11 +80,7 @@ fn decode_json_bytes(bytes: &[u8]) -> serde_json::Value {
 }
 
 fn opt_string(s: String) -> Option<String> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 impl AssistantMessage {
@@ -134,7 +129,11 @@ impl AgentMessage {
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
                 id: opt_string(a.id.clone()),
-                content: a.content.iter().filter_map(content_part_from_proto).collect(),
+                content: a
+                    .content
+                    .iter()
+                    .filter_map(content_part_from_proto)
+                    .collect(),
                 stop_reason: opt_string(a.stop_reason.clone()),
                 created_at: msg.created_at,
             }),
@@ -161,7 +160,9 @@ fn content_part_from_proto(part: &ProtoContentPart) -> Option<AssistantContentPa
             text: t.text.clone(),
             thought_signature: t.thought_signature.clone(),
         }),
-        ProtoPartEvent::Thinking(t) => Some(AssistantContentPart::Thinking { text: t.text.clone() }),
+        ProtoPartEvent::Thinking(t) => Some(AssistantContentPart::Thinking {
+            text: t.text.clone(),
+        }),
         ProtoPartEvent::ToolCall(c) => Some(AssistantContentPart::ToolCall {
             call: ToolCall {
                 id: c.id.clone(),
@@ -190,7 +191,11 @@ pub enum AgentMessage {
         content: String,
         #[serde(default)]
         attachments: Option<Vec<ImageAttachment>>,
-        #[serde(default, skip_serializing_if = "Option::is_none", rename = "contextFiles")]
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "contextFiles"
+        )]
         context_files: Option<Vec<String>>,
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
@@ -456,10 +461,14 @@ pub use console_proto::QueuedPrompt;
 pub fn queued_attachments_to_proto(
     items: Option<Vec<ImageAttachment>>,
 ) -> Vec<ProtoImageAttachment> {
-    items.unwrap_or_default().into_iter().map(|a| ProtoImageAttachment {
-        data: a.data,
-        mime_type: a.mime_type,
-    }).collect()
+    items
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| ProtoImageAttachment {
+            data: a.data,
+            mime_type: a.mime_type,
+        })
+        .collect()
 }
 
 pub fn queued_attachments_from_proto(
@@ -468,10 +477,15 @@ pub fn queued_attachments_from_proto(
     if items.is_empty() {
         None
     } else {
-        Some(items.iter().map(|a| ImageAttachment {
-            data: a.data.clone(),
-            mime_type: a.mime_type.clone(),
-        }).collect())
+        Some(
+            items
+                .iter()
+                .map(|a| ImageAttachment {
+                    data: a.data.clone(),
+                    mime_type: a.mime_type.clone(),
+                })
+                .collect(),
+        )
     }
 }
 

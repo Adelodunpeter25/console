@@ -53,7 +53,10 @@ fn plan_for(req: &BrowserActionRequest) -> Option<Plan> {
         "snapshot" => Some(plan(agent_driver::snapshot_commands(), Kind::Snapshot)),
         "click" => {
             let element_ref = non_empty(&req.element_ref)?;
-            Some(plan(agent_driver::click_commands(element_ref), Kind::Interact))
+            Some(plan(
+                agent_driver::click_commands(element_ref),
+                Kind::Interact,
+            ))
         }
         "type" => {
             let element_ref = non_empty(&req.element_ref)?;

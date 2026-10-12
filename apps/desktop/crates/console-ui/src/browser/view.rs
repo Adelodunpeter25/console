@@ -421,7 +421,9 @@ impl BrowserView {
 
     /// Start a native PNG snapshot of the visible page. The returned slot
     /// fills once the webview finishes; `None` when there is no live webview.
-    pub fn start_snapshot(&self) -> Option<std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>> {
+    pub fn start_snapshot(
+        &self,
+    ) -> Option<std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>> {
         let host = self.host.as_ref()?;
         let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
         host.take_snapshot(slot.clone());
@@ -1001,7 +1003,11 @@ impl BrowserView {
                 "browser-inspect",
                 IconName::Inspector,
                 has_page,
-                if self.inspecting { "Exit Inspect Mode (Esc)" } else { "Inspect Element (⌘⇧C)" },
+                if self.inspecting {
+                    "Exit Inspect Mode (Esc)"
+                } else {
+                    "Inspect Element (⌘⇧C)"
+                },
                 theme,
                 |this, _, cx| this.toggle_inspect(cx),
                 cx,
@@ -1108,30 +1114,25 @@ impl BrowserView {
                     .child(error_detail),
             )
             .child(
-                div()
-                    .mt(px(18.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .px(px(14.0))
-                            .py(px(6.0))
-                            .rounded(px(6.0))
-                            .bg(theme.surface)
-                            .border_1()
-                            .border_color(theme.border)
-                            .text_size(px(12.0))
-                            .text_color(theme.text)
-                            .cursor_default()
-                            .hover(|s| s.bg(theme.overlay))
-                            .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
-                                if let Some(view) = entity.upgrade() {
-                                    view.update(cx, |this, cx| this.reload(cx));
-                                }
-                            })
-                            .child("Try Reloading (⌘R)"),
-                    ),
+                div().mt(px(18.0)).flex().items_center().gap(px(8.0)).child(
+                    div()
+                        .px(px(14.0))
+                        .py(px(6.0))
+                        .rounded(px(6.0))
+                        .bg(theme.surface)
+                        .border_1()
+                        .border_color(theme.border)
+                        .text_size(px(12.0))
+                        .text_color(theme.text)
+                        .cursor_default()
+                        .hover(|s| s.bg(theme.overlay))
+                        .on_mouse_down(gpui::MouseButton::Left, move |_, _, cx| {
+                            if let Some(view) = entity.upgrade() {
+                                view.update(cx, |this, cx| this.reload(cx));
+                            }
+                        })
+                        .child("Try Reloading (⌘R)"),
+                ),
             )
     }
 

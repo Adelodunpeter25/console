@@ -203,8 +203,12 @@ impl McpPage {
         let on_disconnect = self.on_disconnect.clone();
         let on_toggle_expand = self.on_toggle_expand.clone();
 
-        div().flex().flex_col().min_w_0().gap(px(10.0)).children(
-            self.servers.iter().map(|server| {
+        div()
+            .flex()
+            .flex_col()
+            .min_w_0()
+            .gap(px(10.0))
+            .children(self.servers.iter().map(|server| {
                 let id = server.id.clone();
                 let is_expanded = expanded_id.as_deref() == Some(&id);
                 let on_edit_click = on_open_edit.clone();
@@ -220,7 +224,9 @@ impl McpPage {
                     ),
                     McpConnectionStatus::Connecting => ("Connecting...".to_string(), theme.accent),
                     McpConnectionStatus::NeedsAuth => ("Needs Auth".to_string(), theme.warning),
-                    McpConnectionStatus::Disconnected => ("Disconnected".to_string(), theme.text_secondary),
+                    McpConnectionStatus::Disconnected => {
+                        ("Disconnected".to_string(), theme.text_secondary)
+                    }
                     McpConnectionStatus::Error(e) => (format!("Error: {}", e), theme.danger),
                 };
 
@@ -233,7 +239,11 @@ impl McpPage {
                     McpTransportType::Stdio => {
                         let cmd = server.command.clone().unwrap_or_default();
                         let args = server.args.join(" ");
-                        if args.is_empty() { cmd } else { format!("{} {}", cmd, args) }
+                        if args.is_empty() {
+                            cmd
+                        } else {
+                            format!("{} {}", cmd, args)
+                        }
                     }
                     McpTransportType::Http => server.url.clone().unwrap_or_default(),
                 };
@@ -350,7 +360,11 @@ impl McpPage {
                                                     MouseButton::Left,
                                                     move |_event, window, cx| {
                                                         cx.stop_propagation();
-                                                        (on_disc_click)(id_clone2.clone(), window, cx);
+                                                        (on_disc_click)(
+                                                            id_clone2.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
                                                     },
                                                 )
                                                 .child("Disconnect"),
@@ -471,7 +485,9 @@ impl McpPage {
                                                             .truncate()
                                                             .text_size(px(11.5))
                                                             .font_weight(gpui::FontWeight::MEDIUM)
-                                                            .font_family(".AppleSystemUIFontMonospaced")
+                                                            .font_family(
+                                                                ".AppleSystemUIFontMonospaced",
+                                                            )
                                                             .text_color(theme.text)
                                                             .child(t.name.clone()),
                                                     )
@@ -490,8 +506,7 @@ impl McpPage {
                                 }),
                         )
                     })
-            }),
-        )
+            }))
     }
 
     fn render_modal(&self, cx: &mut App) -> impl IntoElement {
@@ -763,14 +778,25 @@ impl McpPage {
                                                 .py(px(5.0))
                                                 .rounded(px(6.0))
                                                 .cursor_pointer()
-                                                .bg(if is_sel { theme.accent } else { theme.overlay })
-                                                .text_color(if is_sel { theme.on_inverse } else { theme.text })
+                                                .bg(if is_sel {
+                                                    theme.accent
+                                                } else {
+                                                    theme.overlay
+                                                })
+                                                .text_color(if is_sel {
+                                                    theme.on_inverse
+                                                } else {
+                                                    theme.text
+                                                })
                                                 .text_size(px(12.0))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                                    cx.stop_propagation();
-                                                    (on_sel)(McpAuthType::Oauth2, window, cx);
-                                                })
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    move |_event, window, cx| {
+                                                        cx.stop_propagation();
+                                                        (on_sel)(McpAuthType::Oauth2, window, cx);
+                                                    },
+                                                )
                                                 .child("OAuth 2.1 (Browser)")
                                         })
                                         .child({
@@ -781,14 +807,25 @@ impl McpPage {
                                                 .py(px(5.0))
                                                 .rounded(px(6.0))
                                                 .cursor_pointer()
-                                                .bg(if is_sel { theme.accent } else { theme.overlay })
-                                                .text_color(if is_sel { theme.on_inverse } else { theme.text })
+                                                .bg(if is_sel {
+                                                    theme.accent
+                                                } else {
+                                                    theme.overlay
+                                                })
+                                                .text_color(if is_sel {
+                                                    theme.on_inverse
+                                                } else {
+                                                    theme.text
+                                                })
                                                 .text_size(px(12.0))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                                    cx.stop_propagation();
-                                                    (on_sel)(McpAuthType::Static, window, cx);
-                                                })
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    move |_event, window, cx| {
+                                                        cx.stop_propagation();
+                                                        (on_sel)(McpAuthType::Static, window, cx);
+                                                    },
+                                                )
                                                 .child("Static Token")
                                         })
                                         .child({
@@ -799,14 +836,25 @@ impl McpPage {
                                                 .py(px(5.0))
                                                 .rounded(px(6.0))
                                                 .cursor_pointer()
-                                                .bg(if is_sel { theme.accent } else { theme.overlay })
-                                                .text_color(if is_sel { theme.on_inverse } else { theme.text })
+                                                .bg(if is_sel {
+                                                    theme.accent
+                                                } else {
+                                                    theme.overlay
+                                                })
+                                                .text_color(if is_sel {
+                                                    theme.on_inverse
+                                                } else {
+                                                    theme.text
+                                                })
                                                 .text_size(px(12.0))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                                    cx.stop_propagation();
-                                                    (on_sel)(McpAuthType::None, window, cx);
-                                                })
+                                                .on_mouse_down(
+                                                    MouseButton::Left,
+                                                    move |_event, window, cx| {
+                                                        cx.stop_propagation();
+                                                        (on_sel)(McpAuthType::None, window, cx);
+                                                    },
+                                                )
                                                 .child("None")
                                         }),
                                 ),
@@ -857,7 +905,11 @@ impl McpPage {
                                     (on_sv)(window, cx);
                                 }
                             })
-                            .child(if self.is_submitting { "Saving..." } else { "Save Server" })
+                            .child(if self.is_submitting {
+                                "Saving..."
+                            } else {
+                                "Save Server"
+                            })
                     }),
             )
     }

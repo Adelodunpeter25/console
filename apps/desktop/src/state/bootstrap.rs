@@ -1,9 +1,9 @@
 //! Startup backend bootstrap & background polling routines.
 
-use std::rc::Rc;
 use console_core::{ModelFavorite, SelectedModel};
 use console_ui::PickerTab;
 use gpui::Context;
+use std::rc::Rc;
 
 use super::app::ConsoleDesktopApp;
 use super::floating_composer::FLOATING_KEY;
@@ -88,8 +88,7 @@ impl ConsoleDesktopApp {
                                 .selected_project_for_pane(&pane_id)
                                 .map(|project| project.path.clone());
                             let Some(root) = root else { return };
-                            let absolute =
-                                console_ui::utils::join_path_lexical(&root, rel_path);
+                            let absolute = console_ui::utils::join_path_lexical(&root, rel_path);
                             this.open_file_tab_in_pane(&pane_id, absolute, cx);
                         });
                     }
@@ -165,8 +164,8 @@ impl ConsoleDesktopApp {
             // 2. Fetch providers and models concurrently
             let providers_client = client_clone.clone();
             let providers_entity = entity.clone();
-            cx.spawn(async move |cx| {
-                match providers_client.providers.list().await {
+            cx.spawn(
+                async move |cx| match providers_client.providers.list().await {
                     Ok(providers) => {
                         cx.update(|cx| {
                             if let Some(app) = providers_entity.upgrade() {
@@ -220,43 +219,45 @@ impl ConsoleDesktopApp {
                             }
                         });
                     }
-                }
-            })
+                },
+            )
             .detach();
 
             // 3. Load model favorites
             let favorites_client = client_clone.clone();
             let favorites_entity = entity.clone();
-            cx.spawn(async move |cx| match favorites_client.model_favorites.list().await {
-                Ok(model_favorites) => {
-                    cx.update(|cx| {
-                        if let Some(app) = favorites_entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.favorites = Rc::new(
-                                    model_favorites
-                                        .into_iter()
-                                        .map(|favorite: ModelFavorite| {
-                                            format!(
-                                                "{}:{}",
-                                                favorite.provider, favorite.model_id
-                                            )
-                                        })
-                                        .collect(),
-                                );
-                                cx.notify();
-                            });
-                        }
-                    });
-                }
-                Err(error) => {
-                    let message = format!("Unable to load model favorites: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = favorites_entity.upgrade() {
-                            app.update(cx, |this, cx| this.set_error(message, cx));
-                        }
-                    });
-                }
-            })
+            cx.spawn(
+                async move |cx| match favorites_client.model_favorites.list().await {
+                    Ok(model_favorites) => {
+                        cx.update(|cx| {
+                            if let Some(app) = favorites_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.favorites = Rc::new(
+                                        model_favorites
+                                            .into_iter()
+                                            .map(|favorite: ModelFavorite| {
+                                                format!(
+                                                    "{}:{}",
+                                                    favorite.provider, favorite.model_id
+                                                )
+                                            })
+                                            .collect(),
+                                    );
+                                    cx.notify();
+                                });
+                            }
+                        });
+                    }
+                    Err(error) => {
+                        let message = format!("Unable to load model favorites: {error}");
+                        cx.update(|cx| {
+                            if let Some(app) = favorites_entity.upgrade() {
+                                app.update(cx, |this, cx| this.set_error(message, cx));
+                            }
+                        });
+                    }
+                },
+            )
             .detach();
 
             // 4. Load projects and git branches

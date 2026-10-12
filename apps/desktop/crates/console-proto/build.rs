@@ -7,9 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let proto_root = manifest
-        .join("../../../..")
-        .join("proto");
+    let proto_root = manifest.join("../../../..").join("proto");
     let protos = [
         proto_root.join("console/v1/common.proto"),
         proto_root.join("console/v1/assist.proto"),
@@ -36,7 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for proto in &protos {
         println!("cargo:rerun-if-changed={}", proto.display());
     }
-    println!("cargo:rerun-if-changed={}", proto_root.join("console/v1").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        proto_root.join("console/v1").display()
+    );
 
     let out = PathBuf::from(std::env::var("OUT_DIR")?);
     let descriptor_file = out.join("descriptors.bin");

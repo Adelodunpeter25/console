@@ -31,14 +31,10 @@ fn decodes_golden_empty_fixture() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let msg: ConsoleSettings = serde_json::from_str(
-        r#"{"modelRoles":{"vision":"x","futureRole":"y"},"futureField":1}"#,
-    )
-    .expect("unknown fields must be ignored");
-    assert_eq!(
-        msg.model_roles.and_then(|r| r.vision).as_deref(),
-        Some("x")
-    );
+    let msg: ConsoleSettings =
+        serde_json::from_str(r#"{"modelRoles":{"vision":"x","futureRole":"y"},"futureField":1}"#)
+            .expect("unknown fields must be ignored");
+    assert_eq!(msg.model_roles.and_then(|r| r.vision).as_deref(), Some("x"));
 }
 
 #[test]

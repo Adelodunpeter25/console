@@ -64,5 +64,8 @@ fn serializes_camel_case_strings() {
         ..Default::default()
     })
     .expect("encode header");
-    assert!(!raw.contains("messageCount"), "unset fields must omit: {raw}");
+    assert!(
+        !raw.contains("messageCount"),
+        "unset fields must omit: {raw}"
+    );
 }

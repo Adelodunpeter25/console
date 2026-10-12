@@ -38,10 +38,9 @@ fn decodes_golden_unforward_fixture() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let msg: ForwardedPort = serde_json::from_str(
-        r#"{"port":80,"url":"http://x","futureField":"y"}"#,
-    )
-    .expect("unknown fields must be ignored");
+    let msg: ForwardedPort =
+        serde_json::from_str(r#"{"port":80,"url":"http://x","futureField":"y"}"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(msg.port, 80);
 }
 
@@ -55,5 +54,8 @@ fn serializes_port_as_number() {
     })
     .expect("encode port");
     assert!(raw.contains(r#""port":5173"#), "unexpected encoding: {raw}");
-    assert!(!raw.contains(r#""projectId""#), "unset fields must omit: {raw}");
+    assert!(
+        !raw.contains(r#""projectId""#),
+        "unset fields must omit: {raw}"
+    );
 }

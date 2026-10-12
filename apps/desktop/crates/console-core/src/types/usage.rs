@@ -82,7 +82,11 @@ impl ContextSnapshot {
 
     /// "23.1k/1.0M" style rendering for the panel header.
     pub fn used_vs_window(&self) -> String {
-        format!("{}/{}", format_tokens(self.used_tokens), format_tokens(self.context_window))
+        format!(
+            "{}/{}",
+            format_tokens(self.used_tokens),
+            format_tokens(self.context_window)
+        )
     }
 }
 

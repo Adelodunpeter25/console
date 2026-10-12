@@ -68,5 +68,8 @@ fn serializes_camel_case_strings() {
     })
     .expect("encode limit");
     assert!(!raw.contains("modelId"), "unset fields must omit: {raw}");
-    assert!(raw.contains(r#""unit":"percent""#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""unit":"percent""#),
+        "unexpected encoding: {raw}"
+    );
 }

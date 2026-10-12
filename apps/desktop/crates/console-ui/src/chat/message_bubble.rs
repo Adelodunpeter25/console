@@ -361,10 +361,7 @@ impl AssistantMessageBubble {
         self
     }
 
-    pub fn on_toggle_changes(
-        mut self,
-        handler: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_toggle_changes(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_toggle_changes = Some(Rc::new(handler));
         self
     }
@@ -472,7 +469,10 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
-        let fork_action = self.fork_message_id.zip(self.on_fork).filter(|_| !is_streaming);
+        let fork_action = self
+            .fork_message_id
+            .zip(self.on_fork)
+            .filter(|_| !is_streaming);
         let chips = file_changes.as_ref().and_then(|turn| {
             turn_change_chips(
                 &self.selection_row,
@@ -582,43 +582,33 @@ impl RenderOnce for AssistantMessageBubble {
             // Footer: this turn's changed-file chips (always visible), then
             // time + copy (hover only).
             .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .children(chips)
-                    .child(
-                        div()
-                            .h(px(27.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(1.0))
-                            .invisible()
-                            .group_hover(group_name, |element| element.visible())
-                            .when_some(timestamp, |element, timestamp| {
-                                element.child(
-                                    div()
-                                        .px(px(4.0))
-                                        .text_size(px(11.5))
-                                        .text_color(theme.text_ghost)
-                                        .child(timestamp),
-                                )
-                            })
-                            .when_some(fork_action, |element, (message_id, on_fork)| {
-                                element.child(fork_button(
-                                    message_id,
-                                    on_fork,
-                                    theme.clone(),
-                                    cx,
-                                ))
-                            })
-                            .child(copy_button(
-                                format!("copy-assistant-message-{}", self.selection_row),
-                                content_for_copy,
-                                theme.clone(),
-                                cx,
-                            )),
-                    ),
+                div().flex().flex_col().gap(px(4.0)).children(chips).child(
+                    div()
+                        .h(px(27.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(1.0))
+                        .invisible()
+                        .group_hover(group_name, |element| element.visible())
+                        .when_some(timestamp, |element, timestamp| {
+                            element.child(
+                                div()
+                                    .px(px(4.0))
+                                    .text_size(px(11.5))
+                                    .text_color(theme.text_ghost)
+                                    .child(timestamp),
+                            )
+                        })
+                        .when_some(fork_action, |element, (message_id, on_fork)| {
+                            element.child(fork_button(message_id, on_fork, theme.clone(), cx))
+                        })
+                        .child(copy_button(
+                            format!("copy-assistant-message-{}", self.selection_row),
+                            content_for_copy,
+                            theme.clone(),
+                            cx,
+                        )),
+                ),
             )
     }
 }

@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use console_core::{CreateSessionDto, WorkspaceNode, WorkspaceTabConfig};
-use console_ui::{IconName, MenuAlign, PaletteEntry, toggle_popover, browser};
+use console_ui::{IconName, MenuAlign, PaletteEntry, browser, toggle_popover};
 use gpui::{Context, Focusable as _, WeakEntity, Window};
 
 use super::ConsoleDesktopApp;
@@ -100,13 +100,7 @@ fn tab_palette_entries(
                     let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
                     browser_entries.push((
                         recency,
-                        tab_palette_entry(
-                            entity.clone(),
-                            &leaf.id,
-                            pane_index,
-                            pane_count,
-                            tab,
-                        ),
+                        tab_palette_entry(entity.clone(), &leaf.id, pane_index, pane_count, tab),
                     ));
                 }
                 WorkspaceTabConfig::Terminal { .. } => {
@@ -122,13 +116,7 @@ fn tab_palette_entries(
                     let recency = tab.last_active_at_ms().unwrap_or(i64::MIN);
                     chat_entries.push((
                         recency,
-                        tab_palette_entry(
-                            entity.clone(),
-                            &leaf.id,
-                            pane_index,
-                            pane_count,
-                            tab,
-                        ),
+                        tab_palette_entry(entity.clone(), &leaf.id, pane_index, pane_count, tab),
                     ));
                 }
                 // File, Diff, and ChangesReview tabs are out of scope for the
@@ -144,8 +132,10 @@ fn tab_palette_entries(
     // Tabs without a timestamp share the bottom of the list in insertion order.
     browser_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
     chat_entries.sort_by(|(a, _), (b, _)| b.cmp(a));
-    let mut entries: Vec<PaletteEntry> =
-        browser_entries.into_iter().map(|(_, entry)| entry).collect();
+    let mut entries: Vec<PaletteEntry> = browser_entries
+        .into_iter()
+        .map(|(_, entry)| entry)
+        .collect();
     entries.extend(terminal_entries);
     entries.extend(chat_entries.into_iter().map(|(_, entry)| entry));
     entries
@@ -186,16 +176,14 @@ fn tab_palette_entry(
                 entry = entry.icon(IconName::Globe);
             }
         }
-        WorkspaceTabConfig::Chat { provider, .. } => {
-            match provider.as_deref() {
-                Some(p) if !p.is_empty() => {
-                    entry = entry.provider_icon(p.to_string());
-                }
-                _ => {
-                    entry = entry.icon(IconName::ChatRoundLine);
-                }
+        WorkspaceTabConfig::Chat { provider, .. } => match provider.as_deref() {
+            Some(p) if !p.is_empty() => {
+                entry = entry.provider_icon(p.to_string());
             }
-        }
+            _ => {
+                entry = entry.icon(IconName::ChatRoundLine);
+            }
+        },
         _ => {
             entry = entry.icon(IconName::Terminal);
         }
@@ -337,10 +325,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(
-                command_palette_entries(entity, &environments),
-                cx,
-            );
+            palette.set_entries(command_palette_entries(entity, &environments), cx);
             palette.toggle(window, cx);
         });
         cx.notify();
@@ -367,7 +352,8 @@ impl ConsoleDesktopApp {
     /// selected, since there is no root to search.
     pub fn toggle_global_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.global_search_panel.read(cx).is_open() {
-            self.global_search_panel.update(cx, |panel, cx| panel.hide(cx));
+            self.global_search_panel
+                .update(cx, |panel, cx| panel.hide(cx));
             cx.notify();
             return;
         }
@@ -403,10 +389,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let environments = self.environments.clone();
         self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(
-                command_palette_entries(entity, &environments),
-                cx,
-            );
+            palette.set_entries(command_palette_entries(entity, &environments), cx);
             palette.show(window, cx);
         });
         cx.notify();

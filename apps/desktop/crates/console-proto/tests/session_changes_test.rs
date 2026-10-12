@@ -54,6 +54,9 @@ fn serializes_counts_as_numbers() {
         ..Default::default()
     })
     .expect("encode change");
-    assert!(raw.contains(r#""turnIndex":3"#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""turnIndex":3"#),
+        "unexpected encoding: {raw}"
+    );
     assert!(!raw.contains("updatedAt"), "zero int64 must omit: {raw}");
 }

@@ -1030,10 +1030,7 @@ impl Render for ConsoleDesktopApp {
                                     .and_then(|state| state.runs.get(id))
                             })
                             .is_some_and(|v| {
-                                v.starting
-                                    || v.run.as_ref().is_some_and(|r| {
-                                        r.status == "running"
-                                    })
+                                v.starting || v.run.as_ref().is_some_and(|r| r.status == "running")
                             });
 
                         let mut tabs: Vec<TerminalTabInfo> = script_log_ids
@@ -1097,7 +1094,8 @@ impl Render for ConsoleDesktopApp {
                                 .unwrap_or_default();
                             let run_view =
                                 script_state.and_then(|state| state.runs.get(&active_id));
-                            let status = run_view.and_then(|v| v.run.as_ref().map(|r| r.status.clone()));
+                            let status =
+                                run_view.and_then(|v| v.run.as_ref().map(|r| r.status.clone()));
                             let exit_code =
                                 run_view.and_then(|v| v.run.as_ref().and_then(|r| r.exit_code));
                             let starting = run_view.is_some_and(|v| v.starting);
@@ -1208,7 +1206,9 @@ impl Render for ConsoleDesktopApp {
                                                     command: script.command.clone(),
                                                     shortcut: script.shortcut.clone(),
                                                     status: view.and_then(|view| {
-                                                        view.run.as_ref().map(|run| run.status.clone())
+                                                        view.run
+                                                            .as_ref()
+                                                            .map(|run| run.status.clone())
                                                     }),
                                                     exit_code: view.and_then(|view| {
                                                         view.run

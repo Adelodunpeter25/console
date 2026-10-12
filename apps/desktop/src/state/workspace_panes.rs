@@ -19,7 +19,14 @@ impl ConsoleDesktopApp {
             let mentions = input.mentions().to_vec();
             let context_files = input.context_files().to_vec();
             let attachments = self.attachments_for_pane(pane_id);
-            self.commit_draft_to_sidebar_with_context(session_id, &text, &mentions, &context_files, &attachments, cx);
+            self.commit_draft_to_sidebar_with_context(
+                session_id,
+                &text,
+                &mentions,
+                &context_files,
+                &attachments,
+                cx,
+            );
         }
 
         self.save_transcript_scroll_position(cx);
@@ -129,7 +136,9 @@ impl ConsoleDesktopApp {
     /// deferred teardown a normal tab close uses.
     pub(crate) fn sweep_unreferenced_browser_views(&mut self, cx: &mut Context<Self>) {
         let mut referenced: std::collections::HashSet<String> =
-            workspace_ops::browser_ids(&self.workspace_root).into_iter().collect();
+            workspace_ops::browser_ids(&self.workspace_root)
+                .into_iter()
+                .collect();
         for root in self.project_workspace_roots.values() {
             referenced.extend(workspace_ops::browser_ids(root));
         }

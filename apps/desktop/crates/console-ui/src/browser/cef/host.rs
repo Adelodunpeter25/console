@@ -26,8 +26,8 @@ use cef::{
 };
 
 use crate::browser::cef::client::{
-    ClientBundle, NavCallbacks, SharedRef, TARGET_INFO_MESSAGE_ID, TargetInfoObserver, build_client,
-    progress_of,
+    ClientBundle, NavCallbacks, SharedRef, TARGET_INFO_MESSAGE_ID, TargetInfoObserver,
+    build_client, progress_of,
 };
 use crate::browser::cef::runtime::ensure_initialized;
 use crate::browser::host::{HostCallbacks, HostContent};
@@ -67,7 +67,10 @@ impl WebviewHost {
     ) -> Result<Self, String> {
         if !ensure_initialized() {
             log::warn!("CEF: runtime unavailable, browser surface not created");
-            return Err("CEF is unavailable: the Chromium framework is not bundled with this build.".to_string());
+            return Err(
+                "CEF is unavailable: the Chromium framework is not bundled with this build."
+                    .to_string(),
+            );
         }
 
         let parent_view = content_view(window)?;
@@ -113,20 +116,19 @@ impl WebviewHost {
             ),
             None => "about:blank".to_string(),
         };
-        let window_info =
-            WindowInfo {
-                // ALLOY, not DEFAULT (Chrome): the Chrome runtime manages
-                // child bounds through the Views framework and overrides the
-                // host's `setFrame`, leaving the view floating at its initial
-                // bounds. Alloy leaves the native view fully host-managed,
-                // which `sync_bounds` requires.
-                runtime_style: RuntimeStyle::ALLOY,
-                ..Default::default()
-            }
-            .set_as_child(
-                (&*parent_view as *const NSView).cast_mut() as *mut c_void,
-                &INITIAL_BOUNDS,
-            );
+        let window_info = WindowInfo {
+            // ALLOY, not DEFAULT (Chrome): the Chrome runtime manages
+            // child bounds through the Views framework and overrides the
+            // host's `setFrame`, leaving the view floating at its initial
+            // bounds. Alloy leaves the native view fully host-managed,
+            // which `sync_bounds` requires.
+            runtime_style: RuntimeStyle::ALLOY,
+            ..Default::default()
+        }
+        .set_as_child(
+            (&*parent_view as *const NSView).cast_mut() as *mut c_void,
+            &INITIAL_BOUNDS,
+        );
         let url = CefString::from(initial_url.as_str());
         let browser = browser_host_create_browser_sync(
             Some(&window_info),
@@ -155,12 +157,9 @@ impl WebviewHost {
         if raw_view.is_null() {
             return Err("CEF browser has no native view.".to_string());
         }
-        let cef_view: Retained<NSView> =
-            unsafe { Retained::retain(raw_view as *mut NSView) }
-                .ok_or_else(|| "CEF browser has no native view.".to_string())?;
-        log::debug!(
-            "CEF: native view {cef_view:p} attached under parent {parent_view:p}"
-        );
+        let cef_view: Retained<NSView> = unsafe { Retained::retain(raw_view as *mut NSView) }
+            .ok_or_else(|| "CEF browser has no native view.".to_string())?;
+        log::debug!("CEF: native view {cef_view:p} attached under parent {parent_view:p}");
         lower_below_scene_overlay(&cef_view);
 
         let responder_observer = cef_view

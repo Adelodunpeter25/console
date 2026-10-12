@@ -68,9 +68,8 @@ impl ConsoleDesktopApp {
                                 this.usage_loading = false;
                                 // Initialize reports map if needed
                                 if this.usage_reports.is_none() {
-                                    this.usage_reports = Some(std::rc::Rc::new(
-                                        std::collections::HashMap::new(),
-                                    ));
+                                    this.usage_reports =
+                                        Some(std::rc::Rc::new(std::collections::HashMap::new()));
                                 }
                                 // Insert the report - create a new map with the update
                                 if let Some(existing_rc) = this.usage_reports.take() {

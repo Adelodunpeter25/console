@@ -5,8 +5,10 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use console_core::{ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader,
-    SessionHeaderExt, UpdateSessionDto};
+use console_core::{
+    ApprovalMode, ProjectInfo, ProjectInfoExt, SelectedModel, SessionHeader, SessionHeaderExt,
+    UpdateSessionDto,
+};
 use console_ui::utils::{SidebarSortMode, group_indices_by_date, group_indices_by_project};
 use gpui::{Context, Window};
 
@@ -208,7 +210,10 @@ impl ConsoleDesktopApp {
                         session.model_id = mid.clone();
                     }
                     if payload.thinking_level.is_some() {
-                        session.thinking_level = payload.thinking_level.as_ref().map(|t| t.as_str().to_string());
+                        session.thinking_level = payload
+                            .thinking_level
+                            .as_ref()
+                            .map(|t| t.as_str().to_string());
                     }
                 }
                 self.persist_workspaces();
@@ -222,8 +227,8 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         let sid = session_id.clone();
         let pid = pane_id.clone();
-        cx.spawn(async move |_entity, cx| {
-            match client.sessions.update(&sid, payload).await {
+        cx.spawn(
+            async move |_entity, cx| match client.sessions.update(&sid, payload).await {
                 Ok(header) => {
                     let _ = cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -244,8 +249,8 @@ impl ConsoleDesktopApp {
                         }
                     });
                 }
-            }
-        })
+            },
+        )
         .detach();
     }
 
@@ -351,11 +356,12 @@ impl ConsoleDesktopApp {
                 }),
             );
         }
-        self.set_pane_approval_mode(
-            pane_id,
-            ApprovalMode::from_value(&header.approval_mode),
-        );
-        if let Some(level) = header.thinking_level.as_deref().and_then(console_core::ThinkingLevel::from_str) {
+        self.set_pane_approval_mode(pane_id, ApprovalMode::from_value(&header.approval_mode));
+        if let Some(level) = header
+            .thinking_level
+            .as_deref()
+            .and_then(console_core::ThinkingLevel::from_str)
+        {
             self.set_pane_thinking_level(pane_id, Some(level));
         }
 
@@ -1142,7 +1148,4 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
-
-
-
 }

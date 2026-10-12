@@ -20,14 +20,14 @@ use gpui::{
 
 use crate::chat::markdown_helpers::{assistant_ctx, compact_ctx, render_selectable_markdown};
 use crate::chat::{ThinkingBlock, WorkingIndicator};
-use crate::viewer::diff_viewer::{EditorDiff, build_editor_diff_from_parsed, file_diff_block};
+use crate::markdown::render as markdown_render;
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
-use crate::markdown::render as markdown_render;
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon, motion};
 use crate::theme::Theme;
 use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
+use crate::viewer::diff_viewer::{EditorDiff, build_editor_diff_from_parsed, file_diff_block};
 // `format_elapsed` was unified into `format_working_elapsed` (C); kept
 // re-exported so older imports keep resolving.
 pub use crate::utils::time::format_working_elapsed as format_elapsed;
@@ -225,7 +225,10 @@ impl ToolCalls {
             return Some(truncate(action, 72));
         }
         if call.name == "memory" {
-            let op = object.get("op").and_then(|v| v.as_str()).unwrap_or("memory");
+            let op = object
+                .get("op")
+                .and_then(|v| v.as_str())
+                .unwrap_or("memory");
             if let Some(query) = object.get("query").and_then(|v| v.as_str()) {
                 return Some(truncate(&format!("{op} \"{query}\""), 72));
             }
@@ -404,9 +407,10 @@ impl ToolCalls {
                 cached.clone()
             } else {
                 let computed = file_call_diffs(&entry.call.name, &entry.call.arguments);
-                cache
-                    .diff_cache
-                    .insert(call_id.clone(), (entry.call.arguments.clone(), computed.clone()));
+                cache.diff_cache.insert(
+                    call_id.clone(),
+                    (entry.call.arguments.clone(), computed.clone()),
+                );
                 computed
             }
         } else {
@@ -451,19 +455,17 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(if is_file_target_tool(&entry.call.name) && file_path.is_some() {
-                        // File-targeting calls show the file's real type icon
-                        // (multicolor, like mobile) instead of the generic
-                        // monochrome tool glyph.
-                        file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
-                    } else {
-                        icon(
-                            activity_icon(&entry.call.name),
-                            13.0,
-                            theme.text_tertiary,
-                        )
-                        .into_any_element()
-                    })
+                    .child(
+                        if is_file_target_tool(&entry.call.name) && file_path.is_some() {
+                            // File-targeting calls show the file's real type icon
+                            // (multicolor, like mobile) instead of the generic
+                            // monochrome tool glyph.
+                            file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
+                        } else {
+                            icon(activity_icon(&entry.call.name), 13.0, theme.text_tertiary)
+                                .into_any_element()
+                        },
+                    )
                     .child(
                         div()
                             .flex_none()
@@ -775,7 +777,12 @@ impl ToolCalls {
     /// Build the expanded timeline: thinking/text events render individually,
     /// and consecutive tool calls of the same name collapse into one group.
     /// Mirrors the desktop app's `groupEvents` pass.
-    fn timeline_children(&self, theme: Theme, window: &mut Window, cx: &mut App) -> Vec<AnyElement> {
+    fn timeline_children(
+        &self,
+        theme: Theme,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Vec<AnyElement> {
         let is_streaming = self.working;
         let mut children: Vec<AnyElement> = Vec::new();
         let mut pending: Vec<ToolCallEntry> = Vec::new();
@@ -1004,11 +1011,7 @@ impl ToolCalls {
                             .text_size(px(12.0))
                             .line_height(px(17.0))
                             .text_color(theme.text_tertiary)
-                            .child(markdown_render::highlighted_code(
-                                code_body,
-                                lang_tag,
-                                &ctx,
-                            )),
+                            .child(markdown_render::highlighted_code(code_body, lang_tag, &ctx)),
                     ),
             )
             .into_any_element()

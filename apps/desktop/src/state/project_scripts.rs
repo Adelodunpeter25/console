@@ -235,9 +235,7 @@ impl ConsoleDesktopApp {
                                 .runs
                                 .iter()
                                 .filter(|(_, view)| {
-                                    view.run
-                                        .as_ref()
-                                        .is_some_and(|run| run.status == "running")
+                                    view.run.as_ref().is_some_and(|run| run.status == "running")
                                 })
                                 .map(|(script_id, view)| {
                                     (
@@ -275,7 +273,9 @@ impl ConsoleDesktopApp {
         if let Some(cwd) = &cwd {
             if let Some(term_state) = self.right_sidebar_terminals_by_cwd.get_mut(cwd) {
                 let prev_len = term_state.script_logs.len();
-                term_state.script_logs.retain(|id| valid_ids.contains(id.as_str()));
+                term_state
+                    .script_logs
+                    .retain(|id| valid_ids.contains(id.as_str()));
                 if term_state.script_logs.len() != prev_len {
                     changed = true;
                 }
@@ -339,11 +339,7 @@ impl ConsoleDesktopApp {
         // play press is always a no-op, never a duplicate run.
         if let Some(state) = self.project_scripts_by_project.get(&project_id)
             && let Some(view) = state.runs.get(script_id)
-            && (view.starting
-                || view
-                    .run
-                    .as_ref()
-                    .is_some_and(|run| run.status == "running"))
+            && (view.starting || view.run.as_ref().is_some_and(|run| run.status == "running"))
         {
             return;
         }
@@ -634,8 +630,7 @@ impl ConsoleDesktopApp {
                                         if let Some(state) = this
                                             .project_scripts_by_project
                                             .get_mut(&project_id_owned)
-                                            && let Some(view) =
-                                                state.runs.get_mut(&script_id_owned)
+                                            && let Some(view) = state.runs.get_mut(&script_id_owned)
                                             && view.run.as_ref().is_some_and(|run| {
                                                 run.run_id == run_id_owned
                                                     && run.status == "running"

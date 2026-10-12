@@ -148,23 +148,47 @@ impl WorkspaceTabConfig {
 
     pub fn last_active_at_ms(&self) -> Option<i64> {
         match self {
-            Self::Chat { last_active_at_ms, .. }
-            | Self::Terminal { last_active_at_ms, .. }
-            | Self::File { last_active_at_ms, .. }
-            | Self::Diff { last_active_at_ms, .. }
-            | Self::Browser { last_active_at_ms, .. }
-            | Self::ChangesReview { last_active_at_ms, .. } => *last_active_at_ms,
+            Self::Chat {
+                last_active_at_ms, ..
+            }
+            | Self::Terminal {
+                last_active_at_ms, ..
+            }
+            | Self::File {
+                last_active_at_ms, ..
+            }
+            | Self::Diff {
+                last_active_at_ms, ..
+            }
+            | Self::Browser {
+                last_active_at_ms, ..
+            }
+            | Self::ChangesReview {
+                last_active_at_ms, ..
+            } => *last_active_at_ms,
         }
     }
 
     pub fn set_last_active_at_ms(&mut self, ts_ms: Option<i64>) {
         match self {
-            Self::Chat { last_active_at_ms, .. }
-            | Self::Terminal { last_active_at_ms, .. }
-            | Self::File { last_active_at_ms, .. }
-            | Self::Diff { last_active_at_ms, .. }
-            | Self::Browser { last_active_at_ms, .. }
-            | Self::ChangesReview { last_active_at_ms, .. } => *last_active_at_ms = ts_ms,
+            Self::Chat {
+                last_active_at_ms, ..
+            }
+            | Self::Terminal {
+                last_active_at_ms, ..
+            }
+            | Self::File {
+                last_active_at_ms, ..
+            }
+            | Self::Diff {
+                last_active_at_ms, ..
+            }
+            | Self::Browser {
+                last_active_at_ms, ..
+            }
+            | Self::ChangesReview {
+                last_active_at_ms, ..
+            } => *last_active_at_ms = ts_ms,
         }
     }
 }
@@ -290,7 +314,6 @@ pub fn split_node(
         children: [Box::new(left), Box::new(right)],
     })
 }
-
 
 /// Separator between a project id and a worktree path inside a workspace key.
 /// Project ids are random ids that never contain it, so the first occurrence

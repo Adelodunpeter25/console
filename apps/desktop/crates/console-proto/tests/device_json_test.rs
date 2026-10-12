@@ -1,6 +1,4 @@
-use console_proto::{
-    DeviceActionRequest, DeviceDescriptor, DeviceDiagnostics, DeviceStreamMeta,
-};
+use console_proto::{DeviceActionRequest, DeviceDescriptor, DeviceDiagnostics, DeviceStreamMeta};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {
@@ -95,6 +93,9 @@ fn serializes_camel_case() {
         appearance: None,
     })
     .expect("encode action");
-    assert!(raw.contains(r#""action":"tap""#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""action":"tap""#),
+        "unexpected encoding: {raw}"
+    );
     assert!(raw.contains(r#""x":1.5"#), "unexpected encoding: {raw}");
 }

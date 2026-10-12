@@ -186,9 +186,9 @@ impl Element for InlineFileMentionText {
         let runs = boundaries
             .windows(2)
             .map(|range| {
-                let in_mention = prepared_mentions.iter().any(|m| {
-                    m.chip_range.start <= range[0] && m.chip_range.end >= range[1]
-                });
+                let in_mention = prepared_mentions
+                    .iter()
+                    .any(|m| m.chip_range.start <= range[0] && m.chip_range.end >= range[1]);
                 TextRun {
                     len: range[1] - range[0],
                     font: style.font(),

@@ -80,7 +80,10 @@ impl std::fmt::Display for BuildError {
             Self::NoCommands => write!(f, "no agent-browser command given"),
             Self::EmptyCommand => write!(f, "empty agent-browser command"),
             Self::DisallowedVerb(verb) => {
-                write!(f, "agent-browser command {verb:?} is not allowed from Console")
+                write!(
+                    f,
+                    "agent-browser command {verb:?} is not allowed from Console"
+                )
             }
         }
     }
@@ -212,8 +215,8 @@ pub fn active_target(
     session: &str,
     timeout: Duration,
 ) -> Result<Option<String>, RunError> {
-    let invocation = active_target_invocation(port, session)
-        .map_err(|err| RunError::Failed(err.to_string()))?;
+    let invocation =
+        active_target_invocation(port, session).map_err(|err| RunError::Failed(err.to_string()))?;
     Ok(parse_active_target(&run(binary, &invocation, timeout)?))
 }
 
@@ -255,7 +258,11 @@ impl StepResult {
                 return text.clone();
             }
         }
-        for (key, verb) in [("clicked", "Clicked"), ("filled", "Filled"), ("typed", "Typed")] {
+        for (key, verb) in [
+            ("clicked", "Clicked"),
+            ("filled", "Filled"),
+            ("typed", "Typed"),
+        ] {
             if let Some(target) = result.get(key) {
                 return format!("{verb} {}", text_of(target));
             }
@@ -337,12 +344,18 @@ pub fn parse_output_for(stdout: &str, has_tab_step: bool) -> Result<Vec<StepResu
                     return Err(RunError::TargetGone(error));
                 }
             }
-            None => return Err(RunError::Failed("agent-browser returned no results".to_string())),
+            None => {
+                return Err(RunError::Failed(
+                    "agent-browser returned no results".to_string(),
+                ));
+            }
         }
     }
     let steps: Vec<StepResult> = steps.collect();
     if steps.is_empty() {
-        return Err(RunError::Failed("agent-browser returned no results".to_string()));
+        return Err(RunError::Failed(
+            "agent-browser returned no results".to_string(),
+        ));
     }
     Ok(steps)
 }
@@ -391,7 +404,11 @@ pub fn run(
                 break None;
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(15)),
-            Err(err) => return Err(RunError::Failed(format!("agent-browser wait failed: {err}"))),
+            Err(err) => {
+                return Err(RunError::Failed(format!(
+                    "agent-browser wait failed: {err}"
+                )));
+            }
         }
     };
     let stdout = stdout_reader.join().unwrap_or_default();
@@ -501,7 +518,10 @@ fn which_in_login_shell(name: &str) -> Option<PathBuf> {
         .stderr(Stdio::null())
         .output()
         .ok()?;
-    let found = PathBuf::from(extract_marked(&String::from_utf8_lossy(&output.stdout), MARKER)?);
+    let found = PathBuf::from(extract_marked(
+        &String::from_utf8_lossy(&output.stdout),
+        MARKER,
+    )?);
     is_executable(&found).then_some(found)
 }
 
@@ -519,7 +539,9 @@ pub fn prepend_path(dir: &Path, existing: Option<&std::ffi::OsStr>) -> Option<st
 /// A failed lookup is not cached, so installing node later still works.
 fn node_dir() -> Option<PathBuf> {
     static CACHE: Mutex<Option<PathBuf>> = Mutex::new(None);
-    let mut cached = CACHE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut cached = CACHE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if cached.is_none() {
         *cached = find_tool("node").and_then(|node| node.parent().map(Path::to_path_buf));
     }
@@ -530,7 +552,11 @@ fn node_dir() -> Option<PathBuf> {
 /// inherited `PATH` already has `node` (or none can be found).
 fn path_with_node() -> Option<std::ffi::OsString> {
     let existing = std::env::var_os("PATH");
-    if existing.as_deref().and_then(|path| which_in("node", path)).is_some() {
+    if existing
+        .as_deref()
+        .and_then(|path| which_in("node", path))
+        .is_some()
+    {
         return None;
     }
     prepend_path(&node_dir()?, existing.as_deref())
@@ -596,7 +622,9 @@ pub fn ensure_binary() -> Result<PathBuf, String> {
         return Ok(path);
     }
     // One installer at a time; a second caller waits, then finds the result.
-    let _guard = INSTALL_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = INSTALL_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some(path) = find_binary() {
         return Ok(path);
     }
@@ -609,7 +637,10 @@ pub fn ensure_binary() -> Result<PathBuf, String> {
     }
     let mut failures = Vec::new();
     for installer in &installers {
-        log::info!("agent-browser not found; installing {PACKAGE_SPEC} with {}", installer.name());
+        log::info!(
+            "agent-browser not found; installing {PACKAGE_SPEC} with {}",
+            installer.name()
+        );
         match run_installer(installer) {
             Ok(()) => match find_binary() {
                 Some(path) => return Ok(path),
@@ -645,12 +676,22 @@ fn run_installer(installer: &Installer) -> Result<(), String> {
             command.env("PATH", joined);
         }
     }
-    let output = command.output().map_err(|err| format!("could not run: {err}"))?;
+    let output = command
+        .output()
+        .map_err(|err| format!("could not run: {err}"))?;
     if output.status.success() {
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let tail: String = stderr.lines().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" ");
+        let tail: String = stderr
+            .lines()
+            .rev()
+            .take(3)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join(" ");
         Err(format!("exited with {}: {tail}", output.status))
     }
 }

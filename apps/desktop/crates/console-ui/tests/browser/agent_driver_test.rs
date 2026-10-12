@@ -36,15 +36,24 @@ fn builds_snapshot_click_and_type() {
 fn script_text_is_one_argument_never_split_or_reinterpreted() {
     let script = "document.title; --cdp 1 && rm -rf /";
     assert_eq!(run_js_commands(script), vec![cmd(&["eval", script])]);
-    assert_eq!(type_commands("e1", "--session x", false)[0][2], "--session x");
+    assert_eq!(
+        type_commands("e1", "--session x", false)[0][2],
+        "--session x"
+    );
 }
 
 // get_content reads the whole body unless a non-blank selector is given.
 #[test]
 fn content_defaults_to_the_whole_body() {
     assert_eq!(content_commands(None), vec![cmd(&["get", "text", "body"])]);
-    assert_eq!(content_commands(Some("  ")), vec![cmd(&["get", "text", "body"])]);
-    assert_eq!(content_commands(Some("main h1")), vec![cmd(&["get", "text", "main h1"])]);
+    assert_eq!(
+        content_commands(Some("  ")),
+        vec![cmd(&["get", "text", "body"])]
+    );
+    assert_eq!(
+        content_commands(Some("main h1")),
+        vec![cmd(&["get", "text", "main h1"])]
+    );
 }
 
 // Each wait condition becomes its own step carrying the timeout; no conditions means no steps.
@@ -82,6 +91,9 @@ fn session_name_is_stable_per_data_dir() {
     let a = session_name(Some("/tmp/console-test-a"));
     assert_eq!(a, session_name(Some("/tmp/console-test-a")));
     assert_ne!(a, session_name(Some("/tmp/console-test-b")));
-    assert!(a.starts_with("console-") && a.len() == "console-".len() + 8, "{a}");
+    assert!(
+        a.starts_with("console-") && a.len() == "console-".len() + 8,
+        "{a}"
+    );
     assert!(a.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'));
 }

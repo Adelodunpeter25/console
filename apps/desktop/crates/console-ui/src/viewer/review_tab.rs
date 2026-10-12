@@ -157,7 +157,9 @@ impl RenderOnce for ReviewTab {
                                             let state = window.use_keyed_state(
                                                 gpui::ElementId::Name(key.into()),
                                                 cx,
-                                                |_, cx| build_editor_diff(text, &entry.path, &theme, cx),
+                                                |_, cx| {
+                                                    build_editor_diff(text, &entry.path, &theme, cx)
+                                                },
                                             );
                                             state.read(cx).clone()
                                         })
@@ -221,9 +223,7 @@ impl RenderOnce for ReviewTab {
                                                                 div()
                                                                     .flex_none()
                                                                     .text_size(px(12.5))
-                                                                    .font_weight(
-                                                                        FontWeight::MEDIUM,
-                                                                    )
+                                                                    .font_weight(FontWeight::MEDIUM)
                                                                     .text_color(theme.text)
                                                                     .child(file_name),
                                                             )

@@ -855,9 +855,9 @@ impl ComposerInput {
     fn navigate_prompt_history(&mut self, down: bool, cx: &mut Context<Self>) -> bool {
         let current_context_files: Vec<String> =
             self.mentions.iter().map(|m| m.path.clone()).collect();
-        let Some(entry) =
-            self.prompt_history
-                .navigate(down, &self.content, &current_context_files)
+        let Some(entry) = self
+            .prompt_history
+            .navigate(down, &self.content, &current_context_files)
         else {
             return false;
         };
@@ -889,11 +889,7 @@ impl ComposerInput {
     /// Replace the current composer prompt with one of the submitted user
     /// prompts. Moving down past the newest entry restores the draft captured
     /// when history navigation began.
-    pub fn set_prompt_history(
-        &mut self,
-        entries: Vec<PromptHistoryEntry>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_prompt_history(&mut self, entries: Vec<PromptHistoryEntry>, cx: &mut Context<Self>) {
         self.prompt_history.set_entries(entries);
         cx.notify();
     }

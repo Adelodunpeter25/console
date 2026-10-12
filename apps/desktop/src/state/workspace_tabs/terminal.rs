@@ -73,7 +73,8 @@ impl ConsoleDesktopApp {
         let tid = terminal_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
             let tv = view.read(cx);
-            let new_title = if tv.status() == console_core::types::terminal::TerminalStatus::Exited {
+            let new_title = if tv.status() == console_core::types::terminal::TerminalStatus::Exited
+            {
                 "Terminal".to_string()
             } else {
                 tv.title()
@@ -125,8 +126,7 @@ impl ConsoleDesktopApp {
         });
         self._subscriptions.push(sub);
 
-        self.terminals
-            .insert(terminal_id.to_string(), view.clone());
+        self.terminals.insert(terminal_id.to_string(), view.clone());
         view
     }
 }

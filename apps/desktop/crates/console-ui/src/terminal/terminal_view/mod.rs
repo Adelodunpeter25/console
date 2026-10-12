@@ -2,9 +2,9 @@ use console_core::ConsoleClient;
 use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled, UTF16Selection, Window,
-    div, prelude::*, px,
+    Focusable, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ParentElement, Pixels, Render, ScrollWheelEvent, SharedString, Styled,
+    UTF16Selection, Window, div, prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -184,7 +184,15 @@ impl TerminalView {
             // apply the result. Snapshot + damage + mouse mode come from one
             // lock via `snapshot_full` so dirty rows stay in sync with the grid
             // and mouse events never touch the backend lock.
-            let (initial_snapshot, initial_mouse, initial_scroll, initial_alt, initial_status, initial_error, initial_title) = cx
+            let (
+                initial_snapshot,
+                initial_mouse,
+                initial_scroll,
+                initial_alt,
+                initial_status,
+                initial_error,
+                initial_title,
+            ) = cx
                 .background_executor()
                 .spawn({
                     let handle = handle.clone();
@@ -196,7 +204,15 @@ impl TerminalView {
                         // consumed per snapshot and can go stale when the
                         // watch loop takes two snapshots between paints, so
                         // the renderer validates rows by content hash instead.
-                        (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error, full.title)
+                        (
+                            full.snapshot,
+                            full.mouse_mode,
+                            full.scroll_state,
+                            full.is_alt_screen,
+                            status,
+                            error,
+                            full.title,
+                        )
                     }
                 })
                 .await;
@@ -226,15 +242,23 @@ impl TerminalView {
                     // snapshot above): termy's blocking mutex must never be
                     // awaited on the main thread.
                     let handle_for_snapshot = handle_for_watch.clone();
-                    let (snapshot, mouse_mode, scroll_state, is_alt_screen, status, error, title) = cx
-                        .background_executor()
-                        .spawn(async move {
-                            let full = handle_for_snapshot.snapshot_full().await;
-                            let status = handle_for_snapshot.status().await;
-                            let error = handle_for_snapshot.error.read().await.clone();
-                            (full.snapshot, full.mouse_mode, full.scroll_state, full.is_alt_screen, status, error, full.title)
-                        })
-                        .await;
+                    let (snapshot, mouse_mode, scroll_state, is_alt_screen, status, error, title) =
+                        cx.background_executor()
+                            .spawn(async move {
+                                let full = handle_for_snapshot.snapshot_full().await;
+                                let status = handle_for_snapshot.status().await;
+                                let error = handle_for_snapshot.error.read().await.clone();
+                                (
+                                    full.snapshot,
+                                    full.mouse_mode,
+                                    full.scroll_state,
+                                    full.is_alt_screen,
+                                    status,
+                                    error,
+                                    full.title,
+                                )
+                            })
+                            .await;
                     let _ = this_watch.update(cx, |view, cx| {
                         view.snapshot = Some(Arc::new(snapshot));
                         view.cached_mouse_mode = mouse_mode;
@@ -298,7 +322,6 @@ impl TerminalView {
             })
             .map(|l| l.target.clone())
     }
-
 
     /// Map a mouse position to a grid cell using the measured cell metrics
     /// from the last paint — never constants, which drift with the font and
@@ -558,27 +581,25 @@ impl Render for TerminalView {
                 .py(px(4.0))
                 .on_mouse_down(
                     MouseButton::Left,
-                    cx.listener(
-                        move |this, event: &MouseDownEvent, _window, cx| {
-                            // Click-to-jump: the grab point becomes the thumb
-                            // position, then motion drags it.
-                            if let Some(bounds) = this.scrollbar_bounds {
-                                let height = f32::from(bounds.size.height);
-                                if height > 0.0 {
-                                    let frac = (f32::from(event.position.y)
-                                        - f32::from(bounds.origin.y))
-                                        / height;
-                                    this.scroll_to_frac(frac);
-                                    this.scrollbar_dragging = true;
-                                    cx.notify();
-                                }
+                    cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
+                        // Click-to-jump: the grab point becomes the thumb
+                        // position, then motion drags it.
+                        if let Some(bounds) = this.scrollbar_bounds {
+                            let height = f32::from(bounds.size.height);
+                            if height > 0.0 {
+                                let frac = (f32::from(event.position.y)
+                                    - f32::from(bounds.origin.y))
+                                    / height;
+                                this.scroll_to_frac(frac);
+                                this.scrollbar_dragging = true;
+                                cx.notify();
                             }
-                            cx.stop_propagation();
-                        },
-                    ),
+                        }
+                        cx.stop_propagation();
+                    }),
                 )
-                .on_mouse_move(cx.listener(
-                    move |this, event: &MouseMoveEvent, _window, cx| {
+                .on_mouse_move(
+                    cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
                         if this.scrollbar_dragging {
                             if let Some(bounds) = this.scrollbar_bounds {
                                 let height = f32::from(bounds.size.height);
@@ -591,8 +612,8 @@ impl Render for TerminalView {
                                 }
                             }
                         }
-                    },
-                ))
+                    }),
+                )
                 .on_mouse_up(
                     MouseButton::Left,
                     cx.listener(move |this, _event: &MouseUpEvent, _window, cx| {
@@ -821,226 +842,243 @@ impl Render for TerminalView {
                             .overflow_hidden()
                             .on_mouse_down(
                                 MouseButton::Left,
-                        cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
-                            let pos = this.cell_at_point(event.position.x, event.position.y);
+                                cx.listener(move |this, event: &MouseDownEvent, _window, cx| {
+                                    let pos =
+                                        this.cell_at_point(event.position.x, event.position.y);
 
-                            // TUI mouse reporting (btop, opencode, ...): when
-                            // the shell enabled mouse mode, forward the click
-                            // as an escape report instead of doing local
-                            // selection. Shift bypasses reporting so text can
-                            // still be selected and copied.
-                            if !event.modifiers.shift
-                                && this.forward_mouse_report(
-                                    TerminalMouseEventKind::Press(TerminalMouseButton::Left),
-                                    pos,
-                                    event.modifiers,
-                                )
-                            {
-                                this.mouse_down = Some(TerminalMouseButton::Left);
-                                cx.notify();
-                                return;
-                            }
-
-                            // Multi-click selection: double-click selects the
-                            // word token, triple-click the full row. Count
-                            // cycles 1 → 2 → 3 on same-cell clicks within
-                            // 500ms. Links still open via Cmd+Click below.
-                            let now = std::time::Instant::now();
-                            let count = match this.last_click {
-                                Some((t, p, c))
-                                    if p == pos
-                                        && now.duration_since(t).as_millis() < 500 =>
-                                {
-                                    (c % 3) + 1
-                                }
-                                _ => 1,
-                            };
-                            this.last_click = Some((now, pos, count));
-                            if count == 2 {
-                                if this.select_token_at_cell(pos) {
-                                    cx.notify();
-                                    return;
-                                }
-                                // Nothing word-like under the cursor — fall
-                                // through to a fresh single-click selection.
-                            } else if count == 3 {
-                                if this.select_line_at_row(pos.row) {
-                                    cx.notify();
-                                    return;
-                                }
-                            }
-
-                            // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
-                            // it in the default browser instead of selecting.
-                            if event.modifiers.platform || event.modifiers.control {
-                                if let Some(url) = this.link_target_at(pos) {
-                                    this.clear_selection();
-                                    cx.notify();
-                                    open_url_in_browser(&url);
-                                    return;
-                                }
-                            }
-
-                            this.selection_anchor = Some(pos);
-                            this.selection_head = Some(pos);
-                            this.selection_dragging = true;
-                            cx.notify();
-                        }),
-                    )
-                    .on_mouse_move(
-                        cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
-                            // TUI mouse reporting: drag (1002) or full motion
-                            // (1003) reports instead of local selection drags.
-                            if this.mouse_mode().enabled {
-                                let pos = this.cell_at_point(event.position.x, event.position.y);
-                                match this.mouse_down {
-                                    Some(button) => {
-                                        if !this.forward_mouse_report(
-                                            TerminalMouseEventKind::Drag(button),
+                                    // TUI mouse reporting (btop, opencode, ...): when
+                                    // the shell enabled mouse mode, forward the click
+                                    // as an escape report instead of doing local
+                                    // selection. Shift bypasses reporting so text can
+                                    // still be selected and copied.
+                                    if !event.modifiers.shift
+                                        && this.forward_mouse_report(
+                                            TerminalMouseEventKind::Press(
+                                                TerminalMouseButton::Left,
+                                            ),
                                             pos,
                                             event.modifiers,
-                                        ) && this.mouse_mode().report_motion
+                                        )
+                                    {
+                                        this.mouse_down = Some(TerminalMouseButton::Left);
+                                        cx.notify();
+                                        return;
+                                    }
+
+                                    // Multi-click selection: double-click selects the
+                                    // word token, triple-click the full row. Count
+                                    // cycles 1 → 2 → 3 on same-cell clicks within
+                                    // 500ms. Links still open via Cmd+Click below.
+                                    let now = std::time::Instant::now();
+                                    let count = match this.last_click {
+                                        Some((t, p, c))
+                                            if p == pos
+                                                && now.duration_since(t).as_millis() < 500 =>
                                         {
-                                            this.forward_mouse_report(
-                                                TerminalMouseEventKind::Move,
-                                                pos,
-                                                event.modifiers,
-                                            );
+                                            (c % 3) + 1
                                         }
-                                    }
-                                    None => {
-                                        if this.mouse_mode().report_motion {
-                                            this.forward_mouse_report(
-                                                TerminalMouseEventKind::Move,
-                                                pos,
-                                                event.modifiers,
-                                            );
-                                        }
-                                    }
-                                }
-                                return;
-                            }
-                            if this.selection_dragging {
-                                let pos = this.cell_at_point(event.position.x, event.position.y);
-                                if this.selection_head != Some(pos) {
-                                    this.selection_head = Some(pos);
-                                    cx.notify();
-                                }
-                            }
-                        }),
-                    )
-                    .on_mouse_up(
-                        MouseButton::Left,
-                        cx.listener(move |this, event: &MouseUpEvent, _window, cx| {
-                            // Release report for an in-progress TUI mouse drag/click.
-                            if let Some(button) = this.mouse_down.take() {
-                                let pos = this.cell_at_point(event.position.x, event.position.y);
-                                this.forward_mouse_report(
-                                    TerminalMouseEventKind::Release(button),
-                                    pos,
-                                    event.modifiers,
-                                );
-                                cx.notify();
-                                return;
-                            }
-                            if this.selection_dragging {
-                                this.selection_dragging = false;
-                                if this.selection_anchor == this.selection_head {
-                                    this.clear_selection();
-                                }
-                                cx.notify();
-                            }
-                        }),
-                    )
-                    .child(
-                        gpui::canvas(
-                            {
-                                // Measure once: the font is fixed (12px mono), so reuse
-                                // the last measured cell metrics instead of shaping
-                                // "0123456789" on every layout pass.
-                                let cached_metrics = self.cell_metrics;
-                                move |bounds, window, _cx| {
-                                    let pad_x = px(8.0);
-                                    let pad_y = px(8.0);
-                                    let avail_w = (bounds.size.width - pad_x * 2.0).max(px(0.0));
-                                    let avail_h = (bounds.size.height - pad_y * 2.0).max(px(0.0));
-
-                                    let (cell_w, cell_h) = if let Some((w, h)) = cached_metrics {
-                                        (w, h)
-                                    } else {
-                                        let run = gpui::TextRun {
-                                            len: 10,
-                                            font: gpui::font(crate::markdown::render::MONO_FAMILY),
-                                            color: gpui::white(),
-                                            ..Default::default()
-                                        };
-                                        let sample = window.text_system().shape_line(
-                                            SharedString::from("0123456789"),
-                                            px(12.0),
-                                            &[run],
-                                            None,
-                                        );
-                                        let w = (sample.width / 10.0).max(px(1.0));
-                                        // Derive row height from the shaped line
-                                        // metrics so mouse mapping never drifts
-                                        // from the painted grid.
-                                        let h = (sample.ascent + sample.descent).max(px(1.0));
-                                        (w, h)
+                                        _ => 1,
                                     };
+                                    this.last_click = Some((now, pos, count));
+                                    if count == 2 {
+                                        if this.select_token_at_cell(pos) {
+                                            cx.notify();
+                                            return;
+                                        }
+                                        // Nothing word-like under the cursor — fall
+                                        // through to a fresh single-click selection.
+                                    } else if count == 3 {
+                                        if this.select_line_at_row(pos.row) {
+                                            cx.notify();
+                                            return;
+                                        }
+                                    }
 
-                                    let cols = ((avail_w / cell_w).floor() as u16).max(20);
-                                    let rows = ((avail_h / cell_h).floor() as u16).max(5);
+                                    // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
+                                    // it in the default browser instead of selecting.
+                                    if event.modifiers.platform || event.modifiers.control {
+                                        if let Some(url) = this.link_target_at(pos) {
+                                            this.clear_selection();
+                                            cx.notify();
+                                            open_url_in_browser(&url);
+                                            return;
+                                        }
+                                    }
 
-                                    (cols, rows, cell_w, cell_h)
-                                }
-                            },
-                            {
-                                let snapshot = snapshot.clone();
-                                let paint_cache = paint_cache.clone();
-                                let view_for_canvas = view_handle.clone();
-                                let focus_for_canvas = self.focus.clone();
-                                move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
-                                    window.handle_input(
-                                        &focus_for_canvas,
-                                        ElementInputHandler::new(bounds, view_for_canvas.clone()),
-                                        cx,
-                                    );
-
-                                    view_for_canvas.update(cx, |view, _| {
-                                        view.cell_metrics = Some((cell_w, cell_h));
-                                        // Window-space grid origin, used by
-                                        // cell_at_point to map mouse events.
-                                        view.grid_origin =
-                                            Some(bounds.origin + gpui::point(px(8.0), px(8.0)));
-                                        if view.size.cols != cols || view.size.rows != rows {
-                                            view.size = TerminalSize { cols, rows };
-                                            if let Some(h) = &view.handle {
-                                                h.resize(view.size);
+                                    this.selection_anchor = Some(pos);
+                                    this.selection_head = Some(pos);
+                                    this.selection_dragging = true;
+                                    cx.notify();
+                                }),
+                            )
+                            .on_mouse_move(cx.listener(
+                                move |this, event: &MouseMoveEvent, _window, cx| {
+                                    // TUI mouse reporting: drag (1002) or full motion
+                                    // (1003) reports instead of local selection drags.
+                                    if this.mouse_mode().enabled {
+                                        let pos =
+                                            this.cell_at_point(event.position.x, event.position.y);
+                                        match this.mouse_down {
+                                            Some(button) => {
+                                                if !this.forward_mouse_report(
+                                                    TerminalMouseEventKind::Drag(button),
+                                                    pos,
+                                                    event.modifiers,
+                                                ) && this.mouse_mode().report_motion
+                                                {
+                                                    this.forward_mouse_report(
+                                                        TerminalMouseEventKind::Move,
+                                                        pos,
+                                                        event.modifiers,
+                                                    );
+                                                }
+                                            }
+                                            None => {
+                                                if this.mouse_mode().report_motion {
+                                                    this.forward_mouse_report(
+                                                        TerminalMouseEventKind::Move,
+                                                        pos,
+                                                        event.modifiers,
+                                                    );
+                                                }
                                             }
                                         }
-                                    });
+                                        return;
+                                    }
+                                    if this.selection_dragging {
+                                        let pos =
+                                            this.cell_at_point(event.position.x, event.position.y);
+                                        if this.selection_head != Some(pos) {
+                                            this.selection_head = Some(pos);
+                                            cx.notify();
+                                        }
+                                    }
+                                },
+                            ))
+                            .on_mouse_up(
+                                MouseButton::Left,
+                                cx.listener(move |this, event: &MouseUpEvent, _window, cx| {
+                                    // Release report for an in-progress TUI mouse drag/click.
+                                    if let Some(button) = this.mouse_down.take() {
+                                        let pos =
+                                            this.cell_at_point(event.position.x, event.position.y);
+                                        this.forward_mouse_report(
+                                            TerminalMouseEventKind::Release(button),
+                                            pos,
+                                            event.modifiers,
+                                        );
+                                        cx.notify();
+                                        return;
+                                    }
+                                    if this.selection_dragging {
+                                        this.selection_dragging = false;
+                                        if this.selection_anchor == this.selection_head {
+                                            this.clear_selection();
+                                        }
+                                        cx.notify();
+                                    }
+                                }),
+                            )
+                            .child(
+                                gpui::canvas(
+                                    {
+                                        // Measure once: the font is fixed (12px mono), so reuse
+                                        // the last measured cell metrics instead of shaping
+                                        // "0123456789" on every layout pass.
+                                        let cached_metrics = self.cell_metrics;
+                                        move |bounds, window, _cx| {
+                                            let pad_x = px(8.0);
+                                            let pad_y = px(8.0);
+                                            let avail_w =
+                                                (bounds.size.width - pad_x * 2.0).max(px(0.0));
+                                            let avail_h =
+                                                (bounds.size.height - pad_y * 2.0).max(px(0.0));
 
-                                    render_canvas_grid(
-                                        bounds,
-                                        cols,
-                                        rows,
-                                        cell_w,
-                                        cell_h,
-                                        snapshot.as_deref(),
-                                        selection_range,
-                                        render_cursor,
-                                        &paint_cache,
-                                        ttheme,
-                                        window,
-                                        cx,
-                                    );
-                                }
-                            },
-                        )
-                        .size_full(),
-                    ),
-                )
-                .when(show_scrollbar, |el| el.child(scrollbar)),
+                                            let (cell_w, cell_h) =
+                                                if let Some((w, h)) = cached_metrics {
+                                                    (w, h)
+                                                } else {
+                                                    let run = gpui::TextRun {
+                                                        len: 10,
+                                                        font: gpui::font(
+                                                            crate::markdown::render::MONO_FAMILY,
+                                                        ),
+                                                        color: gpui::white(),
+                                                        ..Default::default()
+                                                    };
+                                                    let sample = window.text_system().shape_line(
+                                                        SharedString::from("0123456789"),
+                                                        px(12.0),
+                                                        &[run],
+                                                        None,
+                                                    );
+                                                    let w = (sample.width / 10.0).max(px(1.0));
+                                                    // Derive row height from the shaped line
+                                                    // metrics so mouse mapping never drifts
+                                                    // from the painted grid.
+                                                    let h = (sample.ascent + sample.descent)
+                                                        .max(px(1.0));
+                                                    (w, h)
+                                                };
+
+                                            let cols = ((avail_w / cell_w).floor() as u16).max(20);
+                                            let rows = ((avail_h / cell_h).floor() as u16).max(5);
+
+                                            (cols, rows, cell_w, cell_h)
+                                        }
+                                    },
+                                    {
+                                        let snapshot = snapshot.clone();
+                                        let paint_cache = paint_cache.clone();
+                                        let view_for_canvas = view_handle.clone();
+                                        let focus_for_canvas = self.focus.clone();
+                                        move |bounds, (cols, rows, cell_w, cell_h), window, cx| {
+                                            window.handle_input(
+                                                &focus_for_canvas,
+                                                ElementInputHandler::new(
+                                                    bounds,
+                                                    view_for_canvas.clone(),
+                                                ),
+                                                cx,
+                                            );
+
+                                            view_for_canvas.update(cx, |view, _| {
+                                                view.cell_metrics = Some((cell_w, cell_h));
+                                                // Window-space grid origin, used by
+                                                // cell_at_point to map mouse events.
+                                                view.grid_origin = Some(
+                                                    bounds.origin + gpui::point(px(8.0), px(8.0)),
+                                                );
+                                                if view.size.cols != cols || view.size.rows != rows
+                                                {
+                                                    view.size = TerminalSize { cols, rows };
+                                                    if let Some(h) = &view.handle {
+                                                        h.resize(view.size);
+                                                    }
+                                                }
+                                            });
+
+                                            render_canvas_grid(
+                                                bounds,
+                                                cols,
+                                                rows,
+                                                cell_w,
+                                                cell_h,
+                                                snapshot.as_deref(),
+                                                selection_range,
+                                                render_cursor,
+                                                &paint_cache,
+                                                ttheme,
+                                                window,
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                )
+                                .size_full(),
+                            ),
+                    )
+                    .when(show_scrollbar, |el| el.child(scrollbar)),
             )
     }
 }

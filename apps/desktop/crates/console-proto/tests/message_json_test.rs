@@ -1,6 +1,5 @@
 use console_proto::{
-    AgentMessage, agent_message::Message as MessageEvent,
-    assistant_content_part::Part as PartEvent,
+    AgentMessage, agent_message::Message as MessageEvent, assistant_content_part::Part as PartEvent,
 };
 use std::path::PathBuf;
 
@@ -16,8 +15,7 @@ fn fixture(name: &str) -> String {
 
 #[test]
 fn decodes_golden_user_fixture() {
-    let msg: AgentMessage =
-        serde_json::from_str(fixture("user.json").trim()).expect("decode user");
+    let msg: AgentMessage = serde_json::from_str(fixture("user.json").trim()).expect("decode user");
     match msg.message {
         Some(MessageEvent::User(u)) => {
             assert_eq!(u.content, "Hello");

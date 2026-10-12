@@ -31,10 +31,9 @@ fn decodes_golden_set_response_fixture() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let items: Vec<ModelFavorite> = serde_json::from_str(
-        r#"[{"provider":"a","modelId":"b","futureField":"x"}]"#,
-    )
-    .expect("unknown fields must be ignored");
+    let items: Vec<ModelFavorite> =
+        serde_json::from_str(r#"[{"provider":"a","modelId":"b","futureField":"x"}]"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(items[0].provider, "a");
 }
 

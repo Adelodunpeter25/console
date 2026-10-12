@@ -25,8 +25,7 @@ fn decodes_golden_subagents_fixture() {
     let act = &sub.activities[0];
     assert_eq!(act.turn_index, 2);
     assert_eq!(act.tool_call_id, "c9");
-    let args: serde_json::Value =
-        serde_json::from_slice(&act.args).expect("args json");
+    let args: serde_json::Value = serde_json::from_slice(&act.args).expect("args json");
     assert_eq!(args["path"], "/x");
 }
 
@@ -50,5 +49,8 @@ fn serializes_counts_as_numbers() {
         ..Default::default()
     })
     .expect("encode activity");
-    assert!(raw.contains(r#""turnIndex":2"#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""turnIndex":2"#),
+        "unexpected encoding: {raw}"
+    );
 }

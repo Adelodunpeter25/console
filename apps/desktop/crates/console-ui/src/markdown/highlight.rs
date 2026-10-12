@@ -43,7 +43,9 @@ pub struct Token {
 /// Resolve a fenced-code info string or language tag to a Language definition.
 pub fn lang_for_tag(tag: &str) -> Option<&'static Language> {
     let registry = LanguageRegistry::builtin();
-    registry.for_name(tag).or_else(|| registry.for_extension(tag))
+    registry
+        .for_name(tag)
+        .or_else(|| registry.for_extension(tag))
 }
 
 /// Resolve a file path to a language definition name.

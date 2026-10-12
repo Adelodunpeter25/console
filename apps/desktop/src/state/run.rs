@@ -201,14 +201,13 @@ impl ConsoleDesktopApp {
             return;
         };
         let prompt = queued.prompt.clone();
-        let attachments = console_core::queued_attachments_from_proto(&queued.attachments)
-            .unwrap_or_default();
+        let attachments =
+            console_core::queued_attachments_from_proto(&queued.attachments).unwrap_or_default();
         let context_files = queued.context_files.clone();
         // Restore into composer for editing, then discard the queue entry.
-        self.composer_for_pane(&pane_id)
-            .update(cx, |input, cx| {
-                input.set_content_with_context_files(prompt.clone(), context_files, cx)
-            });
+        self.composer_for_pane(&pane_id).update(cx, |input, cx| {
+            input.set_content_with_context_files(prompt.clone(), context_files, cx)
+        });
         if !attachments.is_empty() {
             self.set_attachments_for_pane(&pane_id, attachments);
         }
@@ -709,7 +708,10 @@ impl ConsoleDesktopApp {
                 }
             }
             AgentSessionEvent::ModelStreamEnd { turn, .. } => {
-                if let Some(turn) = turn.as_ref().map(console_core::AssistantMessage::from_proto_assistant) {
+                if let Some(turn) = turn
+                    .as_ref()
+                    .map(console_core::AssistantMessage::from_proto_assistant)
+                {
                     if pane_shows_run {
                         self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                             t.finalize_assistant_message(turn, cx);
@@ -744,7 +746,10 @@ impl ConsoleDesktopApp {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                         t.upsert_assistant_tool_calls(
-                            calls.iter().map(console_core::ToolCall::from_proto).collect(),
+                            calls
+                                .iter()
+                                .map(console_core::ToolCall::from_proto)
+                                .collect(),
                             cx,
                         );
                     });
@@ -764,7 +769,10 @@ impl ConsoleDesktopApp {
                 if pane_shows_run {
                     self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                         t.append_tool_results(
-                            results.iter().map(console_core::ToolResult::from_proto).collect(),
+                            results
+                                .iter()
+                                .map(console_core::ToolResult::from_proto)
+                                .collect(),
                             cx,
                         );
                     });
@@ -991,14 +999,18 @@ impl ConsoleDesktopApp {
                             let sid = run_session_id.to_string();
                             let dq = console_core::RunPromptDto {
                                 prompt: next.prompt,
-                                context_files: console_core::queued_strings_from_proto(&next.context_files),
+                                context_files: console_core::queued_strings_from_proto(
+                                    &next.context_files,
+                                ),
                                 model_id: next.model_id,
                                 provider: next.provider,
                                 approval_mode: next.approval_mode,
                                 thinking_level: console_core::queued_thinking_from_proto(
                                     next.thinking_level.as_deref(),
                                 ),
-                                attachments: console_core::queued_attachments_from_proto(&next.attachments),
+                                attachments: console_core::queued_attachments_from_proto(
+                                    &next.attachments,
+                                ),
                             };
                             cx.spawn(async move |_, _| {
                                 let _ = client.runs.queue_prompt(&sid, dq).await;

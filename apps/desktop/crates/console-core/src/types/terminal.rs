@@ -74,6 +74,8 @@ pub struct TerminalRecord {
     pub revision: u64,
 }
 
+pub use console_proto::terminal_client_message::Event as TerminalClientEvent;
+pub use console_proto::terminal_server_message::Event as TerminalServerEvent;
 /// Server → client frames (canonical wire types from the shared protobuf
 /// schema). JSON text frames decode the oneof shape ({"spawned":{...}});
 /// binary tag-byte frames carry raw PTY output and never touch this type.
@@ -81,14 +83,14 @@ pub use console_proto::{
     TerminalClientMessage, TerminalExit, TerminalInput, TerminalKill, TerminalOutput,
     TerminalResize, TerminalServerMessage, TerminalSpawned,
 };
-pub use console_proto::terminal_client_message::Event as TerminalClientEvent;
-pub use console_proto::terminal_server_message::Event as TerminalServerEvent;
 
 /// Constructors for client frames (prost oneof messages have no inherent
 /// constructors from outside their crate).
 pub fn client_input(data: impl Into<String>) -> TerminalClientMessage {
     TerminalClientMessage {
-        event: Some(TerminalClientEvent::Input(TerminalInput { data: data.into() })),
+        event: Some(TerminalClientEvent::Input(TerminalInput {
+            data: data.into(),
+        })),
     }
 }
 

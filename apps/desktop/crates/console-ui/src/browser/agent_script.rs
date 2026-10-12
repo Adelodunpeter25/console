@@ -19,7 +19,13 @@ const ELEMENT_TEMPLATE: &str = include_str!("element_script.js");
 
 /// Script for the ref-based `snapshot` / `click` / `type` actions. Meant to be
 /// passed to `run_agent_script`, which awaits and returns its value.
-pub fn element_script(op: &str, element_ref: Option<&str>, text: Option<&str>, submit: bool, selector: Option<&str>) -> String {
+pub fn element_script(
+    op: &str,
+    element_ref: Option<&str>,
+    text: Option<&str>,
+    submit: bool,
+    selector: Option<&str>,
+) -> String {
     let request = serde_json::json!({
         "op": op,
         "ref": element_ref.map(str::trim).unwrap_or(""),

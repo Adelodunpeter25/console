@@ -42,12 +42,16 @@ fn worktree_key_round_trips_the_project_and_path() {
 #[test]
 fn a_path_that_itself_looks_like_a_key_still_splits_on_the_first_separator() {
     let key = worktree_workspace_key("proj-1", "/odd/::wt::/dir");
-    assert_eq!(split_workspace_key(&key), ("proj-1", Some("/odd/::wt::/dir")));
+    assert_eq!(
+        split_workspace_key(&key),
+        ("proj-1", Some("/odd/::wt::/dir"))
+    );
 }
 
 #[test]
 fn session_in_a_worktree_gets_the_worktree_workspace() {
-    let key = workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a")), Some("/repo")).unwrap();
+    let key =
+        workspace_key_for_session(&session(Some("proj-1"), Some("/wt/a")), Some("/repo")).unwrap();
     assert_eq!(key, worktree_workspace_key("proj-1", "/wt/a"));
 }
 
@@ -68,7 +72,10 @@ fn session_without_a_worktree_stays_in_its_project_workspace() {
 
 #[test]
 fn session_without_a_project_has_no_workspace_key() {
-    assert_eq!(workspace_key_for_session(&session(None, Some("/wt/a")), Some("/repo")), None);
+    assert_eq!(
+        workspace_key_for_session(&session(None, Some("/wt/a")), Some("/repo")),
+        None
+    );
     assert_eq!(workspace_key_for_session(&session(None, None), None), None);
 }
 
@@ -89,14 +96,20 @@ fn chat_in_an_existing_worktree_is_keyed_by_its_cwd() {
 fn trailing_slash_on_the_project_folder_does_not_make_a_new_workspace() {
     let mut s = session(Some("proj-1"), None);
     s.cwd = "/repo/".into();
-    assert_eq!(workspace_key_for_session(&s, Some("/repo")), Some("proj-1".to_string()));
+    assert_eq!(
+        workspace_key_for_session(&s, Some("/repo")),
+        Some("proj-1".to_string())
+    );
 }
 
 #[test]
 fn unknown_project_folder_falls_back_to_the_project_workspace() {
     let mut s = session(Some("proj-1"), None);
     s.cwd = "/wt/a".into();
-    assert_eq!(workspace_key_for_session(&s, None), Some("proj-1".to_string()));
+    assert_eq!(
+        workspace_key_for_session(&s, None),
+        Some("proj-1".to_string())
+    );
 }
 
 #[test]

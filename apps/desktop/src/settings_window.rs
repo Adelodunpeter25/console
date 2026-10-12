@@ -65,10 +65,12 @@ impl SettingsWindow {
         });
 
         let model_vision_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for chat model")
+            ComposerInput::new(window, cx)
+                .placeholder("provider/model or leave blank for chat model")
         });
         let model_smol_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("provider/model or leave blank for chat model")
+            ComposerInput::new(window, cx)
+                .placeholder("provider/model or leave blank for chat model")
         });
 
         let settings_client = app.upgrade().map(|entity| entity.read(cx).client.clone());
@@ -132,15 +134,23 @@ impl SettingsWindow {
         let mut subscriptions = Vec::new();
         subscriptions.extend(subscription);
         for search in &model_searches {
-            subscriptions.push(cx.subscribe(search, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
-                console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
-                _ => {}
-            }));
+            subscriptions.push(cx.subscribe(
+                search,
+                |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                    console_ui::input::ComposerEvent::Edited
+                    | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                    _ => {}
+                },
+            ));
         }
-        subscriptions.push(cx.subscribe(&keybindings_search, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
-            console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
-            _ => {}
-        }));
+        subscriptions.push(cx.subscribe(
+            &keybindings_search,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
 
         let mcp = crate::settings::mcp::McpTabState::new(app.clone(), window, cx);
 
@@ -152,13 +162,16 @@ impl SettingsWindow {
         // cleared the moment it is submitted (see on_github_submit), which is
         // what keeps the credential from lingering client-side — a read-only
         // field would block pasting entirely.
-        let github_token_input = cx.new(|cx| {
-            ComposerInput::new(window, cx).placeholder("ghp_… or github_pat_…")
-        });
-        subscriptions.push(cx.subscribe(&github_token_input, |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
-            console_ui::input::ComposerEvent::Edited | console_ui::input::ComposerEvent::Focus => cx.notify(),
-            _ => {}
-        }));
+        let github_token_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("ghp_… or github_pat_…"));
+        subscriptions.push(cx.subscribe(
+            &github_token_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
 
         Self {
             app,
@@ -580,8 +593,9 @@ impl Render for SettingsWindow {
                         });
                     });
                 let self_entity = cx.entity().downgrade();
-                let on_tab: Rc<dyn Fn(usize, console_ui::PickerTab, &mut Window, &mut App) + 'static> =
-                    Rc::new(move |idx, tab, _window, cx| {
+                let on_tab: Rc<
+                    dyn Fn(usize, console_ui::PickerTab, &mut Window, &mut App) + 'static,
+                > = Rc::new(move |idx, tab, _window, cx| {
                     if let Some(settings) = self_entity.upgrade() {
                         settings.update(cx, |this, cx| {
                             if idx < 2 {

@@ -4,11 +4,11 @@
 //! this flow lives next to its state instead of inside the window file.
 use std::rc::Rc;
 
-use console_ui::input::ComposerInput;
-use console_ui::settings::{McpModalMode, McpPage};
 use console_core::types::mcp::{
     McpAuthType, McpConnectionStatus, McpServerConfig, McpTransportType,
 };
+use console_ui::input::ComposerInput;
+use console_ui::settings::{McpModalMode, McpPage};
 use gpui::{App, AppContext, Context, Entity, IntoElement, Window};
 
 use crate::settings_window::SettingsWindow;
@@ -144,10 +144,20 @@ impl McpTabState {
                 entity.update(cx, |this, cx| {
                     if let Some(srv) = this.mcp.servers.iter().find(|s| s.id == server_id) {
                         name_input.update(cx, |input, cx| input.set_content(srv.name.clone(), cx));
-                        url_input.update(cx, |input, cx| input.set_content(srv.url.clone().unwrap_or_default(), cx));
-                        command_input.update(cx, |input, cx| input.set_content(srv.command.clone().unwrap_or_default(), cx));
-                        args_input.update(cx, |input, cx| input.set_content(srv.args.join(" "), cx));
-                        let env_str = srv.env.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(", ");
+                        url_input.update(cx, |input, cx| {
+                            input.set_content(srv.url.clone().unwrap_or_default(), cx)
+                        });
+                        command_input.update(cx, |input, cx| {
+                            input.set_content(srv.command.clone().unwrap_or_default(), cx)
+                        });
+                        args_input
+                            .update(cx, |input, cx| input.set_content(srv.args.join(" "), cx));
+                        let env_str = srv
+                            .env
+                            .iter()
+                            .map(|(k, v)| format!("{}={}", k, v))
+                            .collect::<Vec<_>>()
+                            .join(", ");
                         env_input.update(cx, |input, cx| input.set_content(env_str, cx));
 
                         this.mcp.is_modal_open = true;
@@ -202,7 +212,9 @@ impl McpTabState {
             let env_input = self.env_input.clone();
 
             Rc::new(move |_w: &mut Window, cx: &mut App| {
-                let Some(app) = app_handle.upgrade() else { return };
+                let Some(app) = app_handle.upgrade() else {
+                    return;
+                };
                 let client = app.read(cx).client.clone();
                 let name = name_input.read(cx).content().trim().to_string();
                 let url = url_input.read(cx).content().trim().to_string();
@@ -227,7 +239,8 @@ impl McpTabState {
                 let env = if env_str.is_empty() {
                     Vec::new()
                 } else {
-                    env_str.split(',')
+                    env_str
+                        .split(',')
                         .filter_map(|pair| {
                             let mut parts = pair.splitn(2, '=');
                             let k = parts.next()?.trim().to_string();
@@ -242,9 +255,10 @@ impl McpTabState {
                     let t = w.mcp.selected_transport.clone();
                     let a = w.mcp.selected_auth.clone();
                     let srv_id = match &w.mcp.modal_mode {
-                        McpModalMode::Add => {
-                            name.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_alphanumeric() && c != '-', "")
-                        }
+                        McpModalMode::Add => name
+                            .to_lowercase()
+                            .replace(' ', "-")
+                            .replace(|c: char| !c.is_alphanumeric() && c != '-', ""),
                         McpModalMode::Edit(id) => id.clone(),
                     };
                     (t, a, srv_id)
@@ -254,9 +268,17 @@ impl McpTabState {
                     id: id.clone(),
                     name,
                     transport: transport.clone(),
-                    url: if transport == McpTransportType::Http { Some(url) } else { None },
+                    url: if transport == McpTransportType::Http {
+                        Some(url)
+                    } else {
+                        None
+                    },
                     auth_type: auth,
-                    command: if transport == McpTransportType::Stdio { Some(cmd) } else { None },
+                    command: if transport == McpTransportType::Stdio {
+                        Some(cmd)
+                    } else {
+                        None
+                    },
                     args,
                     env,
                     status: McpConnectionStatus::Disconnected,
@@ -271,8 +293,8 @@ impl McpTabState {
                 });
 
                 let entity_clone = entity.clone();
-                cx.spawn(async move |cx| {
-                    match client.mcp.save_server(&server).await {
+                cx.spawn(
+                    async move |cx| match client.mcp.save_server(&server).await {
                         Ok(_) => {
                             let updated_list = client.mcp.list_servers().await.unwrap_or_default();
                             let _ = cx.update(|cx| {
@@ -287,14 +309,15 @@ impl McpTabState {
                         Err(e) => {
                             let _ = cx.update(|cx| {
                                 entity_clone.update(cx, |this, cx| {
-                                    this.mcp.action_error = Some(format!("Failed to save server: {}", e));
+                                    this.mcp.action_error =
+                                        Some(format!("Failed to save server: {}", e));
                                     this.mcp.is_submitting = false;
                                     cx.notify();
                                 });
                             });
                         }
-                    }
-                })
+                    },
+                )
                 .detach();
             })
         };
@@ -303,7 +326,9 @@ impl McpTabState {
             let entity = cx.entity().clone();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
-                let Some(app) = app_handle.upgrade() else { return };
+                let Some(app) = app_handle.upgrade() else {
+                    return;
+                };
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {
@@ -325,7 +350,9 @@ impl McpTabState {
             let entity = cx.entity().clone();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
-                let Some(app) = app_handle.upgrade() else { return };
+                let Some(app) = app_handle.upgrade() else {
+                    return;
+                };
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 // Optimistically set to Connecting
@@ -339,19 +366,12 @@ impl McpTabState {
                     // Client-owned loopback, bound before connect
                     // so the redirect URI is known up front. Falls
                     // back to server loopback when the bind fails.
-                    let listener =
-                        std::net::TcpListener::bind(("127.0.0.1", 0)).ok();
+                    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).ok();
                     let redirect_uri: Option<String> = listener
                         .as_ref()
                         .and_then(|l| l.local_addr().ok())
-                        .map(|a| {
-                            format!("http://127.0.0.1:{}/callback", a.port())
-                        });
-                    if let Err(e) = client
-                        .mcp
-                        .start_connect(&id, redirect_uri.as_deref())
-                        .await
-                    {
+                        .map(|a| format!("http://127.0.0.1:{}/callback", a.port()));
+                    if let Err(e) = client.mcp.start_connect(&id, redirect_uri.as_deref()).await {
                         let _ = cx.update(|cx| {
                             entity_clone.update(cx, |this, cx| {
                                 if let Some(s) = this.mcp.servers.iter_mut().find(|s| s.id == id) {
@@ -369,8 +389,8 @@ impl McpTabState {
                     for _ in 0..240 {
                         match client.mcp.list_servers().await {
                             Ok(list) => {
-                                let terminal = list.iter().find(|s| s.id == id).map(|s| {
-                                    match &s.status {
+                                let terminal =
+                                    list.iter().find(|s| s.id == id).map(|s| match &s.status {
                                         McpConnectionStatus::NeedsAuth => {
                                             auth_url = s.auth_url.clone();
                                             true
@@ -380,8 +400,7 @@ impl McpTabState {
                                             done = true;
                                             true
                                         }
-                                    }
-                                });
+                                    });
                                 let _ = cx.update(|cx| {
                                     entity_clone.update(cx, |this, cx| {
                                         this.mcp.servers = list;
@@ -395,7 +414,9 @@ impl McpTabState {
                             Err(e) => {
                                 let _ = cx.update(|cx| {
                                     entity_clone.update(cx, |this, cx| {
-                                        if let Some(s) = this.mcp.servers.iter_mut().find(|s| s.id == id) {
+                                        if let Some(s) =
+                                            this.mcp.servers.iter_mut().find(|s| s.id == id)
+                                        {
                                             s.status = McpConnectionStatus::Error(e.to_string());
                                             cx.notify();
                                         }
@@ -436,19 +457,17 @@ impl McpTabState {
                             .ok()
                             .flatten();
                             match captured {
-                                Some((state, code, err_msg)) => {
-                                    client
-                                        .mcp
-                                        .forward_oauth_callback(
-                                            &id,
-                                            &state,
-                                            code.as_deref(),
-                                            err_msg.as_deref(),
-                                            None,
-                                        )
-                                        .await
-                                        .is_ok()
-                                }
+                                Some((state, code, err_msg)) => client
+                                    .mcp
+                                    .forward_oauth_callback(
+                                        &id,
+                                        &state,
+                                        code.as_deref(),
+                                        err_msg.as_deref(),
+                                        None,
+                                    )
+                                    .await
+                                    .is_ok(),
                                 None => false,
                             }
                         }
@@ -502,7 +521,9 @@ impl McpTabState {
             let entity = cx.entity().clone();
             let app_handle = self.app.clone();
             Rc::new(move |id: String, _w: &mut Window, cx: &mut App| {
-                let Some(app) = app_handle.upgrade() else { return };
+                let Some(app) = app_handle.upgrade() else {
+                    return;
+                };
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {

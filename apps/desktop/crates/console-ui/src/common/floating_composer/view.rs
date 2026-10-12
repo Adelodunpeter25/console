@@ -19,11 +19,11 @@ use gpui::{
 
 use super::BranchChoice;
 use crate::common::composer_view::composer_attachment_row;
+use crate::common::{ApprovalModeDropdown, ApprovalModeIconExt};
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
     AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
 };
-use crate::common::{ApprovalModeDropdown, ApprovalModeIconExt};
 use crate::input::ComposerInput;
 use crate::primitives::{
     ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, app_icon, dropdown_menu, popover,

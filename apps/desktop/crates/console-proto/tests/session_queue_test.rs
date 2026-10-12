@@ -56,8 +56,7 @@ fn omits_absent_optionals() {
     })
     .expect("encode queue");
     assert_eq!(
-        raw,
-        r#"{"id":"q","sessionId":"s","prompt":"hi","createdAt":"2024-05-01T12:00:00Z"}"#,
+        raw, r#"{"id":"q","sessionId":"s","prompt":"hi","createdAt":"2024-05-01T12:00:00Z"}"#,
         "unexpected encoding: {raw}"
     );
 }

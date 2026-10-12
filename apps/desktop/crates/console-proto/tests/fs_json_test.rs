@@ -46,8 +46,7 @@ fn decodes_golden_search_fixture() {
 
 #[test]
 fn decodes_golden_grep_fixture() {
-    let msg: GrepResult =
-        serde_json::from_str(fixture("grep.json").trim()).expect("decode grep");
+    let msg: GrepResult = serde_json::from_str(fixture("grep.json").trim()).expect("decode grep");
     assert_eq!(msg.total_matched, 3);
     assert_eq!(msg.next_cursor, 200);
     assert!(msg.has_more);
@@ -59,8 +58,7 @@ fn decodes_golden_grep_fixture() {
 
 #[test]
 fn decodes_golden_small_fixtures() {
-    let tree: FsDirectoryTree =
-        serde_json::from_str(fixture("tree.json").trim()).expect("tree");
+    let tree: FsDirectoryTree = serde_json::from_str(fixture("tree.json").trim()).expect("tree");
     assert!(tree.tree_formatted.contains("a.go"));
     let content: FsFileContent =
         serde_json::from_str(fixture("file_content.json").trim()).expect("content");
@@ -74,8 +72,7 @@ fn decodes_golden_small_fixtures() {
     let created: DirCreateResponse =
         serde_json::from_str(fixture("dir_create.json").trim()).expect("mkdir");
     assert!(created.created);
-    let watch: FsChangeEvent =
-        serde_json::from_str(fixture("watch.json").trim()).expect("watch");
+    let watch: FsChangeEvent = serde_json::from_str(fixture("watch.json").trim()).expect("watch");
     assert_eq!(watch.event_path.as_deref(), Some("/p/a.go"));
 }
 

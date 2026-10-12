@@ -247,11 +247,29 @@ pub(super) fn render_canvas_grid(
                 .unwrap_or(false);
             if hit {
                 if let Some(entry) = paint_cache.borrow().get(&row_u16) {
-                    paint_cached_entry(origin, cell_w, cell_h, y, entry, theme.background, window, cx);
+                    paint_cached_entry(
+                        origin,
+                        cell_w,
+                        cell_h,
+                        y,
+                        entry,
+                        theme.background,
+                        window,
+                        cx,
+                    );
                 }
                 paint_cursor_overlay(
-                    origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
-                    window, cx,
+                    origin,
+                    cell_w,
+                    cell_h,
+                    y,
+                    snap,
+                    row_u16,
+                    cursor_here,
+                    cursor,
+                    theme,
+                    window,
+                    cx,
                 );
                 continue;
             }
@@ -344,8 +362,17 @@ pub(super) fn render_canvas_grid(
             );
         }
         paint_cursor_overlay(
-            origin, cell_w, cell_h, y, snap, row_u16, cursor_here, cursor, theme,
-            window, cx,
+            origin,
+            cell_w,
+            cell_h,
+            y,
+            snap,
+            row_u16,
+            cursor_here,
+            cursor,
+            theme,
+            window,
+            cx,
         );
     }
 }

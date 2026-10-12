@@ -101,10 +101,9 @@ impl RunService {
         if body.success {
             Ok(())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to resolve browser action".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to resolve browser action".into()
+            })))
         }
     }
 

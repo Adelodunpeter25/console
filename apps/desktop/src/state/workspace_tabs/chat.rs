@@ -89,7 +89,8 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         let pane_id = usage_pane_id.clone();
                         app.update(cx, |this, cx| {
-                            let session_id = this.active_session_for_pane(&pane_id).unwrap_or_default();
+                            let session_id =
+                                this.active_session_for_pane(&pane_id).unwrap_or_default();
                             this.maybe_fetch_usage(&session_id, cx);
                             this.fetch_context_usage(&session_id, cx);
                         });
@@ -545,9 +546,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let current = self
-            .pane_thinking_level(pane_id)
-            .unwrap_or(supported[0]);
+        let current = self.pane_thinking_level(pane_id).unwrap_or(supported[0]);
 
         let current_index = supported
             .iter()
@@ -776,10 +775,7 @@ impl ConsoleDesktopApp {
         // A known session stamps its project and provider verbatim — including explicit
         // None (No project) — so reopening never inherits the pane's project.
         // Only truly unknown sessions fall back to the pane.
-        let known_session = self
-            .sessions
-            .iter()
-            .find(|s| s.id == session_id);
+        let known_session = self.sessions.iter().find(|s| s.id == session_id);
         let known_project_id = known_session.map(|s| self.workspace_key_for_header(s));
         let project_id = known_project_id
             .clone()

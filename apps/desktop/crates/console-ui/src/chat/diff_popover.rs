@@ -91,12 +91,7 @@ fn body_for(change: &TurnChange) -> Option<Body<'_>> {
     }
 }
 
-fn set_hover(
-    state: &Entity<PopoverHover>,
-    chip: Option<bool>,
-    card: Option<bool>,
-    cx: &mut App,
-) {
+fn set_hover(state: &Entity<PopoverHover>, chip: Option<bool>, card: Option<bool>, cx: &mut App) {
     let (generation, want_open, is_open) = state.update(cx, |s, _| {
         if let Some(value) = chip {
             s.chip = value;

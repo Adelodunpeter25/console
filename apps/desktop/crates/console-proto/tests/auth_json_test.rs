@@ -20,7 +20,10 @@ fn decodes_golden_status_fixture() {
         serde_json::from_str(fixture("status.json").trim()).expect("decode status");
     let antigravity = msg.antigravity.as_ref().expect("antigravity reported");
     assert!(antigravity.logged_in);
-    assert_eq!(antigravity.email.as_deref(), Some("adelodunjoseph892@gmail.com"));
+    assert_eq!(
+        antigravity.email.as_deref(),
+        Some("adelodunjoseph892@gmail.com")
+    );
     assert!(msg.codex.as_ref().unwrap().logged_in);
     assert!(msg.claude.as_ref().unwrap().logged_in);
     // devin is reserved: reported but never logged in, so a client never has
@@ -69,8 +72,8 @@ fn decodes_golden_project_id_fixtures() {
         .expect("decode unset project id");
     assert!(unset.project_id.is_none());
 
-    let set: ProjectIdResponse = serde_json::from_str(fixture("project_id_set.json").trim())
-        .expect("decode set project id");
+    let set: ProjectIdResponse =
+        serde_json::from_str(fixture("project_id_set.json").trim()).expect("decode set project id");
     assert_eq!(set.project_id.as_deref(), Some("my-gcp-project"));
 }
 
@@ -85,10 +88,9 @@ fn decodes_golden_github_status_fixture() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let msg: AuthStatusResponse = serde_json::from_str(
-        r#"{"codex":{"loggedIn":true,"futureField":"x"},"futureTop":"y"}"#,
-    )
-    .expect("unknown fields must be ignored");
+    let msg: AuthStatusResponse =
+        serde_json::from_str(r#"{"codex":{"loggedIn":true,"futureField":"x"},"futureTop":"y"}"#)
+            .expect("unknown fields must be ignored");
     assert!(msg.codex.as_ref().unwrap().logged_in);
 }
 
@@ -101,6 +103,12 @@ fn serializes_camel_case() {
         redirect_uri: "http://localhost:1455/auth/callback".into(),
     })
     .expect("encode login url");
-    assert!(raw.contains(r#""authUrl":"https://x""#), "unexpected encoding: {raw}");
-    assert!(raw.contains(r#""redirectUri""#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""authUrl":"https://x""#),
+        "unexpected encoding: {raw}"
+    );
+    assert!(
+        raw.contains(r#""redirectUri""#),
+        "unexpected encoding: {raw}"
+    );
 }

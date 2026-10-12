@@ -47,7 +47,10 @@ impl ConsoleDesktopApp {
     /// The workspace a session's tabs live in: its worktree's workspace when
     /// it runs outside the project folder, else the project's. Falls back to
     /// what the header alone says while projects are still loading.
-    pub(crate) fn workspace_key_for_header(&self, session: &console_core::SessionHeader) -> Option<String> {
+    pub(crate) fn workspace_key_for_header(
+        &self,
+        session: &console_core::SessionHeader,
+    ) -> Option<String> {
         let project = session
             .project_id
             .as_deref()
@@ -605,7 +608,6 @@ impl ConsoleDesktopApp {
                                 this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
                                     t.set_messages(Vec::new(), cx);
                                 });
-
                             }
                             Err(error) => {
                                 this.set_error(
@@ -650,11 +652,7 @@ impl ConsoleDesktopApp {
                         }
                         match result {
                             Ok(updated_session) => {
-                                this.apply_session_header_for_pane(
-                                    &pane_id,
-                                    &updated_session,
-                                    cx,
-                                );
+                                this.apply_session_header_for_pane(&pane_id, &updated_session, cx);
                                 this.clear_error_for_pane(&pane_id, cx);
                             }
                             Err(error) => {
@@ -674,7 +672,12 @@ impl ConsoleDesktopApp {
 
     /// Reload a pane's branch dropdown state against `cwd` — used after a
     /// worktree attach/create moves the pane onto a different checkout.
-    pub(crate) fn reload_branches_for_pane(&mut self, pane_id: String, cwd: String, cx: &mut Context<Self>) {
+    pub(crate) fn reload_branches_for_pane(
+        &mut self,
+        pane_id: String,
+        cwd: String,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
             state.branch_loaded = false;
             state.branch_cwd = Some(cwd.clone());

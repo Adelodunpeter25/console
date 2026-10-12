@@ -1,6 +1,5 @@
 use console_proto::{
-    TerminalClientMessage, TerminalServerMessage,
-    terminal_client_message::Event as ClientEvent,
+    TerminalClientMessage, TerminalServerMessage, terminal_client_message::Event as ClientEvent,
     terminal_server_message::Event as ServerEvent,
 };
 use std::path::PathBuf;
@@ -90,5 +89,8 @@ fn serializes_oneof_shape() {
         })),
     })
     .expect("encode resize");
-    assert!(raw.contains(r#""resize":{"cols":100,"rows":30}"#), "unexpected: {raw}");
+    assert!(
+        raw.contains(r#""resize":{"cols":100,"rows":30}"#),
+        "unexpected: {raw}"
+    );
 }

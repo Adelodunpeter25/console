@@ -12,13 +12,20 @@ fn entry(text: &str, message_id: Option<&str>) -> PromptHistoryEntry {
 #[test]
 fn recalled_entry_exposes_its_message_id() {
     let mut history = console_ui::common::input::PromptHistory::default();
-    history.set_entries(vec![entry("first", Some("m1")), entry("second", Some("m2"))]);
+    history.set_entries(vec![
+        entry("first", Some("m1")),
+        entry("second", Some("m2")),
+    ]);
 
-    let older = history.navigate(false, "draft", &[]).expect("up recalls newest");
+    let older = history
+        .navigate(false, "draft", &[])
+        .expect("up recalls newest");
     assert_eq!(older.text, "second");
     assert_eq!(older.message_id.as_deref(), Some("m2"));
 
-    let oldest = history.navigate(false, "second", &[]).expect("up recalls older");
+    let oldest = history
+        .navigate(false, "second", &[])
+        .expect("up recalls older");
     assert_eq!(oldest.text, "first");
     assert_eq!(oldest.message_id.as_deref(), Some("m1"));
 }
@@ -30,7 +37,9 @@ fn optimistic_entries_have_no_message_id() {
     let mut history = console_ui::common::input::PromptHistory::default();
     history.set_entries(vec![entry("just sent", None)]);
 
-    let recalled = history.navigate(false, "draft", &[]).expect("up recalls entry");
+    let recalled = history
+        .navigate(false, "draft", &[])
+        .expect("up recalls entry");
     assert_eq!(recalled.text, "just sent");
     assert_eq!(recalled.message_id, None);
 }
@@ -40,8 +49,12 @@ fn stepping_forward_past_newest_restores_draft_without_id() {
     let mut history = console_ui::common::input::PromptHistory::default();
     history.set_entries(vec![entry("first", Some("m1"))]);
 
-    history.navigate(false, "unsent draft", &[]).expect("up recalls entry");
-    let draft = history.navigate(true, "first", &[]).expect("down restores draft");
+    history
+        .navigate(false, "unsent draft", &[])
+        .expect("up recalls entry");
+    let draft = history
+        .navigate(true, "first", &[])
+        .expect("down restores draft");
     assert_eq!(draft.text, "unsent draft");
     assert_eq!(draft.message_id, None);
     // Cleared index is how the composer tells the app it just restored the
@@ -58,7 +71,9 @@ fn mentions_survive_a_recall() {
         Some("m1".to_string()),
     )]);
 
-    let recalled = history.navigate(false, "draft", &[]).expect("up recalls entry");
+    let recalled = history
+        .navigate(false, "draft", &[])
+        .expect("up recalls entry");
     assert_eq!(recalled.context_files, vec!["README.md".to_string()]);
 }
 

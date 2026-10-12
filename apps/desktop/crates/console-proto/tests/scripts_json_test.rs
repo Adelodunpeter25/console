@@ -1,6 +1,4 @@
-use console_proto::{
-    ScriptRun, ScriptRunEvent, script_run_event::Event as ScriptRunEventKind,
-};
+use console_proto::{ScriptRun, ScriptRunEvent, script_run_event::Event as ScriptRunEventKind};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {
@@ -27,8 +25,7 @@ fn decodes_golden_script_fixture() {
 #[test]
 fn decodes_golden_result_fixture() {
     let msg: console_proto::ProjectScriptsResult =
-        serde_json::from_str(fixture("scripts_result.json").trim())
-            .expect("decode result fixture");
+        serde_json::from_str(fixture("scripts_result.json").trim()).expect("decode result fixture");
     assert_eq!(msg.project_id, "p1");
     assert_eq!(msg.scripts.len(), 1);
     assert_eq!(msg.source, "console.toml");
@@ -48,10 +45,7 @@ fn decodes_golden_run_fixture() {
 fn decodes_golden_event_fixtures() {
     let status: ScriptRunEvent =
         serde_json::from_str(fixture("event_status.json").trim()).expect("status");
-    assert!(matches!(
-        status.event,
-        Some(ScriptRunEventKind::Status(_))
-    ));
+    assert!(matches!(status.event, Some(ScriptRunEventKind::Status(_))));
     let output: ScriptRunEvent =
         serde_json::from_str(fixture("event_output.json").trim()).expect("output");
     match output.event {
@@ -83,5 +77,8 @@ fn serializes_camel_case() {
         ..Default::default()
     })
     .expect("encode run");
-    assert!(raw.contains(r#""runId":"r1""#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""runId":"r1""#),
+        "unexpected encoding: {raw}"
+    );
 }

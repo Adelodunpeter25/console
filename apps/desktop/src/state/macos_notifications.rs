@@ -19,7 +19,7 @@ mod imp {
     use objc2::runtime::{Bool, NSObject, NSObjectProtocol};
     use objc2::{ClassType, define_class};
     use objc2_app_kit::NSApplication;
-    use objc2_foundation::{NSArray, NSDictionary, MainThreadMarker, NSError, NSString};
+    use objc2_foundation::{MainThreadMarker, NSArray, NSDictionary, NSError, NSString};
     use objc2_user_notifications::{
         UNAuthorizationOptions, UNMutableNotificationContent, UNNotificationRequest,
         UNNotificationResponse, UNNotificationSound, UNUserNotificationCenter,
@@ -128,9 +128,7 @@ mod imp {
     pub(crate) fn ensure_initialized() -> UnboundedReceiver<String> {
         let txs = CLICK_TXS.get_or_init(|| Mutex::new(Vec::new()));
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        txs.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(tx);
+        txs.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
 
         // One-time native setup.
         if DELEGATE.get().is_none() {

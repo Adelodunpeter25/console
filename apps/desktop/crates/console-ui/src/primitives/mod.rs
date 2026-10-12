@@ -16,7 +16,6 @@ pub mod transparency;
 
 use crate::theme::Theme;
 
-
 pub use context_menu::{draft_context_menu, session_context_menu};
 pub use file_icons::{
     base_name, file_icon_for_language, file_icon_for_name, file_icon_for_path, file_type_icon,

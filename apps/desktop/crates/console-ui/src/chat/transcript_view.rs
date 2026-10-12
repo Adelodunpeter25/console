@@ -162,10 +162,7 @@ impl TranscriptView {
 
     /// Wire assistant-message fork clicks (the app forks the session through
     /// the clicked message and opens the new chat).
-    pub fn set_on_fork(
-        &mut self,
-        handler: impl Fn(String, &mut Window, &mut App) + 'static,
-    ) {
+    pub fn set_on_fork(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
         self.on_fork = Some(Rc::new(handler));
     }
 
@@ -241,7 +238,10 @@ impl TranscriptView {
         let closes_turn = self.messages[index + 1..]
             .iter()
             .take_while(|message| !matches!(message, AgentMessage::User { .. }))
-            .all(|message| !matches!(message, AgentMessage::Assistant { .. }) || is_hidden_tool_transport(message));
+            .all(|message| {
+                !matches!(message, AgentMessage::Assistant { .. })
+                    || is_hidden_tool_transport(message)
+            });
         if !closes_turn {
             return None;
         }
@@ -688,11 +688,7 @@ impl TranscriptView {
     /// The viewport is re-anchored to whatever row was at the top before the
     /// prepend plus the number of new messages, so the user does not see the
     /// scroll position jump. Empty input is a no-op.
-    pub fn prepend_older_messages(
-        &mut self,
-        older: Vec<AgentMessage>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn prepend_older_messages(&mut self, older: Vec<AgentMessage>, cx: &mut Context<Self>) {
         if older.is_empty() {
             return;
         }
@@ -735,8 +731,7 @@ impl TranscriptView {
                 });
                 // Re-apply on the next frame so variable-height Markdown
                 // rows are measured before the offset resolves.
-                self.scroll_restore_generation =
-                    self.scroll_restore_generation.wrapping_add(1);
+                self.scroll_restore_generation = self.scroll_restore_generation.wrapping_add(1);
                 let generation = self.scroll_restore_generation;
                 let entity = cx.entity().downgrade();
                 let row = new_row_index;

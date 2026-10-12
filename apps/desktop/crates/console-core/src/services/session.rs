@@ -3,7 +3,6 @@ use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
 use std::time::Duration;
 
-
 #[derive(Clone)]
 pub struct SessionService {
     transport: HttpTransport,
@@ -136,7 +135,8 @@ impl SessionService {
             .await
             .context("Failed to parse session context response")?;
         if body.success {
-            body.data.ok_or_else(|| anyhow!("Session context data is missing"))
+            body.data
+                .ok_or_else(|| anyhow!("Session context data is missing"))
         } else {
             Err(anyhow!(
                 body.error
@@ -188,12 +188,7 @@ impl SessionService {
     /// `GET /api/sessions/:id/changes/diff` — cached unified diff text for a
     /// single file change, scoped to `(path, turn_index)`. Avoids any git
     /// subprocess call; the diff is served straight from the DB.
-    pub async fn get_change_diff(
-        &self,
-        id: &str,
-        path: &str,
-        turn_index: u64,
-    ) -> Result<String> {
+    pub async fn get_change_diff(&self, id: &str, path: &str, turn_index: u64) -> Result<String> {
         let url = self
             .transport
             .url(&format!(
@@ -222,10 +217,9 @@ impl SessionService {
                 .map(|d| d.diff_text)
                 .ok_or_else(|| anyhow!("Session change diff data is missing"))
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to load session change diff".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to load session change diff".into()
+            })))
         }
     }
 
@@ -265,10 +259,9 @@ impl SessionService {
             .decode_json(resp)
             .await
             .context("Failed to parse set change reviewed response")?;
-        Err(anyhow!(
-            body.error
-                .unwrap_or_else(|| "Failed to set change reviewed state".into())
-        ))
+        Err(anyhow!(body.error.unwrap_or_else(|| {
+            "Failed to set change reviewed state".into()
+        })))
     }
 
     /// `GET /api/sessions/:id/todos` — persisted todo checklist for a session.

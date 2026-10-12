@@ -41,7 +41,10 @@ fn test_mcp_stdio_config() {
         url: None,
         auth_type: McpAuthType::None,
         command: Some("npx".to_string()),
-        args: vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string()],
+        args: vec![
+            "-y".to_string(),
+            "@modelcontextprotocol/server-filesystem".to_string(),
+        ],
         env: vec![("ROOT_DIR".to_string(), "/tmp".to_string())],
         status: McpConnectionStatus::Disconnected,
         auth_url: None,

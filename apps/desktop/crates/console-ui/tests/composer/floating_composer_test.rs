@@ -124,7 +124,10 @@ fn only_new_worktree_creates_a_worktree() {
 
 #[test]
 fn picking_an_existing_branch_checks_it_out_in_the_project() {
-    assert_eq!(BranchChoice::FromBranch("main".into()).checkout_target(), Some("main"));
+    assert_eq!(
+        BranchChoice::FromBranch("main".into()).checkout_target(),
+        Some("main")
+    );
     assert_eq!(BranchChoice::Project.checkout_target(), None);
     assert_eq!(BranchChoice::NewWorktree.checkout_target(), None);
 }

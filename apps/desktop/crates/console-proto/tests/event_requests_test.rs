@@ -1,6 +1,4 @@
-use console_proto::{
-    AskQuestionRequest, BrowserActionRequest, ErrorPayload, PermissionRequest,
-};
+use console_proto::{AskQuestionRequest, BrowserActionRequest, ErrorPayload, PermissionRequest};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {

@@ -1,8 +1,8 @@
 //! "View all" session changes review tab: opening, fetching, and toggling
 //! per-file reviewed state (§6 of `docs/session-changes-turn-diff-plan.md`).
 
-use console_core::types::ChangesScope;
 use console_core::WorkspaceTabConfig;
+use console_core::types::ChangesScope;
 use console_ui::workspace::ops as workspace_ops;
 use gpui::Context;
 
@@ -11,7 +11,12 @@ use crate::state::app::ConsoleDesktopApp;
 impl ConsoleDesktopApp {
     /// Open (or focus, if already open) the review tab for the given session
     /// and scope in the active pane.
-    pub fn open_changes_review_tab(&mut self, session_id: String, scope: ChangesScope, cx: &mut Context<Self>) {
+    pub fn open_changes_review_tab(
+        &mut self,
+        session_id: String,
+        scope: ChangesScope,
+        cx: &mut Context<Self>,
+    ) {
         let pane_id = self
             .active_pane_id
             .clone()
@@ -45,27 +50,29 @@ impl ConsoleDesktopApp {
     ) {
         let client = self.client.clone();
         let tab_id = tab_id.to_string();
-        cx.spawn(async move |entity, cx| match client.sessions.get_changes(&session_id, None).await {
-            Ok(changes) => {
-                cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let collapsed: std::collections::HashSet<String> = changes
-                                .iter()
-                                .filter(|c| c.reviewed)
-                                .map(|c| c.path.clone())
-                                .collect();
-                            this.changes_review_collapsed
-                                .insert(tab_id.clone(), collapsed);
-                            this.changes_review_data
-                                .insert(tab_id.clone(), std::rc::Rc::new(changes));
-                            cx.notify();
-                        });
-                    }
-                });
-            }
-            Err(err) => {
-                log::warn!("Failed to fetch changes review data: {}", err);
+        cx.spawn(async move |entity, cx| {
+            match client.sessions.get_changes(&session_id, None).await {
+                Ok(changes) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let collapsed: std::collections::HashSet<String> = changes
+                                    .iter()
+                                    .filter(|c| c.reviewed)
+                                    .map(|c| c.path.clone())
+                                    .collect();
+                                this.changes_review_collapsed
+                                    .insert(tab_id.clone(), collapsed);
+                                this.changes_review_data
+                                    .insert(tab_id.clone(), std::rc::Rc::new(changes));
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    log::warn!("Failed to fetch changes review data: {}", err);
+                }
             }
         })
         .detach();
@@ -78,7 +85,10 @@ impl ConsoleDesktopApp {
         path: &str,
         cx: &mut Context<Self>,
     ) {
-        let set = self.changes_review_collapsed.entry(tab_id.to_string()).or_default();
+        let set = self
+            .changes_review_collapsed
+            .entry(tab_id.to_string())
+            .or_default();
         if !set.remove(path) {
             set.insert(path.to_string());
         }
@@ -100,7 +110,10 @@ impl ConsoleDesktopApp {
             let Some(data) = self.changes_review_data.get(tab_id) else {
                 return;
             };
-            let Some(entry) = data.iter().find(|c| c.path == path && c.turn_index == turn_index) else {
+            let Some(entry) = data
+                .iter()
+                .find(|c| c.path == path && c.turn_index == turn_index)
+            else {
                 return;
             };
             !entry.reviewed
@@ -119,7 +132,10 @@ impl ConsoleDesktopApp {
                 .collect();
             *data = std::rc::Rc::new(updated);
         }
-        let collapsed = self.changes_review_collapsed.entry(tab_id.to_string()).or_default();
+        let collapsed = self
+            .changes_review_collapsed
+            .entry(tab_id.to_string())
+            .or_default();
         if new_reviewed {
             collapsed.insert(path.clone());
         } else {

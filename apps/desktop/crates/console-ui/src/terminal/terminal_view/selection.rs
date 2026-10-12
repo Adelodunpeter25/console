@@ -177,10 +177,7 @@ impl TerminalView {
         };
         let last_col = (row_cells.len() as u16).saturating_sub(1);
         self.selection_anchor = Some(TerminalCellPos { col: 0, row });
-        self.selection_head = Some(TerminalCellPos {
-            col: last_col,
-            row,
-        });
+        self.selection_head = Some(TerminalCellPos { col: last_col, row });
         self.selection_dragging = false;
         true
     }

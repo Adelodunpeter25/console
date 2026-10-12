@@ -1,5 +1,5 @@
-use crate::types::mcp::{McpServerConfig, McpToolInfo};
 use crate::types::ApiResponse;
+use crate::types::mcp::{McpServerConfig, McpToolInfo};
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
 
@@ -33,9 +33,10 @@ impl McpService {
             .await
             .context("failed to decode MCP servers response")?;
         if !body.success {
-            anyhow::bail!(body
-                .error
-                .unwrap_or_else(|| "failed to list MCP servers".into()));
+            anyhow::bail!(
+                body.error
+                    .unwrap_or_else(|| "failed to list MCP servers".into())
+            );
         }
         // An empty list is not an error; the settings page just renders it.
         Ok(body.data.unwrap_or_default())
@@ -62,16 +63,20 @@ impl McpService {
             .await
             .context("failed to decode MCP server response")?;
         if !body.success {
-            anyhow::bail!(body
-                .error
-                .unwrap_or_else(|| "failed to save MCP server".into()));
+            anyhow::bail!(
+                body.error
+                    .unwrap_or_else(|| "failed to save MCP server".into())
+            );
         }
         body.data
             .ok_or_else(|| anyhow!("MCP server save returned no server"))
     }
 
     pub async fn delete_server(&self, id: &str) -> Result<()> {
-        let url = self.transport.url(&format!("/api/mcp/servers/{}", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/mcp/servers/{}", id))
+            .await;
         let resp = self
             .transport
             .client()
@@ -98,7 +103,10 @@ impl McpService {
     /// the browser plus forwards the result; without it the server keeps
     /// its loopback behavior. Callers poll `list_servers` for progress.
     pub async fn start_connect(&self, id: &str, redirect_uri: Option<&str>) -> Result<()> {
-        let url = self.transport.url(&format!("/api/mcp/servers/{}/connect", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/mcp/servers/{}/connect", id))
+            .await;
         let mut req = self.transport.client().post(&url);
         if let Some(redirect_uri) = redirect_uri {
             req = req.json(&serde_json::json!({ "redirectUri": redirect_uri }));
@@ -115,9 +123,10 @@ impl McpService {
             .await
             .context("failed to decode connect MCP response")?;
         if !body.success {
-            anyhow::bail!(body
-                .error
-                .unwrap_or_else(|| "failed to connect MCP server".into()));
+            anyhow::bail!(
+                body.error
+                    .unwrap_or_else(|| "failed to connect MCP server".into())
+            );
         }
         Ok(())
     }
@@ -160,15 +169,19 @@ impl McpService {
             .await
             .context("failed to decode MCP OAuth callback response")?;
         if !body.success {
-            anyhow::bail!(body
-                .error
-                .unwrap_or_else(|| "failed to forward MCP OAuth callback".into()));
+            anyhow::bail!(
+                body.error
+                    .unwrap_or_else(|| "failed to forward MCP OAuth callback".into())
+            );
         }
         Ok(())
     }
 
     pub async fn disconnect_server(&self, id: &str) -> Result<()> {
-        let url = self.transport.url(&format!("/api/mcp/servers/{}/disconnect", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/mcp/servers/{}/disconnect", id))
+            .await;
         let resp = self
             .transport
             .client()
@@ -185,7 +198,10 @@ impl McpService {
     }
 
     pub async fn list_tools(&self, id: &str) -> Result<Vec<McpToolInfo>> {
-        let url = self.transport.url(&format!("/api/mcp/servers/{}/tools", id)).await;
+        let url = self
+            .transport
+            .url(&format!("/api/mcp/servers/{}/tools", id))
+            .await;
         let resp = self
             .transport
             .client()
@@ -198,6 +214,8 @@ impl McpService {
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!("failed to list MCP tools: {} {}", status, body);
         }
-        resp.json().await.context("failed to decode MCP tools response")
+        resp.json()
+            .await
+            .context("failed to decode MCP tools response")
     }
 }

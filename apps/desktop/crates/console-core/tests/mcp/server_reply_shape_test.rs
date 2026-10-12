@@ -10,10 +10,10 @@
 //! - The list entry carries status as a bare string with any message in a
 //!   separate `error` member, while this client encodes `Error` as an object.
 
+use console_core::types::ApiResponse;
 use console_core::types::mcp::{
     McpAuthType, McpConnectionStatus, McpServerConfig, McpTransportType,
 };
-use console_core::types::ApiResponse;
 
 /// The JSON the Go server returns from `POST /api/mcp/servers` — a saved
 /// `ServerConfig`. Keys and shapes come from
@@ -37,10 +37,13 @@ fn decodes_server_reply_into_client_type() {
     assert_eq!(cfg.id, "atlassian");
     assert_eq!(cfg.name, "Atlassian", "label must populate name");
     assert_eq!(cfg.transport, McpTransportType::Http);
-    assert_eq!(cfg.env, vec![
-        ("TOKEN".to_string(), "abc".to_string()),
-        ("REGION".to_string(), "eu".to_string()),
-    ]);
+    assert_eq!(
+        cfg.env,
+        vec![
+            ("TOKEN".to_string(), "abc".to_string()),
+            ("REGION".to_string(), "eu".to_string()),
+        ]
+    );
     // Without this the settings panel would report "no auth" for a server the
     // user explicitly configured a token for.
     assert_eq!(cfg.auth_type, McpAuthType::Static);
@@ -96,9 +99,7 @@ fn round_trips_through_the_server_canonical_shape() {
 /// "failed to decode MCP server response" on every save.
 #[test]
 fn unwraps_the_save_envelope() {
-    let envelope = format!(
-        r#"{{"success": true, "data": {SERVER_REPLY}}}"#
-    );
+    let envelope = format!(r#"{{"success": true, "data": {SERVER_REPLY}}}"#);
     let body: ApiResponse<McpServerConfig> = serde_json::from_str(&envelope)
         .unwrap_or_else(|e| panic!("save envelope must decode: {e}"));
     assert!(body.success);
@@ -146,7 +147,11 @@ fn list_entries_carry_config_status_and_tools() {
 
     // What the row renders.
     assert_eq!(cfg.status, McpConnectionStatus::Connected);
-    assert_eq!(cfg.tools.len(), 2, "toolCount is derived; tools are the source");
+    assert_eq!(
+        cfg.tools.len(),
+        2,
+        "toolCount is derived; tools are the source"
+    );
     assert_eq!(cfg.tools[0].name, "get_echo");
 }
 
@@ -157,18 +162,23 @@ fn bare_error_status_uses_the_server_message() {
             "status":"error","error":"connection refused"}"#,
     )
     .expect("a bare error status must decode");
-    assert_eq!(cfg.status, McpConnectionStatus::Error("connection refused".into()));
+    assert_eq!(
+        cfg.status,
+        McpConnectionStatus::Error("connection refused".into())
+    );
 }
 
 #[test]
 fn bare_error_without_a_message_stays_readable() {
     // The server omits `error` when it has nothing to say; a blank chip would
     // be worse than a short generic one.
-    let cfg: McpServerConfig = serde_json::from_str(
-        r#"{"id":"a","name":"A","transport":"http","status":"error"}"#,
-    )
-    .expect("decode");
-    assert_eq!(cfg.status, McpConnectionStatus::Error("connection failed".into()));
+    let cfg: McpServerConfig =
+        serde_json::from_str(r#"{"id":"a","name":"A","transport":"http","status":"error"}"#)
+            .expect("decode");
+    assert_eq!(
+        cfg.status,
+        McpConnectionStatus::Error("connection failed".into())
+    );
 }
 
 #[test]
@@ -197,5 +207,8 @@ fn an_unrecognised_status_does_not_break_the_list() {
     let list = body.data.expect("data");
     assert_eq!(list.len(), 2);
     assert_eq!(list[0].status, McpConnectionStatus::Connected);
-    assert_eq!(list[1].status, McpConnectionStatus::Error("warming_up".into()));
+    assert_eq!(
+        list[1].status,
+        McpConnectionStatus::Error("warming_up".into())
+    );
 }

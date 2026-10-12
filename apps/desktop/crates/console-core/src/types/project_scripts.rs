@@ -7,11 +7,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+pub use console_proto::script_run_event::Event as ScriptRunEventKind;
 pub use console_proto::{
     ProjectScript, ProjectScriptsResult, ScriptExitEvent, ScriptOutputEvent, ScriptRun,
     ScriptRunEvent, ScriptStatusEvent, StopScriptRunResponse,
 };
-pub use console_proto::script_run_event::Event as ScriptRunEventKind;
 
 /// A run status other than "running" is terminal: the stream has delivered
 /// (or will never deliver) its final event.

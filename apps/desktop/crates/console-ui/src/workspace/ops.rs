@@ -250,7 +250,9 @@ pub fn browser_ids(root: &WorkspaceNode) -> Vec<String> {
         .iter()
         .flat_map(|leaf| leaf.tabs.iter())
         .filter_map(|tab| match tab {
-            console_core::WorkspaceTabConfig::Browser { browser_id, .. } => Some(browser_id.clone()),
+            console_core::WorkspaceTabConfig::Browser { browser_id, .. } => {
+                Some(browser_id.clone())
+            }
             _ => None,
         })
         .collect()
@@ -302,11 +304,7 @@ pub fn sync_chat_provider(
     for leaf in root.leaves_mut() {
         for tab in &mut leaf.tabs {
             if predicate(tab) {
-                if let console_core::WorkspaceTabConfig::Chat {
-                    provider: p,
-                    ..
-                } = tab
-                {
+                if let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab {
                     *p = Some(provider.clone());
                 }
             }

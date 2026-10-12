@@ -598,7 +598,10 @@ impl ConsoleDesktopApp {
         let watches = if self.right_sidebar_visible {
             self.inspector_active_tab.watches()
         } else {
-            InspectorWatches { fs: false, git: false }
+            InspectorWatches {
+                fs: false,
+                git: false,
+            }
         };
         if watches.fs {
             self.ensure_inspector_fs_watcher(cx);

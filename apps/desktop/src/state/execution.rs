@@ -1,5 +1,5 @@
-use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
 use console_core::ImageAttachment;
+use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
 use gpui::Context;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;

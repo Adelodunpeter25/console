@@ -1,5 +1,5 @@
-use console_ui::{ComposerMention, DraftSummary};
 use console_core::{ProjectInfoExt, SessionHeaderExt};
+use console_ui::{ComposerMention, DraftSummary};
 use gpui::Context;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -206,7 +206,14 @@ impl ConsoleDesktopApp {
         attachments: &[console_core::ImageAttachment],
         cx: &mut Context<Self>,
     ) {
-        self.save_draft_for_session_with_context(Some(session_id), text, mentions, context_files, attachments, cx);
+        self.save_draft_for_session_with_context(
+            Some(session_id),
+            text,
+            mentions,
+            context_files,
+            attachments,
+            cx,
+        );
         if text.trim().is_empty() && attachments.is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {

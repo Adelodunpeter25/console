@@ -261,12 +261,8 @@ impl RenderOnce for WorkspaceTabBar {
                                         Some(p) if !p.is_empty() => {
                                             provider_app_icon(p, 11.0, color).into_any_element()
                                         }
-                                        _ => app_icon(
-                                            IconName::ChatRoundLine,
-                                            11.0,
-                                            color,
-                                        )
-                                        .into_any_element(),
+                                        _ => app_icon(IconName::ChatRoundLine, 11.0, color)
+                                            .into_any_element(),
                                     }
                                 }
                                 console_core::WorkspaceTabConfig::Terminal { .. } => app_icon(
@@ -309,18 +305,16 @@ impl RenderOnce for WorkspaceTabBar {
                                         .into_any_element()
                                     }
                                 }
-                                console_core::WorkspaceTabConfig::ChangesReview { .. } => {
-                                    app_icon(
-                                        IconName::FileDiff,
-                                        11.0,
-                                        if is_active {
-                                            theme.text
-                                        } else {
-                                            theme.text_tertiary
-                                        },
-                                    )
-                                    .into_any_element()
-                                }
+                                console_core::WorkspaceTabConfig::ChangesReview { .. } => app_icon(
+                                    IconName::FileDiff,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
                             })
                             // Tab Title
                             .child(

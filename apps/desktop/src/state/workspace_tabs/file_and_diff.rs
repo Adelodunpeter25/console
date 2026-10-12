@@ -353,20 +353,18 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         let file_path = path.clone();
-        let session_change_diff = diff_override
-            .filter(|d| !d.trim().is_empty())
-            .or_else(|| {
-                self.inspector_session_changes
-                    .iter()
-                    .rfind(|c| {
-                        c.path == file_path
-                            && c.diff_text
-                                .as_deref()
-                                .map(|d| !d.trim().is_empty())
-                                .unwrap_or(false)
-                    })
-                    .and_then(|c| c.diff_text.clone())
-            });
+        let session_change_diff = diff_override.filter(|d| !d.trim().is_empty()).or_else(|| {
+            self.inspector_session_changes
+                .iter()
+                .rfind(|c| {
+                    c.path == file_path
+                        && c.diff_text
+                            .as_deref()
+                            .map(|d| !d.trim().is_empty())
+                            .unwrap_or(false)
+                })
+                .and_then(|c| c.diff_text.clone())
+        });
         // Resolve against the pane's own chat checkout, not the globally
         // last-selected session. `selected_session_id` points at whichever
         // chat was touched last across every pane, so with a main-branch chat
@@ -434,16 +432,18 @@ impl ConsoleDesktopApp {
             .retain(|path, _| open.contains(path));
         self.viewer_editor_views
             .retain(|path, _| open.contains(path));
-        self.viewer_diff_views
-            .retain(|path, _| open.contains(path));
+        self.viewer_diff_views.retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
-        self.viewer_list_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
-        self.viewer_scrollbar_states
-            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
-        self.viewer_markdown_selections
-            .retain(|key, _| Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids));
+        self.viewer_list_states.retain(|key, _| {
+            Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids)
+        });
+        self.viewer_scrollbar_states.retain(|key, _| {
+            Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids)
+        });
+        self.viewer_markdown_selections.retain(|key, _| {
+            Self::viewer_key_is_open(key, &open) || Self::run_key_is_live(key, &live_run_ids)
+        });
     }
 
     /// Script ids still defined in any project's scripts. Bounds the retained

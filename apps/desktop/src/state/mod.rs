@@ -17,8 +17,8 @@ mod environments;
 mod errors;
 mod execution;
 mod floating_composer;
-mod global_actions;
 mod github;
+mod global_actions;
 mod layout;
 mod macos_notifications;
 pub(crate) use macos_notifications::clear_all as clear_all_notifications;
@@ -39,8 +39,8 @@ mod usage;
 mod workspace_panes;
 mod workspace_tabs;
 
-pub mod types;
 mod app;
+pub mod types;
 
 pub use types::{ConsoleDesktopApp, ImageFileState};
 // Shared by the sibling handler modules (`layout`, `sessions`, `run`).

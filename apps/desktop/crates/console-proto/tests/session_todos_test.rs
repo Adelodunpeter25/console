@@ -24,10 +24,9 @@ fn decodes_golden_todos_fixture() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let items: Vec<TodoItem> = serde_json::from_str(
-        r#"[{"id":1,"content":"x","status":"pending","futureField":1}]"#,
-    )
-    .expect("unknown fields must be ignored");
+    let items: Vec<TodoItem> =
+        serde_json::from_str(r#"[{"id":1,"content":"x","status":"pending","futureField":1}]"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(items[0].id, 1);
 }
 

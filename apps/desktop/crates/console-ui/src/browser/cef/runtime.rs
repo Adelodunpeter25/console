@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU16, Ordering};
 
-use cef::{args::Args, library_loader::LibraryLoader, CefString};
+use cef::{CefString, args::Args, library_loader::LibraryLoader};
 use objc2::rc::Retained;
 use objc2_foundation::NSTimer;
 
@@ -236,13 +236,14 @@ impl CefRuntime {
         // concurrent instances (e.g. a test build next to the dev app) do
         // not share the default `~/Library/Application Support/CEF` profile
         // and its process-singleton lock.
-        let data_dir = std::env::var("CONSOLE_CEF_DATA_DIR").ok().filter(|dir| {
-            std::fs::create_dir_all(dir).is_ok()
-        });
+        let data_dir = std::env::var("CONSOLE_CEF_DATA_DIR")
+            .ok()
+            .filter(|dir| std::fs::create_dir_all(dir).is_ok());
         // CDP endpoint (127.0.0.1 only) so agent-browser can attach to this
         // embedded Chromium. Ephemeral by default so a dev build and a test
         // build never fight over a port; `CONSOLE_CEF_DEBUG_PORT` pins one.
-        let debug_port = resolve_debug_port(std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref());
+        let debug_port =
+            resolve_debug_port(std::env::var("CONSOLE_CEF_DEBUG_PORT").ok().as_deref());
         if let Some(port) = debug_port {
             DEBUG_PORT.store(port, Ordering::Relaxed);
             log::info!("CEF: remote debugging on 127.0.0.1:{port}");
@@ -341,11 +342,7 @@ pub fn ensure_initialized() -> bool {
         // contract, and the timer copies it (released on `invalidate`).
         let block = block2::RcBlock::new(|_: std::ptr::NonNull<NSTimer>| pump_global());
         let timer = unsafe {
-            NSTimer::scheduledTimerWithTimeInterval_repeats_block(
-                PUMP_INTERVAL_SECS,
-                true,
-                &block,
-            )
+            NSTimer::scheduledTimerWithTimeInterval_repeats_block(PUMP_INTERVAL_SECS, true, &block)
         };
         runtime.pump_timer = Some(timer);
         slot.borrow_mut().replace(runtime);

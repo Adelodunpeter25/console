@@ -138,7 +138,9 @@ impl TerminalHandle {
             drop(b);
             notify.notify_one();
         });
-        let _ = self.sender.send(crate::types::client_resize(size.cols, size.rows));
+        let _ = self
+            .sender
+            .send(crate::types::client_resize(size.cols, size.rows));
     }
 
     pub fn kill(&self) {

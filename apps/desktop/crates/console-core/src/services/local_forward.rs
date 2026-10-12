@@ -69,9 +69,7 @@ impl LocalForwardManager {
     /// local, so no listener is needed.
     pub async fn is_local_backend(&self) -> bool {
         let base = self.transport.base_url().await.to_lowercase();
-        base.contains("://localhost")
-            || base.contains("://127.0.0.1")
-            || base.contains("://[::1]")
+        base.contains("://localhost") || base.contains("://127.0.0.1") || base.contains("://[::1]")
     }
 
     /// Reconcile listeners with the latest remote port list.
@@ -179,7 +177,9 @@ async fn accept_loop(listener: TcpListener, transport: HttpTransport, remote_por
             if let Err(error) = pipe_connection(stream, &ws_url).await {
                 // Warn (not debug): a failing tunnel is the difference between
                 // a working preview and about:blank. The URL carries no secret.
-                log::warn!("Tunnel localhost -> remote {remote_port} via {ws_url} failed: {error:#}");
+                log::warn!(
+                    "Tunnel localhost -> remote {remote_port} via {ws_url} failed: {error:#}"
+                );
             }
         });
     }
@@ -200,7 +200,9 @@ async fn pipe_connection(local: TcpStream, ws_url: &str) -> Result<()> {
                 let _ = ws_sink.send(Message::Close(None)).await;
                 break;
             }
-            ws_sink.send(Message::Binary(buf[..n].to_vec().into())).await?;
+            ws_sink
+                .send(Message::Binary(buf[..n].to_vec().into()))
+                .await?;
         }
         anyhow::Ok(())
     };

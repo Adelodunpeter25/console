@@ -10,6 +10,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use cef::rc::Rc as CefRc;
 use cef::{
     Browser, BrowserSettings, CefString, Client, ContextMenuHandler, ContextMenuParams,
     DictionaryValue, DisplayHandler, Errorcode, Frame, ImplBrowser, ImplClient,
@@ -18,12 +19,14 @@ use cef::{
     WindowOpenDisposition, WrapClient, WrapContextMenuHandler, WrapDisplayHandler,
     WrapLifeSpanHandler, WrapLoadHandler,
 };
-use cef::{wrap_client, wrap_context_menu_handler, wrap_display_handler, wrap_life_span_handler, wrap_load_handler};
 use cef::{
-    wrap_dev_tools_message_observer, DevToolsMessageObserver, ImplDevToolsMessageObserver,
-    WrapDevToolsMessageObserver,
+    DevToolsMessageObserver, ImplDevToolsMessageObserver, WrapDevToolsMessageObserver,
+    wrap_dev_tools_message_observer,
 };
-use cef::rc::Rc as CefRc;
+use cef::{
+    wrap_client, wrap_context_menu_handler, wrap_display_handler, wrap_life_span_handler,
+    wrap_load_handler,
+};
 
 use crate::browser::host::NativeNavigationError;
 

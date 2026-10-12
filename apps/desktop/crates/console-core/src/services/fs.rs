@@ -280,12 +280,7 @@ impl FsService {
     /// (⌘⇧F). Requires the server's fff index; returns an error (surfaced as
     /// an empty/unavailable state by the caller) when the backend responds
     /// with 503 because the native library isn't wired in for this build.
-    pub async fn grep(
-        &self,
-        root: &str,
-        query: &str,
-        options: &GrepOptions,
-    ) -> Result<GrepResult> {
+    pub async fn grep(&self, root: &str, query: &str, options: &GrepOptions) -> Result<GrepResult> {
         let mut url = self.transport.url("/api/fs/grep").await;
         let mut params = vec![
             format!("root={}", urlencoding::encode(root)),

@@ -14,7 +14,8 @@ fn cmd(parts: &[&str]) -> Vec<String> {
 }
 
 fn fake_binary(name: &str, script: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("console-agent-browser-test-{}", std::process::id()));
+    let dir =
+        std::env::temp_dir().join(format!("console-agent-browser-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
     std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
@@ -38,17 +39,18 @@ fn target_id_must_be_32_hex_chars() {
 
 #[test]
 fn builds_an_atomic_batch_that_always_attaches_over_cdp() {
-    let invocation = build_invocation(
-        9333,
-        "workspace-1",
-        TARGET,
-        &[cmd(&["snapshot", "-i"])],
-    )
-    .unwrap();
+    let invocation =
+        build_invocation(9333, "workspace-1", TARGET, &[cmd(&["snapshot", "-i"])]).unwrap();
     assert_eq!(
         invocation.args,
         cmd(&[
-            "--cdp", "9333", "--session", "workspace-1", "--json", "batch", "--bail"
+            "--cdp",
+            "9333",
+            "--session",
+            "workspace-1",
+            "--json",
+            "batch",
+            "--bail"
         ])
     );
     let steps: Vec<Vec<String>> = serde_json::from_str(&invocation.stdin).unwrap();
@@ -75,7 +77,9 @@ fn agent_text_stays_data_even_when_it_looks_like_flags_or_json() {
 
 #[test]
 fn refuses_tab_lifecycle_close_and_install() {
-    for verb in ["tab", "close", "install", "open", "connect", "launch", "upgrade", "--cdp"] {
+    for verb in [
+        "tab", "close", "install", "open", "connect", "launch", "upgrade", "--cdp",
+    ] {
         assert_eq!(
             build_invocation(9333, "s", TARGET, &[cmd(&[verb, "x"])]),
             Err(BuildError::DisallowedVerb(verb.to_string())),
@@ -101,7 +105,10 @@ fn refuses_bad_target_session_and_empty_input() {
             "{session:?}"
         );
     }
-    assert_eq!(build_invocation(9333, "s", TARGET, &[]), Err(BuildError::NoCommands));
+    assert_eq!(
+        build_invocation(9333, "s", TARGET, &[]),
+        Err(BuildError::NoCommands)
+    );
     assert_eq!(
         build_invocation(9333, "s", TARGET, &[vec![]]),
         Err(BuildError::EmptyCommand)
@@ -159,7 +166,10 @@ echo '[{{"command":["tab","x"],"error":null,"result":{{}}}},{{"command":["get","
     assert_eq!(steps[0].result["url"], "https://example.com/");
     assert_eq!(read(&capture), invocation.stdin);
     let args = read(&PathBuf::from(format!("{}.args", capture.display())));
-    assert!(args.contains("--cdp 9333 --session ws --json batch --bail"), "{args}");
+    assert!(
+        args.contains("--cdp 9333 --session ws --json batch --bail"),
+        "{args}"
+    );
 }
 
 #[test]
@@ -169,7 +179,10 @@ fn run_kills_a_hung_process_after_the_timeout() {
     let started = std::time::Instant::now();
     let err = run(&bin, &invocation, Duration::from_millis(300)).unwrap_err();
     assert!(started.elapsed() < Duration::from_secs(5));
-    assert!(matches!(&err, RunError::Failed(m) if m.contains("timed out")), "{err:?}");
+    assert!(
+        matches!(&err, RunError::Failed(m) if m.contains("timed out")),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -183,7 +196,12 @@ fn run_surfaces_stderr_when_nothing_is_printed() {
 #[test]
 fn run_reports_a_missing_binary() {
     let invocation = build_invocation(9333, "ws", TARGET, &[cmd(&["snapshot"])]).unwrap();
-    let err = run(Path::new("/nonexistent/agent-browser"), &invocation, Duration::from_secs(1)).unwrap_err();
+    let err = run(
+        Path::new("/nonexistent/agent-browser"),
+        &invocation,
+        Duration::from_secs(1),
+    )
+    .unwrap_err();
     assert!(matches!(err, RunError::Failed(m) if m.contains("could not start")));
 }
 
@@ -195,8 +213,14 @@ fn installer_prefers_npm_then_falls_back_to_bun() {
         installer_order(Some(npm.clone()), Some(bun.clone())),
         vec![Installer::Npm(npm.clone()), Installer::Bun(bun.clone())]
     );
-    assert_eq!(installer_order(None, Some(bun.clone())), vec![Installer::Bun(bun)]);
-    assert_eq!(installer_order(Some(npm.clone()), None), vec![Installer::Npm(npm)]);
+    assert_eq!(
+        installer_order(None, Some(bun.clone())),
+        vec![Installer::Bun(bun)]
+    );
+    assert_eq!(
+        installer_order(Some(npm.clone()), None),
+        vec![Installer::Npm(npm)]
+    );
     assert!(installer_order(None, None).is_empty());
 }
 
@@ -236,20 +260,47 @@ fn step(result: serde_json::Value) -> console_ui::browser::cef::agent_browser::S
 #[test]
 fn step_output_covers_each_result_shape() {
     use serde_json::json;
-    assert_eq!(step(json!({"snapshot": "- link \"A\" [ref=e1]", "origin": "x"})).output(), "- link \"A\" [ref=e1]");
-    assert_eq!(step(json!({"snapshot": {"kind": "full", "tree": "TREE"}})).output(), "TREE");
-    assert_eq!(step(json!({"result": "Wikipedia | www.wikipedia.org"})).output(), "Wikipedia | www.wikipedia.org");
+    assert_eq!(
+        step(json!({"snapshot": "- link \"A\" [ref=e1]", "origin": "x"})).output(),
+        "- link \"A\" [ref=e1]"
+    );
+    assert_eq!(
+        step(json!({"snapshot": {"kind": "full", "tree": "TREE"}})).output(),
+        "TREE"
+    );
+    assert_eq!(
+        step(json!({"result": "Wikipedia | www.wikipedia.org"})).output(),
+        "Wikipedia | www.wikipedia.org"
+    );
     assert_eq!(step(json!({"result": 2})).output(), "2");
     assert_eq!(step(json!({"result": {"a": 1}})).output(), r#"{"a":1}"#);
-    assert_eq!(step(json!({"text": "Hello", "origin": "x"})).output(), "Hello");
-    assert_eq!(step(json!({"path": "/tmp/shot.png"})).output(), "/tmp/shot.png");
+    assert_eq!(
+        step(json!({"text": "Hello", "origin": "x"})).output(),
+        "Hello"
+    );
+    assert_eq!(
+        step(json!({"path": "/tmp/shot.png"})).output(),
+        "/tmp/shot.png"
+    );
     assert_eq!(step(json!({"clicked": "@e1"})).output(), "Clicked @e1");
     assert_eq!(step(json!({"filled": "@e35"})).output(), "Filled @e35");
-    assert_eq!(step(json!({"waited": "text", "text": "x"})).output(), "Wait for text satisfied");
-    assert_eq!(step(json!({"waited": "selector", "selector": "#a"})).output(), "Wait for selector satisfied");
+    assert_eq!(
+        step(json!({"waited": "text", "text": "x"})).output(),
+        "Wait for text satisfied"
+    );
+    assert_eq!(
+        step(json!({"waited": "selector", "selector": "#a"})).output(),
+        "Wait for selector satisfied"
+    );
     assert_eq!(step(serde_json::Value::Null).output(), "Done");
-    assert_eq!(step(json!({"lifecycle": {"launched": false}, "origin": "o"})).output(), "Done");
-    assert_eq!(step(json!({"lifecycle": {}, "weird": 1})).output(), r#"{"weird":1}"#);
+    assert_eq!(
+        step(json!({"lifecycle": {"launched": false}, "origin": "o"})).output(),
+        "Done"
+    );
+    assert_eq!(
+        step(json!({"lifecycle": {}, "weird": 1})).output(),
+        r#"{"weird":1}"#
+    );
 }
 
 #[test]
@@ -261,14 +312,21 @@ fn skipping_the_tab_step_keeps_element_refs_valid() {
     let steps: Vec<Vec<String>> = serde_json::from_str(&same.stdin).unwrap();
     assert_eq!(steps, vec![cmd(&["click", "@e3"])]);
     assert!(!same.has_tab_step);
-    assert_eq!(same.args[..4], cmd(&["--cdp", "9333", "--session", "s"])[..]);
+    assert_eq!(
+        same.args[..4],
+        cmd(&["--cdp", "9333", "--session", "s"])[..]
+    );
 
     let switch = build_invocation_for(9333, "s", TARGET, &[cmd(&["click", "@e3"])], true).unwrap();
     let steps: Vec<Vec<String>> = serde_json::from_str(&switch.stdin).unwrap();
     assert_eq!(steps, vec![cmd(&["tab", TARGET]), cmd(&["click", "@e3"])]);
     assert!(switch.has_tab_step);
     // The default builder always switches.
-    assert!(build_invocation(9333, "s", TARGET, &[cmd(&["click", "@e3"])]).unwrap().has_tab_step);
+    assert!(
+        build_invocation(9333, "s", TARGET, &[cmd(&["click", "@e3"])])
+            .unwrap()
+            .has_tab_step
+    );
 }
 
 #[test]
@@ -289,7 +347,10 @@ fn parse_output_without_a_tab_step_keeps_every_step() {
     assert_eq!(steps[0].command, cmd(&["click", "@e3"]));
     // With a tab step the same output would drop its only step and be empty.
     assert!(parse_output_for(out, true).is_err());
-    assert!(matches!(parse_output_for("[]", false), Err(RunError::Failed(_))));
+    assert!(matches!(
+        parse_output_for("[]", false),
+        Err(RunError::Failed(_))
+    ));
 }
 
 #[test]
@@ -297,7 +358,10 @@ fn finds_the_active_target_from_a_tab_listing() {
     use console_ui::browser::cef::agent_browser::{active_target_invocation, parse_active_target};
     let inv = active_target_invocation(9333, "console").unwrap();
     assert!(!inv.has_tab_step);
-    assert_eq!(serde_json::from_str::<Vec<Vec<String>>>(&inv.stdin).unwrap(), vec![cmd(&["tab", "list"])]);
+    assert_eq!(
+        serde_json::from_str::<Vec<Vec<String>>>(&inv.stdin).unwrap(),
+        vec![cmd(&["tab", "list"])]
+    );
     assert!(active_target_invocation(9333, "bad name").is_err());
 
     let out = format!(
@@ -322,12 +386,19 @@ fn prepend_path_puts_node_dir_first() {
     let dirs: Vec<_> = std::env::split_paths(&joined).collect();
     assert_eq!(
         dirs,
-        vec![PathBuf::from("/mise/node/bin"), PathBuf::from("/usr/bin"), PathBuf::from("/bin")]
+        vec![
+            PathBuf::from("/mise/node/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin")
+        ]
     );
 }
 
 #[test]
 fn prepend_path_without_existing_path_is_just_the_dir() {
     let joined = prepend_path(Path::new("/mise/node/bin"), None).unwrap();
-    assert_eq!(std::env::split_paths(&joined).collect::<Vec<_>>(), vec![PathBuf::from("/mise/node/bin")]);
+    assert_eq!(
+        std::env::split_paths(&joined).collect::<Vec<_>>(),
+        vec![PathBuf::from("/mise/node/bin")]
+    );
 }

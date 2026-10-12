@@ -43,8 +43,9 @@ fn decodes_golden_search_fixture() {
 #[test]
 fn decodes_empty_query_fixture() {
     // The wire omits `query` for a bare "@"; the client still reads "".
-    let msg: AssistFileSearchResponse = serde_json::from_str(fixture("search_empty_query.json").trim())
-        .expect("decode empty-query fixture");
+    let msg: AssistFileSearchResponse =
+        serde_json::from_str(fixture("search_empty_query.json").trim())
+            .expect("decode empty-query fixture");
     assert_eq!(msg.query, "");
     assert_eq!(msg.items.len(), 1);
     assert_eq!(msg.items[0].relative_path, "AGENTS.md");
@@ -70,5 +71,8 @@ fn serializes_camel_case() {
     })
     .expect("encode command");
     assert!(raw.contains(r#""name":"a""#), "unexpected encoding: {raw}");
-    assert!(raw.contains(r#""builtin":true"#), "unexpected encoding: {raw}");
+    assert!(
+        raw.contains(r#""builtin":true"#),
+        "unexpected encoding: {raw}"
+    );
 }

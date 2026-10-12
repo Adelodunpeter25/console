@@ -3,8 +3,8 @@
 //! Mirrors the test specifications from `waku/src/browser.rs`.
 
 use console_ui::browser::{
-    AddressTarget, bgra_from_bitmap, display_url, download_destination, favicon_url,
-    is_secure_url, resolve_address, search_url,
+    AddressTarget, bgra_from_bitmap, display_url, download_destination, favicon_url, is_secure_url,
+    resolve_address, search_url,
 };
 
 #[test]

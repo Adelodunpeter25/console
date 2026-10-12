@@ -358,7 +358,9 @@ pub fn flatten_code(
 /// styled like the renderer's own fenced-code blocks.
 pub fn highlighted_code(code: impl Into<SharedString>, lang_tag: &str, ctx: &Ctx) -> AnyElement {
     let reg = syntax::LanguageRegistry::builtin();
-    let lang = reg.for_name(lang_tag).or_else(|| reg.for_extension(lang_tag));
+    let lang = reg
+        .for_name(lang_tag)
+        .or_else(|| reg.for_extension(lang_tag));
     let key = ctx.next_key();
     let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, &ctx.palette));
     text_element(&flat, key, ctx)

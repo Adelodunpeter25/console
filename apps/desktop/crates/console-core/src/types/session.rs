@@ -212,4 +212,3 @@ pub fn filter_changes_for_scope(
         },
     }
 }
-

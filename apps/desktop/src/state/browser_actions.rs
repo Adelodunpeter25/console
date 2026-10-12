@@ -123,7 +123,13 @@ impl ConsoleDesktopApp {
                     Ok(Some(entry)) if req.tab_id.is_some() => Some(entry),
                     Ok(_) => self.find_matching_browser_view(&url, cx),
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -185,7 +191,8 @@ impl ConsoleDesktopApp {
                             // Timed out: report what has loaded so far.
                             let partial = this
                                 .update(cx, |app, cx| {
-                                    let entry = app.navigation_view(matching_view.as_ref(), &known_ids);
+                                    let entry =
+                                        app.navigation_view(matching_view.as_ref(), &known_ids);
                                     entry.map(|(id, view)| {
                                         let rid = format!("{request_id}-partial");
                                         view.update(cx, |bv, _| {
@@ -209,9 +216,8 @@ impl ConsoleDesktopApp {
                             let secs = (NAVIGATION_SETTLE_POLLS as u64
                                 * BROWSER_POLL_INTERVAL.as_millis() as u64)
                                 / 1000;
-                            let mut msg = format!(
-                                "Navigation to {url} is still loading after {secs}s."
-                            );
+                            let mut msg =
+                                format!("Navigation to {url} is still loading after {secs}s.");
                             if let Some((view, rid, header)) = partial {
                                 msg.push_str(&format!("\n{header}"));
                                 if let Ok(text) = poll_script_result(&this, cx, &view, &rid).await {
@@ -222,7 +228,9 @@ impl ConsoleDesktopApp {
                         }
                     };
                     let _ = this.update(cx, |app, cx| {
-                        if let Some((id, _)) = app.navigation_view(matching_view.as_ref(), &known_ids) {
+                        if let Some((id, _)) =
+                            app.navigation_view(matching_view.as_ref(), &known_ids)
+                        {
                             app.agent_browser_tab = Some(id);
                         }
                         app.resolve_browser_action_result(&sess_id, request_id, result, error, cx);
@@ -256,7 +264,13 @@ impl ConsoleDesktopApp {
                 let entry = match self.pick_browser_view(req.tab_id.as_deref(), None, false, cx) {
                     Ok(entry) => entry,
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -266,7 +280,15 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                if self.try_agent_browser(
+                    &sess_id,
+                    &req,
+                    &tab_id,
+                    &view,
+                    note.clone(),
+                    retries_left,
+                    cx,
+                ) {
                     return;
                 }
 
@@ -313,7 +335,12 @@ impl ConsoleDesktopApp {
             }
 
             "switch_tab" | "close_tab" => {
-                let Some(requested) = req.tab_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) else {
+                let Some(requested) = req
+                    .tab_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                else {
                     self.resolve_browser_action_result(
                         &sess_id,
                         request_id,
@@ -327,11 +354,18 @@ impl ConsoleDesktopApp {
                     return;
                 };
                 // Unknown ids error out with the tab listing; never fall back to another tab.
-                let (tab_id, view) = match self.pick_browser_view(Some(requested), None, false, cx) {
+                let (tab_id, view) = match self.pick_browser_view(Some(requested), None, false, cx)
+                {
                     Ok(Some(entry)) => entry,
                     Ok(None) => return,
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -346,7 +380,9 @@ impl ConsoleDesktopApp {
                 let result = if action == "switch_tab" {
                     // Only retargets the agent; the tab the user is looking at is untouched.
                     self.agent_browser_tab = Some(tab_id.clone());
-                    format!("Tab: {tab_id}\nTitle: {title}\nURL: {url}\nSwitched agent target to this tab.")
+                    format!(
+                        "Tab: {tab_id}\nTitle: {title}\nURL: {url}\nSwitched agent target to this tab."
+                    )
                 } else {
                     self.close_agent_browser_tab(&tab_id, cx);
                     if self.agent_browser_tab.as_deref() == Some(tab_id.as_str()) {
@@ -373,7 +409,10 @@ impl ConsoleDesktopApp {
                         &sess_id,
                         request_id,
                         None,
-                        Some("wait_for needs at least one of selector, urlContains, or text".to_string()),
+                        Some(
+                            "wait_for needs at least one of selector, urlContains, or text"
+                                .to_string(),
+                        ),
                         cx,
                     );
                     return;
@@ -381,7 +420,13 @@ impl ConsoleDesktopApp {
                 let entry = match self.pick_browser_view(req.tab_id.as_deref(), None, false, cx) {
                     Ok(entry) => entry,
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -391,14 +436,28 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                if self.try_agent_browser(
+                    &sess_id,
+                    &req,
+                    &tab_id,
+                    &view,
+                    note.clone(),
+                    retries_left,
+                    cx,
+                ) {
                     return;
                 }
 
                 let timeout = Duration::from_millis(
-                    req.timeout_ms.unwrap_or(WAIT_FOR_DEFAULT_MS).clamp(100, WAIT_FOR_MAX_MS),
+                    req.timeout_ms
+                        .unwrap_or(WAIT_FOR_DEFAULT_MS)
+                        .clamp(100, WAIT_FOR_MAX_MS),
                 );
-                let script = wait_for_script(selector.as_deref(), url_contains.as_deref(), text.as_deref());
+                let script = wait_for_script(
+                    selector.as_deref(),
+                    url_contains.as_deref(),
+                    text.as_deref(),
+                );
                 cx.spawn(async move |this, cx| {
                     let started = std::time::Instant::now();
                     let mut attempt = 0u32;
@@ -485,10 +544,21 @@ impl ConsoleDesktopApp {
                     content_script(req.selector.as_deref())
                 };
 
-                let entry = match self.pick_browser_view(req.tab_id.as_deref(), req.url.as_deref(), true, cx) {
+                let entry = match self.pick_browser_view(
+                    req.tab_id.as_deref(),
+                    req.url.as_deref(),
+                    true,
+                    cx,
+                ) {
                     Ok(entry) => entry,
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -499,7 +569,15 @@ impl ConsoleDesktopApp {
 
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                if self.try_agent_browser(
+                    &sess_id,
+                    &req,
+                    &tab_id,
+                    &view,
+                    note.clone(),
+                    retries_left,
+                    cx,
+                ) {
                     return;
                 }
                 let script_id = request_id.clone();
@@ -536,10 +614,21 @@ impl ConsoleDesktopApp {
             }
 
             "screenshot" => {
-                let entry = match self.pick_browser_view(req.tab_id.as_deref(), req.url.as_deref(), true, cx) {
+                let entry = match self.pick_browser_view(
+                    req.tab_id.as_deref(),
+                    req.url.as_deref(),
+                    true,
+                    cx,
+                ) {
                     Ok(entry) => entry,
                     Err(err) => {
-                        self.resolve_browser_action_result(&sess_id, request_id, None, Some(err), cx);
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(err),
+                            cx,
+                        );
                         return;
                     }
                 };
@@ -549,7 +638,15 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(&sess_id, &req, &tab_id, &view, note.clone(), retries_left, cx) {
+                if self.try_agent_browser(
+                    &sess_id,
+                    &req,
+                    &tab_id,
+                    &view,
+                    note.clone(),
+                    retries_left,
+                    cx,
+                ) {
                     return;
                 }
                 let Some(slot) = view.read(cx).start_snapshot() else {
@@ -557,7 +654,9 @@ impl ConsoleDesktopApp {
                         &sess_id,
                         request_id,
                         None,
-                        Some(format!("[tab {tab_id}] Tab has no live webview to capture (open it first)")),
+                        Some(format!(
+                            "[tab {tab_id}] Tab has no live webview to capture (open it first)"
+                        )),
                         cx,
                     );
                     return;
@@ -691,7 +790,12 @@ impl ConsoleDesktopApp {
         let mut best: Option<(i64, String)> = None;
         for leaf in self.workspace_root.leaves() {
             for tab in &leaf.tabs {
-                if let console_core::WorkspaceTabConfig::Browser { browser_id, last_active_at_ms, .. } = tab {
+                if let console_core::WorkspaceTabConfig::Browser {
+                    browser_id,
+                    last_active_at_ms,
+                    ..
+                } = tab
+                {
                     if !self.browser_views.contains_key(browser_id) {
                         continue;
                     }
@@ -723,7 +827,11 @@ impl ConsoleDesktopApp {
                 format!(
                     "- {}{}: \"{}\" {}",
                     id,
-                    if active.as_deref() == Some(id.as_str()) { " (active)" } else { "" },
+                    if active.as_deref() == Some(id.as_str()) {
+                        " (active)"
+                    } else {
+                        ""
+                    },
                     bv.tab_label().unwrap_or_default(),
                     bv.current_url().unwrap_or("(blank)")
                 )
@@ -762,7 +870,9 @@ impl ConsoleDesktopApp {
         // Prefer the tab the agent last worked in: `navigate` opens tabs in the
         // background, so the visible tab is often not the one the agent means.
         let last = self.agent_browser_tab.as_ref().and_then(|id| {
-            self.browser_views.get(id).map(|view| (id.clone(), view.clone()))
+            self.browser_views
+                .get(id)
+                .map(|view| (id.clone(), view.clone()))
         });
         if last.is_some() {
             return Ok(last);
@@ -861,7 +971,9 @@ impl ConsoleDesktopApp {
     /// The browser tab that is active in a visible pane, else the first by id.
     fn active_browser_entry(&self) -> Option<(String, Entity<BrowserView>)> {
         for leaf in self.workspace_root.leaves() {
-            let Some(active_id) = leaf.active_tab_id.as_deref() else { continue };
+            let Some(active_id) = leaf.active_tab_id.as_deref() else {
+                continue;
+            };
             for tab in &leaf.tabs {
                 if tab.id() != active_id {
                     continue;
@@ -875,7 +987,8 @@ impl ConsoleDesktopApp {
         }
         let mut ids: Vec<&String> = self.browser_views.keys().collect();
         ids.sort();
-        ids.first().map(|id| ((*id).clone(), self.browser_views[*id].clone()))
+        ids.first()
+            .map(|id| ((*id).clone(), self.browser_views[*id].clone()))
     }
 
     /// Resolves the browser action via client run service asynchronously.
@@ -921,7 +1034,11 @@ impl ConsoleDesktopApp {
 
 /// Page-side one-shot check for `wait_for`. Returns WF_OK when every given
 /// condition holds, WF_NO otherwise, or WF_ERR on an invalid selector.
-fn wait_for_script(selector: Option<&str>, url_contains: Option<&str>, text: Option<&str>) -> String {
+fn wait_for_script(
+    selector: Option<&str>,
+    url_contains: Option<&str>,
+    text: Option<&str>,
+) -> String {
     let q = |v: Option<&str>| {
         serde_json::to_string(&v.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string())
     };
@@ -957,4 +1074,3 @@ fn content_script(selector: Option<&str>) -> String {
         }
     }
 }
-

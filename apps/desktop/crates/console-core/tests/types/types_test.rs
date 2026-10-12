@@ -51,7 +51,10 @@ fn test_session_file_change_deserialization() {
     assert_eq!(change.additions, 10);
     assert_eq!(change.deletions, 2);
     assert_eq!(change.turn_index, 3);
-    assert_eq!(change.diff_text.as_deref(), Some("--- a/lib.rs\n+++ b/lib.rs\n"));
+    assert_eq!(
+        change.diff_text.as_deref(),
+        Some("--- a/lib.rs\n+++ b/lib.rs\n")
+    );
     assert!(change.reviewed);
 }
 
