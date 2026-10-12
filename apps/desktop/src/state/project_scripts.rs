@@ -69,26 +69,32 @@ impl ConsoleDesktopApp {
                 .as_deref()
                 .and_then(|tab_id| l.tabs.iter().find(|t| t.id() == tab_id))
         });
+        // No live tab (all tabs closed): no scripts target, so the Run
+        // panel shows its empty state — mirroring the inspector's
+        // files/changes tabs. The pane-project fallback below is only for
+        // a live tab that resolves to no project itself.
+        let Some(active_tab) = active_tab else {
+            return None;
+        };
         let from_tab = match active_tab {
-            Some(console_core::WorkspaceTabConfig::Chat {
+            console_core::WorkspaceTabConfig::Chat {
                 session_id,
                 project_id,
                 ..
-            }) => self
+            } => self
                 .sessions
                 .iter()
                 .find(|s| &s.id == session_id)
                 // The chat's workspace key (project, or project + worktree).
                 .and_then(|s| self.workspace_key_for_header(s))
                 .or(project_id.clone()),
-            Some(console_core::WorkspaceTabConfig::File { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::Browser { project_id, .. })
-            | Some(console_core::WorkspaceTabConfig::ChangesReview { project_id, .. }) => {
+            console_core::WorkspaceTabConfig::File { project_id, .. }
+            | console_core::WorkspaceTabConfig::Diff { project_id, .. }
+            | console_core::WorkspaceTabConfig::Terminal { project_id, .. }
+            | console_core::WorkspaceTabConfig::Browser { project_id, .. }
+            | console_core::WorkspaceTabConfig::ChangesReview { project_id, .. } => {
                 project_id.clone()
             }
-            None => None,
         };
         from_tab.or_else(|| self.pane_project_id(pane_id))
     }
