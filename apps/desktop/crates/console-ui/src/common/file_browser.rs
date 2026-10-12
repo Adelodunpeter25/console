@@ -212,6 +212,11 @@ impl Render for FileBrowser {
                     .mx(px(16.0))
                     .mt(px(48.0))
                     .flex()
+                    .flex_1()
+                    // Must fill the window, and must be allowed to be shorter
+                    // than its content — otherwise the column grows, the list
+                    // below never overflows, and nothing scrolls.
+                    .min_h_0()
                     .flex_col()
                     .gap(px(12.0))
                     .child(
@@ -274,7 +279,11 @@ fn build_list(
         .flex()
         .flex_col()
         .flex_1()
-        .min_h(px(220.0))
+        // The fix for "the list won't scroll": a flex item defaults to
+        // `min-height: auto`, so it refuses to shrink below its content and
+        // never overflows. `min_h_0` lifts that, letting it scroll inside the
+        // space `flex_1` gives it. Same pairing as the other scroll views.
+        .min_h_0()
         .border_1()
         .border_color(theme.border)
         .bg(theme.surface)
