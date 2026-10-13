@@ -210,9 +210,11 @@ func (s *Server) serveStream(str *webtransport.Stream, deviceID string) {
 		s.serveChatRun(str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_TERMINAL:
 		s.serveTerminal(str, w, id)
+	case consolev1.WtStreamKind_WT_STREAM_KIND_WATCH:
+		s.serveWatch(str, w, id)
 	default:
-		// WATCH / PORT_TUNNEL / DEVICE_STREAM land in the next slice;
-		// reject explicitly so a newer client fails loudly, not silently.
+		// PORT_TUNNEL / DEVICE_STREAM land in the next slice; reject
+		// explicitly so a newer client fails loudly, not silently.
 		_ = w.sendErrorf("Stream kind %s is not served yet.", kind)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -85,9 +87,15 @@ func wtTestCert(t *testing.T) (certFile, keyFile string) {
 }
 
 type wtHarness struct {
-	server *wt.Server
-	addr   string
-	issuer *auth.TokenIssuer
+	server        *wt.Server
+	addr          string
+	issuer        *auth.TokenIssuer
+	watch         *services.FsWatchService
+	git           *services.GitService
+	notifications *services.NotificationService
+	scripts       *services.ProjectScriptsService
+	projects      *services.ProjectService
+	ports         *services.PortRegistry
 }
 
 func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
@@ -96,6 +104,20 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	issuer := auth.NewTokenIssuerWithSecret([]byte("wt-test-secret-32-bytes-!!!!"))
 	ports := services.NewPortRegistry()
 	t.Cleanup(ports.CloseAll)
+	watch, err := services.NewFsWatchService()
+	if err != nil {
+		t.Fatalf("watch service: %v", err)
+	}
+	t.Cleanup(watch.Close)
+	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	projects := services.NewProjectService(manager)
+	notifications := services.NewNotificationService()
+	git := services.NewGitService()
+	scripts := services.NewProjectScriptsService(projects, ports)
 	srv := wt.New(wt.Config{
 		Mode: wt.TransportWT, WTAddr: "127.0.0.1:0",
 		TLSCertFile: certFile, TLSKeyFile: keyFile,
@@ -104,6 +126,10 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 		Runs:   runs,
 		PTY:    services.NewPtyManager(ports, func(string) string { return "" }),
 		Ports:  ports,
+		Watch:  watch,
+		Git:    git,
+		Notifications: notifications,
+		Scripts:       scripts,
 	})
 	if err := srv.Start(); err != nil {
 		t.Fatalf("wt start: %v", err)
@@ -113,7 +139,7 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	if addr == nil {
 		t.Fatal("server has no address")
 	}
-	return wtHarness{server: srv, addr: addr.String(), issuer: issuer}
+	return wtHarness{server: srv, addr: addr.String(), issuer: issuer, watch: watch, git: git, notifications: notifications, scripts: scripts, projects: projects, ports: ports}
 }
 
 func wtDial(t *testing.T, addr, token string) (*webtransport.Session, *http.Response) {
@@ -416,5 +442,250 @@ func TestWTTerminalSpawnsAndEchoes(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), marker) {
 		t.Fatalf("terminal echo missing marker, got %q", output.String())
+	}
+}
+
+// wtOpenWatch opens a WATCH stream for one target and returns it open.
+func wtOpenWatch(t *testing.T, sess *webtransport.Session, target consolev1.WtWatchTarget, path, projectID, runID, host string) *webtransport.Stream {
+	t.Helper()
+	req, err := protojson.Marshal(&consolev1.WtWatchRequest{
+		Target: target, Path: &path, ProjectId: &projectID, RunId: &runID, Host: &host,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The server ignores the request frame's type tag (kind + position
+	// discriminate); optionals stay absent like the REST query strings.
+	return wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_WATCH, "", "watch", req)
+}
+
+func TestWTWatchFsDeliversChange(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	dir := t.TempDir()
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_FS, dir, "", "", "")
+	time.Sleep(time.Second) // let the server subscribe before the change lands
+	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		_ = str.SetReadDeadline(deadline)
+		frame, err := wt.DecodeFrame(str)
+		if err != nil {
+			t.Fatalf("fsChange frame: %v", err)
+		}
+		if frame.GetType() != "fsChange" {
+			continue
+		}
+		var body struct {
+			ProjectPath string `json:"projectPath"`
+		}
+		if err := json.Unmarshal(frame.GetPayload(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.ProjectPath == dir {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fsChange for %s never arrived: %s", dir, frame.GetPayload())
+		}
+	}
+}
+
+func TestWTWatchGitSnapshot(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	// The snapshot on subscribe is deterministic: no fs event needed.
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_GIT_STATUS, t.TempDir(), "", "", "")
+	_ = str.SetReadDeadline(time.Now().Add(10 * time.Second))
+	frame, err := wt.DecodeFrame(str)
+	if err != nil {
+		t.Fatalf("gitStatus frame: %v", err)
+	}
+	if frame.GetType() != "gitStatus" {
+		t.Fatalf("first frame must be gitStatus, got %q", frame.GetType())
+	}
+	var body struct {
+		Branch *string `json:"branch"`
+		Clean  *bool   `json:"clean"`
+	}
+	if err := json.Unmarshal(frame.GetPayload(), &body); err != nil {
+		t.Fatalf("gitStatus payload: %v", err)
+	}
+}
+
+func TestWTWatchPortsSeesForward(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_PORTS, "", "", "localhost", "")
+	// Forward after subscribing: either the initial snapshot or the update
+	// carries the port, so there is no subscribe race by construction.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	if _, err := h.ports.Forward(port, ""); err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+	want := fmt.Sprint(port)
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		_ = str.SetReadDeadline(deadline)
+		frame, err := wt.DecodeFrame(str)
+		if err != nil {
+			t.Fatalf("ports frame: %v", err)
+		}
+		if frame.GetType() != "ports" {
+			continue
+		}
+		if strings.Contains(string(frame.GetPayload()), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("ports snapshot with %d never arrived: %s", port, frame.GetPayload())
+		}
+	}
+}
+
+func TestWTWatchNotifications(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_NOTIFICATIONS, "", "", "", "")
+	// Retry pushes until the server's subscription lands; Push is
+	// non-blocking, so an early push may predate it.
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		h.notifications.Push(&consolev1.NotificationEvent{Type: "notification", Kind: "test", Title: "hi"})
+		_ = str.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		frame, err := wt.DecodeFrame(str)
+		if err != nil {
+			continue
+		}
+		if frame.GetType() != "notification" {
+			continue
+		}
+		var body struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(frame.GetPayload(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Kind == "test" {
+			return
+		}
+	}
+	t.Fatal("notification frame never arrived")
+}
+
+func wtScriptProject(t *testing.T, h wtHarness, command string) (projectID, scriptID string) {
+	t.Helper()
+	root := t.TempDir()
+	proj, err := h.projects.Create(services.CreateProjectOptions{Name: "P", Dir: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "[scripts]\n\n[scripts.echo]\nlabel = \"Echo\"\ncommand = \"" + command + "\"\n"
+	if err := os.WriteFile(filepath.Join(root, "console.toml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return proj.ID, "echo"
+}
+
+func TestWTWatchScriptRunStreams(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	projectID, scriptID := wtScriptProject(t, h, "sleep 2; echo wt-script-marker")
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	if _, err := h.scripts.Run(projectID, scriptID); err != nil {
+		t.Fatalf("run script: %v", err)
+	}
+	// Re-list to grab the running run's id through the public surface.
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_SCRIPT_RUN, "", projectID, currentScriptRunID(t, h, projectID), "")
+	frames := wtReadFrames(t, str, 20*time.Second)
+	types := frameTypes(frames)
+	sawOutput, sawExit := false, false
+	var output bytes.Buffer
+	for _, f := range frames {
+		if f.GetType() == "output" {
+			sawOutput = true
+			output.Write(f.GetPayload())
+		}
+		if f.GetType() == "exit" {
+			sawExit = true
+		}
+	}
+	if !sawOutput || !strings.Contains(output.String(), "wt-script-marker") {
+		t.Fatalf("script output missing marker, got %v", types)
+	}
+	if !sawExit {
+		t.Fatalf("script stream must end with an exit frame, got %v", types)
+	}
+}
+
+func currentScriptRunID(t *testing.T, h wtHarness, projectID string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, r := range h.scripts.ListRuns(projectID) {
+			if r.Status == "running" {
+				return r.RunID
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("no running script run appeared")
+	return ""
+}
+
+func TestWTWatchRejectsBadRequests(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	// Missing path.
+	str := wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_FS, "", "", "", "")
+	frames := wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("missing path must answer one error frame, got %v", frameTypes(frames))
+	}
+	// Unknown target enum (Go-constructed: protojson accepts the numeric).
+	rawTarget, err := protojson.Marshal(&consolev1.WtWatchRequest{Target: 99})
+	if err != nil {
+		t.Fatal(err)
+	}
+	str = wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_WATCH, "", "watch", rawTarget)
+	frames = wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("unknown target must answer one error frame, got %v", frameTypes(frames))
+	}
+	// Missing script run.
+	str = wtOpenWatch(t, sess, consolev1.WtWatchTarget_WT_WATCH_TARGET_SCRIPT_RUN, "", "nope", "nope", "")
+	frames = wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("missing run must answer one error frame, got %v", frameTypes(frames))
 	}
 }
