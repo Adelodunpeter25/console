@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+import "console/v1/message.proto";
+
+// WebTransport wire (QUIC migration, Phase 1). One WT session per device,
+// multiplexed with QUIC bidi streams: each stream opens with
+// [uvarint kind][uvarint id_len][id], then carries repeated length-prefixed
+// frames, each [u32BE len][protojson(WtFrame)].
+//
+// WtFrame.payload is protojson event bytes for event streams (the same
+// generated types the SSE wire already emits), or raw binary for terminal
+// and tunnel streams (the existing tag-byte framing, zero re-encode).
+// Unary control ops (abort/answer/approve/queue/steer/resize/kill) stay on
+// REST in v1 and are deliberately absent here.
+enum WtStreamKind {
+  WT_STREAM_KIND_UNSPECIFIED = 0;
+  WT_STREAM_KIND_CHAT_RUN = 1;
+  WT_STREAM_KIND_TERMINAL = 2;
+  WT_STREAM_KIND_WATCH = 3;
+  WT_STREAM_KIND_PORT_TUNNEL = 4;
+  WT_STREAM_KIND_DEVICE_STREAM = 5;
+}
+
+// One length-prefixed frame on any stream.
+message WtFrame {
+  // Hub sequence for CHAT_RUN (the resume cursor, mirroring the SSE `id:`
+  // line); 0 on streams without replay.
+  uint64 seq = 1;
+  // SSE event name equivalent (modelStreamPart, output, ports, ...).
+  string type = 2;
+  // Protojson event payload, or raw binary for terminal/tunnel streams.
+  bytes payload = 3;
+}
+
+// CHAT_RUN request: start a run or attach to one. The stream id carries the
+// session id; the request selects start vs attach.
+message WtChatRunRequest {
+  string session_id = 1;
+  oneof request {
+    WtChatRunStart start = 2;
+    WtChatRunAttach attach = 3;
+  }
+}
+
+// Start payload mirrors the REST run prompt body field for field.
+message WtChatRunStart {
+  string text = 1;
+  repeated string context_files = 2;
+  optional string model_id = 3;
+  optional string provider = 4;
+  optional string approval_mode = 5;
+  optional string thinking_level = 6;
+  repeated ImageAttachment attachments = 7;
+  repeated BrowserAnnotation annotations = 8;
+}
+
+// Attach payload mirrors ?since=: replay frames newer than the cursor.
+message WtChatRunAttach {
+  optional int64 since = 1;
+}
+
+// TERMINAL request: spawn params mirror the REST spawn query string. The
+// stream id carries the terminal id for re-attaching; empty for a fresh
+// spawn. Client→server input keeps the existing tag-byte binary framing
+// inside WtFrame.payload; resize/kill stay unary REST in v1.
+message WtTerminalRequest {
+  string cwd = 1;
+  optional string shell = 2;
+  optional int32 cols = 3;
+  optional int32 rows = 4;
+}
+
+// Watch targets multiplexed onto WT_STREAM_KIND_WATCH streams.
+enum WtWatchTarget {
+  WT_WATCH_TARGET_UNSPECIFIED = 0;
+  WT_WATCH_TARGET_FS = 1;
+  WT_WATCH_TARGET_GIT_STATUS = 2;
+  WT_WATCH_TARGET_PORTS = 3;
+  WT_WATCH_TARGET_NOTIFICATIONS = 4;
+  WT_WATCH_TARGET_SCRIPT_RUN = 5;
+}
+
+// WATCH request: one target per stream, carrying that target's
+// query-equivalent params (path for fs/git watches, host + project_id for
+// the ports stream, project_id + run_id for a script run stream;
+// notifications needs none).
+message WtWatchRequest {
+  WtWatchTarget target = 1;
+  optional string path = 2;
+  optional string project_id = 3;
+  optional string run_id = 4;
+  optional string host = 5;
+}
+
+// PORT_TUNNEL request: raw TCP proxied as a reliable stream, same
+// half-close drain semantics as the WS tunnel.
+message WtTunnelRequest {
+  uint32 port = 1;
+}
+
+// DEVICE_STREAM request, mirroring the REST stream route params.
+message WtDeviceStreamRequest {
+  string device_id = 1;
+  optional string platform = 2;
+}
+
+// Background work record, mirroring the service shape field for field
+// (kind/status/timestamps stay plain strings, matched literally).
+message BackgroundWork {
+  string id = 1;
+  string session_id = 2;
+  optional string parent_run_id = 3;
+  optional string parent_call_id = 4;
+  string kind = 5;
+  string status = 6;
+  string created_at = 7;
+  optional string started_at = 8;
+  optional string finished_at = 9;
+  optional string summary = 10;
+  optional string error = 11;
+  map<string, string> metadata = 12;
+}
+
+// Background work lifecycle event for WtFrame payloads. The SSE wire keeps
+// its existing hand-shaped envelope; only WT uses this message.
+message BackgroundWorkEvent {
+  string type = 1;
+  BackgroundWork work = 2;
+}
