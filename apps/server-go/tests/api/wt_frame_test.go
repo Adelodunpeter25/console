@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"strings"
 	"testing"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
@@ -78,5 +79,69 @@ func TestWtFrameOversizePrefixRejected(t *testing.T) {
 func TestWtFrameEncodeNilFails(t *testing.T) {
 	if _, err := wt.EncodeFrame(nil); err == nil {
 		t.Fatal("nil frame must fail")
+	}
+}
+
+func TestWtStreamHeaderRoundTrip(t *testing.T) {
+	var buf bytes.Buffer
+	if err := wt.WriteStreamHeader(&buf, consolev1.WtStreamKind_WT_STREAM_KIND_CHAT_RUN, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	kind, id, err := wt.ReadStreamHeader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != consolev1.WtStreamKind_WT_STREAM_KIND_CHAT_RUN || id != "s1" {
+		t.Fatalf("header = %v %q", kind, id)
+	}
+}
+
+// The header reader must not over-consume: a header and its frame often
+// arrive in one packet, and buffering past the header strands the frame in
+// a discarded buffer (this stalled every stream once).
+func TestWtStreamHeaderLeavesFrameBytes(t *testing.T) {
+	var buf bytes.Buffer
+	if err := wt.WriteStreamHeader(&buf, consolev1.WtStreamKind_WT_STREAM_KIND_TERMINAL, ""); err != nil {
+		t.Fatal(err)
+	}
+	frame, err := wt.EncodeFrame(&consolev1.WtFrame{Type: "spawn", Payload: []byte("{}")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Write(frame)
+	kind, id, err := wt.ReadStreamHeader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if kind != consolev1.WtStreamKind_WT_STREAM_KIND_TERMINAL || id != "" {
+		t.Fatalf("header = %v %q", kind, id)
+	}
+	decoded, err := wt.DecodeFrame(&buf)
+	if err != nil {
+		t.Fatalf("frame after header: %v", err)
+	}
+	if decoded.GetType() != "spawn" {
+		t.Fatalf("frame type = %q", decoded.GetType())
+	}
+}
+
+func TestWtStreamHeaderRejectsBadKind(t *testing.T) {
+	var buf bytes.Buffer
+	// Unspecified kind.
+	buf.Write([]byte{0x00, 0x00})
+	if _, _, err := wt.ReadStreamHeader(&buf); err == nil {
+		t.Fatal("unspecified kind must fail")
+	}
+	// Beyond the dispatched range.
+	buf.Reset()
+	buf.Write([]byte{0x40, 0x06, 0x00})
+	if _, _, err := wt.ReadStreamHeader(&buf); err == nil {
+		t.Fatalf("unknown kind must fail")
+	}
+}
+
+func TestWtStreamHeaderRejectsOversizeID(t *testing.T) {
+	if err := wt.WriteStreamHeader(io.Discard, consolev1.WtStreamKind_WT_STREAM_KIND_CHAT_RUN, strings.Repeat("x", 513)); err == nil {
+		t.Fatal("oversize id must fail on write")
 	}
 }
