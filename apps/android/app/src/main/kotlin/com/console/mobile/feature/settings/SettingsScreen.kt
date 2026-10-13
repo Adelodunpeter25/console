@@ -33,7 +33,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
-import io.github.lyxnx.compose.ui.tablericons.outline.Category2
+import io.github.lyxnx.compose.ui.tablericons.outline.Package
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.TrendingUp
@@ -120,7 +120,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
             }
             Section("AI & tools") {
                 NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
-                NavRow(icon = TablerIcons.Outline.Category2, title = "Integrations", summary = integrationsSummary) { onOpen(SettingsSection.Integrations) }
+                NavRow(icon = TablerIcons.Outline.Package, title = "Integrations", summary = integrationsSummary) { onOpen(SettingsSection.Integrations) }
                 NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
             }
             Section("Projects & chats") {
