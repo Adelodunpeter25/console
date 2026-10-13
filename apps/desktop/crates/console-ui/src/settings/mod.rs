@@ -2,6 +2,7 @@
 
 pub mod deleted_chats_page;
 pub mod github_section;
+pub mod integrations_page;
 pub mod keybindings_page;
 pub mod mcp_page;
 pub mod models_page;
@@ -13,6 +14,7 @@ pub mod usage_page;
 
 pub use deleted_chats_page::*;
 pub use github_section::*;
+pub use integrations_page::*;
 pub use keybindings_page::*;
 pub use mcp_page::*;
 pub use models_page::*;
@@ -33,6 +35,7 @@ pub enum SettingsTab {
     Usage,
     Projects,
     Models,
+    Integrations,
     Mcp,
     DeletedChats,
     Keybindings,
@@ -46,6 +49,7 @@ impl SettingsTab {
             Self::Usage => "Usage",
             Self::Projects => "Projects",
             Self::Models => "Models",
+            Self::Integrations => "Integrations",
             Self::Mcp => "MCP Servers",
             Self::DeletedChats => "Deleted chats",
             Self::Keybindings => "Keyboard Shortcuts",

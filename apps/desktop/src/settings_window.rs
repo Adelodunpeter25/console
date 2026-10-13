@@ -1,8 +1,8 @@
 use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    DeletedChatsPage, KeybindingsPage, ModelsPage, ProbeState, ProjectsPage, ProvidersPage,
-    ServersPage, SettingsShell, SettingsTab, UsagePage,
+    DeletedChatsPage, IntegrationsPage, KeybindingsPage, ModelsPage, ProbeState, ProjectsPage,
+    ProvidersPage, ServersPage, SettingsShell, SettingsTab, UsagePage,
 };
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
@@ -48,6 +48,13 @@ impl SettingsWindow {
             if let Some(app_entity) = app.upgrade() {
                 app_entity.update(cx, |app_state, cx| {
                     app_state.fetch_usage(cx);
+                });
+            }
+        }
+        if initial_tab == SettingsTab::Integrations {
+            if let Some(app_entity) = app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.refresh_integrations(cx);
                 });
             }
         }
@@ -238,6 +245,13 @@ impl SettingsWindow {
         if tab == SettingsTab::Mcp {
             self.mcp.fetch_mcp_servers(cx);
         }
+        if tab == SettingsTab::Integrations {
+            if let Some(app_entity) = self.app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.refresh_integrations(cx);
+                });
+            }
+        }
         if tab == SettingsTab::Providers {
             if let Some(app_entity) = self.app.upgrade() {
                 app_entity.update(cx, |app_state, cx| {
@@ -291,6 +305,13 @@ impl Render for SettingsWindow {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
+                }
+                if tab == SettingsTab::Integrations {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.refresh_integrations(cx);
+                        });
+                    }
                 }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
@@ -630,6 +651,25 @@ impl Render for SettingsWindow {
                     on_save,
                     saving: self.model_saving,
                     error: self.model_error.clone(),
+                }
+                .into_any_element()
+            }
+            SettingsTab::Integrations => {
+                let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.refresh_integrations(cx);
+                            });
+                        }
+                    })
+                };
+                IntegrationsPage {
+                    integrations: app.integrations.clone(),
+                    loading: app.integrations_loading,
+                    error: app.integrations_error.clone(),
+                    on_refresh,
                 }
                 .into_any_element()
             }

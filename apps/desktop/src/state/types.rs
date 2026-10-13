@@ -353,6 +353,17 @@ pub struct ConsoleDesktopApp {
     pub github_form_open: bool,
     /// Server-authored failure text, shown verbatim. Cleared on any new action.
     pub github_error: Option<String>,
+    /// Binary integration rows from `/api/integrations` (gh CLI, ...).
+    /// Refreshed every time the Integrations tab opens — detection runs live
+    /// server-side, so a refresh after installing flips the row with no
+    /// restart. Empty with no error means "not fetched yet", not "none".
+    pub integrations: Vec<console_core::types::IntegrationStatus>,
+    /// True while a refresh is in flight, so the button goes inert rather
+    /// than stacking requests.
+    pub integrations_loading: bool,
+    /// Fetch failure text. Kept separate from the rows so a transient failure
+    /// keeps the last known list instead of blanking the page.
+    pub integrations_error: Option<String>,
     pub usage_reports:
         Option<Rc<std::collections::HashMap<String, Option<console_core::types::UsageReport>>>>,
     pub usage_loading: bool,

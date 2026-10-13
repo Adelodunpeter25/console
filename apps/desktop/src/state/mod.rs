@@ -19,6 +19,7 @@ mod execution;
 mod floating_composer;
 mod github;
 mod global_actions;
+mod integrations;
 mod layout;
 mod macos_notifications;
 pub(crate) use macos_notifications::clear_all as clear_all_notifications;
