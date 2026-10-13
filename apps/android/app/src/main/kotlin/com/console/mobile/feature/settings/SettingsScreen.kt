@@ -33,6 +33,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithubCopilot
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import io.github.lyxnx.compose.ui.tablericons.outline.Package
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.TrendingUp
@@ -45,7 +46,7 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
 
-enum class SettingsSection { Servers, Providers, Usage, Models, Projects, DeletedChats, Mcp }
+enum class SettingsSection { Servers, Providers, Usage, Models, Integrations, Projects, DeletedChats, Mcp }
 
 /**
  * Port of screens/settings/settings-screen.tsx.
@@ -72,6 +73,7 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
             SettingsSection.Providers -> ProvidersSettings(onBack = { section = null })
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
             SettingsSection.Models -> ModelsSettings(onBack = { section = null })
+            SettingsSection.Integrations -> IntegrationsSettings(onBack = { section = null })
             SettingsSection.Projects -> ProjectsSettings(onBack = { section = null }, onAddProject = onAddProject)
             SettingsSection.Mcp -> McpSettings(onBack = { section = null })
             SettingsSection.DeletedChats -> DeletedChatsSettings(onBack = { section = null })
@@ -94,6 +96,15 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
     val roles = providerState.modelRoles.count { it.value.isNotBlank() }
     val n = projectState.projects.size
     val d = projectState.deletedSessions.size
+    // Live only after the page has loaded once this session — the fetch runs
+    // on screen open, not on landing, so one settings visit costs no request.
+    val integrationsState by AppContainer.integrationsStateHolder.state.collectAsStateWithLifecycle()
+    val missingIntegrations = integrationsState.integrations.count { it.installed != true }
+    val integrationsSummary = when {
+        integrationsState.integrations.isEmpty() -> "Helper binaries"
+        missingIntegrations == 0 -> "All installed"
+        else -> "$missingIntegrations missing"
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -109,6 +120,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
             }
             Section("AI & tools") {
                 NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
+                NavRow(icon = TablerIcons.Outline.Package, title = "Integrations", summary = integrationsSummary) { onOpen(SettingsSection.Integrations) }
                 NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
             }
             Section("Projects & chats") {
