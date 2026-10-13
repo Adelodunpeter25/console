@@ -40,7 +40,7 @@ func (s *Service) setStatus(sessionID, status string) {
 // the next turn when the previous settled cleanly. A failed turn holds
 // (not auto-runs, not drops) any staged prompt. One hub spans the whole
 // chain so subscribers keep gap-free sequence numbers.
-func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
+func (s *Service) execute(ctx context.Context, sessionID, runID string, first Prompt, firstProvider loop.Provider, firstProviderID string, hub *Hub, done chan struct{}) {
 	defer close(done)
 	defer func() {
 		// Pre-write snapshots are only meaningful for the run that captured
@@ -69,7 +69,7 @@ func (s *Service) execute(ctx context.Context, sessionID string, first Prompt, f
 	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
 	var runErr error
 	for {
-		turnErr := s.runOneTurn(currentCtx, sessionID, current, hub, &currentProvider, &currentProviderID)
+		turnErr := s.runOneTurn(currentCtx, sessionID, runID, current, hub, &currentProvider, &currentProviderID)
 		runErr = turnErr
 		if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
 			slog.Warn("run turn error", "session", sessionID, "error", turnErr)
@@ -213,7 +213,7 @@ func replaceTool(list []tools.Tool, name string, replacement tools.Tool) []tools
 // runOneTurn builds the agent for one prompt and pumps its events to the
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
-func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string) error {
+func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string) error {
 	loaded, err := s.sessions.Load(sessionID, 0, 0)
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
@@ -341,7 +341,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 		case "askMany":
 			toolList = append(toolList, tools.NewAskManyTool(askHandler))
 		case "bash":
-			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID))
+			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
 		case "ports":
@@ -394,12 +394,16 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 				}
 			}
 		},
-		SystemPrompt: prompt.StableSystem,
-		Setup:        setup,
+		SystemPrompt:   prompt.StableSystem,
+		Setup:          setup,
+		BackgroundWork: s.BackgroundWorkManager(),
+		SessionID:      sessionID,
+		ParentRunID:    runID,
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
 		Guard:        guard,
+		Approver:     s.decisions.ApproverFor(sessionID, hub),
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
@@ -445,6 +449,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID string, dto Prompt, 
 	agent.ToolDefs = registry.Definitions
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = setup
+	agent.TurnContext = func() string { return s.backgroundContext(sessionID) }
 	agent.SystemSections = systemSections(prompt.Sections)
 	agent.Model = modelID
 	agent.CacheRetention = loop.CacheShort

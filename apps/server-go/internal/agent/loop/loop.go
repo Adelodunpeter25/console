@@ -75,6 +75,9 @@ const (
 	EventSubagentStart    EventKind = "subagentStart"
 	EventSubagentActivity EventKind = "subagentActivity"
 	EventSubagentEnd      EventKind = "subagentEnd"
+	// EventBackgroundWork carries a session-owned detached work lifecycle
+	// callback. The payload is a services.BackgroundWorkEvent.
+	EventBackgroundWork EventKind = "backgroundWork"
 	// Wire-structure markers. The run service broadcasts these around the
 	// raw provider stream so the SSE layer can emit the desktop event
 	// vocabulary (sessionStart/turnStart/modelStream*/toolExecution*/turnEnd/
@@ -170,6 +173,12 @@ type Agent struct {
 	// Setup, when set, is sent as a leading <setup> user message before the
 	// conversation on every turn. It is never persisted or compacted.
 	Setup string
+	// TurnContext is called immediately before every provider request. Its
+	// returned text is added to the non-persisted setup context, allowing
+	// detached work that finishes during a tool loop to arrive before the next
+	// safe request without interrupting a stream. The callback should return a
+	// claimed/deduplicated value so it is not repeated on later requests.
+	TurnContext func() string
 	// ToolDefs, when set, supplies the provider tool list at the start of
 	// every turn (lazy tool groups can grow it mid-run). Nil keeps the
 	// list passed to Run.
@@ -346,6 +355,12 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	// per-turn triplets with the canonical assistant snapshot — the desktop
 	// replaces streamed content with it.
 	turnID := newTurnID()
+	setup := a.Setup
+	if a.TurnContext != nil {
+		if contextText := strings.TrimSpace(a.TurnContext()); contextText != "" {
+			setup = strings.TrimSpace(setup + "\n\n<background-work>\n" + contextText + "\n</background-work>")
+		}
+	}
 	if a.OnRequest != nil {
 		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))
 	}
@@ -356,8 +371,8 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		done <- a.provider.RunTurn(ctx, TurnRequest{
 			Model:          a.Model,
 			SystemPrompt:   a.SystemPrompt,
-			Setup:          a.Setup,
-			Messages:       WithSetup(a.Setup, history),
+			Setup:          setup,
+			Messages:       WithSetup(setup, history),
 			Tools:          toolsList,
 			CacheRetention: a.CacheRetention,
 			ConversationID: a.ConversationID,

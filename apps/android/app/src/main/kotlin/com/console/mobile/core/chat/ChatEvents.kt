@@ -298,6 +298,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             session.copy(subagents = updatedList)
         }
+        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> session
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
             val msg = event.error?.message ?: "Unknown agent error"

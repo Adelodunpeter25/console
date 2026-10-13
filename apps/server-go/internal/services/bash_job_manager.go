@@ -36,6 +36,7 @@ const (
 // handle or buffers).
 type BashJobSnapshot struct {
 	JobID      string
+	WorkID     string
 	Command    string
 	Cwd        string
 	Status     BashJobStatus
@@ -70,12 +71,14 @@ type bashJobRecord struct {
 	retentionTimer               *time.Timer
 	waiters                      []chan struct{}
 	ownerSessionID               string
+	workManager                  *BackgroundWorkManager
 }
 
 // BashJobManager owns every background bash job for the process.
 type BashJobManager struct {
 	mu   sync.Mutex
 	jobs map[string]*bashJobRecord
+	work *BackgroundWorkManager
 
 	// ports backs live dev-server detection:
 	// job output is scanned for localhost:PORT candidates, and the job's
@@ -86,6 +89,12 @@ type BashJobManager struct {
 
 func NewBashJobManager(ports *PortRegistry) *BashJobManager {
 	return &BashJobManager{jobs: make(map[string]*bashJobRecord), ports: ports}
+}
+
+func (m *BashJobManager) SetBackgroundWorkManager(work *BackgroundWorkManager) {
+	m.mu.Lock()
+	m.work = work
+	m.mu.Unlock()
 }
 
 func (m *BashJobManager) runningCount() int {
@@ -107,6 +116,9 @@ type StartBashJobOptions struct {
 	Env            []string
 	TimeoutMs      int
 	OwnerSessionID string
+	WorkManager    *BackgroundWorkManager
+	ParentRunID    string
+	ParentCallID   string
 }
 
 // Start launches command as a detached background job and returns its
@@ -162,6 +174,11 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 	if ownerSessionID == "" {
 		ownerSessionID = "default"
 	}
+	if opts.WorkManager == nil {
+		m.mu.Lock()
+		opts.WorkManager = m.work
+		m.mu.Unlock()
+	}
 
 	rec := &bashJobRecord{
 		BashJobSnapshot: BashJobSnapshot{
@@ -170,10 +187,25 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 		},
 		cmd:            cmd,
 		ownerSessionID: ownerSessionID,
+		workManager:    opts.WorkManager,
+	}
+	if opts.WorkManager != nil {
+		work, err := opts.WorkManager.Register(BackgroundWorkOptions{
+			SessionID: ownerSessionID, ParentRunID: opts.ParentRunID, ParentCallID: opts.ParentCallID,
+			Kind: BackgroundWorkShell, Metadata: map[string]string{"job_id": jobID, "command": opts.Command},
+		})
+		if err != nil {
+			_ = cmd.Process.Kill()
+			return BashJobSnapshot{}, err
+		}
+		rec.WorkID = work.ID
 	}
 	m.mu.Lock()
 	m.jobs[jobID] = rec
 	m.mu.Unlock()
+	if opts.WorkManager != nil {
+		_ = opts.WorkManager.SetCancel(rec.WorkID, func() { m.killRecord(rec) })
+	}
 
 	rec.timer = time.AfterFunc(time.Duration(timeoutMs)*time.Millisecond, func() { m.expire(rec) })
 	go m.drain(rec, stdout, "stdout")
@@ -277,6 +309,7 @@ func (m *BashJobManager) maybeFinish(rec *bashJobRecord) {
 	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
+	m.notifyBackgroundWork(rec)
 }
 
 func (m *BashJobManager) expire(rec *bashJobRecord) {
@@ -296,6 +329,7 @@ func (m *BashJobManager) expire(rec *bashJobRecord) {
 	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
+	m.notifyBackgroundWork(rec)
 }
 
 // Status returns the current snapshot for jobID, scoped to ownerSessionID.
@@ -508,6 +542,7 @@ func (m *BashJobManager) killRecord(rec *bashJobRecord) {
 	}
 	m.scheduleRetention(rec)
 	m.notify(rec)
+	m.notifyBackgroundWork(rec)
 }
 
 func (m *BashJobManager) scheduleRetention(rec *bashJobRecord) {
@@ -528,6 +563,35 @@ func (m *BashJobManager) notify(rec *bashJobRecord) {
 	for _, ch := range waiters {
 		close(ch)
 	}
+}
+
+func (m *BashJobManager) notifyBackgroundWork(rec *bashJobRecord) {
+	if rec.workManager == nil || rec.WorkID == "" {
+		return
+	}
+	snap := rec.snapshot()
+	status := BackgroundWorkCompleted
+	failure := ""
+	if snap.Status == BashJobFailed {
+		status = BackgroundWorkFailed
+		failure = fmt.Sprintf("Command exited with code %d", valueOrZero(snap.ExitCode))
+	} else if snap.Status == BashJobExpired {
+		status = BackgroundWorkTimedOut
+		failure = "Command timed out"
+	} else if snap.Status == BashJobKilled {
+		status = BackgroundWorkCancelled
+		failure = "Command was cancelled"
+	}
+	_, _ = rec.workManager.Complete(rec.WorkID, rec.ownerSessionID, status,
+		fmt.Sprintf("Command finished with status %s", snap.Status), failure,
+		map[string]string{"job_id": snap.JobID, "exit_code": fmt.Sprintf("%d", valueOrZero(snap.ExitCode))})
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func (m *BashJobManager) getOwned(jobID, ownerSessionID string) (*bashJobRecord, error) {

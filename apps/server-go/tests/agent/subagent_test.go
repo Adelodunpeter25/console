@@ -12,6 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
@@ -51,6 +52,52 @@ func TestSubagentCompletes(t *testing.T) {
 	for _, want := range []loop.EventKind{loop.EventSubagentStart, loop.EventSubagentEnd} {
 		if !seen[want] {
 			t.Fatalf("missing %s in %v", want, kinds)
+		}
+	}
+}
+
+func TestBackgroundSubagentReturnsBeforeNestedCompletion(t *testing.T) {
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	manager := services.NewBackgroundWorkManager()
+	nested := &blockingProvider{release: release, entered: entered}
+	tool := loop.NewSubagentTool(&loop.SubagentContext{
+		Provider:       nested,
+		Tools:          tools.DefaultTools(),
+		BackgroundWork: manager,
+		SessionID:      "session-1",
+	})
+	args, _ := json.Marshal(map[string]any{"prompt": "slow", "name": "scout", "background": true})
+	started := time.Now()
+	out, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), tools.ToolCall{ID: "sub-bg", Name: "subagent", Arguments: args})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("background subagent blocked the parent tool call")
+	}
+	if !strings.Contains(resultText(t, out), "Background work: work_") {
+		t.Fatalf("start result: %q", resultText(t, out))
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("nested provider never started")
+	}
+	close(release)
+	deadline := time.After(time.Second)
+	for {
+		if completed := manager.TakeCompletions("session-1"); len(completed) == 1 {
+			if completed[0].Status != services.BackgroundWorkCompleted {
+				t.Fatalf("completion: %+v", completed[0])
+			}
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("background subagent did not complete")
+		default:
+			time.Sleep(time.Millisecond)
 		}
 	}
 }

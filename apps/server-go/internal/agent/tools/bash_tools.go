@@ -20,11 +20,13 @@ const (
 )
 
 type bashInput struct {
-	Command    string            `json:"command" jsonschema:"required,description=Shell command to execute"`
-	Cwd        string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
-	TimeoutMs  int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
-	Env        map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
-	Background bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. Poll with bashJob (status/output/wait/kill). The start response is NOT an exit result."`
+	Command      string            `json:"command" jsonschema:"required,description=Shell command to execute"`
+	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
+	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
+	Env          map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
+	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. Poll with bashJob (status/output/wait/kill). The start response is NOT an exit result."`
+	ParentRunID  string            `json:"-"`
+	ParentCallID string            `json:"-"`
 }
 
 func truncateOutput(output string, maxBytes int, label string) string {
@@ -55,7 +57,14 @@ func shellArgv(command string) []string {
 
 // NewBashTool builds the "bash" tool bound to jobs (for background=true
 // runs). A nil manager disables background mode (headless singleton).
-func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
+func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+	parentRunID, parentCallID := "", ""
+	if len(parentIDs) > 0 {
+		parentRunID = parentIDs[0]
+	}
+	if len(parentIDs) > 1 {
+		parentCallID = parentIDs[1]
+	}
 	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Long-running commands: background=true starts a managed job (poll with bashJob); the start response only confirms the process started.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
@@ -81,13 +90,18 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				snap, err := jobs.Start(services.StartBashJobOptions{
 					Command: in.Command, Cwd: cwd, Env: mergedEnv(in.Env),
 					TimeoutMs: timeoutMs, OwnerSessionID: ownerSessionID,
+					ParentRunID: parentRunID, ParentCallID: parentCallID,
 				})
 				if err != nil {
 					return nil, NewToolError("%v", err)
 				}
+				workLine := ""
+				if snap.WorkID != "" {
+					workLine = fmt.Sprintf("\nBackground work: %s", snap.WorkID)
+				}
 				return textResult(fmt.Sprintf(
-					"Started: %s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
-					snap.JobID, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
+					"Started: %s%s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
+					snap.JobID, workLine, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
 				)), nil
 			}
 
