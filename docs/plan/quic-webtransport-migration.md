@@ -4,6 +4,20 @@ Migration plan for moving the coding agent harness server from HTTP, SSE (chat
 streaming), and standard TCP WebSocket (binary interactive terminal) to HTTP/3
 and WebTransport over QUIC.
 
+Status Oct 2026 (server side): Phase 0 auth + config done (`internal/auth/token.go`,
+`internal/wt/config.go`, `POST /api/auth/token`, shared Fiber middleware
+unmounted); Phase 1 framing + schema done (`internal/wt/frame.go`,
+`framing.go`, `proto/console/v1/wt.proto`, golden fixtures); Phase 2 server
+done (`internal/wt/server.go` + per-kind streams, dual-listener `serve.go`,
+`cmd/wtbench`). Resolved triple: quic-go v0.61.0 + webtransport-go v0.12.0
+(newer needs go 1.26; repo pins 1.25). Deviations from the draft below:
+`CloseGracefully` does not exist in webtransport-go v0.12.0 (`Close` instead);
+the QUIC field is `InitialConnectionReceiveWindow`, not
+`ConnectionReceiveWindow`; datagrams stay transport-mandated (the library
+forces the SETTINGS bit) but the protocol sends none; no app-level ping
+frames (QUIC keepalive owns liveness); buf's remote plugins are dead, regen
+is local protoc (proven byte-identical for existing files).
+
 Current baseline (locations by symbol, not line number — numbers rotted
 twice already; re-verified against the tree Oct 2026):
 
@@ -114,7 +128,11 @@ listener exists:
    Remaining work: introduce `internal/services/transport` with `RunSubscriber`,
    `PtySession`, `FsWatcher` only where Fiber handlers still own logic
    (the fs, git, ports, notifications, and script stream handlers all inline
-   their pump loops inside the handler).
+   their pump loops inside the handler). Done differently Oct 2026: the WT
+   server reuses the transport-free sources directly (`Hub.Subscribe`,
+   `StreamConn`/`PumpStream`, managers) plus shared converters
+   (`run.WireFrame`, `services.*ToProto`), with each pump loop mirrored per
+   transport — no separate interface-extraction pass, same end state.
 
 3. Config flags. `console.toml` is a **desktop run-scripts file only**
    (`[scripts.*]`); it is not read by the server or the clients. So:
@@ -216,7 +234,8 @@ session is established so clients can distinguish "bad token" from "UDP blocked"
        MaxIncomingStreams:     1000,
        MaxIncomingUniStreams:  1000,
        InitialStreamReceiveWindow:     512 * 1024,  // terminal stream
-       ConnectionReceiveWindow:        2 * 1024 * 1024,
+       InitialConnectionReceiveWindow: 512 * 1024,
+       MaxConnectionReceiveWindow:     2 * 1024 * 1024,
    }
    ```
 
@@ -238,10 +257,13 @@ session is established so clients can distinguish "bad token" from "UDP blocked"
    QUIC. Same process, different sockets — TCP vs UDP, no `SO_REUSEPORT` needed.
    Keep `:3000` plaintext as the dev path so existing local setups keep working.
 5. `Alt-Svc: h3=":443"` on Fiber responses, only once TLS is on (step 3a).
-6. Graceful shutdown: in `serve.go`, extend the existing sequence with
-   `wtServer.CloseGracefully()` **before** `app.ShutdownWithTimeout` and the
-   existing `shutdownAll()` so PTYs and in-flight runs drain
-   through both paths.
+6. Graceful shutdown: extend the existing sequence with WT `Close()`
+   **before** `app.ShutdownWithTimeout` and the existing `shutdownAll()` so
+   PTYs and in-flight runs drain through both paths. (No `CloseGracefully`
+   in webtransport-go v0.12.0; `Close()` closes sessions and waits handlers.
+   Every pump observes session death — chat/watch loops select on it,
+   terminal/tunnel I/O fails on close, the device pump is waited on — so
+   Close never parks on a silent stream.)
 7. qlog behind a flag; GSO/GRO + socket buffers in Phase 7 (needs sysctl
    privileges, not a Go env var alone).
 
@@ -370,9 +392,10 @@ QUIC cost is syscalls and allocations, not bandwidth.
    Bounded `mpsc(1024)` with coalesced drops for terminal frames; never an
    unbounded `Vec`.
 5. Bench: do **not** extend `apps/server-go/cmd/bench/main.go` — it measures
-   harness token cost per task, not transport fanout. Add a
-   separate `cmd/wtbench` that opens N=500 streams and reports p50/p99 frame
-   latency plus CPU and allocations per stream.
+   harness token cost per task, not transport fanout. `cmd/wtbench` exists
+   for this: opens N (default 500) watch streams against a live server and
+   reports handshake time plus open-to-first-frame p50/p99, client heap
+   delta, and goroutine delta.
 
 ### Phase 8 — Rollout
 
