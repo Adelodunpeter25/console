@@ -9,14 +9,9 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -45,215 +40,6 @@ func bodyToPrompt(body runPromptBody) run.Prompt {
 		dto.Attachments = append(dto.Attachments, run.Attachment{Data: a.Data, MimeType: a.MimeType})
 	}
 	return dto
-}
-
-// queuedPromptToProto converts a staged prompt row to the canonical wire
-// type. Attachments/annotations reuse the message schema; created_at stays
-// the RFC3339 string the server stores; empty optionals stay absent.
-func queuedPromptToProto(qp *types.QueuedPrompt) *consolev1.QueuedPrompt {
-	if qp == nil {
-		return nil
-	}
-	out := &consolev1.QueuedPrompt{
-		Id: qp.ID, SessionId: qp.SessionID, Prompt: qp.Prompt, CreatedAt: qp.CreatedAt,
-	}
-	out.ContextFiles = append(out.ContextFiles, qp.ContextFiles...)
-	for _, a := range qp.Attachments {
-		out.Attachments = append(out.Attachments, &consolev1.ImageAttachment{
-			Data: a.Data, MimeType: a.MimeType,
-		})
-	}
-	for _, a := range qp.Annotations {
-		out.Annotations = append(out.Annotations, loop.AnnotationToProto(a))
-	}
-	if qp.ModelID != "" {
-		out.ModelId = &qp.ModelID
-	}
-	if qp.Provider != "" {
-		out.Provider = &qp.Provider
-	}
-	if qp.ApprovalMode != "" {
-		out.ApprovalMode = &qp.ApprovalMode
-	}
-	return out
-}
-
-// queuedPromptData marshals a staged row for the success envelope, preserving
-// the old data:null when nothing is staged.
-func queuedPromptData(qp *types.QueuedPrompt) (any, error) {
-	if qp == nil {
-		return nil, nil
-	}
-	raw, err := protoMarshal.Marshal(queuedPromptToProto(qp))
-	if err != nil {
-		return nil, err
-	}
-	return json.RawMessage(raw), nil
-}
-
-// toolCallToProto converts a live tool call to the canonical wire type,
-// reusing the transcript schema: arguments cross as raw JSON bytes. Empty
-// or literal-null argument payloads stay absent, as omitempty did.
-func toolCallToProto(c tools.ToolCall) *consolev1.ToolCall {
-	out := &consolev1.ToolCall{Id: c.ID, Name: c.Name}
-	if len(c.Arguments) > 0 && string(c.Arguments) != "null" {
-		out.Arguments = append([]byte(nil), c.Arguments...)
-	}
-	if c.ThoughtSignature != "" {
-		out.ThoughtSignature = &c.ThoughtSignature
-	}
-	return out
-}
-
-// toolResultToProto converts a live tool result to the canonical wire type.
-// Content re-encodes from its parsed form (encoding/json sorts map keys, so
-// the bytes match what the old direct marshal emitted). The loop's echoed
-// call args are dropped — no client reads them (message.proto notes this
-// for the transcript rows too).
-func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
-	out := &consolev1.ToolResult{ToolCallId: r.ToolCallID}
-	if r.ToolName != "" {
-		out.ToolName = &r.ToolName
-	}
-	if r.Content != nil {
-		if raw, err := json.Marshal(r.Content); err == nil && string(raw) != "null" {
-			out.Content = raw
-		}
-	}
-	if r.IsError {
-		out.IsError = &r.IsError
-	}
-	return out
-}
-
-// snapshotToProto converts a context-window snapshot to the canonical wire
-// type. Counts narrow to int32 and stay JSON numbers.
-func snapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
-	return &consolev1.ContextSnapshot{
-		UsedTokens: int32(snap.UsedTokens), ContextWindow: int32(snap.ContextWindow),
-		PercentUsed: snap.PercentUsed, ThresholdRatio: snap.ThresholdRatio,
-		ModelId: snap.ModelID, Provider: snap.Provider, Source: snap.Source,
-	}
-}
-
-// permissionToProto converts a pending tool approval to the canonical wire
-// type. Args cross as raw JSON bytes; null args stay absent (decodes as
-// null client-side, as before).
-func permissionToProto(r permissions.Request) *consolev1.PermissionRequest {
-	out := &consolev1.PermissionRequest{
-		RequestId: r.RequestID, ToolCallId: r.ToolCallID,
-		ToolName: r.ToolName, Tier: string(r.Tier),
-	}
-	if r.Args != nil {
-		if raw, err := json.Marshal(r.Args); err == nil && string(raw) != "null" {
-			out.Args = raw
-		}
-	}
-	if r.Reason != "" {
-		out.Reason = &r.Reason
-	}
-	return out
-}
-
-// askToProto converts a pending agent question. skippable is always set:
-// the old shape had no omitempty and clients tell explicit false apart
-// from absent.
-func askToProto(q tools.AskQuestionRequest) *consolev1.AskQuestionRequest {
-	skippable := q.Skippable
-	out := &consolev1.AskQuestionRequest{
-		RequestId: q.RequestID, Question: q.Question, Skippable: &skippable,
-	}
-	out.Options = append(out.Options, q.Options...)
-	if q.IsMultiSelect {
-		out.IsMultiSelect = true
-	}
-	if q.BatchID != "" {
-		out.BatchId = &q.BatchID
-	}
-	return out
-}
-
-// browserToProto converts a pending browser action. Zero timeout and false
-// submit stay absent, as omitempty did.
-func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionRequest {
-	out := &consolev1.BrowserActionRequest{RequestId: b.RequestID, Action: b.Action}
-	if b.URL != "" {
-		out.Url = &b.URL
-	}
-	if b.Script != "" {
-		out.Script = &b.Script
-	}
-	if b.Selector != "" {
-		out.Selector = &b.Selector
-	}
-	if b.TabID != "" {
-		out.TabId = &b.TabID
-	}
-	if b.URLContains != "" {
-		out.UrlContains = &b.URLContains
-	}
-	if b.Text != "" {
-		out.Text = &b.Text
-	}
-	if b.TimeoutMs != 0 {
-		out.TimeoutMs = int32(b.TimeoutMs)
-	}
-	if b.Ref != "" {
-		out.Ref = &b.Ref
-	}
-	if b.Submit {
-		out.Submit = true
-	}
-	return out
-}
-
-// Subagent lifecycle converters. Fields stay flattened under the frame's
-// type tag (no nested payload object), matching the old wire. Args re-encode
-// from their parsed form (encoding/json sorts map keys), and null args stay
-// absent.
-func subagentStartToProto(v loop.SubagentStartInfo) *consolev1.SubagentStartEvent {
-	out := &consolev1.SubagentStartEvent{
-		SubagentId: v.SubagentID, Name: v.Name, Role: v.Role,
-		Prompt: v.Prompt, MaxTurns: int32(v.MaxTurns),
-	}
-	if v.ParentToolCall != "" {
-		out.ParentToolCallId = &v.ParentToolCall
-	}
-	return out
-}
-
-func subagentActivityToProto(v loop.SubagentActivityInfo) *consolev1.SubagentActivityEvent {
-	out := &consolev1.SubagentActivityEvent{
-		SubagentId: v.SubagentID, TurnIndex: int32(v.TurnIndex), Status: v.Status,
-	}
-	if v.ToolCallID != "" {
-		out.ToolCallId = &v.ToolCallID
-	}
-	if v.ToolName != "" {
-		out.ToolName = &v.ToolName
-	}
-	if v.Args != nil {
-		if raw, err := json.Marshal(v.Args); err == nil && string(raw) != "null" {
-			out.Args = raw
-		}
-	}
-	if v.Error != "" {
-		out.Error = &v.Error
-	}
-	return out
-}
-
-func subagentEndToProto(v loop.SubagentEndInfo) *consolev1.SubagentEndEvent {
-	out := &consolev1.SubagentEndEvent{
-		SubagentId: v.SubagentID, Status: v.Status, TotalTurns: int32(v.TotalTurns),
-	}
-	if v.Summary != "" {
-		out.Summary = &v.Summary
-	}
-	if v.Error != "" {
-		out.Error = &v.Error
-	}
-	return out
 }
 
 func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
@@ -343,7 +129,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
-		raw, err := protoMarshal.Marshal(snapshotToProto(snap))
+		raw, err := protoMarshal.Marshal(run.SnapshotToProto(snap))
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
@@ -432,7 +218,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		if err != nil {
 			return queueError(c, sessionID, err)
 		}
-		data, err := queuedPromptData(queued)
+		data, err := run.QueuedPromptData(queued)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
@@ -456,7 +242,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		if updated == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No queued prompt found for session '" + sessionID + "'."})
 		}
-		data, err := queuedPromptData(updated)
+		data, err := run.QueuedPromptData(updated)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
@@ -469,7 +255,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
-		data, err := queuedPromptData(queued)
+		data, err := run.QueuedPromptData(queued)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
@@ -609,192 +395,11 @@ func pumpHub(sse *sseStream, hub *run.Hub, since *int64) {
 // kinds (token accounting, raw provider deltas) are dropped; the desktop
 // cannot parse them.
 func sendFrame(sse *sseStream, f run.Frame) error {
-	name, body, drop := wireFrame(f.Event)
+	name, body, drop := run.WireFrame(f.Event)
 	if drop {
 		return nil
 	}
 	return sse.SendSeqJSON(name, f.Seq, body)
-}
-
-// modelStreamPartFrame is the one wire frame emitted per model token, so it
-// is a struct rather than a fiber.Map: encoding/json reflects over maps and
-// sorts their keys on every call. The part itself is protojson (shared
-// schema); the ~2.5µs/frame overhead measured against encoding/json is
-// 0.01% of a core at real delta rates — schema uniformity wins.
-type modelStreamPartFrame struct {
-	Type string          `json:"type"`
-	Part json.RawMessage `json:"part"`
-}
-
-// wireFrame maps a hub event to its SSE event name and JSON body.
-func wireFrame(e loop.Event) (string, any, bool) {
-	switch e.Kind {
-	case loop.EventSessionStart:
-		return "sessionStart", fiber.Map{"type": "sessionStart"}, false
-	case loop.EventTurnStart:
-		return "turnStart", fiber.Map{"type": "turnStart", "prompt": e.Text}, false
-	case loop.EventModelStreamStart:
-		return "modelStreamStart", fiber.Map{"type": "modelStreamStart", "turnId": e.Text}, false
-	case loop.EventModelStreamPart:
-		part, ok := e.Part.(*consolev1.ModelStreamPart)
-		if !ok {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(part)
-		if err != nil {
-			return "", nil, true
-		}
-		return "modelStreamPart", modelStreamPartFrame{Type: "modelStreamPart", Part: json.RawMessage(raw)}, false
-	case loop.EventModelStreamEnd:
-		var turn any
-		if m, ok := e.Message.(loop.AssistantMessage); ok {
-			raw, err := protoMarshal.Marshal(loop.AssistantToProto(m))
-			if err != nil {
-				return "", nil, true
-			}
-			turn = json.RawMessage(raw)
-		}
-		return "modelStreamEnd", fiber.Map{"type": "modelStreamEnd", "turnId": e.Text, "turn": turn}, false
-	case loop.EventToolExecutionStart:
-		calls := make([]*consolev1.ToolCall, 0, len(e.Calls))
-		for _, c := range e.Calls {
-			calls = append(calls, toolCallToProto(c))
-		}
-		data, err := marshalProtoList(calls)
-		if err != nil {
-			return "", nil, true
-		}
-		return "toolExecutionStart", fiber.Map{"type": "toolExecutionStart", "calls": data}, false
-	case loop.EventToolExecutionResult:
-		if e.Result == nil {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(toolResultToProto(*e.Result))
-		if err != nil {
-			return "", nil, true
-		}
-		return "toolExecutionResult", fiber.Map{"type": "toolExecutionResult", "result": json.RawMessage(raw)}, false
-	case loop.EventToolExecutionEnd:
-		results := make([]*consolev1.ToolResult, 0, len(e.Results))
-		for _, r := range e.Results {
-			results = append(results, toolResultToProto(r))
-		}
-		data, err := marshalProtoList(results)
-		if err != nil {
-			return "", nil, true
-		}
-		return "toolExecutionEnd", fiber.Map{"type": "toolExecutionEnd", "results": data}, false
-	case loop.EventTurnEnd:
-		return "turnEnd", fiber.Map{"type": "turnEnd", "turnId": e.Text}, false
-	case loop.EventContextUpdate:
-		if e.Context == nil {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(snapshotToProto(*e.Context))
-		if err != nil {
-			return "", nil, true
-		}
-		return "contextUpdate", fiber.Map{"type": "contextUpdate", "context": json.RawMessage(raw)}, false
-	case loop.EventSessionEnd:
-		return "sessionEnd", fiber.Map{"type": "sessionEnd"}, false
-	case loop.EventSessionTitleUpdated:
-		return "sessionTitleUpdated", fiber.Map{"type": "sessionTitleUpdated", "title": e.Title}, false
-	case loop.EventQueueUpdated:
-		data, err := queuedPromptData(e.Queued)
-		if err != nil {
-			return "", nil, true
-		}
-		return "queueUpdated", fiber.Map{"type": "queueUpdated", "queuedPrompt": data}, false
-	case loop.EventAskQuestion:
-		if e.Ask == nil {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(askToProto(*e.Ask))
-		if err != nil {
-			return "", nil, true
-		}
-		return "askQuestion", fiber.Map{"type": "askQuestion", "request": json.RawMessage(raw)}, false
-	case loop.EventBrowserAction:
-		if e.Browser == nil {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(browserToProto(*e.Browser))
-		if err != nil {
-			return "", nil, true
-		}
-		return "browserAction", fiber.Map{"type": "browserAction", "request": json.RawMessage(raw)}, false
-	case loop.EventPermissionRequest:
-		if e.Permission == nil {
-			return "", nil, true
-		}
-		raw, err := protoMarshal.Marshal(permissionToProto(*e.Permission))
-		if err != nil {
-			return "", nil, true
-		}
-		return "permissionRequest", fiber.Map{"type": "permissionRequest", "request": json.RawMessage(raw)}, false
-	case loop.EventTodoUpdate:
-		items := make([]*consolev1.TodoItem, 0, len(e.Items))
-		for _, item := range e.Items {
-			items = append(items, &consolev1.TodoItem{
-				Id: int32(item.ID), Content: item.Content, Status: item.Status,
-			})
-		}
-		data, err := marshalProtoList(items)
-		if err != nil {
-			return "", nil, true
-		}
-		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": data, "action": e.Action}, false
-	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
-		return SubagentFrame(e)
-	case loop.EventBackgroundWork:
-		work, ok := e.Message.(services.BackgroundWorkEvent)
-		if !ok {
-			return "", nil, true
-		}
-		return string(work.Type), fiber.Map{
-			"type": string(work.Type),
-			"work": work.Work,
-		}, false
-	case loop.EventError:
-		raw, err := protoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})
-		if err != nil {
-			return "", nil, true
-		}
-		return "error", fiber.Map{"type": "error", "error": json.RawMessage(raw)}, false
-	default:
-		// Internal provider kinds (text/thinking/toolCall/usage/toolResult/
-		// turnDone) never reach subscribers; drop defensively.
-		return "", nil, true
-	}
-}
-
-// subagentFrame marshals one subagent lifecycle payload. The old helper
-// round-tripped through a map to flatten it; the schema carries the flat
-// shape directly, so the map dance is gone.
-func SubagentFrame(e loop.Event) (string, any, bool) {
-	var msg proto.Message
-	switch v := e.Subagent.(type) {
-	case loop.SubagentStartInfo:
-		msg = subagentStartToProto(v)
-	case loop.SubagentActivityInfo:
-		msg = subagentActivityToProto(v)
-	case loop.SubagentEndInfo:
-		msg = subagentEndToProto(v)
-	default:
-		return "", nil, true
-	}
-	raw, err := protoMarshal.Marshal(msg)
-	if err != nil {
-		return "", nil, true
-	}
-	// Flatten: splice the payload object into the frame envelope alongside
-	// the type tag, which is what clients decode.
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return "", nil, true
-	}
-	fields["type"], _ = json.Marshal(string(e.Kind))
-	return string(e.Kind), fields, false
 }
 
 func parseSince(raw string) (int64, error) {

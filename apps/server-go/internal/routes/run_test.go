@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
@@ -16,7 +17,7 @@ func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
 		Status:    services.BackgroundWorkCompleted,
 		Metadata:  map[string]string{"job_id": "job_test", "exit_code": "0"},
 	}
-	name, body, drop := wireFrame(loop.Event{
+	name, body, drop := run.WireFrame(loop.Event{
 		Kind:    loop.EventBackgroundWork,
 		Message: services.BackgroundWorkEvent{Type: services.BackgroundWorkCompletedEvent, Work: work},
 	})

@@ -17,7 +17,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 )
 
 func frameFixture(t *testing.T, name string) string {
@@ -119,7 +119,7 @@ func TestSubagentFramesMatchFixtures(t *testing.T) {
 // message, and that unknown payload types drop instead of emitting junk.
 func TestSubagentFrameRouting(t *testing.T) {
 	start := loop.SubagentStartInfo{SubagentID: "s1", Name: "w", Role: "r", Prompt: "p", MaxTurns: 10}
-	_, body, drop := routes.SubagentFrame(loop.Event{
+	_, body, drop := run.SubagentFrame(loop.Event{
 		Kind: loop.EventSubagentStart, Subagent: start,
 	})
 	if drop {
@@ -133,7 +133,7 @@ func TestSubagentFrameRouting(t *testing.T) {
 		t.Fatalf("flattened frame missing id: %s", raw)
 	}
 
-	if _, _, drop := routes.SubagentFrame(loop.Event{Kind: loop.EventSubagentStart, Subagent: "unexpected"}); !drop {
+	if _, _, drop := run.SubagentFrame(loop.Event{Kind: loop.EventSubagentStart, Subagent: "unexpected"}); !drop {
 		t.Fatal("unknown subagent payload must drop")
 	}
 }

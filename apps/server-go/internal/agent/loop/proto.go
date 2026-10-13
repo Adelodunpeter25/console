@@ -225,6 +225,13 @@ func protoToUser(m *consolev1.AgentUserMessage) UserMessage {
 	return out
 }
 
+// AnnotationFromProto converts a wire annotation back to the domain shape
+// (WT chat-start requests carry annotations as proto). Nil-safe: proto
+// getters return zero values on nil receivers.
+func AnnotationFromProto(a *consolev1.BrowserAnnotation) types.BrowserAnnotation {
+	return protoToAnnotation(a)
+}
+
 func protoToAnnotation(a *consolev1.BrowserAnnotation) types.BrowserAnnotation {
 	out := types.BrowserAnnotation{
 		ID: a.GetId(), URL: a.GetUrl(), Selector: a.GetSelector(),
