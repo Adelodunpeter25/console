@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Binary integrations (/api/integrations): tools the server shells out to
+// that must be installed on the box to work. Detected live on every read —
+// never cached — so installing the binary then refreshing the page flips the
+// status without a restart.
+//
+// Notes:
+// - installed is `optional` (explicit presence) rather than a bare bool.
+//   protojson omits an implicit-presence false, so a bare bool would drop the
+//   key entirely when the binary is missing — the same trap GitHubAuthStatus
+//   already documents for `connected`.
+// - version and binary_path are optional: an installed binary whose version
+//   probe fails still reports installed, and a missing binary carries
+//   neither.
+// - install_hint is a per-OS copy-paste command; install_url is the fallback
+//   for platforms the hint does not cover. No auto-install endpoint exists
+//   on purpose: the server downloading and executing installers (sudo,
+//   distro detection, version pinning) is a support burden that dwarfs the
+//   status page.
+message IntegrationStatus {
+  // Stable id, e.g. "gh". Clients key rows off this, not the name.
+  string id = 1;
+  string name = 2;
+  // One line on what the server uses it for.
+  string description = 3;
+  optional bool installed = 4;
+  optional string version = 5;
+  optional string binary_path = 6;
+  string install_url = 7;
+  string install_hint = 8;
+}
+
+message IntegrationsResponse {
+  repeated IntegrationStatus integrations = 1;
+}
