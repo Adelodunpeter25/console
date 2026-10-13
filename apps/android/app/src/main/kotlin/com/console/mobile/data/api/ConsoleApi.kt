@@ -96,6 +96,8 @@ interface ConsoleApi {
     suspend fun disconnectGitHub()
     // binary integrations (gh CLI, ...): what the server box has installed
     suspend fun getIntegrations(): console.v1.IntegrationsResponse
+    // install gh the official way for the server's platform; answers the full list
+    suspend fun installGh(): console.v1.IntegrationsResponse
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
     suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>

@@ -489,6 +489,11 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrapOrRawAdapter(raw, integrationsAdapter, "get integrations")
     }
 
+    override suspend fun installGh(): console.v1.IntegrationsResponse {
+        val raw = http.post("/api/integrations/gh/install")
+        return http.unwrapOrRawAdapter(raw, integrationsAdapter, "install GitHub CLI")
+    }
+
     override suspend fun saveProjectId(provider: String, projectId: String?) {
         val body = buildJsonObject {
             put("provider", provider)

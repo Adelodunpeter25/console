@@ -26,4 +26,22 @@ class IntegrationsRepository(
             }
         }
     }
+
+    /**
+     * Install gh the official way for the server's platform. Shares the
+     * refresh busy/error flags: one in-flight operation at a time, and a
+     * failed install reads like a failed refresh. Success replaces the rows,
+     * so the button flips to Installed with no extra fetch.
+     */
+    fun installGh() {
+        scope.launch {
+            integrationsState.patch { it.copy(loading = true, error = null) }
+            try {
+                val response = withContext(Dispatchers.IO) { api.installGh() }
+                integrationsState.patch { it.copy(integrations = response.integrations, loading = false, error = null) }
+            } catch (e: Exception) {
+                integrationsState.patch { it.copy(loading = false, error = e.message ?: "Failed to install GitHub CLI") }
+            }
+        }
+    }
 }

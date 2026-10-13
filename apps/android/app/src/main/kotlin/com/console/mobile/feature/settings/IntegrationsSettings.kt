@@ -31,6 +31,8 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.theme.NewTheme
+import com.console.mobile.ui.components.common.new.ActionButton
+import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.Banner
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.PageHeader
@@ -89,7 +91,7 @@ fun IntegrationsSettings(onBack: () -> Unit) {
                     if (integrationsState.integrations.isEmpty() && !isLoading) {
                         Note("No integrations reported.")
                     }
-                    integrationsState.integrations.forEach { IntegrationCard(it) }
+                    integrationsState.integrations.forEach { IntegrationCard(it, integrationsState.loading) }
                 }
             }
         }
@@ -97,7 +99,7 @@ fun IntegrationsSettings(onBack: () -> Unit) {
 }
 
 @Composable
-private fun IntegrationCard(row: IntegrationStatus) {
+private fun IntegrationCard(row: IntegrationStatus, busy: Boolean) {
     // `installed` has explicit presence on the wire: absent reads as not
     // installed, matching the GitHub `connected` idiom.
     val installed = row.installed == true
@@ -125,7 +127,15 @@ private fun IntegrationCard(row: IntegrationStatus) {
         if (!installed) {
             SectionDivider()
             Note("Install with: ${row.install_hint}")
-            Text(row.install_url, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 16.dp))
+            Text(row.install_url, color = NewTheme.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp))
+            ActionButton(
+                text = "Install",
+                onClick = { AppContainer.integrationsRepository.installGh() },
+                kind = ActionButtonKind.Primary,
+                loading = busy,
+                compact = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(top = 12.dp, bottom = 16.dp),
+            )
         }
     }
 }
