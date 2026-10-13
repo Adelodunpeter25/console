@@ -29,11 +29,11 @@ const (
 type BackgroundWorkEventType string
 
 const (
-	BackgroundWorkStartedEvent   BackgroundWorkEventType = "started"
-	BackgroundWorkProgressEvent  BackgroundWorkEventType = "progress"
-	BackgroundWorkCompletedEvent BackgroundWorkEventType = "completed"
-	BackgroundWorkFailedEvent    BackgroundWorkEventType = "failed"
-	BackgroundWorkCancelledEvent BackgroundWorkEventType = "cancelled"
+	BackgroundWorkStartedEvent   BackgroundWorkEventType = "backgroundWorkStarted"
+	BackgroundWorkProgressEvent  BackgroundWorkEventType = "backgroundWorkProgress"
+	BackgroundWorkCompletedEvent BackgroundWorkEventType = "backgroundWorkCompleted"
+	BackgroundWorkFailedEvent    BackgroundWorkEventType = "backgroundWorkFailed"
+	BackgroundWorkCancelledEvent BackgroundWorkEventType = "backgroundWorkCancelled"
 )
 
 // BackgroundWork is a bounded, session-owned record. Backend-specific data
