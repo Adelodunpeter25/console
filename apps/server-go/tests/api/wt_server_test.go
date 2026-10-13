@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -96,6 +97,7 @@ type wtHarness struct {
 	scripts       *services.ProjectScriptsService
 	projects      *services.ProjectService
 	ports         *services.PortRegistry
+	devices       *services.DeviceService
 }
 
 func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
@@ -118,18 +120,21 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	notifications := services.NewNotificationService()
 	git := services.NewGitService()
 	scripts := services.NewProjectScriptsService(projects, ports)
+	devices := services.NewDeviceService()
+	t.Cleanup(func() { _ = devices.Close() })
 	srv := wt.New(wt.Config{
 		Mode: wt.TransportWT, WTAddr: "127.0.0.1:0",
 		TLSCertFile: certFile, TLSKeyFile: keyFile,
 	}, wt.Deps{
-		Issuer: issuer,
-		Runs:   runs,
-		PTY:    services.NewPtyManager(ports, func(string) string { return "" }),
-		Ports:  ports,
-		Watch:  watch,
-		Git:    git,
+		Issuer:        issuer,
+		Runs:          runs,
+		PTY:           services.NewPtyManager(ports, func(string) string { return "" }),
+		Ports:         ports,
+		Watch:         watch,
+		Git:           git,
 		Notifications: notifications,
 		Scripts:       scripts,
+		Devices:       devices,
 	})
 	if err := srv.Start(); err != nil {
 		t.Fatalf("wt start: %v", err)
@@ -139,7 +144,7 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	if addr == nil {
 		t.Fatal("server has no address")
 	}
-	return wtHarness{server: srv, addr: addr.String(), issuer: issuer, watch: watch, git: git, notifications: notifications, scripts: scripts, projects: projects, ports: ports}
+	return wtHarness{server: srv, addr: addr.String(), issuer: issuer, watch: watch, git: git, notifications: notifications, scripts: scripts, projects: projects, ports: ports, devices: devices}
 }
 
 func wtDial(t *testing.T, addr, token string) (*webtransport.Session, *http.Response) {
@@ -687,5 +692,121 @@ func TestWTWatchRejectsBadRequests(t *testing.T) {
 	frames = wtReadFrames(t, str, 10*time.Second)
 	if len(frames) != 1 || frames[0].GetType() != "error" {
 		t.Fatalf("missing run must answer one error frame, got %v", frameTypes(frames))
+	}
+}
+
+func TestWTTunnelEchoesRawBytes(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	// Local TCP echo target.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				buf := make([]byte, 64*1024)
+				for {
+					n, err := conn.Read(buf)
+					if n > 0 {
+						if _, err := conn.Write(buf[:n]); err != nil {
+							return
+						}
+					}
+					if err != nil {
+						return
+					}
+				}
+			}()
+		}
+	}()
+	port := uint32(ln.Addr().(*net.TCPAddr).Port)
+	req, err := protojson.Marshal(&consolev1.WtTunnelRequest{Port: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	str := wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_PORT_TUNNEL, "", "tunnel", req)
+	payload := []byte("hello-tunnel-raw-bytes")
+	if _, err := str.Write(payload); err != nil {
+		t.Fatalf("tunnel write: %v", err)
+	}
+	_ = str.SetReadDeadline(time.Now().Add(10 * time.Second))
+	echo := make([]byte, len(payload))
+	if _, err := io.ReadFull(str, echo); err != nil {
+		t.Fatalf("tunnel echo: %v", err)
+	}
+	if !bytes.Equal(echo, payload) {
+		t.Fatalf("tunnel corrupted bytes: %q", echo)
+	}
+}
+
+func TestWTTunnelRejectsBadPorts(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	// Privileged port.
+	req, err := protojson.Marshal(&consolev1.WtTunnelRequest{Port: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	str := wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_PORT_TUNNEL, "", "tunnel", req)
+	frames := wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("privileged port must answer one error frame, got %v", frameTypes(frames))
+	}
+	// Closed port (nothing listening).
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := uint32(ln.Addr().(*net.TCPAddr).Port)
+	ln.Close()
+	req, err = protojson.Marshal(&consolev1.WtTunnelRequest{Port: closed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	str = wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_PORT_TUNNEL, "", "tunnel", req)
+	frames = wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("refused port must answer one error frame, got %v", frameTypes(frames))
+	}
+}
+
+func TestWTDeviceStreamRejectsBadRequests(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	h := startWTTestServer(t, run.NewService(sessions))
+	sess, _ := wtDial(t, h.addr, wtMint(t, h, "device-1"))
+	if sess == nil {
+		t.Fatal("dial failed")
+	}
+	// Empty device id (no simulator touched).
+	req, err := protojson.Marshal(&consolev1.WtDeviceStreamRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	str := wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_DEVICE_STREAM, "", "device", req)
+	frames := wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("empty device id must answer one error frame, got %v", frameTypes(frames))
+	}
+	// Unparseable request.
+	str = wtOpenStream(t, sess, consolev1.WtStreamKind_WT_STREAM_KIND_DEVICE_STREAM, "", "device", []byte("not-proto"))
+	frames = wtReadFrames(t, str, 10*time.Second)
+	if len(frames) != 1 || frames[0].GetType() != "error" {
+		t.Fatalf("bad request must answer one error frame, got %v", frameTypes(frames))
 	}
 }

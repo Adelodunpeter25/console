@@ -45,6 +45,7 @@ type Deps struct {
 	Git           *services.GitService
 	Notifications *services.NotificationService
 	Scripts       *services.ProjectScriptsService
+	Devices       *services.DeviceService
 }
 
 // Server is a WebTransport listener. The zero value is not usable;
@@ -212,9 +213,13 @@ func (s *Server) serveStream(str *webtransport.Stream, deviceID string) {
 		s.serveTerminal(str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_WATCH:
 		s.serveWatch(str, w, id)
+	case consolev1.WtStreamKind_WT_STREAM_KIND_PORT_TUNNEL:
+		s.serveTunnel(str, w, id)
+	case consolev1.WtStreamKind_WT_STREAM_KIND_DEVICE_STREAM:
+		s.serveDeviceStream(str, w, id)
 	default:
-		// PORT_TUNNEL / DEVICE_STREAM land in the next slice; reject
-		// explicitly so a newer client fails loudly, not silently.
+		// Unreachable: the header reader rejects unknown kinds. Kept so a
+		// future kind fails loudly here rather than falling silent.
 		_ = w.sendErrorf("Stream kind %s is not served yet.", kind)
 	}
 }
