@@ -101,6 +101,10 @@ name = "tool_icon_test"
 path = "tests/chat/tool_icon_test.rs"
 
 [[test]]
+name = "user_fold_test"
+path = "tests/chat/user_fold_test.rs"
+
+[[test]]
 name = "browser_agent_script_test"
 path = "tests/browser/agent_script_test.rs"
 

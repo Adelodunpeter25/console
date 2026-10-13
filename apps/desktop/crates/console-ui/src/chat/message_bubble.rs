@@ -144,6 +144,27 @@ fn selection_row_for_part(row: &str, part_index: usize) -> String {
 
 // ─── User message ─────────────────────────────────────────────────────────────
 
+/// Fold threshold for user message text: parity with mobile's 4-line fold,
+/// scaled up since desktop lines hold ~2x the characters of a phone line.
+const USER_FOLDED_LINES: usize = 8;
+/// 8 lines at the bubble's 20px line height.
+const USER_FOLDED_MAX_HEIGHT_PX: f32 = 8.0 * 20.0;
+/// Conservative characters-per-line estimate for 14px text in the ~512px
+/// message column (the bubble caps at 540px with 14px side padding).
+const USER_FOLD_CHARS_PER_LINE: usize = 64;
+
+/// Rough wrapped-line count for fold decisions (GPUI has no max-lines):
+/// hard breaks plus length-based wrapping per segment.
+pub fn estimated_text_lines(text: &str) -> usize {
+    text.split('\n')
+        .map(|line| {
+            let wrapped =
+                (line.chars().count() + USER_FOLD_CHARS_PER_LINE - 1) / USER_FOLD_CHARS_PER_LINE;
+            wrapped.max(1)
+        })
+        .sum()
+}
+
 #[derive(IntoElement)]
 pub struct UserMessageBubble {
     pub content: String,
@@ -153,6 +174,8 @@ pub struct UserMessageBubble {
     selection: Option<TranscriptSelection>,
     selection_row: String,
     on_preview_image: Option<PreviewImageHandler>,
+    expanded: bool,
+    on_toggle_expand: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 impl UserMessageBubble {
@@ -165,6 +188,8 @@ impl UserMessageBubble {
             selection: None,
             selection_row: "user-message".to_owned(),
             on_preview_image: None,
+            expanded: false,
+            on_toggle_expand: None,
         }
     }
 
@@ -193,6 +218,19 @@ impl UserMessageBubble {
         self.on_preview_image = Some(handler);
         self
     }
+
+    pub fn expanded(mut self, expanded: bool) -> Self {
+        self.expanded = expanded;
+        self
+    }
+
+    pub fn on_toggle_expand(
+        mut self,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_toggle_expand = Some(Rc::new(handler));
+        self
+    }
 }
 
 impl RenderOnce for UserMessageBubble {
@@ -207,6 +245,16 @@ impl RenderOnce for UserMessageBubble {
         let (message_text, mentions) =
             message_text_with_mentions(&self.content, &self.context_files);
         let has_content = !message_text.is_empty();
+        // Long prompts fold to 8 lines with a Show more/less toggle,
+        // mirroring mobile's 4-line fold.
+        let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
+        let folded = foldable && !self.expanded;
+        let expanded = self.expanded;
+        let expand_toggle = if foldable {
+            self.on_toggle_expand.clone()
+        } else {
+            None
+        };
 
         div()
             .w_full()
@@ -275,7 +323,27 @@ impl RenderOnce for UserMessageBubble {
                                 .text_size(px(14.0))
                                 .line_height(px(20.0))
                                 .text_color(theme.text)
+                                .when(folded, |el| {
+                                    el.max_h(px(USER_FOLDED_MAX_HEIGHT_PX)).overflow_hidden()
+                                })
                                 .child(InlineFileMentionText::new(message_text, mentions)),
+                        )
+                    })
+                    .when_some(expand_toggle, |element, on_toggle| {
+                        element.child(
+                            div()
+                                .id(ElementId::Name(
+                                    format!("toggle-user-fold-{}", self.selection_row).into(),
+                                ))
+                                .px(px(4.0))
+                                .text_size(px(12.0))
+                                .text_color(theme.accent)
+                                .cursor_pointer()
+                                .on_click(move |_, window, cx| {
+                                    (on_toggle)(window, cx);
+                                    cx.stop_propagation();
+                                })
+                                .child(if expanded { "Show less" } else { "Show more" }),
                         )
                     }),
             )

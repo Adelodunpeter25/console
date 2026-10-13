@@ -98,6 +98,10 @@ pub struct TranscriptView {
     /// past the collapsed chip count. Lives here so virtualized rows that
     /// remount keep their state.
     expanded_turn_changes: Rc<RefCell<HashSet<String>>>,
+    /// User messages (by server id, falling back to the row key) whose
+    /// folded text is expanded via Show more. Same lifetime as the other
+    /// per-row disclosure state above.
+    expanded_user_messages: Rc<RefCell<HashSet<String>>>,
 }
 
 impl TranscriptView {
@@ -137,6 +141,7 @@ impl TranscriptView {
             on_open_change: None,
             on_fork: None,
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
+            expanded_user_messages: Rc::new(RefCell::new(HashSet::new())),
         }
     }
 
@@ -146,6 +151,25 @@ impl TranscriptView {
             let mut expanded = self.expanded_turn_changes.borrow_mut();
             if !expanded.remove(&turn_id) {
                 expanded.insert(turn_id);
+            }
+        }
+        self.list_state.splice(row..row + 1, 1);
+        cx.notify();
+    }
+
+    /// Whether a user message's folded text is expanded via Show more.
+    /// Keyed by server id (stable across pagination), falling back to the
+    /// row key for optimistic messages that lack one.
+    pub fn user_message_expanded(&self, key: &str) -> bool {
+        self.expanded_user_messages.borrow().contains(key)
+    }
+
+    /// Expand or collapse one user message's folded text and re-measure it.
+    fn toggle_user_message_expanded(&mut self, key: String, row: usize, cx: &mut Context<Self>) {
+        {
+            let mut expanded = self.expanded_user_messages.borrow_mut();
+            if !expanded.remove(&key) {
+                expanded.insert(key);
             }
         }
         self.list_state.splice(row..row + 1, 1);
@@ -372,6 +396,7 @@ impl TranscriptView {
         self.markdown_cache.borrow_mut().clear();
         self.tool_calls_state.borrow_mut().clear();
         self.thinking_expanded.borrow_mut().clear();
+        self.expanded_user_messages.borrow_mut().clear();
         self.invalidate_activity_cache();
         self.has_more = has_more;
         self.next_cursor = next_cursor;
@@ -656,6 +681,7 @@ impl TranscriptView {
         self.selection.clear();
         self.tool_calls_state.borrow_mut().clear();
         self.thinking_expanded.borrow_mut().clear();
+        self.expanded_user_messages.borrow_mut().clear();
         self.invalidate_activity_cache();
         self.is_streaming = false;
         self.streaming_started_at = None;
@@ -1301,15 +1327,28 @@ fn transcript_row(
     let link_handler = view_ref.link_handler.clone();
     let row = match message {
         AgentMessage::User {
+            id,
             content,
             attachments,
             context_files,
             created_at,
             ..
         } => {
+            let expand_key = id.clone().unwrap_or_else(|| format!("message-{index}"));
+            let user_expanded = view_ref.user_message_expanded(&expand_key);
+            let expand_entity = entity.clone();
             let mut bubble = UserMessageBubble::new(content.clone())
                 .created_at(*created_at)
-                .selection(view_ref.selection.clone(), format!("message-{index}"));
+                .selection(view_ref.selection.clone(), format!("message-{index}"))
+                .expanded(user_expanded)
+                .on_toggle_expand(move |_window, cx| {
+                    if let Some(view) = expand_entity.upgrade() {
+                        let expand_key = expand_key.clone();
+                        view.update(cx, |view, cx| {
+                            view.toggle_user_message_expanded(expand_key, index, cx)
+                        });
+                    }
+                });
             if let Some(attachments) = attachments {
                 bubble = bubble.attachments(attachments.clone());
             }
