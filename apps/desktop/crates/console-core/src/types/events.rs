@@ -1,6 +1,7 @@
 use super::agent::{ImageAttachment, QueuedPrompt, TodoItem};
 use super::model::ThinkingLevel;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +33,30 @@ pub struct AnswerQuestionDto {
 pub struct ApproveToolPermissionDto {
     pub request_id: String,
     pub allow: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundWork {
+    pub id: String,
+    pub session_id: String,
+    #[serde(default)]
+    pub parent_run_id: Option<String>,
+    #[serde(default)]
+    pub parent_call_id: Option<String>,
+    pub kind: String,
+    pub status: String,
+    pub created_at: String,
+    #[serde(default)]
+    pub started_at: Option<String>,
+    #[serde(default)]
+    pub finished_at: Option<String>,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+    #[serde(default)]
+    pub metadata: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,6 +120,21 @@ pub enum AgentSessionEvent {
     SubagentEnd {
         #[serde(flatten)]
         event: console_proto::SubagentEndEvent,
+    },
+    BackgroundWorkStarted {
+        work: BackgroundWork,
+    },
+    BackgroundWorkProgress {
+        work: BackgroundWork,
+    },
+    BackgroundWorkCompleted {
+        work: BackgroundWork,
+    },
+    BackgroundWorkFailed {
+        work: BackgroundWork,
+    },
+    BackgroundWorkCancelled {
+        work: BackgroundWork,
     },
     SessionEnd,
     SessionTitleUpdated {

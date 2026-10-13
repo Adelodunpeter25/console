@@ -40,24 +40,24 @@ const (
 // BackgroundWork is a bounded, session-owned record. Backend-specific data
 // belongs in Metadata; callers should use backend APIs for full output.
 type BackgroundWork struct {
-	ID           string
-	SessionID    string
-	ParentRunID  string
-	ParentCallID string
-	Kind         BackgroundWorkKind
-	Status       BackgroundWorkStatus
-	CreatedAt    string
-	StartedAt    string
-	FinishedAt   string
-	Summary      string
-	Error        string
-	Metadata     map[string]string
+	ID           string               `json:"id"`
+	SessionID    string               `json:"sessionId"`
+	ParentRunID  string               `json:"parentRunId,omitempty"`
+	ParentCallID string               `json:"parentCallId,omitempty"`
+	Kind         BackgroundWorkKind   `json:"kind"`
+	Status       BackgroundWorkStatus `json:"status"`
+	CreatedAt    string               `json:"createdAt"`
+	StartedAt    string               `json:"startedAt,omitempty"`
+	FinishedAt   string               `json:"finishedAt,omitempty"`
+	Summary      string               `json:"summary,omitempty"`
+	Error        string               `json:"error,omitempty"`
+	Metadata     map[string]string    `json:"metadata,omitempty"`
 }
 
 // BackgroundWorkEvent is delivered for every lifecycle transition.
 type BackgroundWorkEvent struct {
-	Type BackgroundWorkEventType
-	Work BackgroundWork
+	Type BackgroundWorkEventType `json:"type"`
+	Work BackgroundWork          `json:"work"`
 }
 
 // BackgroundWorkListener receives events after they are recorded. It should

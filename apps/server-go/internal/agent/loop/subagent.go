@@ -89,7 +89,7 @@ type subagentInput struct {
 	Prompt     string `json:"prompt" jsonschema:"required,description=Clear, actionable task description for the subagent"`
 	Name       string `json:"name" jsonschema:"required,description=Name or identifier for the subagent to help differentiate it from other instances"`
 	Role       string `json:"role,omitempty" jsonschema:"description=Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"`
-	Background bool   `json:"background,omitempty" jsonschema:"description=Start the subagent in the background and continue immediately. The result is delivered when the parent is ready for a later model turn."`
+	Background bool   `json:"background,omitempty" jsonschema:"description=Start the subagent in the background and continue immediately. The result is delivered through the background-work completion callback and the next parent model turn."`
 }
 
 // NewSubagentTool builds the "subagent" tool. With a nil context it

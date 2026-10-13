@@ -891,6 +891,16 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
+            AgentSessionEvent::BackgroundWorkStarted { work }
+            | AgentSessionEvent::BackgroundWorkProgress { work }
+            | AgentSessionEvent::BackgroundWorkCompleted { work }
+            | AgentSessionEvent::BackgroundWorkFailed { work }
+            | AgentSessionEvent::BackgroundWorkCancelled { work } => {
+                // Background work is already recoverable through the session
+                // API. Keep the event in the stream for clients that render a
+                // unified work panel without changing transcript semantics.
+                let _ = work;
+            }
             AgentSessionEvent::Compaction { summary, .. } => {
                 self.set_agent_notice_for_session(
                     run_session_id,

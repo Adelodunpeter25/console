@@ -21,6 +21,22 @@ data class AskQuestionRequest(
 // rows from GET /subagents, so the flat frames are covered by the
 // golden fixtures instead of a decode path here.
 
+@Serializable
+data class BackgroundWork(
+    val id: String,
+    val sessionId: String,
+    val parentRunId: String? = null,
+    val parentCallId: String? = null,
+    val kind: String,
+    val status: String,
+    val createdAt: String,
+    val startedAt: String? = null,
+    val finishedAt: String? = null,
+    val summary: String? = null,
+    val error: String? = null,
+    val metadata: Map<String, String> = emptyMap(),
+)
+
 /** Agent session SSE event. */
 @Serializable
 data class AgentSessionEvent(
@@ -61,6 +77,8 @@ data class AgentSessionEvent(
     // with Moshi where the queue screen needs it (see SessionQueueFixtureTest).
     val queuedPrompt: JsonElement? = null,
     val reason: String? = null,
+    // Background work lifecycle events use a stable nested work record.
+    val work: BackgroundWork? = null,
     // subagent fields (flattened)
     val subagentId: String? = null,
     val parentToolCallId: String? = null,

@@ -751,9 +751,9 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		if !ok {
 			return "", nil, true
 		}
-		return "backgroundWork" + string(work.Type), fiber.Map{
+		return string(work.Type), fiber.Map{
 			"type": string(work.Type),
-			"work": work,
+			"work": work.Work,
 		}, false
 	case loop.EventError:
 		raw, err := protoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})

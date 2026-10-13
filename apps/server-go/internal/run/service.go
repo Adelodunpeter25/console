@@ -95,14 +95,7 @@ type Service struct {
 
 func NewService(sessions *services.SessionService) *Service {
 	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), background: services.NewBackgroundWorkManager()}
-	s.background.SetListener(func(event services.BackgroundWorkEvent) {
-		s.mu.Lock()
-		ar := s.active[event.Work.SessionID]
-		s.mu.Unlock()
-		if ar != nil {
-			ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
-		}
-	})
+	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
 		// A pending question/approval pauses the run until the user
@@ -153,10 +146,24 @@ func (s *Service) SetBashJobs(j *services.BashJobManager) {
 func (s *Service) SetBackgroundWorkManager(work *services.BackgroundWorkManager) {
 	s.mu.Lock()
 	s.background = work
+	s.mu.Unlock()
+	if work != nil {
+		work.SetListener(s.backgroundWorkListener)
+	}
+	s.mu.Lock()
 	jobs := s.bashJobs
 	s.mu.Unlock()
 	if jobs != nil {
 		jobs.SetBackgroundWorkManager(work)
+	}
+}
+
+func (s *Service) backgroundWorkListener(event services.BackgroundWorkEvent) {
+	s.mu.Lock()
+	ar := s.active[event.Work.SessionID]
+	s.mu.Unlock()
+	if ar != nil {
+		ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
 	}
 }
 

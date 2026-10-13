@@ -8,6 +8,8 @@ import (
 // backgroundContext claims completed detached work immediately before a
 // provider request. It is deliberately not persisted as a chat message and is
 // never injected into a provider stream that is already in flight.
+const backgroundContextOutputLimit = 12_000
+
 func (s *Service) backgroundContext(sessionID string) string {
 	work := s.BackgroundWorkManager()
 	if work == nil {
@@ -17,7 +19,7 @@ func (s *Service) backgroundContext(sessionID string) string {
 	if len(completed) == 0 {
 		return ""
 	}
-	lines := make([]string, 0, len(completed)*4)
+	lines := make([]string, 0, len(completed)*6)
 	for _, item := range completed {
 		lines = append(lines, fmt.Sprintf("Background work completed: %s (%s)", item.ID, item.Kind))
 		lines = append(lines, "Status: "+string(item.Status))
@@ -37,6 +39,19 @@ func (s *Service) backgroundContext(sessionID string) string {
 			lines = append(lines, "Name: "+name)
 		}
 		if jobID := item.Metadata["job_id"]; jobID != "" {
+			if jobs := s.bashJobManager(); jobs != nil {
+				if output, err := jobs.Output(jobID, sessionID, 0, backgroundContextOutputLimit); err == nil {
+					if output.Stdout != "" {
+						lines = append(lines, "stdout:\n"+output.Stdout)
+					}
+					if output.Stderr != "" {
+						lines = append(lines, "stderr:\n"+output.Stderr)
+					}
+					if output.Truncated {
+						lines = append(lines, "Output was truncated; use bashJob for the complete output.")
+					}
+				}
+			}
 			lines = append(lines, "Use bashJob with jobId=\""+jobID+"\" for complete shell output.")
 		}
 	}
