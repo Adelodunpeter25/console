@@ -18,29 +18,11 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // gitStatusDebounce is the minimum gap between status recomputations pushed
 // to a watch stream.
 const gitStatusDebounce = 1500 * time.Millisecond
-
-func gitFileEntryToProto(f types.GitFileEntry) *consolev1.GitFileEntry {
-	additions := uint32(f.Additions)
-	deletions := uint32(f.Deletions)
-	return &consolev1.GitFileEntry{
-		Path: f.Path, Status: string(f.Status), Staged: f.Staged,
-		Additions: &additions, Deletions: &deletions,
-	}
-}
-
-func gitSummaryToProto(s types.GitStatusSummary) *consolev1.GitStatusSummary {
-	out := &consolev1.GitStatusSummary{Branch: s.Branch, Clean: s.Clean}
-	for _, f := range s.Files {
-		out.Files = append(out.Files, gitFileEntryToProto(f))
-	}
-	return out
-}
 
 func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services.FsWatchService) {
 	h := app.Group("/api/git")
@@ -62,7 +44,7 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 		if repoPath == "" {
 			return fail(c, fmt.Errorf("Query parameter 'path' is required."))
 		}
-		return okProto(c, gitSummaryToProto(git.GetGitStatus(repoPath)))
+		return okProto(c, services.GitSummaryToProto(git.GetGitStatus(repoPath)))
 	})
 
 	// GET /api/git/status/watch — SSE snapshots on subscribe + debounced fs changes.
@@ -79,7 +61,7 @@ func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services
 			// A send error means the client is gone; stop instead of running
 			// git for a dead stream until the next ping notices.
 			sendStatus := func() error {
-				summary, err := protoMarshal.Marshal(gitSummaryToProto(git.GetGitStatus(repoPath)))
+				summary, err := protoMarshal.Marshal(services.GitSummaryToProto(git.GetGitStatus(repoPath)))
 				if err != nil {
 					return nil
 				}

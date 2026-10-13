@@ -58,25 +58,6 @@ func scriptRunsToProto(runs []types.ScriptRun) []*consolev1.ScriptRun {
 
 // scriptRunEventToProto converts a stream event to the canonical wire type
 // plus the SSE event name previously carried in the "type" field.
-func scriptRunEventToProto(e types.ScriptRunEvent) (*consolev1.ScriptRunEvent, string) {
-	switch e.Type {
-	case "output":
-		return &consolev1.ScriptRunEvent{Event: &consolev1.ScriptRunEvent_Output{
-			Output: &consolev1.ScriptOutputEvent{Stream: e.Stream, Text: e.Text},
-		}}, "output"
-	case "exit":
-		out := &consolev1.ScriptExitEvent{Status: string(e.Status)}
-		if e.ExitCode != nil {
-			out.ExitCode = func() *int32 { v := int32(*e.ExitCode); return &v }()
-		}
-		return &consolev1.ScriptRunEvent{Event: &consolev1.ScriptRunEvent_Exit{Exit: out}}, "exit"
-	default:
-		return &consolev1.ScriptRunEvent{Event: &consolev1.ScriptRunEvent_Status{
-			Status: &consolev1.ScriptStatusEvent{Status: string(e.Status)},
-		}}, "status"
-	}
-}
-
 func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsService) {
 	ok := func(c *fiber.Ctx, data any, status ...int) error {
 		code := fiber.StatusOK
@@ -153,7 +134,7 @@ func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsServic
 			}
 			defer scripts.Unsubscribe(projectID, runID, events)
 			sendEvent := func(event types.ScriptRunEvent) error {
-				msg, name := scriptRunEventToProto(event)
+				msg, name := services.ScriptRunEventToProto(event)
 				raw, err := protoMarshal.Marshal(msg)
 				if err != nil {
 					return err

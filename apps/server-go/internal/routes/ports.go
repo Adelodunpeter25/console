@@ -36,25 +36,8 @@ func hostFromHeader(header string) string {
 	return header
 }
 
-// clientPortToProto converts a registry row to the canonical wire type.
-func clientPortToProto(p types.ClientPort) *consolev1.ForwardedPort {
-	out := &consolev1.ForwardedPort{Port: int32(p.Port), Url: p.URL}
-	if p.ProjectID != nil {
-		out.ProjectId = p.ProjectID
-	}
-	return out
-}
-
-func portsToProto(list []types.ClientPort) []*consolev1.ForwardedPort {
-	out := make([]*consolev1.ForwardedPort, 0, len(list))
-	for _, p := range list {
-		out = append(out, clientPortToProto(p))
-	}
-	return out
-}
-
 func sendPortList(c *fiber.Ctx, list []types.ClientPort) error {
-	data, err := marshalProtoList(portsToProto(list))
+	data, err := marshalProtoList(services.PortsToProto(list))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 	}
@@ -74,7 +57,7 @@ func RegisterPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 			// dropping the snapshot (proto messages cannot fail to encode
 			// in practice, but the stream must never emit a blank frame).
 			snapshotOf := func() string {
-				snapshot, err := marshalProtoList(portsToProto(registry.Snapshot(host, projectID)))
+				snapshot, err := marshalProtoList(services.PortsToProto(registry.Snapshot(host, projectID)))
 				if err != nil {
 					return "{}"
 				}
@@ -126,7 +109,7 @@ func RegisterPortRoutes(app *fiber.App, registry *services.PortRegistry) {
 		if err != nil {
 			return fail400(c, err)
 		}
-		raw, err := protoMarshal.Marshal(clientPortToProto(entry))
+		raw, err := protoMarshal.Marshal(services.PortsToProto([]types.ClientPort{entry})[0])
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
