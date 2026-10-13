@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
@@ -55,22 +54,4 @@ func TestWtChatRunStartProtoMatchesFixture(t *testing.T) {
 	if compactJSON(t, raw) != wtFixture(t, "chat_run_start.json") {
 		t.Fatalf("chat run start drifted:\n got %s\nwant %s", compactJSON(t, raw), wtFixture(t, "chat_run_start.json"))
 	}
-}
-
-func TestWtBackgroundWorkEventProtoMatchesFixture(t *testing.T) {
-	event := &consolev1.BackgroundWorkEvent{
-		Type: "backgroundWorkStarted",
-		Work: &consolev1.BackgroundWork{
-			Id: "work_1", SessionId: "s1", Kind: "shell", Status: "running",
-			CreatedAt: "2026-01-01T00:00:00Z",
-		},
-	}
-	raw, err := protojson.Marshal(event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if compactJSON(t, raw) != wtFixture(t, "background_work_event.json") {
-		t.Fatalf("background work event drifted:\n got %s\nwant %s", compactJSON(t, raw), wtFixture(t, "background_work_event.json"))
-	}
-	var _ proto.Message = event
 }

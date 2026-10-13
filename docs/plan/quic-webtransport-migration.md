@@ -52,7 +52,12 @@ strengthen the recommendation below. Any WT wire must pick one of:
 Decide this before Phase 1 coding. If option 1 wins, decide alongside it
 whether the background-work event gets proto-ized (a `console.v1` message —
 both clients already decode it, so this is schema-only work) or `WtFrame`
-tolerates mixed protojson/plain payloads. Binary tag-byte framing
+tolerates mixed protojson/plain payloads. Decided Oct 2026: neither —
+response/event payloads are byte-identical to the legacy transport bodies
+(SSE JSON for events, raw tag-bytes for terminal output, raw bytes for
+tunnels), so client parsers are shared and only framing changes; only
+client→server requests (new surface, no legacy bytes to match) are
+protojson request messages. Binary tag-byte framing
 (`INPUT_FRAME_TAG`/`OUTPUT_FRAME_TAG`) rides *inside* terminal payloads and stays
 intact either way.
 

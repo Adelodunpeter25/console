@@ -11,11 +11,14 @@ import "console/v1/message.proto";
 // [uvarint kind][uvarint id_len][id], then carries repeated length-prefixed
 // frames, each [u32BE len][protojson(WtFrame)].
 //
-// WtFrame.payload is protojson event bytes for event streams (the same
-// generated types the SSE wire already emits), or raw binary for terminal
-// and tunnel streams (the existing tag-byte framing, zero re-encode).
-// Unary control ops (abort/answer/approve/queue/steer/resize/kill) stay on
-// REST in v1 and are deliberately absent here.
+// Payload rule: response/event payloads are byte-identical to what the
+// legacy transport carries for the same information (SSE JSON bodies for
+// events, raw tag-byte binary for terminal output, raw bytes for tunnels),
+// so client parsers are shared across transports and only the framing
+// changes. Client→server requests below are new surface with no legacy
+// bytes to match, so they are protojson request messages. Unary control
+// ops (abort/answer/approve/queue/steer/resize/kill) stay on REST in v1
+// and are deliberately absent here.
 enum WtStreamKind {
   WT_STREAM_KIND_UNSPECIFIED = 0;
   WT_STREAM_KIND_CHAT_RUN = 1;
@@ -106,28 +109,4 @@ message WtTunnelRequest {
 message WtDeviceStreamRequest {
   string device_id = 1;
   optional string platform = 2;
-}
-
-// Background work record, mirroring the service shape field for field
-// (kind/status/timestamps stay plain strings, matched literally).
-message BackgroundWork {
-  string id = 1;
-  string session_id = 2;
-  optional string parent_run_id = 3;
-  optional string parent_call_id = 4;
-  string kind = 5;
-  string status = 6;
-  string created_at = 7;
-  optional string started_at = 8;
-  optional string finished_at = 9;
-  optional string summary = 10;
-  optional string error = 11;
-  map<string, string> metadata = 12;
-}
-
-// Background work lifecycle event for WtFrame payloads. The SSE wire keeps
-// its existing hand-shaped envelope; only WT uses this message.
-message BackgroundWorkEvent {
-  string type = 1;
-  BackgroundWork work = 2;
 }

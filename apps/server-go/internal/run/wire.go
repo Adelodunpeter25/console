@@ -255,47 +255,6 @@ func subagentEndToProto(v loop.SubagentEndInfo) *consolev1.SubagentEndEvent {
 	return out
 }
 
-// BackgroundWorkEventToProto converts a background-work lifecycle event for
-// WtFrame payloads. Kind/status/timestamps stay plain strings, matched
-// literally; the SSE wire keeps its existing hand-shaped envelope and never
-// calls this.
-func BackgroundWorkEventToProto(e services.BackgroundWorkEvent) *consolev1.BackgroundWorkEvent {
-	work := e.Work
-	out := &consolev1.BackgroundWorkEvent{
-		Type: string(e.Type),
-		Work: &consolev1.BackgroundWork{
-			Id: work.ID, SessionId: work.SessionID,
-			Kind: string(work.Kind), Status: string(work.Status),
-			CreatedAt: work.CreatedAt,
-		},
-	}
-	if work.ParentRunID != "" {
-		out.Work.ParentRunId = &work.ParentRunID
-	}
-	if work.ParentCallID != "" {
-		out.Work.ParentCallId = &work.ParentCallID
-	}
-	if work.StartedAt != "" {
-		out.Work.StartedAt = &work.StartedAt
-	}
-	if work.FinishedAt != "" {
-		out.Work.FinishedAt = &work.FinishedAt
-	}
-	if work.Summary != "" {
-		out.Work.Summary = &work.Summary
-	}
-	if work.Error != "" {
-		out.Work.Error = &work.Error
-	}
-	for k, v := range work.Metadata {
-		if out.Work.Metadata == nil {
-			out.Work.Metadata = map[string]string{}
-		}
-		out.Work.Metadata[k] = v
-	}
-	return out
-}
-
 // WireFrame maps a hub event to its wire event name and JSON body, the shape
 // both SSE (`{"type": ...}`) and WT (frame payload bytes) emit. Internal-only
 // kinds (token accounting, raw provider deltas) drop; drop=true means emit

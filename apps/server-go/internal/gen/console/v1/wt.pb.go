@@ -26,11 +26,14 @@ const (
 // [uvarint kind][uvarint id_len][id], then carries repeated length-prefixed
 // frames, each [u32BE len][protojson(WtFrame)].
 //
-// WtFrame.payload is protojson event bytes for event streams (the same
-// generated types the SSE wire already emits), or raw binary for terminal
-// and tunnel streams (the existing tag-byte framing, zero re-encode).
-// Unary control ops (abort/answer/approve/queue/steer/resize/kill) stay on
-// REST in v1 and are deliberately absent here.
+// Payload rule: response/event payloads are byte-identical to what the
+// legacy transport carries for the same information (SSE JSON bodies for
+// events, raw tag-byte binary for terminal output, raw bytes for tunnels),
+// so client parsers are shared across transports and only the framing
+// changes. Client→server requests below are new surface with no legacy
+// bytes to match, so they are protojson request messages. Unary control
+// ops (abort/answer/approve/queue/steer/resize/kill) stay on REST in v1
+// and are deliberately absent here.
 type WtStreamKind int32
 
 const (
@@ -702,194 +705,6 @@ func (x *WtDeviceStreamRequest) GetPlatform() string {
 	return ""
 }
 
-// Background work record, mirroring the service shape field for field
-// (kind/status/timestamps stay plain strings, matched literally).
-type BackgroundWork struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ParentRunId   *string                `protobuf:"bytes,3,opt,name=parent_run_id,json=parentRunId,proto3,oneof" json:"parent_run_id,omitempty"`
-	ParentCallId  *string                `protobuf:"bytes,4,opt,name=parent_call_id,json=parentCallId,proto3,oneof" json:"parent_call_id,omitempty"`
-	Kind          string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
-	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	StartedAt     *string                `protobuf:"bytes,8,opt,name=started_at,json=startedAt,proto3,oneof" json:"started_at,omitempty"`
-	FinishedAt    *string                `protobuf:"bytes,9,opt,name=finished_at,json=finishedAt,proto3,oneof" json:"finished_at,omitempty"`
-	Summary       *string                `protobuf:"bytes,10,opt,name=summary,proto3,oneof" json:"summary,omitempty"`
-	Error         *string                `protobuf:"bytes,11,opt,name=error,proto3,oneof" json:"error,omitempty"`
-	Metadata      map[string]string      `protobuf:"bytes,12,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *BackgroundWork) Reset() {
-	*x = BackgroundWork{}
-	mi := &file_console_v1_wt_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BackgroundWork) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BackgroundWork) ProtoMessage() {}
-
-func (x *BackgroundWork) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_wt_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BackgroundWork.ProtoReflect.Descriptor instead.
-func (*BackgroundWork) Descriptor() ([]byte, []int) {
-	return file_console_v1_wt_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *BackgroundWork) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetParentRunId() string {
-	if x != nil && x.ParentRunId != nil {
-		return *x.ParentRunId
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetParentCallId() string {
-	if x != nil && x.ParentCallId != nil {
-		return *x.ParentCallId
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetCreatedAt() string {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetStartedAt() string {
-	if x != nil && x.StartedAt != nil {
-		return *x.StartedAt
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetFinishedAt() string {
-	if x != nil && x.FinishedAt != nil {
-		return *x.FinishedAt
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetSummary() string {
-	if x != nil && x.Summary != nil {
-		return *x.Summary
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetError() string {
-	if x != nil && x.Error != nil {
-		return *x.Error
-	}
-	return ""
-}
-
-func (x *BackgroundWork) GetMetadata() map[string]string {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-// Background work lifecycle event for WtFrame payloads. The SSE wire keeps
-// its existing hand-shaped envelope; only WT uses this message.
-type BackgroundWorkEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
-	Work          *BackgroundWork        `protobuf:"bytes,2,opt,name=work,proto3" json:"work,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *BackgroundWorkEvent) Reset() {
-	*x = BackgroundWorkEvent{}
-	mi := &file_console_v1_wt_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BackgroundWorkEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BackgroundWorkEvent) ProtoMessage() {}
-
-func (x *BackgroundWorkEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_wt_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BackgroundWorkEvent.ProtoReflect.Descriptor instead.
-func (*BackgroundWorkEvent) Descriptor() ([]byte, []int) {
-	return file_console_v1_wt_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *BackgroundWorkEvent) GetType() string {
-	if x != nil {
-		return x.Type
-	}
-	return ""
-}
-
-func (x *BackgroundWorkEvent) GetWork() *BackgroundWork {
-	if x != nil {
-		return x.Work
-	}
-	return nil
-}
-
 var File_console_v1_wt_proto protoreflect.FileDescriptor
 
 const file_console_v1_wt_proto_rawDesc = "" +
@@ -946,38 +761,7 @@ const file_console_v1_wt_proto_rawDesc = "" +
 	"\x15WtDeviceStreamRequest\x12\x1b\n" +
 	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12\x1f\n" +
 	"\bplatform\x18\x02 \x01(\tH\x00R\bplatform\x88\x01\x01B\v\n" +
-	"\t_platform\"\xbf\x04\n" +
-	"\x0eBackgroundWork\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12'\n" +
-	"\rparent_run_id\x18\x03 \x01(\tH\x00R\vparentRunId\x88\x01\x01\x12)\n" +
-	"\x0eparent_call_id\x18\x04 \x01(\tH\x01R\fparentCallId\x88\x01\x01\x12\x12\n" +
-	"\x04kind\x18\x05 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x12\x1d\n" +
-	"\n" +
-	"created_at\x18\a \x01(\tR\tcreatedAt\x12\"\n" +
-	"\n" +
-	"started_at\x18\b \x01(\tH\x02R\tstartedAt\x88\x01\x01\x12$\n" +
-	"\vfinished_at\x18\t \x01(\tH\x03R\n" +
-	"finishedAt\x88\x01\x01\x12\x1d\n" +
-	"\asummary\x18\n" +
-	" \x01(\tH\x04R\asummary\x88\x01\x01\x12\x19\n" +
-	"\x05error\x18\v \x01(\tH\x05R\x05error\x88\x01\x01\x12D\n" +
-	"\bmetadata\x18\f \x03(\v2(.console.v1.BackgroundWork.MetadataEntryR\bmetadata\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x10\n" +
-	"\x0e_parent_run_idB\x11\n" +
-	"\x0f_parent_call_idB\r\n" +
-	"\v_started_atB\x0e\n" +
-	"\f_finished_atB\n" +
-	"\n" +
-	"\b_summaryB\b\n" +
-	"\x06_error\"Y\n" +
-	"\x13BackgroundWorkEvent\x12\x12\n" +
-	"\x04type\x18\x01 \x01(\tR\x04type\x12.\n" +
-	"\x04work\x18\x02 \x01(\v2\x1a.console.v1.BackgroundWorkR\x04work*\xc4\x01\n" +
+	"\t_platform*\xc4\x01\n" +
 	"\fWtStreamKind\x12\x1e\n" +
 	"\x1aWT_STREAM_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17WT_STREAM_KIND_CHAT_RUN\x10\x01\x12\x1b\n" +
@@ -1006,7 +790,7 @@ func file_console_v1_wt_proto_rawDescGZIP() []byte {
 }
 
 var file_console_v1_wt_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_console_v1_wt_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_console_v1_wt_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_console_v1_wt_proto_goTypes = []any{
 	(WtStreamKind)(0),             // 0: console.v1.WtStreamKind
 	(WtWatchTarget)(0),            // 1: console.v1.WtWatchTarget
@@ -1018,25 +802,20 @@ var file_console_v1_wt_proto_goTypes = []any{
 	(*WtWatchRequest)(nil),        // 7: console.v1.WtWatchRequest
 	(*WtTunnelRequest)(nil),       // 8: console.v1.WtTunnelRequest
 	(*WtDeviceStreamRequest)(nil), // 9: console.v1.WtDeviceStreamRequest
-	(*BackgroundWork)(nil),        // 10: console.v1.BackgroundWork
-	(*BackgroundWorkEvent)(nil),   // 11: console.v1.BackgroundWorkEvent
-	nil,                           // 12: console.v1.BackgroundWork.MetadataEntry
-	(*ImageAttachment)(nil),       // 13: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),     // 14: console.v1.BrowserAnnotation
+	(*ImageAttachment)(nil),       // 10: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),     // 11: console.v1.BrowserAnnotation
 }
 var file_console_v1_wt_proto_depIdxs = []int32{
 	4,  // 0: console.v1.WtChatRunRequest.start:type_name -> console.v1.WtChatRunStart
 	5,  // 1: console.v1.WtChatRunRequest.attach:type_name -> console.v1.WtChatRunAttach
-	13, // 2: console.v1.WtChatRunStart.attachments:type_name -> console.v1.ImageAttachment
-	14, // 3: console.v1.WtChatRunStart.annotations:type_name -> console.v1.BrowserAnnotation
+	10, // 2: console.v1.WtChatRunStart.attachments:type_name -> console.v1.ImageAttachment
+	11, // 3: console.v1.WtChatRunStart.annotations:type_name -> console.v1.BrowserAnnotation
 	1,  // 4: console.v1.WtWatchRequest.target:type_name -> console.v1.WtWatchTarget
-	12, // 5: console.v1.BackgroundWork.metadata:type_name -> console.v1.BackgroundWork.MetadataEntry
-	10, // 6: console.v1.BackgroundWorkEvent.work:type_name -> console.v1.BackgroundWork
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	5,  // [5:5] is the sub-list for method output_type
+	5,  // [5:5] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_wt_proto_init() }
@@ -1054,14 +833,13 @@ func file_console_v1_wt_proto_init() {
 	file_console_v1_wt_proto_msgTypes[4].OneofWrappers = []any{}
 	file_console_v1_wt_proto_msgTypes[5].OneofWrappers = []any{}
 	file_console_v1_wt_proto_msgTypes[7].OneofWrappers = []any{}
-	file_console_v1_wt_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_wt_proto_rawDesc), len(file_console_v1_wt_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   11,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
