@@ -7,10 +7,14 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	_ "net/http/pprof"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
@@ -149,7 +153,9 @@ func Run() error {
 	// TCP half of WTAddr while the WT server takes the UDP half — same
 	// port, different sockets, no SO_REUSEPORT needed. The plaintext
 	// listener above stays as the dev path either way.
-	var wtServer *wt.Server
+	wtServer := wt.New(wtCfg, wtDeps)
+	routes.RegisterDebugRoutes(app, tokenIssuer, notifications, wtServer.Stats)
+	startDebugPprof()
 	if wtCfg.WTEnabled() {
 		go func() {
 			slog.Info("server listening (TLS)", "addr", wtCfg.WTAddr)
@@ -158,7 +164,6 @@ func Run() error {
 				os.Exit(1)
 			}
 		}()
-		wtServer = wt.New(wtCfg, wtDeps)
 		if err := wtServer.Start(); err != nil {
 			slog.Error("webtransport failed to start", "error", err)
 			return err
@@ -172,9 +177,7 @@ func Run() error {
 	// WT first: closing sessions unblocks every stream handler (chat and
 	// watch pumps observe session death even mid-silence), then the HTTP
 	// listener drains, then everything the server owns stops.
-	if wtServer != nil {
-		_ = wtServer.Close()
-	}
+	_ = wtServer.Close()
 	_ = app.ShutdownWithTimeout(5 * time.Second)
 	// Stop the server means stop everything it owns: in-flight agent runs,
 	// detached background bash jobs, terminal PTYs, and managed project
@@ -193,4 +196,31 @@ func wtAltSvcPort(cfg wt.Config) string {
 		return port
 	}
 	return ""
+}
+
+// startDebugPprof serves net/http/pprof when CONSOLE_DEBUG_PPROF_ADDR names
+// a loopback address (e.g. 127.0.0.1:6060). Anything else — unset, or a
+// non-loopback address — stays off: profiling endpoints never bind
+// publicly from this flag.
+func startDebugPprof() {
+	addr := strings.TrimSpace(os.Getenv("CONSOLE_DEBUG_PPROF_ADDR"))
+	if addr == "" {
+		return
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		slog.Warn("debug pprof address unparseable, profiling stays off", "addr", addr)
+		return
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		slog.Warn("debug pprof address is not loopback, profiling stays off", "addr", addr)
+		return
+	}
+	go func() {
+		slog.Info("pprof listening (loopback only)", "addr", addr)
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			slog.Warn("pprof listener stopped", "error", err)
+		}
+	}()
 }

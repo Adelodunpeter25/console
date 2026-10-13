@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -60,11 +61,17 @@ type Server struct {
 	wt       *webtransport.Server
 	conn     net.PacketConn
 	serveErr error
+
+	statsMu       sync.Mutex
+	sessionsTotal uint64
+	streamsByKind map[string]uint64
+
+	startedAt time.Time
 }
 
 // New builds an unstarted server.
 func New(cfg Config, deps Deps) *Server {
-	return &Server{cfg: cfg, deps: deps}
+	return &Server{cfg: cfg, deps: deps, streamsByKind: map[string]uint64{}, startedAt: time.Now()}
 }
 
 // Start binds UDP, loads TLS, and serves in the background. A no-op when
@@ -134,6 +141,48 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Stats is a point-in-time snapshot for the debug endpoint and wtbench.
+type Stats struct {
+	UptimeMillis int64            `json:"uptimeMillis"`
+	Goroutines   int              `json:"goroutines"`
+	HeapAlloc    uint64           `json:"heapAlloc"`
+	HeapSys      uint64           `json:"heapSys"`
+	SessionsTotal uint64          `json:"sessionsTotal"`
+	StreamsByKind map[string]uint64 `json:"streamsByKind"`
+}
+
+// Stats captures process and WT counters. Cheap enough to serve per scrape.
+func (s *Server) Stats() Stats {
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	byKind := make(map[string]uint64, len(s.streamsByKind))
+	for k, v := range s.streamsByKind {
+		byKind[k] = v
+	}
+	return Stats{
+		UptimeMillis:  time.Since(s.startedAt).Milliseconds(),
+		Goroutines:    runtime.NumGoroutine(),
+		HeapAlloc:     mem.HeapAlloc,
+		HeapSys:       mem.HeapSys,
+		SessionsTotal: s.sessionsTotal,
+		StreamsByKind: byKind,
+	}
+}
+
+func (s *Server) trackSession() {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.sessionsTotal++
+}
+
+func (s *Server) trackStream(kind consolev1.WtStreamKind) {
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.streamsByKind[kind.String()]++
+}
+
 // Close shuts the listener and all sessions down, waiting for in-flight
 // stream handlers. Nil-safe on a never-started server.
 func (s *Server) Close() error {
@@ -184,6 +233,7 @@ func (s *Server) serveSession(sess *webtransport.Session, deviceID string) {
 		}
 		_ = sess.CloseWithError(0, "")
 	}()
+	s.trackSession()
 	ctx := sess.Context()
 	for {
 		str, err := sess.AcceptStream(ctx)
@@ -209,6 +259,7 @@ func (s *Server) serveStream(ctx context.Context, str *webtransport.Stream, devi
 		slog.Debug("webtransport bad stream header", "error", err)
 		return
 	}
+	s.trackStream(kind)
 	w := &streamWriter{str: str}
 	switch kind {
 	case consolev1.WtStreamKind_WT_STREAM_KIND_CHAT_RUN:

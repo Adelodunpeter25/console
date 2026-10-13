@@ -393,9 +393,10 @@ QUIC cost is syscalls and allocations, not bandwidth.
    unbounded `Vec`.
 5. Bench: do **not** extend `apps/server-go/cmd/bench/main.go` — it measures
    harness token cost per task, not transport fanout. `cmd/wtbench` exists
-   for this: opens N (default 500) watch streams against a live server and
-   reports handshake time plus open-to-first-frame p50/p99, client heap
-   delta, and goroutine delta.
+   for this with three modes (`open`: open-to-first-frame latency;
+   `tunnel`: bulk MB/s with verification; `blast`: fanout delivery
+   latency/loss over the token-gated debug notify endpoint), server
+   heap/goroutine deltas via the debug snapshot, and `--json` output.
 
 ### Phase 8 — Rollout
 
