@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check proto help
+.PHONY: dev-server dev-server-wt dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check proto help
 
 # Where `console upgrade` and this target install the binary (matches
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
@@ -10,6 +10,31 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 ## dev-server: Start the Go agent server in dev mode (uses ~/.console-dev storage)
 dev-server:
 	CONSOLE_ENV=dev go -C apps/server-go run ./cmd/server
+
+## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
+##   Generates a throwaway self-signed cert in ~/.console-dev on first run
+##   (clients must trust or skip-verify it; browsers will warn).
+##   Usage: make dev-server-wt              (HTTP 3000 + WT 127.0.0.1:14443)
+##          make dev-server-wt PORT=2003    (HTTP 2003 + WT 127.0.0.1:14443)
+##          make dev-server-wt WT_PORT=24443
+WT_PORT ?= 14443
+dev-server-wt:
+	@if ! command -v openssl >/dev/null 2>&1; then \
+		echo "error: openssl is required to generate the dev TLS certificate." >&2; exit 1; \
+	fi
+	@mkdir -p $(HOME)/.console-dev
+	@if [ ! -f $(HOME)/.console-dev/wt-dev.crt ]; then \
+		openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+			-keyout $(HOME)/.console-dev/wt-dev.key \
+			-out $(HOME)/.console-dev/wt-dev.crt \
+			-subj "/CN=localhost" \
+			-addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null; \
+	fi
+	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
+	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
+	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
+	CONSOLE_WT_ADDR=127.0.0.1:$(WT_PORT) \
+	go -C apps/server-go run ./cmd/server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
