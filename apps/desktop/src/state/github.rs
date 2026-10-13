@@ -15,22 +15,30 @@ use gpui::Context;
 impl ConsoleDesktopApp {
     /// Ask the server for the stored GitHub credential state.
     ///
-    /// A failure is silent by design: this runs on page open, and a backend
-    /// that is merely offline should not surface as a GitHub error. The row
-    /// shows "Not connected" in that case, which is the safe reading.
+    /// A failure is reported, not silent: "Not connected" must mean "no
+    /// token", and a failed fetch showing the same text made an unreachable
+    /// backend indistinguishable from a disconnected account. The error
+    /// renders under the row, where a form error would also appear.
     pub fn refresh_github_status(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            if let Ok(status) = client.auth.github_status().await {
-                let _ = cx.update(|cx| {
-                    if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.github_status = Some(status);
-                            cx.notify();
-                        });
-                    }
-                });
-            }
+            let result = client.auth.github_status().await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        match result {
+                            Ok(status) => {
+                                this.github_status = Some(status);
+                                this.github_error = None;
+                            }
+                            Err(error) => {
+                                this.github_error = Some(error.to_string());
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
         })
         .detach();
     }

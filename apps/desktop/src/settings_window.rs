@@ -58,6 +58,16 @@ impl SettingsWindow {
                 });
             }
         }
+        // Fresh opens pass the tab as initial_tab rather than going through
+        // set_tab, so without this the Providers default never read GitHub
+        // status until the user left the tab and came back.
+        if initial_tab == SettingsTab::Providers {
+            if let Some(app_entity) = app.upgrade() {
+                app_entity.update(cx, |app_state, cx| {
+                    app_state.refresh_github_status(cx);
+                });
+            }
+        }
 
         let new_env_name_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
@@ -305,6 +315,16 @@ impl Render for SettingsWindow {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
+                }
+                // Sidebar clicks bypass set_tab, and without this the GitHub
+                // row never re-reads: one failed load stuck it on
+                // "Not connected" until the whole window reopened.
+                if tab == SettingsTab::Providers {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.refresh_github_status(cx);
+                        });
+                    }
                 }
                 if tab == SettingsTab::Integrations {
                     if let Some(app) = app_handle.upgrade() {
