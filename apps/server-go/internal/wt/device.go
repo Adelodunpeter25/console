@@ -21,7 +21,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
-func (s *Server) serveDeviceStream(str *webtransport.Stream, w *streamWriter, id string) {
+func (s *Server) serveDeviceStream(ctx context.Context, str *webtransport.Stream, w *streamWriter, id string) {
 	if id != "" {
 		_ = w.sendErrorf("Device stream id must be empty.")
 		return
@@ -48,7 +48,19 @@ func (s *Server) serveDeviceStream(str *webtransport.Stream, w *streamWriter, id
 		_ = w.sendErrorf("Cannot open device stream: %s", err.Error())
 		return
 	}
-	services.PumpStream(&wtDeviceConn{str: str, w: w}, st)
+	// PumpStream has no context hook, so wait for either its completion or
+	// shutdown: returning closes the stream (deferred in serveStream),
+	// which fails the pump's blocked reads/writes and reaps it. No leak
+	// either way.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		services.PumpStream(&wtDeviceConn{str: str, w: w}, st)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
 }
 
 // wtDeviceConn adapts a WT stream to services.StreamConn. Reads skip

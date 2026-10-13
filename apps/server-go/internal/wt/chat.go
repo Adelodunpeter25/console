@@ -10,6 +10,7 @@
 package wt
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
@@ -20,7 +21,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 )
 
-func (s *Server) serveChatRun(str *webtransport.Stream, w *streamWriter, id string) {
+func (s *Server) serveChatRun(ctx context.Context, str *webtransport.Stream, w *streamWriter, id string) {
 	if id == "" {
 		_ = w.sendErrorf("Chat run stream id must be the session id.")
 		return
@@ -40,15 +41,15 @@ func (s *Server) serveChatRun(str *webtransport.Stream, w *streamWriter, id stri
 	}
 	switch r := req.GetRequest().(type) {
 	case *consolev1.WtChatRunRequest_Start:
-		s.startChatRun(w, id, r.Start)
+		s.startChatRun(ctx, w, id, r.Start)
 	case *consolev1.WtChatRunRequest_Attach:
-		s.attachChatRun(w, id, r.Attach)
+		s.attachChatRun(ctx, w, id, r.Attach)
 	default:
 		_ = w.sendErrorf("Chat run request is required.")
 	}
 }
 
-func (s *Server) startChatRun(w *streamWriter, sessionID string, start *consolev1.WtChatRunStart) {
+func (s *Server) startChatRun(ctx context.Context, w *streamWriter, sessionID string, start *consolev1.WtChatRunStart) {
 	if start == nil || strings.TrimSpace(start.GetText()) == "" {
 		_ = w.sendErrorf("Field 'prompt' is required.")
 		return
@@ -70,10 +71,10 @@ func (s *Server) startChatRun(w *streamWriter, sessionID string, start *consolev
 		_ = w.sendErrorf("%s", err.Error())
 		return
 	}
-	s.pumpChatRun(w, hub, nil)
+	s.pumpChatRun(ctx, w, hub, nil)
 }
 
-func (s *Server) attachChatRun(w *streamWriter, sessionID string, attach *consolev1.WtChatRunAttach) {
+func (s *Server) attachChatRun(ctx context.Context, w *streamWriter, sessionID string, attach *consolev1.WtChatRunAttach) {
 	var since *int64
 	if attach != nil && attach.Since != nil {
 		since = attach.Since
@@ -87,13 +88,15 @@ func (s *Server) attachChatRun(w *streamWriter, sessionID string, attach *consol
 		_ = w.sendErrorf("No active run for session '%s'.", sessionID)
 		return
 	}
-	s.pumpChatRun(w, hub, since)
+	s.pumpChatRun(ctx, w, hub, since)
 }
 
 // pumpChatRun mirrors the SSE pumpHub: replay, then live frames until the
 // hub settles, draining bursts without a flush per frame. A write error
-// means the client is gone; the server-side run continues.
-func (s *Server) pumpChatRun(w *streamWriter, hub *run.Hub, since *int64) {
+// means the client is gone; the server-side run continues. The session
+// context ends the pump on shutdown even mid-silence, so Close never waits
+// on a quiet run (shutdownAll settles the hub right after).
+func (s *Server) pumpChatRun(ctx context.Context, w *streamWriter, hub *run.Hub, since *int64) {
 	id, ch, replay := hub.Subscribe(since)
 	if ch == nil {
 		_ = w.sendErrorf("Run already settled.")
@@ -106,15 +109,23 @@ func (s *Server) pumpChatRun(w *streamWriter, hub *run.Hub, since *int64) {
 		}
 	}
 	for {
-		f, ok := <-ch
-		if !ok {
+		var f run.Frame
+		select {
+		case <-ctx.Done():
 			return
+		case next, ok := <-ch:
+			if !ok {
+				return
+			}
+			f = next
 		}
 		if err := sendChatFrame(w, f); err != nil {
 			return
 		}
 		for more := true; more; {
 			select {
+			case <-ctx.Done():
+				return
 			case next, ok := <-ch:
 				if !ok {
 					return

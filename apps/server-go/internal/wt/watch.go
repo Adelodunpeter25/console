@@ -5,6 +5,7 @@
 package wt
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -24,7 +25,7 @@ const gitStatusDebounce = 1500 * time.Millisecond
 // scriptRunPollInterval mirrors the SSE route's end-of-run detection.
 const scriptRunPollInterval = 100 * time.Millisecond
 
-func (s *Server) serveWatch(str *webtransport.Stream, w *streamWriter, id string) {
+func (s *Server) serveWatch(ctx context.Context, str *webtransport.Stream, w *streamWriter, id string) {
 	if id != "" {
 		// Watches are always fresh subscriptions; the request carries
 		// every param, so a non-empty id is a client bug.
@@ -46,23 +47,23 @@ func (s *Server) serveWatch(str *webtransport.Stream, w *streamWriter, id string
 			_ = w.sendErrorf("Watch request path is required.")
 			return
 		}
-		s.pumpFsWatch(w, req.GetPath())
+		s.pumpFsWatch(ctx, w, req.GetPath())
 	case consolev1.WtWatchTarget_WT_WATCH_TARGET_GIT_STATUS:
 		if req.GetPath() == "" {
 			_ = w.sendErrorf("Watch request path is required.")
 			return
 		}
-		s.pumpGitWatch(w, req.GetPath())
+		s.pumpGitWatch(ctx, w, req.GetPath())
 	case consolev1.WtWatchTarget_WT_WATCH_TARGET_PORTS:
-		s.pumpPortsWatch(w, req.GetHost(), req.GetProjectId())
+		s.pumpPortsWatch(ctx, w, req.GetHost(), req.GetProjectId())
 	case consolev1.WtWatchTarget_WT_WATCH_TARGET_NOTIFICATIONS:
-		s.pumpNotificationsWatch(w)
+		s.pumpNotificationsWatch(ctx, w)
 	case consolev1.WtWatchTarget_WT_WATCH_TARGET_SCRIPT_RUN:
 		if req.GetProjectId() == "" || req.GetRunId() == "" {
 			_ = w.sendErrorf("Watch request project_id and run_id are required.")
 			return
 		}
-		s.pumpScriptRunWatch(w, req.GetProjectId(), req.GetRunId())
+		s.pumpScriptRunWatch(ctx, w, req.GetProjectId(), req.GetRunId())
 	default:
 		_ = w.sendErrorf("Unknown watch target.")
 	}
@@ -89,22 +90,30 @@ func marshalProtoJSONList[T proto.Message](items []T) ([]byte, error) {
 	return json.Marshal(elements)
 }
 
-func (s *Server) pumpFsWatch(w *streamWriter, path string) {
+func (s *Server) pumpFsWatch(ctx context.Context, w *streamWriter, path string) {
 	s.deps.Watch.Watch(path)
 	events := s.deps.Watch.Subscribe(path)
 	defer s.deps.Watch.Unsubscribe(events)
-	for evt := range events {
-		msg := &consolev1.FsChangeEvent{Type: evt.Type, ProjectPath: evt.ProjectPath}
-		if evt.EventPath != "" {
-			msg.EventPath = &evt.EventPath
-		}
-		if err := w.sendProtoEvent("fsChange", msg); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case evt, ok := <-events:
+			if !ok {
+				return
+			}
+			msg := &consolev1.FsChangeEvent{Type: evt.Type, ProjectPath: evt.ProjectPath}
+			if evt.EventPath != "" {
+				msg.EventPath = &evt.EventPath
+			}
+			if err := w.sendProtoEvent("fsChange", msg); err != nil {
+				return
+			}
 		}
 	}
 }
 
-func (s *Server) pumpGitWatch(w *streamWriter, repoPath string) {
+func (s *Server) pumpGitWatch(ctx context.Context, w *streamWriter, repoPath string) {
 	s.deps.Watch.Watch(repoPath)
 	events := s.deps.Watch.Subscribe(repoPath)
 	defer s.deps.Watch.Unsubscribe(events)
@@ -120,6 +129,8 @@ func (s *Server) pumpGitWatch(w *streamWriter, repoPath string) {
 	pending := false
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case _, ok := <-events:
 			if !ok {
 				return
@@ -137,7 +148,7 @@ func (s *Server) pumpGitWatch(w *streamWriter, repoPath string) {
 	}
 }
 
-func (s *Server) pumpPortsWatch(w *streamWriter, host, projectID string) {
+func (s *Server) pumpPortsWatch(ctx context.Context, w *streamWriter, host, projectID string) {
 	if host == "" {
 		host = "localhost"
 	}
@@ -153,27 +164,43 @@ func (s *Server) pumpPortsWatch(w *streamWriter, host, projectID string) {
 	}
 	events := s.deps.Ports.Subscribe()
 	defer s.deps.Ports.Unsubscribe(events)
-	for range events {
-		if err := sendSnapshot(); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case _, ok := <-events:
+			if !ok {
+				return
+			}
+			if err := sendSnapshot(); err != nil {
+				return
+			}
 		}
 	}
 }
 
-func (s *Server) pumpNotificationsWatch(w *streamWriter) {
+func (s *Server) pumpNotificationsWatch(ctx context.Context, w *streamWriter) {
 	events := s.deps.Notifications.Subscribe()
 	defer s.deps.Notifications.Unsubscribe(events)
-	for event := range events {
-		if event == nil {
-			continue
-		}
-		if err := w.sendProtoEvent("notification", event); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if event == nil {
+				continue
+			}
+			if err := w.sendProtoEvent("notification", event); err != nil {
+				return
+			}
 		}
 	}
 }
 
-func (s *Server) pumpScriptRunWatch(w *streamWriter, projectID, runID string) {
+func (s *Server) pumpScriptRunWatch(ctx context.Context, w *streamWriter, projectID, runID string) {
 	if s.deps.Scripts.GetRun(projectID, runID) == nil {
 		_ = w.sendErrorf("Run not found.")
 		return
@@ -198,6 +225,8 @@ func (s *Server) pumpScriptRunWatch(w *streamWriter, projectID, runID string) {
 	defer poll.Stop()
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case event, ok := <-events:
 			if !ok {
 				return
@@ -209,6 +238,8 @@ func (s *Server) pumpScriptRunWatch(w *streamWriter, projectID, runID string) {
 			if !s.deps.Scripts.IsRunning(projectID, runID) {
 				for {
 					select {
+					case <-ctx.Done():
+						return
 					case event, ok := <-events:
 						if !ok {
 							return

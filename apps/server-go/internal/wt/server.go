@@ -10,6 +10,7 @@
 package wt
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
@@ -54,10 +55,10 @@ type Server struct {
 	cfg  Config
 	deps Deps
 
-	mu     sync.Mutex
-	h3     *http3.Server
-	wt     *webtransport.Server
-	conn   net.PacketConn
+	mu       sync.Mutex
+	h3       *http3.Server
+	wt       *webtransport.Server
+	conn     net.PacketConn
 	serveErr error
 }
 
@@ -120,11 +121,13 @@ func (s *Server) Start() error {
 		return fmt.Errorf("webtransport listen: %w", err)
 	}
 	go func() {
+		// Close() surfaces as context-canceled here; that is the normal
+		// shutdown path, not a failure.
 		if err := s.wt.Serve(s.conn); err != nil {
 			s.mu.Lock()
 			s.serveErr = err
 			s.mu.Unlock()
-			slog.Error("webtransport serve ended", "error", err)
+			slog.Debug("webtransport serve ended", "error", err)
 		}
 	}()
 	slog.Info("webtransport listening", "addr", s.conn.LocalAddr())
@@ -181,18 +184,19 @@ func (s *Server) serveSession(sess *webtransport.Session, deviceID string) {
 		}
 		_ = sess.CloseWithError(0, "")
 	}()
+	ctx := sess.Context()
 	for {
-		str, err := sess.AcceptStream(sess.Context())
+		str, err := sess.AcceptStream(ctx)
 		if err != nil {
 			// Session closed (or failed): every stream handler is already
 			// unwinding on the same cause.
 			return
 		}
-		go s.serveStream(str, deviceID)
+		go s.serveStream(ctx, str, deviceID)
 	}
 }
 
-func (s *Server) serveStream(str *webtransport.Stream, deviceID string) {
+func (s *Server) serveStream(ctx context.Context, str *webtransport.Stream, deviceID string) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("webtransport stream panic", "panic", r)
@@ -208,15 +212,15 @@ func (s *Server) serveStream(str *webtransport.Stream, deviceID string) {
 	w := &streamWriter{str: str}
 	switch kind {
 	case consolev1.WtStreamKind_WT_STREAM_KIND_CHAT_RUN:
-		s.serveChatRun(str, w, id)
+		s.serveChatRun(ctx, str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_TERMINAL:
 		s.serveTerminal(str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_WATCH:
-		s.serveWatch(str, w, id)
+		s.serveWatch(ctx, str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_PORT_TUNNEL:
 		s.serveTunnel(str, w, id)
 	case consolev1.WtStreamKind_WT_STREAM_KIND_DEVICE_STREAM:
-		s.serveDeviceStream(str, w, id)
+		s.serveDeviceStream(ctx, str, w, id)
 	default:
 		// Unreachable: the header reader rejects unknown kinds. Kept so a
 		// future kind fails loudly here rather than falling silent.

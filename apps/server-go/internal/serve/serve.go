@@ -6,11 +6,13 @@ package serve
 import (
 	"context"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/gitconfig"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
@@ -19,6 +21,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 // startDeletedChatSweep purges soft-deleted chats past retention once
@@ -83,7 +86,20 @@ func Run() error {
 	ports.StartReaper(5 * time.Second)
 	notifications := services.NewNotificationService()
 
-	app, runs, shutdownAll := routes.New(routes.Config{DB: manager, Watch: watch, Ports: ports, Notifications: notifications})
+	// Transport surface for the QUIC migration: WT serves alongside Fiber
+	// when TLS is configured, otherwise the server stays legacy-only. One
+	// token issuer feeds both the mint route and the WT handshake so a
+	// revocation applies everywhere.
+	wtCfg, err := wt.ConfigFromEnv()
+	if err != nil {
+		slog.Error("invalid transport config", "error", err)
+		return err
+	}
+	tokenIssuer := auth.NewTokenIssuer()
+	app, runs, wtDeps, shutdownAll := routes.New(routes.Config{
+		DB: manager, Watch: watch, Ports: ports, Notifications: notifications,
+		TokenIssuer: tokenIssuer, AltSvc: wtAltSvcPort(wtCfg),
+	})
 
 	// Deleted chats stay restorable for 7 days, then the backend purges
 	// them permanently. The sweep runs once at startup plus once a day.
@@ -129,14 +145,52 @@ func Run() error {
 		}
 	}()
 
+	// Dual-stack serving when WebTransport is on: Fiber speaks TLS on the
+	// TCP half of WTAddr while the WT server takes the UDP half — same
+	// port, different sockets, no SO_REUSEPORT needed. The plaintext
+	// listener above stays as the dev path either way.
+	var wtServer *wt.Server
+	if wtCfg.WTEnabled() {
+		go func() {
+			slog.Info("server listening (TLS)", "addr", wtCfg.WTAddr)
+			if err := app.ListenTLS(wtCfg.WTAddr, wtCfg.TLSCertFile, wtCfg.TLSKeyFile); err != nil {
+				slog.Error("TLS listener stopped", "error", err)
+				os.Exit(1)
+			}
+		}()
+		wtServer = wt.New(wtCfg, wtDeps)
+		if err := wtServer.Start(); err != nil {
+			slog.Error("webtransport failed to start", "error", err)
+			return err
+		}
+	}
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	slog.Info("shutting down")
+	// WT first: closing sessions unblocks every stream handler (chat and
+	// watch pumps observe session death even mid-silence), then the HTTP
+	// listener drains, then everything the server owns stops.
+	if wtServer != nil {
+		_ = wtServer.Close()
+	}
 	_ = app.ShutdownWithTimeout(5 * time.Second)
 	// Stop the server means stop everything it owns: in-flight agent runs,
 	// detached background bash jobs, terminal PTYs, and managed project
 	// scripts — not just the HTTP listener.
 	shutdownAll()
 	return nil
+}
+
+// wtAltSvcPort renders the H3 port for the Alt-Svc header ("443"), or ""
+// when WebTransport is off so nothing is advertised.
+func wtAltSvcPort(cfg wt.Config) string {
+	if !cfg.WTEnabled() {
+		return ""
+	}
+	if _, port, err := net.SplitHostPort(cfg.WTAddr); err == nil && port != "" {
+		return port
+	}
+	return ""
 }

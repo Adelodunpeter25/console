@@ -3,6 +3,7 @@ package routes
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,6 +18,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 type Config struct {
@@ -24,9 +26,15 @@ type Config struct {
 	Watch         *services.FsWatchService
 	Ports         *services.PortRegistry
 	Notifications *services.NotificationService
+	// TokenIssuer mints the API bearer tokens the WT handshake validates.
+	// Nil builds one internally (persistent secret, ephemeral fallback).
+	TokenIssuer *auth.TokenIssuer
+	// AltSvc advertises the H3 port (e.g. "443" renders h3=":443").
+	// Empty disables the header. Registered before all routes.
+	AltSvc string
 }
 
-func New(cfg Config) (*fiber.App, *run.Service, func()) {
+func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	app := fiber.New(fiber.Config{
 		AppName:     "console-server-go",
 		IdleTimeout: 5 * time.Minute,
@@ -43,6 +51,16 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		Immutable: true,
 	})
 	app.Use(recover.New())
+	if cfg.AltSvc != "" {
+		advertise := `h3="` + cfg.AltSvc + `"`
+		if !strings.HasPrefix(cfg.AltSvc, ":") {
+			advertise = `h3=":` + cfg.AltSvc + `"`
+		}
+		app.Use(func(c *fiber.Ctx) error {
+			c.Set("Alt-Svc", advertise)
+			return c.Next()
+		})
+	}
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
@@ -53,7 +71,8 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	RegisterFsRoutes(app, services.NewFsService(), cfg.Watch)
-	RegisterGitRoutes(app, services.NewGitService(), cfg.Watch)
+	gitSvc := services.NewGitService()
+	RegisterGitRoutes(app, gitSvc, cfg.Watch)
 	projects := services.NewProjectService(cfg.DB)
 	ptyManager := services.NewPtyManager(cfg.Ports, func(cwd string) string {
 		project, err := projects.GetByDir(cwd)
@@ -68,7 +87,11 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB), services.NewProjectBootstrapService())
 	RegisterUsageRoutes(app, usage.NewService())
 	RegisterAuthRoutes(app, auth.NewAuthService())
-	RegisterTokenRoutes(app, auth.NewTokenIssuer())
+	tokenIssuer := cfg.TokenIssuer
+	if tokenIssuer == nil {
+		tokenIssuer = auth.NewTokenIssuer()
+	}
+	RegisterTokenRoutes(app, tokenIssuer)
 	RegisterIntegrationRoutes(app)
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
@@ -114,5 +137,17 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		mcpManager.CloseAll()
 		_ = deviceSvc.Close()
 	}
-	return app, runSvc, shutdown
+	// The WT server drives the same services over QUIC; serve.go owns its
+	// listener lifecycle from this bundle.
+	return app, runSvc, wt.Deps{
+		Issuer:        tokenIssuer,
+		Runs:          runSvc,
+		PTY:           ptyManager,
+		Ports:         cfg.Ports,
+		Watch:         cfg.Watch,
+		Git:           gitSvc,
+		Notifications: cfg.Notifications,
+		Scripts:       scriptsSvc,
+		Devices:       deviceSvc,
+	}, shutdown
 }
