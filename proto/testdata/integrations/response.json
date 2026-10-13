@@ -1,0 +1,1 @@
+{"integrations":[{"id":"gh","name":"GitHub CLI","description":"Used by the agent to create pull requests, read CI status, and manage releases without a browser login.","installed":true,"version":"2.75.0","binaryPath":"/opt/homebrew/bin/gh","installUrl":"https://cli.github.com","installHint":"brew install gh"}]}

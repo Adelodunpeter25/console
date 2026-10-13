@@ -122,3 +122,7 @@ path = "tests/catalog_test.rs"
 [[test]]
 name = "mcp_test"
 path = "tests/mcp_test.rs"
+
+[[test]]
+name = "integrations_json_test"
+path = "tests/integrations_json_test.rs"

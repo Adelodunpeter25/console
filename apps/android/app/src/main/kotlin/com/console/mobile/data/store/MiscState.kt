@@ -152,3 +152,16 @@ class EnvironmentsStateHolder(initial: EnvironmentsState = EnvironmentsState()) 
     fun set(v: EnvironmentsState) { _state.value = v }
     fun patch(fn: (EnvironmentsState) -> EnvironmentsState) { _state.value = fn(_state.value) }
 }
+
+data class IntegrationsState(
+    val integrations: List<console.v1.IntegrationStatus> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
+class IntegrationsStateHolder(initial: IntegrationsState = IntegrationsState()) {
+    private val _state = MutableStateFlow(initial)
+    val state: StateFlow<IntegrationsState> = _state.asStateFlow()
+    fun set(v: IntegrationsState) { _state.value = v }
+    fun patch(fn: (IntegrationsState) -> IntegrationsState) { _state.value = fn(_state.value) }
+}

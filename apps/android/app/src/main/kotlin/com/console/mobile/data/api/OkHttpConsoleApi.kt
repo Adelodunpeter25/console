@@ -97,6 +97,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val authStatusAdapter by lazy { wireMoshi.adapter(AuthStatusResponse::class.java) }
     private val loginUrlAdapter by lazy { wireMoshi.adapter(OAuthLoginUrlResponse::class.java) }
     private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
+    private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
@@ -481,6 +482,11 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun disconnectGitHub() {
         val raw = http.post("/api/auth/github/logout")
         http.unwrapOrRaw(raw, JsonElement.serializer(), "disconnect GitHub")
+    }
+
+    override suspend fun getIntegrations(): console.v1.IntegrationsResponse {
+        val raw = http.get("/api/integrations")
+        return http.unwrapOrRawAdapter(raw, integrationsAdapter, "get integrations")
     }
 
     override suspend fun saveProjectId(provider: String, projectId: String?) {

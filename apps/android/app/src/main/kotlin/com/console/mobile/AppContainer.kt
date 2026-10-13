@@ -15,6 +15,7 @@ import com.console.mobile.data.repo.EnvironmentsRepository
 import com.console.mobile.data.repo.AssistRepository
 import com.console.mobile.data.repo.FsRepository
 import com.console.mobile.data.repo.GitRepository
+import com.console.mobile.data.repo.IntegrationsRepository
 import com.console.mobile.data.repo.McpRepository
 import com.console.mobile.data.repo.NotificationRepository
 import com.console.mobile.data.repo.ProjectRepository
@@ -27,6 +28,7 @@ import com.console.mobile.data.store.AuthStateHolder
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.EnvironmentsStateHolder
 import com.console.mobile.data.store.FsStateHolder
+import com.console.mobile.data.store.IntegrationsStateHolder
 import com.console.mobile.data.store.McpStateHolder
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.data.store.ProjectStateHolder
@@ -111,6 +113,9 @@ object AppContainer {
     lateinit var mcpStateHolder: McpStateHolder
         private set
 
+    lateinit var integrationsStateHolder: IntegrationsStateHolder
+        private set
+
     lateinit var terminalStateHolder: TerminalStateHolder
         private set
 
@@ -143,6 +148,9 @@ object AppContainer {
         private set
 
     lateinit var gitRepository: GitRepository
+        private set
+
+    lateinit var integrationsRepository: IntegrationsRepository
         private set
 
     lateinit var terminalRepository: TerminalRepository
@@ -205,6 +213,7 @@ object AppContainer {
         fsStateHolder = FsStateHolder()
         usageStateHolder = UsageStateHolder()
         mcpStateHolder = McpStateHolder()
+        integrationsStateHolder = IntegrationsStateHolder()
         terminalStateHolder = TerminalStateHolder()
         environmentsStateHolder = EnvironmentsStateHolder()
 
@@ -235,6 +244,10 @@ object AppContainer {
         mcpRepository = McpRepository(
             api = consoleApi,
             mcpState = mcpStateHolder,
+        )
+        integrationsRepository = IntegrationsRepository(
+            api = consoleApi,
+            integrationsState = integrationsStateHolder,
         )
         gitRepository = GitRepository(
             api = consoleApi,

@@ -94,6 +94,8 @@ interface ConsoleApi {
     suspend fun connectGitHub(payload: com.console.mobile.data.model.GitHubTokenDto): console.v1.GitHubAuthStatus
     suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus
     suspend fun disconnectGitHub()
+    // binary integrations (gh CLI, ...): what the server box has installed
+    suspend fun getIntegrations(): console.v1.IntegrationsResponse
     suspend fun saveProjectId(provider: String, projectId: String?)
     // assist
     suspend fun listSlashCommands(sessionId: String?): List<console.v1.SlashCommandInfo>
