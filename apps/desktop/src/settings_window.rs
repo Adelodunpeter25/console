@@ -685,11 +685,22 @@ impl Render for SettingsWindow {
                         }
                     })
                 };
+                let on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.install_gh(cx);
+                            });
+                        }
+                    })
+                };
                 IntegrationsPage {
                     integrations: app.integrations.clone(),
                     loading: app.integrations_loading,
                     error: app.integrations_error.clone(),
                     on_refresh,
+                    on_install,
                 }
                 .into_any_element()
             }

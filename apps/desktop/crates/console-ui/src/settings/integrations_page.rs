@@ -22,6 +22,9 @@ pub struct IntegrationsPage {
     pub loading: bool,
     pub error: Option<String>,
     pub on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    /// Install a missing binary the official way for the server's platform.
+    /// Shown only on rows that report not installed.
+    pub on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl RenderOnce for IntegrationsPage {
@@ -91,11 +94,14 @@ impl RenderOnce for IntegrationsPage {
                     .flex()
                     .flex_col()
                     .gap(px(10.0))
-                    .children(
-                        self.integrations
-                            .iter()
-                            .map(|row| integration_row(row, &theme)),
-                    )
+                    .children(self.integrations.iter().map(|row| {
+                        integration_row(
+                            row,
+                            self.loading,
+                            self.on_install.clone(),
+                            &theme,
+                        )
+                    }))
                     .into_any_element()
             })
     }
@@ -137,8 +143,13 @@ fn refresh_button(
 }
 
 /// One integration: name + status pill, description, then either the detected
-/// version/path or the install hint + URL.
-fn integration_row(row: &IntegrationStatus, theme: &Theme) -> impl IntoElement {
+/// version/path or the install hint + URL with an Install button.
+fn integration_row(
+    row: &IntegrationStatus,
+    loading: bool,
+    on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    theme: &Theme,
+) -> impl IntoElement {
     // `installed` has explicit presence on the wire — a missing key reads as
     // not installed, never as unknown.
     let installed = row.installed.unwrap_or(false);
@@ -214,11 +225,39 @@ fn integration_row(row: &IntegrationStatus, theme: &Theme) -> impl IntoElement {
             );
         }
     } else {
+        let install_button = {
+            let button = div()
+                .id("integrations-install-gh")
+                .px(px(12.0))
+                .py(px(6.0))
+                .rounded(px(6.0))
+                .bg(theme.accent)
+                .opacity(if loading { 0.5 } else { 1.0 })
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(theme.on_inverse)
+                        .child(if loading { "Installing…" } else { "Install" }),
+                );
+            if loading {
+                button.into_any_element()
+            } else {
+                button
+                    .cursor_pointer()
+                    .hover(|s| s.opacity(0.9))
+                    .on_click(move |_event, window, cx| {
+                        cx.stop_propagation();
+                        on_install(window, cx);
+                    })
+                    .into_any_element()
+            }
+        };
         card = card.child(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(6.0))
+                .gap(px(8.0))
                 .rounded(px(6.0))
                 .border_1()
                 .border_color(theme.border)
@@ -227,15 +266,30 @@ fn integration_row(row: &IntegrationStatus, theme: &Theme) -> impl IntoElement {
                 .py(px(8.0))
                 .child(
                     div()
-                        .text_size(px(11.5))
-                        .text_color(theme.text_secondary)
-                        .child(format!("Install with: {}", row.install_hint)),
-                )
-                .child(
-                    div()
-                        .text_size(px(11.0))
-                        .text_color(theme.text_ghost)
-                        .child(row.install_url.clone()),
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .flex_col()
+                                .gap(px(4.0))
+                                .child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(theme.text_secondary)
+                                        .child(format!("Install with: {}", row.install_hint)),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(11.0))
+                                        .text_color(theme.text_ghost)
+                                        .child(row.install_url.clone()),
+                                ),
+                        )
+                        .child(install_button),
                 ),
         );
     }
