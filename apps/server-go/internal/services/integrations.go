@@ -12,7 +12,9 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -61,11 +63,17 @@ func CheckGhCLI() IntegrationInfo {
 	}
 	path, err := exec.LookPath("gh")
 	if err != nil {
-		return info
+		// The Linux installer targets ~/.local/bin, which a thin daemon
+		// PATH may not carry — so check it explicitly rather than reporting
+		// a just-installed binary as missing.
+		if userGh, statErr := os.Stat(filepath.Join(UserBinDir(), "gh")); statErr != nil || userGh.IsDir() {
+			return info
+		}
+		path = filepath.Join(UserBinDir(), "gh")
 	}
 	info.Installed = true
 	info.Path = path
-	if v, err := ghVersion(); err == nil {
+	if v, err := ghVersion(path); err == nil {
 		info.Version = v
 	}
 	// A version probe failure keeps installed=true: the binary resolves and
@@ -74,12 +82,12 @@ func CheckGhCLI() IntegrationInfo {
 	return info
 }
 
-// ghVersion runs `gh --version` and parses the first line. Separate from the
-// LookPath check so a present-but-broken binary still reports installed.
-func ghVersion() (string, error) {
+// ghVersion runs `<path> --version` and parses the first line. Separate from
+// the lookup so a present-but-broken binary still reports installed.
+func ghVersion(path string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ghVersionTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "gh", "--version").Output()
+	out, err := exec.CommandContext(ctx, path, "--version").Output()
 	if err != nil {
 		return "", err
 	}

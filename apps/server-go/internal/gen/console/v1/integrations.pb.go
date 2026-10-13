@@ -35,10 +35,10 @@ const (
 //     probe fails still reports installed, and a missing binary carries
 //     neither.
 //   - install_hint is a per-OS copy-paste command; install_url is the fallback
-//     for platforms the hint does not cover. No auto-install endpoint exists
-//     on purpose: the server downloading and executing installers (sudo,
-//     distro detection, version pinning) is a support burden that dwarfs the
-//     status page.
+//     for platforms the hint does not cover. POST
+//     /api/integrations/gh/install performs the install server-side (brew on
+//     macOS, official tarball into ~/.local/bin on Linux) — same payload
+//     shape back, so clients just replace state.
 type IntegrationStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stable id, e.g. "gh". Clients key rows off this, not the name.

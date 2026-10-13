@@ -5,6 +5,7 @@ package routes
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -17,17 +18,42 @@ import (
 // mirroring RegisterAuthRoutes.
 func RegisterIntegrationRoutes(app *fiber.App) {
 	app.Get("/api/integrations", func(c *fiber.Ctx) error {
-		found := services.ListIntegrations()
-		items := make([]*consolev1.IntegrationStatus, 0, len(found))
-		for _, info := range found {
-			items = append(items, integrationToProto(info))
-		}
-		raw, err := protoMarshal.Marshal(&consolev1.IntegrationsResponse{Integrations: items})
+		raw, err := marshalIntegrations()
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
+
+	// Install the managed gh CLI into the storage bin dir. Shown only when
+	// no `gh` resolves; the call itself re-checks and no-ops to current
+	// status when one does. Answers the full list so clients just replace
+	// state. Failures are 502 with the reason verbatim (unreachable
+	// github.com, checksum mismatch) or 400 for an unsupported platform —
+	// never silent, since a quiet button is worse than none.
+	app.Post("/api/integrations/gh/install", func(c *fiber.Ctx) error {
+		if _, err := services.InstallGhCLI(c.Context()); err != nil {
+			status := fiber.StatusBadGateway
+			if errors.Is(err, services.ErrGhPlatformUnsupported) {
+				status = fiber.StatusBadRequest
+			}
+			return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		raw, err := marshalIntegrations()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+}
+
+func marshalIntegrations() (json.RawMessage, error) {
+	found := services.ListIntegrations()
+	items := make([]*consolev1.IntegrationStatus, 0, len(found))
+	for _, info := range found {
+		items = append(items, integrationToProto(info))
+	}
+	return protoMarshal.Marshal(&consolev1.IntegrationsResponse{Integrations: items})
 }
 
 // integrationToProto converts the detector's plain shape to the wire type.

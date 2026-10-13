@@ -104,8 +104,9 @@ func BuildScriptEnv() []string {
 		out = append(out, kv)
 	}
 	// Scripts that shell out to `gh` authenticate with the stored PAT, same
-	// as agent bash runs — no interactive login on a headless box.
-	return github.AppendToEnv(out)
+	// as agent bash runs — no interactive login on a headless box. The user
+	// bin dir rides along so a server-installed `gh` resolves too.
+	return github.AppendToEnv(EnsureUserBinDir(out))
 }
 
 type ProjectScriptsService struct {

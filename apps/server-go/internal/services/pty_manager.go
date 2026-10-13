@@ -428,8 +428,9 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	env = append(env, "TERM=xterm-256color", "CONSOLE_TERMINAL=true", "CONSOLE_TERMINAL_ID="+id)
 	// Per-spawn, not in the cached base: connecting or disconnecting GitHub
 	// takes effect on the next terminal without a server restart. Lets `gh`
-	// in interactive shells use the stored PAT instead of a browser login.
-	env = github.AppendToEnv(env)
+	// in interactive shells use the stored PAT instead of a browser login,
+	// and resolve a server-installed `gh` (~/.local/bin) under a thin PATH.
+	env = github.AppendToEnv(EnsureUserBinDir(env))
 	cmd.Env = env
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})

@@ -40,15 +40,17 @@ func mergedEnv(overrides map[string]string) []string {
 	env := os.Environ()
 	if len(overrides) == 0 {
 		// GH_TOKEN lets the model drive `gh` with the stored PAT instead of
-		// an interactive browser login, which a headless box cannot do.
-		return github.AppendToEnv(env)
+		// an interactive browser login, which a headless box cannot do. The
+		// user bin dir lets a server-installed `gh` (~/.local/bin) resolve
+		// even when the daemon runs with a thin PATH.
+		return github.AppendToEnv(services.EnsureUserBinDir(env))
 	}
 	out := make([]string, 0, len(env)+len(overrides))
 	out = append(out, env...)
 	for k, v := range overrides {
 		out = append(out, k+"="+v)
 	}
-	return github.AppendToEnv(out)
+	return github.AppendToEnv(services.EnsureUserBinDir(out))
 }
 
 func shellArgv(command string) []string {
