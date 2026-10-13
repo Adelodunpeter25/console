@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
@@ -60,7 +61,9 @@ func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID st
 		sections = append(sections, "", "stderr:", r.Stderr)
 	}
 	sections = append(sections, "", fmt.Sprintf("Poll again with cursor=%d for new output.", r.NextCursor))
-	return strings.Join(sections, "\n"), nil
+	// Background jobs inherit the same env as sync runs (GH_TOKEN included),
+	// so the same scrub applies before output reaches the transcript.
+	return github.RedactSecrets(strings.Join(sections, "\n")), nil
 }
 
 // NewBashJobTool builds the "bashJob" tool bound to jobs, scoped to

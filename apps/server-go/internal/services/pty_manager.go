@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/creack/pty"
 )
@@ -422,9 +423,13 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	cmd := exec.Command(shell)
 	cmd.Dir = params.Cwd
 	base := baseEnv()
-	env := make([]string, 0, len(base)+3)
+	env := make([]string, 0, len(base)+4)
 	env = append(env, base...)
 	env = append(env, "TERM=xterm-256color", "CONSOLE_TERMINAL=true", "CONSOLE_TERMINAL_ID="+id)
+	// Per-spawn, not in the cached base: connecting or disconnecting GitHub
+	// takes effect on the next terminal without a server restart. Lets `gh`
+	// in interactive shells use the stored PAT instead of a browser login.
+	env = github.AppendToEnv(env)
 	cmd.Env = env
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})

@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -102,7 +103,9 @@ func BuildScriptEnv() []string {
 		}
 		out = append(out, kv)
 	}
-	return out
+	// Scripts that shell out to `gh` authenticate with the stored PAT, same
+	// as agent bash runs — no interactive login on a headless box.
+	return github.AppendToEnv(out)
 }
 
 type ProjectScriptsService struct {

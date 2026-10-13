@@ -82,6 +82,13 @@ console.scripts.stop(run_id)
 console.ports.list()
 console.ports.forward(port)
 console.ports.unforward(port)
+
+// Pull requests — typed wrappers over the stored GitHub PAT (§Phase 7)
+console.pr.create({ owner, repo, head, base, title, body, draft }) -> { number, url }
+console.pr.read({ owner, repo, number })     // status, checks, review state
+console.pr.list({ owner, repo, state })      // open by default
+console.pr.update({ owner, repo, number, title?, body?, base? })
+console.pr.merge({ owner, repo, number, method })  // gated, never the default path
 ```
 
 Deferred to a later phase: `console.tabs.*`, `console.panes.*`, `console.mcp.load(group)`, `console.ui.notify/openDiff/focusPane`.
@@ -225,6 +232,15 @@ The boundary should be **path-based inside the kernel**, not tier-based, because
 ### Phase 6 — Security prerequisites landed
 - Path boundary for the kernel (§8.3); `PlanMode` hard deny (§8.2). Independent of the kernel, valuable on their own.
 
+### Phase 7 — GitHub surface: `gh` pre-auth + `console.pr.*`
+Two layers over the same stored PAT, in shipping order:
+
+1. **GH_TOKEN injection (no kernel dependency, land first).** Every agent-spawned command inherits `GH_TOKEN=<stored PAT>` — agent `bash` (sync + background jobs), project scripts, PTY terminals — so the `gh` CLI models already reach for works on a headless box with no `gh auth login` browser flow. `gh` prefers `GH_TOKEN` over keyring/oauth state; an explicitly set `GH_TOKEN`/`GITHUB_TOKEN` always wins over the stored one. `GITHUB_TOKEN` is deliberately left unset (Actions-ephemeral convention); GHE stays out of scope, same as the git credential helper.
+2. **Typed `console.pr.*` tools** over a small GitHub REST service reusing the credential store: create, read, list, update, merge. `TierWrite`, so they resolve through the same approval gating as every other write — unlike raw `gh`, which inherits the run's exec approval only. Merge is gated and never implied by create/update.
+
+**Secret rules (both layers):** the token is loaded from the credential file at spawn/call time, never cached in a package var, never returned to any client, never logged. Exact-token occurrences are scrubbed from tool stdout/stderr before they reach the transcript, so `env` / `printenv GH_TOKEN` cannot leak it.
+- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run 'TestGHEnv|TestBashGH|TestBashEnvDump|TestRedactSecrets' -v` — injected when connected, absent when not, explicit value wins, raw token never in output.
+
 ---
 
 ## 10. Open Questions
@@ -251,4 +267,6 @@ The boundary should be **path-based inside the kernel**, not tier-based, because
 | Delete safety | same | soft by default; self-delete refused; worktree deletion confirmed |
 | Path boundary | same | write outside root denied in every mode |
 | Plan mode deny | `go test ./tests/agent/ -run TestPlanModeDeny -v` | `TierWrite`/`TierExec` hard-denied |
+| gh pre-auth | `go test ./tests/tools/ -run 'TestGHEnv|TestBashGH|TestBashEnvDump|TestRedactSecrets' -v` | `GH_TOKEN` in child env iff connected; explicit value wins; raw token never in output |
+| PR tools | same | create/update/read/list round-trip against httptest; merge gated |
 | Token savings | bench | `ports` + `project_scripts` schemas gone from every request |
