@@ -67,14 +67,16 @@ message WtChatRunAttach {
 }
 
 // TERMINAL request: spawn params mirror the REST spawn query string. The
-// stream id carries the terminal id for re-attaching; empty for a fresh
-// spawn. Client→server input keeps the existing tag-byte binary framing
-// inside WtFrame.payload; resize/kill stay unary REST in v1.
+// stream id must be empty (every stream spawns fresh, like the WS upgrade).
+// Client→server frames are WtFrame envelopes: type "input" with raw PTY
+// bytes, type "resize"/"kill" with the matching protojson payload.
 message WtTerminalRequest {
   string cwd = 1;
   optional string shell = 2;
-  optional int32 cols = 3;
-  optional int32 rows = 4;
+  optional string label = 3;
+  optional int32 cols = 4;
+  optional int32 rows = 5;
+  bool binary = 6;
 }
 
 // Watch targets multiplexed onto WT_STREAM_KIND_WATCH streams.

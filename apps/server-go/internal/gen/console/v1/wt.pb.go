@@ -455,15 +455,17 @@ func (x *WtChatRunAttach) GetSince() int64 {
 }
 
 // TERMINAL request: spawn params mirror the REST spawn query string. The
-// stream id carries the terminal id for re-attaching; empty for a fresh
-// spawn. Client→server input keeps the existing tag-byte binary framing
-// inside WtFrame.payload; resize/kill stay unary REST in v1.
+// stream id must be empty (every stream spawns fresh, like the WS upgrade).
+// Client→server frames are WtFrame envelopes: type "input" with raw PTY
+// bytes, type "resize"/"kill" with the matching protojson payload.
 type WtTerminalRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Cwd           string                 `protobuf:"bytes,1,opt,name=cwd,proto3" json:"cwd,omitempty"`
 	Shell         *string                `protobuf:"bytes,2,opt,name=shell,proto3,oneof" json:"shell,omitempty"`
-	Cols          *int32                 `protobuf:"varint,3,opt,name=cols,proto3,oneof" json:"cols,omitempty"`
-	Rows          *int32                 `protobuf:"varint,4,opt,name=rows,proto3,oneof" json:"rows,omitempty"`
+	Label         *string                `protobuf:"bytes,3,opt,name=label,proto3,oneof" json:"label,omitempty"`
+	Cols          *int32                 `protobuf:"varint,4,opt,name=cols,proto3,oneof" json:"cols,omitempty"`
+	Rows          *int32                 `protobuf:"varint,5,opt,name=rows,proto3,oneof" json:"rows,omitempty"`
+	Binary        bool                   `protobuf:"varint,6,opt,name=binary,proto3" json:"binary,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -512,6 +514,13 @@ func (x *WtTerminalRequest) GetShell() string {
 	return ""
 }
 
+func (x *WtTerminalRequest) GetLabel() string {
+	if x != nil && x.Label != nil {
+		return *x.Label
+	}
+	return ""
+}
+
 func (x *WtTerminalRequest) GetCols() int32 {
 	if x != nil && x.Cols != nil {
 		return *x.Cols
@@ -524,6 +533,13 @@ func (x *WtTerminalRequest) GetRows() int32 {
 		return *x.Rows
 	}
 	return 0
+}
+
+func (x *WtTerminalRequest) GetBinary() bool {
+	if x != nil {
+		return x.Binary
+	}
+	return false
 }
 
 // WATCH request: one target per stream, carrying that target's
@@ -736,13 +752,16 @@ const file_console_v1_wt_proto_rawDesc = "" +
 	"\x0f_thinking_level\"6\n" +
 	"\x0fWtChatRunAttach\x12\x19\n" +
 	"\x05since\x18\x01 \x01(\x03H\x00R\x05since\x88\x01\x01B\b\n" +
-	"\x06_since\"\x8e\x01\n" +
+	"\x06_since\"\xcb\x01\n" +
 	"\x11WtTerminalRequest\x12\x10\n" +
 	"\x03cwd\x18\x01 \x01(\tR\x03cwd\x12\x19\n" +
-	"\x05shell\x18\x02 \x01(\tH\x00R\x05shell\x88\x01\x01\x12\x17\n" +
-	"\x04cols\x18\x03 \x01(\x05H\x01R\x04cols\x88\x01\x01\x12\x17\n" +
-	"\x04rows\x18\x04 \x01(\x05H\x02R\x04rows\x88\x01\x01B\b\n" +
-	"\x06_shellB\a\n" +
+	"\x05shell\x18\x02 \x01(\tH\x00R\x05shell\x88\x01\x01\x12\x19\n" +
+	"\x05label\x18\x03 \x01(\tH\x01R\x05label\x88\x01\x01\x12\x17\n" +
+	"\x04cols\x18\x04 \x01(\x05H\x02R\x04cols\x88\x01\x01\x12\x17\n" +
+	"\x04rows\x18\x05 \x01(\x05H\x03R\x04rows\x88\x01\x01\x12\x16\n" +
+	"\x06binary\x18\x06 \x01(\bR\x06binaryB\b\n" +
+	"\x06_shellB\b\n" +
+	"\x06_labelB\a\n" +
 	"\x05_colsB\a\n" +
 	"\x05_rows\"\xe1\x01\n" +
 	"\x0eWtWatchRequest\x121\n" +

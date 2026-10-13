@@ -5,6 +5,9 @@
 package services
 
 import (
+	"fmt"
+	"os"
+
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -64,4 +67,39 @@ func ScriptRunEventToProto(e types.ScriptRunEvent) (*consolev1.ScriptRunEvent, s
 			Status: &consolev1.ScriptStatusEvent{Status: string(e.Status)},
 		}}, "status"
 	}
+}
+
+// ResolveTerminalSpawnParams validates and defaults terminal spawn params,
+// shared by the WS and WT transports so both enforce identical bounds.
+// Non-positive cols/rows select the 80x24 default; the binary flag selects
+// tag-byte binary output.
+func ResolveTerminalSpawnParams(cwd, shell, label string, cols, rows int, binary bool) (types.TerminalSpawnParams, error) {
+	if len(cwd) > 4096 {
+		return types.TerminalSpawnParams{}, fmt.Errorf("cwd too long")
+	}
+	if cwd == "" {
+		var err error
+		if cwd, err = os.Getwd(); err != nil {
+			return types.TerminalSpawnParams{}, err
+		}
+	}
+	if len(shell) > 1024 {
+		return types.TerminalSpawnParams{}, fmt.Errorf("shell path too long")
+	}
+	if len(label) > 256 {
+		return types.TerminalSpawnParams{}, fmt.Errorf("label too long")
+	}
+	if cols <= 0 {
+		cols = 80
+	}
+	if rows <= 0 {
+		rows = 24
+	}
+	return types.TerminalSpawnParams{
+		Cwd: cwd, Shell: shell,
+		Cols:   min(max(cols, 1), 500),
+		Rows:   min(max(rows, 1), 200),
+		Label:  label,
+		Binary: binary,
+	}, nil
 }

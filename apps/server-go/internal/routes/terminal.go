@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"strconv"
 	"sync"
 
@@ -242,32 +241,14 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 }
 
 func parseSpawnParams(cwd, shell, label, cols, rows, proto string) (types.TerminalSpawnParams, error) {
-	if len(cwd) > 4096 {
-		return types.TerminalSpawnParams{}, fmt.Errorf("cwd too long")
-	}
-	if cwd == "" {
-		var err error
-		if cwd, err = os.Getwd(); err != nil {
-			return types.TerminalSpawnParams{}, err
-		}
-	}
-	if len(shell) > 1024 {
-		return types.TerminalSpawnParams{}, fmt.Errorf("shell path too long")
-	}
-	if len(label) > 256 {
-		return types.TerminalSpawnParams{}, fmt.Errorf("label too long")
-	}
 	if proto != "" && proto != "binary" {
 		return types.TerminalSpawnParams{}, fmt.Errorf("Unsupported proto: %s", proto)
 	}
-	return types.TerminalSpawnParams{
-		Cwd:    cwd,
-		Shell:  shell,
-		Cols:   clampInt(parseIntDefault(cols, 80), 1, 500),
-		Rows:   clampInt(parseIntDefault(rows, 24), 1, 200),
-		Label:  label,
-		Binary: proto == "binary",
-	}, nil
+	return services.ResolveTerminalSpawnParams(
+		cwd, shell, label,
+		parseIntDefault(cols, 80), parseIntDefault(rows, 24),
+		proto == "binary",
+	)
 }
 
 func parseIntDefault(v string, fallback int) int {
