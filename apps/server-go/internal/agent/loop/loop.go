@@ -75,6 +75,9 @@ const (
 	EventSubagentStart    EventKind = "subagentStart"
 	EventSubagentActivity EventKind = "subagentActivity"
 	EventSubagentEnd      EventKind = "subagentEnd"
+	// EventBackgroundWork carries a session-owned detached work lifecycle
+	// callback. The payload is a services.BackgroundWorkEvent.
+	EventBackgroundWork EventKind = "backgroundWork"
 	// Wire-structure markers. The run service broadcasts these around the
 	// raw provider stream so the SSE layer can emit the desktop event
 	// vocabulary (sessionStart/turnStart/modelStream*/toolExecution*/turnEnd/

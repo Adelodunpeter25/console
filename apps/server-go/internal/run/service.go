@@ -54,19 +54,20 @@ type activeRun struct {
 // Service coordinates agent runs: one active run per session, abort, and
 // hub lookup for attaching streams.
 type Service struct {
-	mu        sync.Mutex
-	active    map[string]*activeRun
-	pending   map[string]Prompt
-	sessions  *services.SessionService
-	decisions *Decisions
-	notify    *services.NotificationService
-	memories  *memory.Registry
-	bashJobs  *services.BashJobManager
-	ports     *services.PortRegistry
-	scripts   *services.ProjectScriptsService
-	mcp       *mcp.Manager
-	prompts   promptCache
-	groups    toolGroups
+	mu         sync.Mutex
+	active     map[string]*activeRun
+	pending    map[string]Prompt
+	sessions   *services.SessionService
+	decisions  *Decisions
+	notify     *services.NotificationService
+	memories   *memory.Registry
+	bashJobs   *services.BashJobManager
+	background *services.BackgroundWorkManager
+	ports      *services.PortRegistry
+	scripts    *services.ProjectScriptsService
+	mcp        *mcp.Manager
+	prompts    promptCache
+	groups     toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
@@ -92,7 +93,15 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), background: services.NewBackgroundWorkManager()}
+	s.background.SetListener(func(event services.BackgroundWorkEvent) {
+		s.mu.Lock()
+		ar := s.active[event.Work.SessionID]
+		s.mu.Unlock()
+		if ar != nil {
+			ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
+		}
+	})
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
 		// A pending question/approval pauses the run until the user
@@ -133,7 +142,27 @@ func (s *Service) memoryRegistry() *memory.Registry {
 func (s *Service) SetBashJobs(j *services.BashJobManager) {
 	s.mu.Lock()
 	s.bashJobs = j
+	work := s.background
 	s.mu.Unlock()
+	if j != nil && work != nil {
+		j.SetBackgroundWorkManager(work)
+	}
+}
+
+func (s *Service) SetBackgroundWorkManager(work *services.BackgroundWorkManager) {
+	s.mu.Lock()
+	s.background = work
+	jobs := s.bashJobs
+	s.mu.Unlock()
+	if jobs != nil {
+		jobs.SetBackgroundWorkManager(work)
+	}
+}
+
+func (s *Service) BackgroundWorkManager() *services.BackgroundWorkManager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.background
 }
 
 func (s *Service) bashJobManager() *services.BashJobManager {

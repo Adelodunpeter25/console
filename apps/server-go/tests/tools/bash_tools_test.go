@@ -64,6 +64,7 @@ func TestBashBackgroundDisabledWithoutManager(t *testing.T) {
 
 func TestBashJobLifecycle(t *testing.T) {
 	jobs := services.NewBashJobManager(nil)
+	jobs.SetBackgroundWorkManager(services.NewBackgroundWorkManager())
 	bash := tools.NewBashTool(jobs, "sess1")
 	bashJob := tools.NewBashJobTool(jobs, "sess1")
 
@@ -75,7 +76,7 @@ func TestBashJobLifecycle(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	startStr := resultText(t, startOut)
-	if !strings.Contains(startStr, "Started: job_") {
+	if !strings.Contains(startStr, "Started: job_") || !strings.Contains(startStr, "Background work: work_") {
 		t.Fatalf("start output: %v", startOut)
 	}
 	jobID := strings.TrimPrefix(strings.SplitN(startStr, "\n", 2)[0], "Started: ")

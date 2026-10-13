@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -307,6 +308,28 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		return streamSSE(c, func(sse *sseStream) {
 			pumpHub(sse, hub, since)
 		})
+	})
+
+	// GET /api/sessions/:id/context — estimated context-window occupancy
+	// for the footer ring. Served from the per-session cache when the
+	// message count hasn't moved; recomputed otherwise.
+	app.Get("/api/sessions/:id/background-work", func(c *fiber.Ctx) error {
+		items := runs.BackgroundWorkManager().List(c.Params("id"))
+		return c.JSON(fiber.Map{"success": true, "data": items})
+	})
+	app.Get("/api/sessions/:id/background-work/:workId", func(c *fiber.Ctx) error {
+		item, err := runs.BackgroundWorkManager().Get(c.Params("workId"), c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": item})
+	})
+	app.Post("/api/sessions/:id/background-work/:workId/cancel", func(c *fiber.Ctx) error {
+		item, err := runs.BackgroundWorkManager().Cancel(c.Params("workId"), c.Params("id"))
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": item})
 	})
 
 	// GET /api/sessions/:id/context — estimated context-window occupancy
@@ -723,6 +746,15 @@ func wireFrame(e loop.Event) (string, any, bool) {
 		return "todoUpdate", fiber.Map{"type": "todoUpdate", "items": data, "action": e.Action}, false
 	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
 		return SubagentFrame(e)
+	case loop.EventBackgroundWork:
+		work, ok := e.Message.(services.BackgroundWorkEvent)
+		if !ok {
+			return "", nil, true
+		}
+		return "backgroundWork" + string(work.Type), fiber.Map{
+			"type": string(work.Type),
+			"work": work,
+		}, false
 	case loop.EventError:
 		raw, err := protoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})
 		if err != nil {

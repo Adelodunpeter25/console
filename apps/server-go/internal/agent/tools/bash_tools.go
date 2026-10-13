@@ -19,11 +19,13 @@ const (
 )
 
 type bashInput struct {
-	Command    string            `json:"command" jsonschema:"required,description=Shell command to execute"`
-	Cwd        string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
-	TimeoutMs  int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
-	Env        map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
-	Background bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. Poll with bashJob (status/output/wait/kill). The start response is NOT an exit result."`
+	Command      string            `json:"command" jsonschema:"required,description=Shell command to execute"`
+	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
+	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
+	Env          map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
+	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. Poll with bashJob (status/output/wait/kill). The start response is NOT an exit result."`
+	ParentRunID  string            `json:"-"`
+	ParentCallID string            `json:"-"`
 }
 
 func truncateOutput(output string, maxBytes int, label string) string {
@@ -82,9 +84,13 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 				if err != nil {
 					return nil, NewToolError("%v", err)
 				}
+				workLine := ""
+				if snap.WorkID != "" {
+					workLine = fmt.Sprintf("\nBackground work: %s", snap.WorkID)
+				}
 				return textResult(fmt.Sprintf(
-					"Started: %s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
-					snap.JobID, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
+					"Started: %s%s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
+					snap.JobID, workLine, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
 				)), nil
 			}
 
