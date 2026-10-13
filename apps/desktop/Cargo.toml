@@ -42,6 +42,7 @@ pbjson = "0.9"
 pbjson-build = "0.9"
 protoc-bin-vendored = "3.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+wtransport = "0.7"
 futures-util = "0.3"
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
