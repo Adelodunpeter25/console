@@ -46,6 +46,7 @@ type Prompt struct {
 }
 
 type activeRun struct {
+	runID  string
 	hub    *Hub
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -267,6 +268,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	hub := NewHub()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	runID := "run_" + randomHex(16)
 	s.mu.Lock()
 	// Re-check under lock: a concurrent StartRun may have won the race.
 	if _, ok := s.active[sessionID]; ok {
@@ -274,10 +276,10 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 		cancel()
 		return nil, ErrActive
 	}
-	s.active[sessionID] = &activeRun{hub: hub, cancel: cancel, done: done}
+	s.active[sessionID] = &activeRun{runID: runID, hub: hub, cancel: cancel, done: done}
 	s.mu.Unlock()
 
-	go s.execute(ctx, sessionID, dto, firstProvider, providerID, hub, done)
+	go s.execute(ctx, sessionID, runID, dto, firstProvider, providerID, hub, done)
 	go s.watchRun(sessionID, hub, done)
 	return hub, nil
 }
@@ -294,6 +296,9 @@ func (s *Service) Abort(sessionID string) bool {
 	s.decisions.RejectAllForSession(sessionID, "Run aborted")
 	if jobs := s.bashJobManager(); jobs != nil {
 		jobs.KillOwnedBy(sessionID)
+	}
+	if work := s.BackgroundWorkManager(); work != nil {
+		work.CancelOwnedBy(sessionID)
 	}
 	slog.Info("run aborted", "session", sessionID)
 	return true

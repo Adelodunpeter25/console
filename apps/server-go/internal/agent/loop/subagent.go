@@ -7,11 +7,13 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // SubagentContext wires a subagent tool run. A nil context yields the
@@ -45,6 +47,11 @@ type SubagentContext struct {
 	OnEvent func(Event)
 	// Usage, when set, receives each finished subagent run's token usage.
 	Usage *UsageTracker
+	// BackgroundWork, when set, registers detached subagent runs and queues
+	// their terminal summaries without blocking the parent tool call.
+	BackgroundWork *services.BackgroundWorkManager
+	SessionID      string
+	ParentRunID    string
 }
 
 // SubagentStartInfo opens a subagent run.
@@ -79,9 +86,10 @@ type SubagentEndInfo struct {
 }
 
 type subagentInput struct {
-	Prompt string `json:"prompt" jsonschema:"required,description=Clear, actionable task description for the subagent"`
-	Name   string `json:"name" jsonschema:"required,description=Name or identifier for the subagent to help differentiate it from other instances"`
-	Role   string `json:"role,omitempty" jsonschema:"description=Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"`
+	Prompt     string `json:"prompt" jsonschema:"required,description=Clear, actionable task description for the subagent"`
+	Name       string `json:"name" jsonschema:"required,description=Name or identifier for the subagent to help differentiate it from other instances"`
+	Role       string `json:"role,omitempty" jsonschema:"description=Role or job title for the subagent (e.g. 'Codebase Inspector', 'Test Runner')"`
+	Background bool   `json:"background,omitempty" jsonschema:"description=Start the subagent in the background and continue immediately. The result is delivered when the parent is ready for a later model turn."`
 }
 
 // NewSubagentTool builds the "subagent" tool. With a nil context it
@@ -121,7 +129,50 @@ func (t *subagentTool) ExecuteCall(ctx context.Context, call tools.ToolCall) (an
 	if t.context == nil {
 		return textResult(fmt.Sprintf("Subagent [%s] simulated run for: %q\n(No active provider attached to task tool context)", displayName, in.Prompt)), nil
 	}
+	if in.Background {
+		return t.context.startBackground(ctx, call.ID, in.Prompt, displayName, role)
+	}
 	return t.context.run(ctx, call.ID, in.Prompt, displayName, role)
+}
+
+func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, prompt, name, role string) (any, error) {
+	if c.BackgroundWork == nil || c.SessionID == "" {
+		return nil, tools.NewToolError("Background subagents are not available in this context.")
+	}
+	work, err := c.BackgroundWork.Register(services.BackgroundWorkOptions{
+		SessionID: c.SessionID, ParentRunID: c.ParentRunID, ParentCallID: parentCallID,
+		Kind:     services.BackgroundWorkSubagent,
+		Metadata: map[string]string{"name": name, "role": role},
+	})
+	if err != nil {
+		return nil, tools.NewToolError("Could not start background subagent: %v", err)
+	}
+	childCtx, cancel := context.WithCancel(context.Background())
+	if err := c.BackgroundWork.SetCancel(work.ID, cancel); err != nil {
+		cancel()
+		return nil, tools.NewToolError("Could not start background subagent: %v", err)
+	}
+	go func() {
+		result, runErr := c.run(childCtx, parentCallID, prompt, name, role)
+		status := services.BackgroundWorkCompleted
+		summary := subagentSummary(result)
+		failure := ""
+		if runErr != nil {
+			if errors.Is(childCtx.Err(), context.Canceled) {
+				status = services.BackgroundWorkCancelled
+				failure = "Subagent was cancelled"
+			} else {
+				status = services.BackgroundWorkFailed
+				failure = runErr.Error()
+			}
+			summary = ""
+		}
+		// The nested runner emits detailed lifecycle events. The manager owns
+		// the durable, compact completion callback.
+		_, _ = c.BackgroundWork.Complete(work.ID, c.SessionID, status, summary, failure,
+			map[string]string{"subagent_id": work.ID})
+	}()
+	return textResult(fmt.Sprintf("Started background subagent [%s].\nBackground work: %s\nThe result will be delivered when the parent is ready for a later turn.", name, work.ID)), nil
 }
 
 func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, role string) (any, error) {
@@ -231,6 +282,19 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 // it is unexported across the package boundary).
 func textResult(text string) []map[string]any {
 	return []map[string]any{{"type": "text", "text": text}}
+}
+
+func subagentSummary(result any) string {
+	parts, ok := result.([]map[string]any)
+	if !ok {
+		return "Subagent completed."
+	}
+	for _, part := range parts {
+		if text, ok := part["text"].(string); ok {
+			return strings.TrimSpace(text)
+		}
+	}
+	return "Subagent completed."
 }
 
 func randomSubSession() string {

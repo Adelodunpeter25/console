@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -65,8 +66,9 @@ type BackgroundWorkEvent struct {
 type BackgroundWorkListener func(BackgroundWorkEvent)
 
 type backgroundWorkRecord struct {
-	work   BackgroundWork
-	cancel func()
+	work      BackgroundWork
+	cancel    func()
+	delivered bool
 }
 
 // BackgroundWorkManager owns detached work records and provides a small,
@@ -197,6 +199,23 @@ func (m *BackgroundWorkManager) finish(workID, sessionID string, status Backgrou
 	return work, nil
 }
 
+// CancelOwnedBy cancels every running work item owned by sessionID. It is
+// used when a session run is aborted so detached shells and subagents do not
+// survive the authorization boundary that created them.
+func (m *BackgroundWorkManager) CancelOwnedBy(sessionID string) {
+	m.mu.Lock()
+	ids := make([]string, 0)
+	for id, rec := range m.works {
+		if rec.work.SessionID == sessionID && rec.work.Status == BackgroundWorkRunning {
+			ids = append(ids, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range ids {
+		_, _ = m.Cancel(id, sessionID)
+	}
+}
+
 func (m *BackgroundWorkManager) Get(workID, sessionID string) (BackgroundWork, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -216,6 +235,25 @@ func (m *BackgroundWorkManager) List(sessionID string) []BackgroundWork {
 			out = append(out, cloneWork(rec.work))
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt < out[j].CreatedAt })
+	return out
+}
+
+// TakeCompletions returns terminal work that has not yet been delivered to the
+// parent agent. Claiming is atomic, so a completion appears in at most one
+// later parent turn even if two turns race to start.
+func (m *BackgroundWorkManager) TakeCompletions(sessionID string) []BackgroundWork {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]BackgroundWork, 0)
+	for _, rec := range m.works {
+		if rec.work.SessionID != sessionID || rec.delivered || rec.work.Status == BackgroundWorkRunning {
+			continue
+		}
+		rec.delivered = true
+		out = append(out, cloneWork(rec.work))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].FinishedAt < out[j].FinishedAt })
 	return out
 }
 
