@@ -1,5 +1,7 @@
+use crate::net::WtTls;
 use crate::services::*;
 use crate::utils::HttpTransport;
+use anyhow::Result;
 
 #[derive(Clone)]
 pub struct ConsoleClient {
@@ -52,6 +54,15 @@ impl ConsoleClient {
 
     pub fn terminal_service(&self) -> TerminalService {
         TerminalService::new(self.transport.clone())
+    }
+
+    /// Open a WebTransport session: mints the handshake token, then dials the
+    /// QUIC listener (QUIC migration). Held by the caller for as long as its
+    /// streams live — dropping it closes the connection. `origin` overrides
+    /// the API origin for servers that listen separately, as
+    /// `make dev-server-wt` does.
+    pub async fn connect_wt(&self, origin: Option<&str>, tls: WtTls) -> Result<WtService> {
+        WtService::connect(&self.transport, origin, tls).await
     }
 
     pub async fn set_base_url(&self, url: impl Into<String>) {

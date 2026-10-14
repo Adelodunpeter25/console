@@ -104,3 +104,7 @@ path = "tests/network/wt_frame_test.rs"
 [[test]]
 name = "wt_interop_test"
 path = "tests/network/wt_interop_test.rs"
+
+[[test]]
+name = "wt_service_test"
+path = "tests/network/wt_service_test.rs"

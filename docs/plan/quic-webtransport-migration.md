@@ -18,6 +18,31 @@ forces the SETTINGS bit) but the protocol sends none; no app-level ping
 frames (QUIC keepalive owns liveness); buf's remote plugins are dead, regen
 is local protoc (proven byte-identical for existing files).
 
+Status Oct 2026 (desktop, Phase 4 in progress): transport client done
+(`console-core/src/net/wt_client.rs`: `WtClient`/`WtSession`/`WtStream`, plus
+`WtStreamWriter`/`WtStreamReader` from `WtStream::split` for the bidirectional
+streams — the reader keeps the write half alive so neither half's drop resets
+the other direction); service layer done (`console-core/src/services/wt.rs`:
+`WtService::connect` mints via `AuthService::mint_api_token`, then
+`start_run`/`attach_run` return the same `AgentSessionEvent` stream shape as
+`RunService::stream_prompt`, `spawn_terminal` returns `WtTerminalHandle`, and
+`watch_fs`/`watch_git_status`/`watch_ports`/`watch_notifications`/
+`watch_script_run` mirror the SSE watch methods one for one; reachable as
+`ConsoleClient::connect_wt`). GPUI marshaling in `apps/desktop/src` and the
+`wt` vs `legacy` hard switch are the remaining Phase 4 work. Verified live
+against the Go server by `tests/network/wt_interop_test.rs` (env-gated) and
+offline by `tests/network/wt_service_test.rs`.
+
+Two findings worth keeping:
+* Desktop cert pinning (wtransport `ServerHashVerification`) accepts only
+  **EC P-256** keys with **≤14-day** validity, so `make dev-server-wt` generates
+  `prime256v1`/`-days 13`; the earlier RSA/825-day recipe was unusable and the
+  Makefile regenerates expired dev certs.
+* `pbjson`'s serde impl ignores unknown fields, so decoding a wrapped payload
+  (`TerminalServerMessage`) into its inner type (`TerminalOutput`) succeeds with
+  empty data instead of failing. Terminal frames are always unwrapped in
+  `terminal_event`, with a regression test.
+
 Current baseline (locations by symbol, not line number — numbers rotted
 twice already; re-verified against the tree Oct 2026):
 
@@ -344,7 +369,12 @@ GPUI constraint: the render loop must never `.await` network.
    Android. Cache the decision for the session. Make sure racing cannot
    double-spawn: the WT probe must be a bare handshake, and the real connect
    happens only on the winning branch.
-5. TLS: `rustls-native-roots`, plus mkcert root loading for local dev.
+   **Deferred (agreed Oct 2026):** desktop ships a hard `wt` vs `legacy` switch
+   first and races nothing until WT has survived daily driving with real
+   failure data. The above moves to Phase 5 with the mobile `auto` path.
+5. TLS: `rustls-native-roots`, plus mkcert root loading for local dev. For the
+   self-signed `make dev-server-wt` cert, `WtTls::PinnedHashes` (SHA-256 of the
+   DER) — which is why the dev cert must be EC P-256 with ≤14-day validity.
 
 ### Phase 5 — TCP fallback / firewall traversal
 

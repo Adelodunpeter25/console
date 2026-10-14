@@ -17,6 +17,7 @@ pub mod session;
 pub mod settings;
 pub mod terminal;
 pub mod usage;
+pub mod wt;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
@@ -40,3 +41,4 @@ pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;
 pub use usage::UsageService;
+pub use wt::{WtService, WtTerminalEvent, WtTerminalHandle};

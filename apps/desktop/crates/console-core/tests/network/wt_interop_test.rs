@@ -15,6 +15,10 @@
 //! Absent env skips every case so plain `cargo test` stays green.
 
 use console_core::net::{WtClient, WtSession, WtStreamKind, WtTls};
+use console_core::services::WtService;
+use console_core::types::{AgentSessionEvent, RunPromptDto, TerminalSpawnParams};
+use console_core::utils::HttpTransport;
+use futures_util::StreamExt;
 use std::time::Duration;
 
 struct LiveConfig {
@@ -43,13 +47,15 @@ fn live_config() -> Option<LiveConfig> {
 }
 
 fn skipped(test: &str) -> Option<WtSession> {
-    eprintln!("skipped {test}: set WT_TEST_BASE_URL/WT_TEST_TOKEN/WT_TEST_CERT_HASH for live WT interop");
+    eprintln!(
+        "skipped {test}: set WT_TEST_BASE_URL/WT_TEST_TOKEN/WT_TEST_CERT_HASH for live WT interop"
+    );
     None
 }
 
 async fn live_session(test: &str) -> Option<WtSession> {
     let Some(cfg) = live_config() else {
-        eprintln!("skipped {test}: set WT_TEST_BASE_URL/WT_TEST_TOKEN/WT_TEST_CERT_HASH for live WT interop");
+        skipped(test);
         return None;
     };
     Some(
@@ -60,6 +66,27 @@ async fn live_session(test: &str) -> Option<WtSession> {
         )
         .await
         .expect("live WT connect failed"),
+    )
+}
+
+/// Connect the service layer the way the app does: mint its own token over
+/// the API origin (`WT_TEST_API_URL`) and dial the WT origin. Needs all four
+/// env vars; the API origin is what proves token minting end to end.
+async fn live_service(test: &str) -> Option<WtService> {
+    let Some(cfg) = live_config() else {
+        skipped(test);
+        return None;
+    };
+    let api_url = std::env::var("WT_TEST_API_URL").ok()?;
+    let transport = HttpTransport::new(Some(api_url));
+    Some(
+        WtService::connect(
+            &transport,
+            Some(&cfg.base_url),
+            WtTls::PinnedHashes(vec![cfg.cert_hash]),
+        )
+        .await
+        .expect("live WtService::connect failed"),
     )
 }
 
@@ -116,17 +143,14 @@ async fn chat_start_requires_prompt() {
         .expect("open chat stream");
     let req = console_proto::WtChatRunRequest {
         session_id: "wt-interop-nope".into(),
-        request: Some(
-            console_proto::wt_chat_run_request::Request::Start(
-                console_proto::WtChatRunStart {
-                    text: "  ".into(),
-                    ..Default::default()
-                },
-            ),
-        ),
+        request: Some(console_proto::wt_chat_run_request::Request::Start(
+            console_proto::WtChatRunStart {
+                text: "  ".into(),
+                ..Default::default()
+            },
+        )),
     };
-    let payload =
-        serde_json::to_vec(&req).expect("protojson chat start request");
+    let payload = serde_json::to_vec(&req).expect("protojson chat start request");
     send_request(&mut stream, "start", payload)
         .await
         .expect("send start");
@@ -157,8 +181,7 @@ async fn terminal_spawn_and_kill() {
         shell: Some("/bin/sh".into()),
         ..Default::default()
     };
-    let payload =
-        serde_json::to_vec(&req).expect("protojson spawn request");
+    let payload = serde_json::to_vec(&req).expect("protojson spawn request");
     send_request(&mut stream, "spawn", payload)
         .await
         .expect("send spawn");
@@ -181,10 +204,7 @@ async fn terminal_spawn_and_kill() {
     let end = next_frame_timeout(&mut stream, 15)
         .await
         .expect("read close");
-    assert!(
-        end.is_none(),
-        "killed terminal closes the stream cleanly"
-    );
+    assert!(end.is_none(), "killed terminal closes the stream cleanly");
 }
 
 #[tokio::test]
@@ -201,8 +221,7 @@ async fn ports_watch_snapshot() {
         target: console_proto::WtWatchTarget::Ports as i32,
         ..Default::default()
     };
-    let payload =
-        serde_json::to_vec(&req).expect("protojson watch request");
+    let payload = serde_json::to_vec(&req).expect("protojson watch request");
     send_request(&mut stream, "watch", payload)
         .await
         .expect("send watch");
@@ -216,5 +235,228 @@ async fn ports_watch_snapshot() {
     assert!(
         snapshot.is_array(),
         "ports snapshot decodes as an array: {snapshot}"
+    );
+}
+
+// ── Service layer: mint + dial + typed decode, as the app does it ────────
+
+/// First stream item, bounded so a server that never answers fails instead
+/// of hanging the suite.
+async fn first_item<S, T>(mut stream: S) -> Result<T, String>
+where
+    S: futures_util::Stream<Item = anyhow::Result<T>> + Unpin,
+{
+    match tokio::time::timeout(Duration::from_secs(15), stream.next()).await {
+        Ok(Some(Ok(item))) => Ok(item),
+        Ok(Some(Err(error))) => Err(format!("{error:#}")),
+        Ok(None) => Err("stream ended without an item".into()),
+        Err(_) => Err("timed out waiting for a stream item".into()),
+    }
+}
+
+#[tokio::test]
+async fn service_start_run_rejects_unknown_session() {
+    let Some(service) = live_service("service_start_run_rejects_unknown_session").await else {
+        skipped("service_start_run_rejects_unknown_session");
+        return;
+    };
+    let prompt = RunPromptDto {
+        prompt: "hello".into(),
+        context_files: None,
+        model_id: None,
+        provider: None,
+        approval_mode: None,
+        thinking_level: None,
+        attachments: None,
+    };
+    let events = service
+        .start_run("wt-interop-missing-session", &prompt)
+        .await
+        .expect("start_run opens the stream");
+    let error = first_item(events)
+        .await
+        .err()
+        .expect("unknown session answers an error frame");
+    assert!(
+        error.contains("not found"),
+        "error says the session is missing: {error}"
+    );
+}
+
+#[tokio::test]
+async fn service_attach_run_without_active_run_errors() {
+    let Some(service) = live_service("service_attach_run_without_active_run_errors").await else {
+        skipped("service_attach_run_without_active_run_errors");
+        return;
+    };
+    let events = service
+        .attach_run("wt-interop-nope", None)
+        .await
+        .expect("attach_run opens the stream");
+    let error = first_item(events)
+        .await
+        .err()
+        .expect("attaching to a dead run answers an error frame");
+    assert!(
+        error.contains("No active run"),
+        "error explains there is no run: {error}"
+    );
+}
+
+#[tokio::test]
+async fn service_start_run_rejects_blank_prompt() {
+    let Some(service) = live_service("service_start_run_rejects_blank_prompt").await else {
+        skipped("service_start_run_rejects_blank_prompt");
+        return;
+    };
+    let prompt = RunPromptDto {
+        prompt: "   ".into(),
+        context_files: None,
+        model_id: None,
+        provider: None,
+        approval_mode: None,
+        thinking_level: None,
+        attachments: None,
+    };
+    let events = service
+        .start_run("wt-interop-nope", &prompt)
+        .await
+        .expect("start_run opens the stream");
+    let error = first_item::<_, AgentSessionEvent>(events)
+        .await
+        .err()
+        .expect("blank prompt answers an error frame");
+    assert!(
+        error.contains("prompt"),
+        "error names the missing prompt: {error}"
+    );
+}
+
+/// Next terminal event, bounded so a server that stops answering fails the
+/// case instead of hanging the suite.
+async fn next_terminal_event(
+    terminal: &mut console_core::services::WtTerminalHandle,
+) -> Result<Option<console_core::services::WtTerminalEvent>, String> {
+    match tokio::time::timeout(Duration::from_secs(15), terminal.next_event()).await {
+        Ok(Ok(event)) => Ok(event),
+        Ok(Err(error)) => Err(format!("{error:#}")),
+        Err(_) => Err("timed out waiting for a terminal event".into()),
+    }
+}
+
+#[tokio::test]
+async fn service_terminal_round_trip() {
+    let Some(service) = live_service("service_terminal_round_trip").await else {
+        skipped("service_terminal_round_trip");
+        return;
+    };
+    let params = TerminalSpawnParams {
+        cwd: std::env::temp_dir().to_string_lossy().into_owned(),
+        shell: Some("/bin/sh".into()),
+        ..Default::default()
+    };
+    let mut terminal = service
+        .spawn_terminal(&params, false)
+        .await
+        .expect("spawn_terminal opens the stream");
+
+    let spawned = next_terminal_event(&mut terminal)
+        .await
+        .expect("read spawned within 15s")
+        .expect("spawned event");
+    let id = match spawned {
+        console_core::services::WtTerminalEvent::Spawned(spawned) => spawned.id,
+        other => panic!("first event must be spawned, got {other:?}"),
+    };
+    assert!(!id.is_empty(), "spawned carries a terminal id");
+
+    terminal
+        .send_input(b"echo wt-ok\n")
+        .await
+        .expect("send input");
+    terminal.resize(100, 30).await.expect("resize");
+
+    // The echoed command proves input, resize and output all crossed the
+    // stream; the end of stream proves kill reaped the PTY.
+    let mut saw_output = false;
+    for _ in 0..20 {
+        match next_terminal_event(&mut terminal)
+            .await
+            .expect("read terminal event within 15s")
+        {
+            Some(console_core::services::WtTerminalEvent::Output(output)) => {
+                if output.data.contains("wt-ok") {
+                    saw_output = true;
+                    break;
+                }
+            }
+            Some(console_core::services::WtTerminalEvent::Error(error)) => {
+                panic!("terminal error: {error}")
+            }
+            Some(_) => continue,
+            None => break,
+        }
+    }
+    assert!(saw_output, "terminal echoes the input it received");
+
+    terminal.kill().await.expect("kill");
+    let mut saw_end = false;
+    for _ in 0..10 {
+        match next_terminal_event(&mut terminal)
+            .await
+            .expect("read terminal event within 15s")
+        {
+            Some(console_core::services::WtTerminalEvent::Exit(exit)) => {
+                assert!(exit.code.is_some(), "exit always carries a code");
+                saw_end = true;
+                break;
+            }
+            Some(console_core::services::WtTerminalEvent::Error(error)) => {
+                panic!("terminal error: {error}")
+            }
+            Some(_) => continue,
+            None => {
+                saw_end = true;
+                break;
+            }
+        }
+    }
+    assert!(saw_end, "killed terminal ends the stream");
+}
+
+#[tokio::test]
+async fn service_watch_ports_snapshot_decodes() {
+    let Some(service) = live_service("service_watch_ports_snapshot_decodes").await else {
+        skipped("service_watch_ports_snapshot_decodes");
+        return;
+    };
+    let mut ports = service
+        .watch_ports(None)
+        .await
+        .expect("watch_ports opens the stream");
+    let snapshot = first_item(&mut ports)
+        .await
+        .expect("ports watch sends a snapshot first");
+    // Nothing may be listening, so only the decode itself is asserted.
+    let _ = snapshot;
+}
+
+#[tokio::test]
+async fn service_watch_fs_requires_path() {
+    let Some(service) = live_service("service_watch_fs_requires_path").await else {
+        skipped("service_watch_fs_requires_path");
+        return;
+    };
+    let mut events = service
+        .watch_fs("")
+        .await
+        .expect("watch_fs opens the stream");
+    let error = first_item(&mut events)
+        .await
+        .err()
+        .expect("blank path answers an error frame");
+    assert!(
+        error.contains("path"),
+        "error names the missing path: {error}"
     );
 }

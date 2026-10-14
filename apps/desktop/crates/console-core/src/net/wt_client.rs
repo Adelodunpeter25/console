@@ -6,6 +6,9 @@
 //! body bytes, so only framing is new.
 
 use anyhow::{Context, Result};
+use serde::de::DeserializeOwned;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use wtransport::{ClientConfig, Endpoint, endpoint::ConnectOptions, endpoint::endpoint_side};
 
 /// Stream kinds: numeric values must match `console.v1.WtStreamKind`.
@@ -21,6 +24,7 @@ pub enum WtStreamKind {
 /// TLS trust: platform roots, or pinned server-cert hashes for dev servers
 /// (self-signed `make dev-server-wt` certs). Hashes are raw SHA-256 bytes;
 /// print the dev cert's with `openssl x509 -fingerprint -sha256 -noout`.
+#[derive(Clone, Debug)]
 pub enum WtTls {
     Native,
     PinnedHashes(Vec<[u8; 32]>),
@@ -88,8 +92,7 @@ pub fn encode_stream_header(kind: WtStreamKind, id: &str) -> Result<Vec<u8>> {
 
 /// Encoded `[u32BE len][protojson]` frame.
 pub fn encode_wt_frame(frame: &console_proto::WtFrame) -> Result<Vec<u8>> {
-    let body =
-        serde_json::to_vec(frame).context("Failed to encode WT frame payload")?;
+    let body = serde_json::to_vec(frame).context("Failed to encode WT frame payload")?;
     if body.len() > WT_MAX_FRAME_BYTES {
         anyhow::bail!(
             "WT frame of {} bytes exceeds the {}-byte cap.",
@@ -116,8 +119,8 @@ pub fn decode_wt_frame(buf: &[u8]) -> Result<Option<(console_proto::WtFrame, usi
     if buf.len() < 4 + len {
         return Ok(None);
     }
-    let frame: console_proto::WtFrame = serde_json::from_slice(&buf[4..4 + len])
-        .context("Failed to decode WT frame payload")?;
+    let frame: console_proto::WtFrame =
+        serde_json::from_slice(&buf[4..4 + len]).context("Failed to decode WT frame payload")?;
     Ok(Some((frame, 4 + len)))
 }
 
@@ -159,8 +162,7 @@ impl WtClient {
                     .build()
             }
         };
-        let endpoint =
-            Endpoint::client(config).context("Failed to create QUIC endpoint")?;
+        let endpoint = Endpoint::client(config).context("Failed to create QUIC endpoint")?;
         let url = format!(
             "{}/wt/v1/connect?token={}",
             base_url.trim_end_matches('/'),
@@ -188,8 +190,7 @@ impl WtSession {
             .await
             .context("Failed to open WT stream")?;
         let header = encode_stream_header(kind, id)?;
-        send
-            .write_all(&header)
+        send.write_all(&header)
             .await
             .context("Failed to write WT stream header")?;
         Ok(WtStream {
@@ -197,6 +198,30 @@ impl WtSession {
             recv,
             pending: Vec::new(),
         })
+    }
+
+    /// Open a stream and send the single request frame that configures it.
+    ///
+    /// Chat runs and watches never write again, so they drop the write half
+    /// here — the read half keeps the QUIC stream alive. Terminals and
+    /// tunnels keep both.
+    pub async fn open_stream_with_request(
+        &self,
+        kind: WtStreamKind,
+        id: &str,
+        frame_type: &str,
+        payload: Vec<u8>,
+    ) -> Result<(WtStreamWriter, WtStreamReader)> {
+        let stream = self.open_stream(kind, id).await?;
+        let (writer, reader) = stream.split();
+        writer
+            .send_frame(&console_proto::WtFrame {
+                seq: 0,
+                r#type: frame_type.into(),
+                payload,
+            })
+            .await?;
+        Ok((writer, reader))
     }
 
     /// Close the session (all streams unwind on the same cause).
@@ -220,23 +245,30 @@ impl WtStream {
     /// Next frame, or `None` on clean FIN with no partial data. Errors on
     /// truncation mid-frame (peer died mid-write).
     pub async fn next_frame(&mut self) -> Result<Option<console_proto::WtFrame>> {
-        loop {
-            if let Some((frame, consumed)) = decode_wt_frame(&self.pending)? {
-                self.pending.drain(..consumed);
-                return Ok(Some(frame));
-            }
-            let mut chunk = [0u8; 8192];
-            match self.recv.read(&mut chunk).await {
-                Ok(Some(0)) | Ok(None) => {
-                    if self.pending.is_empty() {
-                        return Ok(None);
-                    }
-                    anyhow::bail!("WT stream ended mid-frame.");
-                }
-                Ok(Some(n)) => self.pending.extend_from_slice(&chunk[..n]),
-                Err(error) => anyhow::bail!("WT stream read failed: {error:?}"),
-            }
-        }
+        read_frame(&mut self.recv, &mut self.pending).await
+    }
+
+    /// Split into independent read/write halves, for bidirectional streams
+    /// (terminal, tunnel) where input is written while output is read.
+    ///
+    /// The reader keeps the write half alive: dropping a QUIC stream half
+    /// sends `STOP_SENDING`/`RESET_STREAM`, which would tear down the other
+    /// direction while it is still in use.
+    pub fn split(self) -> (WtStreamWriter, WtStreamReader) {
+        let WtStream {
+            send,
+            recv,
+            pending,
+        } = self;
+        let send = Arc::new(Mutex::new(send));
+        (
+            WtStreamWriter { send: send.clone() },
+            WtStreamReader {
+                recv,
+                pending,
+                _send: send,
+            },
+        )
     }
 
     /// Raw write for byte-pipe streams (tunnel). No framing.
@@ -263,5 +295,134 @@ impl WtStream {
             .await
             .context("Failed to finish WT stream")?;
         Ok(())
+    }
+}
+
+/// Reassembly loop shared by both read halves: frames coalesce on the wire,
+/// so reads rarely align to frame boundaries.
+async fn read_frame(
+    recv: &mut wtransport::RecvStream,
+    pending: &mut Vec<u8>,
+) -> Result<Option<console_proto::WtFrame>> {
+    loop {
+        if let Some((frame, consumed)) = decode_wt_frame(pending)? {
+            pending.drain(..consumed);
+            return Ok(Some(frame));
+        }
+        let mut chunk = [0u8; 8192];
+        match recv.read(&mut chunk).await {
+            Ok(Some(0)) | Ok(None) => {
+                if pending.is_empty() {
+                    return Ok(None);
+                }
+                anyhow::bail!("WT stream ended mid-frame.");
+            }
+            Ok(Some(n)) => pending.extend_from_slice(&chunk[..n]),
+            Err(error) => anyhow::bail!("WT stream read failed: {error:?}"),
+        }
+    }
+}
+
+/// Write half of a split stream. Cheap to clone: every clone shares the one
+/// QUIC send stream, which the mutex serializes exactly like the server's
+/// `streamWriter`.
+#[derive(Clone)]
+pub struct WtStreamWriter {
+    send: Arc<Mutex<wtransport::SendStream>>,
+}
+
+impl WtStreamWriter {
+    /// Send one length-prefixed frame.
+    pub async fn send_frame(&self, frame: &console_proto::WtFrame) -> Result<()> {
+        let raw = encode_wt_frame(frame)?;
+        let mut send = self.send.lock().await;
+        send.write_all(&raw)
+            .await
+            .context("Failed to write WT frame")?;
+        Ok(())
+    }
+
+    /// Raw write for byte-pipe streams (tunnel, PTY input). No framing.
+    pub async fn write_raw(&self, buf: &[u8]) -> Result<()> {
+        let mut send = self.send.lock().await;
+        send.write_all(buf)
+            .await
+            .context("Failed to write WT stream bytes")?;
+        Ok(())
+    }
+
+    /// Graceful write-side close.
+    pub async fn finish(&self) -> Result<()> {
+        let mut send = self.send.lock().await;
+        send.finish().await.context("Failed to finish WT stream")?;
+        Ok(())
+    }
+}
+
+/// Read half of a split stream, with typed accessors for the SSE-identical
+/// payloads. `next_event` filters by the frame's event name (the SSE `event:`
+/// line equivalent); error frames surface as errors whichever name is asked
+/// for, because the server answers them instead of the requested payload.
+pub struct WtStreamReader {
+    recv: wtransport::RecvStream,
+    pending: Vec<u8>,
+    /// Keeps the write half alive; never read.
+    _send: Arc<Mutex<wtransport::SendStream>>,
+}
+
+impl WtStreamReader {
+    /// Next frame, or `None` on clean end of stream.
+    pub async fn next_frame(&mut self) -> Result<Option<console_proto::WtFrame>> {
+        read_frame(&mut self.recv, &mut self.pending).await
+    }
+
+    /// Next frame payload decoded as `T`, whatever its name. `Ok(None)` at
+    /// end of stream.
+    pub async fn next_payload<T: DeserializeOwned>(&mut self) -> Result<Option<T>> {
+        let Some(frame) = self.next_frame().await? else {
+            return Ok(None);
+        };
+        if frame.r#type == "error" {
+            anyhow::bail!("{}", error_frame_message(&frame.payload));
+        }
+        let value = serde_json::from_slice(&frame.payload)
+            .with_context(|| format!("Failed to decode WT {} frame", frame.r#type))?;
+        Ok(Some(value))
+    }
+
+    /// Next frame named `event`, decoded as `T`. Frames with other names are
+    /// skipped (mirrors the SSE consumers' event filter).
+    pub async fn next_event<T: DeserializeOwned>(&mut self, event: &str) -> Result<Option<T>> {
+        loop {
+            let Some(frame) = self.next_frame().await? else {
+                return Ok(None);
+            };
+            if frame.r#type == "error" {
+                anyhow::bail!("{}", error_frame_message(&frame.payload));
+            }
+            if frame.r#type != event {
+                continue;
+            }
+            let value = serde_json::from_slice(&frame.payload)
+                .with_context(|| format!("Failed to decode WT {event} frame"))?;
+            return Ok(Some(value));
+        }
+    }
+
+    /// Raw read for byte-pipe streams. `None` on clean FIN.
+    pub async fn read_raw(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+        match self.recv.read(buf).await {
+            Ok(n) => Ok(n),
+            Err(error) => anyhow::bail!("WT stream read failed: {error:?}"),
+        }
+    }
+}
+
+/// Error frames carry a protojson `ErrorPayload`; fall back to the raw bytes
+/// so a malformed payload still surfaces something readable.
+fn error_frame_message(payload: &[u8]) -> String {
+    match serde_json::from_slice::<console_proto::ErrorPayload>(payload) {
+        Ok(error) => error.message,
+        Err(_) => String::from_utf8_lossy(payload).into_owned(),
     }
 }
