@@ -6,8 +6,11 @@
 //! wrapped payload into its inner type succeeds with empty data) fails here
 //! instead of showing up as an empty terminal.
 
+use console_core::ConsoleClient;
 use console_core::services::WtTerminalEvent;
-use console_core::services::transport::{Transport, TransportMode, tls_from_setting};
+use console_core::services::transport::{
+    AUTO_DIAL_TIMEOUT, Transport, TransportMode, tls_from_setting,
+};
 use console_core::services::wt::{chat_run_start, terminal_event, upgrade_to_https};
 use console_core::types::{ImageAttachment, RunPromptDto};
 use console_proto::{
@@ -181,15 +184,17 @@ fn origin_upgrades_http_and_leaves_tls_alone() {
 
 #[test]
 fn only_wt_opts_in_to_webtransport() {
-    // Everything else — including a server that would accept `auto` — stays
-    // legacy, so the default install is untouched until the switch flips.
+    // `auto` is the default: QUIC first, legacy on failure. Only an explicit
+    // choice changes that, and an explicit `legacy` is honored.
     assert_eq!(TransportMode::from_setting("wt"), TransportMode::Wt);
     assert_eq!(TransportMode::from_setting("WT"), TransportMode::Wt);
-    for value in ["legacy", "auto", "", "websocket", "wtp"] {
+    assert_eq!(TransportMode::from_setting("legacy"), TransportMode::Legacy);
+    assert_eq!(TransportMode::from_setting("LEGACY"), TransportMode::Legacy);
+    for value in ["auto", "", "websocket", "wtp", "nonsense"] {
         assert_eq!(
             TransportMode::from_setting(value),
-            TransportMode::Legacy,
-            "{value:?} must not select WebTransport"
+            TransportMode::Auto,
+            "{value:?} must fall through to auto"
         );
     }
 }
@@ -216,6 +221,85 @@ async fn wt_transport_connects_lazily() {
     );
     // Clones share one session cell, so the app opens one connection.
     assert!(transport.clone().session().await.is_none());
+}
+
+/// Auto mode against a server that cannot serve WebTransport must fall back
+/// rather than error, and must not pay the dial timeout on every stream.
+#[tokio::test]
+async fn auto_falls_back_when_webtransport_is_unreachable() {
+    // Port 1 is reserved and refuses instantly, so this exercises the
+    // fallback decision without needing a server.
+    let transport = Transport::with_settings(
+        TransportMode::Auto,
+        Some("https://127.0.0.1:1".into()),
+        console_core::net::WtTls::Native,
+    );
+    let client = ConsoleClient::new(Some("http://127.0.0.1:1".into()));
+
+    let started = std::time::Instant::now();
+    let first = transport
+        .connect(&client)
+        .await
+        .expect("auto downgrades instead of erroring");
+    assert!(first.is_none(), "falls back to legacy");
+    assert!(
+        transport.session().await.is_none(),
+        "a failed handshake is never cached as a session"
+    );
+
+    // The backoff means the next stream does not dial again.
+    let again = transport
+        .connect(&client)
+        .await
+        .expect("second attempt also downgrades");
+    assert!(again.is_none());
+    assert!(
+        started.elapsed() < AUTO_DIAL_TIMEOUT * 2,
+        "the retry backoff must keep the second attempt free"
+    );
+}
+
+/// A plaintext server can never serve WebTransport (it mandates TLS), so auto
+/// must not stall the first stream probing one. This is the default `make
+/// dev-server` boot.
+#[tokio::test]
+async fn auto_skips_the_probe_against_a_plaintext_server() {
+    let transport =
+        Transport::with_settings(TransportMode::Auto, None, console_core::net::WtTls::Native);
+    let client = ConsoleClient::new(Some("http://192.0.2.10:3000".into()));
+
+    let started = std::time::Instant::now();
+    let session = transport
+        .connect(&client)
+        .await
+        .expect("plaintext origin downgrades without erroring");
+    assert!(session.is_none());
+    assert!(
+        started.elapsed() < AUTO_DIAL_TIMEOUT,
+        "no dial attempt against a plaintext origin"
+    );
+}
+
+/// `wt` is the opposite contract: no silent downgrade, so a broken handshake
+/// is visible instead of quietly running on SSE.
+#[tokio::test]
+async fn wt_mode_reports_failure_instead_of_downgrading() {
+    let transport = Transport::with_settings(
+        TransportMode::Wt,
+        Some("https://127.0.0.1:1".into()),
+        console_core::net::WtTls::Native,
+    );
+    let client = ConsoleClient::new(Some("http://127.0.0.1:1".into()));
+    let error = transport
+        .connect(&client)
+        .await
+        .err()
+        .expect("wt mode must surface the failure");
+    assert!(error.to_string().contains("WebTransport"), "got: {error}");
+    assert!(
+        transport.session().await.is_none(),
+        "no session is cached for a failed handshake"
+    );
 }
 
 #[test]

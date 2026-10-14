@@ -33,13 +33,27 @@ methods one for one); and the GPUI seam (`console-core/src/services/transport.rs
 stream). `ConsoleDesktopApp.transport` clones into each stream task, so
 `run.rs`, `right_sidebar.rs`, `port_forward.rs`, `notifications.rs`,
 `project_scripts.rs` and `TerminalView` call one method and never learn which
-transport answered. `CONSOLE_TRANSPORT=wt` opts in (unset/`legacy` stay on
-SSE/WS), with `CONSOLE_WT_ORIGIN` and `CONSOLE_WT_TLS=pin:<sha256>` for
-dev-server-wt. Verified live by `tests/network/wt_interop_test.rs`
-(env-gated, 11 cases including the full switch → terminal → grid → input →
-kill path) and offline by `tests/network/wt_service_test.rs`.
+transport answered. `CONSOLE_TRANSPORT` is `auto` by default: try WebTransport,
+downgrade to SSE/WS when the server cannot serve it, so QUIC is the desktop
+default without breaking legacy-only installs. `wt` forces QUIC and surfaces
+handshake failures (dogfooding/CI), `legacy` forces SSE/WS. `CONSOLE_WT_ORIGIN`
+and `CONSOLE_WT_TLS=pin:<sha256>` cover a separately-ported, self-signed dev
+server (`make dev-server-wt` / `make dev-desktop-wt`). Verified live by
+`tests/network/wt_interop_test.rs` (env-gated, 13 cases including the full
+switch → terminal → grid → input → kill path, redial after death, and `auto`
+preferring QUIC) and offline by `tests/network/wt_service_test.rs`.
 
 Desktop notes worth keeping:
+* `auto` never probes a plaintext origin: WebTransport mandates TLS, so a
+  `http://` server would only cost the first stream a dial timeout (that is
+  every `make dev-server` boot). An explicit `CONSOLE_WT_ORIGIN` is always
+  probed.
+* A failed `auto` handshake is remembered for `WT_RETRY_BACKOFF` (60s) and
+  logged once, so a legacy-only server costs one bounded `AUTO_DIAL_TIMEOUT`
+  (2.5s) dial rather than a stall per stream. Racing the two transports is
+  still Phase 5; `auto` is a verdict, not a race.
+* Android is still legacy-only, so this switch is desktop-local and changes no
+  server default (`apps/server-go/internal/wt/config.go` is untouched).
 * `RunService::stream_prompt`/`attach_run_stream` now return a boxed owned
   stream (`RunEventStream`) instead of `impl Stream`: both transports must
   hand back one `'static` type through `Transport`.

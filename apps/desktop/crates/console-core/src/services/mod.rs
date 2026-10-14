@@ -41,6 +41,8 @@ pub use run::RunService;
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;
-pub use transport::{ChatEventStream, Transport, TransportMode};
+pub use transport::{
+    AUTO_DIAL_TIMEOUT, ChatEventStream, Transport, TransportMode, WT_RETRY_BACKOFF,
+};
 pub use usage::UsageService;
 pub use wt::{WtService, WtTerminalEvent, WtTerminalHandle};

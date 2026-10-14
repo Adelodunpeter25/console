@@ -339,12 +339,17 @@ async fn service_start_run_rejects_blank_prompt() {
 /// and its pinned certificate — how the app builds it, minus the environment
 /// variables.
 fn live_transport() -> Option<(ConsoleClient, Transport)> {
+    live_transport_for(TransportMode::Wt)
+}
+
+/// The same, in the given mode (the app's default is `Auto`).
+fn live_transport_for(mode: TransportMode) -> Option<(ConsoleClient, Transport)> {
     let cfg = live_config()?;
     let api_url = std::env::var("WT_TEST_API_URL").ok()?;
     Some((
         ConsoleClient::new(Some(api_url)),
         Transport::with_settings(
-            TransportMode::Wt,
+            mode,
             Some(cfg.base_url),
             WtTls::PinnedHashes(vec![cfg.cert_hash]),
         ),
@@ -486,6 +491,31 @@ async fn service_watch_fs_requires_path() {
         error.contains("path"),
         "error names the missing path: {error}"
     );
+}
+
+/// The new default: `auto` must reach for QUIC when the server serves it,
+/// without anyone opting in.
+#[tokio::test]
+async fn auto_mode_uses_webtransport_when_available() {
+    let Some((client, transport)) = live_transport_for(TransportMode::Auto) else {
+        skipped("auto_mode_uses_webtransport_when_available");
+        return;
+    };
+    let session = transport
+        .connect(&client)
+        .await
+        .expect("auto never errors on a reachable server")
+        .expect("auto prefers WebTransport when the server serves it");
+    assert!(!session.is_closed());
+
+    // And the streams it opens are real QUIC streams, not SSE.
+    let mut ports = transport
+        .watch_ports(&client, None)
+        .await
+        .expect("watch_ports in auto mode");
+    first_item(&mut ports)
+        .await
+        .expect("ports watch sends a snapshot");
 }
 
 /// A dead session must never be handed out again. This is the server-restart
