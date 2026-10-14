@@ -10,7 +10,10 @@ fn worktree_spec_empty_serializes_to_empty_object() {
         title: Some("New Chat".into()),
         approval_mode: None,
         thinking_level: None,
-        worktree: Some(CreateWorktreeSpec { branch: None }),
+        worktree: Some(CreateWorktreeSpec {
+            branch: None,
+            base_branch: None,
+        }),
     };
     let json = serde_json::to_value(&dto).expect("serialize create dto");
     assert_eq!(
@@ -32,12 +35,41 @@ fn worktree_spec_explicit_branch_round_trips() {
         thinking_level: None,
         worktree: Some(CreateWorktreeSpec {
             branch: Some("my-feature".into()),
+            base_branch: None,
         }),
     };
     let json = serde_json::to_value(&dto).expect("serialize create dto");
     assert_eq!(
         json.get("worktree"),
         Some(&serde_json::json!({"branch": "my-feature"}))
+    );
+}
+
+#[test]
+fn worktree_base_branch_sends_base_branch_only() {
+    // Cutting from an existing branch: `branch` names the new branch,
+    // `baseBranch` the one to fork from. Both are optional, and the server
+    // auto-derives whichever is omitted.
+    let dto = CreateSessionDto {
+        cwd: Some("/repo".into()),
+        project_id: None,
+        model_id: None,
+        provider: None,
+        title: None,
+        approval_mode: None,
+        thinking_level: None,
+        worktree: Some(CreateWorktreeSpec {
+            branch: Some("my-feature".into()),
+            base_branch: Some("main".into()),
+        }),
+    };
+    let json = serde_json::to_value(&dto).expect("serialize create dto");
+    assert_eq!(
+        json.get("worktree"),
+        Some(&serde_json::json!({
+            "branch": "my-feature",
+            "baseBranch": "main"
+        }))
     );
 }
 
