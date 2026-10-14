@@ -49,6 +49,15 @@ Desktop notes worth keeping:
 * `Notify` keeps a single permit, so output bursts coalesce. Tests must poll
   the grid rather than count notifications; the view's tight
   `loop { notified().await }` is unaffected.
+* Session lifetime: `Transport` caches one `WtService` behind a `Mutex` and
+  reuses it only while `WtService::is_closed()` is false and the origin still
+  matches. Liveness comes from a task latching `Connection::closed()` — QUIC
+  already detects the dead peer, so there are no timers. Consequences: a
+  server restart is transparent on the next stream (each redial mints a
+  fresh handshake token over REST), and the in-app server picker redials to
+  the new server because the origin is resolved per connect from
+  `client.base_url()` unless `CONSOLE_WT_ORIGIN` pins it. Streams already
+  open when the server dies still die — reconnecting a live run is Phase 6.
 
 Two findings worth keeping:
 * Desktop cert pinning (wtransport `ServerHashVerification`) accepts only

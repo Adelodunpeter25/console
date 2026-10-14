@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-server-wt dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check proto help
+.PHONY: dev-server dev-server-wt dev-console dev-mobile dev-desktop dev-desktop-wt build-desktop package-desktop build-server install build-android check proto help
 
 # Where `console upgrade` and this target install the binary (matches
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
@@ -67,6 +67,23 @@ dev-mobile:
 dev-desktop:
 	bash apps/desktop/scripts/dev.sh
 
+## dev-desktop-wt: Launch the desktop app in WebTransport mode (QUIC migration
+##   dogfooding). Pair it with `make dev-server-wt` running in another terminal:
+##   this points the app at that server's QUIC listener and pins its dev
+##   certificate. Every streaming surface (chat runs, watches, terminals) goes
+##   over QUIC; REST calls stay on the API port as usual.
+##   Usage: make dev-desktop-wt            (API 3000 + WT 127.0.0.1:14443)
+##          make dev-desktop-wt PORT=2003 WT_PORT=24443
+dev-desktop-wt:
+	@if [ ! -f "$(WT_DEV_CERT)" ]; then \
+		echo "error: $(WT_DEV_CERT) is missing. Start 'make dev-server-wt' once to generate it." >&2; exit 1; \
+	fi
+	CONSOLE_TRANSPORT=wt \
+	CONSOLE_WT_ORIGIN=https://127.0.0.1:$(WT_PORT) \
+	CONSOLE_WT_TLS=pin:$$(openssl x509 -in "$(WT_DEV_CERT)" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :) \
+	CONSOLE_BACKEND_URL=http://127.0.0.1:$(if $(PORT),$(PORT),3000) \
+	bash apps/desktop/scripts/dev.sh
+
 ## package-desktop: Package the GPUI desktop app into a production macOS .app bundle (Console.app)
 package-desktop:
 	bash apps/desktop/scripts/package.sh
@@ -133,6 +150,7 @@ help:
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile        - Build and run the native Android app in dev mode"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
+	@echo "  make dev-desktop-wt    - Start the GPUI desktop app on WebTransport (needs make dev-server-wt)"
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"

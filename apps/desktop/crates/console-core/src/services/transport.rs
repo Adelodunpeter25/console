@@ -23,15 +23,15 @@
 use crate::ConsoleClient;
 use crate::net::WtTls;
 use crate::services::terminal::{TerminalHandle, TerminalService};
-use crate::services::wt::WtService;
+use crate::services::wt::{WtService, upgrade_to_https};
 use crate::types::events::AgentSessionEvent;
 use crate::types::terminal::{TerminalSize, TerminalSpawnParams};
 use crate::types::{ForwardedPort, FsChangeEvent, GitStatusSummary, RunPromptDto};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures_util::Stream;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
+use tokio::sync::Mutex;
 
 /// Chat run events: identical shape on both transports.
 pub type ChatEventStream = Pin<Box<dyn Stream<Item = Result<AgentSessionEvent>> + Send>>;
@@ -60,8 +60,9 @@ impl TransportMode {
 }
 
 /// Shared transport selection. Cloning is a refcount bump, and every clone
-/// waits on the same one-time WT handshake, so the app opens exactly one
-/// QUIC connection no matter how many streams it opens.
+/// shares the one WebTransport session, so the app opens a single QUIC
+/// connection no matter how many streams it opens. The session is replaced
+/// when it dies or when the app switches servers — see [`Transport::connect`].
 #[derive(Clone, Default)]
 pub struct Transport {
     inner: Arc<TransportInner>,
@@ -69,9 +70,20 @@ pub struct Transport {
 
 struct TransportInner {
     mode: TransportMode,
+    /// Fixed WT origin from `CONSOLE_WT_ORIGIN`. `None` derives the origin
+    /// from the client's current base URL, which is what production wants
+    /// (HTTP/3 shares the API origin) and what makes the in-app server picker
+    /// work: switching servers redials to the new one.
     origin: Option<String>,
     tls: WtTls,
-    session: OnceCell<WtService>,
+    session: Mutex<Option<CachedSession>>,
+}
+
+/// The live session plus the origin it was dialed against, so a server switch
+/// is detectable rather than silently reusing the old connection.
+struct CachedSession {
+    origin: String,
+    service: WtService,
 }
 
 impl Default for TransportInner {
@@ -83,7 +95,7 @@ impl Default for TransportInner {
             // surfaces when the first stream asks to connect.
             tls: tls_from_setting(&std::env::var("CONSOLE_WT_TLS").unwrap_or_default())
                 .unwrap_or(WtTls::Native),
-            session: OnceCell::const_new(),
+            session: Mutex::new(None),
         }
     }
 }
@@ -108,7 +120,7 @@ impl Transport {
                 mode,
                 origin,
                 tls,
-                session: OnceCell::const_new(),
+                session: Mutex::new(None),
             }),
         }
     }
@@ -123,28 +135,61 @@ impl Transport {
 
     /// The live WT session, if one has been opened. `None` on legacy, and
     /// before the first WT stream forced the handshake.
-    pub fn session(&self) -> Option<&WtService> {
-        self.inner.session.get()
+    pub async fn session(&self) -> Option<WtService> {
+        self.inner
+            .session
+            .lock()
+            .await
+            .as_ref()
+            .map(|c| c.service.clone())
     }
 
-    /// Open the WT session if the mode asks for it. Idempotent and
-    /// concurrency-safe: one handshake, shared by every caller. A failed
-    /// handshake is not cached, so the next stream retries — which is what
-    /// lets the app start before its server is reachable.
+    /// Where this transport dials. `CONSOLE_WT_ORIGIN` wins; otherwise the
+    /// client's current base URL over TLS, resolved per connect so the
+    /// in-app server picker is honored.
+    async fn resolve_origin(&self, client: &ConsoleClient) -> String {
+        match &self.inner.origin {
+            Some(origin) => origin.clone(),
+            None => upgrade_to_https(&client.base_url().await),
+        }
+    }
+
+    /// Open the WT session if the mode asks for it.
+    ///
+    /// One handshake at a time (the mutex is held across the dial, so
+    /// concurrent first-streams do not race), and the session is reused until
+    /// it stops being usable: redial when QUIC has closed it (server restart,
+    /// network loss) or when the origin no longer matches the app's server.
+    /// Failures are never cached, so the app can start before its server is
+    /// reachable and retry on the next stream.
     pub async fn connect(&self, client: &ConsoleClient) -> Result<Option<WtService>> {
         if !self.is_wt() {
             return Ok(None);
         }
-        let origin = self.inner.origin.clone();
-        let tls = self.inner.tls.clone();
-        let session = self
-            .inner
-            .session
-            .get_or_try_init(|| async move {
-                WtService::connect(client.transport(), origin.as_deref(), tls).await
-            })
-            .await?;
-        Ok(Some(session.clone()))
+        let origin = self.resolve_origin(client).await;
+        let mut cache = self.inner.session.lock().await;
+        if let Some(cached) = cache.as_ref()
+            && cached.origin == origin
+            && !cached.service.is_closed()
+        {
+            return Ok(Some(cached.service.clone()));
+        }
+        let service = WtService::connect(client.transport(), Some(&origin), self.inner.tls.clone())
+            .await
+            .with_context(|| format!("Failed to open a WebTransport session at {origin}"))?;
+        *cache = Some(CachedSession {
+            origin,
+            service: service.clone(),
+        });
+        Ok(Some(service))
+    }
+
+    /// Close the connection and forget it, so the next stream redials.
+    pub async fn close(&self, reason: &str) {
+        let mut cache = self.inner.session.lock().await;
+        if let Some(cached) = cache.take() {
+            cached.service.close(reason);
+        }
     }
 
     /// Start an agent run over the selected transport.

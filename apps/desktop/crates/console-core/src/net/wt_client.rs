@@ -8,6 +8,7 @@
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
 use wtransport::{ClientConfig, Endpoint, endpoint::ConnectOptions, endpoint::endpoint_side};
 
@@ -129,6 +130,11 @@ pub fn decode_wt_frame(buf: &[u8]) -> Result<Option<(console_proto::WtFrame, usi
 pub struct WtSession {
     _endpoint: Endpoint<endpoint_side::Client>,
     connection: wtransport::Connection,
+    /// Set once QUIC reports the connection closed (server restart, network
+    /// loss, idle timeout). Lets callers drop a dead session instead of
+    /// handing it out again — the handle itself outlives the connection and
+    /// cannot tell by existing.
+    closed: Arc<AtomicBool>,
 }
 
 /// A framed bidi stream with a small reassembly buffer (frames coalesce on
@@ -172,14 +178,34 @@ impl WtClient {
             .connect(ConnectOptions::builder(url).build())
             .await
             .context("WebTransport handshake failed")?;
+        let closed = Arc::new(AtomicBool::new(false));
+        // QUIC already detects a dead peer (idle timeout + the keepalive the
+        // server configures), so latch it instead of polling: one task per
+        // session, no timers.
+        {
+            let closed = closed.clone();
+            let connection = connection.clone();
+            tokio::spawn(async move {
+                connection.closed().await;
+                closed.store(true, Ordering::Release);
+            });
+        }
         Ok(WtSession {
             _endpoint: endpoint,
             connection,
+            closed,
         })
     }
 }
 
 impl WtSession {
+    /// Whether QUIC has reported this connection closed. Cheap, non-blocking,
+    /// and eventually consistent with the socket: the flag is set right after
+    /// the connection dies.
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Acquire)
+    }
+
     /// Open a framed stream of `kind` with routing `id`, writing its header.
     pub async fn open_stream(&self, kind: WtStreamKind, id: &str) -> Result<WtStream> {
         let (mut send, recv) = self

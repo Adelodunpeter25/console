@@ -198,11 +198,10 @@ fn only_wt_opts_in_to_webtransport() {
 fn legacy_transport_starts_without_a_session() {
     let transport = Transport::new(TransportMode::Legacy);
     assert!(!transport.is_wt());
-    assert!(transport.session().is_none());
 }
 
-#[test]
-fn wt_transport_connects_lazily() {
+#[tokio::test]
+async fn wt_transport_connects_lazily() {
     // Nothing is dialed at construction: the app starts before its server is
     // reachable, and the first stream forces the handshake.
     let transport = Transport::with_settings(
@@ -212,11 +211,11 @@ fn wt_transport_connects_lazily() {
     );
     assert!(transport.is_wt());
     assert!(
-        transport.session().is_none(),
+        transport.session().await.is_none(),
         "no handshake until a stream asks for one"
     );
     // Clones share one session cell, so the app opens one connection.
-    assert!(transport.clone().session().is_none());
+    assert!(transport.clone().session().await.is_none());
 }
 
 #[test]

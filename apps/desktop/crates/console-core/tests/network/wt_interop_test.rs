@@ -488,6 +488,65 @@ async fn service_watch_fs_requires_path() {
     );
 }
 
+/// A dead session must never be handed out again. This is the server-restart
+/// case: the app's cached connection dies with the server, and the next
+/// stream has to redial instead of failing forever.
+#[tokio::test]
+async fn transport_redials_after_its_session_dies() {
+    let Some((client, transport)) = live_transport() else {
+        skipped("transport_redials_after_its_session_dies");
+        return;
+    };
+
+    let first = transport
+        .connect(&client)
+        .await
+        .expect("first connect")
+        .expect("wt mode opens a session");
+    assert!(!first.is_closed(), "a fresh session is open");
+
+    // Connecting again while it is alive must reuse it, not stack handshakes.
+    let reused = transport
+        .connect(&client)
+        .await
+        .expect("second connect reuses the live session")
+        .expect("wt mode opens a session");
+    assert!(!reused.is_closed());
+
+    // Now kill it the way a server restart would. `close` also forgets the
+    // session, so wait on the old handle for the liveness task to notice.
+    transport.close("test: simulating a server restart").await;
+    for _ in 0..100 {
+        if first.is_closed() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        first.is_closed(),
+        "a closed connection is observed by the liveness task"
+    );
+
+    let redialed = transport
+        .connect(&client)
+        .await
+        .expect("redial after a dead session")
+        .expect("wt mode opens a session");
+    assert!(
+        !redialed.is_closed(),
+        "the redialed session works instead of the dead one"
+    );
+
+    // And the redialed one is what streams actually use.
+    let mut ports = transport
+        .watch_ports(&client, None)
+        .await
+        .expect("watch_ports after redial");
+    first_item(&mut ports)
+        .await
+        .expect("ports watch sends a snapshot");
+}
+
 /// The transport switch as the app uses it: one lazily-opened session, and
 /// a terminal handle identical to the WS one (notify + snapshot + input).
 #[tokio::test]
@@ -505,7 +564,7 @@ async fn transport_switch_serves_terminal_and_watch() {
         .await
         .expect("ports watch sends a snapshot");
     assert!(
-        transport.session().is_some(),
+        transport.session().await.is_some(),
         "the switch opened exactly one session and reused it"
     );
 

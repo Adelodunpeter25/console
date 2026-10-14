@@ -67,6 +67,14 @@ impl WtService {
         self.session.close(reason.as_bytes());
     }
 
+    /// Whether QUIC has reported this connection closed (server restart,
+    /// network loss, idle timeout). A handle that outlives its connection
+    /// still opens no streams, so callers that cache sessions use this to
+    /// drop a dead one instead of handing it out again.
+    pub fn is_closed(&self) -> bool {
+        self.session.is_closed()
+    }
+
     /// Start an agent run and stream its events — the WebTransport twin of
     /// [`RunService::stream_prompt`].
     ///
