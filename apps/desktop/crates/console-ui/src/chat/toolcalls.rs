@@ -204,7 +204,10 @@ impl ToolCalls {
             "ask" => "Ask Question".into(),
             "todo" => "Todo".into(),
             "memory" => "Memory".into(),
-            name => name.to_owned(),
+            "loadTools" => "Load Tools".into(),
+            name => parse_mcp_tool_name(name)
+                .map(|(server, tool)| format!("{} ({})", tool.replace('_', " "), server))
+                .unwrap_or_else(|| name.to_owned()),
         }
     }
 
@@ -223,6 +226,14 @@ impl ToolCalls {
                 return Some(truncate(&format!("{action} {job_id}"), 72));
             }
             return Some(truncate(action, 72));
+        }
+        if call.name == "loadTools" {
+            // The loader takes `{group: "mcp:<server-id>"}` — surface it
+            // verbatim so the row says which group was loaded.
+            if let Some(group) = object.get("group").and_then(|v| v.as_str()) {
+                return Some(truncate(group, 72));
+            }
+            return None;
         }
         if call.name == "memory" {
             let op = object
@@ -1126,6 +1137,24 @@ impl ToolCalls {
                     )),
             )
     }
+}
+
+/// Split an `mcp__<server>__<tool>` wire name into `(server, tool)`.
+/// Returns `None` when malformed. Segments are server-sanitized to
+/// `[A-Za-z0-9_-]`, so splitting on the double underscore is safe — single
+/// underscores never form one.
+fn parse_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
+    let rest = name.strip_prefix("mcp__")?;
+    let sep = rest.find("__")?;
+    if sep == 0 {
+        return None;
+    }
+    let server = &rest[..sep];
+    let tool = &rest[sep + 2..];
+    if server.is_empty() || tool.is_empty() {
+        return None;
+    }
+    Some((server, tool))
 }
 
 /// Whether a tool-call name represents a file-edit operation whose

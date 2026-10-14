@@ -111,6 +111,11 @@ pub fn status_color(theme: &Theme, status: &str) -> Hsla {
 }
 
 pub fn activity_icon(tool_name: &str) -> &'static str {
+    // Dynamic `mcp__<server>__<tool>` names can never be match arms; they
+    // share the loader's package glyph.
+    if tool_name.starts_with("mcp__") {
+        return IconName::Package.path();
+    }
     let icon = match tool_name {
         "reasoning" | "think" => IconName::Sparkle,
         "bash" | "shell" | "command" | "bashJob" | "bash_job" => IconName::Terminal,
@@ -121,6 +126,7 @@ pub fn activity_icon(tool_name: &str) -> &'static str {
         "web_search" | "webSearch" | "browser" => IconName::Globe,
         "plan" => IconName::List,
         "memory" => IconName::MemoryStick,
+        "loadTools" => IconName::Package,
         _ => IconName::Wrench,
     };
     icon.path()
