@@ -11,11 +11,12 @@ impl ConsoleDesktopApp {
     pub fn init_port_stream(&mut self, cx: &mut Context<Self>) {
         self.port_stream = None;
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let entity = cx.entity().downgrade();
         self.port_stream = Some(cx.spawn(async move |_, cx| {
             use futures_util::StreamExt;
             loop {
-                match client.ports.watch(None).await {
+                match transport.watch_ports(&client, None).await {
                     Ok(mut stream) => {
                         while let Some(Ok(ports)) = stream.next().await {
                             // Server reports remote ports; expose each one as a

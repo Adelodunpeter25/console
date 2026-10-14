@@ -18,20 +18,37 @@ forces the SETTINGS bit) but the protocol sends none; no app-level ping
 frames (QUIC keepalive owns liveness); buf's remote plugins are dead, regen
 is local protoc (proven byte-identical for existing files).
 
-Status Oct 2026 (desktop, Phase 4 in progress): transport client done
+Status Oct 2026 (desktop, Phase 4 **done**): transport client
 (`console-core/src/net/wt_client.rs`: `WtClient`/`WtSession`/`WtStream`, plus
 `WtStreamWriter`/`WtStreamReader` from `WtStream::split` for the bidirectional
 streams — the reader keeps the write half alive so neither half's drop resets
-the other direction); service layer done (`console-core/src/services/wt.rs`:
+the other direction); service layer (`console-core/src/services/wt.rs`:
 `WtService::connect` mints via `AuthService::mint_api_token`, then
 `start_run`/`attach_run` return the same `AgentSessionEvent` stream shape as
-`RunService::stream_prompt`, `spawn_terminal` returns `WtTerminalHandle`, and
-`watch_fs`/`watch_git_status`/`watch_ports`/`watch_notifications`/
-`watch_script_run` mirror the SSE watch methods one for one; reachable as
-`ConsoleClient::connect_wt`). GPUI marshaling in `apps/desktop/src` and the
-`wt` vs `legacy` hard switch are the remaining Phase 4 work. Verified live
-against the Go server by `tests/network/wt_interop_test.rs` (env-gated) and
-offline by `tests/network/wt_service_test.rs`.
+`RunService::stream_prompt`, `spawn_terminal_handle` returns the *same*
+`TerminalHandle` the WS path returns, and `watch_fs`/`watch_git_status`/
+`watch_ports`/`watch_notifications`/`watch_script_run` mirror the SSE watch
+methods one for one); and the GPUI seam (`console-core/src/services/transport.rs`:
+`Transport` + `TransportMode`, one lazily-opened session shared by every
+stream). `ConsoleDesktopApp.transport` clones into each stream task, so
+`run.rs`, `right_sidebar.rs`, `port_forward.rs`, `notifications.rs`,
+`project_scripts.rs` and `TerminalView` call one method and never learn which
+transport answered. `CONSOLE_TRANSPORT=wt` opts in (unset/`legacy` stay on
+SSE/WS), with `CONSOLE_WT_ORIGIN` and `CONSOLE_WT_TLS=pin:<sha256>` for
+dev-server-wt. Verified live by `tests/network/wt_interop_test.rs`
+(env-gated, 11 cases including the full switch → terminal → grid → input →
+kill path) and offline by `tests/network/wt_service_test.rs`.
+
+Desktop notes worth keeping:
+* `RunService::stream_prompt`/`attach_run_stream` now return a boxed owned
+  stream (`RunEventStream`) instead of `impl Stream`: both transports must
+  hand back one `'static` type through `Transport`.
+* The WT terminal handle is built by feeding the same `TermyBackend` +
+  `notify` contract as WS, in binary mode (raw PTY bytes), so `TerminalView`
+  needed no marshaling changes at all — only a `Transport` parameter.
+* `Notify` keeps a single permit, so output bursts coalesce. Tests must poll
+  the grid rather than count notifications; the view's tight
+  `loop { notified().await }` is unaffected.
 
 Two findings worth keeping:
 * Desktop cert pinning (wtransport `ServerHashVerification`) accepts only

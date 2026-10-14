@@ -1,4 +1,5 @@
 use console_core::ConsoleClient;
+use console_core::services::Transport;
 use console_core::types::terminal::{TerminalSize, TerminalSpawnParams, TerminalStatus};
 use gpui::{
     App, Bounds, Context, ElementInputHandler, EntityInputHandler, ExternalPaths, FocusHandle,
@@ -37,7 +38,7 @@ pub struct TerminalCellPos {
 ///
 /// ```ignore
 /// let params = TerminalSpawnParams { cwd: project.path.clone(), ..Default::default() };
-/// let view = cx.new(|cx| TerminalView::new(params, client.clone(), window, cx));
+/// let view = cx.new(|cx| TerminalView::new(params, client.clone(), transport.clone(), window, cx));
 /// div().child(view)
 /// ```
 pub struct TerminalView {
@@ -103,6 +104,7 @@ impl TerminalView {
     pub fn new(
         params: TerminalSpawnParams,
         client: ConsoleClient,
+        transport: Transport,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -136,13 +138,14 @@ impl TerminalView {
             scrollbar_dragging: false,
         };
 
-        this.spawn(params, client, cx);
+        this.spawn(params, client, transport, cx);
         this
     }
 
     pub fn with_cwd(
         cwd: impl Into<String>,
         client: ConsoleClient,
+        transport: Transport,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -150,20 +153,23 @@ impl TerminalView {
             cwd: cwd.into(),
             ..Default::default()
         };
-        Self::new(params, client, window, cx)
+        Self::new(params, client, transport, window, cx)
     }
 
     fn spawn(
         &mut self,
         params: TerminalSpawnParams,
         client: ConsoleClient,
+        transport: Transport,
         cx: &mut Context<Self>,
     ) {
         let size = self.size;
 
         cx.spawn(async move |this, cx| {
-            let service = client.terminal_service();
-            let handle = match service.spawn(params, size).await {
+            // The transport decides WS vs WebTransport and hands back the same
+            // handle either way, so nothing below this line knows which is in
+            // use (QUIC migration, Phase 4).
+            let handle = match transport.spawn_terminal(&client, params, size).await {
                 Ok(h) => Arc::new(h),
                 Err(e) => {
                     let _ = this.update(cx, |view, cx| {

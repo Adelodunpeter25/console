@@ -269,6 +269,181 @@ impl WtService {
         };
         Ok(wt_events(reader, filter))
     }
+
+    /// Spawn a terminal and return the same [`TerminalHandle`] the WS path hands
+    /// the UI, so `TerminalView` is unaware of the transport.
+    ///
+    /// The lifecycle mirrors [`TerminalService::spawn`] exactly: the handle is
+    /// immediately usable and queues input until the stream is open, the backend
+    /// is fed the same way (binary mode, raw PTY bytes), `notify` fires on every
+    /// change, and shell device-query replies go back out as input. Only the
+    /// transport differs.
+    pub async fn spawn_terminal_handle(
+        &self,
+        params: &TerminalSpawnParams,
+        initial_size: TerminalSize,
+    ) -> Result<crate::services::terminal::TerminalHandle> {
+        use crate::services::terminal::TerminalHandle;
+        use std::sync::Arc;
+        use tokio::sync::{RwLock, mpsc};
+
+        // Binary mode: the WS path parses raw PTY bytes client-side, and the
+        // server-side text path would re-split multibyte sequences at frame
+        // boundaries — matching WS is both the parity and the correctness choice.
+        let request = console_proto::WtTerminalRequest {
+            cwd: params.cwd.clone(),
+            shell: params.shell.clone(),
+            label: params.label.clone(),
+            cols: Some(i32::from(initial_size.cols)),
+            rows: Some(i32::from(initial_size.rows)),
+            binary: true,
+        };
+        let payload =
+            serde_json::to_vec(&request).context("Failed to encode WT terminal request")?;
+        let stream = self
+            .session
+            .open_stream_with_request(WtStreamKind::Terminal, "", "spawn", payload)
+            .await?;
+        let (writer, mut reader) = stream;
+
+        let (tx, mut rx) = mpsc::unbounded_channel::<TerminalClientMessage>();
+        let backend = Arc::new(tokio::sync::Mutex::new(
+            crate::services::terminal::TermyBackend::new(initial_size),
+        ));
+        let id: Arc<RwLock<Option<crate::types::terminal::TerminalId>>> =
+            Arc::new(RwLock::new(None));
+        let status: Arc<RwLock<TerminalStatus>> = Arc::new(RwLock::new(TerminalStatus::Spawning));
+        let error: Arc<RwLock<Option<String>>> = Arc::new(RwLock::new(None));
+        let notify: Arc<tokio::sync::Notify> = Arc::new(tokio::sync::Notify::new());
+        let reply_sender = tx.clone();
+
+        // The task needs the shared state too; clone before moving it in so the
+        // handle below can be built from the originals.
+        let task_id = id.clone();
+        let task_status = status.clone();
+        let task_error = error.clone();
+        let task_notify = notify.clone();
+
+        let write_task = tokio::spawn(async move {
+            while let Some(message) = rx.recv().await {
+                let frame = match message.event {
+                    Some(console_proto::terminal_client_message::Event::Input(input)) => {
+                        console_proto::WtFrame {
+                            seq: 0,
+                            r#type: "input".into(),
+                            payload: input.data.into_bytes(),
+                        }
+                    }
+                    Some(console_proto::terminal_client_message::Event::Resize(resize)) => {
+                        let payload = match serde_json::to_vec(&resize) {
+                            Ok(payload) => payload,
+                            Err(error) => {
+                                log::warn!("Failed to encode WT terminal resize: {error}");
+                                continue;
+                            }
+                        };
+                        console_proto::WtFrame {
+                            seq: 0,
+                            r#type: "resize".into(),
+                            payload,
+                        }
+                    }
+                    Some(console_proto::terminal_client_message::Event::Kill(_)) => {
+                        console_proto::WtFrame {
+                            seq: 0,
+                            r#type: "kill".into(),
+                            payload: Vec::new(),
+                        }
+                    }
+                    None => continue,
+                };
+                if let Err(error) = writer.send_frame(&frame).await {
+                    log::warn!("WT terminal send failed: {error}");
+                    break;
+                }
+            }
+        });
+
+        let task_backend = backend.clone();
+        let task = tokio::spawn(async move {
+            loop {
+                let event = match reader.next_frame().await {
+                    Ok(Some(frame)) => terminal_event(true, &frame),
+                    Ok(None) => {
+                        *task_status.write().await = TerminalStatus::Exited;
+                        task_notify.notify_one();
+                        break;
+                    }
+                    Err(read_error) => {
+                        *task_status.write().await = TerminalStatus::Error;
+                        *task_error.write().await =
+                            Some(format!("WT terminal read failed: {read_error:#}"));
+                        task_notify.notify_one();
+                        break;
+                    }
+                };
+                match event {
+                    Ok(WtTerminalEvent::Spawned(spawned)) => {
+                        *task_id.write().await = Some(spawned.id);
+                        *task_status.write().await = TerminalStatus::Running;
+                        task_notify.notify_one();
+                    }
+                    // The handle spawns binary streams, but the text arm stays so
+                    // a server that answers in text mode still drives the grid.
+                    Ok(WtTerminalEvent::Output(output)) => {
+                        let replies = {
+                            let mut backend = task_backend.lock().await;
+                            backend.advance_and_collect_replies(&output.data)
+                        };
+                        if !replies.is_empty() {
+                            let _ = reply_sender.send(crate::types::client_input(
+                                String::from_utf8_lossy(&replies).into_owned(),
+                            ));
+                        }
+                        task_notify.notify_one();
+                    }
+                    Ok(WtTerminalEvent::OutputBytes(bytes)) => {
+                        let replies = {
+                            let mut backend = task_backend.lock().await;
+                            backend.advance_and_collect_replies_bytes(&bytes)
+                        };
+                        if !replies.is_empty() {
+                            let _ = reply_sender.send(crate::types::client_input(
+                                String::from_utf8_lossy(&replies).into_owned(),
+                            ));
+                        }
+                        task_notify.notify_one();
+                    }
+                    Ok(WtTerminalEvent::Exit(exit)) => {
+                        *task_status.write().await = TerminalStatus::Exited;
+                        if let Some(code) = exit.code {
+                            *task_error.write().await =
+                                Some(format!("Shell exited with code {code}"));
+                        }
+                        task_notify.notify_one();
+                        break;
+                    }
+                    Ok(WtTerminalEvent::Error(message)) => {
+                        *task_status.write().await = TerminalStatus::Error;
+                        *task_error.write().await = Some(message);
+                        task_notify.notify_one();
+                        break;
+                    }
+                    Err(decode_error) => {
+                        *task_status.write().await = TerminalStatus::Error;
+                        *task_error.write().await = Some(format!("{decode_error:#}"));
+                        task_notify.notify_one();
+                        break;
+                    }
+                }
+            }
+            write_task.abort();
+        });
+
+        Ok(TerminalHandle::from_parts(
+            id, status, error, backend, notify, tx, task,
+        ))
+    }
 }
 
 /// A terminal event on a WT terminal stream: the WS server messages under

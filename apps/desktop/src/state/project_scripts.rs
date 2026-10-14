@@ -532,6 +532,7 @@ impl ConsoleDesktopApp {
         self.project_script_stream_seq += 1;
         let seq = self.project_script_stream_seq;
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let project_id_owned = project_id.to_string();
         let (server_project_id, _) = Self::scripts_server_target(project_id);
         let script_id_owned = script_id.to_string();
@@ -556,9 +557,8 @@ impl ConsoleDesktopApp {
                 });
             }
             let mut terminal_seen = false;
-            match client
-                .scripts
-                .stream_run(&server_project_id, &run_id_owned)
+            match transport
+                .watch_script_run(&client, &server_project_id, &run_id_owned)
                 .await
             {
                 Ok(mut stream) => {

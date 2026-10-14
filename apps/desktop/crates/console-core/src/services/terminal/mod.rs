@@ -259,6 +259,36 @@ impl TerminalHandle {
     }
 }
 
+impl TerminalHandle {
+    /// Assemble a handle around an already-plumbed inbound/outbound pair.
+    ///
+    /// Both transports share one handle: the WS path builds its halves
+    /// inline in [`TerminalService::spawn`], the WebTransport path in
+    /// [`crate::services::WtService::spawn_terminal_handle`]. Keeping the
+    /// construction here means neither transport reaches into these fields.
+    pub(crate) fn from_parts(
+        id: Arc<RwLock<Option<TerminalId>>>,
+        status: Arc<RwLock<TerminalStatus>>,
+        error: Arc<RwLock<Option<String>>>,
+        backend: Arc<tokio::sync::Mutex<TermyBackend>>,
+        notify: Arc<tokio::sync::Notify>,
+        sender: mpsc::UnboundedSender<TerminalClientMessage>,
+        task: tokio::task::JoinHandle<()>,
+    ) -> Self {
+        Self {
+            id,
+            status,
+            error,
+            backend,
+            notify,
+            sender,
+            scroll_pending: Arc::new(std::sync::Mutex::new(0)),
+            scroll_scheduled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            _task: task,
+        }
+    }
+}
+
 impl TerminalService {
     /// Spawn a new PTY on the server and return a `TerminalHandle` driving a
     /// `TermyBackend`. The handle is immediately usable: `send_input` /
@@ -416,16 +446,8 @@ impl TerminalService {
             write_task.abort();
         });
 
-        Ok(TerminalHandle {
-            id,
-            status,
-            error,
-            backend,
-            notify,
-            sender: tx,
-            scroll_pending: Arc::new(std::sync::Mutex::new(0)),
-            scroll_scheduled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            _task: task,
-        })
+        Ok(TerminalHandle::from_parts(
+            id, status, error, backend, notify, tx, task,
+        ))
     }
 }

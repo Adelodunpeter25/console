@@ -16,6 +16,7 @@ pub mod run;
 pub mod session;
 pub mod settings;
 pub mod terminal;
+pub mod transport;
 pub mod usage;
 pub mod wt;
 
@@ -40,5 +41,6 @@ pub use run::RunService;
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;
+pub use transport::{ChatEventStream, Transport, TransportMode};
 pub use usage::UsageService;
 pub use wt::{WtService, WtTerminalEvent, WtTerminalHandle};

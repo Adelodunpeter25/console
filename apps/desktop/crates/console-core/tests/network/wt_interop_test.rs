@@ -14,12 +14,15 @@
 //! ```
 //! Absent env skips every case so plain `cargo test` stays green.
 
+use console_core::ConsoleClient;
 use console_core::net::{WtClient, WtSession, WtStreamKind, WtTls};
-use console_core::services::WtService;
+use console_core::services::{Transport, TransportMode, WtService};
+use console_core::types::terminal::TerminalSize;
 use console_core::types::{AgentSessionEvent, RunPromptDto, TerminalSpawnParams};
 use console_core::utils::HttpTransport;
 use futures_util::StreamExt;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 struct LiveConfig {
     base_url: String,
@@ -273,10 +276,10 @@ async fn service_start_run_rejects_unknown_session() {
         .start_run("wt-interop-missing-session", &prompt)
         .await
         .expect("start_run opens the stream");
-    let error = first_item(events)
-        .await
-        .err()
-        .expect("unknown session answers an error frame");
+    let error = match first_item(events).await {
+        Err(error) => error,
+        Ok(_) => panic!("unknown session answers an error frame"),
+    };
     assert!(
         error.contains("not found"),
         "error says the session is missing: {error}"
@@ -293,10 +296,10 @@ async fn service_attach_run_without_active_run_errors() {
         .attach_run("wt-interop-nope", None)
         .await
         .expect("attach_run opens the stream");
-    let error = first_item(events)
-        .await
-        .err()
-        .expect("attaching to a dead run answers an error frame");
+    let error = match first_item(events).await {
+        Err(error) => error,
+        Ok(_) => panic!("attaching to a dead run answers an error frame"),
+    };
     assert!(
         error.contains("No active run"),
         "error explains there is no run: {error}"
@@ -322,18 +325,42 @@ async fn service_start_run_rejects_blank_prompt() {
         .start_run("wt-interop-nope", &prompt)
         .await
         .expect("start_run opens the stream");
-    let error = first_item::<_, AgentSessionEvent>(events)
-        .await
-        .err()
-        .expect("blank prompt answers an error frame");
+    let error = match first_item::<_, AgentSessionEvent>(events).await {
+        Err(error) => error,
+        Ok(_) => panic!("blank prompt answers an error frame"),
+    };
     assert!(
         error.contains("prompt"),
         "error names the missing prompt: {error}"
     );
 }
 
+/// A [`Transport`] pinned to WT, wired to the live server's API + WT origins
+/// and its pinned certificate — how the app builds it, minus the environment
+/// variables.
+fn live_transport() -> Option<(ConsoleClient, Transport)> {
+    let cfg = live_config()?;
+    let api_url = std::env::var("WT_TEST_API_URL").ok()?;
+    Some((
+        ConsoleClient::new(Some(api_url)),
+        Transport::with_settings(
+            TransportMode::Wt,
+            Some(cfg.base_url),
+            WtTls::PinnedHashes(vec![cfg.cert_hash]),
+        ),
+    ))
+}
+
+/// The rendered grid as one string, for asserting what the terminal showed.
+async fn rendered_grid(handle: &console_core::services::terminal::TerminalHandle) -> String {
+    let grid = handle.snapshot().await;
+    grid.rows
+        .iter()
+        .flat_map(|row| row.iter().map(|cell| cell.c))
+        .collect()
+}
+
 /// Next terminal event, bounded so a server that stops answering fails the
-/// case instead of hanging the suite.
 async fn next_terminal_event(
     terminal: &mut console_core::services::WtTerminalHandle,
 ) -> Result<Option<console_core::services::WtTerminalEvent>, String> {
@@ -451,12 +478,104 @@ async fn service_watch_fs_requires_path() {
         .watch_fs("")
         .await
         .expect("watch_fs opens the stream");
-    let error = first_item(&mut events)
-        .await
-        .err()
-        .expect("blank path answers an error frame");
+    let error = match first_item(&mut events).await {
+        Err(error) => error,
+        Ok(_) => panic!("blank path answers an error frame"),
+    };
     assert!(
         error.contains("path"),
         "error names the missing path: {error}"
+    );
+}
+
+/// The transport switch as the app uses it: one lazily-opened session, and
+/// a terminal handle identical to the WS one (notify + snapshot + input).
+#[tokio::test]
+async fn transport_switch_serves_terminal_and_watch() {
+    let Some((client, transport)) = live_transport() else {
+        skipped("transport_switch_serves_terminal_and_watch");
+        return;
+    };
+
+    let mut ports = transport
+        .watch_ports(&client, None)
+        .await
+        .expect("watch_ports over the WT transport");
+    first_item(&mut ports)
+        .await
+        .expect("ports watch sends a snapshot");
+    assert!(
+        transport.session().is_some(),
+        "the switch opened exactly one session and reused it"
+    );
+
+    let params = TerminalSpawnParams {
+        cwd: std::env::temp_dir().to_string_lossy().into_owned(),
+        shell: Some("/bin/sh".into()),
+        ..Default::default()
+    };
+    let handle = Arc::new(
+        transport
+            .spawn_terminal(&client, params, TerminalSize::new(80, 24))
+            .await
+            .expect("spawn_terminal over the WT transport"),
+    );
+
+    // The handle is the same type the WS path returns, so the UI contract is
+    // unchanged: it waits on `notify` and snapshots the backend.
+    //
+    // Poll the grid rather than counting notifications: `Notify` keeps one
+    // permit, so a burst of output coalesces into a single wake and a
+    // check-then-wait loop can miss the update it is waiting for. The grid is
+    // the thing under test; `saw_notify` still proves the handle notifies.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut saw_notify = false;
+    let mut saw_prompt = false;
+    while Instant::now() < deadline {
+        if !rendered_grid(&handle).await.trim().is_empty() {
+            saw_prompt = true;
+            break;
+        }
+        if tokio::time::timeout(Duration::from_millis(500), handle.notify.notified())
+            .await
+            .is_ok()
+        {
+            saw_notify = true;
+        }
+    }
+    assert!(saw_prompt, "the WT terminal renders a prompt on the grid");
+
+    handle.send_input("echo transport-ok\n");
+    handle.resize(TerminalSize::new(100, 30));
+
+    // Twice: the line discipline's echo of the typed command, then the
+    // command's own output. Both crossing the QUIC stream in each direction
+    // is what makes this worth asserting.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut saw_output = false;
+    while Instant::now() < deadline {
+        if rendered_grid(&handle).await.matches("transport-ok").count() >= 2 {
+            saw_output = true;
+            break;
+        }
+        if tokio::time::timeout(Duration::from_millis(500), handle.notify.notified())
+            .await
+            .is_ok()
+        {
+            saw_notify = true;
+        }
+    }
+    assert!(
+        saw_output,
+        "input echoed back and its output rendered through the WT terminal"
+    );
+    assert!(saw_notify, "the WT terminal handle notifies on output");
+
+    handle.kill();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(
+        handle.status().await,
+        console_core::types::terminal::TerminalStatus::Exited,
+        "killing the WT terminal reaps the server PTY"
     );
 }

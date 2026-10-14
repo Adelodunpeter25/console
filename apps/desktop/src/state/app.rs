@@ -559,6 +559,7 @@ impl ConsoleDesktopApp {
         let client_for_palettes = client.clone();
         let mut app = Self {
             client,
+            transport: console_core::services::Transport::default(),
             sessions: Rc::new(Vec::new()),
             selected_session_id: None,
             session_rename_id: None,

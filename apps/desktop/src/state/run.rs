@@ -380,6 +380,7 @@ impl ConsoleDesktopApp {
             .selected_project_for_pane(&run_pane_id)
             .map(|project| project.path.clone());
         let client = self.client.clone();
+        let transport = self.transport.clone();
 
         self.composer_for_pane(&run_pane_id)
             .update(cx, |input, cx| {
@@ -477,7 +478,7 @@ impl ConsoleDesktopApp {
                 attachments: if attachments.is_empty() { None } else { Some(attachments) },
             };
 
-            let mut stream = match client.runs.stream_prompt(&session_id, run_dto).await {
+            let mut stream = match transport.start_run(&client, &session_id, &run_dto).await {
                 Ok(stream) => stream,
                 Err(error) => {
                     let message = format!("Unable to start agent run: {error}");
@@ -1115,6 +1116,7 @@ impl ConsoleDesktopApp {
         let run_token = self.next_run_token_for_session(&session_id);
 
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let entity = cx.entity().downgrade();
         let run_pane_id = pane_id.clone();
         let run_session_id = session_id.clone();
@@ -1126,7 +1128,7 @@ impl ConsoleDesktopApp {
         }
 
         cx.spawn(async move |_, cx| {
-            let mut stream = match client.runs.attach_run_stream(&session_id, None).await {
+            let mut stream = match transport.attach_run(&client, &session_id, None).await {
                 Ok(stream) => stream,
                 Err(_) => {
                     cx.update(|cx| {

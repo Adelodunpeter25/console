@@ -56,6 +56,12 @@ impl ConsoleClient {
         TerminalService::new(self.transport.clone())
     }
 
+    /// The shared HTTP transport, for services that need it without
+    /// building a `TerminalService` (the WT transport switch).
+    pub fn transport(&self) -> &HttpTransport {
+        &self.transport
+    }
+
     /// Open a WebTransport session: mints the handshake token, then dials the
     /// QUIC listener (QUIC migration). Held by the caller for as long as its
     /// streams live — dropping it closes the connection. `origin` overrides

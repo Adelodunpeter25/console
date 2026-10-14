@@ -235,12 +235,13 @@ impl ConsoleDesktopApp {
         state.next_id += 1;
 
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let terminal = cx.new(|cx| {
             let params = console_core::types::terminal::TerminalSpawnParams {
                 cwd,
                 ..Default::default()
             };
-            console_ui::terminal::TerminalView::new(params, client, window, cx)
+            console_ui::terminal::TerminalView::new(params, client, transport, window, cx)
         });
 
         state.terminals.push((id, terminal));
@@ -499,13 +500,14 @@ impl ConsoleDesktopApp {
                 let id = state.next_id;
                 state.next_id += 1;
                 let client = client.clone();
+                let transport = self.transport.clone();
                 let cwd_clone = cwd.clone();
                 let terminal = cx.new(|cx| {
                     let params = console_core::types::terminal::TerminalSpawnParams {
                         cwd: cwd_clone,
                         ..Default::default()
                     };
-                    console_ui::terminal::TerminalView::new(params, client, window, cx)
+                    console_ui::terminal::TerminalView::new(params, client, transport, window, cx)
                 });
                 state.terminals.push((id, terminal));
             }
@@ -638,10 +640,11 @@ impl ConsoleDesktopApp {
         self.inspector_fs_watch = None;
 
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let watch_cwd = cwd.clone();
         let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
-            if let Ok(mut stream) = client.fs.watch_events(&watch_cwd).await {
+            if let Ok(mut stream) = transport.watch_fs(&client, &watch_cwd).await {
                 while let Some(Ok(_event)) = stream.next().await {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -680,10 +683,11 @@ impl ConsoleDesktopApp {
         self.inspector_git_watch = None;
 
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let watch_cwd = cwd.clone();
         let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
-            let mut stream = match client.git.watch_status(&watch_cwd).await {
+            let mut stream = match transport.watch_git_status(&client, &watch_cwd).await {
                 Ok(stream) => stream,
                 Err(err) => {
                     log::warn!("Failed to connect to git status watch: {}", err);

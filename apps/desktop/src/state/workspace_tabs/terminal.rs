@@ -68,7 +68,9 @@ impl ConsoleDesktopApp {
             return view.clone();
         }
 
-        let view = cx.new(|cx| TerminalView::with_cwd(cwd, self.client.clone(), window, cx));
+        let view = cx.new(|cx| {
+            TerminalView::with_cwd(cwd, self.client.clone(), self.transport.clone(), window, cx)
+        });
 
         let tid = terminal_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {

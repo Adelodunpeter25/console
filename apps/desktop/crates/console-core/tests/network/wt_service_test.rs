@@ -7,6 +7,7 @@
 //! instead of showing up as an empty terminal.
 
 use console_core::services::WtTerminalEvent;
+use console_core::services::transport::{Transport, TransportMode, tls_from_setting};
 use console_core::services::wt::{chat_run_start, terminal_event, upgrade_to_https};
 use console_core::types::{ImageAttachment, RunPromptDto};
 use console_proto::{
@@ -113,16 +114,14 @@ fn binary_output_strips_the_tag_byte() {
 fn binary_output_without_the_tag_is_an_error() {
     // Silently decoding this would surface an empty terminal instead.
     let error = terminal_event(true, &frame("output", b"raw".to_vec()))
-        .err()
-        .expect("untagged binary output must fail");
+        .expect_err("untagged binary output must fail");
     assert!(error.to_string().contains("tag byte"), "got: {error}");
 }
 
 #[test]
 fn unknown_terminal_frame_type_is_rejected() {
     let error = terminal_event(false, &frame("nonsense", Vec::new()))
-        .err()
-        .expect("unknown frame type must fail");
+        .expect_err("unknown frame type must fail");
     assert!(error.to_string().contains("nonsense"), "got: {error}");
 }
 
@@ -176,4 +175,89 @@ fn origin_upgrades_http_and_leaves_tls_alone() {
         upgrade_to_https("https://api.example.com"),
         "https://api.example.com"
     );
+}
+
+// ── Transport switch ────────────────────────────────────────────────────
+
+#[test]
+fn only_wt_opts_in_to_webtransport() {
+    // Everything else — including a server that would accept `auto` — stays
+    // legacy, so the default install is untouched until the switch flips.
+    assert_eq!(TransportMode::from_setting("wt"), TransportMode::Wt);
+    assert_eq!(TransportMode::from_setting("WT"), TransportMode::Wt);
+    for value in ["legacy", "auto", "", "websocket", "wtp"] {
+        assert_eq!(
+            TransportMode::from_setting(value),
+            TransportMode::Legacy,
+            "{value:?} must not select WebTransport"
+        );
+    }
+}
+
+#[test]
+fn legacy_transport_starts_without_a_session() {
+    let transport = Transport::new(TransportMode::Legacy);
+    assert!(!transport.is_wt());
+    assert!(transport.session().is_none());
+}
+
+#[test]
+fn wt_transport_connects_lazily() {
+    // Nothing is dialed at construction: the app starts before its server is
+    // reachable, and the first stream forces the handshake.
+    let transport = Transport::with_settings(
+        TransportMode::Wt,
+        Some("https://127.0.0.1:14443".into()),
+        console_core::net::WtTls::PinnedHashes(vec![[7u8; 32]]),
+    );
+    assert!(transport.is_wt());
+    assert!(
+        transport.session().is_none(),
+        "no handshake until a stream asks for one"
+    );
+    // Clones share one session cell, so the app opens one connection.
+    assert!(transport.clone().session().is_none());
+}
+
+#[test]
+fn tls_defaults_to_platform_roots() {
+    assert!(matches!(
+        tls_from_setting("").expect("unset"),
+        console_core::net::WtTls::Native
+    ));
+    assert!(matches!(
+        tls_from_setting("native").expect("native"),
+        console_core::net::WtTls::Native
+    ));
+}
+
+#[test]
+fn tls_pins_parse_hex_with_or_without_colons() {
+    let plain = "571b8c9e079e80a7cf7e141f3ef1087b42a56e632797438c969cee576ecf93d9";
+    let colons = "57:1B:8C:9E:07:9E:80:A7:CF:7E:14:1F:3E:F1:08:7B:42:A5:6E:63:27:97:43:8C:96:9C:EE:57:6E:CF:93:D9";
+    let hashes = |setting: String| match tls_from_setting(&setting).expect("pin") {
+        console_core::net::WtTls::PinnedHashes(hashes) => hashes,
+        console_core::net::WtTls::Native => panic!("expected pins"),
+    };
+    let plain_hashes = hashes(format!("pin:{plain}"));
+    assert_eq!(
+        plain_hashes,
+        hashes(format!("pin:{colons}")),
+        "colons are presentation only"
+    );
+    assert_eq!(plain_hashes[0][0], 0x57);
+}
+
+#[test]
+fn tls_pins_reject_bad_input() {
+    for bad in [
+        "pin:",
+        "pin:deadbeef",
+        "pin:zz1b8c9e079e80a7cf7e141f3ef1087b42a56e632797438c969cee576ecf93d9",
+    ] {
+        assert!(
+            tls_from_setting(bad).is_err(),
+            "{bad:?} should be rejected, not silently ignored"
+        );
+    }
 }

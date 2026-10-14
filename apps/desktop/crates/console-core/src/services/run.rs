@@ -1,6 +1,12 @@
 use crate::types::*;
 use crate::utils::{HttpTransport, SseStreamReader};
 use anyhow::{Context, Result, anyhow};
+use std::pin::Pin;
+
+/// Agent run events as one owned stream type, shared by the SSE and
+/// WebTransport paths so callers hold a single type across transports.
+pub type RunEventStream =
+    Pin<Box<dyn futures_util::Stream<Item = Result<AgentSessionEvent>> + Send>>;
 
 #[derive(Clone)]
 pub struct RunService {
@@ -141,11 +147,16 @@ impl RunService {
         }
     }
 
+    /// Start a run and stream its events over SSE.
+    ///
+    /// Returns an owned stream so the transport switch in
+    /// [`crate::services::Transport`] can hand back either transport's stream
+    /// under one `'static` type.
     pub async fn stream_prompt(
         &self,
         session_id: &str,
         payload: RunPromptDto,
-    ) -> Result<impl futures_util::Stream<Item = Result<AgentSessionEvent>>> {
+    ) -> Result<RunEventStream> {
         let url = self
             .transport
             .url(&format!("/api/sessions/{}/run", session_id))
@@ -165,14 +176,16 @@ impl RunService {
             return Err(anyhow!("Run failed with status: {}", err_text));
         }
 
-        Ok(SseStreamReader::parse_stream(resp))
+        Ok(Box::pin(SseStreamReader::parse_stream(resp)))
     }
 
+    /// Attach to a run in flight and stream its events over SSE. Returns an
+    /// owned stream — see [`Self::stream_prompt`].
     pub async fn attach_run_stream(
         &self,
         session_id: &str,
         since: Option<u64>,
-    ) -> Result<impl futures_util::Stream<Item = Result<AgentSessionEvent>>> {
+    ) -> Result<RunEventStream> {
         let path = if let Some(seq) = since {
             format!("/api/sessions/{}/run/stream?since={}", session_id, seq)
         } else {
@@ -198,7 +211,7 @@ impl RunService {
             ));
         }
 
-        Ok(SseStreamReader::parse_stream(resp))
+        Ok(Box::pin(SseStreamReader::parse_stream(resp)))
     }
 
     pub async fn queue_prompt(

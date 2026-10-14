@@ -11,6 +11,7 @@ use super::macos_notifications;
 impl ConsoleDesktopApp {
     pub fn init_notifications(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
+        let transport = self.transport.clone();
         let entity = cx.entity().downgrade();
 
         // Native center delegate + authorization. Clicks arrive as session ids.
@@ -35,7 +36,7 @@ impl ConsoleDesktopApp {
         // SSE event stream → native banner (or silent in-app update).
         cx.spawn(async move |_entity, cx| {
             loop {
-                match client.notifications.stream().await {
+                match transport.watch_notifications(&client).await {
                     Ok(mut stream) => {
                         while let Some(event_res) = stream.next().await {
                             if let Ok(event) = event_res {
