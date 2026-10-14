@@ -100,3 +100,7 @@ path = "tests/session/fork_dto_test.rs"
 [[test]]
 name = "wt_frame_test"
 path = "tests/network/wt_frame_test.rs"
+
+[[test]]
+name = "wt_interop_test"
+path = "tests/network/wt_interop_test.rs"
