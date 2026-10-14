@@ -14,6 +14,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Globe
 import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.Messages
+import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
@@ -48,9 +49,30 @@ val TOOL_LABELS: Map<String, String> = mapOf(
     "subagent" to "Subagent",
     "ask" to "Ask Question", "askMany" to "Ask Questions", "todo" to "Todo",
     "memory" to "Memory", "readSkill" to "Read Skill",
+    "loadTools" to "Load Tools",
 )
 
-fun getToolLabel(name: String): String = TOOL_LABELS[name] ?: name
+/** Split an `mcp__<server>__<tool>` wire name into (server, tool); null when
+ * malformed. Segments are server-sanitized to `[A-Za-z0-9_-]`, so splitting
+ * on the double underscore is safe — single underscores never form one. */
+fun parseMcpToolName(name: String): Pair<String, String>? {
+    if (!name.startsWith("mcp__")) return null
+    val rest = name.removePrefix("mcp__")
+    val sep = rest.indexOf("__")
+    if (sep <= 0) return null
+    val server = rest.substring(0, sep)
+    val tool = rest.substring(sep + 2)
+    if (server.isEmpty() || tool.isEmpty()) return null
+    return server to tool
+}
+
+fun getToolLabel(name: String): String {
+    TOOL_LABELS[name]?.let { return it }
+    parseMcpToolName(name)?.let { (server, tool) ->
+        return "${tool.replace('_', ' ')} ($server)"
+    }
+    return name
+}
 
 // Mirrors the desktop's `activity_icon` alias handling in
 // apps/desktop/crates/console-ui/src/primitives/mod.rs.
@@ -71,7 +93,13 @@ val TOOL_ICONS: Map<String, ImageVector> = mapOf(
     "memory" to TablerIcons.Outline.Brain, "readSkill" to TablerIcons.Outline.Book,
 )
 
-fun getToolIcon(name: String): ImageVector = TOOL_ICONS[name] ?: TablerIcons.Outline.Tool
+fun getToolIcon(name: String): ImageVector {
+    TOOL_ICONS[name]?.let { return it }
+    // The loader and every namespaced MCP tool share the plug glyph — dynamic
+    // `mcp__<server>__<tool>` names can never be map keys.
+    if (name == "loadTools" || name.startsWith("mcp__")) return TablerIcons.Outline.PlugConnected
+    return TablerIcons.Outline.Tool
+}
 
 fun formatUnknown(v: Any?): String = when (v) {
     null -> "null"
@@ -122,6 +150,11 @@ fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
             ?.let { return truncate("$op [${it.joinToString(", ")}]", 72) }
         s("id")?.let { return truncate("$op $it", 72) }
         return truncate(op, 72)
+    }
+    // The loader takes `{group: "mcp:<server-id>"}` — surface it verbatim so
+    // the row says which group was loaded.
+    if (call.name == "loadTools") {
+        return s("group")?.let { truncate(it, 72) }
     }
     // Multi-line values (heredoc scripts, multi-line queries) must collapse to
     // one line: a literal newline renders as a hard line break that no
