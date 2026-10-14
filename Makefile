@@ -12,27 +12,32 @@ dev-server:
 	CONSOLE_ENV=dev go -C apps/server-go run ./cmd/server
 
 ## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
-##   Generates a throwaway self-signed cert in ~/.console-dev on first run
-##   (clients must trust or skip-verify it; browsers will warn).
+##   Generates a throwaway self-signed EC cert in ~/.console-dev on first run
+##   (regenerated when expired). Desktop trusts it via pinned hash; browsers
+##   will warn. EC P-256 with short validity is required: the desktop's cert
+##   pinning rejects RSA keys and validity past 14 days.
 ##   Usage: make dev-server-wt              (HTTP 3000 + WT 127.0.0.1:14443)
 ##          make dev-server-wt PORT=2003    (HTTP 2003 + WT 127.0.0.1:14443)
 ##          make dev-server-wt WT_PORT=24443
 WT_PORT ?= 14443
+WT_DEV_CERT := $(HOME)/.console-dev/wt-dev.crt
+WT_DEV_KEY := $(HOME)/.console-dev/wt-dev.key
 dev-server-wt:
 	@if ! command -v openssl >/dev/null 2>&1; then \
 		echo "error: openssl is required to generate the dev TLS certificate." >&2; exit 1; \
 	fi
 	@mkdir -p $(HOME)/.console-dev
-	@if [ ! -f $(HOME)/.console-dev/wt-dev.crt ]; then \
-		openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
-			-keyout $(HOME)/.console-dev/wt-dev.key \
-			-out $(HOME)/.console-dev/wt-dev.crt \
-			-subj "/CN=localhost" \
-			-addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null; \
+	@if [ ! -f $(WT_DEV_CERT) ] || ! openssl x509 -in $(WT_DEV_CERT) -noout -checkend 0 2>/dev/null; then \
+		tmpconf=$$(mktemp); \
+		printf '[req]\ndistinguished_name=dn\nreq_extensions=ext\n[dn]\n[ext]\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n' > $$tmpconf; \
+		openssl ecparam -genkey -name prime256v1 -noout -out $(WT_DEV_KEY) 2>/dev/null && \
+		openssl req -new -x509 -key $(WT_DEV_KEY) -out $(WT_DEV_CERT) -days 13 \
+			-subj "/CN=localhost" -config $$tmpconf 2>/dev/null; \
+		rm -f $$tmpconf; \
 	fi
 	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
-	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
-	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
+	CONSOLE_TLS_CERT=$(WT_DEV_CERT) \
+	CONSOLE_TLS_KEY=$(WT_DEV_KEY) \
 	CONSOLE_WT_ADDR=127.0.0.1:$(WT_PORT) \
 	go -C apps/server-go run ./cmd/server
 
