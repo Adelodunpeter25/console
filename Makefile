@@ -12,33 +12,24 @@ dev-server:
 	CONSOLE_ENV=dev go -C apps/server-go run ./cmd/server
 
 ## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
-##   Generates a throwaway self-signed EC cert in ~/.console-dev on first run
-##   (regenerated when expired). Desktop trusts it via pinned hash; browsers
-##   will warn. EC P-256 with short validity is required: the desktop's cert
-##   pinning rejects RSA keys and validity past 14 days.
-##   Usage: make dev-server-wt              (HTTP 3000 + WT 127.0.0.1:14443)
-##          make dev-server-wt PORT=2003    (HTTP 2003 + WT 127.0.0.1:14443)
+##   `console cert-fingerprint` creates the dev certificate on first use (and
+##   replaces it when expired) so there is nothing to generate by hand and no
+##   openssl involved. A client pins it with CONSOLE_WT_TLS=pin:<fingerprint>;
+##   `make dev-desktop-wt` wires that up for you.
+##   Usage: make dev-server-wt              (HTTP 3000 + QUIC :14443)
+##          make dev-server-wt PORT=2003    (HTTP 2003 + QUIC :14443)
 ##          make dev-server-wt WT_PORT=24443
+##
+##   Runs the server directly rather than through `console start`, matching
+##   dev-server: this target is a foreground server, not a managed daemon, and
+##   must not refuse to start because a daemon from another mode is running.
 WT_PORT ?= 14443
-WT_DEV_CERT := $(HOME)/.console-dev/wt-dev.crt
-WT_DEV_KEY := $(HOME)/.console-dev/wt-dev.key
 dev-server-wt:
-	@if ! command -v openssl >/dev/null 2>&1; then \
-		echo "error: openssl is required to generate the dev TLS certificate." >&2; exit 1; \
-	fi
-	@mkdir -p $(HOME)/.console-dev
-	@if [ ! -f $(WT_DEV_CERT) ] || ! openssl x509 -in $(WT_DEV_CERT) -noout -checkend 0 2>/dev/null; then \
-		tmpconf=$$(mktemp); \
-		printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\n[dn]\n[ext]\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n' > $$tmpconf; \
-		openssl ecparam -genkey -name prime256v1 -noout -out $(WT_DEV_KEY) 2>/dev/null && \
-		openssl req -new -x509 -key $(WT_DEV_KEY) -out $(WT_DEV_CERT) -days 13 \
-			-subj "/CN=localhost" -config $$tmpconf 2>/dev/null; \
-		rm -f $$tmpconf; \
-	fi
+	@CONSOLE_ENV=dev go -C apps/server-go run ./cmd/console cert-fingerprint --dev > /dev/null
 	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
-	CONSOLE_TLS_CERT=$(WT_DEV_CERT) \
-	CONSOLE_TLS_KEY=$(WT_DEV_KEY) \
-	CONSOLE_WT_ADDR=127.0.0.1:$(WT_PORT) \
+	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
+	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
+	CONSOLE_WT_ADDR=:$(WT_PORT) \
 	go -C apps/server-go run ./cmd/server
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
@@ -75,12 +66,10 @@ dev-desktop:
 ##   Usage: make dev-desktop-wt            (API 3000 + WT 127.0.0.1:14443)
 ##          make dev-desktop-wt PORT=2003 WT_PORT=24443
 dev-desktop-wt:
-	@if [ ! -f "$(WT_DEV_CERT)" ]; then \
-		echo "error: $(WT_DEV_CERT) is missing. Start 'make dev-server-wt' once to generate it." >&2; exit 1; \
-	fi
+	CONSOLE_ENV=dev \
 	CONSOLE_TRANSPORT=wt \
 	CONSOLE_WT_ORIGIN=https://127.0.0.1:$(WT_PORT) \
-	CONSOLE_WT_TLS=pin:$$(openssl x509 -in "$(WT_DEV_CERT)" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d :) \
+	CONSOLE_WT_TLS=pin:$$(go -C apps/server-go run ./cmd/console cert-fingerprint --dev) \
 	CONSOLE_BACKEND_URL=http://127.0.0.1:$(if $(PORT),$(PORT),3000) \
 	bash apps/desktop/scripts/dev.sh
 

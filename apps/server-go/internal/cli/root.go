@@ -28,6 +28,8 @@ func Execute() {
 	startDaemon := true
 	startNoDaemon := false
 	startDev := false
+	startWT := false
+	startWTPort := ""
 	startCmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start the console agent daemon (reuses saved port/host from ~/.console/config.json when flags are omitted)",
@@ -35,6 +37,7 @@ func Execute() {
 			daemon := startDaemon && !startNoDaemon
 			return commands.StartDaemon(commands.StartOptions{
 				Port: startPort, Host: startHost, Daemon: daemon, Dev: startDev,
+				WT: startWT, WTPort: startWTPort,
 			})
 		},
 	}
@@ -43,6 +46,8 @@ func Execute() {
 	startCmd.Flags().BoolVar(&startDaemon, "daemon", true, "Run as background daemon")
 	startCmd.Flags().BoolVar(&startNoDaemon, "no-daemon", false, "Run in foreground")
 	startCmd.Flags().BoolVar(&startDev, "dev", false, "Use dev storage (~/.console-dev) instead of production (~/.console)")
+	startCmd.Flags().BoolVar(&startWT, "wt", false, "Also serve WebTransport over QUIC, generating a development certificate if needed")
+	startCmd.Flags().StringVar(&startWTPort, "wt-port", "", "WebTransport/QUIC port (default 14443)")
 	root.AddCommand(startCmd)
 
 	root.AddCommand(&cobra.Command{
@@ -85,19 +90,38 @@ func Execute() {
 	restartPort := ""
 	restartHost := ""
 	restartDev := false
+	restartWT := false
+	restartWTPort := ""
 	restartCmd := &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the console agent daemon (reuses saved port/host when flags are omitted)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return commands.RestartDaemon(commands.RestartOptions{
 				Port: restartPort, Host: restartHost, Dev: restartDev,
+				WT: restartWT, WTPort: restartWTPort,
 			})
 		},
 	}
 	restartCmd.Flags().StringVarP(&restartPort, "port", "p", "", "Port to run the server on (omit to reuse saved port)")
 	restartCmd.Flags().StringVar(&restartHost, "host", "", "Host to bind to (omit to reuse saved host)")
 	restartCmd.Flags().BoolVar(&restartDev, "dev", false, "Use dev storage (~/.console-dev) instead of production (~/.console)")
+	restartCmd.Flags().BoolVar(&restartWT, "wt", false, "Also serve WebTransport over QUIC (repeat on every restart; not remembered)")
+	restartCmd.Flags().StringVar(&restartWTPort, "wt-port", "", "WebTransport/QUIC port (default 14443)")
 	root.AddCommand(restartCmd)
+
+	certDev := false
+	certCmd := &cobra.Command{
+		Use:   "cert-fingerprint",
+		Short: "Print the SHA-256 fingerprint clients use to pin the development TLS certificate",
+		Long: "Print the SHA-256 fingerprint of the development certificate that `console start --wt`\n" +
+			"serves, generating the certificate if it does not exist yet. Pass the value to a\n" +
+			"client as CONSOLE_WT_TLS=pin:<fingerprint>.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.CertFingerprint(certDev)
+		},
+	}
+	certCmd.Flags().BoolVar(&certDev, "dev", false, "Use dev storage (~/.console-dev) instead of production (~/.console)")
+	root.AddCommand(certCmd)
 
 	root.AddCommand(&cobra.Command{
 		Use:   "env",

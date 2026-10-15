@@ -8,15 +8,20 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 // StartOptions configures start: port/host save-and-reuse,
-// daemon selects background vs foreground, dev pins dev storage.
+// daemon selects background vs foreground, dev pins dev storage,
+// wt serves WebTransport over QUIC alongside HTTP.
 type StartOptions struct {
 	Port   string
 	Host   string
 	Daemon bool
 	Dev    bool
+	WT     bool
+	// WTPort overrides the WebTransport/QUIC port when WT is set.
+	WTPort string
 }
 
 // serverLaunch is how to spawn the server process.
@@ -112,6 +117,23 @@ func StartDaemon(options StartOptions) error {
 	overrides := map[string]string{
 		"PORT": port, "HOST": host, "CONSOLE_DAEMON": "true",
 	}
+
+	// WebTransport is opt-in so a plain `console start` behaves exactly as it
+	// did before QUIC existed. Once asked for, it is self-sufficient: the dev
+	// certificate is generated on first use and the fingerprint is printed so
+	// a client can pin it.
+	var wtCert wt.DevCert
+	if options.WT {
+		wtCert, err = setupWebTransport(options, host)
+		if err != nil {
+			return err
+		}
+		overrides["CONSOLE_TRANSPORT"] = string(wt.TransportAuto)
+		overrides["CONSOLE_TLS_CERT"] = wtCert.CertPath
+		overrides["CONSOLE_TLS_KEY"] = wtCert.KeyPath
+		overrides["CONSOLE_WT_ADDR"] = wtAddr(host, options.WTPort)
+	}
+
 	if launch.serveSelf {
 		overrides["CONSOLE_SERVE"] = "1"
 	}
@@ -122,6 +144,9 @@ func StartDaemon(options StartOptions) error {
 		fmt.Printf("Mode: %s (storage: %s)\n", daemon.ResolveMode(), daemon.ConsoleDir())
 		fmt.Printf("Port: %s\n", port)
 		fmt.Printf("Host: %s\n", host)
+		if options.WT {
+			printWebTransport(wtCert, wtAddr(host, options.WTPort))
+		}
 		fmt.Println(firecrawlStatus)
 
 		logFile, err := os.OpenFile(daemon.LogFilePath(), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
@@ -176,6 +201,9 @@ func StartDaemon(options StartOptions) error {
 	fmt.Println("Starting console agent in foreground...")
 	fmt.Printf("Port: %s\n", port)
 	fmt.Printf("Host: %s\n", host)
+	if options.WT {
+		printWebTransport(wtCert, wtAddr(host, options.WTPort))
+	}
 	fmt.Println(firecrawlStatus)
 	fmt.Println("Press Ctrl+C to stop")
 

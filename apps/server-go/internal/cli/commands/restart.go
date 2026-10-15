@@ -13,6 +13,12 @@ type RestartOptions struct {
 	Port string
 	Host string
 	Dev  bool
+	// WT and WTPort must be repeated on every restart. The daemon is
+	// restarted from scratch with a fresh environment rather than inheriting
+	// the old process's, so a `start --wt` that is not mirrored here would
+	// silently come back without WebTransport.
+	WT     bool
+	WTPort string
 }
 
 // RestartDaemon stops the running daemon (if any) and starts it again.
@@ -38,5 +44,6 @@ func RestartDaemon(options RestartOptions) error {
 	}
 	return StartDaemon(StartOptions{
 		Port: options.Port, Host: options.Host, Daemon: true, Dev: dev,
+		WT: options.WT, WTPort: options.WTPort,
 	})
 }
