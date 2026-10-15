@@ -7,20 +7,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
-)
 
-// SupportedImageMIMEs are the formats read_file returns as image parts.
-// Anything sniffed but absent here (BMP, AVIF, PDF) stays on the text/binary
-// path.
-var SupportedImageMIMEs = map[string]bool{
-	"image/png":  true,
-	"image/jpeg": true,
-	"image/gif":  true,
-	"image/webp": true,
-}
+	imageutil "github.com/Adelodunpeter25/console/apps/server-go/internal/utils/image"
+)
 
 // readMaxImageBytes is the ingest ceiling for a supported image, checked
 // before the payload is read.
@@ -53,22 +46,6 @@ type ReadFileOptions struct {
 	VisionModel string
 }
 
-// sniffImageMime identifies a supported image by magic bytes only — never by
-// extension. Returns "" when the prefix is not a supported image.
-func sniffImageMime(prefix []byte) string {
-	switch {
-	case bytes.HasPrefix(prefix, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}):
-		return "image/png"
-	case bytes.HasPrefix(prefix, []byte{0xff, 0xd8, 0xff}):
-		return "image/jpeg"
-	case bytes.HasPrefix(prefix, []byte{0x47, 0x49, 0x46, 0x38}):
-		return "image/gif"
-	case len(prefix) >= 12 && bytes.HasPrefix(prefix, []byte("RIFF")) && bytes.Equal(prefix[8:12], []byte("WEBP")):
-		return "image/webp"
-	}
-	return ""
-}
-
 // imagePart renders raw image bytes as the inline content part every provider
 // adapter understands.
 func imagePart(mime string, data []byte) map[string]any {
@@ -77,6 +54,15 @@ func imagePart(mime string, data []byte) map[string]any {
 		"data":     base64.StdEncoding.EncodeToString(data),
 		"mimeType": mime,
 	}
+}
+
+// imageTextLine labels an emitted image part with its path, mime, and
+// dimensions when known.
+func imageTextLine(path string, p imageutil.Payload) string {
+	if p.Width > 0 && p.Height > 0 {
+		return fmt.Sprintf("Image read: %s (%s, %dx%d).", path, p.Mime, p.Width, p.Height)
+	}
+	return fmt.Sprintf("Image read: %s (%s).", path, p.Mime)
 }
 
 // binaryExtensions are known-binary, non-image suffixes rejected without

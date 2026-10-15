@@ -14,6 +14,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
+	imageutil "github.com/Adelodunpeter25/console/apps/server-go/internal/utils/image"
 )
 
 // fffManager is set once at startup (see SetFffManager) so glob/grep can use
@@ -101,7 +102,7 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 
 	// Images are decided by magic bytes, never by extension; a text file named
 	// ".png" falls through to the text path below.
-	if mime := sniffImageMime(prefix); mime != "" {
+	if mime := imageutil.SniffMime(prefix); mime != "" {
 		if sizeBytes > int64(maxImageBytes) {
 			return nil, NewToolError("Cannot read %s: image is %d bytes, over the %d byte limit.", in.Path, sizeBytes, maxImageBytes)
 		}
@@ -113,9 +114,13 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 			}
 			data = append(append(make([]byte, 0, len(prefix)+len(rest)), prefix...), rest...)
 		}
+		payload, err := imageutil.Fit(data, mime)
+		if err != nil {
+			return nil, NewToolError("Cannot read %s: %v (limit %d bytes).", in.Path, err, imageutil.MaxBase64)
+		}
 		return []map[string]any{
-			imagePart(mime, data),
-			{"type": "text", "text": fmt.Sprintf("Image read: %s (%s).", in.Path, mime)},
+			imagePart(payload.Mime, payload.Data),
+			{"type": "text", "text": imageTextLine(in.Path, payload)},
 		}, nil
 	}
 

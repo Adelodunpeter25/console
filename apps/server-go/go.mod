@@ -13,6 +13,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/valyala/fasthttp v1.58.0
+	golang.org/x/image v0.40.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.38.0
