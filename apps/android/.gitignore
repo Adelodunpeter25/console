@@ -24,8 +24,9 @@ upload-keystore.jks
 # new worktrees, which a `keystore/` dir-only pattern would not match.
 keystore
 .kotlin/
-rust-wt-spike/target/
-# Staged into the APK by rust-wt-spike/build.sh — a binary is not a
-# reviewable artifact, and it is reproducible from that script.
+# The Rust WebTransport client: build artifacts, and the .so it stages into
+# the APK. A binary is not a reviewable artifact, and both are reproducible
+# from rust-wt/build.sh.
+rust-wt/target/
 app/src/main/jniLibs/arm64-v8a/libconsole_wt_android.so
 app/src/main/jniLibs/x86_64/libconsole_wt_android.so

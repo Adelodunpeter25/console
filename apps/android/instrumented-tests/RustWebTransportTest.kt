@@ -25,14 +25,14 @@ import java.util.concurrent.TimeUnit
  * API does not exist at all.
  *
  * Needs the Rust library staged into the APK first:
- *   apps/android/rust-wt-spike/build.sh
+ *   apps/android/rust-wt/build.sh
  *   # then a WT server on the ports below (see the plan doc)
  *
  * Settings come from instrumentation arguments (`am instrument -e`), not the
  * environment — `System.getenv` yields nothing there.
  */
 @RunWith(AndroidJUnit4::class)
-class RustWebTransportSpikeTest {
+class RustWebTransportTest {
     private val args: android.os.Bundle by lazy {
         androidx.test.platform.app.InstrumentationRegistry.getArguments()
     }

@@ -24,7 +24,7 @@ object WtNative {
 
     /**
      * Build marker from the Rust side. Calling anything here first runs the
-     * library load, so a missing `rust-wt-spike/build.sh` staging step fails
+     * library load, so a missing `rust-wt/build.sh` staging step fails
      * here rather than as an unexplained `UnsatisfiedLinkError` later.
      */
     external fun abiVersion(): Int
