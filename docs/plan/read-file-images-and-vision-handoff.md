@@ -2,7 +2,9 @@
 
 `read_file` today is text-only: it stats, reads up to 512 KB, splits on `\n`, and returns line-numbered prose. Point it at a PNG and the model gets a wall of binary mojibake. This plan makes it return real image parts, and — the interesting part — when the active run model cannot see images, it spends one call on the configured `vision` role model and returns *that model's description* as the tool result, so the run continues on its original model instead of going blind.
 
-Target: `internal/agent/tools/file_tools.go`, new `internal/agent/tools/image_view.go`, new `internal/agent/vision/vision.go`, `internal/agent/compaction/tokens.go`, `internal/agent/loop/breakdown.go`, `internal/run/models.go`, `internal/run/turns.go`, `go.mod`.
+Target: `internal/agent/tools/file_tools.go`, new `internal/agent/tools/image_view.go`, new `internal/agent/vision/vision.go`, `internal/agent/compaction/tokens.go`, `internal/agent/compaction/summary.go`, `internal/agent/loop/breakdown.go`, `internal/run/models.go`, `internal/run/turns.go`, `internal/services/settings_service.go`, `go.mod`.
+
+> Line references below are approximate and drift as the tree moves — this plan's were written before the background-work, path-guard, and file-change commits. Prefer the named symbols when the numbers disagree.
 
 ---
 
@@ -13,19 +15,19 @@ Target: `internal/agent/tools/file_tools.go`, new `internal/agent/tools/image_vi
 - **No SVG images.** SVG is XML text; the existing line reader already handles it correctly. It is deliberately not in the sniff table.
 - **No model switch mid-run.** See §2 — swapping models inside the loop is off the table for good reasons.
 - **No new settings field in the first cut.** Vision describe turns on implicitly when a `vision` role is configured and the run model is image-blind. A kill switch is Phase 5.
-- **No client work.** Tool-result images are already stripped before broadcast (`run/turns.go:473`), so desktop and Android need no changes.
+- **No client work.** Tool-result images are already stripped before broadcast (`stripResultImages` in `run/turns.go`), so desktop and Android need no changes.
 
 ---
 
 ## 1. Design Principles
 
-1. **The transport already exists — use it, don't build a second one.** Tool results in this harness already carry `{"type":"image","data":<base64>,"mimeType":<mime>}` parts. The browser tool (`agent/tools/browser_tool.go:117`), the MCP adapter (`services/mcp/adapter.go:178`), and the CUA driver (`services/cua/manager.go:274`) all produce them. Claude renders them as native image blocks (`providers/claude/convert.go:47`); every other provider replaces them with `[image omitted: provider does not support images in tool results]` (`providers/shared/json.go:56`). `read_file` becomes just another producer of a shape we own.
+1. **The transport already exists — use it, don't build a second one.** Tool results in this harness already carry `{"type":"image","data":<base64>,"mimeType":<mime>}` parts. The browser tool (`agent/tools/browser_tool.go:117`), the MCP adapter (`services/mcp/adapter.go:178`), and the CUA driver (`services/cua/js.go:220,434`) all produce them. Claude renders them as native image blocks (`providers/claude/convert.go:47`); codex, opencode, and antigravity replace them with `[image omitted: provider does not support images in tool results]` (`providers/shared/json.go:56`). `read_file` becomes just another producer of a shape we own — but note §2.1: producing the shape is not the same as delivering it, and only Claude delivers it inside a tool result today.
 
 2. **Detect by magic bytes, never by extension.** A `.png` that is actually a text file, or a binary blob named `.txt`, must not be routed by filename. Sniff the first bytes; extension is at most a tiebreaker we do not need.
 
 3. **Images never pass through the line reader.** Sniff on a small prefix, branch immediately. This is the single most important structural point — it is why OpenCode's read tool is fast on images and ours would be pathological.
 
-4. **The run model never changes.** The loop is `for { turn(); execute tools }` with the provider fixed for the whole `run()` (`agent/loop/loop.go:231`). Vision help arrives as a *description*, not as a model swap.
+4. **The run model never changes.** The loop is `for { turn(); execute tools }` with the provider fixed for the whole `run()` (`agent/loop/loop.go`, the `for` loop in `run`). Vision help arrives as a *description*, not as a model swap.
 
 5. **Fail loud, degrade once.** No binary support and no vision role → say so in the tool result with the reason and the remedy. Never silently return `[image omitted]` with no explanation.
 
@@ -35,23 +37,31 @@ Target: `internal/agent/tools/file_tools.go`, new `internal/agent/tools/image_vi
 
 ## 2. The Two Constraints That Shape Everything
 
-### 2.1 The transport is done; only the producer is missing
+### 2.1 The producer is missing — and three of four providers drop the product
 
 ```
 read_file.Execute
   └─ returns []map[string]any{{"type":"image","data":..., "mimeType":...}}
-       └─ loop.ToolResultMessage  (agent/loop/loop.go:270)
-            ├─ claude     → toolResultContent → Anthropic image block   ✅
+       └─ loop.ToolResultMessage  (agent/loop/loop.go, `results` in `run`)
+            ├─ claude     → toolResultContent → Anthropic image block   ✅ delivers
             ├─ codex      → shared.ToolResultText → RedactImages        ❌ placeholder
             ├─ opencode   → shared.ToolResultText → RedactImages        ❌ placeholder
-            └─ antigravity→ shared.ToolResultText → RedactImages        ❌ placeholder
+            └─ antigravity→ shared.RedactImages                         ❌ placeholder
 ```
 
-Three of four providers drop it today. That is the problem §5 Phase 3 solves.
+**Model capability and provider delivery are two different things, and the plan must not conflate them.** `model.SupportsImages` reports whether the model accepts images in *user* messages. Only Claude also accepts them inside a *tool result*; the other three redact every tool-result image to a text placeholder before the request is built, regardless of what the model can do. So `CanSeeImages: model.SupportsImages` (Phase 4) and the "never pay for what the model can do" early return in `imageDescriber` (§4.3) would, for a Codex/Antigravity/OpenCode model that *declares* image support, hand the model an image part the adapter then silently drops — the exact un-explained `[image omitted: ...]` dead end §1.5 forbids, with no description and no remedy.
+
+The fix is to gate on **delivery**, not on capability:
+
+- Introduce one predicate, e.g. `providerDeliversToolResultImages(providerID string) bool`, true for `claude` today.
+- `CanSeeImages` = `model.SupportsImages && providerDeliversToolResultImages(provider)`.
+- `imageDescriber`'s early return must use the same predicate, so a capable-but-redacting model falls through to describe-or-placeholder instead of a silent drop.
+
+This keeps §5 Phase 3's "works on all four providers" claim true for the describe path while making the direct-image path honest. The alternative — teach codex/opencode/antigravity to carry media in tool results (OpenCode's provider capability matrix, §3.1) — is real work and belongs in its own change, not here.
 
 ### 2.2 The vision fallback cannot work mid-loop
 
-The existing fallback (`run/turns.go:272-283`) is gated on `len(dto.Attachments) > 0` and runs **once, before the loop**:
+The existing fallback (`run/turns.go`, the `len(dto.Attachments) > 0` block that calls `s.resolveVision`) is gated on `len(dto.Attachments) > 0` and runs **once, before the loop**:
 
 ```go
 if len(dto.Attachments) > 0 && !model.SupportsImages {
@@ -71,11 +81,17 @@ This is the same shape Claude Code uses, and it composes with what is already he
 
 ### 2.3 Behavior matrix
 
-| Run model sees images? | `vision` role resolves to an image-capable model? | `read_file` on a PNG returns |
-|---|---|---|
-| yes | — | image part + short text line. Zero extra calls. |
-| no | yes | text description from the vision model, labelled as such |
-| no | no / unset | text placeholder naming the path, mime, dimensions, and the fix |
+"Provider delivers tool-result images" is true for Claude only (§2.1). The run model's declared `SupportsImages` matters only when that is also true.
+
+| Provider delivers tool-result images? | Run model sees images? | `vision` role resolves to an image-capable model? | `read_file` on a PNG returns |
+|---|---|---|---|
+| yes (claude) | yes | — | image part + short text line. Zero extra calls. |
+| no (codex/opencode/antigravity) | yes | yes | text description from the vision model, labelled as such |
+| no | yes | no / unset | text placeholder naming the path, mime, dimensions, and the fix |
+| — | no | yes | text description from the vision model, labelled as such |
+| — | no | no / unset | text placeholder naming the path, mime, dimensions, and the fix |
+
+The first two rows are why the gate is on delivery, not capability: a Codex model that *can* see user-message images still cannot see a tool-result image, so without the gate it lands in a silent placeholder.
 
 ---
 
@@ -150,20 +166,33 @@ type ImagePayload struct {
 }
 ```
 
-`ReadFile` changes from a package-level `var` to a constructor, matching `NewTodoTool`, `NewBashTool`, `NewBrowserTool`:
+Add a constructor, matching `NewTodoTool`, `NewBashTool`, `NewBrowserTool`. Keep the package-level `ReadFile` name as the zero-options instance so existing call sites do not churn:
 
 ```go
 func NewReadFileTool(opts ReadFileOptions) Tool
+
 type ReadFileOptions struct {
-    // CanSeeImages is true when the run model declares image support, in
-    // which case the image part is returned directly and Describe is unused.
+    // CanSeeImages is true when the image part will actually reach the run
+    // model — i.e. the model declares image support *and* the provider
+    // delivers images inside a tool result (§2.1). When true, Describe is unused.
     CanSeeImages bool
     Describer    ImageDescriber // nil disables describe; falls back to placeholder
     MaxImageBytes int           // default readMaxImageBytes
+    // RunModel is the active run model id, and VisionModel the resolved vision
+    // role as "provider/model". Both are used only to label the Phase 3 text.
+    // Empty values degrade to a generic sentence.
+    RunModel    string
+    VisionModel string
 }
+
+// ReadFile is the zero-options default used by DefaultTools() (static
+// registration, headless CLI, test fixtures).
+var ReadFile = NewReadFileTool(ReadFileOptions{})
 ```
 
-`tools.DefaultTools()` keeps returning a `read_file` with zero-value options so static registration (and `subagent`'s simulated path) still works.
+`tools.DefaultTools()` keeps returning this zero-value `read_file`. `ReadFile` is referenced by `tests/tools/read_file_test.go`, `tests/agent/agent_test.go`, and `tests/providers/opencode_provider_test.go`; keeping the var means only the new image tests are added, not the existing ones rewritten.
+
+`RunModel`/`VisionModel` exist because the Phase 3 messages name the active model and the vision model (`The active model (<model>) has no image support...`). `ImageDescriber` returns prose only, so without these the placeholder branch has nothing to render `<model>` from.
 
 ### 4.2 Pure-Go resize budget
 
@@ -229,14 +258,18 @@ const visionSystemPrompt = "You describe images for a text-only coding agent. " 
 
 ```go
 // internal/run/models.go
-func (s *Service) imageDescriber(model types.Model) tools.ImageDescriber {
-    if model.SupportsImages { return nil }        // never pay for what the model can do
+func (s *Service) imageDescriber(model types.Model, providerID string) tools.ImageDescriber {
+    // Capability is not delivery: a Codex/Gemini model that sees user-message
+    // images still gets tool-result images redacted, so it needs describe too.
+    if model.SupportsImages && providerDeliversToolResultImages(providerID) {
+        return nil
+    }
     if _, ok := s.resolveVision(model); !ok { return nil }
     return &visionDescriber{s: s, fallback: model}
 }
 ```
 
-`visionDescriber.Describe` resolves the role, `s.Lookup`s the provider, calls `vision.Describe`, and returns `ok=false` if the role model or the call fails. It wraps each call in `context.WithTimeout(ctx, 30*time.Second)` so a slow vision model cannot stall the run indefinitely.
+`visionDescriber.Describe` resolves the role, `s.Lookup`s the provider, calls `vision.Describe`, and returns `ok=false` if the role model or the call fails. It wraps each call in `context.WithTimeout(ctx, 30*time.Second)` so a slow vision model cannot stall the run indefinitely. The resolved `provider/model` label travels with the describer so the Phase 3 result can say which model wrote the description.
 
 **Decision — trust the user's declared vision role (fix A).** `roles.ResolveRoleModel` (`internal/agent/roles/roles.go:78-81`) synthesizes a model for an unknown id with a hardcoded `ContextWindow: 128_000` and never sets `SupportsImages`, so it is `false`. Combined with the `!vision.SupportsImages` gate in `run/models.go:67`, a `vision` role pointing at a model id the catalog does not know **can never win the fallback, silently** — the user configures a vision model, the UI shows it set, and images are still redacted to `[image omitted: ...]`.
 
@@ -258,16 +291,21 @@ This is live, not theoretical. `providers/opencode/models.go:113-115` hardcodes 
 
 This must land before any image is ever returned, or we will trigger runaway compaction.
 
-Both estimators `json.Marshal` the tool result and count **every** character, base64 included:
+Three estimate walks `json.Marshal` the tool result and count **every** character, base64 included — all three feed a live decision:
 
-- `internal/agent/compaction/tokens.go:153` — `resultChars` → `len(raw)`
-- `internal/agent/loop/breakdown.go:151` — `contentChars` → counts marshalled length
+- `internal/agent/compaction/tokens.go` — `resultChars`, reached by **both** `EstimateMessageTokens` (history estimate; used by `FindCutPoint` and the compaction accounting) and `EstimatePayloadTokens` (payload estimate; used by `ShouldCompact` and the footer context ring via `run/context.go` `ContextUsage`).
+- `internal/agent/loop/breakdown.go` — `contentChars`, reached by `EstimateBreakdown` (the `OnRequest` per-source breakdown).
 
-A 1.5 MB PNG becomes ~2 MB of base64, so `2_000_000 / 4 ≈ 500_000` tokens attributed to `ToolResults["read_file"]` — against a real cost of ~1,000. Two images would look like a blown context, firing the emergency-compaction and overflow-retry paths in `agent/loop/loop.go:297` on every single turn. Meanwhile the correct flat rate (`imageTokensEach = 1000`, `tokens.go:17`) is applied *only* to `UserMessage.Attachments` and never to tool results.
+A 1.5 MB PNG becomes ~2 MB of base64, so `2_000_000 / 4 ≈ 500_000` tokens attributed to `ToolResults["read_file"]` — against a real cost of ~1,000. Two images would look like a blown context: `ShouldCompact` fires autocompaction, the footer ring pins to red, and the overflow-retry path in `agent/loop/loop.go` (`turn`, the `overflowRetried` loop) can trigger on every turn. Meanwhile the correct flat rate (`imageTokensEach = 1000`, `tokens.go`) is applied *only* to `UserMessage.Attachments` and never to tool results.
 
-Add an image-aware walk to both: strip `{"type":"image"}` parts before counting characters and add `imageTokensEach` per part, exactly as `UserMessage.Attachments` already does. Share one helper so the two estimators cannot drift.
+Add an image-aware walk to all three: strip `{"type":"image"}` parts before counting characters and add `imageTokensEach` per part, exactly as `UserMessage.Attachments` already does. Share one helper (in `loop`, which `compaction` already imports) so the estimators cannot drift.
 
-- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestBreakdown -v` and `cd apps/server-go && go test ./tests/compaction/ -run TestEstimateMessageTokens -v` — a `ToolResultMessage` carrying a 2 MB base64 image estimates at ~1,000 tokens, not ~500,000; text-only results are unchanged; multiple images add linearly.
+Two adjacent holes to close in the same phase, since this is the phase that makes tool-result images common:
+
+- **Summary extraction leaks base64 into checkpoint summaries.** `compaction/summary.go` `resultText` only collapses `[]any` text parts; the in-memory `[]map[string]any` shape a `read_file` (or browser/MCP/CUA) result actually has falls through to `json.Marshal`, so `formatFileFacts` embeds up to `maxFileFactChars` (400) of raw base64 per read per checkpoint. Reuse the same image-aware extraction helper here.
+- **Persistence and replay.** Tool-result content is stored as raw JSON in session storage (`agent/loop/proto.go`, `toolResultsToProto` → `json.Marshal`), base64 and all, and `DecodeHistory` replays it into every later run's history. Phase 0 fixes the *estimate*; it does not stop the storage growth or the re-upload. Accept and document that for now (compaction discards whole turns eventually), or add a follow-up to store a placeholder and keep the image in-flight only. Note also that `ShakeConversation` only truncates *string* content, so image results cannot be shaken in an emergency — acceptable at 1,000 estimated tokens each, but make it deliberate.
+
+- **Verification**: `cd apps/server-go && go test ./tests/compaction/ -run TestEstimateTokens -v` and `cd apps/server-go && go test ./tests/agent/ -run TestBreakdown -v` (the fixture is `TestBreakdownBuckets`) — a `ToolResultMessage` carrying a 2 MB base64 image estimates at ~1,000 tokens, not ~500,000; text-only results are unchanged; multiple images add linearly.
 
 ### Phase 1 — Detect images and pass them through
 
@@ -320,33 +358,35 @@ The last branch matters. Today the model would receive `[image omitted: provider
 
 ### Phase 4 — Wire it into the run
 
-`internal/run/turns.go` — add to the tool-swap switch at line 296:
+`internal/run/turns.go` — add to the tool-swap switch (the `for _, t := range tools.DefaultTools()` switch in `runOneTurn`):
 
 ```go
 case "read_file":
     toolList = append(toolList, tools.NewReadFileTool(tools.ReadFileOptions{
-        CanSeeImages: model.SupportsImages,
-        Describer:    s.imageDescriber(model),
+        CanSeeImages: model.SupportsImages && providerDeliversToolResultImages(providerID),
+        Describer:    s.imageDescriber(model, providerID),
+        RunModel:     modelID,
+        VisionModel:  s.visionLabel(model, providerID),
     }))
 ```
 
-Note `model` here is the **post-vision-fallback** variable. If the run already swapped to the vision model at line 274 because the user attached an image, `model.SupportsImages` is then `true`, so a subsequent `read_file` image goes straight through as an image part. Correct, and it falls out for free.
+Note `model`/`providerID` here are the **post-vision-fallback** variables. If the run already swapped to the vision model because the user attached an image, and that model is on a delivering provider (Claude), `CanSeeImages` is true and a subsequent `read_file` image goes straight through — correct, and it falls out for free. On a redacting provider it must describe or placehold instead (§2.1).
 
-`internal/run/models.go` — add `imageDescriber`. Reuse `resolveVision` so the `SupportsImages` gate stays in one place.
+`internal/run/models.go` — add `imageDescriber` (gated on delivery, §4.3) and `visionLabel` (the `provider/model` string for the Phase 3 text). Reuse `resolveVision` so the role resolution stays in one place.
 
 Also land the §4.3 fix here, in two small pieces:
-- `internal/agent/roles/roles.go:78-81` — `SupportsImages: true` in the synthesize branch when `role == Vision`.
+- `internal/agent/roles/roles.go` — `SupportsImages: true` in the synthesize branch when `role == Vision`.
 - `internal/run/models.go` `resolveVision` — `slog.Warn` when the role resolved to an uncatalogued id, naming the provider/model, so the trust decision is visible in logs.
 
-Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a subagent's `read_file` should get its own describer rather than the parent's. Wire `SubagentContext` the same way if subagents can read files.
+Subagents already receive the parent's bound `toolList` by value (`agent/loop/subagent.go` `SubagentContext`, built in `runOneTurn`), so their `read_file` inherits the same `CanSeeImages`/`Describer` — and the same `Model`, since a subagent reuses the parent's model id. No separate wiring is needed; the earlier "own describer" idea is dropped.
 
-- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model gets `CanSeeImages: true` and no describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil.
+- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model on a delivering provider (Claude) gets `CanSeeImages: true` and no describer; the same capable model on a redacting provider (Codex) gets `CanSeeImages: false` and, when a `vision` role is configured, a describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil.
 - **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestResolveRoleModel -v` — extend the existing table in `tests/agent/roles_test.go` with `TestResolveRoleModelVisionCapability`: a `vision` role resolving to an uncatalogued id synthesizes with `SupportsImages == true`; the same ref under the `smol` role still synthesizes with `SupportsImages == false`; a catalogued model's real flag is preserved and never overwritten; an empty ref and an unknown provider both return the fallback unchanged.
 
 ### Phase 5 — Prompt text, kill switch, docs
 
 - Update the `read_file` description to say it reads images and PDFs correctly — **drop "and PDFs"**, we reject PDFs (§0).
-- Kill switch: add `vision.describeImages` (default `true`) to the `Settings` struct in `internal/services/settings_service.go`, checked in `imageDescriber`. No proto change — `Settings` is plain JSON with `ModelRoles` already alongside it.
+- Kill switch: add `vision.describeImages` (default `true`) to the `Settings` struct in `internal/services/settings_service.go`, checked in `imageDescriber`. No proto change — `Settings` is plain JSON with `ModelRoles` already alongside it. **Watch `Load`/`Patch`**: `SettingsService.Patch` rebuilds `Settings{ModelRoles: merged}` from scratch and writes it back, and `Load` reconstructs its result too, so a new field must be carried through both or every model-role update silently wipes it.
 - Optional per-run memo: key a description cache on `path + mtime + size` so re-reading one image does not pay twice. Only if profiling shows it matters.
 
 - **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestVisionDescribeDisabled -v` — with the switch off, `imageDescriber` returns nil and the placeholder branch is used.
@@ -358,11 +398,15 @@ Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a s
 | Risk | Mitigation |
 |---|---|
 | Token blowout from base64 in tool results | Phase 0 lands first and is independently tested. This is the one that would hurt in production. |
+| A capable model on a redacting provider gets a silent placeholder | Gate `CanSeeImages` and `imageDescriber` on provider *delivery*, not `SupportsImages` (§2.1, §2.3, §4.3). |
+| Tool-result images grow session storage and re-upload on replay | Acknowledged in Phase 0; compaction eventually discards the turn. Follow-up: store a placeholder and keep the image in-flight only. |
+| Base64 leaks into checkpoint `<file-facts>` | Phase 0 reuses the image-aware extraction in `compaction/summary.go`. |
+| New settings field wiped by `SettingsService.Patch` | Thread the field through both `Load` and `Patch`, not just the struct (§5 Phase 5). |
 | Vision describe becomes a cost/loop sink | One call, no tools passed (cannot recurse), 30 s timeout, no retry. `ok=false` degrades to a placeholder. |
 | Description quality is worse than the model seeing the image | Inherent to the handoff. Mitigated by a prompt that prioritises verbatim visible text and error state — the things coding agents actually need from screenshots. |
 | `golang.org/x/image` is a new dependency | Pulls nothing else; `x/image` is leaf-only and stdlib-adjacent. Verify `go mod tidy` adds no transitive surprises. |
 | Provider rejects an image payload | Bounded by `imageMaxBase64` and `imageMaxEdge`; Phase 2 verifies the bounds hold. |
-| `read_file` behaviour change breaks existing tests | `tests/tools/read_file_test.go` exists and must stay green. Text paths are byte-identical by design — only new branches are added. |
+| `read_file` behaviour change breaks existing tests | `tools.ReadFile` stays as the zero-options instance so the existing tests keep compiling; text paths are byte-identical by design — only new branches are added. |
 | Synthetic role model has `SupportsImages: false` | Fixed per §4.3 (trust the declared vision role) + `slog.Warn` from the caller. Ships independently of this plan. |
 
 ---
@@ -372,4 +416,6 @@ Subagents inherit `Model` from the parent (`agent/loop/subagent.go:21`), and a s
 - Should the vision description be cached per run? Costs one model call per image read otherwise.
 - Should `write_file` refuse binary writes, or is that out of scope?
 - Does `imageTokensEach = 1000` hold for the vision role models we route to, or should descriptions count as text against their context?
+- Should tool-result images be persisted at all, or replaced with a placeholder once the producing turn is no longer recent? Phase 0 documents the current behaviour; this is the follow-up that removes the storage/replay cost.
+- Should codex/opencode/antigravity learn to carry media inside a tool result (OpenCode's capability matrix, §3.1), so capable models stop paying for `vision` describe? Separate change from this plan.
 - Should the browser tool's screenshot path route through `fitImage` too? **Separate follow-up, not part of this plan.** To be explicit, since it was unclear before: nothing gets replaced. `read_file` reads bytes off local disk; browser screenshots are captured by the desktop client and arrive as `res.ImageBase64` (`browser_tool.go:117`). Only the pure `fitImage` helper would be shared. Both paths are currently unbounded — the browser tool has no size guard at all, and the MCP adapter caps image *count* at 4 (`mcp/adapter.go:118`) but not per-image bytes — so both would benefit. Worth its own change; bundled here it would just be scope creep.
