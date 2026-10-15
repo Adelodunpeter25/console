@@ -36,24 +36,41 @@ func formatToolArgs(args json.RawMessage) string {
 	return ""
 }
 
+// resultText flattens a tool result's content into text for summaries. Inline
+// image parts are dropped first — their base64 must never reach a checkpoint —
+// then text parts are joined; any other shape falls back to its JSON form.
 func resultText(content any) string {
+	content, _ = loop.SplitImageParts(content)
 	if s, ok := content.(string); ok {
 		return s
 	}
-	if items, ok := content.([]any); ok {
-		var texts []string
+	var texts []string
+	switch items := content.(type) {
+	case []map[string]any:
 		for _, item := range items {
-			if m, ok := item.(map[string]any); ok {
-				if m["type"] == "text" {
-					if s, ok := m["text"].(string); ok {
-						texts = append(texts, s)
-					}
+			if item["type"] == "text" {
+				if s, ok := item["text"].(string); ok {
+					texts = append(texts, s)
 				}
 			}
 		}
-		if len(texts) > 0 {
-			return strings.Join(texts, "\n")
+	case []any:
+		for _, item := range items {
+			if m, ok := item.(map[string]any); ok && m["type"] == "text" {
+				if s, ok := m["text"].(string); ok {
+					texts = append(texts, s)
+				}
+			}
 		}
+	default:
+		raw, err := json.Marshal(content)
+		if err != nil {
+			return ""
+		}
+		return string(raw)
+	}
+	if len(texts) > 0 {
+		return strings.Join(texts, "\n")
 	}
 	raw, err := json.Marshal(content)
 	if err != nil {

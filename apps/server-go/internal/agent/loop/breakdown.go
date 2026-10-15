@@ -144,20 +144,25 @@ func (b *Breakdown) addResults(msg ToolResultMessage) {
 		if name == "" {
 			name = "unknown"
 		}
-		b.ToolResults[name] += codeTokens(contentChars(r.Content))
+		chars, images := contentChars(r.Content)
+		b.ToolResults[name] += codeTokens(chars) + images*breakdownImage
 	}
 }
 
-func contentChars(content any) int {
-	if s, ok := content.(string); ok {
-		return len([]rune(s))
+// contentChars returns the character count of a tool result's content with
+// inline image parts removed, plus the number of images removed. Callers add
+// the flat per-image allowance so base64 is never counted as code.
+func contentChars(content any) (chars, images int) {
+	stripped, images := SplitImageParts(content)
+	if s, ok := stripped.(string); ok {
+		return len([]rune(s)), images
 	}
-	if content == nil {
-		return 0
+	if stripped == nil {
+		return 0, images
 	}
-	raw, err := json.Marshal(content)
+	raw, err := json.Marshal(stripped)
 	if err != nil {
-		return 0
+		return 0, images
 	}
-	return len(raw)
+	return len(raw), images
 }

@@ -47,12 +47,16 @@ func EstimateMessageTokens(history []any) int {
 			}
 		case loop.ToolResultMessage:
 			for _, r := range msg.Results {
-				totalChars += resultChars(r.Content)
+				chars, images := resultChars(r.Content)
+				totalChars += chars
+				imageTokens += images * imageTokensEach
 			}
 		case *loop.ToolResultMessage:
 			if msg != nil {
 				for _, r := range msg.Results {
-					totalChars += resultChars(r.Content)
+					chars, images := resultChars(r.Content)
+					totalChars += chars
+					imageTokens += images * imageTokensEach
 				}
 			}
 		}
@@ -87,12 +91,16 @@ func EstimatePayloadTokens(history []any, systemPrompt string, defs []tools.Defi
 			}
 		case loop.ToolResultMessage:
 			for _, r := range msg.Results {
-				codeChars += resultChars(r.Content)
+				chars, images := resultChars(r.Content)
+				codeChars += chars
+				imageTokens += images * imageTokensEach
 			}
 		case *loop.ToolResultMessage:
 			if msg != nil {
 				for _, r := range msg.Results {
-					codeChars += resultChars(r.Content)
+					chars, images := resultChars(r.Content)
+					codeChars += chars
+					imageTokens += images * imageTokensEach
 				}
 			}
 		}
@@ -150,16 +158,20 @@ func argsChars(args json.RawMessage) int {
 	return len(raw)
 }
 
-func resultChars(content any) int {
-	if s, ok := content.(string); ok {
-		return len([]rune(s))
+// resultChars returns the character count of a tool result's content with
+// inline image parts removed, plus the number of images removed. Callers add
+// the flat per-image allowance themselves so base64 is never counted as text.
+func resultChars(content any) (chars, images int) {
+	stripped, images := loop.SplitImageParts(content)
+	if s, ok := stripped.(string); ok {
+		return len([]rune(s)), images
 	}
-	if content == nil {
-		return 0
+	if stripped == nil {
+		return 0, images
 	}
-	raw, err := json.Marshal(content)
+	raw, err := json.Marshal(stripped)
 	if err != nil {
-		return 100
+		return 100, images
 	}
-	return len(raw)
+	return len(raw), images
 }

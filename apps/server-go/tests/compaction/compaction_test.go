@@ -59,6 +59,50 @@ func TestEstimateTokens(t *testing.T) {
 	}
 }
 
+// Tool results carrying inline images must be charged a flat per-image
+// allowance, never the base64 payload, in both estimators.
+func TestEstimateTokensToolResultImages(t *testing.T) {
+	big := strings.Repeat("A", 2_000_000)
+	part := []map[string]any{{"type": "text", "text": "hello"}}
+	textOnly := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: part},
+	}}}
+	withImage := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "text", "text": "hello"},
+		}},
+	}}}
+	// The decoded-from-storage shape ([]any of map[string]any) must count the same.
+	decoded := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []any{
+			map[string]any{"type": "image", "data": big, "mimeType": "image/png"},
+			map[string]any{"type": "text", "text": "hello"},
+		}},
+	}}}
+	textTokens := compaction.EstimateMessageTokens(textOnly)
+	imageTokens := compaction.EstimateMessageTokens(withImage)
+	if imageTokens-textTokens != 1000 {
+		t.Fatalf("image result must add exactly one image allowance: text=%d image=%d", textTokens, imageTokens)
+	}
+	if got := compaction.EstimateMessageTokens(decoded); got != imageTokens {
+		t.Fatalf("decoded []any shape must count the same: %d vs %d", got, imageTokens)
+	}
+	twoImages := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "text", "text": "hello"},
+		}},
+	}}}
+	if got := compaction.EstimateMessageTokens(twoImages) - imageTokens; got != 1000 {
+		t.Fatalf("second image must add 1000: %d", got)
+	}
+	if payload := compaction.EstimatePayloadTokens(withImage, "", nil); payload.Tokens > 10_000 {
+		t.Fatalf("payload estimate must not count base64: %d", payload.Tokens)
+	}
+}
+
 func TestShakeConversation(t *testing.T) {
 	big := strings.Repeat("x", 9000)
 	history := []any{
@@ -148,6 +192,31 @@ func TestBuildStructuralSummary(t *testing.T) {
 	}
 	if got := compaction.BuildStructuralSummary(nil); !strings.Contains(got, "preliminary exploratory") {
 		t.Fatalf("empty: %q", got)
+	}
+}
+
+// A read_file image result must contribute its text line to <file-facts>, not
+// a 400-char slice of base64.
+func TestBuildStructuralSummaryStripsImageBase64(t *testing.T) {
+	big := strings.Repeat("A", 2_000_000)
+	history := []any{
+		loop.UserMessage{Role: loop.RoleUser, Content: "look at img.png"},
+		loop.AssistantMessage{Role: loop.RoleAssistant, ID: "m1", Content: []any{
+			loop.ToolCallPart{Type: "toolCall", Call: tools.ToolCall{ID: "c1", Name: "read_file", Arguments: jsonRaw(`{"path":"img.png"}`)}},
+		}, StopReason: loop.StopToolUse},
+		loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+			{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+				{"type": "image", "data": big, "mimeType": "image/png"},
+				{"type": "text", "text": "Image read: img.png (image/png, 10x10)."},
+			}},
+		}},
+	}
+	summary := compaction.BuildStructuralSummary(history)
+	if strings.Contains(summary, big[:200]) {
+		t.Fatal("checkpoint summary must not embed image base64")
+	}
+	if !strings.Contains(summary, "Image read: img.png") {
+		t.Fatalf("summary should keep the text part:\n%s", summary)
 	}
 }
 

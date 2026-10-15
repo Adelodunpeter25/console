@@ -50,6 +50,36 @@ func TestBreakdownBuckets(t *testing.T) {
 	}
 }
 
+// The per-source breakdown must charge image results a flat allowance, not the
+// base64 payload.
+func TestBreakdownToolResultImages(t *testing.T) {
+	big := strings.Repeat("A", 2_000_000)
+	textOnly := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{{"type": "text", "text": "hello"}}},
+	}}}
+	withImage := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "text", "text": "hello"},
+		}},
+	}}}
+	textTokens := loop.EstimateBreakdown(nil, "", nil, textOnly).ToolResults["read_file"]
+	imageTokens := loop.EstimateBreakdown(nil, "", nil, withImage).ToolResults["read_file"]
+	if imageTokens-textTokens != 1000 {
+		t.Fatalf("image result must add one image allowance: text=%d image=%d", textTokens, imageTokens)
+	}
+	twoImages := []any{loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+		{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "image", "data": big, "mimeType": "image/png"},
+			{"type": "text", "text": "hello"},
+		}},
+	}}}
+	if got := loop.EstimateBreakdown(nil, "", nil, twoImages).ToolResults["read_file"] - imageTokens; got != 1000 {
+		t.Fatalf("second image must add 1000: %d", got)
+	}
+}
+
 func TestBreakdownWholePromptFallback(t *testing.T) {
 	b := loop.EstimateBreakdown(nil, strings.Repeat("x", 400), nil, nil)
 	if b.System["system"] != 100 {
