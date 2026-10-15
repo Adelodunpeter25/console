@@ -65,6 +65,35 @@ func imageTextLine(path string, p imageutil.Payload) string {
 	return fmt.Sprintf("Image read: %s (%s).", path, p.Mime)
 }
 
+// imageDescriptor renders "mime, WxH, N KB" (dimensions omitted when unknown).
+func imageDescriptor(p imageutil.Payload) string {
+	kb := (len(p.Data) + 1023) / 1024
+	if p.Width > 0 && p.Height > 0 {
+		return fmt.Sprintf("%s, %dx%d, %d KB", p.Mime, p.Width, p.Height, kb)
+	}
+	return fmt.Sprintf("%s, %d KB", p.Mime, kb)
+}
+
+// describeImageText labels a description produced by the vision role so the
+// run model can tell it apart from what it would have seen itself.
+func describeImageText(path string, p imageutil.Payload, visionModel, description string) string {
+	header := fmt.Sprintf("Image: %s (%s)", path, imageDescriptor(p))
+	if visionModel != "" {
+		return fmt.Sprintf("%s\nThis model cannot view images; described by vision model %s:\n%s", header, visionModel, description)
+	}
+	return fmt.Sprintf("%s\nThis model cannot view images; described by the configured vision model:\n%s", header, description)
+}
+
+// placeholderImageText is the recoverable dead end: it names the image, why it
+// cannot be seen, and the fix (configure a vision role).
+func placeholderImageText(path string, p imageutil.Payload, runModel string) string {
+	who := "The active model"
+	if runModel != "" {
+		who = fmt.Sprintf("The active model (%s)", runModel)
+	}
+	return fmt.Sprintf("Cannot view %s: %s. %s has no image support and no vision model is configured. Set one in Settings → Models → Vision, or read the file as text.", path, imageDescriptor(p), who)
+}
+
 // binaryExtensions are known-binary, non-image suffixes rejected without
 // reading further. Image suffixes are deliberately absent: images are decided
 // by magic bytes, so a text file named ".png" must still read as text.

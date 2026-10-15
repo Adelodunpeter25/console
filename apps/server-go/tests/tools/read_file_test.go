@@ -91,10 +91,14 @@ func TestReadFileDenseByDefault(t *testing.T) {
 	}
 }
 
-func execRead(t *testing.T, args map[string]any) (any, error) {
+// imageReadTool pretends the run model can see images, so read_file emits the
+// image part directly. The zero-options default describes or placeholds.
+var imageReadTool = tools.NewReadFileTool(tools.ReadFileOptions{CanSeeImages: true})
+
+func execReadTool(t *testing.T, tool tools.Tool, args map[string]any) (any, error) {
 	t.Helper()
 	raw, _ := json.Marshal(args)
-	return tools.ReadFile.Execute(context.Background(), raw)
+	return tool.Execute(context.Background(), raw)
 }
 
 func TestReadFileImages(t *testing.T) {
@@ -117,7 +121,7 @@ func TestReadFileImages(t *testing.T) {
 		if err := os.WriteFile(p, tc.data, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		out, err := execRead(t, map[string]any{"path": p})
+		out, err := execReadTool(t, imageReadTool, map[string]any{"path": p})
 		if err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
@@ -141,7 +145,7 @@ func TestReadFileImages(t *testing.T) {
 	if err := os.WriteFile(p, []byte("line1\nline2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	out, err := execRead(t, map[string]any{"path": p})
+	out, err := execReadTool(t, imageReadTool, map[string]any{"path": p})
 	if err != nil {
 		t.Fatalf("text-named .png: %v", err)
 	}
@@ -155,7 +159,7 @@ func TestReadFileImages(t *testing.T) {
 	if err := os.WriteFile(truncated, []byte{0x89, 0x50, 0x4e, 0x47}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := execRead(t, map[string]any{"path": truncated}); err == nil {
+	if _, err := execReadTool(t, imageReadTool, map[string]any{"path": truncated}); err == nil {
 		t.Fatal("truncated PNG must be rejected as binary")
 	}
 
@@ -164,7 +168,7 @@ func TestReadFileImages(t *testing.T) {
 	if err := os.WriteFile(binary, []byte("hello\x00world"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := execRead(t, map[string]any{"path": binary}); err == nil {
+	if _, err := execReadTool(t, imageReadTool, map[string]any{"path": binary}); err == nil {
 		t.Fatal("NUL-bearing file must be rejected as binary")
 	}
 
@@ -173,7 +177,7 @@ func TestReadFileImages(t *testing.T) {
 	if err := os.WriteFile(pdf, []byte("%PDF-1.4\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := execRead(t, map[string]any{"path": pdf}); err == nil {
+	if _, err := execReadTool(t, imageReadTool, map[string]any{"path": pdf}); err == nil {
 		t.Fatal("PDF must be rejected as binary")
 	}
 
@@ -189,7 +193,7 @@ func TestReadFileImages(t *testing.T) {
 	}
 
 	// Directory, empty-file, and offset-past-EOF behaviour is unchanged.
-	dirOut, err := execRead(t, map[string]any{"path": dir})
+	dirOut, err := execReadTool(t, imageReadTool, map[string]any{"path": dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +204,7 @@ func TestReadFileImages(t *testing.T) {
 	if err := os.WriteFile(empty, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	emptyOut, err := execRead(t, map[string]any{"path": empty})
+	emptyOut, err := execReadTool(t, imageReadTool, map[string]any{"path": empty})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,11 +212,91 @@ func TestReadFileImages(t *testing.T) {
 		t.Fatalf("empty message: %q", text)
 	}
 	past := writeLines(t, 3)
-	pastOut, err := execRead(t, map[string]any{"path": past, "startLine": 10})
+	pastOut, err := execReadTool(t, imageReadTool, map[string]any{"path": past, "startLine": 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, _ := pastOut.([]map[string]any)[0]["text"].(string); !strings.Contains(text, "Offset beyond EOF.") {
 		t.Fatalf("offset message: %q", text)
+	}
+}
+
+type stubDescriber struct {
+	calls int
+	mime  string
+	data  []byte
+	hint  string
+	desc  string
+	ok    bool
+}
+
+func (s *stubDescriber) Describe(_ context.Context, mime string, data []byte, hint string) (string, bool) {
+	s.calls++
+	s.mime, s.data, s.hint = mime, data, hint
+	return s.desc, s.ok
+}
+
+func TestReadFileVisionHandoff(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "shot.png")
+	if err := os.WriteFile(p, solidPNG(t, 8, 8), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]any{"path": p})
+
+	// CanSeeImages: the describer is never consulted.
+	stub := &stubDescriber{desc: "unused", ok: true}
+	tool := tools.NewReadFileTool(tools.ReadFileOptions{CanSeeImages: true, Describer: stub})
+	out, err := tool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("describer must not run when the model can see images: %d calls", stub.calls)
+	}
+	if parts := out.([]map[string]any); parts[0]["type"] != "image" {
+		t.Fatalf("want image part: %#v", parts)
+	}
+
+	// Handoff: text only, naming the vision model and embedding its prose.
+	stub = &stubDescriber{desc: "A blue square.", ok: true}
+	tool = tools.NewReadFileTool(tools.ReadFileOptions{Describer: stub, RunModel: "gpt-5", VisionModel: "claude/sonnet"})
+	out, err = tool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := out.([]map[string]any)
+	if len(parts) != 1 || parts[0]["type"] != "text" {
+		t.Fatalf("handoff must be text only: %#v", parts)
+	}
+	text := parts[0]["text"].(string)
+	if !strings.Contains(text, "claude/sonnet") || !strings.Contains(text, "A blue square.") {
+		t.Fatalf("handoff text: %q", text)
+	}
+	if stub.mime != "image/png" || len(stub.data) == 0 || stub.hint != p {
+		t.Fatalf("describer input: mime=%s len=%d hint=%s", stub.mime, len(stub.data), stub.hint)
+	}
+
+	// No describer: a recoverable placeholder naming path, mime, dimensions,
+	// and the settings remedy.
+	tool = tools.NewReadFileTool(tools.ReadFileOptions{RunModel: "gpt-5"})
+	out, err = tool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text = out.([]map[string]any)[0]["text"].(string)
+	for _, want := range []string{p, "image/png", "8x8", "Settings → Models → Vision"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("placeholder missing %q: %q", want, text)
+		}
+	}
+
+	// A describer that reports failure falls through to the placeholder.
+	tool = tools.NewReadFileTool(tools.ReadFileOptions{Describer: &stubDescriber{ok: false}, RunModel: "gpt-5"})
+	out, err = tool.Execute(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text = out.([]map[string]any)[0]["text"].(string); !strings.Contains(text, "Cannot view") {
+		t.Fatalf("failed describer must placehold: %q", text)
 	}
 }

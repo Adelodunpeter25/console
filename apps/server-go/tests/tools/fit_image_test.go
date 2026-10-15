@@ -4,9 +4,7 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
-	"encoding/json"
 	"image"
 	"image/color"
 	"image/draw"
@@ -18,7 +16,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	imageutil "github.com/Adelodunpeter25/console/apps/server-go/internal/utils/image"
 )
 
@@ -103,8 +100,7 @@ func TestReadFileResizesImage(t *testing.T) {
 	if err := os.WriteFile(p, solidPNG(t, 2500, 1500), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := json.Marshal(map[string]any{"path": p})
-	out, err := tools.ReadFile.Execute(context.Background(), raw)
+	out, err := execReadTool(t, imageReadTool, map[string]any{"path": p})
 	if err != nil {
 		t.Fatal(err)
 	}

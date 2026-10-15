@@ -118,10 +118,18 @@ func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions
 		if err != nil {
 			return nil, NewToolError("Cannot read %s: %v (limit %d bytes).", in.Path, err, imageutil.MaxBase64)
 		}
-		return []map[string]any{
-			imagePart(payload.Mime, payload.Data),
-			{"type": "text", "text": imageTextLine(in.Path, payload)},
-		}, nil
+		if opts.CanSeeImages {
+			return []map[string]any{
+				imagePart(payload.Mime, payload.Data),
+				{"type": "text", "text": imageTextLine(in.Path, payload)},
+			}, nil
+		}
+		if opts.Describer != nil {
+			if desc, ok := opts.Describer.Describe(ctx, payload.Mime, payload.Data, in.Path); ok && strings.TrimSpace(desc) != "" {
+				return textResult(describeImageText(in.Path, payload, opts.VisionModel, desc)), nil
+			}
+		}
+		return textResult(placeholderImageText(in.Path, payload, opts.RunModel)), nil
 	}
 
 	// Binary detection runs before the line splitter so a binary file is never
