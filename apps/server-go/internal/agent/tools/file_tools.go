@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,6 +38,9 @@ const (
 	// readDefaultLines caps a read with no startLine/endLine, so a whole
 	// file isn't pulled into history when only part of it is needed.
 	readDefaultLines = 300
+	// readSniffBytes is the prefix read for magic-byte and binary detection,
+	// taken before the file is read in full.
+	readSniffBytes = 4096
 )
 
 // sparseLineNumbers reports whether read_file should number only the first
@@ -53,98 +57,153 @@ func textResult(text string) []map[string]any {
 	return []map[string]any{{"type": "text", "text": text}}
 }
 
-var ReadFile = NewTool("read_file", "Read a file on disk. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
-	func(ctx context.Context, in readFileInput) (any, error) {
-		if in.Path == "" {
-			return nil, NewToolError("path is required")
-		}
-		info, err := os.Stat(in.Path)
-		if err != nil {
-			return nil, NewToolError("Cannot read %s: %v", in.Path, err)
-		}
-		if info.IsDir() {
-			return textResult(fmt.Sprintf("%q is a directory. Use list_dir to browse directories.", in.Path)), nil
-		}
-		sizeBytes := info.Size()
-		data, err := os.ReadFile(in.Path)
-		if err != nil {
-			return nil, NewToolError("Cannot read %s: %v", in.Path, err)
-		}
-		byteCapped := false
-		if len(data) > readMaxBytes {
-			data = data[:readMaxBytes]
-			byteCapped = true
-		}
-		if len(data) == 0 {
-			return textResult(fmt.Sprintf("File is empty: %s", in.Path)), nil
-		}
+// NewReadFileTool builds read_file with the given options. ReadFile is the
+// zero-options instance used by DefaultTools().
+func NewReadFileTool(opts ReadFileOptions) Tool {
+	maxImageBytes := opts.MaxImageBytes
+	if maxImageBytes <= 0 {
+		maxImageBytes = readMaxImageBytes
+	}
+	return NewTool("read_file", "Read a file on disk. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
+		func(ctx context.Context, in readFileInput) (any, error) {
+			return readFileExecute(ctx, in, opts, maxImageBytes)
+		})
+}
 
-		allLines := strings.Split(string(data), "\n")
-		totalLines := len(allLines)
-		start := in.StartLine
-		if start < 1 {
-			start = 1
-		}
-		if start > totalLines {
-			return textResult(fmt.Sprintf("Offset beyond EOF. The file has %d lines. Try a smaller startLine.", totalLines)), nil
-		}
-		naturalEnd := totalLines
-		if in.EndLine > 0 && in.EndLine < naturalEnd {
-			naturalEnd = in.EndLine
-		}
-		if start > naturalEnd {
-			return textResult(fmt.Sprintf("startLine (%d) must be less than or equal to endLine (%d).", start, naturalEnd)), nil
-		}
-		end := naturalEnd
-		maxLines := readMaxLines
-		if in.StartLine == 0 && in.EndLine == 0 {
-			maxLines = readDefaultLines
-		}
-		if emitEnd := start + maxLines - 1; end > emitEnd {
-			end = emitEnd
-		}
-		truncated := byteCapped || end < naturalEnd
+// ReadFile is the zero-options default used by DefaultTools() (static
+// registration, headless CLI, test fixtures).
+var ReadFile = NewReadFileTool(ReadFileOptions{})
 
-		lines := allLines[start-1 : end]
-		eofReached := !truncated && end == totalLines
-		rangeDescription := fmt.Sprintf("lines %d–%d", start, end)
-		if eofReached {
-			if start == 1 {
-				rangeDescription = fmt.Sprintf("all %d lines", totalLines)
-			} else {
-				rangeDescription = fmt.Sprintf("lines %d–%d of %d", start, end, totalLines)
+func readFileExecute(ctx context.Context, in readFileInput, opts ReadFileOptions, maxImageBytes int) (any, error) {
+	if in.Path == "" {
+		return nil, NewToolError("path is required")
+	}
+	info, err := os.Stat(in.Path)
+	if err != nil {
+		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
+	}
+	if info.IsDir() {
+		return textResult(fmt.Sprintf("%q is a directory. Use list_dir to browse directories.", in.Path)), nil
+	}
+	sizeBytes := info.Size()
+
+	f, err := os.Open(in.Path)
+	if err != nil {
+		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
+	}
+	defer f.Close()
+	prefix := make([]byte, readSniffBytes)
+	n, err := io.ReadFull(f, prefix)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
+	}
+	prefix = prefix[:n]
+
+	// Images are decided by magic bytes, never by extension; a text file named
+	// ".png" falls through to the text path below.
+	if mime := sniffImageMime(prefix); mime != "" {
+		if sizeBytes > int64(maxImageBytes) {
+			return nil, NewToolError("Cannot read %s: image is %d bytes, over the %d byte limit.", in.Path, sizeBytes, maxImageBytes)
+		}
+		data := prefix
+		if sizeBytes > int64(len(prefix)) {
+			rest, err := io.ReadAll(io.LimitReader(f, int64(maxImageBytes)+1))
+			if err != nil {
+				return nil, NewToolError("Cannot read %s: %v", in.Path, err)
 			}
+			data = append(append(make([]byte, 0, len(prefix)+len(rest)), prefix...), rest...)
 		}
+		return []map[string]any{
+			imagePart(mime, data),
+			{"type": "text", "text": fmt.Sprintf("Image read: %s (%s).", in.Path, mime)},
+		}, nil
+	}
 
-		showing := "Showing: " + rangeDescription
-		if truncated {
-			showing += " (truncated)"
-		}
-		header := []string{
-			"File: " + in.Path,
-			showing,
-			fmt.Sprintf("Size: %d bytes", sizeBytes),
-		}
-		if truncated {
-			header = append(header, fmt.Sprintf("Output truncated at line %d of %d. Continue with startLine=%d.", end, totalLines, end+1))
-		}
-		header = append(header, "")
+	// Binary detection runs before the line splitter so a binary file is never
+	// rendered as mojibake.
+	if isBinaryFile(in.Path, prefix) {
+		return nil, NewToolError("Cannot read %s: binary file. It is not a supported image (png, jpeg, gif, webp) and cannot be read as text.", in.Path)
+	}
 
-		width := len(fmt.Sprintf("%d", end))
-		sparse := sparseLineNumbers()
-		pad := strings.Repeat(" ", width+2)
-		numbered := make([]string, len(lines))
-		for i, line := range lines {
-			n := start + i
-			if sparse && n != start && n != end && n%10 != 0 {
-				numbered[i] = pad + line
-				continue
-			}
-			numbered[i] = fmt.Sprintf("%*d: %s", width, n, line)
-		}
+	rest, err := io.ReadAll(io.LimitReader(f, int64(readMaxBytes)+1))
+	if err != nil {
+		return nil, NewToolError("Cannot read %s: %v", in.Path, err)
+	}
+	data := append(append(make([]byte, 0, len(prefix)+len(rest)), prefix...), rest...)
+	byteCapped := false
+	if len(data) > readMaxBytes {
+		data = data[:readMaxBytes]
+		byteCapped = true
+	}
+	if len(data) == 0 {
+		return textResult(fmt.Sprintf("File is empty: %s", in.Path)), nil
+	}
+	allLines := strings.Split(string(data), "\n")
+	totalLines := len(allLines)
+	start := in.StartLine
+	if start < 1 {
+		start = 1
+	}
+	if start > totalLines {
+		return textResult(fmt.Sprintf("Offset beyond EOF. The file has %d lines. Try a smaller startLine.", totalLines)), nil
+	}
+	naturalEnd := totalLines
+	if in.EndLine > 0 && in.EndLine < naturalEnd {
+		naturalEnd = in.EndLine
+	}
+	if start > naturalEnd {
+		return textResult(fmt.Sprintf("startLine (%d) must be less than or equal to endLine (%d).", start, naturalEnd)), nil
+	}
+	end := naturalEnd
+	maxLines := readMaxLines
+	if in.StartLine == 0 && in.EndLine == 0 {
+		maxLines = readDefaultLines
+	}
+	if emitEnd := start + maxLines - 1; end > emitEnd {
+		end = emitEnd
+	}
+	truncated := byteCapped || end < naturalEnd
 
-		return textResult(strings.Join(header, "\n") + strings.Join(numbered, "\n")), nil
-	})
+	lines := allLines[start-1 : end]
+	eofReached := !truncated && end == totalLines
+	rangeDescription := fmt.Sprintf("lines %d–%d", start, end)
+	if eofReached {
+		if start == 1 {
+			rangeDescription = fmt.Sprintf("all %d lines", totalLines)
+		} else {
+			rangeDescription = fmt.Sprintf("lines %d–%d of %d", start, end, totalLines)
+		}
+	}
+
+	showing := "Showing: " + rangeDescription
+	if truncated {
+		showing += " (truncated)"
+	}
+	header := []string{
+		"File: " + in.Path,
+		showing,
+		fmt.Sprintf("Size: %d bytes", sizeBytes),
+	}
+	if truncated {
+		header = append(header, fmt.Sprintf("Output truncated at line %d of %d. Continue with startLine=%d.", end, totalLines, end+1))
+	}
+	header = append(header, "")
+
+	width := len(fmt.Sprintf("%d", end))
+	sparse := sparseLineNumbers()
+	pad := strings.Repeat(" ", width+2)
+	numbered := make([]string, len(lines))
+	for i, line := range lines {
+		n := start + i
+		if sparse && n != start && n != end && n%10 != 0 {
+			numbered[i] = pad + line
+			continue
+		}
+		numbered[i] = fmt.Sprintf("%*d: %s", width, n, line)
+	}
+
+	return textResult(strings.Join(header, "\n") + strings.Join(numbered, "\n")), nil
+}
 
 type writeFileInput struct {
 	Path    string `json:"path" jsonschema:"required,description=Absolute file path to write"`
