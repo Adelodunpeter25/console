@@ -336,6 +336,30 @@ Exit: `curl --http3` and a WT echo both work; legacy clients unaffected.
 
 ### Phase 3 — Android: Cronet for WT, OkHttp stays for fallback
 
+> **Spiked Oct 2026 — this phase is blocked as written.** Cronet's
+> bidirectional-stream API (the only WebTransport path on Android) requires
+> **Android 14 / API 34**: Chromium's own `BidirectionalStreamTest.java`
+> carries `// HttpEngine is supported from Android U+` with
+> `@RequiresMinAndroidApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)`. Measured on
+> an API 33 emulator, `newBidirectionalStreamBuilder` does not throw the
+> documented Java-engine error — it **silently never dispatches**: no
+> callbacks, and a Cronet netlog with no QUIC activity at all (TCP to the
+> same host works, so it is not a network path issue). The app's `minSdk` is
+> 26, so a Cronet client would leave every device below Android 14 on SSE/WS
+> permanently — the fallback would not be a temporary crutch but the majority
+> path.
+>
+> Requirements the spike did confirm, for any future Cronet use:
+> `android.permission.ACCESS_NETWORK_STATE` (Cronet throws `SecurityException`
+> without it) and `addQuicHint(host, port, port)` (Cronet only tries QUIC for
+> origins it was told about). The spike is
+> `apps/android/instrumented-tests/CronetWebTransportSpikeTest.kt`.
+>
+> **Revised options:** (a) accept Android 14+ as the QUIC floor and keep a
+> legacy path below it; (b) reuse the proven desktop Rust client over JNI/NDK,
+> which has no API-level gate but adds a native toolchain to the Android
+> build. Decide before writing any client code.
+
 OkHttp has no WebTransport. Keep `HttpTransport.kt`, `ChatStreamClient.kt`, and
 `TerminalRepository.kt` interfaces; swap internals.
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEBUG-ONLY network security config (plan Phase 3 Cronet/WebTransport spike).
+     Overrides the main config for debug builds so the spike can validate the
+     throwaway WebTransport test certificate.
+
+     Why this exists: Cronet exposes no trust-all verifier, and a self-signed
+     dev certificate has to be a real trust anchor. The emulator's /system is
+     verity-locked (no `adb remount`), so the CA cannot be installed device-wide.
+     `debug-overrides` applies only when the app is debuggable, so production
+     builds never trust this anchor.
+
+     It also answers a production question: whether Cronet honours the app's
+     network security config at all. If the spike handshake validates through
+     this anchor, Cronet does, and a private CA is viable on Android.
+     A private CA pinned this way is the fallback if a device cannot be given
+     a publicly-trusted certificate.
+
+     Delete together with instrumented-tests/CronetWebTransportSpikeTest.kt. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/wt_spike_ca" />
+        </trust-anchors>
+    </base-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/wt_spike_ca" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

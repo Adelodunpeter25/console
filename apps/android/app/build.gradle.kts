@@ -31,6 +31,8 @@ android {
         versionCode = 3
         versionName = "1.0.1"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
         }
@@ -100,6 +102,12 @@ android {
         getByName("test") {
             java.srcDirs("../tests", "src/test/java", "src/test/kotlin")
         }
+        // Instrumented tests need a device (Cronet is a native library, so it
+        // cannot run on the JVM). Flat folder alongside `tests/`, mirroring
+        // the JVM suite's layout.
+        getByName("androidTest") {
+            java.srcDirs("../instrumented-tests", "src/androidTest/java", "src/androidTest/kotlin")
+        }
     }
 
     packaging {
@@ -153,6 +161,16 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.02.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+
+    // QUIC/WebTransport spike (plan Phase 3). Cronet is the only Android
+    // networking stack with QUIC; `cronet-embedded` is deprecated in favour
+    // of `cronet-bundled`, which carries the native implementation directly.
+    // The bidirectional-stream API WebTransport needs is experimental and
+    // absent from the Java fallback engine, so the spike asserts the native
+    // engine is the one in use.
+    androidTestImplementation("org.chromium.net:cronet-bundled:500.1.0")
 
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.appcompat:appcompat:1.7.0")

@@ -29,7 +29,7 @@ dev-server-wt:
 	@mkdir -p $(HOME)/.console-dev
 	@if [ ! -f $(WT_DEV_CERT) ] || ! openssl x509 -in $(WT_DEV_CERT) -noout -checkend 0 2>/dev/null; then \
 		tmpconf=$$(mktemp); \
-		printf '[req]\ndistinguished_name=dn\nreq_extensions=ext\n[dn]\n[ext]\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n' > $$tmpconf; \
+		printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\n[dn]\n[ext]\nsubjectAltName=DNS:localhost,IP:127.0.0.1\n' > $$tmpconf; \
 		openssl ecparam -genkey -name prime256v1 -noout -out $(WT_DEV_KEY) 2>/dev/null && \
 		openssl req -new -x509 -key $(WT_DEV_KEY) -out $(WT_DEV_CERT) -days 13 \
 			-subj "/CN=localhost" -config $$tmpconf 2>/dev/null; \
