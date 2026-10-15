@@ -12,6 +12,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import com.console.mobile.data.stream.WtTransport
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -71,7 +72,21 @@ class GitRepository(
             .adapter(GitStatusSummary::class.java)
     }
 
-    fun watchStatus(path: String): Flow<GitStatusSummary> = callbackFlow {
+    /**
+     * Live git status, over WebTransport when the server serves it.
+     *
+     * Falls through to the SSE watch on a server without a WebTransport
+     * listener, which is why the SSE body below is unchanged.
+     */
+    fun watchStatus(path: String): Flow<GitStatusSummary> =
+        WtTransport.watch(
+            baseUrl = apiClient.baseUrl,
+            requestJson = WtTransport.watchRequest(WtTransport.TARGET_GIT_STATUS, path = path),
+            frameType = WtTransport.FRAME_GIT_STATUS,
+            decode = { raw -> gitStatusMoshi.fromJson(raw) },
+        ) ?: watchStatusOverSse(path)
+
+    private fun watchStatusOverSse(path: String): Flow<GitStatusSummary> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
         val encoded = java.net.URLEncoder.encode(path, "UTF-8")
         val url = "$baseUrl/api/git/status/watch?path=$encoded"

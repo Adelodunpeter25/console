@@ -9,6 +9,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import com.console.mobile.data.stream.WtTransport
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -31,7 +32,21 @@ class NotificationRepository(
     private val notificationAdapter = Moshi.Builder().add(WireJsonAdapterFactory()).build()
         .adapter(NotificationEvent::class.java)
 
-    fun notifications(): Flow<NotificationEvent> = callbackFlow {
+    /**
+     * Notification banners, over WebTransport when the server serves it.
+     *
+     * The switch sits at the top so the SSE path below is untouched: a server
+     * without a WebTransport listener falls through to it.
+     */
+    fun notifications(): Flow<NotificationEvent> =
+        WtTransport.watch(
+            baseUrl = apiClient.baseUrl,
+            requestJson = WtTransport.watchRequest(WtTransport.TARGET_NOTIFICATIONS),
+            frameType = WtTransport.FRAME_NOTIFICATION,
+            decode = { raw -> notificationAdapter.fromJson(raw) },
+        ) ?: notificationsOverSse()
+
+    private fun notificationsOverSse(): Flow<NotificationEvent> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
         val url = "$baseUrl/api/notifications/stream"
 

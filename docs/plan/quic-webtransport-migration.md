@@ -361,7 +361,7 @@ Exit: `curl --http3` and a WT echo both work; legacy clients unaffected.
 > build. Decide before writing any client code.
 
 > **Rust/JNI route spiked Oct 2026 — it works, on every `minSdk`.**
-> `apps/android/rust-wt-spike` builds `wtransport` (the same version the
+> `apps/android/rust-wt` builds `wtransport` (the same version the
 > desktop dogfoods) into a ~2 MB per-ABI `.so` via `build.sh`, exposed through
 > `WtNative.probeSession`. On an API 33 emulator it completes the real
 > handshake against the Go server — the server logs
@@ -375,11 +375,31 @@ Exit: `curl --http3` and a WT echo both work; legacy clients unaffected.
 > and `am instrument -e` arguments arrive via `InstrumentationRegistry`,
 > **not** `System.getenv`.
 >
-> Remaining work is the client, not the transport: port the framing and stream
-> layer from `apps/desktop/crates/console-core/src/net/wt_client.rs` (the
-> spike deliberately stops at a session), decide how Kotlin receives frames
-> (callback vs `Flow`), and wire `ChatStreamClient`/`TerminalRepository` to it
-> behind the same transport switch desktop has.
+> **Mobile client wired (Oct 2026).** `apps/android/rust-wt` builds the
+> `console-core` client for Android rather than reimplementing it — the
+> framing, session cache, redial and auto/legacy switch are the same code the
+> desktop dogfoods, ~2.8 MB per ABI. `WtStream.kt` (one WT stream, blocking
+> frame reads) and `WtTransport.kt` (the switch) expose it to Kotlin, which
+> receives frames as a `Flow` like the SSE path already did — so the switch
+> lives only in `ChatStreamClient` and the two watch repositories, and
+> `RunStreamController`/`ChatRepository` are untouched. Same one-seam shape as
+> desktop. Verified on-device: a run streams over QUIC
+> (`ChatRunOverWebTransportTest`) and the git-status watch delivers a real
+> summary (`WatchesOverWebTransportTest`). The REST→WT payload translation is
+> pinned by `tests/WtPayloadTest.kt`. WebTransport is attempted only when the
+> API origin is TLS or an override names one, matching desktop, so a plaintext
+> dev server does not pay a dial timeout on every stream.
+>
+> **Deliberately still open on mobile:** the terminal stays on WebSocket. It
+> works, and moving it means feeding the existing ghostty VT renderer from Rust
+> rather than reusing `spawn_terminal_handle`, which would pull a second
+> terminal emulator into the app — `WtStream`'s frame API already supports it
+> whenever that trade looks right. Also `WtTransport.originOverride` is a plain
+> var that the settings UI should own.
+>
+> Remaining work is client polish, not transport: Phase 5 (Happy-Eyeballs
+> racing) and Phase 6 (dropping the legacy path) are unchanged, and both need
+> the same real failure data desktop can now produce.
 
 OkHttp has no WebTransport. Keep `HttpTransport.kt`, `ChatStreamClient.kt`, and
 `TerminalRepository.kt` interfaces; swap internals.

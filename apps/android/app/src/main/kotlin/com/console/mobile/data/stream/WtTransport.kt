@@ -140,6 +140,79 @@ object WtTransport {
         com.console.mobile.WtNative.closeAll()
     }
 
+    /**
+     * A watch stream over WebTransport, or null when this server cannot serve
+     * it (caller falls back to SSE).
+     *
+     * Mirrors the SSE watches: one target per stream, each frame named, and a
+     * frame that does not decode is ignored rather than fatal. [decode]
+     * belongs to the caller because the payload types are repository-owned
+     * (Moshi adapters) and this file has no business knowing them.
+     */
+    fun <T> watch(
+        baseUrl: String,
+        requestJson: String,
+        frameType: String,
+        decode: (String) -> T?,
+    ): Flow<T>? {
+        val origin = originFor(baseUrl) ?: return null
+        val stream = WtStream.open(
+            apiUrl = baseUrl.trimEnd('/'),
+            origin = origin,
+            certSha256 = certSha256,
+            kind = com.console.mobile.WtNative.kindWatch(),
+            streamId = "",
+            requestType = WtStream.REQUEST_WATCH,
+            requestJson = requestJson,
+        ) ?: return null
+        return callbackFlow {
+            val reader = launch(Dispatchers.IO) {
+                try {
+                    while (true) {
+                        val frame = stream.readNext(READ_TIMEOUT_MS) ?: continue
+                        if (frame.type == "error") break // server rejected the watch
+                        if (frame.type != frameType) continue
+                        // Malformed payloads are skipped, matching the SSE readers.
+                        decode(frame.text())?.let { trySend(it) }
+                    }
+                } catch (_: Exception) {
+                    // Stream ended or broke; a watch has nothing to report.
+                }
+                close()
+            }
+            awaitClose {
+                reader.cancel()
+                stream.close()
+            }
+        }
+    }
+
+    /**
+     * Watch request bodies. Targets are the proto enum **names**, matching what
+     * the server's protojson unmarshaller accepts, so renumbering the schema
+     * cannot silently watch the wrong thing.
+     */
+    fun watchRequest(
+        target: String,
+        path: String? = null,
+        projectId: String? = null,
+        runId: String? = null,
+    ): String = buildJsonObject {
+        put("target", JsonPrimitive(target))
+        path?.let { put("path", JsonPrimitive(it)) }
+        projectId?.let { put("projectId", JsonPrimitive(it)) }
+        runId?.let { put("runId", JsonPrimitive(it)) }
+    }.toString()
+
+    const val TARGET_NOTIFICATIONS = "WT_WATCH_TARGET_NOTIFICATIONS"
+    const val TARGET_GIT_STATUS = "WT_WATCH_TARGET_GIT_STATUS"
+    const val TARGET_FS = "WT_WATCH_TARGET_FS"
+
+    /** Frame names the server sends for each target. */
+    const val FRAME_NOTIFICATION = "notification"
+    const val FRAME_GIT_STATUS = "gitStatus"
+    const val FRAME_FS_CHANGE = "fsChange"
+
     private const val READ_TIMEOUT_MS = 250
 }
 
