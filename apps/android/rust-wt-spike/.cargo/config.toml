@@ -1,0 +1,18 @@
+# Android cross-compilation for the WebTransport client (plan Phase 3).
+#
+# Lives in config.toml rather than Cargo.toml because a manifest
+# `[target.<triple>]` table is not honored for this package; config.toml is
+# what Cargo reads for build-time toolchain selection.
+#
+# NDK 28's clang wrappers supply both the linker and the C compiler: `ring`
+# (wtransport's default TLS backend — not aws-lc-rs, which needs cmake/nasm)
+# is C and asm, so the same clang has to reach ring's build script, not just
+# the final link.
+#
+# `cargo-ndk` does the same wiring automatically if this ever gets tedious.
+
+[target.aarch64-linux-android]
+linker = "/Users/adelodunpeter/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang"
+
+[target.x86_64-linux-android]
+linker = "/Users/adelodunpeter/Library/Android/sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/darwin-x86_64/bin/x86_64-linux-android21-clang"

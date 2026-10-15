@@ -360,6 +360,27 @@ Exit: `curl --http3` and a WT echo both work; legacy clients unaffected.
 > which has no API-level gate but adds a native toolchain to the Android
 > build. Decide before writing any client code.
 
+> **Rust/JNI route spiked Oct 2026 — it works, on every `minSdk`.**
+> `apps/android/rust-wt-spike` builds `wtransport` (the same version the
+> desktop dogfoods) into a ~2 MB per-ABI `.so` via `build.sh`, exposed through
+> `WtNative.probeSession`. On an API 33 emulator it completes the real
+> handshake against the Go server — the server logs
+> `webtransport session accepted` — and a bogus token is correctly rejected,
+> so the result code means something. No OS-version floor, and the size is
+> ~7× smaller than Cronet's per-ABI cost. Toolchain notes worth keeping:
+> `[target.<triple>]` in a manifest is **not** honored (use `.cargo/config.toml`),
+> `.cargo/config.toml` is discovered from the cwd (so build from inside the
+> crate), `ring` needs the NDK `CC_<triple>`/`AR_<triple>` env vars — whose
+> names contain dashes, which `export` rejects, so pass them through `env` —
+> and `am instrument -e` arguments arrive via `InstrumentationRegistry`,
+> **not** `System.getenv`.
+>
+> Remaining work is the client, not the transport: port the framing and stream
+> layer from `apps/desktop/crates/console-core/src/net/wt_client.rs` (the
+> spike deliberately stops at a session), decide how Kotlin receives frames
+> (callback vs `Flow`), and wire `ChatStreamClient`/`TerminalRepository` to it
+> behind the same transport switch desktop has.
+
 OkHttp has no WebTransport. Keep `HttpTransport.kt`, `ChatStreamClient.kt`, and
 `TerminalRepository.kt` interfaces; swap internals.
 
