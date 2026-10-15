@@ -78,6 +78,9 @@ func ResolveRoleModel(role string, fallback types.Model, configuredRef string) t
 	return types.Model{
 		ID: modelID, Provider: providerID, ContextWindow: 128_000,
 		ThinkingLevels: levels, DefaultThinking: def,
+		// A user-declared vision role is trusted to see images even when the
+		// catalog does not know the id; this is the only signal we have.
+		SupportsImages: role == Vision,
 	}
 }
 

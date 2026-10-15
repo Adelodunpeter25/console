@@ -78,6 +78,26 @@ func TestResolveRoleModel(t *testing.T) {
 	}
 }
 
+func TestResolveRoleModelVisionCapability(t *testing.T) {
+	fallback := types.Model{ID: "gpt-5.6-luna", Provider: "codex", ContextWindow: 272_000}
+	// A user-declared vision role is trusted to see images even when the id is
+	// not in the catalog (the synthesize branch).
+	if got := roles.ResolveRoleModel("vision", fallback, "codex/future-vision-9"); !got.SupportsImages {
+		t.Fatalf("vision role must trust declared image support: %+v", got)
+	}
+	// The same unknown id under another role stays blind.
+	if got := roles.ResolveRoleModel("smol", fallback, "codex/future-model-9"); got.SupportsImages {
+		t.Fatalf("smol role must not claim image support: %+v", got)
+	}
+	// Fallbacks keep the fallback model untouched.
+	if got := roles.ResolveRoleModel("vision", fallback, ""); got.ID != fallback.ID || got.SupportsImages {
+		t.Fatalf("empty ref must fall back unchanged: %+v", got)
+	}
+	if got := roles.ResolveRoleModel("vision", fallback, "unknown-provider/m"); got.ID != fallback.ID {
+		t.Fatalf("unknown provider must fall back: %+v", got)
+	}
+}
+
 func TestValidateLevel(t *testing.T) {
 	model := types.Model{ID: "m", Provider: "codex", ThinkingLevels: []string{"low", "high"}}
 	if err := roles.ValidateLevel(model, ""); err != nil {

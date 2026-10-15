@@ -6,13 +6,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/compaction"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/vision"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -60,14 +63,94 @@ func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) 
 	}
 }
 
-// resolveVision maps a model without image support to the configured
-// vision role model when it does support images.
+// DeliversToolResultImages reports whether a provider renders inline images
+// carried by a tool result. Only Claude does today; the other adapters redact
+// them to a placeholder before the request is built, regardless of the model's
+// declared capability.
+func DeliversToolResultImages(providerID string) bool { return providerID == "claude" }
+
+// resolveVision maps a model without image support to the configured vision
+// role model when it does support images.
 func (s *Service) resolveVision(model types.Model) (types.Model, bool) {
-	vision := roles.ResolveRoleModel(roles.Vision, model, s.roleRef(roles.Vision))
-	if !vision.SupportsImages {
+	vm, ok := s.visionRole(model)
+	if !ok || !vm.SupportsImages {
 		return model, false
 	}
-	return vision, true
+	return vm, true
+}
+
+// visionRole resolves the configured vision role, reporting whether one is
+// set at all. An id the catalog does not know is trusted on the user's word,
+// with a warning so the decision is visible in logs.
+func (s *Service) visionRole(model types.Model) (types.Model, bool) {
+	ref := s.roleRef(roles.Vision)
+	if strings.TrimSpace(ref) == "" {
+		return types.Model{}, false
+	}
+	vm := roles.ResolveRoleModel(roles.Vision, model, ref)
+	if _, ok := providers.FindModel(vm.Provider, vm.ID); !ok {
+		slog.Warn("vision role resolves to an uncatalogued model; trusting its declared image support",
+			"model", vm.Provider+"/"+vm.ID)
+	}
+	return vm, true
+}
+
+// visionLabel is the "provider/model" of the configured vision role, or "".
+func (s *Service) visionLabel(model types.Model) string {
+	vm, ok := s.visionRole(model)
+	if !ok {
+		return ""
+	}
+	return vm.Provider + "/" + vm.ID
+}
+
+// ReadFileToolOptions builds read_file's per-run options: direct image parts
+// when the model and provider can carry them, otherwise a vision-role
+// describer, otherwise the placeholder.
+func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID string) tools.ReadFileOptions {
+	return tools.ReadFileOptions{
+		CanSeeImages: model.SupportsImages && DeliversToolResultImages(providerID),
+		Describer:    s.imageDescriber(model, providerID),
+		RunModel:     modelID,
+		VisionModel:  s.visionLabel(model),
+	}
+}
+
+// imageDescriber returns a describer for an image the run would otherwise not
+// see. Capability is not delivery: a Codex/Gemini model that sees user-message
+// images still gets tool-result images redacted, so it needs a describer too.
+func (s *Service) imageDescriber(model types.Model, providerID string) tools.ImageDescriber {
+	if model.SupportsImages && DeliversToolResultImages(providerID) {
+		return nil
+	}
+	if _, ok := s.resolveVision(model); !ok {
+		return nil
+	}
+	return &visionDescriber{s: s, fallback: model}
+}
+
+// visionDescriber runs the configured vision model once per image.
+type visionDescriber struct {
+	s        *Service
+	fallback types.Model
+}
+
+func (d *visionDescriber) Describe(ctx context.Context, mime string, data []byte, hint string) (string, bool) {
+	vm, ok := d.s.resolveVision(d.fallback)
+	if !ok {
+		return "", false
+	}
+	provider, err := d.s.Lookup(vm.Provider)
+	if err != nil {
+		return "", false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	desc := vision.Describe(ctx, provider, vm.ID, mime, data, hint)
+	if strings.TrimSpace(desc) == "" {
+		return "", false
+	}
+	return desc, true
 }
 
 // roleRef reads one configured model-role reference from settings.
