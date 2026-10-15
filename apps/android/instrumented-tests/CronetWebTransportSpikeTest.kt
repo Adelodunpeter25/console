@@ -26,7 +26,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * QUIC/WebTransport spike for plan Phase 3 (docs/plan/quic-webtransport-migration.md).
+ * QUIC/WebTransport spike — the negative result that chose the Rust/JNI client.
  *
  * One question, answered on a device: **can Cronet actually open a
  * WebTransport session?** Everything the mobile migration rests on lives in
