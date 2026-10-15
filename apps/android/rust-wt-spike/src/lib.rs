@@ -1,62 +1,74 @@
-//! QUIC/WebTransport spike for plan Phase 3 (mobile).
+//! QUIC/WebTransport client for Android (plan Phase 3).
 //!
-//! Question being answered: **can the desktop's WebTransport client cross-
-//! compile to Android and open a session there?** Unlike the Cronet route this
-//! has no OS-version floor, so if it works mobile gets QUIC on every `minSdk`
-//! the app supports (26) rather than only Android 14+.
+//! **The transport is not written here.** It is `console-core` — the same
+//! crate the desktop client uses — cross-compiled for Android. Framing, the
+//! session cache, certificate pinning and reconnect live there, so there is
+//! one implementation of the protocol and one place to fix it.
 //!
-//! This is deliberately the smallest surface that answers the question: one
-//! blocking JNI call that opens a session and reports whether the handshake
-//! completed. The framing and stream layer are already proven on desktop in
-//! `apps/desktop/crates/console-core`; wiring those in is the next step, not
-//! this one's job.
+//! This crate is the JNI surface plus [`bridge`]: stream registry, blocking
+//! frame reads, and a shared tokio runtime.
 //!
-//! Not production code.
+//! Frame wire shape between Rust and Kotlin (one allocation per frame):
+//! `[u32BE type_len][type][u64BE seq][payload]`.
+//!
+//! Build: `apps/android/rust-wt-spike/build.sh`.
 
-use jni::objects::{JClass, JString};
-use jni::sys::jint;
+mod bridge;
+
+/// Run a JNI entry point, turning a panic into an error code.
+///
+/// A JNI function is `extern "system"`, and unwinding out of one aborts the
+/// whole app — a Rust bug in this library would take the user's session with
+/// it. Every entry point goes through here.
+fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
+    // `&mut JNIEnv` is not `UnwindSafe`, and that is fine: the JNIEnv is only
+    // borrowed for the duration of the call and nothing escapes a panic.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => value,
+        Err(payload) => {
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            bridge::record_error(format!("Rust panic: {message}"));
+            log::error!("Rust panic escaped a JNI call: {message}");
+            fallback
+        }
+    }
+}
+
+/// Install the Android log sink once. Called from the JNI entry points so a
+/// panic anywhere below prints to logcat instead of a silent abort.
+fn init_logging() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_tag("console_wt")
+                .with_max_level(log::LevelFilter::Debug),
+        );
+        // Explicit hook: the default one writes to stderr, which Android
+        // discards, so a panic would otherwise be a bare SIGABRT.
+        let _ = std::panic::set_hook(Box::new(|info| {
+            log::error!("PANIC in WebTransport client: {info}");
+        }));
+    });
+}
+
+use jni::objects::{JByteArray, JClass, JString};
+use jni::sys::{jbyteArray, jint, jstring};
 use jni::JNIEnv;
+
+use crate::bridge::{KIND_CHAT_RUN, KIND_TERMINAL, KIND_WATCH};
 
 /// Result codes, mirrored in `WtNative.kt`.
 const OK: jint = 0;
-const ERR_BAD_ARG: jint = -1;
-const ERR_RUNTIME: jint = -2;
-const ERR_ENDPOINT: jint = -3;
-const ERR_HANDSHAKE: jint = -4;
-const ERR_CERT: jint = -5;
+const ERR_ARG: jint = -1;
 
-/// Last failure, so the Kotlin side can print it. The `log` crate has no
-/// logger installed inside a plain `.so`, so `log::error!` goes nowhere —
-/// a spike that cannot say *why* it failed is half a spike.
-static LAST_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-
-/// `WtNative.lastError()` — the most recent failure, or an empty string.
-#[no_mangle]
-pub extern "system" fn Java_com_console_mobile_WtNative_lastError(
-    mut env: JNIEnv,
-    _class: JClass,
-) -> jni::sys::jstring {
-    let message = LAST_ERROR
-        .lock()
-        .ok()
-        .and_then(|slot| slot.clone())
-        .unwrap_or_default();
-    match env.new_string(message) {
-        Ok(value) => value.into_raw(),
-        Err(_) => std::ptr::null_mut(),
-    }
-}
-
-fn record_error(message: String) {
-    if let Ok(mut slot) = LAST_ERROR.lock() {
-        *slot = Some(message.clone());
-    }
-    log::error!("{message}");
-}
-
-/// Build marker: proves the `.so` loaded and ran, before any networking.
-/// Returns 1. Lives on `WtNative` rather than on the test class so that
-/// calling it runs the Kotlin `init` that loads the library first.
+/// `WtNative.abiVersion()` — build marker. Calling anything on `WtNative`
+/// first runs the Kotlin `init` that loads this library, so a wrong ABI or a
+/// missing `build.sh` staging step fails here rather than later.
 #[no_mangle]
 pub extern "system" fn Java_com_console_mobile_WtNative_abiVersion(
     _env: JNIEnv,
@@ -65,108 +77,193 @@ pub extern "system" fn Java_com_console_mobile_WtNative_abiVersion(
     1
 }
 
-/// `WtNative.probeSession(origin, token, certSha256)` — opens one
-/// WebTransport session and reports whether the handshake completed.
-///
-/// @param certSha256 hex SHA-256 of the server's DER certificate; empty uses
-///   platform roots. Pinning is what a self-signed dev certificate needs, and
-///   the desktop client already depends on the same mechanism.
+fn arg(env: &mut JNIEnv, value: &JString) -> Option<String> {
+    env.get_string(value).ok().map(|value| value.into())
+}
+
+fn byte_array(env: &mut JNIEnv, bytes: &[u8]) -> jbyteArray {
+    match env.byte_array_from_slice(bytes) {
+        Ok(array) => array.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// `WtNative.lastError()` — the most recent failure, or an empty string.
+/// There is no logger inside a plain `.so`, so this is how a failure explains
+/// itself.
 #[no_mangle]
-pub extern "system" fn Java_com_console_mobile_WtNative_probeSession(
+pub extern "system" fn Java_com_console_mobile_WtNative_lastError(
+    env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    match env.new_string(bridge::last_error()) {
+        Ok(value) => value.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// `WtNative.openStream(apiUrl, origin, certSha256, kind, streamId, requestType, requestJson)`
+///
+/// Connects if needed and registers the stream. Returns a handle, or 0 on
+/// failure.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_com_console_mobile_WtNative_openStream(
     mut env: JNIEnv,
     _class: JClass,
+    api_url: JString,
     origin: JString,
-    token: JString,
     cert_sha256: JString,
+    kind: jint,
+    stream_id: JString,
+    request_type: JString,
+    request_json: JString,
 ) -> jint {
-    let origin = match read_string(&mut env, &origin) {
-        Some(value) => value,
-        None => return ERR_BAD_ARG,
+    init_logging();
+    guard(ERR_ARG, || {
+    let api_url = arg(&mut env, &api_url);
+    let origin = arg(&mut env, &origin);
+    let cert = arg(&mut env, &cert_sha256);
+    let stream_id = arg(&mut env, &stream_id);
+    let request_type = arg(&mut env, &request_type);
+    let request_json = arg(&mut env, &request_json);
+    let (Some(api_url), Some(origin), Some(cert), Some(stream_id), Some(request_type), Some(request_json)) = (
+        api_url,
+        origin,
+        cert,
+        stream_id,
+        request_type,
+        request_json,
+    ) else {
+        bridge::record_error("null argument".into());
+        return ERR_ARG;
     };
-    let token = match read_string(&mut env, &token) {
-        Some(value) => value,
-        None => return ERR_BAD_ARG,
-    };
-    let cert = read_string(&mut env, &cert_sha256).unwrap_or_default();
+    bridge::open_stream(
+        &api_url,
+        &origin,
+        &cert,
+        kind as u8,
+        &stream_id,
+        &request_type,
+        &request_json,
+    ) as jint
+    })
+}
 
-    let runtime = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            log::error!("tokio runtime: {error:#}");
-            return ERR_RUNTIME;
-        }
-    };
-
-    runtime.block_on(async move {
-        let client_config = match build_client_config(&cert) {
-            Ok(config) => config,
-            Err(code) => return code,
-        };
-        let endpoint = match wtransport::Endpoint::client(client_config) {
-            Ok(endpoint) => endpoint,
-            Err(error) => {
-                log::error!("endpoint: {error:#}");
-                return ERR_ENDPOINT;
-            }
-        };
-        let url = format!(
-            "{}/wt/v1/connect?token={}",
-            origin.trim_end_matches('/'),
-            token
-        );
-        match endpoint
-            .connect(wtransport::endpoint::ConnectOptions::builder(url).build())
-            .await
-        {
-            Ok(connection) => {
-                log::info!("WebTransport session established on Android");
-                drop(connection);
-                OK
-            }
-            Err(error) => {
-                // The reason has to reach the app: `log::error!` has nowhere
-                // to go without a logger, so it goes back over JNI instead.
-                record_error(format!("WebTransport handshake failed: {error:#}"));
-                ERR_HANDSHAKE
-            }
+/// `WtNative.readFrame(handle, timeoutMs)` — blocking read of one frame.
+///
+/// Returns `null` on timeout (the reader loop should just continue), an empty
+/// array when the stream ended or broke, or the encoded frame. See the crate
+/// doc for the byte layout.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_readFrame(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jint,
+    timeout_ms: jint,
+) -> jbyteArray {
+    init_logging();
+    guard(std::ptr::null_mut(), || match bridge::read_frame(handle as u64, timeout_ms) {
+        None => std::ptr::null_mut(),
+        Some(Ok(bytes)) => byte_array(&mut env, &bytes),
+        Some(Err(error)) => {
+            bridge::record_error(error);
+            byte_array(&mut env, &[])
         }
     })
 }
 
-fn build_client_config(cert: &str) -> Result<wtransport::ClientConfig, jint> {
-    if cert.is_empty() {
-        return Ok(wtransport::ClientConfig::builder()
-            .with_bind_default()
-            .with_native_certs()
-            .build());
-    }
-    let Some(digest) = hex_to_32(cert) else {
-        log::error!("cert hash must be 64 hex characters of SHA-256");
-        return Err(ERR_CERT);
+/// `WtNative.sendFrame(handle, type, payload)` — write one client frame
+/// (terminal input, resize, kill). Returns 0 on success.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_sendFrame(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jint,
+    frame_type: JString,
+    payload: jni::sys::jbyteArray,
+) -> jint {
+    init_logging();
+    guard(ERR_ARG, || {
+    let Some(frame_type) = arg(&mut env, &frame_type) else {
+        return ERR_ARG;
     };
-    Ok(wtransport::ClientConfig::builder()
-        .with_bind_default()
-        .with_server_certificate_hashes(vec![wtransport::tls::Sha256Digest::new(digest)])
-        .build())
+    let mut bytes = Vec::new();
+    if !payload.is_null() {
+        // jni 0.21 wants a typed array, not a raw pointer.
+        let array = unsafe { JByteArray::from_raw(payload) };
+        match env.get_array_length(&array) {
+            Ok(len) => {
+                let mut buffer = vec![0i8; len as usize];
+                if env.get_byte_array_region(&array, 0, &mut buffer).is_ok() {
+                    bytes.extend(buffer.iter().map(|byte| *byte as u8));
+                }
+            }
+            Err(error) => bridge::record_error(format!("read payload: {error}")),
+        }
+    }
+    match bridge::send_frame(handle as u64, &frame_type, &bytes) {
+        Ok(()) => OK,
+        Err(error) => {
+            bridge::record_error(error);
+            ERR_ARG
+        }
+    }
+    })
 }
 
-fn read_string(env: &mut JNIEnv, value: &JString) -> Option<String> {
-    env.get_string(value)
-        .ok()
-        .map(|java_string| java_string.into())
+/// `WtNative.closeStream(handle, type)` — send a terminal close frame if asked,
+/// then drop the stream. `type` is empty for streams that need no frame.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_closeStream(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jint,
+    frame_type: JString,
+) -> jint {
+    init_logging();
+    guard(ERR_ARG, || {
+    let frame_type = arg(&mut env, &frame_type).unwrap_or_default();
+    match bridge::close_stream(handle as u64, &frame_type) {
+        Ok(()) => OK,
+        Err(error) => {
+            bridge::record_error(error);
+            ERR_ARG
+        }
+    }
+    })
 }
 
-fn hex_to_32(hex: &str) -> Option<[u8; 32]> {
-    let clean: String = hex.chars().filter(|c| *c != ':').collect();
-    if clean.len() != 64 {
-        return None;
-    }
-    let mut out = [0u8; 32];
-    for (index, byte) in out.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&clean[2 * index..2 * index + 2], 16).ok()?;
-    }
-    Some(out)
+/// `WtNative.closeAll()` — tear every stream down (app shutdown).
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_closeAll(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    bridge::close_all();
+}
+
+/// Stream kinds for `openStream`, so Kotlin does not hardcode proto numbers.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_kindChatRun(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jint {
+    KIND_CHAT_RUN as jint
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_kindTerminal(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jint {
+    KIND_TERMINAL as jint
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_WtNative_kindWatch(
+    _env: JNIEnv,
+    _class: JClass,
+) -> jint {
+    KIND_WATCH as jint
 }

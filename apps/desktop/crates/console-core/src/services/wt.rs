@@ -62,6 +62,27 @@ impl WtService {
         })
     }
 
+    /// Open a raw framed stream: one request frame in, a frame reader out.
+    ///
+    /// The methods above are the right entry point when the client wants the
+    /// same decoded events desktop consumes. Android needs the other shape:
+    /// its existing parsers already expect the SSE frame shape (`seq`, event
+    /// name, raw body), so mobile decodes frames itself and only needs the
+    /// session, framing and request encoding — not desktop's event types.
+    ///
+    /// Both directions share the stream's lifetime: the reader keeps the
+    /// write half alive, so dropping the writer is safe (see
+    /// [`crate::net::WtStream::split`]).
+    pub async fn open_stream(
+        &self,
+        kind: WtStreamKind,
+        id: &str,
+        request_type: &str,
+        payload: Vec<u8>,
+    ) -> Result<(WtStreamWriter, WtStreamReader)> {
+        self.session.open_stream_with_request(kind, id, request_type, payload).await
+    }
+
     /// Close the connection. Streams unwind on the same cause.
     pub fn close(&self, reason: &str) {
         self.session.close(reason.as_bytes());

@@ -13,12 +13,20 @@ crate-type = ["cdylib"]
 [dependencies]
 # Same version the desktop client is proven on (apps/desktop/Cargo.lock).
 wtransport = "0.7"
+# The desktop crate, cross-compiled. This is the point of the whole route: the
+# transport, framing, session cache and reconnect are NOT reimplemented here.
+console-core = { path = "../../desktop/crates/console-core" }
+console-proto = { path = "../../desktop/crates/console-proto" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"
 log = "0.4"
 # Kotlin's `external fun` resolves to a JNI symbol, so the Rust side needs the
 # JNI ABI, not a plain `extern "C"` export.
 jni = "0.21"
+# Without a logger, `log::error!` goes nowhere and a panic prints to a stderr
+# that Android discards — a Rust bug on this platform would be a bare SIGABRT
+# with no message. This is how the panic reason reaches logcat.
+android_logger = "0.13"
 
 # Android cross-compilation lives in .cargo/config.toml — a manifest
 # `[target.<triple>]` table is not honored for this package.
@@ -28,3 +36,8 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 strip = true
+# Android targets default to panic = "abort", which turns any panic into a
+# bare SIGABRT with no message. Unwinding lets a panic cross the JNI boundary
+# as an exception Kotlin can report, which is what makes a bug here debuggable
+# instead of mysterious.
+panic = "unwind"
