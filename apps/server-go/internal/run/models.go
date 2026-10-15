@@ -123,6 +123,9 @@ func (s *Service) imageDescriber(model types.Model, providerID string) tools.Ima
 	if model.SupportsImages && DeliversToolResultImages(providerID) {
 		return nil
 	}
+	if !services.NewSettingsService().Load().Vision.DescribeImagesEnabled() {
+		return nil
+	}
 	if _, ok := s.resolveVision(model); !ok {
 		return nil
 	}

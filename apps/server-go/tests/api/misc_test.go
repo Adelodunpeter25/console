@@ -55,6 +55,43 @@ func TestSettingsPatchSemantics(t *testing.T) {
 	}
 }
 
+// The vision kill switch is plain JSON alongside modelRoles; a role patch must
+// carry it through Load and Patch rather than wiping it.
+func TestSettingsVisionKillSwitchSurvivesPatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	body := `{"modelRoles":{"vision":"claude-opus-4"},"vision":{"describeImages":false}}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONSOLE_SETTINGS_PATH", path)
+	settings := services.NewSettingsService()
+
+	if settings.Load().Vision.DescribeImagesEnabled() {
+		t.Fatal("disabled switch must load as disabled")
+	}
+
+	smol := "gpt-5-mini"
+	result, err := settings.Patch(map[string]*string{"smol": &smol})
+	if err != nil {
+		t.Fatalf("patch: %v", err)
+	}
+	if result.Vision.DescribeImagesEnabled() {
+		t.Fatal("patch must not re-enable the switch")
+	}
+	if reloaded := settings.Load(); reloaded.Vision.DescribeImagesEnabled() {
+		t.Fatal("patch must not wipe the switch on disk")
+	}
+
+	// Absent field means enabled (the default).
+	if err := os.WriteFile(path, []byte(`{"modelRoles":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !settings.Load().Vision.DescribeImagesEnabled() {
+		t.Fatal("absent switch must default to enabled")
+	}
+}
+
 func TestSkillDiscovery(t *testing.T) {
 	skills := services.NewSkillsService()
 	root := t.TempDir()

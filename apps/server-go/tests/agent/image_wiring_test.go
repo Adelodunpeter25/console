@@ -4,10 +4,14 @@
 package tests
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
@@ -54,5 +58,34 @@ func TestReadFileImageWiring(t *testing.T) {
 	capable := svc.ReadFileToolOptions(types.Model{ID: "gpt-5", Provider: "codex", SupportsImages: true}, "codex", "gpt-5")
 	if capable.Describer == nil {
 		t.Fatal("capable redacting model must describe when a vision role is set")
+	}
+}
+
+func TestVisionDescribeDisabled(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	body := `{"modelRoles":{"vision":"claude/haiku"},"vision":{"describeImages":false}}`
+	if err := os.WriteFile(settingsPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONSOLE_SETTINGS_PATH", settingsPath)
+	svc := run.NewService(helpers.NewRunSessions(t))
+
+	opts := svc.ReadFileToolOptions(types.Model{ID: "gpt-5", Provider: "codex"}, "codex", "gpt-5")
+	if opts.Describer != nil {
+		t.Fatalf("kill switch must disable the describer: %+v", opts)
+	}
+
+	// With the describer disabled, read_file falls back to the placeholder.
+	img := filepath.Join(dir, "shot.png")
+	if err := os.WriteFile(img, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 'x'}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := tools.NewReadFileTool(opts).Execute(context.Background(), json.RawMessage(`{"path":"`+img+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := out.([]map[string]any)[0]["text"].(string); !strings.Contains(text, "Cannot view") {
+		t.Fatalf("kill switch must fall back to the placeholder: %q", text)
 	}
 }

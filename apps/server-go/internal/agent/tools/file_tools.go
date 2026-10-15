@@ -65,7 +65,7 @@ func NewReadFileTool(opts ReadFileOptions) Tool {
 	if maxImageBytes <= 0 {
 		maxImageBytes = readMaxImageBytes
 	}
-	return NewTool("read_file", "Read a file on disk. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
+	return NewTool("read_file", "Read a file on disk. Images (png, jpeg, gif, webp) are returned for viewing; other binary files are rejected. Without startLine/endLine, returns the first 300 lines; pass a range to read further.", TierRead,
 		func(ctx context.Context, in readFileInput) (any, error) {
 			return readFileExecute(ctx, in, opts, maxImageBytes)
 		})

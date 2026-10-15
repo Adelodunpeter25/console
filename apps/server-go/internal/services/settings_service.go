@@ -12,8 +12,21 @@ import (
 
 var settingsRoles = []string{"vision", "smol"}
 
+// VisionSettings controls the vision-role handoff for read_file images.
+type VisionSettings struct {
+	// DescribeImages is the kill switch for the vision handoff. Omitted (nil)
+	// means enabled, the default.
+	DescribeImages *bool `json:"describeImages,omitempty"`
+}
+
+// DescribeImagesEnabled reports whether the vision handoff is on (default).
+func (v VisionSettings) DescribeImagesEnabled() bool {
+	return v.DescribeImages == nil || *v.DescribeImages
+}
+
 type Settings struct {
 	ModelRoles map[string]string `json:"modelRoles"`
+	Vision     VisionSettings    `json:"vision"`
 }
 
 type SettingsService struct{}
@@ -46,7 +59,7 @@ func (s *SettingsService) Load() Settings {
 			clean[role] = v
 		}
 	}
-	return Settings{ModelRoles: clean}
+	return Settings{ModelRoles: clean, Vision: parsed.Vision}
 }
 
 // IsModelRole reports whether the role is a known console model role.
@@ -78,7 +91,7 @@ func (s *SettingsService) Patch(patch map[string]*string) (Settings, error) {
 		}
 		merged[role] = strings.TrimSpace(*value)
 	}
-	result := Settings{ModelRoles: merged}
+	result := Settings{ModelRoles: merged, Vision: current.Vision}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return current, err
