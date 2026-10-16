@@ -54,10 +54,43 @@ func functionCallPart(name string, args map[string]any, id, thoughtSignature str
 	return part
 }
 
+// functionResponsePart renders a CCA functionResponse. Text travels in
+// `response.content` (flattened, so the function-response sanitizer can read
+// it) and inline images travel in `parts` so the model can view them.
 func functionResponsePart(name, id string, content any) map[string]any {
-	return map[string]any{"functionResponse": map[string]any{
-		"name": name, "id": id, "response": map[string]any{"content": shared.RedactImages(content)},
-	}}
+	items := shared.ContentItems(content)
+	response := map[string]any{}
+	media := make([]map[string]any, 0, len(items))
+	var texts []string
+	for _, item := range items {
+		switch item["type"] {
+		case "image":
+			data, _ := item["data"].(string)
+			mime, _ := item["mimeType"].(string)
+			if data != "" && mime != "" {
+				media = append(media, inlineDataPart(data, mime))
+			}
+		case "text":
+			if text, _ := item["text"].(string); text != "" {
+				texts = append(texts, text)
+			}
+		}
+	}
+	if len(items) == 0 {
+		// Scalar content keeps its original shape.
+		response["content"] = content
+	} else {
+		text := strings.Join(texts, "\n")
+		if text == "" && len(media) > 0 {
+			text = "the tool returned an image"
+		}
+		response["content"] = text
+	}
+	functionResponse := map[string]any{"name": name, "id": id, "response": response}
+	if len(media) > 0 {
+		functionResponse["parts"] = media
+	}
+	return map[string]any{"functionResponse": functionResponse}
 }
 
 func decodeArgs(raw json.RawMessage) map[string]any {

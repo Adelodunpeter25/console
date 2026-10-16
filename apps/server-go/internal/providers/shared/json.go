@@ -39,6 +39,25 @@ func NumberFieldOr(m map[string]any, key string, fallback float64) float64 {
 	return fallback
 }
 
+// ContentItems normalizes tool result content into a typed item list. It
+// accepts the shapes providers pass around ([]map[string]any from tools,
+// []any from decoded JSON) and returns nil for scalar content.
+func ContentItems(content any) []map[string]any {
+	switch v := content.(type) {
+	case []map[string]any:
+		return v
+	case []any:
+		items := make([]map[string]any, 0, len(v))
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				items = append(items, m)
+			}
+		}
+		return items
+	}
+	return nil
+}
+
 // ToolResultText stringifies tool result content for provider input.
 func ToolResultText(content any) string {
 	if s, ok := content.(string); ok {

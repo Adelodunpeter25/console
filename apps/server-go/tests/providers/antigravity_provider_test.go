@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 )
 
@@ -212,5 +214,46 @@ func TestAntigravityOnboardUserPolling(t *testing.T) {
 	}
 	if project != "proj-polled" {
 		t.Fatalf("project = %q", project)
+	}
+}
+
+func TestAntigravityToolResultImage(t *testing.T) {
+	msgs := []any{
+		loop.UserMessage{Role: loop.RoleUser, Content: "read the file"},
+		loop.AssistantMessage{Role: loop.RoleAssistant, ID: "m1", Content: []any{
+			loop.ToolCallPart{Type: "toolCall", Call: tools.ToolCall{ID: "c1", Name: "read_file", Arguments: json.RawMessage(`{"path":"/tmp/x.png"}`)}},
+		}},
+		loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{{
+			ToolCallID: "c1",
+			Content: []map[string]any{
+				{"type": "text", "text": "read_file returned:"},
+				{"type": "image", "data": "QUJD", "mimeType": "image/png"},
+			},
+		}}},
+	}
+
+	contents := antigravity.ConvertMessages(msgs, antigravity.ConvertMessagesOptions{})
+	var fr map[string]any
+	for _, c := range contents {
+		for _, p := range c.Parts {
+			if f, ok := p["functionResponse"].(map[string]any); ok {
+				fr = f
+			}
+		}
+	}
+	if fr == nil {
+		t.Fatalf("no functionResponse in %#v", contents)
+	}
+	resp, _ := fr["response"].(map[string]any)
+	if resp["content"] != "read_file returned:" {
+		t.Fatalf("response content: %#v", resp)
+	}
+	parts, _ := fr["parts"].([]map[string]any)
+	if len(parts) != 1 {
+		t.Fatalf("parts: %#v", fr["parts"])
+	}
+	inline, _ := parts[0]["inlineData"].(map[string]any)
+	if inline["mimeType"] != "image/png" || inline["data"] != "QUJD" {
+		t.Fatalf("inlineData: %#v", parts[0])
 	}
 }

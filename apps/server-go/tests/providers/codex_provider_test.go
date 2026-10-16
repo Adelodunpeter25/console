@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -333,5 +332,32 @@ func TestCodexConvertInput(t *testing.T) {
 	if len(input) != 3 {
 		t.Fatalf("input items: %v", input)
 	}
-	_ = os.Getenv("PATH")
+	if out, ok := input[2]["output"].(string); !ok || out != "out" {
+		t.Fatalf("text tool result must stay a string: %#v", input[2]["output"])
+	}
+
+	// A tool result carrying an image becomes an ordered content array so the
+	// model can view it.
+	imgInput := codex.ConvertInput([]any{
+		loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{{
+			ToolCallID: "c2",
+			Content: []map[string]any{
+				{"type": "text", "text": "read_file returned:"},
+				{"type": "image", "data": "QUJD", "mimeType": "image/png"},
+			},
+		}}},
+	})
+	if len(imgInput) != 1 {
+		t.Fatalf("image input items: %v", imgInput)
+	}
+	out, ok := imgInput[0]["output"].([]map[string]any)
+	if !ok || len(out) != 2 {
+		t.Fatalf("image tool result output: %#v", imgInput[0]["output"])
+	}
+	if out[0]["type"] != "input_text" || out[0]["text"] != "read_file returned:" {
+		t.Fatalf("text content: %#v", out[0])
+	}
+	if out[1]["type"] != "input_image" || out[1]["image_url"] != "data:image/png;base64,QUJD" {
+		t.Fatalf("image content: %#v", out[1])
+	}
 }

@@ -18,13 +18,13 @@ import (
 )
 
 func TestReadFileImageWiring(t *testing.T) {
-	if !run.DeliversToolResultImages("claude") {
-		t.Fatal("claude must deliver tool-result images")
-	}
-	for _, p := range []string{"codex", "opencode", "antigravity"} {
-		if run.DeliversToolResultImages(p) {
-			t.Fatalf("%s must not deliver tool-result images", p)
+	for _, p := range []string{"claude", "codex", "antigravity"} {
+		if !run.DeliversToolResultImages(p) {
+			t.Fatalf("%s must deliver tool-result images", p)
 		}
+	}
+	if run.DeliversToolResultImages("opencode") {
+		t.Fatal("opencode must not deliver tool-result images")
 	}
 
 	// Isolate settings: an absent file means no vision role.
@@ -33,16 +33,19 @@ func TestReadFileImageWiring(t *testing.T) {
 	t.Setenv("CONSOLE_SETTINGS_PATH", settingsPath)
 	svc := run.NewService(helpers.NewRunSessions(t))
 
-	// Claude + capable model: direct image parts, no describer.
-	claude := svc.ReadFileToolOptions(types.Model{ID: "sonnet", Provider: "claude", SupportsImages: true}, "claude", "sonnet")
-	if !claude.CanSeeImages || claude.Describer != nil {
-		t.Fatalf("claude capable: %+v", claude)
+	// Delivering providers with a capable model: direct image parts, no
+	// describer.
+	for _, provider := range []string{"claude", "codex", "antigravity"} {
+		opts := svc.ReadFileToolOptions(types.Model{ID: "m", Provider: provider, SupportsImages: true}, provider, "m")
+		if !opts.CanSeeImages || opts.Describer != nil {
+			t.Fatalf("%s capable: %+v", provider, opts)
+		}
 	}
-	// Codex + capable model: the adapter redacts tool-result images, so no
-	// direct part and (with no vision role) no describer.
-	codex := svc.ReadFileToolOptions(types.Model{ID: "gpt-5", Provider: "codex", SupportsImages: true}, "codex", "gpt-5")
-	if codex.CanSeeImages || codex.Describer != nil {
-		t.Fatalf("codex capable: %+v", codex)
+	// A non-delivering provider with a capable model: the adapter redacts, so
+	// no direct part and (with no vision role) no describer.
+	nonDelivering := svc.ReadFileToolOptions(types.Model{ID: "gpt", Provider: "opencode", SupportsImages: true}, "opencode", "gpt")
+	if nonDelivering.CanSeeImages || nonDelivering.Describer != nil {
+		t.Fatalf("opencode capable: %+v", nonDelivering)
 	}
 
 	// Configure a vision role: a blind model now gets a describer bound to the
@@ -54,10 +57,10 @@ func TestReadFileImageWiring(t *testing.T) {
 	if blind.Describer == nil || blind.VisionModel != "claude/haiku" || blind.RunModel != "gpt-5" {
 		t.Fatalf("blind with vision role: %+v", blind)
 	}
-	// A capable but redacting model also describes once a role is set.
+	// A capable delivering model needs no describer even with a role set.
 	capable := svc.ReadFileToolOptions(types.Model{ID: "gpt-5", Provider: "codex", SupportsImages: true}, "codex", "gpt-5")
-	if capable.Describer == nil {
-		t.Fatal("capable redacting model must describe when a vision role is set")
+	if capable.Describer != nil || !capable.CanSeeImages {
+		t.Fatalf("capable delivering model must not describe: %+v", capable)
 	}
 }
 

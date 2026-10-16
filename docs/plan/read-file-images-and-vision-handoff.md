@@ -21,7 +21,7 @@ Target: `internal/agent/tools/file_tools.go`, new `internal/agent/tools/image_vi
 
 ## 1. Design Principles
 
-1. **The transport already exists — use it, don't build a second one.** Tool results in this harness already carry `{"type":"image","data":<base64>,"mimeType":<mime>}` parts. The browser tool (`agent/tools/browser_tool.go:117`), the MCP adapter (`services/mcp/adapter.go:178`), and the CUA driver (`services/cua/js.go:220,434`) all produce them. Claude renders them as native image blocks (`providers/claude/convert.go:47`); codex, opencode, and antigravity replace them with `[image omitted: provider does not support images in tool results]` (`providers/shared/json.go:56`). `read_file` becomes just another producer of a shape we own — but note §2.1: producing the shape is not the same as delivering it, and only Claude delivers it inside a tool result today.
+1. **The transport already exists — use it, don't build a second one.** Tool results in this harness already carry `{"type":"image","data":<base64>,"mimeType":<mime>}` parts. The browser tool (`agent/tools/browser_tool.go:117`), the MCP adapter (`services/mcp/adapter.go:178`), and the CUA driver (`services/cua/js.go:220,434`) all produce them. Claude renders them as native image blocks (`providers/claude/convert.go:47`), Codex and Antigravity forward them in their own wire shapes, and OpenCode replaces them with `[image omitted: provider does not support images in tool results]` (`providers/shared/json.go:56`). `read_file` becomes just another producer of a shape we own — but note §2.1: producing the shape is not the same as delivering it, and delivery is per-adapter, not universal.
 
 2. **Detect by magic bytes, never by extension.** A `.png` that is actually a text file, or a binary blob named `.txt`, must not be routed by filename. Sniff the first bytes; extension is at most a tiebreaker we do not need.
 
@@ -44,20 +44,20 @@ read_file.Execute
   └─ returns []map[string]any{{"type":"image","data":..., "mimeType":...}}
        └─ loop.ToolResultMessage  (agent/loop/loop.go, `results` in `run`)
             ├─ claude     → toolResultContent → Anthropic image block   ✅ delivers
-            ├─ codex      → shared.ToolResultText → RedactImages        ❌ placeholder
-            ├─ opencode   → shared.ToolResultText → RedactImages        ❌ placeholder
-            └─ antigravity→ shared.RedactImages                         ❌ placeholder
+            ├─ codex      → functionCallOutput → input_image content     ✅ delivers
+            ├─ antigravity→ functionResponse → inlineData parts          ✅ delivers
+            └─ opencode   → shared.ToolResultText → RedactImages        ❌ placeholder
 ```
 
-**Model capability and provider delivery are two different things, and the plan must not conflate them.** `model.SupportsImages` reports whether the model accepts images in *user* messages. Only Claude also accepts them inside a *tool result*; the other three redact every tool-result image to a text placeholder before the request is built, regardless of what the model can do. So `CanSeeImages: model.SupportsImages` (Phase 4) and the "never pay for what the model can do" early return in `imageDescriber` (§4.3) would, for a Codex/Antigravity/OpenCode model that *declares* image support, hand the model an image part the adapter then silently drops — the exact un-explained `[image omitted: ...]` dead end §1.5 forbids, with no description and no remedy.
+**Model capability and provider delivery are two different things, and the plan must not conflate them.** `model.SupportsImages` reports whether the model accepts images in *user* messages. Whether a *tool result* can carry one depends on the adapter: Claude, Codex, and Antigravity forward them; OpenCode still redacts every tool-result image to a text placeholder before the request is built, regardless of what the model can do. So `CanSeeImages: model.SupportsImages` (Phase 4) and the "never pay for what the model can do" early return in `imageDescriber` (§4.3) would, for a redacting provider, hand the model an image part the adapter then silently drops — the exact un-explained `[image omitted: ...]` dead end §1.5 forbids, with no description and no remedy.
 
 The fix is to gate on **delivery**, not on capability:
 
-- Introduce one predicate, e.g. `providerDeliversToolResultImages(providerID string) bool`, true for `claude` today.
+- Introduce one predicate, e.g. `providerDeliversToolResultImages(providerID string) bool`, true for `claude`, `codex`, and `antigravity`.
 - `CanSeeImages` = `model.SupportsImages && providerDeliversToolResultImages(provider)`.
 - `imageDescriber`'s early return must use the same predicate, so a capable-but-redacting model falls through to describe-or-placeholder instead of a silent drop.
 
-This keeps §5 Phase 3's "works on all four providers" claim true for the describe path while making the direct-image path honest. The alternative — teach codex/opencode/antigravity to carry media in tool results (OpenCode's provider capability matrix, §3.1) — is real work and belongs in its own change, not here.
+This keeps §5 Phase 3's "works on all four providers" claim true for the describe path while making the direct-image path honest. Teaching Codex (content-array `function_call_output`) and Antigravity (`functionResponse.parts`/`inlineData`) to carry media in tool results is the follow-up that landed before the OpenCode lane, which stays redacting for now.
 
 ### 2.2 The vision fallback cannot work mid-loop
 
@@ -81,12 +81,12 @@ This is the same shape Claude Code uses, and it composes with what is already he
 
 ### 2.3 Behavior matrix
 
-"Provider delivers tool-result images" is true for Claude only (§2.1). The run model's declared `SupportsImages` matters only when that is also true.
+"Provider delivers tool-result images" is true for Claude, Codex, and Antigravity (§2.1). The run model's declared `SupportsImages` matters only when that is also true.
 
 | Provider delivers tool-result images? | Run model sees images? | `vision` role resolves to an image-capable model? | `read_file` on a PNG returns |
 |---|---|---|---|
-| yes (claude) | yes | — | image part + short text line. Zero extra calls. |
-| no (codex/opencode/antigravity) | yes | yes | text description from the vision model, labelled as such |
+| yes (claude/codex/antigravity) | yes | — | image part + short text line. Zero extra calls. |
+| no (opencode) | yes | yes | text description from the vision model, labelled as such |
 | no | yes | no / unset | text placeholder naming the path, mime, dimensions, and the fix |
 | — | no | yes | text description from the vision model, labelled as such |
 | — | no | no / unset | text placeholder naming the path, mime, dimensions, and the fix |
@@ -259,8 +259,9 @@ const visionSystemPrompt = "You describe images for a text-only coding agent. " 
 ```go
 // internal/run/models.go
 func (s *Service) imageDescriber(model types.Model, providerID string) tools.ImageDescriber {
-    // Capability is not delivery: a Codex/Gemini model that sees user-message
-    // images still gets tool-result images redacted, so it needs describe too.
+    // Capability is not delivery: a model that sees user-message images still
+    // gets tool-result images redacted by a non-delivering adapter, so it
+    // needs describe too.
     if model.SupportsImages && providerDeliversToolResultImages(providerID) {
         return nil
     }
@@ -370,7 +371,7 @@ case "read_file":
     }))
 ```
 
-Note `model`/`providerID` here are the **post-vision-fallback** variables. If the run already swapped to the vision model because the user attached an image, and that model is on a delivering provider (Claude), `CanSeeImages` is true and a subsequent `read_file` image goes straight through — correct, and it falls out for free. On a redacting provider it must describe or placehold instead (§2.1).
+Note `model`/`providerID` here are the **post-vision-fallback** variables. If the run already swapped to the vision model because the user attached an image, and that model is on a delivering provider (Claude/Codex/Antigravity), `CanSeeImages` is true and a subsequent `read_file` image goes straight through — correct, and it falls out for free. On the remaining redacting provider it must describe or placehold instead (§2.1).
 
 `internal/run/models.go` — add `imageDescriber` (gated on delivery, §4.3) and `visionLabel` (the `provider/model` string for the Phase 3 text). Reuse `resolveVision` so the role resolution stays in one place.
 
@@ -380,7 +381,8 @@ Also land the §4.3 fix here, in two small pieces:
 
 Subagents already receive the parent's bound `toolList` by value (`agent/loop/subagent.go` `SubagentContext`, built in `runOneTurn`), so their `read_file` inherits the same `CanSeeImages`/`Describer` — and the same `Model`, since a subagent reuses the parent's model id. No separate wiring is needed; the earlier "own describer" idea is dropped.
 
-- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model on a delivering provider (Claude) gets `CanSeeImages: true` and no describer; the same capable model on a redacting provider (Codex) gets `CanSeeImages: false` and, when a `vision` role is configured, a describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil.
+- **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestReadFileImageWiring -v` — a vision-capable run model on a delivering provider (Claude/Codex/Antigravity) gets `CanSeeImages: true` and no describer; the same capable model on the redacting provider (OpenCode) gets `CanSeeImages: false` and, when a `vision` role is configured, a describer; an image-blind run model with a `vision` role in a temp `settings.json` (via `CONSOLE_SETTINGS_PATH`, following `tests/agent/roles_test.go:329`) gets a describer bound to the role model; with no role configured it gets nil.
+- **Verification**: `cd apps/server-go && go test ./tests/providers/ -run 'TestCodexConvertInput|TestAntigravityToolResultImage' -v` — a tool result carrying an image lowers to the provider's native media shape (Codex `function_call_output` content array, Antigravity `functionResponse.parts` `inlineData`) and text-only results keep the string form.
 - **Verification**: `cd apps/server-go && go test ./tests/agent/ -run TestResolveRoleModel -v` — extend the existing table in `tests/agent/roles_test.go` with `TestResolveRoleModelVisionCapability`: a `vision` role resolving to an uncatalogued id synthesizes with `SupportsImages == true`; the same ref under the `smol` role still synthesizes with `SupportsImages == false`; a catalogued model's real flag is preserved and never overwritten; an empty ref and an unknown provider both return the fallback unchanged.
 
 ### Phase 5 — Prompt text, kill switch, docs

@@ -136,7 +136,7 @@ func ConvertInput(messages []any) []map[string]any {
 				input = append(input, map[string]any{
 					"type":    "function_call_output",
 					"call_id": r.ToolCallID,
-					"output":  shared.ToolResultText(r.Content),
+					"output":  functionCallOutput(r.Content),
 				})
 			}
 		case *loop.ToolResultMessage:
@@ -149,6 +149,44 @@ func ConvertInput(messages []any) []map[string]any {
 		return []map[string]any{}
 	}
 	return input
+}
+
+// functionCallOutput renders tool result content for a `function_call_output`
+// item. Text-only results stay a plain string; results carrying inline images
+// become an ordered input-content array so the model can view them.
+func functionCallOutput(content any) any {
+	items := shared.ContentItems(content)
+	hasImage := false
+	for _, item := range items {
+		if item["type"] == "image" {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		return shared.ToolResultText(content)
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		switch item["type"] {
+		case "image":
+			data, _ := item["data"].(string)
+			mime, _ := item["mimeType"].(string)
+			if data == "" || mime == "" {
+				continue
+			}
+			out = append(out, map[string]any{
+				"type":      "input_image",
+				"image_url": fmt.Sprintf("data:%s;base64,%s", mime, data),
+				"detail":    "auto",
+			})
+		case "text":
+			if text, _ := item["text"].(string); text != "" {
+				out = append(out, map[string]any{"type": "input_text", "text": text})
+			}
+		}
+	}
+	return out
 }
 
 // ConvertTools maps tool definitions to Codex function tools.

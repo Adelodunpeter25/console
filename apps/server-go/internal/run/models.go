@@ -64,10 +64,17 @@ func (s *Service) resolveModel(ctx context.Context, providerID, modelID string) 
 }
 
 // DeliversToolResultImages reports whether a provider renders inline images
-// carried by a tool result. Only Claude does today; the other adapters redact
+// carried by a tool result. Claude sends them natively; Codex and Antigravity
+// forward them in their own wire shapes. Other adapters (e.g. OpenCode) redact
 // them to a placeholder before the request is built, regardless of the model's
 // declared capability.
-func DeliversToolResultImages(providerID string) bool { return providerID == "claude" }
+func DeliversToolResultImages(providerID string) bool {
+	switch providerID {
+	case "claude", "codex", "antigravity":
+		return true
+	}
+	return false
+}
 
 // resolveVision maps a model without image support to the configured vision
 // role model when it does support images.
@@ -117,8 +124,9 @@ func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID str
 }
 
 // imageDescriber returns a describer for an image the run would otherwise not
-// see. Capability is not delivery: a Codex/Gemini model that sees user-message
-// images still gets tool-result images redacted, so it needs a describer too.
+// see. Capability is not delivery: a model that sees user-message images still
+// gets tool-result images redacted by a non-delivering adapter, so it needs a
+// describer too.
 func (s *Service) imageDescriber(model types.Model, providerID string) tools.ImageDescriber {
 	if model.SupportsImages && DeliversToolResultImages(providerID) {
 		return nil
