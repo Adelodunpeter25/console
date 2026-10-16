@@ -88,6 +88,13 @@ func (c *wtDeviceConn) WriteClose() error {
 	return c.str.Close()
 }
 
+// CloseConn tears the stream down so a blocked ReadText returns. PumpStream
+// calls it before returning from its write loop: same discipline as the WS
+// adapter — the reader must stop before the caller releases the stream.
+func (c *wtDeviceConn) CloseConn() {
+	_ = c.str.Close()
+}
+
 func (c *wtDeviceConn) ReadText() ([]byte, error) {
 	for {
 		frame, err := DecodeFrame(c.str)

@@ -171,6 +171,15 @@ func (w *deviceWSConn) WriteClose() error {
 	return w.write(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }
 
+// CloseConn tears the underlying connection down so a blocked ReadText
+// returns. PumpStream calls it before returning from the upgrade handler:
+// fasthttp releases the hijacked connection on return, and a read that
+// outlives the handler dereferences a released conn and crashes the
+// server (seen in production as a SIGSEGV inside fasthttp's hijackConn).
+func (w *deviceWSConn) CloseConn() {
+	_ = w.conn.Close()
+}
+
 func (w *deviceWSConn) ReadText() ([]byte, error) {
 	for {
 		typ, data, err := w.conn.ReadMessage()

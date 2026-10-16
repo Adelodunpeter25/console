@@ -34,6 +34,10 @@ const (
 	deviceBootTimeout   = 5 * time.Minute
 	DeviceStreamPongTTL = 60 * time.Second
 	deviceStreamPing    = DeviceStreamPongTTL * 9 / 10
+	// Max wait for the read goroutine to acknowledge a forced close before
+	// the upgrade handler returns (it is normally st.WriteClose-fast: the
+	// unblocked read errors out in milliseconds).
+	deviceReaderWait = 5 * time.Second
 )
 
 type DeviceService struct {
@@ -238,6 +242,9 @@ type StreamConn interface {
 	WriteBinary(data []byte) error
 	WritePing() error
 	WriteClose() error
+	// CloseConn tears the underlying websocket down (unblocking a blocked
+	// ReadText) without implying any wire close status.
+	CloseConn()
 	// ReadText blocks for the next text frame; non-text frames are skipped
 	// by the adapter. Any error ends the stream.
 	ReadText() ([]byte, error)
@@ -250,12 +257,27 @@ type StreamConn interface {
 //	viewer -> server  text    sdk.Input JSON
 //
 // plus a ping every ~54s. Closes st.
+//
+// Lifecycle discipline (this used to crash the whole server): the reader
+// below runs on the hijacked fasthttp connection, which is released the
+// moment the upgrade handler returns. So on every exit path the handler
+// first closes the underlying websocket (unblocking the reader), then waits
+// for the reader to acknowledge before returning. The reader additionally
+// recovers hard from its own panics as defense in depth: a goroutine panic
+// would take the whole daemon down.
 func PumpStream(conn StreamConn, st *sdk.Stream) {
 	var once sync.Once
 	detach := func() { once.Do(func() { _ = st.Close() }) }
 	defer detach()
 
+	readerDone := make(chan struct{})
 	go func() {
+		defer close(readerDone)
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("device stream reader panic", "panic", r)
+			}
+		}()
 		defer detach() // ends Packets, which ends the writer
 		for {
 			data, err := conn.ReadText()
@@ -274,21 +296,29 @@ func PumpStream(conn StreamConn, st *sdk.Stream) {
 
 	ping := time.NewTicker(deviceStreamPing)
 	defer ping.Stop()
+loop:
 	for {
 		select {
 		case p, ok := <-st.Packets():
 			if !ok {
 				_ = conn.WriteClose()
-				return
+				break loop
 			}
 			if err := writePacket(conn, p); err != nil {
-				return
+				break loop
 			}
 		case <-ping.C:
 			if err := conn.WritePing(); err != nil {
-				return
+				break loop
 			}
 		}
+	}
+
+	// Wait for the reader before returning from the upgrade handler.
+	conn.CloseConn()
+	select {
+	case <-readerDone:
+	case <-time.After(deviceReaderWait):
 	}
 }
 
