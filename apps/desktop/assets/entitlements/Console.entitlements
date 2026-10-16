@@ -5,7 +5,7 @@
   runtime + notarization). Not used for ad-hoc dev signing.
 
   Usage:
-    bash scripts/build.sh --mode prod --cef --sign "Developer ID Application: ..." \
+    bash scripts/build.sh --mode prod --sign "Developer ID Application: ..." \
         --main-entitlements assets/entitlements/Console.entitlements \
         --helper-entitlements assets/entitlements/ConsoleHelper.entitlements
 

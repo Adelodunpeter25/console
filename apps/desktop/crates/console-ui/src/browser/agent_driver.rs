@@ -1,8 +1,8 @@
 //! Backend-neutral entry point for driving a browser tab with agent-browser.
 //!
-//! Only the CEF backend can be driven (it exposes CDP). Without the
-//! `cef-browser` feature everything here reports "unavailable", so callers
-//! need no feature gates and simply fall back to the in-page script path.
+//! Only the CEF backend can be driven (it exposes CDP). Off macOS everything
+//! here reports "unavailable", so callers need no platform gates and simply
+//! fall back to the in-page script path.
 //! See `docs/plan/agent-browser-cef.md`.
 
 use std::time::Duration;
@@ -39,7 +39,7 @@ impl std::fmt::Display for DriveError {
 
 impl std::error::Error for DriveError {}
 
-#[cfg(all(target_os = "macos", feature = "cef-browser"))]
+#[cfg(target_os = "macos")]
 mod imp {
     use super::{DriveError, DriveStep};
     use crate::browser::cef::agent_browser::{self, RunError};
@@ -128,7 +128,7 @@ mod imp {
     }
 }
 
-#[cfg(not(all(target_os = "macos", feature = "cef-browser")))]
+#[cfg(not(target_os = "macos"))]
 mod imp {
     use super::{DriveError, DriveStep};
     use std::time::Duration;

@@ -482,15 +482,14 @@ impl BrowserView {
         self
     }
 
-    /// This tab's CDP target id, when the CEF backend is active and the
-    /// browser has reported it. Lets agent-browser address exactly this tab.
-    /// Always `None` on the wry/WKWebView backend.
+    /// This tab's CDP target id, once the browser has reported it. Lets
+    /// agent-browser address exactly this tab. Always `None` off macOS.
     pub fn cdp_target_id(&self) -> Option<String> {
-        #[cfg(all(target_os = "macos", feature = "cef-browser"))]
+        #[cfg(target_os = "macos")]
         {
             self.host.as_ref().and_then(|host| host.target_id())
         }
-        #[cfg(not(all(target_os = "macos", feature = "cef-browser")))]
+        #[cfg(not(target_os = "macos"))]
         {
             None
         }

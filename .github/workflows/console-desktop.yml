@@ -42,7 +42,7 @@ jobs:
       # CEF distribution (~150MB first run): the `cef` crate's build script
       # downloads it into $CEF_PATH when that env var is set (otherwise it
       # lands in the cargo target dir, uncached and invisible to step 4b of
-      # build.sh). build.sh --cef then bundles framework + helpers into
+      # build.sh). build.sh then bundles framework + helpers into
       # the .app. Cached per target triple — x64 and arm64 need different
       # frameworks. Keyed on console-ui's Cargo.toml so a `cef` version
       # bump refetches instead of mixing.
@@ -65,7 +65,6 @@ jobs:
           bash apps/desktop/scripts/build.sh
           --mode prod
           --release
-          --cef
           --bundle-id com.console.desktop
           --app-name "Console"
           --target ${{ matrix.rust-target }}

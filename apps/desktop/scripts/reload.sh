@@ -16,7 +16,7 @@ fi
 
 if [[ -f "$BINARY_SRC" ]]; then
     cp -f "$BINARY_SRC" "$APP_EXEC"
-    # CEF bundles: helpers are our own binary (see build.sh --cef). Dev
+    # CEF bundles: helpers are our own binary (see build.sh). Dev
     # bundles share ONE signed executable via hardlinks instead of five
     # ~300MB copies. Re-signing with --deep would replace each helper file and
     # sever the links, so sign a single seed with the helper identifier, relink

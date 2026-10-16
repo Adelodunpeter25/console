@@ -77,7 +77,7 @@ pub fn run_helper_process() -> Option<i32> {
 }
 
 /// Bundle locations CEF needs, derived from the running executable. All
-/// paths follow the layout `scripts/build.sh --cef` assembles:
+/// paths follow the layout `scripts/build.sh` assembles:
 /// `<App>.app/Contents/{MacOS/console, Frameworks/...}`.
 pub struct BundlePaths {
     /// `.../Frameworks/Chromium Embedded Framework.framework`.

@@ -137,7 +137,6 @@ pub struct HostContent {
 }
 
 #[cfg(target_os = "macos")]
-#[cfg_attr(feature = "cef-browser", allow(dead_code))]
 mod macos_host {
     use std::cell::Cell;
 
@@ -550,17 +549,13 @@ mod macos_host {
     }
 }
 
-#[cfg(all(target_os = "macos", feature = "cef-browser"))]
+#[cfg(target_os = "macos")]
 pub use super::cef::host::WebviewHost;
 
-#[cfg(all(target_os = "macos", not(feature = "cef-browser")))]
-pub use macos_host::WebviewHost;
-
-/// The system webview (WKWebView via wry), available regardless of which
-/// backend `WebviewHost` resolves to. The Devices tab uses this one: it
-/// decodes the sim-go H.264 stream with WebCodecs, and stock CEF builds ship
-/// without proprietary codecs ("H.264 decoding is not supported"), while
-/// WKWebView hands H.264 to the OS decoder.
+/// The system webview (WKWebView via wry), next to `WebviewHost` (Chromium).
+/// The Devices tab uses this one: it decodes the sim-go H.264 stream with
+/// WebCodecs, and stock CEF builds ship without proprietary codecs ("H.264
+/// decoding is not supported"), while WKWebView hands H.264 to the OS decoder.
 #[cfg(target_os = "macos")]
 pub use macos_host::WebviewHost as SystemWebviewHost;
 

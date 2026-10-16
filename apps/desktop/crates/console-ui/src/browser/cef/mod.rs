@@ -1,7 +1,6 @@
-//! Chromium (CEF) browser backend.
-//!
-//! Gated behind the `cef-browser` cargo feature so default builds keep using
-//! wry/WKWebView with zero CEF download or link cost.
+//! Chromium (CEF) browser backend for the browser tab. The Devices tab does
+//! not use it: it runs on the system WKWebView (see
+//! `browser::host::SystemWebviewHost`) because stock CEF has no H.264.
 
 pub mod agent_browser;
 #[cfg(target_os = "macos")]

@@ -11,7 +11,6 @@ BUNDLE_ID=""
 APP_NAME=""
 OUT_DIR="$DESKTOP_DIR/dist"
 TARGET_TRIPLE=""
-WITH_CEF=false
 SIGN_IDENTITY="-"
 MAIN_ENTITLEMENTS=""
 HELPER_ENTITLEMENTS=""
@@ -51,13 +50,9 @@ while [[ $# -gt 0 ]]; do
             TARGET_TRIPLE="$2"
             shift 2
             ;;
-        # Chromium (CEF) browser backend: build with the `cef-browser` cargo
-        # feature and assemble the framework + helper apps into the bundle
-        # (section 4b). Requires CEF_PATH pointing at a shared CEF download
-        # (see scripts/dev.sh); dev.sh exports a default.
+        # Retired: the Chromium (CEF) backend is always built and bundled
+        # now. Accepted as a no-op so old invocations keep working.
         --cef)
-            WITH_CEF=true
-            EXTRA_CARGO_ARGS+=("--features" "cef-browser")
             shift
             ;;
         # Signing identity (`-` = ad-hoc, the default). Pass a Developer ID
@@ -222,88 +217,89 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
 </plist>
 PLIST
 
-# 4b. CEF framework + helper apps (only with --cef)
+# 4b. CEF framework + helper apps. Requires CEF_PATH pointing at a shared CEF
+# download (scripts/dev.sh exports a default; the `cef` crate's build script
+# fills it on first build).
 # Layout mirrors cef-rs `bundle-cef-app` (see `cef::build_util::mac`):
 #   Contents/Frameworks/Chromium Embedded Framework.framework
 #   Contents/Frameworks/<bin> Helper{, (GPU),(Renderer),(Plugin),(Alerts)}.app
 # each helper a full .app whose executable is a copy of our own binary (CEF
 # re-executes it for renderer/GPU/... subprocesses; see runtime.rs).
-if [[ "$WITH_CEF" == true ]]; then
-    echo "==> Assembling CEF framework and helpers..."
-    CEF_DIST="${CEF_PATH:-$HOME/.local/share/cef}"
-    # Key off the build target, not the host: CI cross-compiles x86_64 on
-    # Apple Silicon runners, where uname -m would pick the wrong framework.
-    case "${TARGET_TRIPLE:-$(uname -m)}" in
-        x86_64-apple-darwin|x86_64) CEF_ARCH="x86_64" ;;
-        aarch64-apple-darwin|arm64) CEF_ARCH="aarch64" ;;
-        *) echo "Error: unsupported architecture ${TARGET_TRIPLE:-$(uname -m)} for CEF" >&2; exit 1 ;;
-    esac
-    # Exactly one CEF version directory must match (unexpanded globs fail the
-    # existence check below, which also keeps this safe under `set -u` on the
-    # system bash 3.2).
-    CEF_CANDIDATES=( "$CEF_DIST"/*/cef_macos_"$CEF_ARCH" )
-    if [[ ${#CEF_CANDIDATES[@]} -ne 1 || ! -e "${CEF_CANDIDATES[0]}" ]]; then
-        echo "Error: expected exactly one CEF distribution at $CEF_DIST/*/cef_macos_$CEF_ARCH" >&2
-        exit 1
-    fi
-    CEF_FW_SRC="${CEF_CANDIDATES[0]}/Chromium Embedded Framework.framework"
-    if [[ ! -d "$CEF_FW_SRC" ]]; then
-        echo "Error: CEF framework missing at $CEF_FW_SRC" >&2
-        exit 1
-    fi
+echo "==> Assembling CEF framework and helpers..."
+CEF_DIST="${CEF_PATH:-$HOME/.local/share/cef}"
+# Key off the build target, not the host: CI cross-compiles x86_64 on
+# Apple Silicon runners, where uname -m would pick the wrong framework.
+case "${TARGET_TRIPLE:-$(uname -m)}" in
+    x86_64-apple-darwin|x86_64) CEF_ARCH="x86_64" ;;
+    aarch64-apple-darwin|arm64) CEF_ARCH="aarch64" ;;
+    *) echo "Error: unsupported architecture ${TARGET_TRIPLE:-$(uname -m)} for CEF" >&2; exit 1 ;;
+esac
+# Exactly one CEF version directory must match (unexpanded globs fail the
+# existence check below, which also keeps this safe under `set -u` on the
+# system bash 3.2).
+CEF_CANDIDATES=( "$CEF_DIST"/*/cef_macos_"$CEF_ARCH" )
+if [[ ${#CEF_CANDIDATES[@]} -ne 1 || ! -e "${CEF_CANDIDATES[0]}" ]]; then
+    echo "Error: expected exactly one CEF distribution at $CEF_DIST/*/cef_macos_$CEF_ARCH" >&2
+    exit 1
+fi
+CEF_FW_SRC="${CEF_CANDIDATES[0]}/Chromium Embedded Framework.framework"
+if [[ ! -d "$CEF_FW_SRC" ]]; then
+    echo "Error: CEF framework missing at $CEF_FW_SRC" >&2
+    exit 1
+fi
 
-    FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
-    mkdir -p "$FRAMEWORKS_DIR"
-    echo "    Copying framework (one-time cost, ~330MB)..."
-    rm -rf "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
-    ditto "$CEF_FW_SRC" "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+mkdir -p "$FRAMEWORKS_DIR"
+echo "    Copying framework (one-time cost, ~330MB)..."
+rm -rf "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
+ditto "$CEF_FW_SRC" "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
 
-    BIN_STEM="$(basename "$MACOS_DIR/console")"
-    HELPER_BASE="$BIN_STEM Helper"
-    # CEF re-executes our own binary for every one of the five helpers, so
-    # copying it five times duplicates a ~300MB debug binary (~1.5GB per dev
-    # bundle). Dev bundles therefore share ONE signed helper executable via
-    # hardlinks. Two codesign constraints shape this:
-    #   * codesign replaces the file (severing hardlinks), so the shared inode
-    #     must be signed first, and each helper bundle must declare the same
-    #     CFBundleIdentifier that the inode was signed with.
-    #   * helper bundles are therefore not re-signed one by one below.
-    # Release builds keep real per-helper copies and per-helper identifiers so
-    # each one can be signed and notarized for distribution.
-    if [[ "$IS_RELEASE" == true || "$MODE" == "prod" ]]; then
-        HELPER_LINK=false
-        HELPER_SEED=""
+BIN_STEM="$(basename "$MACOS_DIR/console")"
+HELPER_BASE="$BIN_STEM Helper"
+# CEF re-executes our own binary for every one of the five helpers, so
+# copying it five times duplicates a ~300MB debug binary (~1.5GB per dev
+# bundle). Dev bundles therefore share ONE signed helper executable via
+# hardlinks. Two codesign constraints shape this:
+#   * codesign replaces the file (severing hardlinks), so the shared inode
+#     must be signed first, and each helper bundle must declare the same
+#     CFBundleIdentifier that the inode was signed with.
+#   * helper bundles are therefore not re-signed one by one below.
+# Release builds keep real per-helper copies and per-helper identifiers so
+# each one can be signed and notarized for distribution.
+if [[ "$IS_RELEASE" == true || "$MODE" == "prod" ]]; then
+    HELPER_LINK=false
+    HELPER_SEED=""
+else
+    HELPER_LINK=true
+    HELPER_ID="$BUNDLE_ID.helper"
+    HELPER_SEED="$FRAMEWORKS_DIR/.helper-seed"
+    rm -f "$HELPER_SEED"
+    cp "$MACOS_DIR/console" "$HELPER_SEED"
+    codesign --force --sign "$SIGN_IDENTITY" --identifier "$HELPER_ID" "$HELPER_SEED"
+fi
+for SUFFIX in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
+    HELPER_NAME="$HELPER_BASE$SUFFIX"
+    HELPER_APP="$FRAMEWORKS_DIR/$HELPER_NAME.app"
+    rm -rf "$HELPER_APP"
+    mkdir -p "$HELPER_APP/Contents/MacOS" "$HELPER_APP/Contents/Resources"
+    if [[ "$HELPER_LINK" == true ]]; then
+        ln "$HELPER_SEED" "$HELPER_APP/Contents/MacOS/$HELPER_NAME" 2>/dev/null \
+            || cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
     else
-        HELPER_LINK=true
-        HELPER_ID="$BUNDLE_ID.helper"
-        HELPER_SEED="$FRAMEWORKS_DIR/.helper-seed"
-        rm -f "$HELPER_SEED"
-        cp "$MACOS_DIR/console" "$HELPER_SEED"
-        codesign --force --sign "$SIGN_IDENTITY" --identifier "$HELPER_ID" "$HELPER_SEED"
+        cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
     fi
-    for SUFFIX in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
-        HELPER_NAME="$HELPER_BASE$SUFFIX"
-        HELPER_APP="$FRAMEWORKS_DIR/$HELPER_NAME.app"
-        rm -rf "$HELPER_APP"
-        mkdir -p "$HELPER_APP/Contents/MacOS" "$HELPER_APP/Contents/Resources"
-        if [[ "$HELPER_LINK" == true ]]; then
-            ln "$HELPER_SEED" "$HELPER_APP/Contents/MacOS/$HELPER_NAME" 2>/dev/null \
-                || cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+    chmod +x "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+    if [[ "$HELPER_LINK" == true ]]; then
+        HELPER_BUNDLE_ID="$HELPER_ID"
+    else
+        SLUG=$(echo "$SUFFIX" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
+        if [[ -n "$SLUG" ]]; then
+            HELPER_BUNDLE_ID="$BUNDLE_ID.helper.$SLUG"
         else
-            cp "$MACOS_DIR/console" "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
+            HELPER_BUNDLE_ID="$BUNDLE_ID.helper"
         fi
-        chmod +x "$HELPER_APP/Contents/MacOS/$HELPER_NAME"
-        if [[ "$HELPER_LINK" == true ]]; then
-            HELPER_BUNDLE_ID="$HELPER_ID"
-        else
-            SLUG=$(echo "$SUFFIX" | tr -d ' ()' | tr '[:upper:]' '[:lower:]')
-            if [[ -n "$SLUG" ]]; then
-                HELPER_BUNDLE_ID="$BUNDLE_ID.helper.$SLUG"
-            else
-                HELPER_BUNDLE_ID="$BUNDLE_ID.helper"
-            fi
-        fi
-        cat << PLIST > "$HELPER_APP/Contents/Info.plist"
+    fi
+    cat << PLIST > "$HELPER_APP/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -331,14 +327,13 @@ if [[ "$WITH_CEF" == true ]]; then
 </dict>
 </plist>
 PLIST
-    done
-    if [[ "$HELPER_LINK" == true ]]; then
-        # The seed is only the source of the hardlinks; it must not ship (or
-        # be sealed by the container signature below).
-        rm -f "$HELPER_SEED"
-    fi
-    echo "    Helpers installed: $HELPER_BASE{, (GPU),(Renderer),(Plugin),(Alerts)}"
+done
+if [[ "$HELPER_LINK" == true ]]; then
+    # The seed is only the source of the hardlinks; it must not ship (or
+    # be sealed by the container signature below).
+    rm -f "$HELPER_SEED"
 fi
+echo "    Helpers installed: $HELPER_BASE{, (GPU),(Renderer),(Plugin),(Alerts)}"
 
 # 5. Code signing, inside-out so nested code is sealed before the container.
 # Ad-hoc (`-`) by default; pass --sign with a Developer ID for distribution.
@@ -350,18 +345,16 @@ sign() {
         codesign --force --sign "$SIGN_IDENTITY" "$1"
     fi
 }
-if [[ "$WITH_CEF" == true ]]; then
-    sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
-    if [[ "$HELPER_LINK" == true ]]; then
-        # Dev helpers share one executable signed with the helper identifier
-        # (see section 4b). Re-signing each helper would replace that file and
-        # restore the five full copies this is avoiding.
-        echo "    Helper executable is shared and pre-signed; skipping per-helper signing."
-    else
-        for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
-            sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
-        done
-    fi
+sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
+if [[ "$HELPER_LINK" == true ]]; then
+    # Dev helpers share one executable signed with the helper identifier
+    # (see section 4b). Re-signing each helper would replace that file and
+    # restore the five full copies this is avoiding.
+    echo "    Helper executable is shared and pre-signed; skipping per-helper signing."
+else
+    for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
+        sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
+    done
 fi
 sign "$APP_DIR" "$MAIN_ENTITLEMENTS"
 
