@@ -646,6 +646,16 @@ impl DeviceViewer {
             // GPUI focus moved elsewhere (e.g. the composer) while the native
             // surface still holds the keyboard: hand it back.
             self.reclaim_native_keyboard(cx);
+        } else if !natively_focused && window_focus_changed && window_focus.is_some()
+            && !viewer_focused
+            && self.was_natively_focused
+        {
+            // Same hand-back, probed the other way: GPUI moved focus but the
+            // CEF backend failed to report the native focus transition
+            // (`native_focus_within()` just flipped off). Without this the
+            // composer kept rendering its focus ring while the embedded
+            // page swallowed every keystroke.
+            self.reclaim_native_keyboard(cx);
         } else if native_became_focused && !window_focus_changed && !viewer_focused {
             window.focus(&self.focus_handle, cx);
         }
