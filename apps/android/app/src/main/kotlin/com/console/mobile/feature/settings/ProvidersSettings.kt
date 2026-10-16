@@ -70,6 +70,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         AppContainer.providerRepository.loadProviders()
         AppContainer.authRepository.loadStatus()
+        AppContainer.authRepository.loadProviderCredentials()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
@@ -83,6 +84,18 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 Section("Providers") {
                     if (providers.isEmpty()) Note("No providers available.")
                     providers.forEachIndexed { i, p ->
+                        // A pasted API key is not a login: there is no browser
+                        // trip and no session to renew, so it gets a field
+                        // instead of the OAuth button below.
+                        if (p.auth_method == "api-key") {
+                            ApiKeyProviderRow(
+                                providerId = p.name,
+                                displayName = p.display_name,
+                                description = p.description,
+                            )
+                            if (i < providers.lastIndex) SectionDivider(startInset = 58.dp)
+                            return@forEachIndexed
+                        }
                         val status = authState.status?.get(p.name)
                         val loggedIn = status?.logged_in == true
                         val busy = loggingIn == p.name

@@ -5,6 +5,7 @@ import console.v1.AuthStatusResponse
 import console.v1.GitHubAuthStatus
 import console.v1.OAuthLoginUrlResponse
 import console.v1.ProviderAuthStatus
+import console.v1.ProviderCredentialStatus
 import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
@@ -101,6 +102,72 @@ class AuthRepository(
             authState.patch { it.copy(github = GitHubAuthStatus(), githubBusy = false) }
         } catch (e: Exception) {
             authState.patch { it.copy(githubBusy = false) }
+            throw e
+        }
+    }
+
+    /**
+     * Read which providers have an API key stored. The response reports only
+     * that a key exists and where it came from — the key itself lives on the
+     * server and no endpoint will hand it back.
+     */
+    suspend fun loadProviderCredentials() {
+        try {
+            val statuses = withContext(Dispatchers.IO) { api.getProviderCredentials() }
+            authState.patch { it.copy(providerCredentials = statuses) }
+        } catch (e: Exception) {
+            // Status is decorative: a failure here must not block the page, and
+            // a provider with no entry simply renders as "not connected".
+            authState.patch { it.copy(error = e.message ?: "Couldn't read provider credentials") }
+        }
+    }
+
+    /**
+     * Store an API key for a provider on the server.
+     *
+     * The key is handed straight to the server and dropped — keeping it would
+     * mean holding the user's provider secret in app state for no benefit,
+     * since nothing on this side ever needs to read it back.
+     */
+    suspend fun setProviderCredential(provider: String, apiKey: String) {
+        authState.patch { it.copy(credentialsBusy = it.credentialsBusy + provider) }
+        try {
+            val response = withContext(Dispatchers.IO) { api.setProviderCredential(provider, apiKey) }
+            authState.patch {
+                it.copy(
+                    credentialsBusy = it.credentialsBusy - provider,
+                    providerCredentials = it.providerCredentials + (
+                        provider to ProviderCredentialStatus(
+                            configured = response.configured ?: true,
+                            source = response.source,
+                        )
+                        ),
+                )
+            }
+        } catch (e: Exception) {
+            authState.patch { it.copy(credentialsBusy = it.credentialsBusy - provider) }
+            throw e
+        }
+    }
+
+    /** Remove a provider's stored key, falling back to whatever the server did before. */
+    suspend fun clearProviderCredential(provider: String) {
+        authState.patch { it.copy(credentialsBusy = it.credentialsBusy + provider) }
+        try {
+            val response = withContext(Dispatchers.IO) { api.clearProviderCredential(provider) }
+            authState.patch {
+                it.copy(
+                    credentialsBusy = it.credentialsBusy - provider,
+                    providerCredentials = it.providerCredentials + (
+                        provider to ProviderCredentialStatus(
+                            configured = response.configured ?: false,
+                            source = response.source,
+                        )
+                        ),
+                )
+            }
+        } catch (e: Exception) {
+            authState.patch { it.copy(credentialsBusy = it.credentialsBusy - provider) }
             throw e
         }
     }

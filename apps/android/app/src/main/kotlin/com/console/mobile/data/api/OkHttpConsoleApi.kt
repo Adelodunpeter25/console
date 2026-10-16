@@ -37,7 +37,11 @@ import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.GitHubTokenDto
+import com.console.mobile.data.model.ProviderCredentialRequest
 import com.console.mobile.data.model.OAuthLoginUrlDto
+import console.v1.ProviderCredentialStatus
+import console.v1.ProviderCredentialStatuses
+import console.v1.SetProviderCredentialResponse
 import console.v1.ProviderCatalogEntry
 import console.v1.ProviderModelsResponse
 import com.console.mobile.data.model.RunPromptDto
@@ -97,6 +101,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val authStatusAdapter by lazy { wireMoshi.adapter(AuthStatusResponse::class.java) }
     private val loginUrlAdapter by lazy { wireMoshi.adapter(OAuthLoginUrlResponse::class.java) }
     private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
+    private val providerCredentialsAdapter by lazy { wireMoshi.adapter(console.v1.ProviderCredentialStatuses::class.java) }
+    private val setProviderCredentialAdapter by lazy { wireMoshi.adapter(console.v1.SetProviderCredentialResponse::class.java) }
     private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
@@ -482,6 +488,28 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun disconnectGitHub() {
         val raw = http.post("/api/auth/github/logout")
         http.unwrapOrRaw(raw, JsonElement.serializer(), "disconnect GitHub")
+    }
+
+    override suspend fun getProviderCredentials(): Map<String, ProviderCredentialStatus> {
+        val raw = http.get("/api/providers/credentials")
+        val statuses = http.unwrapOrRawAdapter(raw, providerCredentialsAdapter, "get provider credentials")
+        // Wire synthesizes the map field as a nullable property even though
+        // protojson omits an empty map entirely, so an absent map reads as
+        // null rather than {}.
+        return statuses.providers ?: emptyMap()
+    }
+
+    override suspend fun setProviderCredential(provider: String, apiKey: String): SetProviderCredentialResponse {
+        // The key is sent once and dropped: the response reports only whether
+        // one is configured and where it came from.
+        val body = http.encodeBody(ProviderCredentialRequest.serializer(), ProviderCredentialRequest(apiKey))
+        val raw = http.put("/api/providers/$provider/credential", body)
+        return http.unwrapOrRawAdapter(raw, setProviderCredentialAdapter, "set provider credential")
+    }
+
+    override suspend fun clearProviderCredential(provider: String): SetProviderCredentialResponse {
+        val raw = http.delete("/api/providers/$provider/credential")
+        return http.unwrapOrRawAdapter(raw, setProviderCredentialAdapter, "clear provider credential")
     }
 
     override suspend fun getIntegrations(): console.v1.IntegrationsResponse {

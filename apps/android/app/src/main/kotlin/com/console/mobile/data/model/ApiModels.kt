@@ -111,6 +111,16 @@ data class OAuthLoginUrlDto(val provider: String)
 @Serializable
 data class GitHubTokenDto(val token: String)
 
+/**
+ * Body for PUT /api/providers/:id/credential.
+ *
+ * camelCase `apiKey` to match the server's protojson field name — this is the
+ * one place a wire name is hand-written rather than generated, so it is named
+ * explicitly rather than relying on a naming strategy.
+ */
+@Serializable
+data class ProviderCredentialRequest(val apiKey: String)
+
 @Serializable
 data class OAuthCallbackDto(val provider: String, val code: String, val state: String? = null)
 

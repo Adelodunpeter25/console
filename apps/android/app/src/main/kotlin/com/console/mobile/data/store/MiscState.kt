@@ -4,6 +4,7 @@ import console.v1.FsTreeEntry
 import console.v1.GitHubAuthStatus
 import console.v1.McpServerStatus as McpServerEntry
 import console.v1.ProviderAuthStatus
+import console.v1.ProviderCredentialStatus
 import console.v1.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,14 @@ data class AuthState(
     val github: GitHubAuthStatus? = null,
     /** True while a token is being validated or removed. */
     val githubBusy: Boolean = false,
+    /**
+     * Pasted provider API keys, keyed by provider id. Carries only whether a
+     * key exists and where it came from — never the key, which lives on the
+     * server and is not readable through any endpoint.
+     */
+    val providerCredentials: Map<String, ProviderCredentialStatus> = emptyMap(),
+    /** Provider ids with a key write or removal in flight. */
+    val credentialsBusy: Set<String> = emptySet(),
 )
 
 class AuthStateHolder(initial: AuthState = AuthState()) {

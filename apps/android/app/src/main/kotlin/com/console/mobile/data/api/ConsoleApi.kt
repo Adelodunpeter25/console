@@ -94,6 +94,12 @@ interface ConsoleApi {
     suspend fun connectGitHub(payload: com.console.mobile.data.model.GitHubTokenDto): console.v1.GitHubAuthStatus
     suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus
     suspend fun disconnectGitHub()
+    // provider API keys (generic, /api/providers/:id/credential). The key is
+    // stored on the server — it is the only party that talks to the provider —
+    // and is never read back, so status is the only thing a client can learn.
+    suspend fun getProviderCredentials(): Map<String, console.v1.ProviderCredentialStatus>
+    suspend fun setProviderCredential(provider: String, apiKey: String): console.v1.SetProviderCredentialResponse
+    suspend fun clearProviderCredential(provider: String): console.v1.SetProviderCredentialResponse
     // binary integrations (gh CLI, ...): what the server box has installed
     suspend fun getIntegrations(): console.v1.IntegrationsResponse
     // install gh the official way for the server's platform; answers the full list
