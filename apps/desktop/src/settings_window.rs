@@ -30,6 +30,11 @@ pub struct SettingsWindow {
     pub(crate) model_error: Option<String>,
     pub(crate) mcp: crate::settings::mcp::McpTabState,
     github_token_input: Entity<ComposerInput>,
+    /// One key field per key-taking provider, created lazily: the catalog
+    /// arrives from the server, so the set is not known when the window is
+    /// built. A field per provider rather than one shared, because a key typed
+    /// for one row must never be submittable against another.
+    api_key_inputs: std::collections::HashMap<String, Entity<ComposerInput>>,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -65,6 +70,7 @@ impl SettingsWindow {
             if let Some(app_entity) = app.upgrade() {
                 app_entity.update(cx, |app_state, cx| {
                     app_state.refresh_github_status(cx);
+                    app_state.refresh_provider_credentials(cx);
                 });
             }
         }
@@ -198,6 +204,7 @@ impl SettingsWindow {
             editing_env_id: None,
             new_env_name_input,
             github_token_input,
+            api_key_inputs: std::collections::HashMap::new(),
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
             model_vision_input,
@@ -266,10 +273,126 @@ impl SettingsWindow {
             if let Some(app_entity) = self.app.upgrade() {
                 app_entity.update(cx, |app_state, cx| {
                     app_state.refresh_github_status(cx);
+                    app_state.refresh_provider_credentials(cx);
                 });
             }
         }
         cx.notify();
+    }
+
+    /// Build one row per key-taking provider, creating each row's key field on
+    /// first render.
+    ///
+    /// The fields are lazy because the provider catalog is fetched from the
+    /// server, so which providers take a key is not known when the window is
+    /// built — and a field per provider (rather than one shared) keeps a key
+    /// typed against one row from being submittable against another.
+    fn build_api_key_sections(
+        &mut self,
+        app_entity: &Entity<ConsoleDesktopApp>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<console_ui::settings::ApiKeyProviderSection> {
+        // Snapshot what the rows need out of the app entity first, so the read
+        // guard is dropped before this method creates entities via `cx`.
+        let rows: Vec<(String, String, String, Option<console_core::types::ProviderCredentialStatus>, bool, bool, Option<String>)> = {
+            let app = app_entity.read(cx);
+            app.providers
+                .iter()
+                .filter(|p| p.auth_method == "api-key")
+                .map(|p| {
+                    (
+                        p.name.clone(),
+                        p.display_name.clone(),
+                        p.description.clone(),
+                        app.provider_credentials.get(&p.name).cloned(),
+                        app.provider_credential_busy.contains(&p.name),
+                        app.provider_credential_forms_open.contains(&p.name),
+                        app.provider_credential_error.clone(),
+                    )
+                })
+                .collect()
+        };
+
+        let mut sections = Vec::with_capacity(rows.len());
+        for (provider_id, display_name, description, status, busy, form_open, error) in
+            rows
+        {
+            let input = self
+                .api_key_inputs
+                .entry(provider_id.clone())
+                .or_insert_with(|| cx.new(|cx| ComposerInput::new(window, cx).placeholder("sk-…")));
+
+            let on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                let app_handle = self.app.clone();
+                let provider_id = provider_id.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            let next = !app_state
+                                .provider_credential_forms_open
+                                .contains(&provider_id);
+                            app_state.set_provider_credential_form_open(
+                                provider_id.clone(),
+                                next,
+                                cx,
+                            );
+                        });
+                    }
+                })
+            };
+            let on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
+                let app_handle = self.app.clone();
+                let provider_id = provider_id.clone();
+                let input = input.clone();
+                Rc::new(move |key: String, _w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        // Clear the field as soon as the key is handed off: it
+                        // is a credential, and nothing should keep a copy
+                        // client-side.
+                        input.update(cx, |input, cx| input.set_content("", cx));
+                        app.update(cx, |app_state, cx| {
+                            app_state.set_provider_credential(
+                                provider_id.clone(),
+                                key,
+                                cx,
+                            );
+                            app_state.set_provider_credential_form_open(
+                                provider_id.clone(),
+                                false,
+                                cx,
+                            );
+                        });
+                    }
+                })
+            };
+            let on_remove: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                let app_handle = self.app.clone();
+                let provider_id = provider_id.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.clear_provider_credential(provider_id.clone(), cx);
+                        });
+                    }
+                })
+            };
+
+            sections.push(console_ui::settings::ApiKeyProviderSection {
+                provider_id,
+                display_name,
+                description,
+                status,
+                busy,
+                form_open,
+                error,
+                key_input: Some(input.clone()),
+                on_toggle_form: on_toggle,
+                on_submit,
+                on_remove,
+            });
+        }
+        sections
     }
 
     pub fn fetch_mcp_servers(&mut self, cx: &mut Context<Self>) {
@@ -296,9 +419,18 @@ impl Render for SettingsWindow {
                 .into_any_element();
         };
 
-        let app = app_entity.read(cx);
-
         let active_tab = self.active_tab;
+
+        // Built before the `app` read guard below: creating each field needs
+        // `&mut self`, which a live Ref would forbid. Doing it here also keeps
+        // the guard from being held across the whole tab's render.
+        let api_keys = if active_tab == SettingsTab::Providers {
+            self.build_api_key_sections(&app_entity, window, cx)
+        } else {
+            Vec::new()
+        };
+
+        let app = app_entity.read(cx);
 
         let on_select_tab: Rc<dyn Fn(SettingsTab, &mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
@@ -394,6 +526,7 @@ impl Render for SettingsWindow {
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
                     on_login,
+                    api_keys,
                     github: Some(console_ui::settings::GitHubSection {
                         status: app.github_status.clone(),
                         busy: app.github_busy,

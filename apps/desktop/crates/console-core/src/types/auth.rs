@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 pub use console_proto::{
     AuthStatusResponse, GitHubAuthStatus, GitHubLogoutResponse, OAuthCallbackResponse,
-    OAuthLoginUrlResponse, ProjectIdResponse, ProviderAuthStatus,
+    OAuthLoginUrlResponse, ProjectIdResponse, ProviderAuthStatus, ProviderCredentialStatus,
+    ProviderCredentialStatuses, SetProviderCredentialResponse,
 };
 
 /// OAuth-capable providers with credential state.

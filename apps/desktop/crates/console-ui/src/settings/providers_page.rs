@@ -18,6 +18,9 @@ pub struct ProvidersPage {
     /// sibling section — GitHub is not a chat provider and authenticates by
     /// token, not OAuth.
     pub github: Option<GitHubSection>,
+    /// Providers that authenticate by a pasted API key, in catalog order.
+    /// Each carries its own form state and callbacks, keyed by provider id.
+    pub api_keys: Vec<crate::settings::ApiKeyProviderSection>,
 }
 
 impl RenderOnce for ProvidersPage {
@@ -56,7 +59,7 @@ impl RenderOnce for ProvidersPage {
                 div().flex().flex_col().gap(px(10.0)).children(
                     self.providers
                         .iter()
-                        .filter(|p| p.auth_method != "none")
+                        .filter(|p| p.auth_method != "none" && p.auth_method != "api-key")
                         .map(|provider| {
                             let provider_id = provider.name.clone();
                             let is_logging_in = logging_in.contains(&provider_id);
@@ -178,6 +181,10 @@ impl RenderOnce for ProvidersPage {
                         }),
                 ),
             )
+            // Pasted-key providers render as their own rows below the OAuth
+            // ones. They are filtered out of the list above so they do not get
+            // a Login button they cannot use.
+            .child(div().flex().flex_col().gap(px(10.0)).children(self.api_keys))
             // GitHub sits below the LLM providers as a sibling section, not
             // inside the provider list: it is a git credential, not a chat
             // provider, and its auth method (pasted token) has no equivalent

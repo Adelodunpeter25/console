@@ -358,6 +358,19 @@ pub struct ConsoleDesktopApp {
     pub github_form_open: bool,
     /// Server-authored failure text, shown verbatim. Cleared on any new action.
     pub github_error: Option<String>,
+    /// Pasted provider API keys, keyed by provider id. Carries only whether a
+    /// key exists and where it came from — never the key, which lives on the
+    /// server and is not readable through any endpoint. See
+    /// state/provider_credentials.rs.
+    pub provider_credentials:
+        std::collections::HashMap<String, console_core::types::ProviderCredentialStatus>,
+    /// Provider ids with a key write or removal in flight, so a row can
+    /// disable its buttons rather than firing duplicate requests.
+    pub provider_credential_busy: std::collections::HashSet<String>,
+    /// Provider ids whose key field is currently showing.
+    pub provider_credential_forms_open: std::collections::HashSet<String>,
+    /// Server-authored failure text for the key fields, shown verbatim.
+    pub provider_credential_error: Option<String>,
     /// Binary integration rows from `/api/integrations` (gh CLI, ...).
     /// Refreshed every time the Integrations tab opens — detection runs live
     /// server-side, so a refresh after installing flips the row with no

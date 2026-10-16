@@ -67,6 +67,10 @@ name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 
 [[test]]
+name = "api_key_section_test"
+path = "tests/settings/api_key_section_test.rs"
+
+[[test]]
 name = "workspace_test"
 path = "tests/workspace/workspace_test.rs"
 

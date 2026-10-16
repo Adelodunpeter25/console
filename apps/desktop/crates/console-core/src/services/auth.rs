@@ -194,6 +194,112 @@ impl AuthService {
         }
     }
 
+    /// `GET /api/providers/credentials` — which providers have an API key
+    /// stored, keyed by provider id.
+    ///
+    /// Returns only *whether* a key exists and where it came from. The key
+    /// itself is stored on the server and no endpoint will return it, so there
+    /// is nothing here to accidentally log or cache.
+    pub async fn provider_credentials(&self) -> Result<ProviderCredentialStatuses> {
+        let url = self.transport.url("/api/providers/credentials").await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to load provider credentials")?;
+
+        let body: ApiResponse<ProviderCredentialStatuses> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse provider credentials response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to load provider credentials".into())
+            ))
+        }
+    }
+
+    /// `PUT /api/providers/:id/credential` — store a pasted API key on the
+    /// server. The key is sent once and never returned.
+    pub async fn set_provider_credential(
+        &self,
+        provider: &str,
+        api_key: &str,
+    ) -> Result<SetProviderCredentialResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/providers/{provider}/credential"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .put(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&serde_json::json!({ "apiKey": api_key }))
+            .send()
+            .await
+            .context("Failed to save API key")?;
+
+        let body: ApiResponse<SetProviderCredentialResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse set credential response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to save API key".into())
+            ))
+        }
+    }
+
+    /// `DELETE /api/providers/:id/credential` — remove a stored key, falling
+    /// back to whatever the provider did before. Idempotent.
+    ///
+    /// This cannot remove a key supplied by an environment variable, which is
+    /// why the status payload carries a `source`: the UI hides the remove
+    /// action rather than offering one that silently does nothing.
+    pub async fn clear_provider_credential(
+        &self,
+        provider: &str,
+    ) -> Result<SetProviderCredentialResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/providers/{provider}/credential"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to remove API key")?;
+
+        let body: ApiResponse<SetProviderCredentialResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse clear credential response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to remove API key".into())
+            ))
+        }
+    }
+
     /// `POST /api/auth/token` — mint a short-lived API bearer token for the
     /// WebTransport handshake (QUIC migration, Phase 0).
     ///

@@ -1,5 +1,6 @@
 //! Shared settings view-models and UI components.
 
+pub mod api_key_section;
 pub mod deleted_chats_page;
 pub mod github_section;
 pub mod integrations_page;
@@ -12,6 +13,7 @@ pub mod servers_page;
 pub mod settings_shell;
 pub mod usage_page;
 
+pub use api_key_section::*;
 pub use deleted_chats_page::*;
 pub use github_section::*;
 pub use integrations_page::*;
