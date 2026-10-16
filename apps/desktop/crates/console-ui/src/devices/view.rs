@@ -21,7 +21,7 @@ use gpui::{
 };
 
 use super::player::PlayerConfig;
-use crate::browser::host::{HostCallbacks, HostContent, WebviewHost};
+use crate::browser::host::{HostCallbacks, HostContent, SystemWebviewHost as WebviewHost};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{
     ContextMenuHandle, IconName, MenuAlign, MenuItem, app_icon, dropdown_menu,

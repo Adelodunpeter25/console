@@ -556,6 +556,17 @@ pub use super::cef::host::WebviewHost;
 #[cfg(all(target_os = "macos", not(feature = "cef-browser")))]
 pub use macos_host::WebviewHost;
 
+/// The system webview (WKWebView via wry), available regardless of which
+/// backend `WebviewHost` resolves to. The Devices tab uses this one: it
+/// decodes the sim-go H.264 stream with WebCodecs, and stock CEF builds ship
+/// without proprietary codecs ("H.264 decoding is not supported"), while
+/// WKWebView hands H.264 to the OS decoder.
+#[cfg(target_os = "macos")]
+pub use macos_host::WebviewHost as SystemWebviewHost;
+
+#[cfg(not(target_os = "macos"))]
+pub type SystemWebviewHost = WebviewHost;
+
 #[cfg(not(target_os = "macos"))]
 pub struct WebviewHost {
     last_bounds: Cell<Option<(i32, i32, i32, i32)>>,
