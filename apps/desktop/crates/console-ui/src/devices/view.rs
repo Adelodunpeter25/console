@@ -20,7 +20,7 @@ use gpui::{
     px,
 };
 
-use super::player::{PLAYER_HTML, PlayerConfig};
+use super::player::PlayerConfig;
 use crate::browser::host::{HostCallbacks, HostContent, WebviewHost};
 use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{
@@ -63,6 +63,15 @@ pub struct DeviceViewer {
     host: Option<Rc<WebviewHost>>,
     host_error: Option<String>,
     base_url: Option<String>,
+    /// Backend origin the player page was last loaded from: the page only
+    /// reloads when the origin changes, so selection churn never reloads it.
+    loaded_player_base: Option<String>,
+    /// Increments on every stream start/reset so a start-script retry loop
+    /// can tell whether it is still the active attempt.
+    start_generation: u64,
+    /// Set by `player_event` when the page reports a post-start status
+    /// (proves the start script executed), used to stop the retry loop.
+    start_reported: Option<u64>,
     devices: Rc<Vec<DeviceDescriptor>>,
     selected_id: Option<String>,
     pending: DeviceViewerPending,
@@ -87,6 +96,9 @@ impl DeviceViewer {
             host: None,
             host_error: None,
             base_url: None,
+            loaded_player_base: None,
+            start_generation: 0,
+            start_reported: None,
             devices: Rc::new(Vec::new()),
             selected_id: None,
             pending: DeviceViewerPending {
@@ -154,7 +166,10 @@ impl DeviceViewer {
         let content = HostContent {
             user_agent: None,
             initialization_script: None,
-            html: Some(PLAYER_HTML.to_owned()),
+            // The page loads from the server origin on first stream start
+            // (same-origin for the device stream websocket); a blank page
+            // here keeps the created surface inert until then.
+            html: None,
             allow_navigation: None,
             on_ipc: Some(Box::new(move |body| {
                 on_ipc.update(move |this, cx| this.player_event(body, cx));
@@ -260,10 +275,13 @@ impl DeviceViewer {
         cx.notify();
     }
 
-    fn start_selected_stream(&mut self, _cx: &mut Context<Self>) {
+    fn start_selected_stream(&mut self, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
         };
+        // Invalidate any running retry loop from a previous attempt.
+        self.start_generation = self.start_generation.wrapping_add(1);
+        let generation = self.start_generation;
         let Some(device) = self.selected() else {
             host.evaluate_script(PlayerConfig::stop_script());
             return;
@@ -280,18 +298,73 @@ impl DeviceViewer {
         }
         let config = PlayerConfig::for_device(&base, &device.id, device_platform(&device).as_str());
         host.set_visible(true);
+        // Load the player page for this origin once; the start script below
+        // is retried until the page reports back, so a page still mid-load
+        // (asynchronous URL load in both backends) cannot strand the stream
+        // at "connecting" forever.
+        if self.loaded_player_base.as_deref() != Some(base.as_str()) {
+            self.loaded_player_base = Some(base.clone());
+            host.load_url(&PlayerConfig::player_page_url(&base));
+        }
         host.evaluate_script(&config.start_script());
         self.stream_status = Some("connecting".to_string());
+        self.retry_start_script(host, config.start_script(), generation, cx);
+    }
+
+    /// Re-evaluate the start script until `player_event` sees a post-start
+    /// status (`start_reported`), so a page mid-load runs the latest start.
+    fn retry_start_script(
+        &mut self,
+        host: Rc<WebviewHost>,
+        script: String,
+        generation: u64,
+        cx: &mut Context<Self>,
+    ) {
+        let view = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            for _ in 0..10 {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(600))
+                    .await;
+                let done = cx.update(|cx| {
+                    let Some(view) = view.upgrade() else {
+                        return true;
+                    };
+                    view.update(cx, |this, _| {
+                        // A newer attempt superseded this loop, or the page
+                        // already reported the start script ran.
+                        if generation != this.start_generation
+                            || generation == this.start_reported.unwrap_or(u64::MAX)
+                        {
+                            return true;
+                        }
+                        host.evaluate_script(&script);
+                        false
+                    })
+                });
+                if done {
+                    return;
+                }
+            }
+        })
+        .detach();
     }
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
             match value.get("type").and_then(|t| t.as_str()) {
                 Some("status") => {
-                    self.stream_status = value
+                    let status = value
                         .get("status")
                         .and_then(|s| s.as_str())
                         .map(|s| s.to_string());
+                    // Any post-start status proves the start script executed
+                    // ("ready" is the page's own boot report), so the retry
+                    // loop can stop.
+                    if status.as_deref().is_some_and(|s| s != "ready") {
+                        self.start_reported = Some(self.start_generation);
+                    }
+                    self.stream_status = status;
                     cx.notify();
                 }
                 _ => {}
@@ -509,6 +582,8 @@ impl DeviceViewer {
 
     /// Fully tear down the native surface when the tab closes.
     pub fn close(&mut self, cx: &mut Context<Self>) {
+        // Stop any start-script retry loop along with the socket.
+        self.start_generation = self.start_generation.wrapping_add(1);
         if let Some(host) = self.host.clone() {
             host.evaluate_script(PlayerConfig::stop_script());
             host.set_visible(false);
@@ -535,7 +610,13 @@ impl DeviceViewer {
         }
         let has_device = self.selected_id.is_some();
         let show = surface_visible && has_device && !occluded;
-        if !show && host.native_focus_within() {
+        if !show {
+            // The surface cannot use the keyboard while it is hidden; give
+            // keyboard focus back unconditionally. `native_focus_within()`
+            // is not trusted as a gate here: under the CEF backend it can
+            // report false while Chromium's child still holds first
+            // responder, which is how the composer looked focused yet
+            // received no keystrokes.
             self.reclaim_native_keyboard(cx);
         }
         host.set_visible(show);

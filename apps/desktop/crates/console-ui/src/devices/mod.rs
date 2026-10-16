@@ -9,5 +9,5 @@
 mod player;
 mod view;
 
-pub use player::{PLAYER_HTML, PlayerConfig};
+pub use player::{PlayerConfig};
 pub use view::{DeviceViewer, DeviceViewerPending, select_device};
