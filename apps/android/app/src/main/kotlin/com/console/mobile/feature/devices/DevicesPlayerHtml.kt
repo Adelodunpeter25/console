@@ -63,6 +63,18 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     codec = ''; desc = null; streamW = 0; streamH = 0; seq = 0; gotFrame = false;
   }
 
+  // A cold stream's meta can be sent before the device has reported its
+  // encoder config, and then carries no codec at all. The avcC description
+  // always arrives before the first key frame, so the WebCodecs codec string
+  // can be derived from it (avc1.PPCCLL); without this the decoder is never
+  // configured and the viewer sits at "waiting for video" forever.
+  function codecFromAvcC(d) {
+    // configurationVersion 1 marks an AVCDecoderConfigurationRecord.
+    if (!d || d.length < 4 || d[0] !== 1) return '';
+    const hex = (n) => n.toString(16).padStart(2, '0');
+    return 'avc1.' + hex(d[1]) + hex(d[2]) + hex(d[3]);
+  }
+
   function ensureDecoder() {
     if (decoder) return true;
     if (!codec || !desc) return false;
@@ -100,7 +112,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 
   function onBinary(buf) {
     const tag = buf[0], payload = buf.subarray(1);
-    if (tag === 1) { desc = payload.slice(); closeDecoder(); return; }
+    if (tag === 1) { desc = payload.slice(); if (!codec) codec = codecFromAvcC(desc); closeDecoder(); return; }
     if (tag !== 2 && tag !== 3) return;
     if (!ensureDecoder()) return;
     if (needKey && tag !== 2) return;
