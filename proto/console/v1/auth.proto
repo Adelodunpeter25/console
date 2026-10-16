@@ -100,3 +100,35 @@ message GitHubValidateResponse {
   optional string username = 2;
   repeated string scopes = 3;
 }
+
+// Response of GET /api/providers/credentials. One entry per provider that
+// accepts a pasted key, so a client can render its fields without inferring
+// anything from the catalog.
+//
+// `configured` is explicit-presence for the same reason GitHubAuthStatus uses
+// it: protojson drops an implicit false, and "no key" must be distinguishable
+// from "server did not report". `source` says *where the key in use came from*
+// — "env" when OPENCODE_API_KEY is set, "stored" when it came from this API.
+// They are not interchangeable: an env key survives a "remove" here, so a
+// client that hid its field after a remove would be lying about which key is
+// live. That distinction is the whole reason this message exists rather than
+// folding into ProviderAuthStatus.
+message ProviderCredentialStatus {
+  optional bool configured = 1;
+  optional string source = 2;
+  optional string updated_at = 3;
+}
+
+// Map of provider id → status. Providers that take a key are always present.
+message ProviderCredentialStatuses {
+  map<string, ProviderCredentialStatus> providers = 1;
+}
+
+// Response of PUT/DELETE /api/providers/:id/credential. The key never appears
+// here in any form — neither the value nor a masked prefix.
+message SetProviderCredentialResponse {
+  string provider = 1;
+  optional bool configured = 2;
+  optional string source = 3;
+  bool removed = 4;
+}

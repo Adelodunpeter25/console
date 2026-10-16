@@ -36,10 +36,34 @@ func ListProviders() []types.ProviderEntry {
 		{
 			Name: "opencode", DisplayName: "OpenCode Zen",
 			Description: "Free-tier models through the direct OpenCode Zen API",
-			Models:      DefaultOpenCodeModels(), AuthMethod: "none",
+			// "api-key", not "none": Zen serves a free tier anonymously, but
+			// also accepts a personal key, and both clients hide providers
+			// whose auth_method is "none" — so "none" would make the field
+			// unreachable. A key is optional here: with none stored the
+			// provider still works on the free tier, and the status endpoint
+			// reports configured=false rather than this lying about it.
+			Models: DefaultOpenCodeModels(), AuthMethod: "api-key",
 		},
 	}
 }
+
+// SupportsAPIKey reports whether a catalog provider accepts a pasted key, and
+// so may be targeted by PUT/DELETE /api/providers/:id/credential.
+//
+// Derived from the catalog rather than a hand-kept list, so a provider cannot
+// be added in one place and forgotten in the other.
+func SupportsAPIKey(provider string) bool {
+	for _, entry := range ListProviders() {
+		if entry.Name == provider && entry.AuthMethod == AuthMethodAPIKey {
+			return true
+		}
+	}
+	return false
+}
+
+// AuthMethodAPIKey marks a provider whose credential is a key the owner pastes
+// once, rather than an OAuth session this server renews on its own.
+const AuthMethodAPIKey = "api-key"
 
 // AntigravityModels returns live Antigravity models from the hourly
 // discovery cache, or nil when logged out / undiscovered. There is no

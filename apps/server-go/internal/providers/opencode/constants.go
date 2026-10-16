@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/apikeys"
 )
 
 const (
@@ -17,6 +19,13 @@ const (
 	DefaultUserAgent = "opencode/latest/2.0.15/cli"
 	// DefaultContextWindow is used when discovery does not provide one.
 	DefaultContextWindow = 200_000
+	// ProviderID is this provider's catalog id, and the key under which its
+	// credential is stored. Kept as a constant because the store and the
+	// catalog must agree on it.
+	ProviderID = "opencode"
+	// publicIdentity is Zen's anonymous bearer for the free tier — what this
+	// provider sent before any key existed.
+	publicIdentity = "public"
 )
 
 var (
@@ -131,11 +140,32 @@ func ThinkingLevelsFor(modelID string) []string {
 	return nil
 }
 
-// SetCommonHeaders applies the public Zen identity used by model discovery
-// and inference. The compatibility gate is isolated here so it can be updated
+// APIKey resolves the credential to send upstream, in priority order:
+//
+//  1. OPENCODE_API_KEY — an environment override, so headless and CI setups
+//     work with no stored credential at all. Env wins over stored, matching
+//     the BaseURL/UserAgent convention in this file.
+//  2. A key pasted through PUT /api/providers/opencode/credential. It lives on
+//     the server, which is the only party that talks to Zen, so a key pasted on
+//     any client reaches the same store.
+//  3. "public" — the free tier's shared identity, and the behavior before any
+//     of this existed. A server with no key configured keeps working exactly
+//     as it did, which is what makes storing a key safe to introduce.
+func APIKey() string {
+	if key := strings.TrimSpace(os.Getenv("OPENCODE_API_KEY")); key != "" {
+		return key
+	}
+	if key, ok := apikeys.Get(ProviderID); ok {
+		return key
+	}
+	return publicIdentity
+}
+
+// SetCommonHeaders applies the Zen identity used by model discovery and
+// inference. The compatibility gate is isolated here so it can be updated
 // without changing the agent loop.
 func SetCommonHeaders(req *http.Request, accept string) {
-	req.Header.Set("Authorization", "Bearer public")
+	req.Header.Set("Authorization", "Bearer "+APIKey())
 	req.Header.Set("User-Agent", UserAgent())
 	req.Header.Set("x-opencode-client", "cli")
 	req.Header.Set("x-opencode-session", SessionID())

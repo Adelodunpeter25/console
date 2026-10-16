@@ -590,6 +590,193 @@ func (x *GitHubValidateResponse) GetScopes() []string {
 	return nil
 }
 
+// Response of GET /api/providers/credentials. One entry per provider that
+// accepts a pasted key, so a client can render its fields without inferring
+// anything from the catalog.
+//
+// `configured` is explicit-presence for the same reason GitHubAuthStatus uses
+// it: protojson drops an implicit false, and "no key" must be distinguishable
+// from "server did not report". `source` says *where the key in use came from*
+// — "env" when OPENCODE_API_KEY is set, "stored" when it came from this API.
+// They are not interchangeable: an env key survives a "remove" here, so a
+// client that hid its field after a remove would be lying about which key is
+// live. That distinction is the whole reason this message exists rather than
+// folding into ProviderAuthStatus.
+type ProviderCredentialStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Configured    *bool                  `protobuf:"varint,1,opt,name=configured,proto3,oneof" json:"configured,omitempty"`
+	Source        *string                `protobuf:"bytes,2,opt,name=source,proto3,oneof" json:"source,omitempty"`
+	UpdatedAt     *string                `protobuf:"bytes,3,opt,name=updated_at,json=updatedAt,proto3,oneof" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProviderCredentialStatus) Reset() {
+	*x = ProviderCredentialStatus{}
+	mi := &file_console_v1_auth_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderCredentialStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderCredentialStatus) ProtoMessage() {}
+
+func (x *ProviderCredentialStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderCredentialStatus.ProtoReflect.Descriptor instead.
+func (*ProviderCredentialStatus) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ProviderCredentialStatus) GetConfigured() bool {
+	if x != nil && x.Configured != nil {
+		return *x.Configured
+	}
+	return false
+}
+
+func (x *ProviderCredentialStatus) GetSource() string {
+	if x != nil && x.Source != nil {
+		return *x.Source
+	}
+	return ""
+}
+
+func (x *ProviderCredentialStatus) GetUpdatedAt() string {
+	if x != nil && x.UpdatedAt != nil {
+		return *x.UpdatedAt
+	}
+	return ""
+}
+
+// Map of provider id → status. Providers that take a key are always present.
+type ProviderCredentialStatuses struct {
+	state         protoimpl.MessageState               `protogen:"open.v1"`
+	Providers     map[string]*ProviderCredentialStatus `protobuf:"bytes,1,rep,name=providers,proto3" json:"providers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProviderCredentialStatuses) Reset() {
+	*x = ProviderCredentialStatuses{}
+	mi := &file_console_v1_auth_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderCredentialStatuses) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderCredentialStatuses) ProtoMessage() {}
+
+func (x *ProviderCredentialStatuses) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderCredentialStatuses.ProtoReflect.Descriptor instead.
+func (*ProviderCredentialStatuses) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ProviderCredentialStatuses) GetProviders() map[string]*ProviderCredentialStatus {
+	if x != nil {
+		return x.Providers
+	}
+	return nil
+}
+
+// Response of PUT/DELETE /api/providers/:id/credential. The key never appears
+// here in any form — neither the value nor a masked prefix.
+type SetProviderCredentialResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Configured    *bool                  `protobuf:"varint,2,opt,name=configured,proto3,oneof" json:"configured,omitempty"`
+	Source        *string                `protobuf:"bytes,3,opt,name=source,proto3,oneof" json:"source,omitempty"`
+	Removed       bool                   `protobuf:"varint,4,opt,name=removed,proto3" json:"removed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetProviderCredentialResponse) Reset() {
+	*x = SetProviderCredentialResponse{}
+	mi := &file_console_v1_auth_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetProviderCredentialResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetProviderCredentialResponse) ProtoMessage() {}
+
+func (x *SetProviderCredentialResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetProviderCredentialResponse.ProtoReflect.Descriptor instead.
+func (*SetProviderCredentialResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SetProviderCredentialResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *SetProviderCredentialResponse) GetConfigured() bool {
+	if x != nil && x.Configured != nil {
+		return *x.Configured
+	}
+	return false
+}
+
+func (x *SetProviderCredentialResponse) GetSource() string {
+	if x != nil && x.Source != nil {
+		return *x.Source
+	}
+	return ""
+}
+
+func (x *SetProviderCredentialResponse) GetRemoved() bool {
+	if x != nil {
+		return x.Removed
+	}
+	return false
+}
+
 var File_console_v1_auth_proto protoreflect.FileDescriptor
 
 const file_console_v1_auth_proto_rawDesc = "" +
@@ -643,7 +830,31 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\tconnected\x18\x01 \x01(\bR\tconnected\x12\x1f\n" +
 	"\busername\x18\x02 \x01(\tH\x00R\busername\x88\x01\x01\x12\x16\n" +
 	"\x06scopes\x18\x03 \x03(\tR\x06scopesB\v\n" +
-	"\t_usernameBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\t_username\"\xa9\x01\n" +
+	"\x18ProviderCredentialStatus\x12#\n" +
+	"\n" +
+	"configured\x18\x01 \x01(\bH\x00R\n" +
+	"configured\x88\x01\x01\x12\x1b\n" +
+	"\x06source\x18\x02 \x01(\tH\x01R\x06source\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"updated_at\x18\x03 \x01(\tH\x02R\tupdatedAt\x88\x01\x01B\r\n" +
+	"\v_configuredB\t\n" +
+	"\a_sourceB\r\n" +
+	"\v_updated_at\"\xd5\x01\n" +
+	"\x1aProviderCredentialStatuses\x12S\n" +
+	"\tproviders\x18\x01 \x03(\v25.console.v1.ProviderCredentialStatuses.ProvidersEntryR\tproviders\x1ab\n" +
+	"\x0eProvidersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12:\n" +
+	"\x05value\x18\x02 \x01(\v2$.console.v1.ProviderCredentialStatusR\x05value:\x028\x01\"\xb1\x01\n" +
+	"\x1dSetProviderCredentialResponse\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12#\n" +
+	"\n" +
+	"configured\x18\x02 \x01(\bH\x00R\n" +
+	"configured\x88\x01\x01\x12\x1b\n" +
+	"\x06source\x18\x03 \x01(\tH\x01R\x06source\x88\x01\x01\x12\x18\n" +
+	"\aremoved\x18\x04 \x01(\bR\aremovedB\r\n" +
+	"\v_configuredB\t\n" +
+	"\a_sourceBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_auth_proto_rawDescOnce sync.Once
@@ -657,29 +868,35 @@ func file_console_v1_auth_proto_rawDescGZIP() []byte {
 	return file_console_v1_auth_proto_rawDescData
 }
 
-var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_console_v1_auth_proto_goTypes = []any{
-	(*ProviderAuthStatus)(nil),     // 0: console.v1.ProviderAuthStatus
-	(*GitHubAuthStatus)(nil),       // 1: console.v1.GitHubAuthStatus
-	(*AuthStatusResponse)(nil),     // 2: console.v1.AuthStatusResponse
-	(*OAuthLoginUrlResponse)(nil),  // 3: console.v1.OAuthLoginUrlResponse
-	(*OAuthCallbackResponse)(nil),  // 4: console.v1.OAuthCallbackResponse
-	(*ProjectIDResponse)(nil),      // 5: console.v1.ProjectIDResponse
-	(*SetProjectIDResponse)(nil),   // 6: console.v1.SetProjectIDResponse
-	(*GitHubLogoutResponse)(nil),   // 7: console.v1.GitHubLogoutResponse
-	(*GitHubValidateResponse)(nil), // 8: console.v1.GitHubValidateResponse
+	(*ProviderAuthStatus)(nil),            // 0: console.v1.ProviderAuthStatus
+	(*GitHubAuthStatus)(nil),              // 1: console.v1.GitHubAuthStatus
+	(*AuthStatusResponse)(nil),            // 2: console.v1.AuthStatusResponse
+	(*OAuthLoginUrlResponse)(nil),         // 3: console.v1.OAuthLoginUrlResponse
+	(*OAuthCallbackResponse)(nil),         // 4: console.v1.OAuthCallbackResponse
+	(*ProjectIDResponse)(nil),             // 5: console.v1.ProjectIDResponse
+	(*SetProjectIDResponse)(nil),          // 6: console.v1.SetProjectIDResponse
+	(*GitHubLogoutResponse)(nil),          // 7: console.v1.GitHubLogoutResponse
+	(*GitHubValidateResponse)(nil),        // 8: console.v1.GitHubValidateResponse
+	(*ProviderCredentialStatus)(nil),      // 9: console.v1.ProviderCredentialStatus
+	(*ProviderCredentialStatuses)(nil),    // 10: console.v1.ProviderCredentialStatuses
+	(*SetProviderCredentialResponse)(nil), // 11: console.v1.SetProviderCredentialResponse
+	nil,                                   // 12: console.v1.ProviderCredentialStatuses.ProvidersEntry
 }
 var file_console_v1_auth_proto_depIdxs = []int32{
-	0, // 0: console.v1.AuthStatusResponse.antigravity:type_name -> console.v1.ProviderAuthStatus
-	0, // 1: console.v1.AuthStatusResponse.codex:type_name -> console.v1.ProviderAuthStatus
-	0, // 2: console.v1.AuthStatusResponse.devin:type_name -> console.v1.ProviderAuthStatus
-	0, // 3: console.v1.AuthStatusResponse.claude:type_name -> console.v1.ProviderAuthStatus
-	1, // 4: console.v1.AuthStatusResponse.github:type_name -> console.v1.GitHubAuthStatus
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0,  // 0: console.v1.AuthStatusResponse.antigravity:type_name -> console.v1.ProviderAuthStatus
+	0,  // 1: console.v1.AuthStatusResponse.codex:type_name -> console.v1.ProviderAuthStatus
+	0,  // 2: console.v1.AuthStatusResponse.devin:type_name -> console.v1.ProviderAuthStatus
+	0,  // 3: console.v1.AuthStatusResponse.claude:type_name -> console.v1.ProviderAuthStatus
+	1,  // 4: console.v1.AuthStatusResponse.github:type_name -> console.v1.GitHubAuthStatus
+	12, // 5: console.v1.ProviderCredentialStatuses.providers:type_name -> console.v1.ProviderCredentialStatuses.ProvidersEntry
+	9,  // 6: console.v1.ProviderCredentialStatuses.ProvidersEntry.value:type_name -> console.v1.ProviderCredentialStatus
+	7,  // [7:7] is the sub-list for method output_type
+	7,  // [7:7] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_auth_proto_init() }
@@ -693,13 +910,15 @@ func file_console_v1_auth_proto_init() {
 	file_console_v1_auth_proto_msgTypes[5].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[6].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[8].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[9].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_auth_proto_rawDesc), len(file_console_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

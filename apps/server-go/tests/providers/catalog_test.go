@@ -47,8 +47,15 @@ func TestCatalogListsOpenCode(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("no opencode entry: %+v", entries)
 	}
-	if entry.AuthMethod != "none" || len(entry.Models) != 1 || entry.Models[0].ID != "space-bunny-free" {
+	// "api-key", not "none": Zen serves a free tier anonymously but also takes
+	// a personal key, and both clients hide providers whose auth_method is
+	// "none", so "none" would make the field unreachable. The key stays
+	// optional — see opencode.APIKey, which falls back to the public identity.
+	if entry.AuthMethod != "api-key" || len(entry.Models) != 1 || entry.Models[0].ID != "space-bunny-free" {
 		t.Fatalf("opencode fallback: %+v", entry)
+	}
+	if !providers.SupportsAPIKey("opencode") {
+		t.Fatal("auth_method api-key must be what gates the credential route")
 	}
 	if !providers.IsCatalogProvider("opencode") {
 		t.Fatal("opencode must be a catalog provider")
