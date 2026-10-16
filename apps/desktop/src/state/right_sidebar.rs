@@ -389,11 +389,9 @@ impl ConsoleDesktopApp {
             if let Some(device) = self.device_view.take() {
                 device.update(cx, |view, cx| view.close(cx));
             }
-            let client = self.client.clone();
-            cx.spawn(async move |_, _| {
-                let _ = client.devices.shutdown_all().await;
-            })
-            .detach();
+            // Closing the tab must not power off devices: each device has its
+            // own stop button (device power toolbar button) and they keep
+            // running for other viewers.
         }
         self.inspector_open_auxiliary_tabs
             .retain(|open| *open != tab);
