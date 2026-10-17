@@ -13,3 +13,13 @@
 -keep class com.squareup.wire.** { *; }
 -keep class console.v1.** { *; }
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
+
+# kotlinx.serialization: the library's own rule is conditional on `INSTANCE`
+# surviving shrinking, so a @Serializable object used only as a type argument
+# (e.g. navigation `composable<RouteOnboarding>`) lost its serializer and the
+# app crashed after connecting with "Serializer for class 'm' is not found".
+-keepclassmembers @kotlinx.serialization.Serializable class ** {
+    public static ** INSTANCE;
+    static **$Companion Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}
