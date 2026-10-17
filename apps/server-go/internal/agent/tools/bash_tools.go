@@ -24,7 +24,7 @@ type bashInput struct {
 	Cwd          string            `json:"cwd,omitempty" jsonschema:"description=Working directory for the command. Defaults to the current directory."`
 	TimeoutMs    int               `json:"timeoutMs,omitempty" jsonschema:"description=Timeout in milliseconds. Sync mode: time the tool call waits (default 30s). Background mode: max job lifetime (default 10min). Max: 20min."`
 	Env          map[string]string `json:"env,omitempty" jsonschema:"description=Additional environment variables for this command"`
-	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. Poll with bashJob (status/output/wait/kill). The start response is NOT an exit result."`
+	Background   bool              `json:"background,omitempty" jsonschema:"description=Start as a background job and return immediately with a jobId. You are notified automatically with the exit code and output when it finishes, so do not poll or wait: keep working on other things, or end your turn and tell the user what you are waiting on. The start response is NOT an exit result."`
 	ParentRunID  string            `json:"-"`
 	ParentCallID string            `json:"-"`
 }
@@ -67,7 +67,7 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs
 	if len(parentIDs) > 1 {
 		parentCallID = parentIDs[1]
 	}
-	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Long-running commands: background=true starts a managed job (poll with bashJob); the start response only confirms the process started.", TierExec,
+	return NewTool("bash", "Run a shell command and return output. Use for builds, tests, or git — not for reading or editing files. Long-running commands (builds, test suites, dev servers): background=true starts a managed job and returns immediately; you are notified automatically with the result when it finishes, even if you end your turn.", TierExec,
 		func(ctx context.Context, in bashInput) (any, error) {
 			if in.Command == "" {
 				return nil, NewToolError("command is required")
@@ -102,8 +102,8 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs
 					workLine = fmt.Sprintf("\nBackground work: %s", snap.WorkID)
 				}
 				return textResult(fmt.Sprintf(
-					"Started: %s%s\nMax lifetime: %dms\nDefault wait: %dms\n\nUse bashJob action=\"output|wait|kill\" with jobId=%q.\nThis response is not an exit result — poll for status before assuming success.",
-					snap.JobID, workLine, timeoutMs, services.BashJobMaxWaitMs, snap.JobID,
+					"Started: %s%s\nMax lifetime: %dms\n\nThe job runs in the background. You will be notified automatically with its exit code and output when it finishes — do not poll or wait for it. Continue with other work, or end your turn and tell the user what you are waiting on.\nThis response is not an exit result. Use bashJob (jobId=%q) only to peek at partial output or to kill it.",
+					snap.JobID, workLine, timeoutMs, snap.JobID,
 				)), nil
 			}
 

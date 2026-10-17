@@ -78,6 +78,10 @@ const (
 	// EventBackgroundWork carries a session-owned detached work lifecycle
 	// callback. The payload is a services.BackgroundWorkEvent.
 	EventBackgroundWork EventKind = "backgroundWork"
+	// EventBackgroundContinue announces that finished background work woke an
+	// idle session and the agent is continuing on its own. Message holds the
+	// []services.BackgroundWork that triggered it.
+	EventBackgroundContinue EventKind = "backgroundWorkContinue"
 	// Wire-structure markers. The run service broadcasts these around the
 	// raw provider stream so the SSE layer can emit the desktop event
 	// vocabulary (sessionStart/turnStart/modelStream*/toolExecution*/turnEnd/

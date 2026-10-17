@@ -52,6 +52,8 @@ message AgentUserMessage {
   repeated string context_files = 2;
   repeated ImageAttachment attachments = 3;
   repeated BrowserAnnotation annotations = 4;
+  // Server-injected turn (e.g. background work finished); never shown in chat.
+  bool synthetic = 5;
 }
 
 message TextPart {

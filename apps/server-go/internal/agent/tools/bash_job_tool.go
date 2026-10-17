@@ -12,11 +12,10 @@ import (
 )
 
 type bashJobInput struct {
-	Action string `json:"action" jsonschema:"required,description=status|output|wait|kill|list"`
+	Action string `json:"action" jsonschema:"required,description=status|output|kill|list"`
 	JobID  string `json:"jobId,omitempty" jsonschema:"description=background job id (job_...) — required except for list"`
 	Cursor int    `json:"cursor,omitempty" jsonschema:"description=stdout offset from previous output call"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=max chars per stream (default 20000, max 50000)"`
-	WaitMs int    `json:"waitMs,omitempty" jsonschema:"description=max wait for wait action (default 10000, max 120000)"`
 }
 
 func formatJobSnapshot(s services.BashJobSnapshot) string {
@@ -70,7 +69,7 @@ func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID st
 // ownerSessionID (must match the session that started the job via bash's
 // background=true).
 func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
-	return NewTool("bashJob", "Manage background bash jobs. action: status|output|wait|kill|list. output is cursor-paginated (nextCursor, truncated).", TierExec,
+	return NewTool("bashJob", "Inspect or stop background bash jobs. action: status|output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to peek at partial output of a still-running job or to kill one. Never poll in a loop.", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {
 			if jobs == nil {
 				return nil, NewToolError("Background jobs are not available in this context.")
@@ -113,32 +112,6 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 					return nil, NewToolError("%v", err)
 				}
 				return textResult(formatJobSnapshot(s) + "\n" + body), nil
-
-			case "wait":
-				if in.JobID == "" {
-					return nil, NewToolError(`Missing jobId for action="wait".`)
-				}
-				waitMs := in.WaitMs
-				if waitMs <= 0 {
-					waitMs = 10_000
-				}
-				s, err := jobs.Wait(in.JobID, ownerSessionID, waitMs)
-				if err != nil {
-					return nil, NewToolError("%v", err)
-				}
-				body, err := renderJobOutputBody(jobs, in.JobID, ownerSessionID, in.Cursor, in.Limit)
-				if err != nil {
-					return nil, NewToolError("%v", err)
-				}
-				suffix := ""
-				if s.Status == services.BashJobRunning {
-					suffix = fmt.Sprintf("\n\nStill running after wait. Poll again or wait longer (max %dms).", services.BashJobMaxWaitMs)
-				}
-				result := formatJobSnapshot(s) + "\n" + body + suffix
-				if s.Status == services.BashJobFailed || s.Status == services.BashJobExpired {
-					return nil, NewToolError("%s", result)
-				}
-				return textResult(result), nil
 
 			case "kill":
 				if in.JobID == "" {

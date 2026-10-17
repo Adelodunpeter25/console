@@ -190,7 +190,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
 			"hasMore": result.HasMore, "header": json.RawMessage(headerRaw),
-			"messages": result.Messages, "nextCursor": result.NextCursor,
+			"messages": visibleMessages(result.Messages), "nextCursor": result.NextCursor,
 		}})
 	})
 

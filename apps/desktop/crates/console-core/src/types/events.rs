@@ -136,6 +136,13 @@ pub enum AgentSessionEvent {
     BackgroundWorkCancelled {
         work: BackgroundWork,
     },
+    /// An idle session resumed on its own because background work finished.
+    /// Clients may surface `message`; the wake turn itself is never rendered.
+    BackgroundWorkContinue {
+        message: String,
+        #[serde(default)]
+        work: Vec<BackgroundWork>,
+    },
     SessionEnd,
     SessionTitleUpdated {
         title: String,
