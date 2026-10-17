@@ -1,7 +1,7 @@
 //! Unit tests for the Run tab helpers: shortcut canonicalization and
 //! dispatch state, shortcut display, status labels, and the output cap.
 
-use console_core::{ProjectScript, ScriptRunStatus, canonicalize_shortcut, compute_shortcut_state};
+use console_core::{ProjectScript, canonicalize_shortcut, compute_shortcut_state};
 use console_ui::run::{
     MAX_RUN_OUTPUT_BYTES, cap_run_output, display_script_shortcut, push_run_output,
     script_row_status_label,
@@ -136,19 +136,19 @@ fn test_status_labels_cover_every_row_state() {
     assert_eq!(script_row_status_label(None, false), "Not run yet");
     assert_eq!(script_row_status_label(None, true), "Starting…");
     assert_eq!(
-        script_row_status_label(Some(ScriptRunStatus::Running), false),
+        script_row_status_label(Some("running".into()), false),
         "Running…"
     );
     assert_eq!(
-        script_row_status_label(Some(ScriptRunStatus::Succeeded), false),
+        script_row_status_label(Some("succeeded".into()), false),
         "Succeeded"
     );
     assert_eq!(
-        script_row_status_label(Some(ScriptRunStatus::Failed), false),
+        script_row_status_label(Some("failed".into()), false),
         "Failed"
     );
     assert_eq!(
-        script_row_status_label(Some(ScriptRunStatus::Stopped), false),
+        script_row_status_label(Some("stopped".into()), false),
         "Stopped"
     );
 }
