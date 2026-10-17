@@ -100,7 +100,8 @@ impl ConsoleDesktopApp {
         }
 
         let app_weak = cx.entity().downgrade();
-        let view = cx.new(|cx| SettingsWindow::new(app_weak, tab, window, cx));
+        let client = self.client.clone();
+        let view = cx.new(|cx| SettingsWindow::new(app_weak, client, tab, window, cx));
         self.settings_view = Some(view.clone());
         self.settings_window_view = Some(view.downgrade());
         view
@@ -116,6 +117,18 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        match tab {
+            console_ui::settings::SettingsTab::Usage => self.fetch_usage(cx),
+            console_ui::settings::SettingsTab::Integrations => self.refresh_integrations(cx),
+            console_ui::settings::SettingsTab::Providers => {
+                self.refresh_github_status(cx);
+                self.refresh_provider_credentials(cx);
+            }
+            _ => {}
+        }
+        self.refresh_auth_status(cx);
+        self.refresh_deleted_sessions(cx);
+
         let settings_view = self.get_or_create_settings_view(tab, window, cx);
         settings_view.update(cx, |view, cx| {
             view.set_tab(tab, cx);

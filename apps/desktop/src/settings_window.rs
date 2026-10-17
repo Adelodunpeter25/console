@@ -41,6 +41,7 @@ pub struct SettingsWindow {
 impl SettingsWindow {
     pub fn new(
         app: WeakEntity<ConsoleDesktopApp>,
+        client: console_core::ConsoleClient,
         initial_tab: SettingsTab,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -48,32 +49,6 @@ impl SettingsWindow {
         let subscription = app
             .upgrade()
             .map(|app_entity| cx.observe(&app_entity, |_this, _app, cx| cx.notify()));
-
-        if initial_tab == SettingsTab::Usage {
-            if let Some(app_entity) = app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.fetch_usage(cx);
-                });
-            }
-        }
-        if initial_tab == SettingsTab::Integrations {
-            if let Some(app_entity) = app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.refresh_integrations(cx);
-                });
-            }
-        }
-        // Fresh opens pass the tab as initial_tab rather than going through
-        // set_tab, so without this the Providers default never read GitHub
-        // status until the user left the tab and came back.
-        if initial_tab == SettingsTab::Providers {
-            if let Some(app_entity) = app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.refresh_github_status(cx);
-                    app_state.refresh_provider_credentials(cx);
-                });
-            }
-        }
 
         let new_env_name_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
@@ -96,38 +71,36 @@ impl SettingsWindow {
                 .placeholder("provider/model or leave blank for chat model")
         });
 
-        let settings_client = app.upgrade().map(|entity| entity.read(cx).client.clone());
         let vision_for_load = model_vision_input.clone();
         let smol_for_load = model_smol_input.clone();
-        if let Some(client) = settings_client {
-            cx.spawn(async move |_, cx| {
-                if let Ok(settings) = client.settings.get().await {
-                    cx.update(|cx| {
-                        vision_for_load.update(cx, |input, cx| {
-                            input.set_content(
-                                settings
-                                    .model_roles
-                                    .as_ref()
-                                    .and_then(|roles| roles.vision.clone())
-                                    .unwrap_or_default(),
-                                cx,
-                            )
-                        });
-                        smol_for_load.update(cx, |input, cx| {
-                            input.set_content(
-                                settings
-                                    .model_roles
-                                    .as_ref()
-                                    .and_then(|roles| roles.smol.clone())
-                                    .unwrap_or_default(),
-                                cx,
-                            )
-                        });
+        let client_for_load = client.clone();
+        cx.spawn(async move |_, cx| {
+            if let Ok(settings) = client_for_load.settings.get().await {
+                cx.update(|cx| {
+                    vision_for_load.update(cx, |input, cx| {
+                        input.set_content(
+                            settings
+                                .model_roles
+                                .as_ref()
+                                .and_then(|roles| roles.vision.clone())
+                                .unwrap_or_default(),
+                            cx,
+                        )
                     });
-                }
-            })
-            .detach();
-        }
+                    smol_for_load.update(cx, |input, cx| {
+                        input.set_content(
+                            settings
+                                .model_roles
+                                .as_ref()
+                                .and_then(|roles| roles.smol.clone())
+                                .unwrap_or_default(),
+                            cx,
+                        )
+                    });
+                });
+            }
+        })
+        .detach();
 
         let model_menus = [
             console_ui::ContextMenuHandle::new(cx),
@@ -146,7 +119,6 @@ impl SettingsWindow {
             }),
         ];
         let focus_handle = cx.focus_handle();
-        window.focus(&focus_handle, cx);
 
         let keybindings_search = cx.new(|cx| {
             ComposerInput::new(window, cx)
@@ -252,30 +224,8 @@ impl SettingsWindow {
 
     pub fn set_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         self.active_tab = tab;
-        if tab == SettingsTab::Usage {
-            if let Some(app_entity) = self.app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.fetch_usage(cx);
-                });
-            }
-        }
         if tab == SettingsTab::Mcp {
             self.mcp.fetch_mcp_servers(cx);
-        }
-        if tab == SettingsTab::Integrations {
-            if let Some(app_entity) = self.app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.refresh_integrations(cx);
-                });
-            }
-        }
-        if tab == SettingsTab::Providers {
-            if let Some(app_entity) = self.app.upgrade() {
-                app_entity.update(cx, |app_state, cx| {
-                    app_state.refresh_github_status(cx);
-                    app_state.refresh_provider_credentials(cx);
-                });
-            }
         }
         cx.notify();
     }
