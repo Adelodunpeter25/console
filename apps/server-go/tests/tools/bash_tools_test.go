@@ -83,7 +83,7 @@ func TestBashJobLifecycle(t *testing.T) {
 	jobID := strings.TrimPrefix(strings.SplitN(startStr, "\n", 2)[0], "Started: ")
 
 	// No model-facing wait: completion is pushed, so poll status directly.
-	statusArgs0, _ := json.Marshal(map[string]any{"action": "status", "jobId": jobID})
+	statusArgs0, _ := json.Marshal(map[string]any{"action": "output", "jobId": jobID})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		out, err := bashJob.Execute(context.Background(), statusArgs0)
@@ -118,7 +118,7 @@ func TestBashJobLifecycle(t *testing.T) {
 
 	// Different owner session cannot see the job.
 	otherJob := tools.NewBashJobTool(jobs, "sess2")
-	statusArgs, _ := json.Marshal(map[string]any{"action": "status", "jobId": jobID})
+	statusArgs, _ := json.Marshal(map[string]any{"action": "output", "jobId": jobID})
 	if _, err := otherJob.Execute(context.Background(), statusArgs); err == nil {
 		t.Fatal("expected error: job not owned by sess2")
 	}
@@ -150,7 +150,7 @@ func TestBashJobKill(t *testing.T) {
 func TestBashJobMissingJobID(t *testing.T) {
 	jobs := services.NewBashJobManager(nil)
 	bashJob := tools.NewBashJobTool(jobs, "")
-	for _, action := range []string{"status", "output", "kill"} {
+	for _, action := range []string{"output", "kill"} {
 		args, _ := json.Marshal(map[string]any{"action": action})
 		if _, err := bashJob.Execute(context.Background(), args); err == nil {
 			t.Fatalf("expected error for missing jobId on action=%s", action)

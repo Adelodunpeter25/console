@@ -12,7 +12,7 @@ import (
 )
 
 type bashJobInput struct {
-	Action string `json:"action" jsonschema:"required,description=status|output|kill|list"`
+	Action string `json:"action" jsonschema:"required,description=output|kill|list"`
 	JobID  string `json:"jobId,omitempty" jsonschema:"description=background job id (job_...) — required except for list"`
 	Cursor int    `json:"cursor,omitempty" jsonschema:"description=stdout offset from previous output call"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=max chars per stream (default 20000, max 50000)"`
@@ -69,7 +69,7 @@ func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID st
 // ownerSessionID (must match the session that started the job via bash's
 // background=true).
 func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
-	return NewTool("bashJob", "Inspect or stop background bash jobs. action: status|output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to peek at partial output of a still-running job or to kill one. Never poll in a loop.", TierExec,
+	return NewTool("bashJob", "Inspect or stop background bash jobs. action: output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to read the output of a job that is still running (e.g. a dev server) or to kill one. Never poll in a loop.", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {
 			if jobs == nil {
 				return nil, NewToolError("Background jobs are not available in this context.")
@@ -85,19 +85,6 @@ func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
 					lines[i] = formatJobSnapshot(s)
 				}
 				return textResult(strings.Join(lines, "\n\n---\n\n")), nil
-
-			case "status":
-				if in.JobID == "" {
-					return nil, NewToolError(`Missing jobId for action="status".`)
-				}
-				s, err := jobs.Status(in.JobID, ownerSessionID)
-				if err != nil {
-					return nil, NewToolError("%v", err)
-				}
-				if s.Status == services.BashJobFailed || s.Status == services.BashJobExpired {
-					return nil, NewToolError("%s", formatJobSnapshot(s))
-				}
-				return textResult(formatJobSnapshot(s)), nil
 
 			case "output":
 				if in.JobID == "" {
