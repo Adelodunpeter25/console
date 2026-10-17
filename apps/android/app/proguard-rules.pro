@@ -5,3 +5,11 @@
 }
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Wire protobuf: the runtime finds each generated message/enum's `ADAPTER`
+# field and its @WireField members reflectively, so R8 must not rename or
+# strip them (release builds crashed at startup with
+# NoSuchFieldException: ADAPTER). See Wire docs, "ProGuard".
+-keep class com.squareup.wire.** { *; }
+-keep class console.v1.** { *; }
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
