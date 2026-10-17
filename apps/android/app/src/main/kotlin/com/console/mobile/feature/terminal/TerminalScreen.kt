@@ -66,10 +66,10 @@ private data class ExtraKey(val label: String, val bytes: String)
 private val EXTRA_KEYS = listOf(
     ExtraKey("Esc", "\u001B"),
     ExtraKey("Tab", "\t"),
-    ExtraKey("↑", "\u001BA"),
-    ExtraKey("↓", "\u001BB"),
-    ExtraKey("←", "\u001BD"),
-    ExtraKey("→", "\u001BC"),
+    ExtraKey("↑", "\u001B[A"),
+    ExtraKey("↓", "\u001B[B"),
+    ExtraKey("←", "\u001B[D"),
+    ExtraKey("→", "\u001B[C"),
     ExtraKey("Ctrl-C", "\u0003"),
 )
 
