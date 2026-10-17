@@ -46,15 +46,44 @@ pub enum SettingsTab {
 impl SettingsTab {
     pub fn title(&self) -> &'static str {
         match self {
-            Self::Providers => "Providers",
-            Self::Servers => "Servers",
-            Self::Usage => "Usage",
+            Self::Providers => "AI Providers",
+            Self::Servers => "Environments",
+            Self::Usage => "Usage & Activity",
             Self::Projects => "Projects",
-            Self::Models => "Models",
+            Self::Models => "Model Roles",
             Self::Integrations => "Integrations",
             Self::Mcp => "MCP Servers",
-            Self::DeletedChats => "Deleted chats",
+            Self::DeletedChats => "Deleted Chats",
             Self::Keybindings => "Keyboard Shortcuts",
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Providers => "providers",
+            Self::Servers => "servers",
+            Self::Usage => "usage",
+            Self::Projects => "projects",
+            Self::Models => "models",
+            Self::Integrations => "integrations",
+            Self::Mcp => "mcp",
+            Self::DeletedChats => "deleted-chats",
+            Self::Keybindings => "keybindings",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "providers" => Some(Self::Providers),
+            "servers" => Some(Self::Servers),
+            "usage" => Some(Self::Usage),
+            "projects" => Some(Self::Projects),
+            "models" => Some(Self::Models),
+            "integrations" => Some(Self::Integrations),
+            "mcp" => Some(Self::Mcp),
+            "deleted-chats" | "deletedChats" => Some(Self::DeletedChats),
+            "keybindings" => Some(Self::Keybindings),
+            _ => None,
         }
     }
 }

@@ -123,7 +123,8 @@ fn tab_palette_entries(
                 // ⌘⇧P palette; reachable via the tab bar and ⌘P file search.
                 WorkspaceTabConfig::File { .. }
                 | WorkspaceTabConfig::Diff { .. }
-                | WorkspaceTabConfig::ChangesReview { .. } => {}
+                | WorkspaceTabConfig::ChangesReview { .. }
+                | WorkspaceTabConfig::Settings { .. } => {}
             }
         }
     }

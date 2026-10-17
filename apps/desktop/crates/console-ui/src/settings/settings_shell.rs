@@ -1,11 +1,48 @@
 use super::SettingsTab;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
+use gpui::prelude::FluentBuilder;
 use gpui::{
-    AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, App, ElementId, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;
+
+struct SettingsGroup {
+    title: &'static str,
+    tabs: &'static [(SettingsTab, IconName, &'static str)],
+}
+
+const SETTINGS_GROUPS: &[SettingsGroup] = &[
+    SettingsGroup {
+        title: "AI & Models",
+        tabs: &[
+            (SettingsTab::Providers, IconName::Sparkle, "AI Providers"),
+            (SettingsTab::Models, IconName::Brain, "Model Roles"),
+            (SettingsTab::Mcp, IconName::Cpu, "MCP Servers"),
+        ],
+    },
+    SettingsGroup {
+        title: "Workspace",
+        tabs: &[
+            (SettingsTab::Projects, IconName::Folder, "Projects"),
+            (SettingsTab::Servers, IconName::Server, "Environments"),
+            (SettingsTab::Integrations, IconName::Package, "Integrations"),
+            (
+                SettingsTab::DeletedChats,
+                IconName::TrashBinMinimalistic,
+                "Deleted Chats",
+            ),
+        ],
+    },
+    SettingsGroup {
+        title: "Preferences",
+        tabs: &[
+            (SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts"),
+            (SettingsTab::Usage, IconName::LayoutDashboard, "Usage & Activity"),
+        ],
+    },
+];
 
 #[derive(IntoElement)]
 pub struct SettingsShell {
@@ -32,124 +69,156 @@ impl RenderOnce for SettingsShell {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_select = self.on_select_tab.clone();
-        let tabs = [
-            (SettingsTab::Providers, IconName::User, "Providers"),
-            (SettingsTab::Servers, IconName::Server, "Servers"),
-            (SettingsTab::Usage, IconName::ChartColumn, "Usage"),
-            (SettingsTab::Projects, IconName::Folder, "Projects"),
-            (SettingsTab::Models, IconName::Settings2, "Models"),
-            (
-                SettingsTab::Integrations,
-                IconName::Package,
-                "Integrations",
-            ),
-            (SettingsTab::Mcp, IconName::Server, "MCP Servers"),
-            (
-                SettingsTab::DeletedChats,
-                IconName::TrashBinMinimalistic,
-                "Deleted chats",
-            ),
-            (SettingsTab::Keybindings, IconName::Keyboard, "Keybindings"),
-        ];
 
         div()
             .flex()
             .size_full()
             .bg(theme.canvas)
             .text_color(theme.text)
-            // Left sidebar for navigation
+            // Left navigation sidebar
             .child(
                 div()
-                    .w(px(210.0))
+                    .w(px(220.0))
                     .flex_shrink_0()
                     .h_full()
                     .border_r_1()
-                    .border_color(theme.border)
+                    .border_color(theme.sidebar_border)
                     .bg(theme.sidebar)
                     .flex()
                     .flex_col()
                     .justify_between()
-                    .pt(px(42.0))
+                    .pt(px(16.0))
                     .pb(px(16.0))
                     .px(px(12.0))
                     .child(
                         div()
                             .flex()
                             .flex_col()
-                            .gap(px(10.0))
+                            .gap(px(16.0))
+                            // Sidebar Header
                             .child(
                                 div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
                                     .px(px(8.0))
                                     .py(px(4.0))
-                                    .text_size(px(14.0))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(theme.text)
-                                    .child("Settings"),
+                                    .child(app_icon(IconName::Settings, 16.0, theme.text))
+                                    .child(
+                                        div()
+                                            .text_size(px(14.0))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(theme.text)
+                                            .child("Settings"),
+                                    ),
                             )
-                            .child(div().flex().flex_col().gap(px(2.0)).children(
-                                tabs.into_iter().map(|(tab, icon_name, label)| {
-                                    let is_active = self.active_tab == tab;
-                                    let on_tab_click = on_select.clone();
-                                    let tab_id = format!("settings-tab-{:?}", tab);
+                            // Navigation Groups
+                            .child(
+                                div().flex().flex_col().gap(px(12.0)).children(
+                                    SETTINGS_GROUPS.iter().map(|group| {
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(2.0))
+                                            .child(
+                                                div()
+                                                    .px(px(8.0))
+                                                    .pt(px(4.0))
+                                                    .pb(px(2.0))
+                                                    .text_size(px(10.5))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(theme.text_ghost)
+                                                    .child(group.title),
+                                            )
+                                            .children(group.tabs.iter().map(
+                                                |(tab, icon_name, label)| {
+                                                    let is_active = self.active_tab == *tab;
+                                                    let on_tab_click = on_select.clone();
+                                                    let tab_id = format!("settings-tab-{:?}", tab);
+                                                    let tab_val = *tab;
 
-                                    div()
-                                        .id(ElementId::from(tab_id))
-                                        .px(px(8.0))
-                                        .py(px(6.0))
-                                        .rounded(px(6.0))
-                                        .cursor_pointer()
-                                        .bg(if is_active {
-                                            theme.accent
-                                        } else {
-                                            gpui::transparent_black()
-                                        })
-                                        .hover(|s| if !is_active { s.bg(theme.overlay) } else { s })
-                                        .active(|s| {
-                                            if !is_active {
-                                                s.bg(theme.overlay_strong)
-                                            } else {
-                                                s
-                                            }
-                                        })
-                                        .on_mouse_down(
-                                            MouseButton::Left,
-                                            move |_event, window, cx| {
-                                                cx.stop_propagation();
-                                                (on_tab_click)(tab, window, cx);
-                                            },
-                                        )
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(8.0))
-                                        .child(app_icon(
-                                            icon_name,
-                                            14.0,
-                                            if is_active {
-                                                theme.on_inverse
-                                            } else {
-                                                theme.text_secondary
-                                            },
-                                        ))
-                                        .child(
-                                            div()
-                                                .text_size(px(13.0))
-                                                .font_weight(if is_active {
-                                                    gpui::FontWeight::MEDIUM
-                                                } else {
-                                                    gpui::FontWeight::NORMAL
-                                                })
-                                                .text_color(if is_active {
-                                                    theme.on_inverse
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .child(label),
-                                        )
-                                }),
-                            )),
+                                                    div()
+                                                        .id(ElementId::from(tab_id))
+                                                        .px(px(8.0))
+                                                        .py(px(6.0))
+                                                        .rounded(px(6.0))
+                                                        .cursor_pointer()
+                                                        .bg(if is_active {
+                                                            theme.surface
+                                                        } else {
+                                                            gpui::transparent_black()
+                                                        })
+                                                        .hover(|s| {
+                                                            if !is_active {
+                                                                s.bg(theme.overlay)
+                                                            } else {
+                                                                s
+                                                            }
+                                                        })
+                                                        .active(|s| {
+                                                            if !is_active {
+                                                                s.bg(theme.overlay_strong)
+                                                            } else {
+                                                                s
+                                                            }
+                                                        })
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            move |_event, window, cx| {
+                                                                cx.stop_propagation();
+                                                                (on_tab_click)(tab_val, window, cx);
+                                                            },
+                                                        )
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_between()
+                                                        .child(
+                                                            div()
+                                                                .flex()
+                                                                .items_center()
+                                                                .gap(px(8.0))
+                                                                .child(app_icon(
+                                                                    *icon_name,
+                                                                    13.5,
+                                                                    if is_active {
+                                                                        theme.accent
+                                                                    } else {
+                                                                        theme.text_secondary
+                                                                    },
+                                                                ))
+                                                                .child(
+                                                                    div()
+                                                                        .text_size(px(12.5))
+                                                                        .font_weight(if is_active {
+                                                                            FontWeight::MEDIUM
+                                                                        } else {
+                                                                            FontWeight::NORMAL
+                                                                        })
+                                                                        .text_color(if is_active {
+                                                                            theme.text
+                                                                        } else {
+                                                                            theme.text_secondary
+                                                                        })
+                                                                        .child(*label),
+                                                                ),
+                                                        )
+                                                        .when(is_active, |el| {
+                                                            el.child(
+                                                                div()
+                                                                    .w(px(2.5))
+                                                                    .h(px(12.0))
+                                                                    .rounded(px(1.5))
+                                                                    .bg(theme.accent),
+                                                            )
+                                                        })
+                                                },
+                                            ))
+                                    }),
+                                ),
+                            ),
                     ),
             )
-            // Right content container
+            // Right content container with readable max-width and comfortable padding
             .child(
                 div()
                     .id("settings-content-scroll")
@@ -157,10 +226,16 @@ impl RenderOnce for SettingsShell {
                     .min_w_0()
                     .h_full()
                     .overflow_y_scroll()
-                    .pt(px(42.0))
-                    .pb(px(24.0))
-                    .px(px(24.0))
-                    .child(self.content),
+                    .child(
+                        div()
+                            .w_full()
+                            .max_w(px(860.0))
+                            .mx_auto()
+                            .pt(px(24.0))
+                            .pb(px(40.0))
+                            .px(px(32.0))
+                            .child(self.content),
+                    ),
             )
     }
 }

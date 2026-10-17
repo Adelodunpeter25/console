@@ -242,6 +242,9 @@ impl Render for ConsoleDesktopApp {
                         _ => Some(title.clone()),
                     }
                 }
+                Some(console_core::WorkspaceTabConfig::Settings { title, .. }) => {
+                    Some(title.clone())
+                }
                 Some(console_core::WorkspaceTabConfig::Chat {
                     session_id, title, ..
                 }) => {

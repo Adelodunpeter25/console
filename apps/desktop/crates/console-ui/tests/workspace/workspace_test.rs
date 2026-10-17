@@ -25,6 +25,15 @@ fn test_workspace_node_serialization_roundtrip() {
             last_active_at_ms: None,
         },
     );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Settings {
+            title: "Settings".into(),
+            active_tab: Some("providers".into()),
+            last_active_at_ms: None,
+        },
+    );
 
     let json = serde_json::to_string_pretty(&root).expect("serialize workspace node");
     let deserialized: WorkspaceNode =
@@ -32,10 +41,10 @@ fn test_workspace_node_serialization_roundtrip() {
 
     assert_eq!(root, deserialized);
     assert_eq!(deserialized.leaves().len(), 1);
-    assert_eq!(deserialized.leaves()[0].tabs.len(), 2);
+    assert_eq!(deserialized.leaves()[0].tabs.len(), 3);
     assert_eq!(
         deserialized.leaves()[0].active_tab_id.as_deref(),
-        Some("file:/path/to/file.rs")
+        Some("settings")
     );
 }
 

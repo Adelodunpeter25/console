@@ -123,15 +123,25 @@ impl NewProjectDialog {
     ///
     /// Closes this window first: leaving it open behind the settings window would
     /// put a second window with a live form in front of the user after they return.
-    fn open_providers(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_providers(&self, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(app) = self.app.upgrade() {
             app.update(cx, |app_state, cx| {
                 app_state.close_new_project_dialog(cx);
-                app_state.open_settings_tab(
-                    console_ui::settings::SettingsTab::Providers,
-                    window,
-                    cx,
-                );
+                if let Some(main_handle) = app_state.main_window_handle {
+                    let app_entity = cx.entity().clone();
+                    cx.defer(move |cx| {
+                        let _ = main_handle.update(cx, |_root, main_window, cx| {
+                            main_window.activate_window();
+                            app_entity.update(cx, |this, cx| {
+                                this.open_settings_tab(
+                                    console_ui::settings::SettingsTab::Providers,
+                                    main_window,
+                                    cx,
+                                );
+                            });
+                        });
+                    });
+                }
             });
         }
     }

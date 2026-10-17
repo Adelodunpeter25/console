@@ -11,7 +11,7 @@ use crate::theme::Theme;
 use console_core::types::IntegrationStatus;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    App, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;

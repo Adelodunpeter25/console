@@ -27,6 +27,19 @@ impl ConsoleDesktopApp {
             return EmptyChatState::new(on_new_chat).into_any_element();
         }
 
+        // Settings tab: render the embedded settings view for the active pane.
+        if let Some(console_core::WorkspaceTabConfig::Settings {
+            active_tab: subtab, ..
+        }) = active_tab
+        {
+            let tab = subtab
+                .as_deref()
+                .and_then(console_ui::settings::SettingsTab::from_id)
+                .unwrap_or(console_ui::settings::SettingsTab::Providers);
+            let view = self.get_or_create_settings_view(tab, window, cx);
+            return div().size_full().child(view).into_any_element();
+        }
+
         // Terminal tab: render the live terminal surface for its id.
         // No cwd fallback: rehydrated tabs without a selected project must
         // not respawn with the process cwd or "." (it may not exist on the

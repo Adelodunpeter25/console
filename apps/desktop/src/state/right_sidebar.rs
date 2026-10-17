@@ -351,6 +351,7 @@ impl ConsoleDesktopApp {
                 let cwd = self.session_cwd(session_id, project_id.as_deref(), pane_id);
                 (Some(session_id.clone()), cwd)
             }
+            Some(console_core::WorkspaceTabConfig::Settings { .. }) => (None, None),
             Some(console_core::WorkspaceTabConfig::File { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Diff { project_id, .. })
             | Some(console_core::WorkspaceTabConfig::Terminal { project_id, .. })

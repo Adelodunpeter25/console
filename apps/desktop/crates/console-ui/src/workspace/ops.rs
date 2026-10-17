@@ -271,7 +271,8 @@ pub fn open_file_paths(root: &WorkspaceNode) -> Vec<String> {
                 WorkspaceTabConfig::Chat { .. }
                 | WorkspaceTabConfig::Terminal { .. }
                 | WorkspaceTabConfig::Browser { .. }
-                | WorkspaceTabConfig::ChangesReview { .. } => {}
+                | WorkspaceTabConfig::ChangesReview { .. }
+                | WorkspaceTabConfig::Settings { .. } => {}
             }
         }
     }

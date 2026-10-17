@@ -1,11 +1,11 @@
 use super::ConsoleDesktopApp;
 use crate::new_project_dialog::NewProjectDialog;
-use crate::persistence::store::load_settings_window;
 use crate::settings_window::SettingsWindow;
 use console_core::ConsoleSettings;
 use console_ui::common::FileBrowser;
 use gpui::{
-    App, AppContext, Context, TitlebarOptions, Window, WindowBounds, WindowOptions, point, px, size,
+    App, AppContext, Context, Entity, TitlebarOptions, Window, WindowBounds, WindowOptions, point,
+    px, size,
 };
 use std::rc::Rc;
 
@@ -37,7 +37,9 @@ impl ConsoleDesktopApp {
     }
 
     fn apply_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
-        if let Some(settings_view) = self
+        if let Some(settings_view) = &self.settings_view {
+            settings_view.update(cx, |view, cx| view.apply_model_settings(&settings, cx));
+        } else if let Some(settings_view) = self
             .settings_window_view
             .as_ref()
             .and_then(|view| view.upgrade())
@@ -49,11 +51,11 @@ impl ConsoleDesktopApp {
 
     pub fn save_model_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
         let client = self.client.clone();
-        let Some(settings_view) = self
-            .settings_window_view
-            .as_ref()
-            .and_then(|view| view.upgrade())
-        else {
+        let Some(settings_view) = self.settings_view.clone().or_else(|| {
+            self.settings_window_view
+                .as_ref()
+                .and_then(|view| view.upgrade())
+        }) else {
             return;
         };
 
@@ -87,6 +89,23 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    pub fn get_or_create_settings_view(
+        &mut self,
+        tab: console_ui::settings::SettingsTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<SettingsWindow> {
+        if let Some(view) = &self.settings_view {
+            return view.clone();
+        }
+
+        let app_weak = cx.entity().downgrade();
+        let view = cx.new(|cx| SettingsWindow::new(app_weak, tab, window, cx));
+        self.settings_view = Some(view.clone());
+        self.settings_window_view = Some(view.downgrade());
+        view
+    }
+
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.open_settings_tab(console_ui::settings::SettingsTab::Providers, window, cx);
     }
@@ -94,63 +113,70 @@ impl ConsoleDesktopApp {
     pub fn open_settings_tab(
         &mut self,
         tab: console_ui::settings::SettingsTab,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(handle) = self.settings_window_handle {
-            if let Some(view) = self.settings_window_view.as_ref().and_then(|v| v.upgrade()) {
-                if cx
-                    .update_window(handle, |_root, window, cx| {
-                        window.activate_window();
-                        view.update(cx, |settings, cx| {
-                            settings.set_tab(tab, cx);
-                        });
-                    })
-                    .is_ok()
-                {
-                    return;
-                }
-            }
-        }
+        let settings_view = self.get_or_create_settings_view(tab, window, cx);
+        settings_view.update(cx, |view, cx| {
+            view.set_tab(tab, cx);
+        });
 
-        let bounds = load_settings_window()
-            .map(|w| w.bounds())
-            .unwrap_or_else(|| gpui::Bounds {
-                origin: point(px(120.0), px(120.0)),
-                size: size(px(780.0), px(560.0)),
-            });
-
-        let options = WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions {
-                title: Some("Settings".into()),
-                appears_transparent: true,
-                traffic_light_position: Some(point(px(14.0), px(14.0))),
-            }),
-            ..Default::default()
-        };
-
-        let entity = cx.entity().clone();
-        let app_entity = cx.entity().downgrade();
-
-        cx.defer(move |cx| {
-            let mut settings_weak = None;
-            let handle = cx
-                .open_window(options, |window, cx| {
-                    let settings_view =
-                        cx.new(|cx| SettingsWindow::new(app_entity, tab, window, cx));
-                    settings_weak = Some(settings_view.downgrade());
-                    cx.new(|cx| gpui_component::Root::new(settings_view, window, cx))
-                })
-                .ok();
-
-            if let Some(h) = handle {
-                entity.update(cx, |this, _cx| {
-                    this.settings_window_handle = Some(h.into());
-                    this.settings_window_view = settings_weak;
-                });
+        // If settings tab is already open in any pane, switch to it:
+        let existing = self.workspace_root.leaves().iter().find_map(|leaf| {
+            if leaf
+                .tabs
+                .iter()
+                .any(|t| matches!(t, console_core::WorkspaceTabConfig::Settings { .. }))
+            {
+                Some(leaf.id.clone())
+            } else {
+                None
             }
         });
+
+        if let Some(existing_pane_id) = existing {
+            if let Some(leaf) = self.workspace_root.leaf_mut(&existing_pane_id) {
+                for t in &mut leaf.tabs {
+                    if let console_core::WorkspaceTabConfig::Settings {
+                        active_tab: at,
+                        ..
+                    } = t
+                    {
+                        *at = Some(tab.as_str().to_string());
+                    }
+                }
+            }
+            console_ui::workspace::ops::select_tab(
+                &mut self.workspace_root,
+                &existing_pane_id,
+                "settings",
+            );
+            self.active_pane_id = Some(existing_pane_id);
+            self.sync_workspace_webviews(cx);
+            self.persist_workspaces();
+            self.refresh_auth_status(cx);
+            self.refresh_deleted_sessions(cx);
+            cx.notify();
+            return;
+        }
+
+        let pane_id = self.active_pane_id.clone().unwrap_or_else(|| {
+            self.workspace_root
+                .first_leaf()
+                .map(|l| l.id.clone())
+                .unwrap_or_else(|| "pane-main".to_string())
+        });
+
+        let tab_config = console_core::WorkspaceTabConfig::Settings {
+            title: "Settings".into(),
+            active_tab: Some(tab.as_str().to_string()),
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
+        };
+
+        console_ui::workspace::ops::open_tab(&mut self.workspace_root, &pane_id, tab_config);
+        self.active_pane_id = Some(pane_id);
+        self.sync_workspace_webviews(cx);
+        self.persist_workspaces();
 
         // Refresh dynamic status when opening settings
         self.refresh_auth_status(cx);

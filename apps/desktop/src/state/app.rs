@@ -710,6 +710,7 @@ impl ConsoleDesktopApp {
             deleted_sessions: Vec::new(),
             settings_window_handle: None,
             settings_window_view: None,
+            settings_view: None,
             new_project_dialog_handle: None,
             file_browser_window_handle: None,
             new_project_dialog_view: None,

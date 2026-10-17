@@ -396,6 +396,7 @@ pub struct ConsoleDesktopApp {
     pub deleted_sessions: Vec<SessionHeader>,
     pub settings_window_handle: Option<gpui::AnyWindowHandle>,
     pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
+    pub settings_view: Option<gpui::Entity<crate::settings_window::SettingsWindow>>,
     /// New Project dialog window (File ▸ New Project…). Tracked like the
     /// settings window so a second menu click focuses the open dialog instead
     /// of stacking copies.

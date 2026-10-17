@@ -329,6 +329,7 @@ impl ConsoleDesktopApp {
                 }
             }
             WorkspaceTabConfig::Chat { .. } => {}
+            WorkspaceTabConfig::Settings { .. } => {}
             WorkspaceTabConfig::ChangesReview { .. } => {
                 let tab_id = tab.id();
                 let still_referenced = self

@@ -408,8 +408,14 @@ impl Focusable for SettingsWindow {
 
 impl Render for SettingsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(state) = crate::persistence::window::capture(window) {
-            crate::persistence::store::save_settings_window(state);
+        if self
+            .app
+            .upgrade()
+            .map_or(false, |app| app.read(cx).settings_window_handle.is_some())
+        {
+            if let Some(state) = crate::persistence::window::capture(window) {
+                crate::persistence::store::save_settings_window(state);
+            }
         }
 
         let Some(app_entity) = self.app.upgrade() else {
@@ -874,21 +880,25 @@ impl Render for SettingsWindow {
                 let on_add_project: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
                     let app_handle = self.app.clone();
                     Rc::new(move |window: &mut Window, cx: &mut App| {
-                        window.remove_window();
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                app_state.settings_window_handle = None;
-                                app_state.settings_window_view = None;
-                                if let Some(main_handle) = app_state.main_window_handle {
-                                    let app_entity = cx.entity().clone();
-                                    cx.defer(move |cx| {
-                                        let _ = main_handle.update(cx, |_root, main_window, cx| {
-                                            main_window.activate_window();
-                                            app_entity.update(cx, |this, cx| {
-                                                this.open_project_browse(main_window, cx);
+                                if app_state.settings_window_handle.is_some() {
+                                    window.remove_window();
+                                    app_state.settings_window_handle = None;
+                                    app_state.settings_window_view = None;
+                                    if let Some(main_handle) = app_state.main_window_handle {
+                                        let app_entity = cx.entity().clone();
+                                        cx.defer(move |cx| {
+                                            let _ = main_handle.update(cx, |_root, main_window, cx| {
+                                                main_window.activate_window();
+                                                app_entity.update(cx, |this, cx| {
+                                                    this.open_project_browse(main_window, cx);
+                                                });
                                             });
                                         });
-                                    });
+                                    }
+                                } else {
+                                    app_state.open_project_browse(window, cx);
                                 }
                             });
                         }
@@ -957,12 +967,14 @@ impl Render for SettingsWindow {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" {
                     if let Some(app) = this.app.upgrade() {
-                        app.update(cx, |app_state, _cx| {
-                            app_state.settings_window_handle = None;
-                            app_state.settings_window_view = None;
-                        });
+                        if app.read(cx).settings_window_handle.is_some() {
+                            app.update(cx, |app_state, _cx| {
+                                app_state.settings_window_handle = None;
+                                app_state.settings_window_view = None;
+                            });
+                            window.remove_window();
+                        }
                     }
-                    window.remove_window();
                 }
             }))
             .child(SettingsShell::new(active_tab, on_select_tab, content))

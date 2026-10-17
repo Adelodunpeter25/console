@@ -84,6 +84,20 @@ pub enum WorkspaceTabConfig {
         #[serde(rename = "lastActiveAtMs")]
         last_active_at_ms: Option<i64>,
     },
+    #[serde(rename = "settings")]
+    Settings {
+        #[serde(default = "default_settings_title")]
+        title: String,
+        #[serde(default, rename = "activeTab", skip_serializing_if = "Option::is_none")]
+        active_tab: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "lastActiveAtMs")]
+        last_active_at_ms: Option<i64>,
+    },
+}
+
+fn default_settings_title() -> String {
+    "Settings".to_string()
 }
 
 impl WorkspaceTabConfig {
@@ -98,6 +112,7 @@ impl WorkspaceTabConfig {
             Self::ChangesReview {
                 session_id, scope, ..
             } => format!("changesReview:{session_id}:{scope:?}"),
+            Self::Settings { .. } => "settings".to_string(),
         }
     }
 
@@ -108,7 +123,8 @@ impl WorkspaceTabConfig {
             | Self::File { title, .. }
             | Self::Diff { title, .. }
             | Self::Browser { title, .. }
-            | Self::ChangesReview { title, .. } => title,
+            | Self::ChangesReview { title, .. }
+            | Self::Settings { title, .. } => title,
         }
     }
 
@@ -120,7 +136,8 @@ impl WorkspaceTabConfig {
             | Self::File { title: t, .. }
             | Self::Diff { title: t, .. }
             | Self::Browser { title: t, .. }
-            | Self::ChangesReview { title: t, .. } => *t = title,
+            | Self::ChangesReview { title: t, .. }
+            | Self::Settings { title: t, .. } => *t = title,
         }
     }
 
@@ -132,6 +149,7 @@ impl WorkspaceTabConfig {
             | Self::Diff { project_id, .. }
             | Self::Browser { project_id, .. }
             | Self::ChangesReview { project_id, .. } => project_id.as_deref(),
+            Self::Settings { .. } => None,
         }
     }
 
@@ -143,6 +161,7 @@ impl WorkspaceTabConfig {
             | Self::Diff { project_id: p, .. }
             | Self::Browser { project_id: p, .. }
             | Self::ChangesReview { project_id: p, .. } => *p = project_id,
+            Self::Settings { .. } => {}
         }
     }
 
@@ -164,6 +183,9 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::ChangesReview {
+                last_active_at_ms, ..
+            }
+            | Self::Settings {
                 last_active_at_ms, ..
             } => *last_active_at_ms,
         }
@@ -187,6 +209,9 @@ impl WorkspaceTabConfig {
                 last_active_at_ms, ..
             }
             | Self::ChangesReview {
+                last_active_at_ms, ..
+            }
+            | Self::Settings {
                 last_active_at_ms, ..
             } => *last_active_at_ms = ts_ms,
         }

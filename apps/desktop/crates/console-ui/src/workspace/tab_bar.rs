@@ -315,6 +315,16 @@ impl RenderOnce for WorkspaceTabBar {
                                     },
                                 )
                                 .into_any_element(),
+                                console_core::WorkspaceTabConfig::Settings { .. } => app_icon(
+                                    IconName::Settings,
+                                    11.0,
+                                    if is_active {
+                                        theme.text
+                                    } else {
+                                        theme.text_tertiary
+                                    },
+                                )
+                                .into_any_element(),
                             })
                             // Tab Title
                             .child(

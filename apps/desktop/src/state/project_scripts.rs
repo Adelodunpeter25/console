@@ -88,6 +88,7 @@ impl ConsoleDesktopApp {
                 // The chat's workspace key (project, or project + worktree).
                 .and_then(|s| self.workspace_key_for_header(s))
                 .or(project_id.clone()),
+            console_core::WorkspaceTabConfig::Settings { .. } => None,
             console_core::WorkspaceTabConfig::File { project_id, .. }
             | console_core::WorkspaceTabConfig::Diff { project_id, .. }
             | console_core::WorkspaceTabConfig::Terminal { project_id, .. }
