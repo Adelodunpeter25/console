@@ -6,6 +6,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,10 +17,24 @@ import (
 
 const testGHPAT = "ghp_testtoken1234567890"
 
+// clearGHEnv removes any operator-exported token for the test. AppendToEnv
+// lets an explicit GH_TOKEN/GITHUB_TOKEN win over the stored credential, so a
+// developer machine (or CI) that exports one would otherwise suppress the
+// injection these tests exercise. t.Setenv registers the restore; the Unsetenv
+// then makes the variable genuinely absent rather than empty.
+func clearGHEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{"GH_TOKEN", "GITHUB_TOKEN"} {
+		t.Setenv(key, "")
+		os.Unsetenv(key)
+	}
+}
+
 // withTempCreds points the credential file at a temp dir and stores a fake
 // PAT. SaveCredential only writes the file — no network.
 func withTempCreds(t *testing.T) {
 	t.Helper()
+	clearGHEnv(t)
 	t.Setenv("GITHUB_CREDENTIALS_PATH", filepath.Join(t.TempDir(), "github-creds.json"))
 	if err := github.SaveCredential(github.Credential{Token: testGHPAT, Username: "octocat"}); err != nil {
 		t.Fatalf("save credential: %v", err)
@@ -28,6 +43,7 @@ func withTempCreds(t *testing.T) {
 
 func withNoCreds(t *testing.T) {
 	t.Helper()
+	clearGHEnv(t)
 	t.Setenv("GITHUB_CREDENTIALS_PATH", filepath.Join(t.TempDir(), "missing.json"))
 }
 
