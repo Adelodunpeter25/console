@@ -1,8 +1,12 @@
 package run
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // backgroundContext claims completed detached work immediately before a
@@ -19,6 +23,10 @@ func (s *Service) backgroundContext(sessionID string) string {
 	if len(completed) == 0 {
 		return ""
 	}
+	return s.renderBackgroundWork(sessionID, completed)
+}
+
+func (s *Service) renderBackgroundWork(sessionID string, completed []services.BackgroundWork) string {
 	lines := make([]string, 0, len(completed)*6)
 	for _, item := range completed {
 		lines = append(lines, fmt.Sprintf("Background work completed: %s (%s)", item.ID, item.Kind))
@@ -56,4 +64,54 @@ func (s *Service) backgroundContext(sessionID string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// wakeIfIdle continues an idle session when finished background work is
+// waiting to be delivered. While a run is active nothing is needed: the next
+// provider request claims the completion. A lost race (a user turn started
+// first) is fine for the same reason.
+func (s *Service) wakeIfIdle(sessionID string) {
+	work := s.BackgroundWorkManager()
+	if work == nil || s.sessions == nil || s.IsActive(sessionID) || !work.HasUndelivered(sessionID) {
+		return
+	}
+	if _, err := s.StartRun(sessionID, Prompt{Synthetic: true}); err != nil && !errors.Is(err, ErrActive) {
+		slog.Warn("background wake failed", "session", sessionID, "error", err)
+	}
+}
+
+// wakeContext claims the finished work and renders the synthetic user turn.
+// It returns false when nothing is left to deliver.
+func (s *Service) wakeContext(sessionID string) (string, []services.BackgroundWork, bool) {
+	work := s.BackgroundWorkManager()
+	if work == nil {
+		return "", nil, false
+	}
+	items := work.TakeCompletions(sessionID)
+	if len(items) == 0 {
+		return "", nil, false
+	}
+	return "Background work finished while you were idle. Review the results and continue the task.\n\n" + s.renderBackgroundWork(sessionID, items), items, true
+}
+
+// wakeMessage is the short human label carried on the wake event so clients
+// can say what resumed the agent.
+func wakeMessage(items []services.BackgroundWork) string {
+	shell, sub := false, false
+	for _, item := range items {
+		switch item.Kind {
+		case services.BackgroundWorkShell:
+			shell = true
+		case services.BackgroundWorkSubagent:
+			sub = true
+		}
+	}
+	switch {
+	case shell && sub:
+		return "Background work completed, continuing agent"
+	case sub:
+		return "Subagent completed, continuing agent"
+	default:
+		return "Bash tool completed, continuing agent"
+	}
 }

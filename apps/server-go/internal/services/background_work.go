@@ -257,6 +257,24 @@ func (m *BackgroundWorkManager) TakeCompletions(sessionID string) []BackgroundWo
 	return out
 }
 
+// HasUndelivered reports whether the session has finished work the parent has
+// not seen yet. Cancelled work is ignored: a kill or abort is already known to
+// whoever requested it and must never wake an idle session.
+func (m *BackgroundWorkManager) HasUndelivered(sessionID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, rec := range m.works {
+		if rec.work.SessionID != sessionID || rec.delivered {
+			continue
+		}
+		switch rec.work.Status {
+		case BackgroundWorkCompleted, BackgroundWorkFailed, BackgroundWorkTimedOut:
+			return true
+		}
+	}
+	return false
+}
+
 func (m *BackgroundWorkManager) ownedLocked(workID, sessionID string) (*backgroundWorkRecord, error) {
 	rec, ok := m.works[workID]
 	if !ok || rec.work.SessionID != sessionID {

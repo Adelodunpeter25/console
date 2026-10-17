@@ -902,6 +902,10 @@ impl ConsoleDesktopApp {
                 // unified work panel without changing transcript semantics.
                 let _ = work;
             }
+            AgentSessionEvent::BackgroundWorkContinue { .. } => {
+                // The server resumed an idle session; the wake turn is hidden
+                // and its output streams like any other turn.
+            }
             AgentSessionEvent::Compaction { summary, .. } => {
                 self.set_agent_notice_for_session(
                     run_session_id,

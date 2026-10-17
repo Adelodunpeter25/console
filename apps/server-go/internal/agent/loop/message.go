@@ -83,6 +83,9 @@ type UserMessage struct {
 	ContextFiles []string                  `json:"contextFiles,omitempty"`
 	Attachments  []ImageAttachment         `json:"attachments,omitempty"`
 	Annotations  []types.BrowserAnnotation `json:"annotations,omitempty"`
+	// Synthetic marks a server-injected turn (e.g. background work finished)
+	// that the model sees but clients never render.
+	Synthetic bool `json:"synthetic,omitempty"`
 }
 
 // RenderedAnnotations returns the <browser_annotation> markup for a set of

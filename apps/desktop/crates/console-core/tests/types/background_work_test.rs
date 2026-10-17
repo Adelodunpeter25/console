@@ -33,3 +33,20 @@ fn background_work_events_deserialize_without_nested_event_payload() {
         other => panic!("wrong event: {other:?}"),
     }
 }
+
+#[test]
+fn background_work_continue_event_deserializes() {
+    let json = r#"{
+        "type": "backgroundWorkContinue",
+        "message": "Bash tool completed, continuing agent",
+        "work": []
+    }"#;
+
+    match serde_json::from_str::<AgentSessionEvent>(json).unwrap() {
+        AgentSessionEvent::BackgroundWorkContinue { message, work } => {
+            assert_eq!(message, "Bash tool completed, continuing agent");
+            assert!(work.is_empty());
+        }
+        other => panic!("wrong event: {other:?}"),
+    }
+}

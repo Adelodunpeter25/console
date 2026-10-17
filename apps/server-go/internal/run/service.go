@@ -43,6 +43,11 @@ type Prompt struct {
 	Thinking     string
 	Attachments  []Attachment
 	Annotations  []types.BrowserAnnotation
+	// Synthetic marks a server-initiated wake turn (finished background work
+	// continuing an idle session). Its text is built from the claimed work.
+	Synthetic bool
+	// woken lists the work that triggered a synthetic turn (wire event only).
+	woken []services.BackgroundWork
 }
 
 type activeRun struct {
@@ -164,6 +169,10 @@ func (s *Service) backgroundWorkListener(event services.BackgroundWorkEvent) {
 	s.mu.Unlock()
 	if ar != nil {
 		ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
+	}
+	switch event.Work.Status {
+	case services.BackgroundWorkCompleted, services.BackgroundWorkFailed, services.BackgroundWorkTimedOut:
+		s.wakeIfIdle(event.Work.SessionID)
 	}
 }
 

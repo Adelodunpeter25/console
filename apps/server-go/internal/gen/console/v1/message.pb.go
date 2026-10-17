@@ -304,11 +304,13 @@ func (x *BrowserAnnotation) GetScreenshotBase64() string {
 }
 
 type AgentUserMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
-	ContextFiles  []string               `protobuf:"bytes,2,rep,name=context_files,json=contextFiles,proto3" json:"context_files,omitempty"`
-	Attachments   []*ImageAttachment     `protobuf:"bytes,3,rep,name=attachments,proto3" json:"attachments,omitempty"`
-	Annotations   []*BrowserAnnotation   `protobuf:"bytes,4,rep,name=annotations,proto3" json:"annotations,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Content      string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	ContextFiles []string               `protobuf:"bytes,2,rep,name=context_files,json=contextFiles,proto3" json:"context_files,omitempty"`
+	Attachments  []*ImageAttachment     `protobuf:"bytes,3,rep,name=attachments,proto3" json:"attachments,omitempty"`
+	Annotations  []*BrowserAnnotation   `protobuf:"bytes,4,rep,name=annotations,proto3" json:"annotations,omitempty"`
+	// Server-injected turn (e.g. background work finished); never shown in chat.
+	Synthetic     bool `protobuf:"varint,5,opt,name=synthetic,proto3" json:"synthetic,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -369,6 +371,13 @@ func (x *AgentUserMessage) GetAnnotations() []*BrowserAnnotation {
 		return x.Annotations
 	}
 	return nil
+}
+
+func (x *AgentUserMessage) GetSynthetic() bool {
+	if x != nil {
+		return x.Synthetic
+	}
+	return false
 }
 
 type TextPart struct {
@@ -1030,12 +1039,13 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\x10_source_locationB\a\n" +
 	"\x05_roleB\x12\n" +
 	"\x10_accessible_nameB\x14\n" +
-	"\x12_screenshot_base64\"\xd1\x01\n" +
+	"\x12_screenshot_base64\"\xef\x01\n" +
 	"\x10AgentUserMessage\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12#\n" +
 	"\rcontext_files\x18\x02 \x03(\tR\fcontextFiles\x12=\n" +
 	"\vattachments\x18\x03 \x03(\v2\x1b.console.v1.ImageAttachmentR\vattachments\x12?\n" +
-	"\vannotations\x18\x04 \x03(\v2\x1d.console.v1.BrowserAnnotationR\vannotations\"f\n" +
+	"\vannotations\x18\x04 \x03(\v2\x1d.console.v1.BrowserAnnotationR\vannotations\x12\x1c\n" +
+	"\tsynthetic\x18\x05 \x01(\bR\tsynthetic\"f\n" +
 	"\bTextPart\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x120\n" +
 	"\x11thought_signature\x18\x02 \x01(\tH\x00R\x10thoughtSignature\x88\x01\x01B\x14\n" +

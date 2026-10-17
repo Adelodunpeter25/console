@@ -25,3 +25,22 @@ func marshalProtoList[T proto.Message](items []T) (json.RawMessage, error) {
 	}
 	return json.Marshal(elements)
 }
+
+// visibleMessages drops server-injected (synthetic) user turns, such as the
+// wake-up message for finished background work. The model keeps them in its
+// history; clients never render them.
+func visibleMessages(messages []json.RawMessage) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(messages))
+	for _, raw := range messages {
+		var probe struct {
+			User *struct {
+				Synthetic bool `json:"synthetic"`
+			} `json:"user"`
+		}
+		if json.Unmarshal(raw, &probe) == nil && probe.User != nil && probe.User.Synthetic {
+			continue
+		}
+		out = append(out, raw)
+	}
+	return out
+}

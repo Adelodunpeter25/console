@@ -128,6 +128,13 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 	}
 	staged, ok := s.takeStaged(sessionID)
 	if !ok {
+		// Work that finished while this run was settling would otherwise be
+		// stranded: the listener saw an active run and skipped the wake.
+		if turnErr == nil && ctx.Err() == nil {
+			if work := s.BackgroundWorkManager(); work != nil && work.HasUndelivered(sessionID) {
+				return Prompt{Synthetic: true}, true
+			}
+		}
 		return Prompt{}, false
 	}
 	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated})
@@ -139,7 +146,7 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 func countUserMessages(history []any) int {
 	n := 0
 	for _, msg := range history {
-		if _, ok := msg.(loop.UserMessage); ok {
+		if user, ok := msg.(loop.UserMessage); ok && !user.Synthetic {
 			n++
 		}
 	}
@@ -226,6 +233,17 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	header := loaded.Header
 
+	// A synthetic turn is the server waking an idle session for finished
+	// background work. The claimed results become the (hidden) user message;
+	// if another turn already took them there is nothing to do.
+	if dto.Synthetic {
+		text, items, ok := s.wakeContext(sessionID)
+		if !ok {
+			return nil
+		}
+		dto.Text, dto.woken = text, items
+	}
+
 	// /computer-use activates computer use for the session. The model has no
 	// prior knowledge of it, so the command is matched here rather than
 	// discovered. The message itself is never rewritten: what the user typed
@@ -284,6 +302,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		Content:      dto.Text,
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
+		Synthetic:    dto.Synthetic,
 	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})
@@ -313,6 +332,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// A turn is one user message: its index is how many user messages the
 	// session already holds (compaction never rewrites stored history).
 	turn := turnRef{Index: countUserMessages(history), UserMessageID: "msg_" + randomHex(16)}
+	if dto.Synthetic && turn.Index > 0 {
+		// Wake turns belong to the user turn that started the work.
+		turn.Index--
+	}
 	// File baselines are per turn: the first touch of a path in this turn
 	// captures its "before" side, so repeated edits record the net change.
 	s.snapshots.drop(sessionID)
@@ -461,7 +484,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	agent.ThinkingLevel = effectiveThinking
 	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
 
-	hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
+	if dto.Synthetic {
+		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
+		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart})
+	} else {
+		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
+	}
 
 	// First user turn on a placeholder title: generate one in the
 	// background. Only applied if still generic.

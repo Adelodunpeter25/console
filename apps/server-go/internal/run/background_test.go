@@ -63,7 +63,7 @@ func TestBackgroundContextIncludesCompletedShellOutput(t *testing.T) {
 	}
 	deadline := time.Now().Add(time.Second)
 	for {
-		final, waitErr := jobs.Wait(snapshot.JobID, "session-1", 50)
+		final, waitErr := jobs.Status(snapshot.JobID, "session-1")
 		if waitErr != nil {
 			t.Fatal(waitErr)
 		}
@@ -73,6 +73,7 @@ func TestBackgroundContextIncludesCompletedShellOutput(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatal("background shell did not finish")
 		}
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	context := service.backgroundContext("session-1")

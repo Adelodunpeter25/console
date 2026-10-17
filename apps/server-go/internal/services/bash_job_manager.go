@@ -19,7 +19,6 @@ const (
 	bashJobMaxRunning       = 10
 	bashJobMaxRetained      = 50
 	bashJobRetention        = 30 * time.Minute
-	BashJobMaxWaitMs        = 120 * 1000
 )
 
 type BashJobStatus string
@@ -69,7 +68,6 @@ type bashJobRecord struct {
 	rawExit                      int
 	timer                        *time.Timer
 	retentionTimer               *time.Timer
-	waiters                      []chan struct{}
 	ownerSessionID               string
 	workManager                  *BackgroundWorkManager
 }
@@ -308,7 +306,6 @@ func (m *BashJobManager) maybeFinish(rec *bashJobRecord) {
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
 	}
 	m.scheduleRetention(rec)
-	m.notify(rec)
 	m.notifyBackgroundWork(rec)
 }
 
@@ -328,7 +325,6 @@ func (m *BashJobManager) expire(rec *bashJobRecord) {
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
 	}
 	m.scheduleRetention(rec)
-	m.notify(rec)
 	m.notifyBackgroundWork(rec)
 }
 
@@ -404,35 +400,6 @@ func (m *BashJobManager) Output(jobID, ownerSessionID string, cursor, limit int)
 	}, nil
 }
 
-// Wait blocks until jobID settles or waitMs elapses, whichever first.
-func (m *BashJobManager) Wait(jobID, ownerSessionID string, waitMs int) (BashJobSnapshot, error) {
-	rec, err := m.getOwned(jobID, ownerSessionID)
-	if err != nil {
-		return BashJobSnapshot{}, err
-	}
-	rec.mu.Lock()
-	if rec.Status != BashJobRunning {
-		snap := rec.snapshotLocked()
-		rec.mu.Unlock()
-		return snap, nil
-	}
-	ch := make(chan struct{})
-	rec.waiters = append(rec.waiters, ch)
-	rec.mu.Unlock()
-
-	if waitMs <= 0 {
-		waitMs = 10_000
-	}
-	if waitMs > BashJobMaxWaitMs {
-		waitMs = BashJobMaxWaitMs
-	}
-	select {
-	case <-ch:
-	case <-time.After(time.Duration(waitMs) * time.Millisecond):
-	}
-	return rec.snapshot(), nil
-}
-
 // Kill terminates jobID's process tree (SIGTERM, escalating to SIGKILL).
 func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, error) {
 	rec, err := m.getOwned(jobID, ownerSessionID)
@@ -459,7 +426,6 @@ func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, er
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
 	}
 	m.scheduleRetention(rec)
-	m.notify(rec)
 	return rec.snapshot(), nil
 }
 
@@ -541,7 +507,6 @@ func (m *BashJobManager) killRecord(rec *bashJobRecord) {
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: jobID})
 	}
 	m.scheduleRetention(rec)
-	m.notify(rec)
 	m.notifyBackgroundWork(rec)
 }
 
@@ -553,16 +518,6 @@ func (m *BashJobManager) scheduleRetention(rec *bashJobRecord) {
 	jobID := rec.JobID
 	rec.retentionTimer = time.AfterFunc(bashJobRetention, func() { m.delete(jobID) })
 	rec.mu.Unlock()
-}
-
-func (m *BashJobManager) notify(rec *bashJobRecord) {
-	rec.mu.Lock()
-	waiters := rec.waiters
-	rec.waiters = nil
-	rec.mu.Unlock()
-	for _, ch := range waiters {
-		close(ch)
-	}
 }
 
 func (m *BashJobManager) notifyBackgroundWork(rec *bashJobRecord) {

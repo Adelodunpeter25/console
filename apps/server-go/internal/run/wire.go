@@ -387,6 +387,11 @@ func WireFrame(e loop.Event) (string, any, bool) {
 			"type": string(work.Type),
 			"work": work.Work,
 		}, false
+	case loop.EventBackgroundContinue:
+		work, _ := e.Message.([]services.BackgroundWork)
+		return "backgroundWorkContinue", map[string]any{
+			"type": "backgroundWorkContinue", "message": e.Text, "work": work,
+		}, false
 	case loop.EventError:
 		raw, err := wireProtoMarshal.Marshal(&consolev1.ErrorPayload{Message: e.Text})
 		if err != nil {

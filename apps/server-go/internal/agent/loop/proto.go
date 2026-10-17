@@ -102,7 +102,7 @@ func MessageFromProtoBytes(raw []byte) (any, error) {
 }
 
 func userToProto(m UserMessage) *consolev1.AgentUserMessage {
-	out := &consolev1.AgentUserMessage{Content: m.Content}
+	out := &consolev1.AgentUserMessage{Content: m.Content, Synthetic: m.Synthetic}
 	out.ContextFiles = append(out.ContextFiles, m.ContextFiles...)
 	for _, a := range m.Attachments {
 		out.Attachments = append(out.Attachments, &consolev1.ImageAttachment{
@@ -212,7 +212,7 @@ func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, er
 }
 
 func protoToUser(m *consolev1.AgentUserMessage) UserMessage {
-	out := UserMessage{Role: RoleUser, Content: m.GetContent()}
+	out := UserMessage{Role: RoleUser, Content: m.GetContent(), Synthetic: m.GetSynthetic()}
 	out.ContextFiles = append(out.ContextFiles, m.GetContextFiles()...)
 	for _, a := range m.GetAttachments() {
 		out.Attachments = append(out.Attachments, ImageAttachment{
