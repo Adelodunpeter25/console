@@ -24,6 +24,14 @@ pub use console_proto::{SessionHeader, SessionWorktree};
 // default branches at each match site.
 pub trait SessionHeaderExt {
     fn display_title(&self) -> &str;
+
+    /// Sidebar ordering key: creation time.
+    ///
+    /// The sidebar used to key on last activity, so opening a session (which
+    /// refreshed only that row's timestamp) or a run producing output would
+    /// reshuffle the list. Keying on creation time keeps every row in the day
+    /// it was created and never moves it afterwards.
+    fn sort_timestamp(&self) -> i64;
 }
 
 impl SessionHeaderExt for SessionHeader {
@@ -34,6 +42,10 @@ impl SessionHeaderExt for SessionHeader {
         } else {
             trimmed
         }
+    }
+
+    fn sort_timestamp(&self) -> i64 {
+        self.created_at
     }
 }
 

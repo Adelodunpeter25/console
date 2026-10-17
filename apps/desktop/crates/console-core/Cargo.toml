@@ -108,3 +108,7 @@ path = "tests/network/wt_interop_test.rs"
 [[test]]
 name = "wt_service_test"
 path = "tests/network/wt_service_test.rs"
+
+[[test]]
+name = "sidebar_sort_timestamp_test"
+path = "tests/session/sidebar_sort_timestamp_test.rs"

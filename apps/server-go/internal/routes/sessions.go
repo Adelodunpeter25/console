@@ -175,9 +175,10 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
 		// Settle stale working state on read, mirroring getSession: a chat
-		// whose run is gone is done, not stuck working.
+		// whose run is gone is done, not stuck working. Status-only — a read
+		// must not bump updated_at, which orders the sidebar.
 		if !runs.IsActive(id) && (result.Header.Status == "working" || result.Header.Status == "needs_attention") {
-			if err := sessions.UpdateStatus(id, "done"); err == nil {
+			if err := sessions.UpdateStatusOnly(id, "done"); err == nil {
 				result.Header.Status = "done"
 			}
 		}

@@ -311,7 +311,7 @@ impl RenderOnce for SidebarSessionItem {
                                     })
                                     .unwrap_or_else(|| {
                                         SharedString::from(format_time_ago(
-                                            session.updated_at.max(session.created_at),
+                                            session.sort_timestamp(),
                                         ))
                                     }),
                             ),

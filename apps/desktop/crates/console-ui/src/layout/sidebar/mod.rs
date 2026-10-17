@@ -9,7 +9,7 @@ pub use session_item::{
     render_sidebar_session_item,
 };
 
-use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader};
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
     App, Entity, FontWeight, InteractiveElement, IntoElement, ListState, MouseButton,
     ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, list,
@@ -245,7 +245,7 @@ impl RenderOnce for SidebarView {
             if draft_sessions.contains(&session.id) {
                 0
             } else {
-                session.updated_at.max(session.created_at)
+                session.sort_timestamp()
             }
         };
         let grouped: Vec<(SessionDateGroup, Vec<usize>)> =

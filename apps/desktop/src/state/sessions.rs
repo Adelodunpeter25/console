@@ -842,7 +842,7 @@ impl ConsoleDesktopApp {
             if draft_ids.contains(&session.id) {
                 0
             } else {
-                session.updated_at.max(session.created_at)
+                session.sort_timestamp()
             }
         };
         let mut ids = Vec::new();

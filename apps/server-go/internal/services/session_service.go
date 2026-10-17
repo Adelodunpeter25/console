@@ -302,6 +302,10 @@ func (s *SessionService) UpdateStatus(sessionID, status string) error {
 	return s.inner.UpdateStatus(sessionID, status)
 }
 
+func (s *SessionService) UpdateStatusOnly(sessionID, status string) error {
+	return s.inner.UpdateStatusOnly(sessionID, status)
+}
+
 func (s *SessionService) GetSubagents(sessionID string) ([]types.SubagentInfo, error) {
 	return s.inner.GetSubagents(sessionID)
 }

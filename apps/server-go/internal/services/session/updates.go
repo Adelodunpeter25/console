@@ -428,6 +428,16 @@ func (s *Service) UpdateStatus(sessionID, status string) error {
 	return err
 }
 
+// UpdateStatusOnly sets the indexed status without touching updated_at. Read
+// paths that settle a stale working chat use this: a GET must not reorder the
+// sidebar, whose sort key is updated_at.
+func (s *Service) UpdateStatusOnly(sessionID, status string) error {
+	_, err := s.manager.Global().Exec(
+		`UPDATE sessions SET status = ? WHERE id = ?`,
+		status, sessionID)
+	return err
+}
+
 // GetSubagents returns live (running) subagents
 // only, empty for unknown sessions.
 func (s *Service) GetSubagents(sessionID string) ([]types.SubagentInfo, error) {
