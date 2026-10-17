@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,6 +93,8 @@ fun TerminalScreen(onBack: () -> Unit) {
     val needsProjectPick = project == null && projectState.projects.isNotEmpty()
     var terminalId by remember(project?.id, project?.path) { mutableStateOf<String?>(null) }
     var spawnError by remember(project?.id, project?.path) { mutableStateOf<String?>(null) }
+    // The hidden EditText inside this view owns the IME, so the keyboard button has to go through it.
+    var terminalView by remember { mutableStateOf<NativeTerminalView?>(null) }
 
     // Spawn or reuse on entry (80×24 default; resize follows surface — PTY reflows).
     LaunchedEffect(project?.id, project?.path) {
@@ -180,11 +184,16 @@ fun TerminalScreen(onBack: () -> Unit) {
                                 terminalId = terminalId,
                                 buffer = buffer,
                                 isRunning = isRunning,
+                                onViewChanged = { terminalView = it },
                             )
                         }
                     }
                 }
                 ExtraKeysBar(
+                    onToggleKeyboard = { visible ->
+                        val view = terminalView ?: return@ExtraKeysBar
+                        if (visible) view.hideKeyboard() else view.requestKeyboardFocus()
+                    },
                     onExtraKey = { bytes ->
                         val id = terminalId ?: return@ExtraKeysBar
                         scope.launch { withContext(Dispatchers.IO) { AppContainer.terminalRepository.write(id, bytes) } }
@@ -197,7 +206,7 @@ fun TerminalScreen(onBack: () -> Unit) {
 
 /** Hosts NativeTerminalView (Ghostty JNI renderer) inside Compose. */
 @Composable
-private fun GhosttyTerminalSurface(terminalId: String?, buffer: String, isRunning: Boolean) {
+private fun GhosttyTerminalSurface(terminalId: String?, buffer: String, isRunning: Boolean, onViewChanged: (NativeTerminalView?) -> Unit) {
     val scope = rememberCoroutineScope()
     val terminalIdState = rememberUpdatedState(terminalId)
     AndroidView(
@@ -215,8 +224,12 @@ private fun GhosttyTerminalSurface(terminalId: String?, buffer: String, isRunnin
         },
         update = { view ->
             view.initialBuffer = buffer
+            onViewChanged(view)
         },
-        onRelease = { view -> view.cleanup() },
+        onRelease = { view ->
+            onViewChanged(null)
+            view.cleanup()
+        },
         modifier = Modifier.fillMaxSize(),
     )
     DisposableEffect(Unit) {
@@ -248,9 +261,10 @@ private fun ProjectPicker(projects: List<ProjectInfo>, onSelect: (String) -> Uni
 
 /** PTY control strip: extra keys the soft keyboard cannot produce. */
 @Composable
-private fun ExtraKeysBar(onExtraKey: (String) -> Unit) {
-    val keyboard = LocalSoftwareKeyboardController.current
-    var kbVisible by remember { mutableStateOf(false) }
+@OptIn(ExperimentalLayoutApi::class)
+private fun ExtraKeysBar(onToggleKeyboard: (keyboardVisible: Boolean) -> Unit, onExtraKey: (String) -> Unit) {
+    // Ask the system instead of tracking a flag: Back or a swipe can dismiss the IME behind our back.
+    val kbVisible = WindowInsets.isImeVisible
     Row(
         modifier = Modifier.fillMaxWidth().background(NewTheme.Background).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -258,7 +272,7 @@ private fun ExtraKeysBar(onExtraKey: (String) -> Unit) {
     ) {
         Box(
             modifier = Modifier.size(38.dp).clip(RoundedCornerShape(NewTheme.ChipRadius)).background(NewTheme.Card)
-                .clickable(onClickLabel = "Toggle keyboard") { if (kbVisible) keyboard?.hide() else keyboard?.show(); kbVisible = !kbVisible },
+                .clickable(onClickLabel = "Toggle keyboard") { onToggleKeyboard(kbVisible) },
             contentAlignment = Alignment.Center,
         ) {
             Icon(if (kbVisible) TablerIcons.Outline.KeyboardOff else TablerIcons.Outline.Keyboard, contentDescription = "Toggle keyboard", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
