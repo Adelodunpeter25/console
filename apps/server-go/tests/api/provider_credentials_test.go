@@ -4,6 +4,7 @@ package tests
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -122,33 +123,40 @@ func TestStoreFileIsNotWorldReadable(t *testing.T) {
 	}
 }
 
-func TestOpenCodePrefersEnvThenStoredThenPublic(t *testing.T) {
+func TestOpenCodeRequiresAKey(t *testing.T) {
 	useTempKeyStore(t)
 
-	// No key at all: the free tier, unchanged from before this existed.
-	if got := opencode.APIKey(); got != "public" {
-		t.Fatalf("with nothing configured the provider must stay anonymous, got %q", got)
+	// Go has no anonymous tier. Unconfigured must be a hard, named error — not
+	// a fallback identity, which would have silently run the user's traffic on
+	// someone else's free plan.
+	if got, err := opencode.APIKey(); err == nil {
+		t.Fatalf("expected an error with no key configured, got %q", got)
+	} else if !errors.Is(err, opencode.ErrNoAPIKey) {
+		t.Fatalf("expected ErrNoAPIKey, got %v", err)
+	}
+	if got, _ := opencode.APIKey(); got != "" {
+		t.Fatalf("a failed resolution must not leak a credential, got %q", got)
 	}
 
 	// A stored key is used once present.
 	if err := apikeys.Set("opencode", "stored-key"); err != nil {
 		t.Fatal(err)
 	}
-	if got := opencode.APIKey(); got != "stored-key" {
-		t.Fatalf("stored key not used, got %q", got)
+	if got, err := opencode.APIKey(); err != nil || got != "stored-key" {
+		t.Fatalf("stored key not used: %q %v", got, err)
 	}
 
 	// Env wins over stored, so CI can override a configured server.
 	t.Setenv("OPENCODE_API_KEY", "env-key")
-	if got := opencode.APIKey(); got != "env-key" {
-		t.Fatalf("env should win over stored, got %q", got)
+	if got, err := opencode.APIKey(); err != nil || got != "env-key" {
+		t.Fatalf("env should win over stored: %q %v", got, err)
 	}
 
 	// Whitespace-only env must not shadow a stored key — a stray newline in a
 	// CI secret file would otherwise silently break a working configuration.
 	t.Setenv("OPENCODE_API_KEY", "   ")
-	if got := opencode.APIKey(); got != "stored-key" {
-		t.Fatalf("blank env must fall through to stored, got %q", got)
+	if got, err := opencode.APIKey(); err != nil || got != "stored-key" {
+		t.Fatalf("blank env must fall through to stored: %q %v", got, err)
 	}
 }
 
@@ -162,10 +170,61 @@ func TestSetCommonHeadersCarriesTheStoredKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opencode.SetCommonHeaders(req, "")
+	if err := opencode.SetCommonHeaders(req, ""); err != nil {
+		t.Fatalf("set headers: %v", err)
+	}
 
 	if got := req.Header.Get("Authorization"); got != "Bearer sk-header-key" {
 		t.Fatalf("Authorization must carry the stored key, got %q", got)
+	}
+}
+
+func TestSetCommonHeadersRefusesWithoutAKey(t *testing.T) {
+	useTempKeyStore(t)
+
+	req, err := http.NewRequest("GET", "https://example.invalid", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = opencode.SetCommonHeaders(req, "")
+	if !errors.Is(err, opencode.ErrNoAPIKey) {
+		t.Fatalf("expected ErrNoAPIKey, got %v", err)
+	}
+	// Sending an unauthenticated request would surface as an opaque upstream
+	// 401 instead of naming the thing the user can fix.
+	if got := req.Header.Get("Authorization"); got != "" {
+		t.Fatalf("no Authorization header may be set without a key, got %q", got)
+	}
+}
+
+func TestFetchModelsRefusesWithoutAKey(t *testing.T) {
+	useTempKeyStore(t)
+
+	// The credential check must happen before the network call, so an
+	// unconfigured server reports the real problem.
+	_, err := opencode.FetchModels(t.Context(), nil, "https://example.invalid")
+	if !errors.Is(err, opencode.ErrNoAPIKey) {
+		t.Fatalf("expected ErrNoAPIKey, got %v", err)
+	}
+}
+
+func TestFreeTierIdentityIsNeverSent(t *testing.T) {
+	useTempKeyStore(t)
+	t.Setenv("OPENCODE_API_KEY", "")
+
+	// Regression guard. The provider used to end in "public", Zen's anonymous
+	// shared bearer, so an unconfigured server consumed the free tier while
+	// looking identical to a paid one. Asserted behaviorally: whatever the
+	// resolution path, no request may carry that identity.
+	req, err := http.NewRequest("GET", "https://example.invalid", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := opencode.SetCommonHeaders(req, ""); err == nil {
+		t.Fatal("an unconfigured provider must not produce a usable request")
+	}
+	if got := req.Header.Get("Authorization"); strings.Contains(got, "public") {
+		t.Fatalf("free-tier identity sent: %q", got)
 	}
 }
 

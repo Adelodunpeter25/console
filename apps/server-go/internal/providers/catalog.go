@@ -34,15 +34,17 @@ func ListProviders() []types.ProviderEntry {
 			Models:      claude.Snapshot(), AuthMethod: "oauth",
 		},
 		{
-			Name: "opencode", DisplayName: "OpenCode Zen",
-			Description: "Free-tier models through the direct OpenCode Zen API",
-			// "api-key", not "none": Zen serves a free tier anonymously, but
-			// also accepts a personal key, and both clients hide providers
-			// whose auth_method is "none" — so "none" would make the field
-			// unreachable. A key is optional here: with none stored the
-			// provider still works on the free tier, and the status endpoint
-			// reports configured=false rather than this lying about it.
-			Models: DefaultOpenCodeModels(), AuthMethod: "api-key",
+			Name: "opencode", DisplayName: "OpenCode Go",
+			Description: "Subscription models through the OpenCode Go API",
+			// "api-key", not "none": both clients hide providers whose
+			// auth_method is "none", which would make the field unreachable.
+			//
+			// Models is deliberately empty. Go's lineup is account-scoped and
+			// changes often, so a static list here would drift immediately; the
+			// pickers read /api/providers/opencode/models instead, and
+			// ResolveLiveModel covers individual lookups. Note the key is now
+			// required rather than optional — Go has no anonymous tier.
+			Models: nil, AuthMethod: "api-key",
 		},
 	}
 }
@@ -86,20 +88,16 @@ func ClaudeModels(ctx context.Context) []types.Model {
 	return claude.CachedModels(ctx)
 }
 
-// DefaultOpenCodeModels returns the single offline fallback model.
-func DefaultOpenCodeModels() []types.Model {
-	return opencode.DefaultModels()
-}
-
-// OpenCodeModels returns the live Zen model list, falling back only to the
-// stealth model when discovery is unavailable.
-func OpenCodeModels(ctx context.Context) []types.Model {
+// OpenCodeModels returns the live Go model list.
+//
+// Unlike the other providers there is no offline fallback: the previous one was
+// a hardcoded free-tier model, and since Go has no free tier a fallback could
+// only be a lie. An unconfigured or unreachable provider now surfaces its own
+// error instead of quietly advertising a model that cannot be called.
+func OpenCodeModels(ctx context.Context) ([]types.Model, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if discovered, err := opencode.FetchModels(ctx, nil, ""); err == nil && len(discovered) > 0 {
-		return discovered
-	}
-	return DefaultOpenCodeModels()
+	return opencode.FetchModels(ctx, nil, "")
 }
 
 // SortModelsByFavorites moves favorited models first (stable).
@@ -150,6 +148,12 @@ func ResolveLiveModel(ctx context.Context, providerID, modelID string) (types.Mo
 		return claude.ResolveModel(ctx, modelID)
 	case "codex":
 		return codex.ResolveModel(ctx, modelID)
+	case "opencode":
+		// Without this, any Go model not in the (now empty) static catalog
+		// would fall through to the 128k synthetic entry in
+		// run.resolveModel — understating a 1M window by 8x and offering no
+		// effort levels.
+		return opencode.ResolveModel(ctx, modelID)
 	default:
 		return types.Model{}, false
 	}

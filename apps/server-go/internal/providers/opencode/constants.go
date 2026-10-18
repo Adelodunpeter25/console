@@ -2,6 +2,7 @@
 package opencode
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -13,19 +14,22 @@ import (
 )
 
 const (
-	// DefaultBaseURL is the public OpenCode Zen API root.
-	DefaultBaseURL = "https://opencode.ai/zen/v1"
-	// DefaultUserAgent matches the OpenCode client identity required by Zen.
+	// DefaultBaseURL is the OpenCode Go inference root. Go is a subscription
+	// plan served from a different path than the free Zen catalogue, and the
+	// two are not interchangeable: a key issued for one is not accepted by the
+	// other.
+	DefaultBaseURL = "https://opencode.ai/inference/go/v1"
+	// DefaultUserAgent matches the OpenCode client identity required by Go.
 	DefaultUserAgent = "opencode/latest/2.0.15/cli"
-	// DefaultContextWindow is used when discovery does not provide one.
+	// DefaultContextWindow is a conservative window for models models.dev does
+	// not cover yet. It is a floor, not a claim: it keeps an unknown model
+	// usable rather than guessing high, and it is only reached for the handful
+	// of models upstream ships before the catalogue catches up.
 	DefaultContextWindow = 200_000
 	// ProviderID is this provider's catalog id, and the key under which its
 	// credential is stored. Kept as a constant because the store and the
 	// catalog must agree on it.
 	ProviderID = "opencode"
-	// publicIdentity is Zen's anonymous bearer for the free tier — what this
-	// provider sent before any key existed.
-	publicIdentity = "public"
 )
 
 var (
@@ -98,46 +102,24 @@ func IsResponsesModel(modelID string) bool {
 		strings.HasPrefix(modelID, "grok-")
 }
 
-// Zen publishes no reasoning metadata: GET /zen/v1/models returns only id,
-// object, created and owned_by for every model. Thinking support therefore has
-// to be a curated table rather than discovery-driven, mirroring
-// codex.CodexThinkingLevels and claude.ClaudeThinkingLevels.
+// ErrNoAPIKey is returned when no credential is configured. Go has no anonymous
+// tier to fall back to, so this is a hard stop rather than a degraded mode: the
+// alternative — inventing an identity — would silently send the user's traffic
+// to a plan they did not choose.
+var ErrNoAPIKey = errors.New("OpenCode Go needs an API key. Add one in Settings > Providers.")
+
+// ThinkingLevelsFor reports the effort levels an OpenCode model accepts.
 //
-// Level sets are the effort vocabularies the upstream models accept per
-// models.dev. Only free models are cataloged here, so the table covers the
-// Zen free lineup only; unknown ids deliberately resolve to no levels and keep
-// the existing "provider default" behaviour.
-var (
-	// museThinkingLevels covers Muse Spark 1.2 and 1.3, which share the same
-	// five-step effort vocabulary.
-	museThinkingLevels = []string{"minimal", "low", "medium", "high", "xhigh"}
-	// deepSeekThinkingLevels covers the DeepSeek V4 free lane, which offers
-	// effort levels on top of its native hybrid thinking toggle.
-	deepSeekThinkingLevels = []string{"low", "medium", "high", "xhigh"}
-	// spaceBunnyThinkingLevels is the Stealth model's own vocabulary. It runs
-	// up to "max" and has no "minimal" step, so it cannot share the Muse Spark
-	// set even though both models expose five levels.
-	spaceBunnyThinkingLevels = []string{"low", "medium", "high", "xhigh", "max"}
-)
-
-// defaultThinkingLevel is the effort used when a level-capable model receives
-// no explicit level. "medium" is the midpoint of every declared vocabulary, so
-// it is always a member of the level set it defaults for.
-const defaultThinkingLevel = "medium"
-
-// ThinkingLevelsFor reports the effort levels an OpenCode model accepts. It
-// returns nil for models with no tunable reasoning, which callers treat as
-// "unsupported" and fall back to the provider default.
+// Reads the models.dev index rather than a curated table. See metadata.go for why
+// the table went away. Returns nil for models with no tunable reasoning — and
+// for models the index does not cover — which callers treat as "unsupported"
+// and fall back to the provider default.
 func ThinkingLevelsFor(modelID string) []string {
-	switch {
-	case strings.HasPrefix(modelID, "muse-"):
-		return museThinkingLevels
-	case strings.HasPrefix(modelID, "deepseek-"):
-		return deepSeekThinkingLevels
-	case modelID == "space-bunny-free":
-		return spaceBunnyThinkingLevels
+	md, ok := MetadataFor(modelID)
+	if !ok {
+		return nil
 	}
-	return nil
+	return md.ThinkingLevels
 }
 
 // APIKey resolves the credential to send upstream, in priority order:
@@ -146,30 +128,40 @@ func ThinkingLevelsFor(modelID string) []string {
 //     work with no stored credential at all. Env wins over stored, matching
 //     the BaseURL/UserAgent convention in this file.
 //  2. A key pasted through PUT /api/providers/opencode/credential. It lives on
-//     the server, which is the only party that talks to Zen, so a key pasted on
+//     the server, which is the only party that talks to Go, so a key pasted on
 //     any client reaches the same store.
-//  3. "public" — the free tier's shared identity, and the behavior before any
-//     of this existed. A server with no key configured keeps working exactly
-//     as it did, which is what makes storing a key safe to introduce.
-func APIKey() string {
+//
+// There is deliberately no third case. The provider previously ended in
+// "public", Zen's anonymous shared identity, so an unconfigured server quietly
+// ran on the free tier — indistinguishable, to the user, from a paid one.
+func APIKey() (string, error) {
 	if key := strings.TrimSpace(os.Getenv("OPENCODE_API_KEY")); key != "" {
-		return key
+		return key, nil
 	}
 	if key, ok := apikeys.Get(ProviderID); ok {
-		return key
+		return key, nil
 	}
-	return publicIdentity
+	return "", ErrNoAPIKey
 }
 
-// SetCommonHeaders applies the Zen identity used by model discovery and
+// SetCommonHeaders applies the Go identity used by model discovery and
 // inference. The compatibility gate is isolated here so it can be updated
 // without changing the agent loop.
-func SetCommonHeaders(req *http.Request, accept string) {
-	req.Header.Set("Authorization", "Bearer "+APIKey())
+//
+// Returns ErrNoAPIKey rather than sending an unauthenticated request, so an
+// unconfigured server fails at the call site with an actionable message instead
+// of producing an opaque 401 from upstream.
+func SetCommonHeaders(req *http.Request, accept string) error {
+	key, err := APIKey()
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("User-Agent", UserAgent())
 	req.Header.Set("x-opencode-client", "cli")
 	req.Header.Set("x-opencode-session", SessionID())
 	if accept != "" {
 		req.Header.Set("Accept", accept)
 	}
+	return nil
 }

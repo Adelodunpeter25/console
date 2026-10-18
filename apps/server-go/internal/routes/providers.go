@@ -94,7 +94,17 @@ func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService)
 		case "antigravity":
 			return encodeModelsResponse(c, id, withFavorites(providers.AntigravityModels(c.Context()), favorites))
 		case "opencode":
-			return encodeModelsResponse(c, id, withFavorites(providers.OpenCodeModels(c.Context()), favorites))
+			// Go has no offline fallback, so the error is real information:
+			// most often it is ErrNoAPIKey, which tells the user exactly what
+			// to do. Swallowing it would render an empty picker instead.
+			models, err := providers.OpenCodeModels(c.Context())
+			if err != nil {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"success": false,
+					"error":   err.Error(),
+				})
+			}
+			return encodeModelsResponse(c, id, withFavorites(models, favorites))
 		default:
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid provider '" + id + "'."})
 		}

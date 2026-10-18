@@ -50,10 +50,13 @@ func InferThinkingLevels(provider, modelID string) (levels []string, def string)
 			return []string{"minimal", "low", "medium", "high"}, "low"
 		}
 	case "opencode":
-		// Zen publishes no capability metadata, so consult the curated table
-		// shared with the OpenCode catalog.
+		// Capabilities come from models.dev, not a local table — see
+		// opencode/metadata.go.
 		if levels := opencode.ThinkingLevelsFor(modelID); len(levels) > 0 {
-			return levels, "medium"
+			// Default to the midpoint of the model's own vocabulary rather than
+			// a fixed "medium": DeepSeek V4.1 Flash accepts low/high/max, so a
+			// hardcoded medium would ship a level the provider rejects.
+			return levels, opencode.DefaultThinkingFor(levels)
 		}
 	}
 	return nil, ""

@@ -47,23 +47,22 @@ func TestCatalogListsOpenCode(t *testing.T) {
 	if entry == nil {
 		t.Fatalf("no opencode entry: %+v", entries)
 	}
-	// "api-key", not "none": Zen serves a free tier anonymously but also takes
-	// a personal key, and both clients hide providers whose auth_method is
-	// "none", so "none" would make the field unreachable. The key stays
-	// optional — see opencode.APIKey, which falls back to the public identity.
-	if entry.AuthMethod != "api-key" || len(entry.Models) != 1 || entry.Models[0].ID != "space-bunny-free" {
-		t.Fatalf("opencode fallback: %+v", entry)
+	// "api-key", not "none": both clients hide providers whose auth_method is
+	// "none", which would make the credential field unreachable. The key is
+	// required, not optional — Go has no anonymous tier (opencode.APIKey
+	// returns ErrNoAPIKey rather than falling back).
+	//
+	// Models is empty on purpose: Go's lineup is account-scoped and changes
+	// often, so a static list here would drift. The pickers read
+	// /api/providers/opencode/models instead.
+	if entry.AuthMethod != "api-key" || len(entry.Models) != 0 {
+		t.Fatalf("opencode catalog entry: %+v", entry)
 	}
 	if !providers.SupportsAPIKey("opencode") {
 		t.Fatal("auth_method api-key must be what gates the credential route")
 	}
 	if !providers.IsCatalogProvider("opencode") {
 		t.Fatal("opencode must be a catalog provider")
-	}
-	for _, model := range entry.Models {
-		if model.Provider != "opencode" || model.ContextWindow != 1_000_000 || !model.SupportsImages {
-			t.Fatalf("opencode model: %+v", model)
-		}
 	}
 }
 

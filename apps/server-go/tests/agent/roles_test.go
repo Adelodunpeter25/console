@@ -203,12 +203,12 @@ func TestOpenCodeForwardsSpaceBunnyMaxThinkingLevel(t *testing.T) {
 	rec := &modelRecorder{mock: queueMock("ok")}
 	svc.Lookup = func(id string) (loop.Provider, error) { return rec, nil }
 	header := helpers.CreateRunSession(t, sessions)
-	// space-bunny-free tops out at "max" rather than "xhigh", so its vocabulary
+	// space-bunny tops out at "max" rather than "xhigh", so its vocabulary
 	// must not be conflated with the Muse Spark one.
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "space-bunny-free",
+		ModelID:  "space-bunny",
 		Thinking: "max",
 	})
 	if err != nil {
@@ -236,7 +236,7 @@ func TestOpenCodeRejectsMuseOnlyMinimalForSpaceBunny(t *testing.T) {
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "space-bunny-free",
+		ModelID:  "space-bunny",
 		Thinking: "minimal",
 	})
 	if err != nil {
@@ -258,7 +258,7 @@ func TestOpenCodeForwardsDeclaredThinkingLevel(t *testing.T) {
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "muse-spark-1.3-contributor-free",
+		ModelID:  "muse-spark-1.3-contributor",
 		Thinking: "high",
 	})
 	if err != nil {
@@ -287,7 +287,7 @@ func TestOpenCodeAppliesDefaultThinkingLevel(t *testing.T) {
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "muse-spark-1.3-contributor-free",
+		ModelID:  "muse-spark-1.3-contributor",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -315,7 +315,7 @@ func TestOpenCodeRejectsUnsupportedLevelOnSupportedModel(t *testing.T) {
 	hub, err := svc.StartRun(header.ID, run.Prompt{
 		Text:     "hi",
 		Provider: "opencode",
-		ModelID:  "muse-spark-1.3-contributor-free",
+		ModelID:  "muse-spark-1.3-contributor",
 		Thinking: "max",
 	})
 	if err != nil {

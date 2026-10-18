@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,19 +19,33 @@ import (
 func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
 	t.Setenv("OPENCODE_SESSION_ID", "ses_test_chat")
+	// Set an explicit test key rather than relying on the ambient store, so the
+	// header assertion below checks a value this test owns. TestMain already
+	// redirects the store to a temp dir; setting the variable too keeps the
+	// expected value visible next to the assertion.
+	t.Setenv("OPENCODE_API_KEY", "oc_sk_test_key")
 	var modelCalls, chatCalls int
 	var chatRequest map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer public" ||
-			r.Header.Get("User-Agent") != opencode.DefaultUserAgent ||
-			r.Header.Get("x-opencode-client") != "cli" ||
-			r.Header.Get("x-opencode-session") != "ses_test_chat" {
-			t.Errorf("missing OpenCode headers: %#v", r.Header)
+		// Compared one at a time rather than dumping the whole header set on
+		// failure: a dump prints the Authorization value, and if the store were
+		// ever misconfigured that writes a real credential into the test log.
+		if got := r.Header.Get("Authorization"); got != "Bearer oc_sk_test_key" {
+			t.Errorf("Authorization: got %q", got)
+		}
+		if got := r.Header.Get("User-Agent"); got != opencode.DefaultUserAgent {
+			t.Errorf("User-Agent: got %q", got)
+		}
+		if got := r.Header.Get("x-opencode-client"); got != "cli" {
+			t.Errorf("x-opencode-client: got %q", got)
+		}
+		if got := r.Header.Get("x-opencode-session"); got != "ses_test_chat" {
+			t.Errorf("x-opencode-session: got %q", got)
 		}
 		switch r.URL.Path {
 		case "/models":
 			modelCalls++
-			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"paid-model"}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny"},{"id":"kimi-k3"}]}`))
 		case "/chat/completions":
 			chatCalls++
 			if r.Method != http.MethodPost {
@@ -53,11 +68,11 @@ func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 
 	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
 	events, err := runOpenCodeTurn(provider, loop.TurnRequest{
-		Model:          "space-bunny-free",
+		Model:          "space-bunny",
 		SystemPrompt:   "system",
 		Messages:       []any{loop.UserMessage{Role: loop.RoleUser, Content: "read it"}},
 		Tools:          openCodeToolDefinitions(),
-		ConversationID: "session:opencode:space-bunny-free",
+		ConversationID: "session:opencode:space-bunny",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +80,7 @@ func TestOpenCodeDiscoveryAndChatProvider(t *testing.T) {
 	if modelCalls != 1 || chatCalls != 1 {
 		t.Fatalf("calls: models=%d chat=%d", modelCalls, chatCalls)
 	}
-	if got := chatRequest["model"]; got != "space-bunny-free" {
+	if got := chatRequest["model"]; got != "space-bunny" {
 		t.Fatalf("model: %v", got)
 	}
 	messages, _ := chatRequest["messages"].([]any)
@@ -108,7 +123,7 @@ func TestOpenCodeResponsesProviderAndCaching(t *testing.T) {
 		switch r.URL.Path {
 		case "/models":
 			modelCalls++
-			_, _ = w.Write([]byte(`{"data":[{"id":"muse-spark-1.3-contributor-free"}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"muse-spark-1.3-contributor"}]}`))
 		case "/responses":
 			responsesCalls++
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -129,7 +144,7 @@ func TestOpenCodeResponsesProviderAndCaching(t *testing.T) {
 
 	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
 	events, err := runOpenCodeTurn(provider, loop.TurnRequest{
-		Model:          "muse-spark-1.3-contributor-free",
+		Model:          "muse-spark-1.3-contributor",
 		SystemPrompt:   "system",
 		Messages:       []any{loop.UserMessage{Role: loop.RoleUser, Content: "use a tool"}},
 		Tools:          openCodeToolDefinitions(),
@@ -160,7 +175,7 @@ func TestOpenCodeUnknownModelFailsBeforeInference(t *testing.T) {
 	var inferenceCalls int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/models" {
-			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny"}]}`))
 			return
 		}
 		inferenceCalls++
@@ -208,31 +223,86 @@ func TestOpenCodeConversions(t *testing.T) {
 	}
 }
 
-func TestOpenCodeThinkingLevels(t *testing.T) {
-	if got := opencode.ThinkingLevelsFor("muse-spark-1.3-contributor-free"); len(got) != 5 {
+func TestOpenCodeThinkingLevelsComeFromMetadata(t *testing.T) {
+	// Seeded rather than hardcoded: effort vocabularies are upstream's to
+	// publish, not ours to invent.
+	opencode.UseMetadata(map[string]opencode.ModelMetadata{
+		"muse-spark-1.3-contributor": {
+			ThinkingLevels: []string{"minimal", "low", "medium", "high", "xhigh"},
+		},
+		"deepseek-v4.1-flash": {
+			// The real vocabulary. Note there is no "medium": this is exactly
+			// the case a hardcoded default got wrong.
+			ThinkingLevels: []string{"low", "high", "max"},
+		},
+		"beam-free": {},
+	})
+	t.Cleanup(func() { opencode.UseMetadata(nil) })
+
+	if got := opencode.ThinkingLevelsFor("muse-spark-1.3-contributor"); len(got) != 5 {
 		t.Fatalf("muse levels: %#v", got)
 	}
-	if got := opencode.ThinkingLevelsFor("deepseek-v4-flash-free"); len(got) != 4 {
+	if got := opencode.ThinkingLevelsFor("deepseek-v4.1-flash"); !reflect.DeepEqual(got, []string{"low", "high", "max"}) {
 		t.Fatalf("deepseek levels: %#v", got)
 	}
-	if got := opencode.ThinkingLevelsFor("space-bunny-free"); !reflect.DeepEqual(got, []string{"low", "medium", "high", "xhigh", "max"}) {
-		t.Fatalf("space bunny levels: %#v", got)
+	// A model the catalogue knows but that does no tunable reasoning offers no
+	// picker at all.
+	if got := opencode.ThinkingLevelsFor("beam-free"); got != nil {
+		t.Fatalf("expected no levels for beam-free, got %#v", got)
 	}
-	if got := opencode.ThinkingLevelsFor("longcat-2.5-preview-free"); got != nil {
-		t.Fatalf("expected no levels for longcat, got %#v", got)
+	// A model the catalogue has never heard of is also nil — which callers
+	// read as "use the provider default", not as a claim that it has no
+	// reasoning.
+	if got := opencode.ThinkingLevelsFor("some-future-model"); got != nil {
+		t.Fatalf("expected no levels for an uncatalogued model, got %#v", got)
 	}
 }
 
-func TestOpenCodeCatalogAttachesThinkingLevels(t *testing.T) {
-	// The offline fallback ships space-bunny-free, which now declares levels.
-	for _, model := range opencode.DefaultModels() {
-		if len(model.ThinkingLevels) == 0 {
-			t.Fatalf("offline fallback lost its thinking levels: %#v", model)
+func TestOpenCodeDefaultThinkingIsAMemberOfTheLevels(t *testing.T) {
+	// The bug this replaces: a hardcoded "medium" default was shipped for every
+	// model, including ones whose vocabulary is low/high/max.
+	cases := []struct {
+		levels []string
+		want   string
+	}{
+		{[]string{"low", "high", "max"}, "high"},
+		{[]string{"minimal", "low", "medium", "high", "xhigh"}, "medium"},
+		{[]string{"low", "medium", "high", "xhigh", "max"}, "high"},
+		{[]string{"only"}, "only"},
+		{nil, ""},
+	}
+	for _, tc := range cases {
+		got := opencode.DefaultThinkingFor(tc.levels)
+		if got != tc.want {
+			t.Fatalf("DefaultThinkingFor(%v) = %q, want %q", tc.levels, got, tc.want)
+		}
+		if got != "" && !slices.Contains(tc.levels, got) {
+			t.Fatalf("default %q is not a member of %v", got, tc.levels)
 		}
 	}
+}
+
+func TestOpenCodeFetchModelsUsesMetadataForCapabilities(t *testing.T) {
+	opencode.UseMetadata(map[string]opencode.ModelMetadata{
+		"kimi-k3": {
+			ContextWindow:  262144,
+			SupportsImages: true,
+			ThinkingLevels: []string{"low", "high", "max"},
+		},
+		"glm-5.3": {
+			ContextWindow: 204800,
+		},
+	})
+	t.Cleanup(func() { opencode.UseMetadata(nil) })
+
 	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	t.Setenv("OPENCODE_API_KEY", "sk-test")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"muse-spark-1.3-contributor-free"},{"id":"deepseek-v4-flash-free"}]}`))
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"kimi-k3","object":"model"},
+			{"id":"glm-5.3","object":"model"},
+			{"id":"uncovered-model","object":"model"}
+		]}`))
 	}))
 	defer server.Close()
 
@@ -240,23 +310,44 @@ func TestOpenCodeCatalogAttachesThinkingLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetch models: %v", err)
 	}
+	// Every model the endpoint lists is returned. The old implementation kept
+	// only "-free" ids, which silently discarded 35 of Go's 37.
 	if len(discovered) != 3 {
 		t.Fatalf("discovered: %#v", discovered)
 	}
+
 	byID := map[string]int{}
 	for i, model := range discovered {
 		byID[model.ID] = i
+		if model.Provider != "opencode" {
+			t.Fatalf("provider: %#v", model)
+		}
 	}
-	if levels := discovered[byID["space-bunny-free"]].ThinkingLevels; !reflect.DeepEqual(levels, []string{"low", "medium", "high", "xhigh", "max"}) {
-		t.Fatalf("space bunny levels: %#v", levels)
+
+	kimi := discovered[byID["kimi-k3"]]
+	if kimi.ContextWindow != 262144 || !kimi.SupportsImages {
+		t.Fatalf("kimi capabilities: %#v", kimi)
 	}
-	muse := discovered[byID["muse-spark-1.3-contributor-free"]]
-	if len(muse.ThinkingLevels) != 5 || muse.DefaultThinking != "medium" {
-		t.Fatalf("muse thinking: %#v", muse)
+	if kimi.DefaultThinking != "high" {
+		t.Fatalf("kimi default should be the midpoint of low/high/max, got %q", kimi.DefaultThinking)
 	}
-	deepSeek := discovered[byID["deepseek-v4-flash-free"]]
-	if len(deepSeek.ThinkingLevels) != 4 || deepSeek.DefaultThinking != "medium" {
-		t.Fatalf("deepseek thinking: %#v", deepSeek)
+
+	glm := discovered[byID["glm-5.3"]]
+	if glm.ContextWindow != 204800 {
+		t.Fatalf("glm context: %#v", glm)
+	}
+	if glm.SupportsImages {
+		t.Fatalf("glm should not claim image support: %#v", glm)
+	}
+
+	// A model the catalogue does not cover is still listed — with a
+	// conservative window and no levels — rather than hidden or defaulted to 0.
+	uncovered := discovered[byID["uncovered-model"]]
+	if uncovered.ContextWindow != opencode.DefaultContextWindow {
+		t.Fatalf("uncovered context window: %#v", uncovered)
+	}
+	if len(uncovered.ThinkingLevels) != 0 || uncovered.DefaultThinking != "" {
+		t.Fatalf("uncovered model must not invent levels: %#v", uncovered)
 	}
 }
 
@@ -267,7 +358,7 @@ func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/models":
-			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"muse-spark-1.3-contributor-free"}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny"},{"id":"muse-spark-1.3-contributor"}]}`))
 		case "/chat/completions":
 			if err := json.NewDecoder(r.Body).Decode(&chatBody); err != nil {
 				t.Errorf("decode chat: %v", err)
@@ -290,7 +381,7 @@ func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
 	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
 
 	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
-		Model:         "space-bunny-free",
+		Model:         "space-bunny",
 		Messages:      []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
 		ThinkingLevel: "high",
 	}); err != nil {
@@ -301,7 +392,7 @@ func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
 	}
 
 	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
-		Model:         "muse-spark-1.3-contributor-free",
+		Model:         "muse-spark-1.3-contributor",
 		Messages:      []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
 		ThinkingLevel: "xhigh",
 	}); err != nil {
@@ -313,11 +404,26 @@ func TestOpenCodeSendsThinkingLevelOnBothRoutes(t *testing.T) {
 	}
 }
 
-func TestSpaceBunnyCapabilities(t *testing.T) {
+func TestOpenCodeCapabilitiesFallBackWhenUncatalogued(t *testing.T) {
+	// Replaces a test that pinned a hand-written 1M floor onto one specific
+	// model id. With capabilities sourced from models.dev there is no curated
+	// floor left to assert; what matters now is that an uncatalogued model is
+	// still listed, with a conservative window and no invented claims.
+	opencode.UseMetadata(map[string]opencode.ModelMetadata{
+		"space-bunny": {
+			ContextWindow:  1_000_000,
+			SupportsImages: true,
+			ThinkingLevels: []string{"low", "medium", "high", "xhigh", "max"},
+		},
+		// Advertised without a context limit: must fall back, not report zero.
+		"no-window-model": {SupportsImages: false},
+	})
+	t.Cleanup(func() { opencode.UseMetadata(nil) })
+
 	t.Setenv("OPENCODE_USER_AGENT", opencode.DefaultUserAgent)
+	t.Setenv("OPENCODE_API_KEY", "oc_sk_test_key")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// No context_window reported: the known-good floor must apply.
-		_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"},{"id":"other-free","context_window":50000}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny"},{"id":"no-window-model"},{"id":"uncatalogued"}]}`))
 	}))
 	defer server.Close()
 
@@ -329,12 +435,31 @@ func TestSpaceBunnyCapabilities(t *testing.T) {
 	for i, model := range discovered {
 		byID[model.ID] = i
 	}
-	bunny := discovered[byID["space-bunny-free"]]
+
+	bunny := discovered[byID["space-bunny"]]
 	if bunny.ContextWindow != 1_000_000 || !bunny.SupportsImages {
 		t.Fatalf("space bunny: %+v", bunny)
 	}
-	if other := discovered[byID["other-free"]]; other.ContextWindow != 50000 || other.SupportsImages {
-		t.Fatalf("other model must keep endpoint values: %+v", other)
+	if bunny.DefaultThinking != "high" {
+		t.Fatalf("space bunny default: %q", bunny.DefaultThinking)
+	}
+
+	// A catalogued model with no published limit must not report 0, which
+	// would silently break every context calculation downstream.
+	if got := discovered[byID["no-window-model"]].ContextWindow; got != opencode.DefaultContextWindow {
+		t.Fatalf("no-window-model context: %d", got)
+	}
+	if discovered[byID["no-window-model"]].SupportsImages {
+		t.Fatal("no-window-model must not claim image support")
+	}
+
+	// Uncatalogued: listed, conservative, no fabricated capabilities.
+	unc := discovered[byID["uncatalogued"]]
+	if unc.ContextWindow != opencode.DefaultContextWindow || unc.SupportsImages {
+		t.Fatalf("uncatalogued: %+v", unc)
+	}
+	if len(unc.ThinkingLevels) != 0 || unc.DefaultThinking != "" {
+		t.Fatalf("uncatalogued must not invent levels: %+v", unc)
 	}
 }
 
@@ -345,7 +470,7 @@ func TestOpenCodeOmitsThinkingWhenUnset(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/models":
-			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny-free"}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"id":"space-bunny"}]}`))
 		case "/chat/completions":
 			if err := json.NewDecoder(r.Body).Decode(&chatBody); err != nil {
 				t.Errorf("decode chat: %v", err)
@@ -361,7 +486,7 @@ func TestOpenCodeOmitsThinkingWhenUnset(t *testing.T) {
 
 	provider := &opencode.Provider{BaseURL: server.URL, HTTPClient: server.Client()}
 	if _, err := runOpenCodeTurn(provider, loop.TurnRequest{
-		Model:    "space-bunny-free",
+		Model:    "space-bunny",
 		Messages: []any{loop.UserMessage{Role: loop.RoleUser, Content: "hi"}},
 	}); err != nil {
 		t.Fatalf("chat turn: %v", err)

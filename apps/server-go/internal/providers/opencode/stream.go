@@ -84,7 +84,12 @@ func (p *Provider) postJSON(ctx context.Context, path, conversationID string, bo
 	if err != nil {
 		return nil, err
 	}
-	SetCommonHeaders(req, "text/event-stream")
+	// Surface a missing credential here rather than sending an unauthenticated
+	// request: Go rejects it as a 401, and an opaque upstream error would hide
+	// the one thing the user can actually fix.
+	if err := SetCommonHeaders(req, "text/event-stream"); err != nil {
+		return nil, err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := p.httpClient().Do(req)
 	if err != nil {
