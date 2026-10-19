@@ -13,7 +13,7 @@ use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, 
 use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
-use crate::utils::format_message_time;
+use crate::utils::{format_message_time, format_tokens_per_second};
 
 use super::ThinkingBlock;
 use base64::Engine as _;
@@ -397,6 +397,8 @@ pub struct AssistantMessageBubble {
     pub content_parts: Rc<Vec<AssistantContentPart>>,
     pub is_streaming: bool,
     pub created_at: Option<i64>,
+    /// Server-computed output throughput for this turn, already gated there.
+    pub tok_per_sec: Option<f64>,
     content_for_copy: Option<gpui::SharedString>,
     fork_message_id: Option<String>,
     on_fork: Option<ForkHandler>,
@@ -419,6 +421,7 @@ impl AssistantMessageBubble {
             content_parts,
             is_streaming: false,
             created_at: None,
+            tok_per_sec: None,
             content_for_copy: None,
             fork_message_id: None,
             on_fork: None,
@@ -495,6 +498,12 @@ impl AssistantMessageBubble {
         self
     }
 
+    /// Output throughput computed by the server; `None` hides the metric.
+    pub fn tok_per_sec(mut self, tok_per_sec: Option<f64>) -> Self {
+        self.tok_per_sec = tok_per_sec;
+        self
+    }
+
     pub fn on_preview_image(mut self, handler: PreviewImageHandler) -> Self {
         self.on_preview_image = Some(handler);
         self
@@ -537,6 +546,7 @@ impl RenderOnce for AssistantMessageBubble {
                 .into()
         });
         let timestamp = format_message_time(self.created_at);
+        let throughput = format_tokens_per_second(self.tok_per_sec);
         let group_name = format!("assistant-message-{}", self.selection_row);
         let palette = Palette::from_theme(&theme);
         let selection = self.selection.clone().unwrap_or_default();
@@ -677,6 +687,15 @@ impl RenderOnce for AssistantMessageBubble {
                                     .text_size(px(11.5))
                                     .text_color(theme.text_ghost)
                                     .child(timestamp),
+                            )
+                        })
+                        .when_some(throughput, |element, throughput| {
+                            element.child(
+                                div()
+                                    .px(px(4.0))
+                                    .text_size(px(11.5))
+                                    .text_color(theme.text_ghost)
+                                    .child(throughput),
                             )
                         })
                         .when_some(fork_action, |element, (message_id, on_fork)| {

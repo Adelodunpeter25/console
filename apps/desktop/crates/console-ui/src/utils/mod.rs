@@ -2,6 +2,7 @@
 
 pub mod path;
 pub mod session_groups;
+pub mod throughput;
 pub mod time;
 
 pub use path::{
@@ -13,3 +14,4 @@ pub use session_groups::{
     group_indices_by_project, session_date_group,
 };
 pub use time::{format_message_time, format_time_ago, format_working_elapsed};
+pub use throughput::format_tokens_per_second;

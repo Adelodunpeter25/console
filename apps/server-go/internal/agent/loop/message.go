@@ -163,6 +163,10 @@ type AssistantMessage struct {
 	Content    []any       `json:"content"` // TextPart | ThinkingPart | ToolCallPart
 	StopReason StopReason  `json:"stopReason"`
 	Usage      *TurnUsage  `json:"usage,omitempty"`
+	// TokPerSec is this turn's output throughput, computed in turnOnce from
+	// Usage over the provider-active stream time. Nil when it would be
+	// meaningless (no usage reported, no output, or a sub-second stream).
+	TokPerSec *float64 `json:"tokPerSec,omitempty"`
 }
 
 type ToolResultMessage struct {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
@@ -369,6 +370,10 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 		a.OnRequest(EstimateBreakdown(a.SystemSections, a.SystemPrompt, toolsList, history))
 	}
 	events.Push(Event{Kind: EventModelStreamStart, Text: turnID})
+	// Throughput is measured from here to the provider stream closing: model
+	// time only, excluding tool execution and approval waits, so the number
+	// describes the model rather than the harness.
+	streamStarted := time.Now()
 	turnStream := stream.New[Event]()
 	done := make(chan error, 1)
 	go func() {
@@ -441,6 +446,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 	if err := <-done; err != nil {
 		return assistant, err
 	}
+	assistant.TokPerSec = tokensPerSecond(assistant.Usage, time.Since(streamStarted))
 	if a.Usage != nil {
 		a.Usage.AddTurn(assistant.Usage)
 	}

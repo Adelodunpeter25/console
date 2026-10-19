@@ -5,8 +5,9 @@
 // client contract. These converters are the only bridge: persist sites
 // encode through ToProtoBytes, replay decodes through
 // MessageFromProtoBytes, and everything between works on loop structs
-// exactly as before. Turn usage stays loop-internal (dropped from the
-// schema); tool args/result content cross as raw JSON bytes.
+// exactly as before. Raw turn usage stays loop-internal; only the derived
+// output rate (tok_per_sec) crosses, for the client's message footer.
+// Tool args/result content cross as raw JSON bytes.
 package loop
 
 import (
@@ -158,7 +159,7 @@ func AnnotationToProto(a types.BrowserAnnotation) *consolev1.BrowserAnnotation {
 
 func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 	out := &consolev1.AgentAssistantMessage{
-		Id: m.ID, StopReason: string(m.StopReason),
+		Id: m.ID, StopReason: string(m.StopReason), TokPerSec: m.TokPerSec,
 	}
 	for _, part := range m.Content {
 		switch p := part.(type) {
@@ -304,6 +305,7 @@ func protoToAssistant(m *consolev1.AgentAssistantMessage) (AssistantMessage, err
 			return AssistantMessage{}, fmt.Errorf("unknown content part")
 		}
 	}
+	out.TokPerSec = m.TokPerSec
 	return out, nil
 }
 

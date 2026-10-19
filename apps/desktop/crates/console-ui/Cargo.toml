@@ -99,6 +99,10 @@ name = "path_test"
 path = "tests/utils/path_test.rs"
 
 [[test]]
+name = "throughput_test"
+path = "tests/utils/throughput_test.rs"
+
+[[test]]
 name = "tool_icon_test"
 path = "tests/chat/tool_icon_test.rs"
 

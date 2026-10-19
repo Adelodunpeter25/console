@@ -15,8 +15,9 @@ option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/
 //   (plan §4): base64 on the wire, raw JSON in memory on both ends.
 // - Timestamps and the row id are injected on LOAD (DB columns), never
 //   persisted: absent at persist, strings on the wire.
-// - Turn usage (token/cache stats) is loop-internal and unread by every
-//   client: dropped from the schema, live accumulation untouched.
+// - Raw turn usage (input/cache/reasoning breakdown) stays loop-internal:
+//   only the derived output rate (tok_per_sec) crosses, because the model
+//   footer renders it; live accumulation is untouched.
 // - Browser annotations persist structured (replay needs them back intact).
 message ImageAttachment {
   string data = 1;
@@ -90,6 +91,12 @@ message AgentAssistantMessage {
   string id = 1;
   repeated AssistantContentPart content = 2;
   string stop_reason = 3;
+  // Output throughput of this turn: (output + reasoning tokens) over the
+  // provider-active stream time. Computed and gated server-side (see
+  // loop.turnOnce) and persisted with the row, so historical turns keep it.
+  // Absent when the provider reported no usage or the stream was too short
+  // to be meaningful.
+  optional double tok_per_sec = 4;
 }
 
 message ToolResult {

@@ -846,6 +846,7 @@ impl TranscriptView {
                 }],
                 stop_reason: None,
                 created_at: Some(chrono::Utc::now().timestamp()),
+                tok_per_sec: None,
             });
             self.content_revisions.push(0);
             self.invalidate_latest_activity_cache();
@@ -871,6 +872,7 @@ impl TranscriptView {
                 }],
                 stop_reason: None,
                 created_at: Some(chrono::Utc::now().timestamp()),
+                tok_per_sec: None,
             });
             self.content_revisions.push(0);
             self.invalidate_latest_activity_cache();
@@ -898,6 +900,7 @@ impl TranscriptView {
             content,
             stop_reason,
             created_at,
+            tok_per_sec,
         }) = self.messages.last_mut()
         {
             if message.id.is_some() {
@@ -908,6 +911,7 @@ impl TranscriptView {
             if message.created_at.is_some() {
                 *created_at = message.created_at;
             }
+            *tok_per_sec = message.tok_per_sec;
             self.bump_last_content_revision();
             self.invalidate_latest_activity_cache();
         } else {
@@ -916,6 +920,7 @@ impl TranscriptView {
                 content: message.content,
                 stop_reason: message.stop_reason,
                 created_at: message.created_at,
+                tok_per_sec: message.tok_per_sec,
             });
             self.content_revisions.push(0);
             self.invalidate_latest_activity_cache();
@@ -948,6 +953,7 @@ impl TranscriptView {
                 content: vec![AssistantContentPart::ToolCall { call }],
                 stop_reason: None,
                 created_at: Some(chrono::Utc::now().timestamp()),
+                tok_per_sec: None,
             });
             self.content_revisions.push(0);
             self.invalidate_latest_activity_cache();
@@ -984,6 +990,7 @@ impl TranscriptView {
                     content: vec![AssistantContentPart::ToolCall { call }],
                     stop_reason: None,
                     created_at: Some(chrono::Utc::now().timestamp()),
+                    tok_per_sec: None,
                 });
                 self.content_revisions.push(0);
             }
@@ -1397,6 +1404,7 @@ fn transcript_row(
             content,
             created_at,
             id,
+            tok_per_sec,
             ..
         } => {
             let presentation = view_ref.assistant_presentation(index, content);
@@ -1447,6 +1455,7 @@ fn transcript_row(
                     }
                 })
                 .created_at(*created_at)
+                .tok_per_sec(*tok_per_sec)
                 .selection(view_ref.selection.clone(), format!("message-{index}"))
                 .markdown_views(markdown_views)
                 .streaming(view_ref.is_streaming && index + 1 == view_ref.messages.len())

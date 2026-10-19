@@ -32,8 +32,9 @@ const (
 //     (plan §4): base64 on the wire, raw JSON in memory on both ends.
 //   - Timestamps and the row id are injected on LOAD (DB columns), never
 //     persisted: absent at persist, strings on the wire.
-//   - Turn usage (token/cache stats) is loop-internal and unread by every
-//     client: dropped from the schema, live accumulation untouched.
+//   - Raw turn usage (input/cache/reasoning breakdown) stays loop-internal:
+//     only the derived output rate (tok_per_sec) crosses, because the model
+//     footer renders it; live accumulation is untouched.
 //   - Browser annotations persist structured (replay needs them back intact).
 type ImageAttachment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -711,10 +712,16 @@ func (*AssistantContentPart_ToolCall) isAssistantContentPart_Part() {}
 func (*AssistantContentPart_Image) isAssistantContentPart_Part() {}
 
 type AgentAssistantMessage struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Id            string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Content       []*AssistantContentPart `protobuf:"bytes,2,rep,name=content,proto3" json:"content,omitempty"`
-	StopReason    string                  `protobuf:"bytes,3,opt,name=stop_reason,json=stopReason,proto3" json:"stop_reason,omitempty"`
+	state      protoimpl.MessageState  `protogen:"open.v1"`
+	Id         string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Content    []*AssistantContentPart `protobuf:"bytes,2,rep,name=content,proto3" json:"content,omitempty"`
+	StopReason string                  `protobuf:"bytes,3,opt,name=stop_reason,json=stopReason,proto3" json:"stop_reason,omitempty"`
+	// Output throughput of this turn: (output + reasoning tokens) over the
+	// provider-active stream time. Computed and gated server-side (see
+	// loop.turnOnce) and persisted with the row, so historical turns keep it.
+	// Absent when the provider reported no usage or the stream was too short
+	// to be meaningful.
+	TokPerSec     *float64 `protobuf:"fixed64,4,opt,name=tok_per_sec,json=tokPerSec,proto3,oneof" json:"tok_per_sec,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -768,6 +775,13 @@ func (x *AgentAssistantMessage) GetStopReason() string {
 		return x.StopReason
 	}
 	return ""
+}
+
+func (x *AgentAssistantMessage) GetTokPerSec() float64 {
+	if x != nil && x.TokPerSec != nil {
+		return *x.TokPerSec
+	}
+	return 0
 }
 
 type ToolResult struct {
@@ -1066,12 +1080,14 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\bthinking\x18\x02 \x01(\v2\x18.console.v1.ThinkingPartH\x00R\bthinking\x123\n" +
 	"\ttool_call\x18\x03 \x01(\v2\x14.console.v1.ToolCallH\x00R\btoolCall\x12-\n" +
 	"\x05image\x18\x04 \x01(\v2\x15.console.v1.ImagePartH\x00R\x05imageB\x06\n" +
-	"\x04part\"\x84\x01\n" +
+	"\x04part\"\xb9\x01\n" +
 	"\x15AgentAssistantMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12:\n" +
 	"\acontent\x18\x02 \x03(\v2 .console.v1.AssistantContentPartR\acontent\x12\x1f\n" +
 	"\vstop_reason\x18\x03 \x01(\tR\n" +
-	"stopReason\"\xa5\x01\n" +
+	"stopReason\x12#\n" +
+	"\vtok_per_sec\x18\x04 \x01(\x01H\x00R\ttokPerSec\x88\x01\x01B\x0e\n" +
+	"\f_tok_per_sec\"\xa5\x01\n" +
 	"\n" +
 	"ToolResult\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
@@ -1160,6 +1176,7 @@ func file_console_v1_message_proto_init() {
 		(*AssistantContentPart_ToolCall)(nil),
 		(*AssistantContentPart_Image)(nil),
 	}
+	file_console_v1_message_proto_msgTypes[9].OneofWrappers = []any{}
 	file_console_v1_message_proto_msgTypes[10].OneofWrappers = []any{}
 	file_console_v1_message_proto_msgTypes[12].OneofWrappers = []any{
 		(*AgentMessage_User)(nil),

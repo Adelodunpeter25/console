@@ -72,6 +72,11 @@ pub struct AssistantMessage {
     pub stop_reason: Option<String>,
     #[serde(default)]
     pub created_at: Option<i64>,
+    /// Output throughput for the turn, computed and gated by the Go server
+    /// (output + reasoning tokens over provider-active stream time). Absent
+    /// when the provider reported no usage or the stream was too short.
+    #[serde(default, rename = "tokPerSec")]
+    pub tok_per_sec: Option<f64>,
 }
 
 /// Decode helpers from the canonical wire shape into the render models.
@@ -97,6 +102,7 @@ impl AssistantMessage {
                 .collect(),
             stop_reason: opt_string(msg.stop_reason.clone()),
             created_at: None,
+            tok_per_sec: msg.tok_per_sec,
         }
     }
 }
@@ -136,6 +142,7 @@ impl AgentMessage {
                     .collect(),
                 stop_reason: opt_string(a.stop_reason.clone()),
                 created_at: msg.created_at,
+                tok_per_sec: a.tok_per_sec,
             }),
             ProtoMessageEvent::ToolResult(t) => Some(AgentMessage::ToolResult {
                 results: t
@@ -209,6 +216,10 @@ pub enum AgentMessage {
         stop_reason: Option<String>,
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
+        /// Server-computed output throughput for the turn; absent when the
+        /// server could not measure it.
+        #[serde(default, rename = "tokPerSec")]
+        tok_per_sec: Option<f64>,
     },
     #[serde(rename = "toolResult")]
     ToolResult {
