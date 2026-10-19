@@ -3,22 +3,32 @@ package com.console.mobile.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.console.mobile.AppContainer
 import com.console.mobile.core.notification.NotificationPermissionRequest
+import com.console.mobile.feature.browser.BrowserScreen
+import com.console.mobile.feature.browser.BrowserUriHandler
+import com.console.mobile.feature.browser.handOffToSystem
+import com.console.mobile.feature.browser.rememberBrowserState
 import com.console.mobile.feature.changes.ChangesScreen
 import com.console.mobile.feature.chat.ChatScreen
 import com.console.mobile.feature.devices.DevicesScreen
@@ -34,6 +44,8 @@ import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.common.new.ConfirmPromptHost
 import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 
 @Composable
 fun AppNavGraph() {
@@ -115,23 +127,62 @@ fun AppNavGraph() {
                 )
             }
             composable<RouteChat> {
-                ChatScreen(
-                    onBackToHome = {
-                        AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
-                        navController.navigate(RouteHome) { launchSingleTop = true }
-                    },
-                    onOpenTab = { tab ->
-                        when (tab) {
-                            com.console.mobile.data.store.MobileTab.Files -> navController.navigate(RouteFiles) { launchSingleTop = true }
-                            com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
-                            com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
-                            com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
-                            com.console.mobile.data.store.MobileTab.Subagents -> navController.navigate(RouteSubagents) { launchSingleTop = true }
-                            else -> {}
+                // Links in a bubble open in the app's own browser rather than
+                // handing off to Chrome: the ones worth tapping point at a
+                // forwarded port or tunnel on the server this screen is already
+                // talking to, and the in-app WebView can reach those.
+                //
+                // Overriding LocalUriHandler is the whole hook — Compose's text
+                // links read it, so every link the markdown renderer draws in
+                // this subtree comes through here without it knowing.
+                val systemUriHandler = LocalUriHandler.current
+                val linkHandler = remember(systemUriHandler) {
+                    BrowserUriHandler(systemUriHandler) { url ->
+                        navController.navigate(RouteBrowser(url)) { launchSingleTop = true }
+                    }
+                }
+                CompositionLocalProvider(LocalUriHandler provides linkHandler) {
+                    ChatScreen(
+                        onBackToHome = {
+                            AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
+                            navController.navigate(RouteHome) { launchSingleTop = true }
+                        },
+                        onOpenTab = { tab ->
+                            when (tab) {
+                                com.console.mobile.data.store.MobileTab.Files -> navController.navigate(RouteFiles) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
+                                com.console.mobile.data.store.MobileTab.Subagents -> navController.navigate(RouteSubagents) { launchSingleTop = true }
+                                else -> {}
+                            }
+                        },
+                        onOpenSubagentDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
+                        onAddProject = { navController.navigate(RouteAddProject) },
+                    )
+                }
+            }
+            // A link target, opened as a push from wherever the link lived, so
+            // back returns to that screen. In-page history is the screen's own
+            // business (BrowserScreen consumes back while it can go back).
+            composable<RouteBrowser> { entry ->
+                val url = entry.toRoute<RouteBrowser>().url
+                val systemUriHandler = LocalUriHandler.current
+                BrowserScreen(
+                    state = rememberBrowserState(url),
+                    toolbarTrailing = {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(
+                                TablerIcons.Outline.X,
+                                contentDescription = "Close browser",
+                                tint = NewTheme.TextPrimary,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     },
-                    onOpenSubagentDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
-                    onAddProject = { navController.navigate(RouteAddProject) },
+                    // Schemes the WebView will not render still belong to a
+                    // system app.
+                    onExternalUrl = { handOffToSystem(systemUriHandler, it) },
                 )
             }
             composable<RouteFiles> {

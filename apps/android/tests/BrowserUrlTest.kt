@@ -3,6 +3,7 @@ package com.console.mobile
 import com.console.mobile.feature.browser.isSecureUrl
 import com.console.mobile.feature.browser.isWebUrl
 import com.console.mobile.feature.browser.normalizeBrowserUrl
+import com.console.mobile.feature.browser.opensInBrowser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -49,5 +50,22 @@ class BrowserUrlTest {
     fun lockIsShownOnlyForSecurePages() {
         assertTrue(isSecureUrl("https://example.com"))
         assertFalse(isSecureUrl("http://127.0.0.1:5173/"))
+    }
+
+    /**
+     * Which clicked links stay in the app. Chat is where the interesting ones
+     * live (a forwarded port the WebView can reach) and where the junk ones
+     * live too (`mailto:`, `intent:`), and the two must not be confused.
+     */
+    @Test
+    fun onlyWebLinksOpenInTheBrowser() {
+        assertTrue(opensInBrowser("https://5173-app.instabox.tech"))
+        assertTrue(opensInBrowser("http://127.0.0.1:5173/"))
+        assertTrue(opensInBrowser("HTTPS://EXAMPLE.COM"))
+        assertFalse(opensInBrowser("mailto:dev@example.com"))
+        assertFalse(opensInBrowser("tel:+15551234567"))
+        assertFalse(opensInBrowser("intent://scan/#Intent;scheme=zxing;end"))
+        assertFalse(opensInBrowser("javascript:alert(1)"))
+        assertFalse(opensInBrowser(""))
     }
 }

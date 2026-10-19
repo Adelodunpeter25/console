@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
 @Serializable object RouteChanges
 @Serializable object RouteSubagents
 @Serializable data class RouteSubagentDetails(val subagentId: String)
+@Serializable data class RouteBrowser(val url: String)
 @Serializable object RouteSettings
 @Serializable object RouteSettingsFromSetup
 @Serializable object RouteAddProject
