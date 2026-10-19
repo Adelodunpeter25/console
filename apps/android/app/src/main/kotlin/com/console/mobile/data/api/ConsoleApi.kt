@@ -132,5 +132,9 @@ interface ConsoleApi {
     suspend fun bootDevice(id: String, platform: String)
     suspend fun shutdownDevice(id: String, platform: String)
     suspend fun interactDevice(id: String, platform: String, action: console.v1.DeviceActionRequest)
+    // ports (forwarded dev servers)
+    suspend fun getPorts(projectId: String? = null): List<console.v1.ForwardedPort>
+    suspend fun forwardPort(port: Int, projectId: String? = null): console.v1.ForwardedPort
+    suspend fun unforwardPort(port: Int, projectId: String? = null)
 }
 

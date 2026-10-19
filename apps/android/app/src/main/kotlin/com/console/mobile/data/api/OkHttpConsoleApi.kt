@@ -18,6 +18,7 @@ import console.v1.FsBrowseResult
 import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
+import console.v1.ForwardedPort
 import console.v1.WriteFileRequest
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
@@ -105,6 +106,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val setProviderCredentialAdapter by lazy { wireMoshi.adapter(console.v1.SetProviderCredentialResponse::class.java) }
     private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
+    private val forwardedPortAdapter by lazy { wireMoshi.adapter(ForwardedPort::class.java) }
     private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
     private val assistSearchAdapter by lazy { wireMoshi.adapter(AssistFileSearchResponse::class.java) }
@@ -696,6 +698,26 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         val body = deviceActionAdapter.toJson(action)
         val raw = http.post("/api/devices/${enc(id)}/interact?platform=${enc(platform)}", body)
         ensureOk(raw, "interact with device")
+    }
+
+    override suspend fun getPorts(projectId: String?): List<ForwardedPort> {
+        val raw = http.get("/api/ports", mapOf("projectId" to projectId))
+        val items = http.unwrapOrRaw(raw, JsonArray.serializer(), "load ports")
+        return items.mapNotNull { forwardedPortAdapter.fromJson(it.toString()) }
+    }
+
+    override suspend fun forwardPort(port: Int, projectId: String?): ForwardedPort {
+        val body = buildJsonObject {
+            put("port", port)
+            if (projectId != null) put("projectId", projectId)
+        }.toString()
+        val raw = http.post("/api/ports/forward", body)
+        return http.unwrapOrRawAdapter(raw, forwardedPortAdapter, "forward port")
+    }
+
+    override suspend fun unforwardPort(port: Int, projectId: String?) {
+        val raw = http.delete("/api/ports/$port", mapOf("projectId" to projectId))
+        ensureOk(raw, "unforward port")
     }
 
     private fun ensureOk(raw: String, action: String) {
