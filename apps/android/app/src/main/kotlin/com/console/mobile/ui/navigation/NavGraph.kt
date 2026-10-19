@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -56,9 +57,23 @@ fun AppNavGraph() {
     LaunchedEffect(environments.activeId, appState.backendUrl) {
         AppContainer.setupRepository.maybeShow(environments.activeId)
     }
-    // Seeded during AppContainer init, so this is normally already correct on
-    // the first frame rather than flashing Home for one.
-    val startDestination = if (setupState.activeEnvId != null) RouteSetup else RouteHome
+    // Setup appears as the start destination when the app opens onto a server
+    // that has not been through it, so there is no flash of Home first.
+    //
+    // `remember` pins that decision to the first composition on purpose. An
+    // *unpinned* start destination rebuilds the NavHost graph whenever the value
+    // changes, and rebuilding the graph clears the back stack — which is exactly
+    // why stepping out to Providers used to leave back with nowhere to go. The
+    // later LaunchedEffect below covers switching servers mid-session, where a
+    // push is both correct and stack-safe.
+    val startDestination = remember {
+        if (setupState.activeEnvId != null) RouteSetup else RouteHome
+    }
+    LaunchedEffect(setupState.activeEnvId) {
+        if (setupState.activeEnvId != null) {
+            navController.navigate(RouteSetup) { launchSingleTop = true }
+        }
+    }
 
     // Past the onboarding gate, so we only ask once a backend is connected.
     NotificationPermissionRequest()
@@ -173,6 +188,16 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                 )
             }
+            // Same screen, but it knows the first-run panel sent it here, so
+            // back returns to that panel instead of the Settings landing list.
+            composable<RouteSettingsFromSetup> {
+                SettingsScreen(
+                    onBackToHome = { navController.popBackStack() },
+                    onAddProject = { navController.navigate(RouteAddProject) },
+                    startSection = com.console.mobile.feature.settings.SettingsSection.Providers,
+                    openedFromSetup = true,
+                )
+            }
             composable<RouteAddProject> {
                 AddProjectScreen(
                     onBack = { navController.popBackStack() },
@@ -208,8 +233,11 @@ fun AppNavGraph() {
                         // pressing back should do.
                         when (step) {
                             SetupStep.AddProject -> navController.navigate(RouteAddProject)
-                            SetupStep.Providers -> navController.navigate(RouteSettings)
-                            SetupStep.Github -> navController.navigate(RouteSettings)
+                            // Lands directly on the Providers section rather
+                            // than the Settings landing list: going to Settings
+                            // and hunting for Providers was the "dead end".
+                            SetupStep.Providers, SetupStep.Github ->
+                                navController.navigate(RouteSettingsFromSetup)
                         }
                     },
                     onSkip = { AppContainer.setupRepository.dismiss() },

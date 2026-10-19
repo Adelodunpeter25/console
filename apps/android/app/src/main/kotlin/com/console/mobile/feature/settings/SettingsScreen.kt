@@ -51,11 +51,25 @@ enum class SettingsSection { Servers, Providers, Usage, Models, Integrations, Pr
 /**
  * Port of screens/settings/settings-screen.tsx.
  * Landing list → sub-screen. Back returns to list, then to home via onBackToHome.
+ *
+ * [startSection] and [openedFromSetup] exist because setup is a *caller*, not
+ * just another destination. Arriving from the first-run panel means back should
+ * return to that panel; arriving from Settings' own entry point means back
+ * returns to the landing list. Without the distinction, back out of Providers
+ * landed on the Settings landing with no route back to the panel that sent you
+ * there — Settings' internal section stack swallowed the press.
  */
 @Composable
-fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
-    var section by remember { mutableStateOf<SettingsSection?>(null) }
-    BackHandler(enabled = section != null) { section = null }
+fun SettingsScreen(
+    onBackToHome: () -> Unit,
+    onAddProject: () -> Unit,
+    startSection: SettingsSection? = null,
+    openedFromSetup: Boolean = false,
+) {
+    var section by remember { mutableStateOf<SettingsSection?>(startSection) }
+    // From setup there is no landing list to fall back to, so back leaves
+    // Settings entirely rather than unwinding an internal section.
+    BackHandler(enabled = section != null && !openedFromSetup) { section = null }
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
 
     // Env switcher "Add" flow jumps straight into Servers.
@@ -70,7 +84,11 @@ fun SettingsScreen(onBackToHome: () -> Unit, onAddProject: () -> Unit) {
         when (val s = section) {
             null -> SettingsLanding(onBack = onBackToHome, onOpen = { section = it })
             SettingsSection.Servers -> ServersSettings(onBack = { section = null })
-            SettingsSection.Providers -> ProvidersSettings(onBack = { section = null })
+            SettingsSection.Providers -> ProvidersSettings(onBack = {
+                // Leaving Providers from setup goes back to setup; elsewhere it
+                // returns to the Settings landing list.
+                if (openedFromSetup) onBackToHome() else section = null
+            })
             SettingsSection.Usage -> UsageSettings(onBack = { section = null })
             SettingsSection.Models -> ModelsSettings(onBack = { section = null })
             SettingsSection.Integrations -> IntegrationsSettings(onBack = { section = null })
