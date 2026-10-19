@@ -335,19 +335,19 @@ fun ChatScreen(
                     HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
                     OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
                         OverflowMenuItem(
-                            label = "Open ports",
-                            icon = TablerIcons.Outline.PlugConnected,
-                            onClick = {
-                                overflowMenu = false
-                                onOpenPorts()
-                            },
-                        )
-                        OverflowMenuItem(
                             label = "Open diff",
                             icon = TablerIcons.Outline.BrandGit,
                             onClick = {
                                 overflowMenu = false
                                 jumpToProjectTab(MobileTab.Changes)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open ports",
+                            icon = TablerIcons.Outline.PlugConnected,
+                            onClick = {
+                                overflowMenu = false
+                                onOpenPorts()
                             },
                         )
                         OverflowMenuItem(
