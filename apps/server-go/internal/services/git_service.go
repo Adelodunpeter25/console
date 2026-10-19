@@ -4,6 +4,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +34,14 @@ func NewGitService() *GitService { return &GitService{inflight: make(map[string]
 // error carries git's stderr — without it a caller only sees "exit status
 // 128/255", which tells neither the user nor the retry logic what went wrong.
 func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	return runGitCtx(context.Background(), dir, args...)
+}
+
+// runGitCtx is runGit with cancellation. Best-effort callers give it a
+// deadline so a pathological repo (or a slow volume) can never stall the
+// operation they are piggy-backing on.
+func runGitCtx(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

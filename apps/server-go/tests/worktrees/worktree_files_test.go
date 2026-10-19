@@ -155,6 +155,23 @@ func TestWorktreeAddDefaultsToEnv(t *testing.T) {
 	assertAbsent(t, filepath.Join(wt, "local.txt"))
 }
 
+// A matching file inside a collapsed ignored directory still arrives: the
+// listing collapses ignored dirs for speed, so the carry-over must expand
+// the ones that aren't build/dependency output.
+func TestWorktreeAddCarriesEnvInsideIgnoredDir(t *testing.T) {
+	svc := services.NewWorktreeService()
+	repo := initRepo(t, true)
+	writeRepoFile(t, repo, ".gitignore", "secrets/\n", 0o644)
+	commitAll(t, repo, "base")
+	writeRepoFile(t, repo, "secrets/.env", "NESTED=1", 0o644)
+
+	wt := worktreeTarget(t)
+	if err := svc.WorktreeAdd(repo, wt, "nestedenv", ""); err != nil {
+		t.Fatalf("WorktreeAdd: %v", err)
+	}
+	assertFileContent(t, filepath.Join(wt, "secrets", ".env"), "NESTED=1")
+}
+
 func TestWorktreeAddSkipsBuildOutput(t *testing.T) {
 	svc := services.NewWorktreeService()
 	repo := initRepo(t, true)

@@ -9,10 +9,12 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -69,6 +71,7 @@ func isGitRepo(dir string) bool {
 // clean regardless of what the local HEAD is).
 // Refuses non-repos loudly and repos with no commits yet (unborn HEAD).
 func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error {
+	start := time.Now()
 	if !isGitRepo(repoDir) {
 		return ErrNotGitRepo
 	}
@@ -87,6 +90,7 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error 
 	// Best-effort files-to-copy (see worktree_files.go): never fail
 	// creation over a carry-over.
 	s.carryWorktreeFilesBestEffort(repoDir, path)
+	slog.Debug("worktree add done", "repo", repoDir, "path", path, "branch", branch, "took", time.Since(start))
 	return nil
 }
 

@@ -14,11 +14,13 @@
 package services
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -26,6 +28,11 @@ import (
 // worktreeIncludeFile is the committed, tool-agnostic pattern file read
 // from the source checkout's root (Claude Code reads the same file).
 const worktreeIncludeFile = ".worktreeinclude"
+
+// worktreeCarryTimeout bounds the best-effort files-to-copy step. It is
+// allowed to carry nothing, so it must never stall creation on a
+// pathological ignored-file tree (huge build dirs, slow volumes).
+const worktreeCarryTimeout = 5 * time.Second
 
 // Carry-over skips anything utils.IsPathIgnored reports (dependency,
 // build output, caches, IDE state — the same set tree and search ignore):
@@ -158,9 +165,53 @@ func resolveWorktreePatterns(top string) []includePattern {
 // gitIsIgnored reports whether p (root-relative) is ignored in the
 // checkout rooted at top. Any git failure counts as "not ignored":
 // eligibility must stay conservative and best-effort.
-func gitIsIgnored(top, p string) bool {
-	_, err := runGit(top, "check-ignore", "-q", p)
+func gitIsIgnored(ctx context.Context, top, p string) bool {
+	_, err := runGitCtx(ctx, top, "check-ignore", "-q", p)
 	return err == nil
+}
+
+// ignoredFiles lists the checkout's gitignored paths under top. Plain
+// `ls-files --others --ignored` walks every file inside ignored build and
+// dependency directories (hundreds of thousands in a native repo) just to
+// build a list the carry-over mostly discards; `--directory` collapses
+// those dirs to a single entry instead. Collapsed dirs that survive the
+// build-output filter (anything not in utils.IgnoredPaths) are expanded
+// with a scoped second call so a `.env` under, say, an ignored secrets/
+// still gets carried.
+func ignoredFiles(ctx context.Context, top string) ([]string, error) {
+	out, err := runGitCtx(ctx, top, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z")
+	if err != nil {
+		return nil, err
+	}
+	var files, expand []string
+	for _, rel := range strings.Split(out, "\x00") {
+		if rel == "" {
+			continue
+		}
+		if !strings.HasSuffix(rel, "/") {
+			files = append(files, rel)
+			continue
+		}
+		if utils.IsPathIgnored(rel) {
+			continue
+		}
+		expand = append(expand, rel)
+	}
+	if len(expand) == 0 {
+		return files, nil
+	}
+	// --literal-pathspecs: a repo path must never be read as a glob.
+	args := append([]string{"--literal-pathspecs", "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--"}, expand...)
+	sub, err := runGitCtx(ctx, top, args...)
+	if err != nil {
+		return files, nil // best effort: keep the individual files we have
+	}
+	for _, rel := range strings.Split(sub, "\x00") {
+		if rel != "" {
+			files = append(files, rel)
+		}
+	}
+	return files, nil
 }
 
 // copyWorktreeFile snapshots the source-checkout file rel into the new
@@ -216,8 +267,8 @@ func linkWorktreePath(top, wtPath, rel string) error {
 // matching its patterns into the new worktree at wtPath. It returns copy
 // and link counts; any error aborts the carry-over (the caller swallows
 // it — creation must proceed exactly as before).
-func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) {
-	out, err := runGit(repoDir, "rev-parse", "--show-toplevel")
+func carryWorktreeFiles(ctx context.Context, repoDir, wtPath string) (copied, linked int, err error) {
+	out, err := runGitCtx(ctx, repoDir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return 0, 0, err
 	}
@@ -231,7 +282,7 @@ func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) 
 		if !p.link || p.negate || p.hasMagic() {
 			continue
 		}
-		if utils.IsPathIgnored(p.literal) || !gitIsIgnored(top, p.literal) {
+		if utils.IsPathIgnored(p.literal) || !gitIsIgnored(ctx, top, p.literal) {
 			continue
 		}
 		if err := linkWorktreePath(top, wtPath, p.literal); err != nil {
@@ -240,12 +291,28 @@ func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) 
 		linked++
 	}
 
-	// Glob entries match against the checkout's ignored files.
-	out, err = runGit(top, "ls-files", "--others", "--ignored", "--exclude-standard", "-z")
+	// Only a positive, non-link pattern can select a file to copy. A
+	// link-only include (or one with just negations) needs no listing at
+	// all, so skip the ignored-file scan entirely.
+	scan := false
+	for _, p := range patterns {
+		if !p.link && !p.negate {
+			scan = true
+			break
+		}
+	}
+	if !scan {
+		return copied, linked, nil
+	}
+
+	files, err := ignoredFiles(ctx, top)
 	if err != nil {
 		return copied, linked, err
 	}
-	for _, rel := range strings.Split(out, "\x00") {
+	for _, rel := range files {
+		if ctx.Err() != nil {
+			return copied, linked, ctx.Err()
+		}
 		rel = strings.TrimSpace(rel)
 		if rel == "" || utils.IsPathIgnored(rel) {
 			continue
@@ -282,12 +349,13 @@ func carryWorktreeFiles(repoDir, wtPath string) (copied, linked int, err error) 
 // swallows every failure: a failed carry-over must be indistinguishable
 // from not having one. Counts only — never file contents — hit the logs.
 func (s *WorktreeService) carryWorktreeFilesBestEffort(repoDir, wtPath string) {
-	copied, linked, err := carryWorktreeFiles(repoDir, wtPath)
+	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), worktreeCarryTimeout)
+	defer cancel()
+	copied, linked, err := carryWorktreeFiles(ctx, repoDir, wtPath)
 	if err != nil {
-		slog.Debug("worktree files-to-copy skipped", "repo", repoDir, "error", err)
+		slog.Debug("worktree files-to-copy skipped", "repo", repoDir, "error", err, "took", time.Since(start))
 		return
 	}
-	if copied+linked > 0 {
-		slog.Debug("worktree files-to-copy done", "repo", repoDir, "copied", copied, "linked", linked)
-	}
+	slog.Debug("worktree files-to-copy done", "repo", repoDir, "copied", copied, "linked", linked, "took", time.Since(start))
 }
