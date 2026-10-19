@@ -134,4 +134,22 @@ class SetupStateTest {
         assertFalse(afterReturn.hasProvider)
         assertFalse(afterReturn.hasGithub)
     }
+
+    @Test
+    fun a_complete_server_has_nothing_left_to_onboard() {
+        // The gate for showing the panel at all. A server that is already fully
+        // configured must not be interrupted with a first-run screen just
+        // because it was added recently — "new server" is not the same as
+        // "unconfigured server".
+        assertFalse(SetupState().isComplete)
+        assertTrue(fullySetUp().isComplete)
+    }
+
+    @Test
+    fun one_missing_step_is_enough_to_warrant_the_panel() {
+        val complete = fullySetUp()
+        assertFalse(complete.copy(hasProject = false).isComplete)
+        assertFalse(complete.copy(hasProvider = false).isComplete)
+        assertFalse(complete.copy(hasGithub = false).isComplete)
+    }
 }

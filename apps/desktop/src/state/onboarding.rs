@@ -30,12 +30,16 @@ pub struct SetupStatus {
     pub has_github: bool,
 }
 
-// Deliberately no `is_complete` here: the panel computes it from its own
-// mirror of these fields, since console-ui cannot depend on the app binary. One
-// implementation lives in console-ui, in src/onboarding/panel.rs.
+impl SetupStatus {
+    /// Every step satisfied — nothing left to onboard this server.
+    pub fn is_complete(&self) -> bool {
+        self.has_project && self.has_provider && self.has_github
+    }
+}
 
 impl ConsoleDesktopApp {
-    /// Show the setup panel if this server has never had it dismissed.
+    /// Show the setup panel if this server has never had it dismissed *and*
+    /// has something left to set up.
     ///
     /// Called from both places that change which server is active — the boot
     /// path in `init_environments` and `activate_environment` — because boot
@@ -43,29 +47,22 @@ impl ConsoleDesktopApp {
     /// path, and "launch the app onto a new server" is the case that matters
     /// most.
     ///
-    /// Cheap when the server is already dismissed: the set is read in memory
-    /// and the function returns without a single request.
+    /// The completeness check runs *before* the panel opens, not after. Opening
+    /// first and hiding a moment later still shows a first-run screen to someone
+    /// whose server has been configured for weeks, which is worse than never
+    /// showing it. The panel appears only once something is genuinely missing.
+    ///
+    /// A server that is already complete is not recorded as dismissed: it stays
+    /// eligible for the check, so removing the last provider key brings the panel
+    /// back rather than leaving a server with nothing configured and no prompt.
     pub fn maybe_show_onboarding(&mut self, env_id: Option<&str>, cx: &mut Context<Self>) {
-        let Some(env_id) = env_id else {
+        let Some(env_id) = env_id.map(str::to_string) else {
             return;
         };
-        if self.onboarding_dismissed.contains(env_id) {
+        if self.onboarding_dismissed.contains(&env_id) {
             self.onboarding_env_id = None;
             return;
         }
-        self.onboarding_env_id = Some(env_id.to_string());
-        self.refresh_setup_status(cx);
-        cx.notify();
-    }
-
-    /// Fetch the three live facts behind the panel's steps.
-    ///
-    /// Each is independent and a failure is confined to its own step: a server
-    /// with no GitHub token still 200s `/api/auth/github/status`, but if that
-    /// endpoint is unreachable the GitHub row shows as unmet rather than the
-    /// whole panel failing to render. That is deliberate — an onboarding panel
-    /// that errors out teaches the user nothing.
-    pub fn refresh_setup_status(&mut self, cx: &mut Context<Self>) {
         self.setup_status_loading = true;
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -79,23 +76,24 @@ impl ConsoleDesktopApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        let has_project = projects.map(|list| !list.is_empty()).unwrap_or(false);
-                        let has_provider = providers
-                            .map(|statuses| {
-                                statuses
-                                    .providers
-                                    .values()
-                                    .any(|status| status.configured == Some(true))
-                            })
-                            .unwrap_or(false);
-                        let has_github = github
-                            .map(|status| status.connected == Some(true))
-                            .unwrap_or(false);
-                        this.setup_status = SetupStatus {
-                            has_project,
-                            has_provider,
-                            has_github,
+                        let status = SetupStatus {
+                            has_project: projects.map(|l| !l.is_empty()).unwrap_or(false),
+                            has_provider: providers
+                                .map(|s| {
+                                    s.providers
+                                        .values()
+                                        .any(|status| status.configured == Some(true))
+                                })
+                                .unwrap_or(false),
+                            has_github: github.map(|s| s.connected == Some(true)).unwrap_or(false),
                         };
+                        // Nothing left to do: leave the window alone entirely.
+                        if status.is_complete() {
+                            this.onboarding_env_id = None;
+                        } else {
+                            this.onboarding_env_id = Some(env_id);
+                            this.setup_status = status;
+                        }
                         this.setup_status_loading = false;
                         cx.notify();
                     });

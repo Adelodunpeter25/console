@@ -240,7 +240,15 @@ fun AppNavGraph() {
                                 navController.navigate(RouteSettingsFromSetup)
                         }
                     },
-                    onSkip = { AppContainer.setupRepository.dismiss() },
+                    // Both halves matter. `dismiss()` clears the state and
+                    // persists it; without the pop the route stays on the back
+                    // stack and SetupScreen keeps rendering — the button looked
+                    // inert because closing the state was never going to change
+                    // what the navigator was showing.
+                    onSkip = {
+                        AppContainer.setupRepository.dismiss()
+                        navController.popBackStack()
+                    },
                 )
             }
         }

@@ -3,6 +3,7 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.store.EnvironmentsStateHolder
+import com.console.mobile.data.store.SetupState
 import com.console.mobile.data.store.SetupStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,10 +28,17 @@ class SetupRepository(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
     /**
-     * Open the panel if this server has never had it dismissed.
+     * Open the panel, but only if this server actually has something left to set
+     * up.
      *
-     * Called on every environment switch. Cheap when the server is already
-     * dismissed — it returns without touching the network.
+     * The check happens *before* opening, not after. Showing the panel and then
+     * hiding it a moment later when the server turns out to be complete is worse
+     * than never showing it — the user still sees a first-run screen for a server
+     * they configured weeks ago.
+     *
+     * Nothing is persisted for an already-complete server. It stays eligible for
+     * the check next launch, so removing the last provider key brings the panel
+     * back rather than leaving a server with nothing configured and no prompt.
      */
     fun maybeShow(envId: String?) {
         val id = envId ?: return
@@ -38,41 +46,25 @@ class SetupRepository(
             setupState.close()
             return
         }
-        val name = environmentsState.state.value.environments
-            .firstOrNull { it.id == id }?.name
-        setupState.open(id, name)
-        refresh()
-    }
-
-    /**
-     * Read the three live facts behind the panel's steps.
-     *
-     * Each failure is confined to its own step: a server with no GitHub token
-     * still answers the status call, but if that call is unreachable the GitHub
-     * row reads as unmet rather than the panel failing to render. An onboarding
-     * panel that errors out teaches the user nothing.
-     *
-     * Reads the API directly rather than reading existing holders, because the
-     * panel can be the first thing to touch a freshly connected server and every
-     * holder would still be empty.
-     */
-    fun refresh() {
+        val name = environmentsState.state.value.environments.firstOrNull { it.id == id }?.name
         scope.launch {
-            val projects = async { runCatching { api.getProjects() }.getOrNull() }
-            val providers = async { runCatching { api.getProviderCredentials() }.getOrNull() }
-            val github = async { runCatching { api.getGitHubStatus() }.getOrNull() }
-
-            // `getProjects` is not wrapped in withContext here on purpose: the
-            // OkHttp call is already off the main thread inside the API layer,
-            // and awaiting three of them concurrently keeps the panel to one
-            // round-trip's latency instead of three.
-            val hasProject = projects.await()?.isNotEmpty() == true
-            val hasProvider = providers.await()?.values?.any { it.configured == true } == true
-            val hasGithub = github.await()?.connected == true
-
-            setupState.resolve(hasProject, hasProvider, hasGithub)
+            val status = fetchStatus()
+            if (status.isComplete) {
+                setupState.close()
+            } else {
+                setupState.open(id, name)
+                setupState.resolve(status.hasProject, status.hasProvider, status.hasGithub)
+            }
         }
     }
+
+    /** The three live facts, each isolated so one failure cannot blank the rest. */
+    private suspend fun fetchStatus(): SetupState = SetupState(
+        hasProject = runCatching { api.getProjects() }.getOrNull()?.isNotEmpty() == true,
+        hasProvider = runCatching { api.getProviderCredentials() }.getOrNull()
+            ?.values?.any { it.configured == true } == true,
+        hasGithub = runCatching { api.getGitHubStatus() }.getOrNull()?.connected == true,
+    )
 
     /**
      * Dismiss the panel for the active server.
