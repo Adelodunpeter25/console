@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ const ConnectPath = "/wt/v1/connect"
 // noted; the server never mutates them.
 type Deps struct {
 	Issuer        *auth.TokenIssuer
+	Authenticate  func(string) (auth.Claims, error)
 	Runs          *run.Service
 	PTY           *services.PtyManager
 	Ports         *services.PortRegistry
@@ -82,7 +84,18 @@ func (s *Server) Start() error {
 		return nil
 	}
 	if s.deps.Issuer == nil || s.deps.Runs == nil {
-		return fmt.Errorf("webtransport server requires a token issuer and run service.")
+		return fmt.Errorf("webtransport server requires authentication and run service.")
+	}
+	// The production route graph supplies the database-backed authenticator.
+	// Keep the dependency injectable for transport-focused tests.
+	if s.deps.Authenticate == nil {
+		s.deps.Authenticate = func(token string) (auth.Claims, error) {
+			device, err := s.deps.Issuer.Validate(token)
+			if err != nil {
+				return auth.Claims{}, err
+			}
+			return auth.Claims{Kind: "device", Device: device}, nil
+		}
 	}
 	cert, err := tls.LoadX509KeyPair(s.cfg.TLSCertFile, s.cfg.TLSKeyFile)
 	if err != nil {
@@ -143,11 +156,11 @@ func (s *Server) Start() error {
 
 // Stats is a point-in-time snapshot for the debug endpoint and wtbench.
 type Stats struct {
-	UptimeMillis int64            `json:"uptimeMillis"`
-	Goroutines   int              `json:"goroutines"`
-	HeapAlloc    uint64           `json:"heapAlloc"`
-	HeapSys      uint64           `json:"heapSys"`
-	SessionsTotal uint64          `json:"sessionsTotal"`
+	UptimeMillis  int64             `json:"uptimeMillis"`
+	Goroutines    int               `json:"goroutines"`
+	HeapAlloc     uint64            `json:"heapAlloc"`
+	HeapSys       uint64            `json:"heapSys"`
+	SessionsTotal uint64            `json:"sessionsTotal"`
 	StreamsByKind map[string]uint64 `json:"streamsByKind"`
 }
 
@@ -211,11 +224,26 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Token issuer not configured.", http.StatusInternalServerError)
 		return
 	}
-	deviceID, err := s.deps.Issuer.Validate(r.URL.Query().Get("token"))
+	token := ""
+	if scheme, value, ok := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " "); ok && strings.EqualFold(scheme, "bearer") {
+		token = strings.TrimSpace(value)
+	}
+	// WebTransport clients may not be able to set CONNECT headers, so the
+	// handshake permits the credential in its dedicated query parameter. This
+	// is intentionally not accepted by ordinary Fiber HTTP routes.
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+	if token == "" {
+		http.Error(w, "A valid API token is required.", http.StatusUnauthorized)
+		return
+	}
+	claims, err := s.deps.Authenticate(token)
 	if err != nil {
 		http.Error(w, "A valid API token is required.", http.StatusUnauthorized)
 		return
 	}
+	deviceID := claims.Device
 	sess, err := s.wt.Upgrade(w, r)
 	if err != nil {
 		slog.Debug("webtransport upgrade failed", "error", err)

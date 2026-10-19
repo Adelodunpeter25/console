@@ -59,6 +59,33 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			created_at INTEGER NOT NULL,
 			PRIMARY KEY (provider, model_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS auth_devices (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			platform TEXT NOT NULL,
+			token_id TEXT NOT NULL UNIQUE,
+			token_hash TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			last_seen_at INTEGER,
+			revoked_at INTEGER,
+			metadata_json TEXT NOT NULL DEFAULT '{}'
+		);
+		CREATE INDEX IF NOT EXISTS idx_auth_devices_active ON auth_devices(revoked_at, last_seen_at);
+
+		CREATE TABLE IF NOT EXISTS auth_pairing_grants (
+			id TEXT PRIMARY KEY,
+			grant_hash TEXT NOT NULL UNIQUE,
+			kind TEXT NOT NULL,
+			creator_device_id TEXT,
+			target_platform TEXT NOT NULL,
+			target_name TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL,
+			consumed_at INTEGER,
+			revoked_at INTEGER
+		);
+		CREATE INDEX IF NOT EXISTS idx_auth_pairing_grants_expiry ON auth_pairing_grants(expires_at, consumed_at, revoked_at);
 	`)
 	if err != nil {
 		return err

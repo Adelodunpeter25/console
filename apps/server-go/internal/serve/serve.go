@@ -5,6 +5,7 @@ package serve
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -99,7 +100,19 @@ func Run() error {
 		slog.Error("invalid transport config", "error", err)
 		return err
 	}
-	tokenIssuer := auth.NewTokenIssuer()
+	tokenIssuer, err := auth.NewTokenIssuerStrict()
+	if err != nil {
+		slog.Error("failed to initialize authentication", "error", err)
+		return err
+	}
+	authManager := auth.NewManager(manager, tokenIssuer)
+	if grant, expires, grantErr := authManager.CreateBootstrapGrant(); grantErr != nil {
+		slog.Error("failed to initialize bootstrap pairing", "error", grantErr)
+		return grantErr
+	} else if grant != "" {
+		// Deliberately written to the operator's terminal, never structured logs.
+		fmt.Fprintf(os.Stderr, "Console pairing grant (expires %s): %s\n", time.UnixMilli(expires).Format(time.RFC3339), grant)
+	}
 	app, runs, wtDeps, shutdownAll := routes.New(routes.Config{
 		DB: manager, Watch: watch, Ports: ports, Notifications: notifications,
 		TokenIssuer: tokenIssuer, AltSvc: wtAltSvcPort(wtCfg),

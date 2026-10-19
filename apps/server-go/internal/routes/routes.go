@@ -67,6 +67,16 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	})
 	RegisterVersionRoutes(app)
 
+	// Authentication is protected by default. Pairing is the sole public
+	// application endpoint; health/version are registered above this boundary.
+	tokenIssuer := cfg.TokenIssuer
+	if tokenIssuer == nil {
+		tokenIssuer = auth.NewTokenIssuer()
+	}
+	authManager := auth.NewManager(cfg.DB, tokenIssuer)
+	RegisterPairingRoutes(app, authManager)
+	app.Use(RequireDeviceToken(authManager))
+
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
@@ -87,11 +97,9 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB), services.NewProjectBootstrapService())
 	RegisterUsageRoutes(app, usage.NewService())
 	RegisterAuthRoutes(app, auth.NewAuthService())
-	tokenIssuer := cfg.TokenIssuer
-	if tokenIssuer == nil {
-		tokenIssuer = auth.NewTokenIssuer()
-	}
-	RegisterTokenRoutes(app, tokenIssuer)
+	RegisterDeviceRoutes(app, authManager)
+	// The old freely-mintable token endpoint is intentionally removed. Device
+	// tokens can only be issued through a consumed pairing grant.
 	RegisterIntegrationRoutes(app)
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
@@ -141,6 +149,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	// listener lifecycle from this bundle.
 	return app, runSvc, wt.Deps{
 		Issuer:        tokenIssuer,
+		Authenticate:  authManager.Authenticate,
 		Runs:          runSvc,
 		PTY:           ptyManager,
 		Ports:         cfg.Ports,
