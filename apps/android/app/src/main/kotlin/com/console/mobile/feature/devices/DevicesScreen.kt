@@ -11,24 +11,19 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,26 +49,21 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
-import console.v1.DeviceActionRequest
 import com.console.mobile.data.model.displayName
 import com.console.mobile.data.model.isBooted
 import com.console.mobile.data.model.isBooting
-import com.console.mobile.data.model.isIos
 import console.v1.DeviceDescriptor
+import com.console.mobile.ui.components.common.new.EmptyView
+import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.Home
-import io.github.lyxnx.compose.ui.tablericons.outline.Lock
-import io.github.lyxnx.compose.ui.tablericons.outline.Moon
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerPlay
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
-import io.github.lyxnx.compose.ui.tablericons.outline.Volume
-import io.github.lyxnx.compose.ui.tablericons.outline.Volume2
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -169,7 +158,23 @@ fun DevicesScreen(
             .fillMaxSize()
             .background(NewTheme.Background),
     ) {
-        PageHeader(title = "Devices", onBack = onBack)
+        PageHeader(
+            title = "Devices",
+            onBack = onBack,
+            actions = {
+                // The one device control worth having: on a booted device, send
+                // it to its home screen. Everything else lives on the device.
+                val booted = selectedDevice?.isBooted == true
+                HeaderIconButton(
+                    icon = TablerIcons.Outline.Home,
+                    contentDescription = "Home",
+                    enabled = booted,
+                    onClick = {
+                        webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('home')", null)
+                    },
+                )
+            },
+        )
         // Top toolbar: one raised card holding the picker and the device controls.
         Row(
             modifier = Modifier
@@ -337,131 +342,54 @@ fun DevicesScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(NewTheme.Background),
+            // Video stream surface (WebView)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
             ) {
-                // Video stream surface (WebView)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                                // The page is https (secure context, needed for WebCodecs)
-                                // but the stream socket is usually plain ws:// on a LAN.
-                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                setBackgroundColor(0xFF0A0A0B.toInt())
-                                addJavascriptInterface(AndroidBridge { s ->
-                                    streamStatus = s
-                                }, "AndroidBridge")
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                                        Log.d("DevicesPlayer", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
-                                        return true
-                                    }
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = false
+                            settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                            // The page is https (secure context, needed for WebCodecs)
+                            // but the stream socket is usually plain ws:// on a LAN.
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            setBackgroundColor(0xFF0A0A0B.toInt())
+                            addJavascriptInterface(AndroidBridge { s ->
+                                streamStatus = s
+                            }, "AndroidBridge")
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                                    Log.d("DevicesPlayer", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+                                    return true
                                 }
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                                        if (request.url.toString() != DEVICES_PLAYER_URL) return null
-                                        return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(DEVICES_PLAYER_HTML.toByteArray()))
-                                    }
-
-                                    override fun onPageFinished(view: WebView, url: String?) {
-                                        if (url == DEVICES_PLAYER_URL) pageReady = true
-                                    }
-                                }
-                                loadUrl(DEVICES_PLAYER_URL)
-                                webViewRef = this
                             }
-                        },
-                        onRelease = { wv ->
-                            wv.destroy()
-                            if (webViewRef === wv) webViewRef = null
-                            pageReady = false
-                            streamStatus = "idle"
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    StreamStatusOverlay(device = dev, status = streamStatus, isBooting = isBooting)
-                }
-
-                // Right Hardware Controls Rail (when booted)
-                if (dev.isBooted) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .padding(end = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Card(
-                            shape = RoundedCornerShape(NewTheme.FieldRadius),
-                            colors = CardDefaults.cardColors(containerColor = NewTheme.Card),
-                            modifier = Modifier.padding(vertical = 12.dp),
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                RailButton(
-                                    icon = TablerIcons.Outline.Home,
-                                    tooltip = "Home",
-                                    onClick = {
-                                        webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('home')", null)
-                                    },
-                                )
-                                if (!dev.isIos) {
-                                    RailButton(
-                                        icon = TablerIcons.Outline.ChevronLeft,
-                                        tooltip = "Back",
-                                        onClick = {
-                                            webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('back')", null)
-                                        },
-                                    )
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                                    if (request.url.toString() != DEVICES_PLAYER_URL) return null
+                                    return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(DEVICES_PLAYER_HTML.toByteArray()))
                                 }
-                                RailButton(
-                                    icon = TablerIcons.Outline.Volume,
-                                    tooltip = "Volume up",
-                                    onClick = {
-                                        webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('volume-up')", null)
-                                    },
-                                )
-                                RailButton(
-                                    icon = TablerIcons.Outline.Volume2,
-                                    tooltip = "Volume down",
-                                    onClick = {
-                                        webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('volume-down')", null)
-                                    },
-                                )
-                                RailButton(
-                                    icon = TablerIcons.Outline.Lock,
-                                    tooltip = "Lock / Power",
-                                    onClick = {
-                                        webViewRef?.evaluateJavascript("window.__consoleDevice && window.__consoleDevice.button('power')", null)
-                                    },
-                                )
-                                RailButton(
-                                    icon = TablerIcons.Outline.Moon,
-                                    tooltip = "Toggle dark / light",
-                                    onClick = {
-                                        scope.launch {
-                                            repo.interact(dev.id, dev.platform, DeviceActionRequest(action = "appearance", appearance = "toggle"))
-                                        }
-                                    },
-                                )
+
+                                override fun onPageFinished(view: WebView, url: String?) {
+                                    if (url == DEVICES_PLAYER_URL) pageReady = true
+                                }
                             }
+                            loadUrl(DEVICES_PLAYER_URL)
+                            webViewRef = this
                         }
-                    }
-                }
+                    },
+                    onRelease = { wv ->
+                        wv.destroy()
+                        if (webViewRef === wv) webViewRef = null
+                        pageReady = false
+                        streamStatus = "idle"
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                StreamStatusOverlay(device = dev, status = streamStatus, isBooting = isBooting)
             }
         }
     }
@@ -491,28 +419,6 @@ private fun StreamStatusOverlay(device: DeviceDescriptor, status: String, isBoot
             text = message,
             color = if (isError) NewTheme.Danger else NewTheme.TextSecondary,
             fontSize = 13.sp,
-        )
-    }
-}
-
-@Composable
-private fun RailButton(
-    icon: ImageVector,
-    tooltip: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = tooltip,
-            tint = NewTheme.TextSecondary,
-            modifier = Modifier.size(19.dp),
         )
     }
 }
