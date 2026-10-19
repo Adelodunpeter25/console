@@ -1,5 +1,7 @@
 package com.console.mobile.core.util
 
+import java.util.Locale
+
 fun folderName(path: String?): String {
     if (path.isNullOrEmpty()) return ""
     val trimmed = path.trimEnd('/')
@@ -25,4 +27,12 @@ fun formatDurationMs(ms: Long): String {
     val minutes = seconds / 60
     return "$minutes m ${(seconds % 60).toString().padStart(2, '0')}s".replace(" ", "")
         .let { "${minutes}m ${(seconds % 60).toString().padStart(2, '0')}s" }
+}
+
+/** Footer label for the server-computed output rate, e.g. "42.1 tok/s".
+ *  The Go server owns the measurement and its gating; null hides the metric. */
+fun formatTokensPerSecond(tokPerSec: Double?): String? {
+    val rate = tokPerSec ?: return null
+    if (!rate.isFinite() || rate <= 0.0) return null
+    return String.format(Locale.US, "%.1f tok/s", rate)
 }

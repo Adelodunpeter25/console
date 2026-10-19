@@ -55,6 +55,8 @@ data class AssistantMessage(
     override val createdAt: Long? = null,
     val content: List<MessageContent> = emptyList(),
     val stopReason: String? = null,
+    /** Server-computed output throughput; null when it could not measure. */
+    val tokPerSec: Double? = null,
 ) : AgentMessage
 
 @Serializable

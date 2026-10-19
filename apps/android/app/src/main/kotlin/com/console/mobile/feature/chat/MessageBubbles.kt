@@ -60,6 +60,7 @@ import com.console.mobile.core.util.argumentPath
 import com.console.mobile.core.util.extractWriteArgs
 import com.console.mobile.core.util.fileCallDiffs
 import com.console.mobile.core.util.formatMessageTime
+import com.console.mobile.core.util.formatTokensPerSecond
 import com.console.mobile.core.util.getFileName
 import com.console.mobile.core.util.getToolIcon
 import com.console.mobile.core.util.getToolLabel
@@ -194,6 +195,7 @@ fun AssistantBubble(
     onOpenChange: ((SessionFileChange) -> Unit)? = null,
     messageId: String? = null,
     onFork: ((String) -> Unit)? = null,
+    tokPerSec: Double? = null,
 ) {
     val context = LocalContext.current
     val hasContent = !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty()
@@ -242,6 +244,9 @@ fun AssistantBubble(
         if (!isStreaming && (createdAt != null || !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty() || fileChanges.isNotEmpty())) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp, start = 2.dp)) {
                 Text(formatMessageTime(createdAt ?: System.currentTimeMillis()), color = NewTheme.TextMuted, fontSize = 12.sp)
+                formatTokensPerSecond(tokPerSec)?.let { rate ->
+                    Text(rate, color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                }
                 if (onFork != null && messageId != null) ForkButton(onClick = { onFork.invoke(messageId) })
                 val copyable = buildList {
                     if (!thinkingContent.isNullOrEmpty()) add("Thought:\n$thinkingContent")
@@ -553,6 +558,7 @@ fun MessageBubbleItem(
                 onOpenChange = onOpenChange,
                 messageId = item.id,
                 onFork = onFork,
+                tokPerSec = item.tokPerSec,
             )
         }
     }

@@ -50,6 +50,7 @@ internal fun console.v1.AgentAssistantMessage.toUi(): AssistantMessage = Assista
     id = id.takeIf { it.isNotEmpty() },
     content = content.mapNotNull { it.toUi() },
     stopReason = stop_reason.takeIf { it.isNotEmpty() },
+    tokPerSec = tok_per_sec,
 )
 
 fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
@@ -65,6 +66,7 @@ fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
         createdAt = created_at,
         content = event.value.content.mapNotNull { it.toUi() },
         stopReason = event.value.stop_reason.takeIf { it.isNotEmpty() },
+        tokPerSec = event.value.tok_per_sec,
     )
     is console.v1.AgentMessage.Message.ToolResult -> ToolResultMessage(
         id = id,
