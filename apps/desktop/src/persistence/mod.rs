@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod layout;
 pub(crate) mod store;
 pub mod window;

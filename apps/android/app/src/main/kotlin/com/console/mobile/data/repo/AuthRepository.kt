@@ -1,13 +1,19 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
+import com.console.mobile.data.local.TokenStore
 import console.v1.AuthStatusResponse
 import console.v1.GitHubAuthStatus
 import console.v1.OAuthLoginUrlResponse
 import console.v1.ProviderAuthStatus
 import console.v1.ProviderCredentialStatus
+import com.console.mobile.data.model.DeviceInfo
 import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.OAuthCallbackDto
+import com.console.mobile.data.model.PairingData
+import com.console.mobile.data.model.PairingGrantData
+import com.console.mobile.data.model.PairingGrantRequest
+import com.console.mobile.data.model.PairingRequest
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
 import com.console.mobile.data.store.AuthStateHolder
@@ -20,8 +26,26 @@ import kotlinx.coroutines.withContext
 class AuthRepository(
     private val api: ConsoleApi,
     private val authState: AuthStateHolder,
+    private val tokenStore: TokenStore,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
+    suspend fun pair(request: PairingRequest): PairingData = withContext(Dispatchers.IO) {
+        val paired = api.pair(request)
+        tokenStore.authToken = paired.token
+        tokenStore.deviceId = paired.device.id
+        tokenStore.deviceName = paired.device.name
+        tokenStore.tokenExpiresAt = paired.expiresAt
+        paired
+    }
+
+    suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData = withContext(Dispatchers.IO) {
+        api.createPairingGrant(request)
+    }
+
+    suspend fun listDevices(): List<DeviceInfo> = withContext(Dispatchers.IO) { api.listAuthDevices() }
+
+    suspend fun revokeDevice(id: String) = withContext(Dispatchers.IO) { api.revokeAuthDevice(id) }
+
     fun loadStatus() {
         scope.launch {
             authState.patch { it.copy(loading = true, error = null) }

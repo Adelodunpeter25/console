@@ -306,6 +306,7 @@ object AppContainer {
         authRepository = AuthRepository(
             api = consoleApi,
             authState = authStateHolder,
+            tokenStore = tokenStore,
         )
         setupRepository = SetupRepository(
             api = consoleApi,

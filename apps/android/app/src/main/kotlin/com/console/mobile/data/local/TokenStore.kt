@@ -28,9 +28,33 @@ class TokenStore(context: Context) {
 
     var authToken: String?
         get() = prefs.getString(KEY_TOKEN, null)
-        set(value) { prefs.edit().putString(KEY_TOKEN, value).apply() }
+        set(value) {
+            if (value == null) prefs.edit().remove(KEY_TOKEN).apply()
+            else prefs.edit().putString(KEY_TOKEN, value).apply()
+        }
+
+    var deviceId: String?
+        get() = prefs.getString(KEY_DEVICE_ID, null)
+        set(value) {
+            if (value == null) prefs.edit().remove(KEY_DEVICE_ID).apply()
+            else prefs.edit().putString(KEY_DEVICE_ID, value).apply()
+        }
+
+    var deviceName: String?
+        get() = prefs.getString(KEY_DEVICE_NAME, null)
+        set(value) {
+            if (value == null) prefs.edit().remove(KEY_DEVICE_NAME).apply()
+            else prefs.edit().putString(KEY_DEVICE_NAME, value).apply()
+        }
+
+    var tokenExpiresAt: Long
+        get() = prefs.getLong(KEY_TOKEN_EXPIRES_AT, 0L)
+        set(value) { prefs.edit().putLong(KEY_TOKEN_EXPIRES_AT, value).apply() }
 
     companion object {
         const val KEY_TOKEN = "auth_token"
+        const val KEY_DEVICE_ID = "device_id"
+        const val KEY_DEVICE_NAME = "device_name"
+        const val KEY_TOKEN_EXPIRES_AT = "auth_token_expires_at"
     }
 }

@@ -40,6 +40,12 @@ import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.ProviderCredentialRequest
 import com.console.mobile.data.model.OAuthLoginUrlDto
+import com.console.mobile.data.model.DeviceInfo
+import com.console.mobile.data.model.DeviceListData
+import com.console.mobile.data.model.PairingData
+import com.console.mobile.data.model.PairingGrantData
+import com.console.mobile.data.model.PairingGrantRequest
+import com.console.mobile.data.model.PairingRequest
 import console.v1.ProviderCredentialStatus
 import console.v1.ProviderCredentialStatuses
 import console.v1.SetProviderCredentialResponse
@@ -460,6 +466,26 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun getApprovalModes(): List<ApprovalModeOption> {
         val raw = http.get("/api/config/approval-modes")
         return http.unwrap(raw, ListSerializer(ApprovalModeOption.serializer()), "list approval modes")
+    }
+
+    override suspend fun pair(request: PairingRequest): PairingData {
+        val raw = http.post("/api/auth/pair", http.encodeBody(PairingRequest.serializer(), request))
+        return http.unwrap(raw, PairingData.serializer(), "pair with server")
+    }
+
+    override suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData {
+        val raw = http.post("/api/auth/pairing-grants", http.encodeBody(PairingGrantRequest.serializer(), request))
+        return http.unwrap(raw, PairingGrantData.serializer(), "create pairing grant")
+    }
+
+    override suspend fun listAuthDevices(): List<DeviceInfo> {
+        val raw = http.get("/api/auth/devices")
+        return http.unwrap(raw, DeviceListData.serializer(), "list devices").devices
+    }
+
+    override suspend fun revokeAuthDevice(id: String) {
+        val raw = http.delete("/api/auth/devices/$id")
+        http.unwrap(raw, JsonElement.serializer(), "revoke device")
     }
 
     override suspend fun getAuthStatus(): AuthStatusResponse {
