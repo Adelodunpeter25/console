@@ -57,9 +57,67 @@ jobs:
           keyPassword=$ANDROID_KEY_PASSWORD
           EOF
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Must match rust-toolchain.toml (source of truth), the same pin the
+          # desktop workflow uses.
+          toolchain: 1.97.1
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/android/rust-wt
+
+      # libconsole_wt_android.so is gitignored on purpose (a binary is not a
+      # reviewable artifact) and produced by rust-wt/build.sh, so without this
+      # step both APKs ship with no WebTransport at all. The app falls back to
+      # SSE/WS when the library is missing, which is exactly why this runs: a
+      # silent downgrade on every released APK is not a fallback, it is a bug.
+      #
+      # The NDK is resolved here instead of being left to Gradle, which installs
+      # one during the build — already too late for this step.
+      - name: Stage the WebTransport library
+        working-directory: apps/android
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          NDK_VERSION=28.2.13676358
+          NDK_DIR="$SDK/ndk/$NDK_VERSION"
+          if [[ ! -d "$NDK_DIR" ]]; then
+            # Any NDK builds the Rust side; only fetch the pinned one when the
+            # runner has none, so the common case stays a download-free hit.
+            NDK_DIR="$(ls -d "$SDK"/ndk/* 2>/dev/null | tail -1 || true)"
+          fi
+          if [[ -z "${NDK_DIR:-}" || ! -d "$NDK_DIR" ]]; then
+            SDKMANAGER="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)"
+            if [[ -z "$SDKMANAGER" ]]; then
+              echo "No NDK and no sdkmanager under $SDK" >&2
+              exit 1
+            fi
+            yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION"
+            NDK_DIR="$SDK/ndk/$NDK_VERSION"
+          fi
+          echo "Staging WebTransport with NDK at $NDK_DIR"
+          ANDROID_NDK_HOME="$NDK_DIR" bash rust-wt/build.sh
+
       - name: Build release and debug APKs
         working-directory: apps/android
         run: ./gradlew assembleRelease assembleDebug
+
+      # The app runs without the library (SSE/WS fallback), so a packaging
+      # mistake here is invisible on the device — only WebTransport quietly
+      # stops being used. Assert it instead of trusting the step above.
+      - name: Verify the APKs carry WebTransport
+        run: |
+          set -euo pipefail
+          for apk in \
+            apps/android/app/build/outputs/apk/release/app-release.apk \
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+          do
+            unzip -l "$apk" | grep -q 'lib/arm64-v8a/libconsole_wt_android.so' \
+              || { echo "$apk is missing libconsole_wt_android.so" >&2; exit 1; }
+          done
 
       - name: Collect APKs
         run: |

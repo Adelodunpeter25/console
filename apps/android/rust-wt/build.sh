@@ -37,6 +37,11 @@ build_target() {
     local target="$1"
     # Must run inside the crate: `.cargo/config.toml` (the NDK linker) is
     # discovered from the working directory, not from --manifest-path.
+    #
+    # That config's linker paths name the host they were written on, so the
+    # wrapper found above is passed through CARGO_TARGET_*_LINKER as well.
+    # Environment beats config file, which is what lets the same script run on
+    # a Linux CI runner, where the committed darwin paths do not exist.
     (
         cd "$SCRIPT_DIR"
         env \
@@ -44,6 +49,8 @@ build_target() {
             "CC_x86_64-linux-android=$BIN/x86_64-linux-android21-clang" \
             "AR_aarch64-linux-android=$BIN/llvm-ar" \
             "AR_x86_64-linux-android=$BIN/llvm-ar" \
+            "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$BIN/aarch64-linux-android21-clang" \
+            "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$BIN/x86_64-linux-android21-clang" \
             cargo build --release --target "$target"
     )
 }

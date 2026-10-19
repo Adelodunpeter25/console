@@ -9,6 +9,10 @@
 # is C and asm, so the same clang has to reach ring's build script, not just
 # the final link.
 #
+# These paths are this host's; build.sh overrides them from ANDROID_NDK_HOME
+# (environment beats config file), so a clone elsewhere or a CI runner does not
+# need this file edited — it only has to be right for a bare `cargo` call.
+#
 # `cargo-ndk` does the same wiring automatically if this ever gets tedious.
 
 [target.aarch64-linux-android]
