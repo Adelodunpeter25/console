@@ -24,6 +24,8 @@ import com.console.mobile.feature.devices.DevicesScreen
 import com.console.mobile.feature.files.FilesScreen
 import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
+import com.console.mobile.feature.onboarding.SetupScreen
+import com.console.mobile.feature.onboarding.SetupStep
 import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.subagents.SubagentDetailsScreen
@@ -39,6 +41,33 @@ fun AppNavGraph() {
 
     if (appState.backendUrl.isNullOrBlank()) {
         OnboardingScreen(onConnected = {})
+        ConfirmPromptHost()
+        return
+    }
+
+    // Second gate: the server is connected but not yet set up. Distinct from the
+    // gate above, which is about *having* a backend; this one is about it being
+    // usable. Re-keyed on the active environment so switching to a newly added
+    // server runs the check again for that server alone.
+    val setupState by AppContainer.setupStateHolder.state.collectAsStateWithLifecycle()
+    val environments by AppContainer.environmentsStateHolder.state.collectAsStateWithLifecycle()
+    LaunchedEffect(environments.activeId, appState.backendUrl) {
+        AppContainer.setupRepository.maybeShow(environments.activeId)
+    }
+    if (setupState.activeEnvId != null) {
+        SetupScreen(
+            state = setupState,
+            onStep = { step ->
+                // Engaging a step dismisses the panel: it is a one-shot pointer,
+                // and every step has a real screen behind it. Points at Settings
+                // because that is where Projects, Providers and the GitHub key
+                // all live.
+                AppContainer.setupRepository.dismissThen {
+                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Settings)
+                }
+            },
+            onSkip = { AppContainer.setupRepository.dismiss() },
+        )
         ConfirmPromptHost()
         return
     }

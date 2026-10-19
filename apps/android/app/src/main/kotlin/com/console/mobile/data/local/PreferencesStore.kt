@@ -49,8 +49,38 @@ class PreferencesStore(context: Context) {
         prefs.edit().clear().apply()
     }
 
+    /**
+     * Environment ids whose setup panel was already dismissed.
+     *
+     * One bit per server, keyed by environment id — the same ids
+     * [PersistedEnvironments] uses. Empty means every server still shows the
+     * panel, which is what makes a fresh install and an upgraded one behave the
+     * same (nothing stored reads as "nothing dismissed").
+     *
+     * Deliberately holds no setup state. Whether a server has a project or a
+     * provider key is read live; storing it here would let the two disagree the
+     * moment a user deleted their last project.
+     */
+    fun loadOnboardingDismissed(): Set<String> =
+        prefs.getStringSet(KEY_ONBOARDING_DISMISSED, emptySet())?.toSet() ?: emptySet()
+
+    /**
+     * Mark one server's setup panel dismissed, leaving every other server's bit
+     * alone.
+     *
+     * A `StringSet` is copied before writing because Android hands back the live
+     * stored instance — mutating it in place updates memory only, and the change
+     * is silently lost.
+     */
+    fun dismissOnboarding(envId: String) {
+        val next = loadOnboardingDismissed().toMutableSet()
+        next.add(envId)
+        prefs.edit().putStringSet(KEY_ONBOARDING_DISMISSED, next).apply()
+    }
+
     companion object {
         const val KEY_BACKEND_URL = "backend_url"
         const val KEY_ENVIRONMENTS = "environments_data"
+        const val KEY_ONBOARDING_DISMISSED = "onboarding_dismissed"
     }
 }

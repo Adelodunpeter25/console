@@ -10,6 +10,7 @@ import com.console.mobile.data.local.ChatPersistence
 import com.console.mobile.data.local.PreferencesStore
 import com.console.mobile.data.local.TokenStore
 import com.console.mobile.data.repo.AuthRepository
+import com.console.mobile.data.repo.SetupRepository
 import com.console.mobile.data.repo.ChatRepository
 import com.console.mobile.data.repo.EnvironmentsRepository
 import com.console.mobile.data.repo.AssistRepository
@@ -25,6 +26,7 @@ import com.console.mobile.data.repo.TerminalRepository
 import com.console.mobile.data.repo.UsageRepository
 import com.console.mobile.data.store.AppStateHolder
 import com.console.mobile.data.store.AuthStateHolder
+import com.console.mobile.data.store.SetupStateHolder
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.EnvironmentsStateHolder
 import com.console.mobile.data.store.FsStateHolder
@@ -104,6 +106,9 @@ object AppContainer {
     lateinit var authStateHolder: AuthStateHolder
         private set
 
+    lateinit var setupStateHolder: SetupStateHolder
+        private set
+
     lateinit var fsStateHolder: FsStateHolder
         private set
 
@@ -159,6 +164,9 @@ object AppContainer {
     lateinit var notificationRepository: NotificationRepository
         private set
 
+    lateinit var setupRepository: SetupRepository
+        private set
+
     lateinit var authRepository: AuthRepository
         private set
 
@@ -210,6 +218,7 @@ object AppContainer {
         projectStateHolder = ProjectStateHolder()
         providerStateHolder = ProviderStateHolder()
         authStateHolder = AuthStateHolder()
+        setupStateHolder = SetupStateHolder()
         fsStateHolder = FsStateHolder()
         usageStateHolder = UsageStateHolder()
         mcpStateHolder = McpStateHolder()
@@ -283,6 +292,12 @@ object AppContainer {
         authRepository = AuthRepository(
             api = consoleApi,
             authState = authStateHolder,
+        )
+        setupRepository = SetupRepository(
+            api = consoleApi,
+            preferencesStore = preferencesStore,
+            environmentsState = environmentsStateHolder,
+            setupState = setupStateHolder,
         )
         deviceRepository = com.console.mobile.data.repo.DeviceRepository(
             api = consoleApi,

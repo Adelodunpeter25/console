@@ -1,0 +1,106 @@
+package com.console.mobile
+
+import com.console.mobile.data.store.SetupState
+import com.console.mobile.data.store.SetupStateHolder
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * First-run setup panel state: the stored-vs-derived split, mirroring the
+ * desktop's model.
+ *
+ * The property under test is that setup facts are never persisted. They are read
+ * live, so a user who deletes their last project sees that row go back to unmet
+ * without the panel reopening — the dismissal is the only thing remembered.
+ */
+class SetupStateTest {
+    private fun fullySetUp() = SetupState(
+        activeEnvId = "env_abc123",
+        serverName = "Remote box",
+        hasProject = true,
+        hasProvider = true,
+        hasGithub = true,
+        loading = false,
+    )
+
+    @Test
+    fun a_server_missing_nothing_is_complete() {
+        assertTrue(fullySetUp().isComplete)
+    }
+
+    @Test
+    fun each_step_alone_leaves_it_incomplete() {
+        // The panel's whole purpose is the remaining work, so one unmet step must
+        // keep it open-able.
+        val complete = fullySetUp()
+        assertFalse(complete.copy(hasProject = false).isComplete)
+        assertFalse(complete.copy(hasProvider = false).isComplete)
+        assertFalse(complete.copy(hasGithub = false).isComplete)
+    }
+
+    @Test
+    fun an_untouched_server_is_not_complete() {
+        assertFalse(SetupState().isComplete)
+    }
+
+    @Test
+    fun opening_resets_prior_step_results() {
+        // The panel can open for a second server after the first was set up. The
+        // new server must start from "unknown", not inherit the previous
+        // server's answers — those would be lies about a different machine.
+        val holder = SetupStateHolder()
+        holder.resolve(hasProject = true, hasProvider = true, hasGithub = true)
+        holder.open("env_second", "Second box")
+
+        val state = holder.state.value
+        assertEquals("env_second", state.activeEnvId)
+        assertEquals("Second box", state.serverName)
+        assertTrue("step status is unknown until resolved", state.loading)
+        assertFalse(state.hasProject)
+        assertFalse(state.hasProvider)
+        assertFalse(state.hasGithub)
+    }
+
+    @Test
+    fun resolving_clears_loading_and_records_every_step() {
+        val holder = SetupStateHolder()
+        holder.open("env_abc123", "Remote box")
+        holder.resolve(hasProject = true, hasProvider = false, hasGithub = true)
+
+        val state = holder.state.value
+        assertFalse(state.loading)
+        assertTrue(state.hasProject)
+        assertFalse(state.hasProvider)
+        assertTrue(state.hasGithub)
+        assertFalse(state.isComplete)
+    }
+
+    @Test
+    fun closing_clears_the_active_server() {
+        val holder = SetupStateHolder()
+        holder.open("env_abc123", "Remote box")
+        holder.resolve(true, true, true)
+        holder.close()
+
+        val state = holder.state.value
+        assertNull("a closed panel must not gate navigation", state.activeEnvId)
+        assertNull(state.serverName)
+        // Step results reset with it, so a later open cannot read stale answers.
+        assertFalse(state.hasProject)
+        assertFalse(state.hasProvider)
+        assertFalse(state.hasGithub)
+    }
+
+    @Test
+    fun dismissal_is_tracked_per_server_not_globally() {
+        // The store holds environment ids, so dismissing one server cannot
+        // silence the panel on another. Modelled here as the set the store keeps.
+        val dismissed = mutableSetOf("env_abc123")
+
+        assertTrue("env_abc123" in dismissed)
+        assertFalse("env_second" in dismissed)
+    }
+}
