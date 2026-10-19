@@ -273,7 +273,7 @@ func (t *TokenIssuer) parse(token string) (tokenPayload, error) {
 		return out, ErrTokenInvalid
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(body)
-	if err != nil {
+	if err != nil || base64.RawURLEncoding.EncodeToString(raw) != body {
 		return out, ErrTokenInvalid
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
