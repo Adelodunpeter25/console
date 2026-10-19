@@ -18,8 +18,8 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
 <style>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0a0a0b; overflow: hidden; user-select: none; -webkit-user-select: none; }
-  #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-  canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; touch-action: none; -webkit-user-drag: none; }
+  #stage { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { flex: none; display: block; touch-action: none; -webkit-user-drag: none; }
   #dbg { position: absolute; left: 6px; top: 6px; max-width: 94%; font: 10px/1.35 monospace; color: #7CFC00; background: rgba(0,0,0,.72); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre-wrap; z-index: 5; }
   #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
@@ -59,6 +59,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
       'in=' + dbg.chunksIn + ' key=' + dbg.keyIn + ' decoded=' + dbg.decoded + ' drawn=' + dbg.drawn + '\n' +
       'cfg=' + dbg.cfg + ' ' + dbg.cfgOk + '\n' +
       'canvas=' + canvas.width + 'x' + canvas.height + ' css=' + Math.round(r.width) + 'x' + Math.round(r.height) + '\n' +
+      'stage=' + stage.clientWidth + 'x' + stage.clientHeight + ' win=' + window.innerWidth + 'x' + window.innerHeight + '\n' +
       'frame=' + dbg.lastFrame + ' px=' + dbg.px + '\n' +
       (dbg.decErr ? 'ERR ' + dbg.decErr : '');
     dbgEl.textContent = txt;
@@ -78,6 +79,21 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     statusEl.style.display = isError ? 'block' : 'none';
     report({ type: 'status', status: s });
   };
+
+  const stage = document.getElementById('stage');
+  // Contain-fit the canvas in pixels. CSS percent max-width/height gave this
+  // canvas a 0x0 box in the Android WebView, so size it explicitly instead.
+  function fitCanvas() {
+    const cw = canvas.width, ch = canvas.height;
+    if (!cw || !ch) return;
+    const sw = stage.clientWidth || window.innerWidth;
+    const sh = stage.clientHeight || window.innerHeight;
+    if (!sw || !sh) return;
+    const k = Math.min(sw / cw, sh / ch);
+    canvas.style.width = Math.max(1, Math.floor(cw * k)) + 'px';
+    canvas.style.height = Math.max(1, Math.floor(ch * k)) + 'px';
+  }
+  window.addEventListener('resize', fitCanvas);
 
   function closeDecoder() {
     try { if (decoder && decoder.state !== 'closed') decoder.close(); } catch (e) {}
@@ -116,6 +132,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
           if (targetW && targetH && (canvas.width !== targetW || canvas.height !== targetH)) {
             canvas.width = targetW; canvas.height = targetH;
           }
+          fitCanvas();
           if (canvas.width && canvas.height) {
             ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
             dbg.drawn++;
