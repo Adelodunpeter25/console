@@ -245,8 +245,8 @@ impl RenderOnce for UserMessageBubble {
         let (message_text, mentions) =
             message_text_with_mentions(&self.content, &self.context_files);
         let has_content = !message_text.is_empty();
-        // Long prompts fold to 8 lines with a Show more/less toggle,
-        // mirroring mobile's 4-line fold.
+        // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
+// mirroring mobile's 4-line fold.
         let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
         let folded = foldable && !self.expanded;
         let expanded = self.expanded;
@@ -320,30 +320,42 @@ impl RenderOnce for UserMessageBubble {
                                 .bg(theme.user_bubble)
                                 .border_1()
                                 .border_color(theme.user_bubble_border)
+                                .flex()
+                                .flex_col()
                                 .text_size(px(14.0))
                                 .line_height(px(20.0))
                                 .text_color(theme.text)
-                                .when(folded, |el| {
-                                    el.max_h(px(USER_FOLDED_MAX_HEIGHT_PX)).overflow_hidden()
-                                })
-                                .child(InlineFileMentionText::new(message_text, mentions)),
-                        )
-                    })
-                    .when_some(expand_toggle, |element, on_toggle| {
-                        element.child(
-                            div()
-                                .id(ElementId::Name(
-                                    format!("toggle-user-fold-{}", self.selection_row).into(),
-                                ))
-                                .px(px(4.0))
-                                .text_size(px(12.0))
-                                .text_color(theme.accent)
-                                .cursor_pointer()
-                                .on_click(move |_, window, cx| {
-                                    (on_toggle)(window, cx);
-                                    cx.stop_propagation();
-                                })
-                                .child(if expanded { "Show less" } else { "Show more" }),
+                                // Clip the text itself rather than the card, so the
+                                // fold toggle below stays on the bubble's background.
+                                .child(
+                                    div()
+                                        .when(folded, |el| {
+                                            el.max_h(px(USER_FOLDED_MAX_HEIGHT_PX))
+                                                .overflow_hidden()
+                                        })
+                                        .child(InlineFileMentionText::new(message_text, mentions)),
+                                )
+                                .when_some(expand_toggle, |card, on_toggle| {
+                                    card.child(
+                                        div()
+                                            .id(ElementId::Name(
+                                                format!(
+                                                    "toggle-user-fold-{}",
+                                                    self.selection_row
+                                                )
+                                                .into(),
+                                            ))
+                                            .pt(px(4.0))
+                                            .text_size(px(12.0))
+                                            .text_color(theme.accent)
+                                            .cursor_pointer()
+                                            .on_click(move |_, window, cx| {
+                                                (on_toggle)(window, cx);
+                                                cx.stop_propagation();
+                                            })
+                                            .child(if expanded { "Show less" } else { "Show more" }),
+                                    )
+                                }),
                         )
                     }),
             )
