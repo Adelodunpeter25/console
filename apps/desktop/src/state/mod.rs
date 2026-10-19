@@ -18,6 +18,7 @@ mod errors;
 mod execution;
 mod floating_composer;
 mod github;
+mod onboarding;
 mod provider_credentials;
 mod global_actions;
 mod integrations;

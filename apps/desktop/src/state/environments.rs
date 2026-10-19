@@ -83,6 +83,13 @@ impl ConsoleDesktopApp {
             self.save_persisted_environments();
         }
 
+        // Boot into an un-onboarded server is the case this panel exists for:
+        // the user just opened the app onto a machine they have not set up.
+        // `active_env_id` is assigned directly here rather than through
+        // `activate_environment`, so this has to be checked explicitly or the
+        // launch case would never fire.
+        self.maybe_show_onboarding(self.active_env_id.clone().as_deref(), cx);
+
         let active_url = self.active_environment_url();
         let client = self.client.clone();
         cx.spawn(async move |_entity, _cx| {
@@ -251,6 +258,10 @@ impl ConsoleDesktopApp {
             return;
         };
         self.active_env_id = Some(env_id);
+        // Switching servers is the other half of the trigger. Each server keeps
+        // its own dismissal bit, so a server already set up stays silent while
+        // a newly added one opens the panel.
+        self.maybe_show_onboarding(self.active_env_id.clone().as_deref(), cx);
         // Drop the old backend's stream and localhost listeners before
         // switching its shared transport.
         self.port_stream = None;

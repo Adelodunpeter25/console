@@ -696,6 +696,10 @@ impl ConsoleDesktopApp {
             provider_credential_busy: std::collections::HashSet::new(),
             provider_credential_forms_open: std::collections::HashSet::new(),
             provider_credential_error: None,
+            onboarding_dismissed: std::collections::HashSet::new(),
+            onboarding_env_id: None,
+            setup_status: Default::default(),
+            setup_status_loading: false,
             integrations: Vec::new(),
             integrations_loading: false,
             integrations_error: None,
@@ -745,6 +749,12 @@ impl ConsoleDesktopApp {
             }
             _ => None,
         };
+        // Restore the per-server setup dismissals *before* environments init, which
+        // is where the panel is first considered. Loading it afterwards would
+        // open the panel once on every launch for a server already dismissed.
+        app.onboarding_dismissed = crate::persistence::load_onboarding()
+            .map(|state| state.dismissed)
+            .unwrap_or_default();
         app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
         app.refresh_auth_status(cx);
         app.init_notifications(cx);

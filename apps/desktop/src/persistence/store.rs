@@ -48,6 +48,24 @@ pub struct PersistedDraftsState {
     pub drafts: std::collections::HashMap<String, PersistedDraft>,
 }
 
+/// Which servers have already been shown the first-run setup panel.
+///
+/// One bit per server, keyed by environment id — the same stable ids
+/// `PersistedEnvironmentsState` uses (`default-local` is a literal, not a
+/// generated one). A set rather than a map because presence *is* the whole
+/// fact; there is no per-step progress to record.
+///
+/// Deliberately does NOT track whether a server is "configured". That is
+/// derived live from the server every time the panel opens (projects, provider
+/// key, GitHub key), so this can never disagree with reality: a user who
+/// deletes their last project sees that step go back to unmet without the tour
+/// re-opening, because the tour only records that it was dismissed once.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PersistedOnboardingState {
+    #[serde(default)]
+    pub dismissed: std::collections::HashSet<String>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(crate) struct StorageDocument {
     pub(crate) version: u32,
@@ -56,6 +74,7 @@ pub(crate) struct StorageDocument {
     pub(crate) layout: Option<PersistedLayoutState>,
     pub(crate) environments: Option<PersistedEnvironmentsState>,
     pub(crate) drafts: Option<PersistedDraftsState>,
+    pub(crate) onboarding: Option<PersistedOnboardingState>,
 }
 
 fn app_folder_name() -> &'static str {
@@ -186,6 +205,22 @@ pub fn save_layout(state: PersistedLayoutState) {
 
 pub fn load_environments() -> Option<PersistedEnvironmentsState> {
     read_document().environments
+}
+
+/// Server ids whose setup panel has been dismissed. Absent means none, which is
+/// what makes every server show the panel until it is dismissed.
+pub fn load_onboarding() -> Option<PersistedOnboardingState> {
+    read_document().onboarding
+}
+
+/// Mark one server's setup panel as dismissed, leaving every other server's
+/// state alone.
+pub fn dismiss_onboarding(env_id: &str) {
+    update_document(|document| {
+        let mut state = document.onboarding.clone().unwrap_or_default();
+        state.dismissed.insert(env_id.to_string());
+        document.onboarding = Some(state);
+    });
 }
 
 pub fn save_environments(state: PersistedEnvironmentsState) {

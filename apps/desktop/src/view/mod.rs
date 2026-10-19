@@ -1413,5 +1413,10 @@ impl Render for ConsoleDesktopApp {
                 el.child(card)
             })
             .child(self.global_search_panel.clone())
+            // First-run setup panel. Renders nothing when the active server has
+            // already been through it.
+            .when_some(self.onboarding_panel_view(window, cx), |el, panel| {
+                el.child(panel)
+            })
     }
 }

@@ -371,6 +371,16 @@ pub struct ConsoleDesktopApp {
     pub provider_credential_forms_open: std::collections::HashSet<String>,
     /// Server-authored failure text for the key fields, shown verbatim.
     pub provider_credential_error: Option<String>,
+    /// Server ids whose first-run setup panel was dismissed. Read from the
+    /// local store at boot; see state/onboarding.rs for why nothing about
+    /// server setup is kept here.
+    pub onboarding_dismissed: std::collections::HashSet<String>,
+    /// The server whose setup panel is currently open, if any.
+    pub onboarding_env_id: Option<String>,
+    /// Live setup status for the panel's steps. Never persisted.
+    pub setup_status: super::onboarding::SetupStatus,
+    /// True while the panel's three checks are in flight.
+    pub setup_status_loading: bool,
     /// Binary integration rows from `/api/integrations` (gh CLI, ...).
     /// Refreshed every time the Integrations tab opens — detection runs live
     /// server-side, so a refresh after installing flips the row with no
