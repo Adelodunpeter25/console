@@ -1,4 +1,4 @@
-pub mod onboarding_panel;
+pub mod onboarding;
 pub mod browser;
 pub mod chat;
 pub mod common;
@@ -15,7 +15,7 @@ pub mod utils;
 pub mod viewer;
 pub mod workspace;
 
-pub use onboarding_panel::{OnboardingPanel, SetupStatus};
+pub use onboarding::{OnboardingPanel, SetupStatus};
 pub use browser::*;
 pub use chat::*;
 pub use common::*;

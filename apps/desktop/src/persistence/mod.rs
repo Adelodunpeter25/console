@@ -5,7 +5,7 @@ pub mod workspace;
 pub mod workspace_state;
 
 pub use layout::PersistedLayoutState;
-pub use store::{PersistedOnboardingState, dismiss_onboarding, load_onboarding};
+pub use store::{dismiss_onboarding, load_onboarding};
 pub(crate) use store::read_document;
 pub use workspace::{
     PersistedScriptTabs, PersistedWorkspace, WorkspacesDocument, load_workspaces,

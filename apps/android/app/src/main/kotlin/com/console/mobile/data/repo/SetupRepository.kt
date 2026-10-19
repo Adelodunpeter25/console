@@ -85,10 +85,4 @@ class SetupRepository(
         setupState.state.value.activeEnvId?.let { preferencesStore.dismissOnboarding(it) }
         setupState.close()
     }
-
-    /** Close after a step is engaged. Same effect as skipping, by design. */
-    fun dismissThen(action: () -> Unit) {
-        dismiss()
-        action()
-    }
 }

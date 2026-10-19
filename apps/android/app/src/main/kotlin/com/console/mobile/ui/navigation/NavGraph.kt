@@ -45,32 +45,20 @@ fun AppNavGraph() {
         return
     }
 
-    // Second gate: the server is connected but not yet set up. Distinct from the
-    // gate above, which is about *having* a backend; this one is about it being
-    // usable. Re-keyed on the active environment so switching to a newly added
-    // server runs the check again for that server alone.
+    // Setup is a real route rather than an early return. Returning before the
+    // NavHost composes meant the panel could not navigate anywhere — its
+    // buttons would fire a navigation into a graph that did not exist yet.
+    //
+    // Re-keyed on the active environment, so switching to a newly added server
+    // runs the check again for that server alone.
     val setupState by AppContainer.setupStateHolder.state.collectAsStateWithLifecycle()
     val environments by AppContainer.environmentsStateHolder.state.collectAsStateWithLifecycle()
     LaunchedEffect(environments.activeId, appState.backendUrl) {
         AppContainer.setupRepository.maybeShow(environments.activeId)
     }
-    if (setupState.activeEnvId != null) {
-        SetupScreen(
-            state = setupState,
-            onStep = { step ->
-                // Engaging a step dismisses the panel: it is a one-shot pointer,
-                // and every step has a real screen behind it. Points at Settings
-                // because that is where Projects, Providers and the GitHub key
-                // all live.
-                AppContainer.setupRepository.dismissThen {
-                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Settings)
-                }
-            },
-            onSkip = { AppContainer.setupRepository.dismiss() },
-        )
-        ConfirmPromptHost()
-        return
-    }
+    // Seeded during AppContainer init, so this is normally already correct on
+    // the first frame rather than flashing Home for one.
+    val startDestination = if (setupState.activeEnvId != null) RouteSetup else RouteHome
 
     // Past the onboarding gate, so we only ask once a backend is connected.
     NotificationPermissionRequest()
@@ -102,7 +90,7 @@ fun AppNavGraph() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = RouteHome,
+            startDestination = startDestination,
             modifier = Modifier.padding(padding),
         ) {
             composable<RouteHome> {
@@ -207,6 +195,26 @@ fun AppNavGraph() {
                 })
             }
             composable<RouteOnboarding> { OnboardingScreen(onConnected = {}) }
+            composable<RouteSetup> {
+                SetupScreen(
+                    state = setupState,
+                    onStep = { step ->
+                        // Each step opens the screen it names. Routing every
+                        // one of them to Settings was a dead end: "Add project"
+                        // has a real AddProject screen two taps away.
+                        //
+                        // Deliberately not dismissed here - backing out of the
+                        // destination returns to this panel, which is what
+                        // pressing back should do.
+                        when (step) {
+                            SetupStep.AddProject -> navController.navigate(RouteAddProject)
+                            SetupStep.Providers -> navController.navigate(RouteSettings)
+                            SetupStep.Github -> navController.navigate(RouteSettings)
+                        }
+                    },
+                    onSkip = { AppContainer.setupRepository.dismiss() },
+                )
+            }
         }
         ConfirmPromptHost()
     }

@@ -15,7 +15,7 @@
 //! project correctly shows that step as unmet again while the panel stays shut.
 
 use super::ConsoleDesktopApp;
-use gpui::{Context, Window};
+use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};
 use std::rc::Rc;
 
 /// Live setup status for the active server. Every field is a fact the server
@@ -30,12 +30,9 @@ pub struct SetupStatus {
     pub has_github: bool,
 }
 
-impl SetupStatus {
-    /// Every step satisfied — the panel has nothing left to offer.
-    pub fn is_complete(&self) -> bool {
-        self.has_project && self.has_provider && self.has_github
-    }
-}
+// Deliberately no `is_complete` here: the panel computes it from its own
+// mirror of these fields, since console-ui cannot depend on the app binary. One
+// implementation lives in console-ui, in src/onboarding/panel.rs.
 
 impl ConsoleDesktopApp {
     /// Show the setup panel if this server has never had it dismissed.
@@ -120,25 +117,12 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Close the panel after the user engages a step.
-    ///
-    /// Same effect as skipping, and for the same reason: the panel is a
-    /// one-shot pointer, not a progress tracker. The steps themselves are all
-    /// reachable from Settings afterwards.
-    pub fn close_onboarding(&mut self, cx: &mut Context<Self>) {
-        self.dismiss_onboarding(cx);
-    }
-
     /// Build the panel, or `None` when no server is due one.
     ///
     /// Every step's action closes the panel first: engaging a step is the
     /// clearest possible signal that the user has read it, and leaving a panel
     /// floating over the palette it just opened would be worse than closing it.
-    pub fn onboarding_panel_view(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<console_ui::OnboardingPanel> {
+    pub fn onboarding_panel_view(&mut self, cx: &mut Context<Self>) -> Option<console_ui::OnboardingPanel> {
         let env_id = self.onboarding_env_id.clone()?;
         let server_name = self
             .environments
@@ -148,14 +132,19 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| "This server".to_string());
         let entity = cx.entity().downgrade();
 
-        // Each step closes the panel before running its action: engaging a step
-        // is the clearest signal the user has read the panel, and leaving it
-        // floating over the palette it just opened would be worse than closing.
-        let close_then_open_settings = {
+        // Engaging a step deliberately does NOT dismiss the panel.
+        //
+        // It used to, and that was wrong: opening the project palette also wrote
+        // the dismissal, so pressing Escape to back out of the palette left the
+        // user with neither onboarding nor a project — the panel had recorded
+        // itself as seen at the exact moment they were mid-task.
+        //
+        // Only the explicit Skip button dismisses now. Escape from a step's
+        // dialog returns to the panel, which is what pressing Escape means.
+        let open_settings = {
             let entity = entity.clone();
             Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.close_onboarding(cx));
                     // Providers and the GitHub key both live on Settings >
                     // Providers, which `open_settings` already opens (and which
                     // already refreshes both statuses on entry).
@@ -178,18 +167,41 @@ impl ConsoleDesktopApp {
                 let entity = entity.clone();
                 Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.close_onboarding(cx));
                         app.update(cx, |this, cx| this.open_project_browse(window, cx));
                     }
                 })
             },
-            on_open_providers: close_then_open_settings.clone(),
-            on_open_github: close_then_open_settings,
+            on_open_providers: open_settings.clone(),
+            on_open_github: open_settings,
             on_dismiss: Rc::new(move |_window: &mut Window, cx: &mut gpui::App| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| this.dismiss_onboarding(cx));
                 }
             }),
         })
+    }
+
+    /// Render the setup panel as the entire main window.
+    ///
+    /// Returned from the window's render *instead of* the workspace, which is
+    /// what keeps the title bar, sidebar and inspector out of the way. The
+    /// overlay version left the sidebar showing through and read as an
+    /// interruption rather than a first-run screen.
+    ///
+    /// The project-browse palette is re-parented in here so the "Add project"
+    /// step still opens a dialog on top of the panel: the palette renders as
+    /// part of the workspace root, so without this the step would do nothing at
+    /// all while the panel had the window to itself.
+    pub fn render_onboarding(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let palette = self.project_browse_palette.clone();
+        match self.onboarding_panel_view(cx) {
+            Some(panel) => div()
+                .size_full()
+                .child(panel)
+                .child(palette)
+                .into_any_element(),
+            // Raced with a dismissal between the check and this render.
+            None => div().size_full().into_any_element(),
+        }
     }
 }

@@ -299,6 +299,10 @@ object AppContainer {
             environmentsState = environmentsStateHolder,
             setupState = setupStateHolder,
         )
+        // Seed now rather than waiting for NavGraph's LaunchedEffect: the nav
+        // graph picks its start destination from this, so an unseeded holder
+        // would compose Home first and flash before switching to setup.
+        setupRepository.maybeShow(environmentsStateHolder.state.value.activeId)
         deviceRepository = com.console.mobile.data.repo.DeviceRepository(
             api = consoleApi,
             apiClient = consoleApiClient,

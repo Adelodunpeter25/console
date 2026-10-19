@@ -103,4 +103,35 @@ class SetupStateTest {
         assertTrue("env_abc123" in dismissed)
         assertFalse("env_second" in dismissed)
     }
+
+    @Test
+    fun closing_does_not_imply_dismissal() {
+        // Regression guard for a real bug: opening a step used to dismiss the
+        // panel at the same time, so backing out of the destination left the
+        // user with neither the panel nor the thing they were setting up.
+        // Only an explicit Skip writes the dismissal.
+        val holder = SetupStateHolder()
+        holder.open("env_abc123", "Remote box")
+        holder.close()
+
+        assertNull("close() must not record a dismissal", holder.state.value.activeEnvId)
+        assertFalse(holder.state.value.isComplete)
+    }
+
+    @Test
+    fun a_step_can_be_opened_without_dismissing_the_panel() {
+        // Opening a destination leaves panel state untouched, so coming back
+        // shows the panel again — still open, still reporting what the server
+        // actually has.
+        val holder = SetupStateHolder()
+        holder.open("env_abc123", "Remote box")
+        holder.resolve(hasProject = false, hasProvider = false, hasGithub = false)
+
+        val afterReturn = holder.state.value
+        assertEquals("env_abc123", afterReturn.activeEnvId)
+        assertEquals("Remote box", afterReturn.serverName)
+        assertFalse(afterReturn.hasProject)
+        assertFalse(afterReturn.hasProvider)
+        assertFalse(afterReturn.hasGithub)
+    }
 }

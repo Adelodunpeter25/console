@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
  * plus onboarding + subagent-details. Navigation Compose 2.8 + kotlinx.serialization.
  */
 @Serializable object RouteOnboarding
+@Serializable object RouteSetup
 @Serializable object RouteHome
 @Serializable object RouteChat
 @Serializable object RouteTerminal

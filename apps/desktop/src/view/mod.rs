@@ -27,6 +27,15 @@ impl Render for ConsoleDesktopApp {
         // they are rebuilt here each frame rather than pushed by events. Skipped
         // while closed so a hidden card costs nothing.
         self.refresh_floating_composer(window, cx);
+
+        // First-run setup replaces the entire window — title bar, sidebar and
+        // inspector included — rather than floating over the workspace. Returned
+        // before any of that is built, so there is nothing underneath to show
+        // through.
+        if self.onboarding_env_id.is_some() {
+            return self.render_onboarding(cx);
+        }
+
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
         let client = self.client.clone();
@@ -1413,10 +1422,8 @@ impl Render for ConsoleDesktopApp {
                 el.child(card)
             })
             .child(self.global_search_panel.clone())
-            // First-run setup panel. Renders nothing when the active server has
-            // already been through it.
-            .when_some(self.onboarding_panel_view(window, cx), |el, panel| {
-                el.child(panel)
-            })
+            // Boxed so both render paths share a single return type — the
+            // first-run setup branch above returns an AnyElement.
+            .into_any_element()
     }
 }
