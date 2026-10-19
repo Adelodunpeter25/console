@@ -20,6 +20,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
   html, body { margin: 0; padding: 0; height: 100%; width: 100%; background: #0a0a0b; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #stage { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
   canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; touch-action: none; -webkit-user-drag: none; }
+  #dbg { position: absolute; left: 6px; top: 6px; max-width: 94%; font: 10px/1.35 monospace; color: #7CFC00; background: rgba(0,0,0,.72); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre-wrap; z-index: 5; }
   #status { display: none; position: absolute; left: 8px; bottom: 8px; font: 11px/1.4 -apple-system, sans-serif; color: rgba(255,255,255,.9); background: rgba(180,30,30,.85); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 </style>
 </head>
@@ -27,6 +28,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
 <div id="stage">
   <canvas id="screen"></canvas>
   <div id="status"></div>
+  <div id="dbg"></div>
 </div>
 <script>
 (function () {
@@ -36,6 +38,32 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
   let cfg = null, ws = null, decoder = null;
   let streamW = 0, streamH = 0, codec = '', desc = null, needKey = true, seq = 0, gotFrame = false;
   let retry = null;
+
+  // TEMPORARY debug readout (see dbg panel): which stage of the pipeline stalls.
+  const dbgEl = document.getElementById('dbg');
+  const dbg = { chunksIn: 0, keyIn: 0, decoded: 0, drawn: 0, decErr: '', cfg: '', cfgOk: '', lastFrame: '', px: '' };
+  function sampleCanvas() {
+    try {
+      if (!canvas.width || !canvas.height) return 'canvas 0x0';
+      const w = Math.min(canvas.width, 64), h = Math.min(canvas.height, 64);
+      const d = ctx.getImageData(Math.floor((canvas.width - w) / 2), Math.floor((canvas.height - h) / 2), w, h).data;
+      let lit = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] | d[i + 1] | d[i + 2]) lit++;
+      return lit + '/' + (w * h) + ' lit';
+    } catch (e) { return 'getImageData: ' + e.message; }
+  }
+  setInterval(() => {
+    const r = canvas.getBoundingClientRect();
+    const txt =
+      'state=' + (decoder ? decoder.state : 'none') + ' q=' + (decoder ? decoder.decodeQueueSize : '-') + '\n' +
+      'in=' + dbg.chunksIn + ' key=' + dbg.keyIn + ' decoded=' + dbg.decoded + ' drawn=' + dbg.drawn + '\n' +
+      'cfg=' + dbg.cfg + ' ' + dbg.cfgOk + '\n' +
+      'canvas=' + canvas.width + 'x' + canvas.height + ' css=' + Math.round(r.width) + 'x' + Math.round(r.height) + '\n' +
+      'frame=' + dbg.lastFrame + ' px=' + dbg.px + '\n' +
+      (dbg.decErr ? 'ERR ' + dbg.decErr : '');
+    dbgEl.textContent = txt;
+    report({ type: 'debug', text: txt });
+  }, 500);
 
   const report = (msg) => {
     try {
@@ -82,6 +110,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     try {
       decoder = new VideoDecoder({
         output(frame) {
+          dbg.decoded++; dbg.lastFrame = frame.codedWidth + 'x' + frame.codedHeight + ' disp ' + frame.displayWidth + 'x' + frame.displayHeight;
           const targetW = frame.displayWidth || frame.codedWidth || streamW;
           const targetH = frame.displayHeight || frame.codedHeight || streamH;
           if (targetW && targetH && (canvas.width !== targetW || canvas.height !== targetH)) {
@@ -89,6 +118,8 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
           }
           if (canvas.width && canvas.height) {
             ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+            dbg.drawn++;
+            if (dbg.drawn === 1 || dbg.drawn % 30 === 0) dbg.px = sampleCanvas();
           }
           frame.close();
           if (!gotFrame) { gotFrame = true; setStatus('streaming'); }
@@ -96,11 +127,14 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
         error(e) {
           const errMsg = e && e.message ? e.message : String(e);
           console.error('VideoDecoder error:', errMsg);
+          dbg.decErr = errMsg;
           closeDecoder();
           send({ type: 'reset' });
         },
       });
+      dbg.cfg = codec + ' desc=' + desc.length + 'B'; dbg.cfgOk = '';
       decoder.configure({ codec, description: desc, optimizeForLatency: true });
+      try { VideoDecoder.isConfigSupported({ codec, description: desc }).then((r) => { dbg.cfgOk = 'supported=' + r.supported; }).catch((e) => { dbg.cfgOk = 'isConfigSupported threw: ' + e.message; }); } catch (e) { dbg.cfgOk = 'no isConfigSupported'; }
       needKey = true;
       return true;
     } catch (e) {
@@ -114,6 +148,7 @@ internal const val DEVICES_PLAYER_HTML = """<!doctype html>
     const tag = buf[0], payload = buf.subarray(1);
     if (tag === 1) { desc = payload.slice(); if (!codec) codec = codecFromAvcC(desc); closeDecoder(); return; }
     if (tag !== 2 && tag !== 3) return;
+    dbg.chunksIn++; if (tag === 2) dbg.keyIn++;
     if (!ensureDecoder()) return;
     if (needKey && tag !== 2) return;
     if (tag === 2) needKey = false;

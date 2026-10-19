@@ -84,7 +84,7 @@ import kotlinx.serialization.json.put
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.TintPill
 
-private class AndroidBridge(private val onStatus: (String) -> Unit) {
+private class AndroidBridge(private val onStatus: (String) -> Unit, private val onDebug: (String) -> Unit = {}) {
     @JavascriptInterface
     fun postMessage(json: String) {
         try {
@@ -93,6 +93,8 @@ private class AndroidBridge(private val onStatus: (String) -> Unit) {
             if (type == "status") {
                 val status = root["status"]?.toString()?.trim('"') ?: ""
                 onStatus(status)
+            } else if (type == "debug") {
+                onDebug((root["text"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "")
             }
         } catch (_: Exception) {}
     }
@@ -111,6 +113,7 @@ fun DevicesScreen(
 
     var selectedDevice by remember { mutableStateOf<DeviceDescriptor?>(null) }
     var streamStatus by remember { mutableStateOf("idle") }
+    var playerDebug by remember { mutableStateOf("") } // TEMPORARY: player debug readout, drawn natively
     var isBooting by remember { mutableStateOf(false) }
     var isStopping by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -360,9 +363,10 @@ fun DevicesScreen(
                                 // but the stream socket is usually plain ws:// on a LAN.
                                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 setBackgroundColor(0xFF0A0A0B.toInt())
-                                addJavascriptInterface(AndroidBridge { s ->
-                                    streamStatus = s
-                                }, "AndroidBridge")
+                                addJavascriptInterface(AndroidBridge(
+                                    onStatus = { s -> streamStatus = s },
+                                    onDebug = { t -> playerDebug = t },
+                                ), "AndroidBridge")
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                                         Log.d("DevicesPlayer", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
@@ -392,6 +396,19 @@ fun DevicesScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                     StreamStatusOverlay(device = dev, status = streamStatus, isBooting = isBooting)
+                    if (playerDebug.isNotEmpty()) {
+                        Text(
+                            text = playerDebug,
+                            color = androidx.compose.ui.graphics.Color(0xFF7CFC00),
+                            fontSize = 10.sp,
+                            lineHeight = 13.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                                .background(androidx.compose.ui.graphics.Color(0xB8000000)),
+                        )
+                    }
                 }
 
                 // Right Hardware Controls Rail (when booted)
