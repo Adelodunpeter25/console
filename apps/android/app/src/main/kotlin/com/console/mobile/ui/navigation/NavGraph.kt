@@ -37,6 +37,7 @@ import com.console.mobile.feature.home.HomeScreen
 import com.console.mobile.feature.onboarding.OnboardingScreen
 import com.console.mobile.feature.onboarding.SetupScreen
 import com.console.mobile.feature.onboarding.SetupStep
+import com.console.mobile.feature.ports.PortsScreen
 import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
 import com.console.mobile.feature.subagents.SubagentDetailsScreen
@@ -159,6 +160,7 @@ fun AppNavGraph() {
                         },
                         onOpenSubagentDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
                         onAddProject = { navController.navigate(RouteAddProject) },
+                        onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
                     )
                 }
             }
@@ -226,6 +228,14 @@ fun AppNavGraph() {
                     AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
                     navController.navigate(RouteChat) { launchSingleTop = true }
                 })
+            }
+            // Ports is reached from chat's overflow menu rather than the tab
+            // bar, so back is a plain pop to wherever it was pushed from.
+            composable<RoutePorts> {
+                PortsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPort = { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } },
+                )
             }
             composable<RouteSettings> {
                 SettingsScreen(

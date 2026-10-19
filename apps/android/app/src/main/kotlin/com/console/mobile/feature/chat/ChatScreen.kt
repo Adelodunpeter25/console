@@ -52,6 +52,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
 import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
+import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -70,6 +71,7 @@ fun ChatScreen(
     onOpenTab: (MobileTab) -> Unit,
     onOpenSubagentDetails: (String) -> Unit,
     onAddProject: () -> Unit,
+    onOpenPorts: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
@@ -354,6 +356,14 @@ fun ChatScreen(
                             onClick = {
                                 overflowMenu = false
                                 jumpToProjectTab(MobileTab.Terminal)
+                            },
+                        )
+                        OverflowMenuItem(
+                            label = "Open ports",
+                            icon = TablerIcons.Outline.PlugConnected,
+                            onClick = {
+                                overflowMenu = false
+                                onOpenPorts()
                             },
                         )
                     }

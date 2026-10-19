@@ -1,6 +1,7 @@
 package com.console.mobile
 
 import android.content.Context
+import com.console.mobile.core.forward.LocalForwardManager
 import com.console.mobile.core.notification.LocalNotificationPresenter
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.api.ConsoleApiClient
@@ -20,6 +21,7 @@ import com.console.mobile.data.repo.IntegrationsRepository
 import com.console.mobile.data.repo.McpRepository
 import com.console.mobile.data.repo.NotificationRepository
 import com.console.mobile.data.repo.ProjectRepository
+import com.console.mobile.data.repo.PortsRepository
 import com.console.mobile.data.repo.ProviderRepository
 import com.console.mobile.data.repo.SessionRepository
 import com.console.mobile.data.repo.TerminalRepository
@@ -176,6 +178,18 @@ object AppContainer {
     lateinit var deviceRepository: com.console.mobile.data.repo.DeviceRepository
         private set
 
+    lateinit var localForwardManager: LocalForwardManager
+        private set
+
+    lateinit var portsRepository: PortsRepository
+        private set
+
+    /**
+     * Teardown that outlives any screen — dropping the port tunnels when the
+     * server changes. Screens keep their own scopes for their own work.
+     */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun initialize(context: Context) {
         val app = context.applicationContext
         appContext = app
@@ -307,6 +321,18 @@ object AppContainer {
             api = consoleApi,
             apiClient = consoleApiClient,
         )
+        // Ports: the server's forwarded dev ports plus this device's loopback
+        // tunnels into them, so the built-in browser can open a dev server that
+        // only exists on the backend's own localhost.
+        localForwardManager = LocalForwardManager(
+            client = httpClient,
+            baseUrl = { consoleApiClient.baseUrl },
+            authToken = { consoleApiClient.authToken },
+        )
+        portsRepository = PortsRepository(
+            api = consoleApi,
+            forwards = localForwardManager,
+        )
         environmentsRepository = EnvironmentsRepository(
             preferencesStore = preferencesStore,
             environmentsState = environmentsStateHolder,
@@ -321,6 +347,10 @@ object AppContainer {
             usageState = usageStateHolder,
             terminalState = terminalStateHolder,
             onBackendUrlChanged = {
+                // Tunnels are bound to the server they were opened against, so
+                // they do not survive a switch; the next refresh rebuilds them
+                // for whichever server is active now.
+                backgroundScope.launch { portsRepository.stop() }
                 projectRepository.loadProjects()
                 projectRepository.loadSessions()
                 providerRepository.loadProviders()
