@@ -1,6 +1,7 @@
 package com.console.mobile.data.stream
 
 import com.console.mobile.WtFrame
+import com.console.mobile.WtNative
 import com.console.mobile.WtStream
 import com.console.mobile.data.model.AgentSessionEvent
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,7 @@ object WtTransport {
      * serve it (caller falls back to SSE).
      */
     fun openChatRun(baseUrl: String, sessionId: String, requestType: String, requestJson: String): WtStream? {
+        if (!WtNative.available) return null
         val origin = originFor(baseUrl) ?: return null
         return WtStream.open(
             apiUrl = baseUrl.trimEnd('/'),
@@ -137,7 +139,7 @@ object WtTransport {
 
     /** Close every WT stream — call when the app's server changes. */
     fun reset() {
-        com.console.mobile.WtNative.closeAll()
+        if (com.console.mobile.WtNative.available) com.console.mobile.WtNative.closeAll()
     }
 
     /**
@@ -155,6 +157,7 @@ object WtTransport {
         frameType: String,
         decode: (String) -> T?,
     ): Flow<T>? {
+        if (!WtNative.available) return null
         val origin = originFor(baseUrl) ?: return null
         val stream = WtStream.open(
             apiUrl = baseUrl.trimEnd('/'),

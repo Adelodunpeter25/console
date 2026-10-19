@@ -16,16 +16,32 @@ import java.io.Closeable
  * `ChatStreamClient` and the repository layer are unchanged.
  */
 object WtNative {
-    init {
+    /**
+     * True when the staged Rust library loaded.
+     *
+     * `libconsole_wt_android.so` is produced by `rust-wt/build.sh` and is
+     * gitignored on purpose, so any build that skipped that step — CI, a fresh
+     * clone — carries no library at all, as do the 32-bit ABIs the script never
+     * stages. That is not fatal: WebTransport is optional and every caller
+     * falls back to SSE/WS, exactly as it does for a server with no WT
+     * listener. It must not be fatal either — an unguarded `loadLibrary` in an
+     * object initializer takes the whole app down from
+     * `AppContainer.initialize`, before any UI exists to explain it. App startup
+     * logs the downgrade; nothing else here touches Android, so the flag is also
+     * what a JVM test sees.
+     */
+    val available: Boolean = try {
         System.loadLibrary("console_wt_android")
+        true
+    } catch (_: UnsatisfiedLinkError) {
+        false
     }
 
     const val OK = 0
 
     /**
-     * Build marker from the Rust side. Calling anything here first runs the
-     * library load, so a missing `rust-wt/build.sh` staging step fails
-     * here rather than as an unexplained `UnsatisfiedLinkError` later.
+     * Build marker from the Rust side. Every `external` here needs
+     * [available] first; without it the JNI symbol does not resolve.
      */
     external fun abiVersion(): Int
 
@@ -79,9 +95,10 @@ object WtNative {
     external fun closeAll()
 
     /** Human-readable for a JNI/stream result, for logs and test failures. */
-    fun describe(handle: Long): String = when (handle) {
-        OK.toLong() -> "session established"
-        0L -> "stream could not be opened: ${lastError()}"
+    fun describe(handle: Long): String = when {
+        !available -> "WebTransport unavailable on this build"
+        handle == OK.toLong() -> "session established"
+        handle == 0L -> "stream could not be opened: ${lastError()}"
         else -> "stream handle $handle"
     }
 }
@@ -181,6 +198,7 @@ class WtStream private constructor(
             requestJson: String,
             closeFrame: String = "",
         ): WtStream? {
+            if (!WtNative.available) return null
             val handle = WtNative.openStream(
                 apiUrl,
                 origin,

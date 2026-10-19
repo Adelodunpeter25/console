@@ -314,6 +314,17 @@ object AppContainer {
 
         LocalNotificationPresenter.ensureChannelCreated(app)
 
+        // WebTransport is optional: a build without the staged Rust library
+        // (CI, the 32-bit ABIs) runs SSE/WS only. Say so once, at startup, so
+        // the downgrade is visible in logcat instead of looking like a slow
+        // server.
+        if (!WtNative.available) {
+            android.util.Log.w(
+                "ConsoleApp",
+                "WebTransport unavailable (libconsole_wt_android.so not staged): SSE/WS only",
+            )
+        }
+
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         // notifications() is a one-shot callbackFlow: the server closing the SSE
         // connection (idle timeout, restart, brief network drop) completes the flow
