@@ -83,16 +83,23 @@ jobs:
           set -euo pipefail
           SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           NDK_VERSION=28.2.13676358
+          # The script links with the versioned clang wrappers (API 21), so an
+          # NDK is only usable if it ships them — the newest one on the runner
+          # is not automatically it.
+          usable() {
+            [[ -n "${1:-}" ]] && compgen -G "$1"/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android21-clang >/dev/null
+          }
           NDK_DIR="$SDK/ndk/$NDK_VERSION"
-          if [[ ! -d "$NDK_DIR" ]]; then
-            # Any NDK builds the Rust side; only fetch the pinned one when the
-            # runner has none, so the common case stays a download-free hit.
-            NDK_DIR="$(ls -d "$SDK"/ndk/* 2>/dev/null | tail -1 || true)"
+          if ! usable "$NDK_DIR"; then
+            NDK_DIR=""
+            for candidate in "$SDK"/ndk/*; do
+              if usable "$candidate"; then NDK_DIR="$candidate"; break; fi
+            done
           fi
-          if [[ -z "${NDK_DIR:-}" || ! -d "$NDK_DIR" ]]; then
+          if ! usable "$NDK_DIR"; then
             SDKMANAGER="$(ls -d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)"
             if [[ -z "$SDKMANAGER" ]]; then
-              echo "No NDK and no sdkmanager under $SDK" >&2
+              echo "No usable NDK and no sdkmanager under $SDK" >&2
               exit 1
             fi
             yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION"

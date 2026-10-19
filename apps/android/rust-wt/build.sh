@@ -18,11 +18,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_JNI="$SCRIPT_DIR/../app/src/main/jniLibs"
 
 NDK_VERSION="${ANDROID_NDK_VERSION:-28.2.13676358}"
-NDK="${ANDROID_NDK_HOME:-$HOME/Library/Android/sdk/ndk/$NDK_VERSION}"
+NDK="${ANDROID_NDK_HOME:-${ANDROID_HOME:-$HOME/Library/Android/sdk}/ndk/$NDK_VERSION}"
 BIN="$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin"
 if [[ ! -d "$BIN" ]]; then
-    # Apple Silicon NDKs are named per-host; fall back to whatever is present.
-    BIN="$(dirname "$(find "$NDK/toolchains/llvm/prebuilt" -maxdepth 1 -mindepth 1 -type d | head -1)")/bin"
+    # The host directory is named per-host (`linux-x86_64` on a CI runner, and
+    # `darwin-x86_64` / `darwin-arm64` depending on the Mac), so take whichever
+    # the NDK ships instead of the name written above. An empty result falls
+    # through to the check below, which says what is missing.
+    HOST_DIR="$(find "$NDK/toolchains/llvm/prebuilt" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -1 || true)"
+    BIN="${HOST_DIR:-$NDK/toolchains/llvm/prebuilt}/bin"
 fi
 if [[ ! -x "$BIN/aarch64-linux-android21-clang" ]]; then
     echo "error: NDK clang wrappers not found under $BIN" >&2
