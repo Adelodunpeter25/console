@@ -38,6 +38,13 @@ class ServerAuthFixtureTest {
         assertEquals("device-1", device!!.id)
         assertEquals("My desktop", device.name)
         assertEquals("desktop", device.platform)
+        // The server says which machine issued the token, so the phone can
+        // confirm it paired with the one the user meant.
+        val server = data.server
+        assertNotNull("server must be reported", server)
+        assertEquals("server-1", server!!.id)
+        assertEquals("Studio Mac", server.name)
+        assertEquals("1.0.1", server.version)
     }
 
     @Test
@@ -45,6 +52,9 @@ class ServerAuthFixtureTest {
         val grant = grantAdapter.fromJson(fixture("pairing_grant.json"))!!
         assertEquals("cp1_grant", grant.grant)
         assertEquals(1760000030000L, grant.expires_at)
+        val server = grant.server
+        assertNotNull("server must be reported", server)
+        assertEquals("server-1", server!!.id)
     }
 
     @Test

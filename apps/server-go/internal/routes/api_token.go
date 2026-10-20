@@ -1,80 +1,26 @@
-// API bearer token routes and middleware for the QUIC/WebTransport
-// migration (Phase 0): minting over REST, plus the single validator shared
-// by the future WT path and the legacy path.
+// Device credential helpers shared by the Fiber routes.
 //
-// The middleware is NOT mounted on any route yet: mounting bearer enforcement
-// on legacy REST today would break clients that send opportunistic tokens.
-// The WT listener (Phase 2) is its first consumer.
+// The token *minting* endpoint that used to live here is gone: a device
+// credential is issued only by exchanging a one-time pairing grant
+// (see RegisterPairingRoutes). A route that minted a token from a
+// caller-supplied device id was proof of nothing — anyone who guessed an id
+// got a credential.
+//
+// The query-string form (`?token=`) is gone too, for ordinary HTTP. URLs
+// leak through access logs, proxy logs, browser history and Referer headers,
+// so a credential in one is a credential in a log file. The WebTransport
+// handshake keeps its own scoped copy of that path, because a CONNECT
+// request from some clients cannot carry headers.
 package routes
 
 import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 )
 
-// DeviceIDKey is retained for WT/legacy isolated tests.
+// DeviceIDKey is the Fiber local the authenticated device id lands in.
 const DeviceIDKey = "authenticatedDeviceID"
-
-// RegisterTokenRoutes is deprecated and intentionally not registered by the
-// production route graph. It remains available to focused migration tests.
-func RegisterTokenRoutes(app *fiber.App, issuer *auth.TokenIssuer) {
-	h := app.Group("/api/auth")
-
-	h.Post("/token", func(c *fiber.Ctx) error {
-		var req struct {
-			DeviceID string `json:"deviceId"`
-		}
-		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
-		}
-		if strings.TrimSpace(req.DeviceID) == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "deviceId is required."})
-		}
-		token, expiresAt, err := issuer.Mint(req.DeviceID, 0)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
-		}
-		// Hand-shaped like the other control responses (abort/approve):
-		// expiresAt stays a JSON number rather than a protojson string.
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
-			"token":     token,
-			"expiresAt": expiresAt,
-		}})
-	})
-}
-
-// RequireAPIToken is retained for the isolated WebTransport migration tests.
-// Production HTTP routes use RequireDeviceToken, which also checks the database
-// device record and never accepts query-string credentials.
-// RequireAPIToken enforces a valid API token from either the
-// `Authorization: Bearer` header or the `?token=` query parameter, so the WT
-// handshake path and the legacy path share one validator. The validated
-// device id lands in c.Locals(DeviceIDKey) for the handler (or, in Phase 2,
-// for binding to the QUIC connection). Failures are a single 401 that does
-// not distinguish expired from invalid.
-func RequireAPIToken(issuer *auth.TokenIssuer) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		token := bearerToken(c.Get("Authorization"))
-		if token == "" {
-			token = strings.TrimSpace(c.Query("token"))
-		}
-		deviceID, err := issuer.Validate(token)
-		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"success": false, "error": "A valid API token is required."})
-		}
-		c.Locals(DeviceIDKey, deviceID)
-		return c.Next()
-	}
-}
-
-// DeviceIDFromContext reads the device id RequireAPIToken stored.
-func DeviceIDFromContext(c *fiber.Ctx) (string, bool) {
-	deviceID, ok := c.Locals(DeviceIDKey).(string)
-	return deviceID, ok && deviceID != ""
-}
 
 // bearerToken extracts a bearer credential. The scheme matches
 // case-insensitively per RFC 9110; anything else (including a bare token
@@ -86,4 +32,10 @@ func bearerToken(header string) string {
 		return ""
 	}
 	return strings.TrimSpace(credentials)
+}
+
+// DeviceIDFromContext reads the device id the middleware stored.
+func DeviceIDFromContext(c *fiber.Ctx) (string, bool) {
+	deviceID, ok := c.Locals(DeviceIDKey).(string)
+	return deviceID, ok && deviceID != ""
 }

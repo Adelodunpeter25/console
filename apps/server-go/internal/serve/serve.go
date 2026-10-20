@@ -57,6 +57,30 @@ func startDeletedChatSweep(runs *run.Service) func() {
 	}
 }
 
+// startGrantPurge deletes spent pairing grants on a timer, and returns a
+// stop func for shutdown.
+//
+// Pairing grants are one-time: once redeemed (or expired) they can never
+// be used, so keeping them only grows the table.
+func startGrantPurge(database *db.DB) func() {
+	ticker := time.NewTicker(time.Hour)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				database.PurgePairingGrants(time.Now().UnixMilli())
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() {
+		ticker.Stop()
+		close(done)
+	}
+}
+
 // Run starts the server and blocks until SIGINT/SIGTERM. It returns nil on
 // clean shutdown and a non-nil error when startup fails.
 func Run() error {
@@ -100,28 +124,53 @@ func Run() error {
 		slog.Error("invalid transport config", "error", err)
 		return err
 	}
+	// Plain HTTP is the default for a local daemon, which is fine on a
+	// laptop. On a network it is not: every request, including the device
+	// credential, travels in the clear. The plan's rule is that a server
+	// reachable from off the machine must be encrypted, and the operator can
+	// insist on it with CONSOLE_REQUIRE_TLS.
+	if !wtCfg.WTEnabled() {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("CONSOLE_REQUIRE_TLS")), "true") {
+			slog.Error("CONSOLE_REQUIRE_TLS is set but the server has no TLS configured; refusing to serve plain HTTP")
+			return fmt.Errorf("TLS is required but not configured (set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY, or use 'console start --wt')")
+		}
+		slog.Warn("serving plain HTTP: device credentials travel unencrypted. Use 'console start --wt' for TLS.")
+	}
 	tokenIssuer, err := auth.NewTokenIssuerStrict()
 	if err != nil {
 		slog.Error("failed to initialize authentication", "error", err)
 		return err
 	}
-	authManager := auth.NewManager(manager, tokenIssuer)
-	if grant, expires, grantErr := authManager.CreateBootstrapGrant(); grantErr != nil {
-		slog.Error("failed to initialize bootstrap pairing", "error", grantErr)
-		return grantErr
-	} else if grant != "" {
-		// Deliberately written to the operator's terminal, never structured logs.
-		fmt.Fprintf(os.Stderr, "Console pairing grant (expires %s): %s\n", time.UnixMilli(expires).Format(time.RFC3339), grant)
+	identity, err := auth.LoadServerIdentity()
+	if err != nil {
+		slog.Error("failed to load server identity", "error", err)
+		return err
 	}
+	authManager := auth.NewManager(manager, tokenIssuer)
+	authManager.Identity = identity
+	// No pairing grant is minted here, and none is printed. A grant is a
+	// credential, and the daemon's output is a log file — a place credentials
+	// leak from. The operator gets one on the terminal instead, where
+	// `console pair` and `console status` print it.
+	//
+	// Spent grants are purged here instead: the table would otherwise grow
+	// without bound, one row per pairing attempt.
+	manager.PurgePairingGrants(time.Now().UnixMilli())
 	app, runs, wtDeps, shutdownAll := routes.New(routes.Config{
 		DB: manager, Watch: watch, Ports: ports, Notifications: notifications,
-		TokenIssuer: tokenIssuer, AltSvc: wtAltSvcPort(wtCfg),
+		TokenIssuer: tokenIssuer, Identity: identity, AltSvc: wtAltSvcPort(wtCfg),
 	})
 
 	// Deleted chats stay restorable for 7 days, then the backend purges
 	// them permanently. The sweep runs once at startup plus once a day.
 	stopSweep := startDeletedChatSweep(runs)
 	defer stopSweep()
+
+	// Spent pairing grants are purged hourly as well as at startup: a
+	// server that hands out a URL every few minutes would otherwise
+	// accumulate a row per attempt.
+	stopGrantPurge := startGrantPurge(manager)
+	defer stopGrantPurge()
 
 	// Warm the Antigravity model cache in the background when logged in, so
 	// the provider catalog serves discovered models (with context windows)
@@ -167,7 +216,7 @@ func Run() error {
 	// port, different sockets, no SO_REUSEPORT needed. The plaintext
 	// listener above stays as the dev path either way.
 	wtServer := wt.New(wtCfg, wtDeps)
-	routes.RegisterDebugRoutes(app, tokenIssuer, notifications, wtServer.Stats)
+	routes.RegisterDebugRoutes(app, notifications, wtServer.Stats)
 	startDebugPprof()
 	if wtCfg.WTEnabled() {
 		go func() {

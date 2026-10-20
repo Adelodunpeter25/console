@@ -93,12 +93,18 @@ func TestPairDeviceFixture(t *testing.T) {
 			Id: "device-1", Name: "My desktop", Platform: "desktop",
 		},
 		Token: "ct1_device_token", ExpiresAt: 1762592000000,
+		Server: &consolev1.ServerIdentity{
+			Id: "server-1", Name: "Studio Mac", Version: "1.0.1",
+		},
 	})
 }
 
 func TestPairingGrantFixture(t *testing.T) {
 	checkAuthFixture(t, "pairing_grant.json", &consolev1.PairingGrantResponse{
 		Grant: "cp1_grant", ExpiresAt: 1760000030000,
+		Server: &consolev1.ServerIdentity{
+			Id: "server-1", Name: "Studio Mac", Version: "1.0.1",
+		},
 	})
 }
 

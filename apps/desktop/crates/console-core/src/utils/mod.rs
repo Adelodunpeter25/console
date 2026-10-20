@@ -1,6 +1,7 @@
 pub mod diff;
 pub mod file_kind;
 pub mod http_transport;
+pub mod pairing_url;
 pub mod server_auth_store;
 pub mod sse_reader;
 
@@ -13,5 +14,6 @@ pub use file_kind::{
     file_kind_for_path, is_lock_file,
 };
 pub use http_transport::{HttpTransport, decode_json_bytes, fetch_url_bytes, probe_backend};
+pub use pairing_url::{PairingUrl, parse_pairing_url};
 pub use server_auth_store::StoredServerAuth;
 pub use sse_reader::SseStreamReader;

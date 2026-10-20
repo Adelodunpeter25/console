@@ -26,6 +26,12 @@ fn decodes_the_golden_pair_device_fixture() {
     assert_eq!(device.id, "device-1");
     assert_eq!(device.name, "My desktop");
     assert_eq!(device.platform, "desktop");
+    // The server says which machine issued the token, so the client can
+    // confirm it paired with the one it meant to.
+    let server = msg.server.as_ref().expect("server reported");
+    assert_eq!(server.id, "server-1");
+    assert_eq!(server.name, "Studio Mac");
+    assert_eq!(server.version, "1.0.1");
 }
 
 #[test]
@@ -34,6 +40,9 @@ fn decodes_the_golden_pairing_grant_fixture() {
         serde_json::from_str(fixture("pairing_grant.json").trim()).expect("decode grant");
     assert_eq!(msg.grant, "cp1_grant");
     assert_eq!(msg.expires_at, 1760000030000);
+    let server = msg.server.as_ref().expect("server reported");
+    assert_eq!(server.id, "server-1");
+    assert_eq!(server.name, "Studio Mac");
 }
 
 // A device that has never been seen carries no lastSeenAt: the timestamp has

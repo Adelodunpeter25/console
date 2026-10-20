@@ -16,6 +16,11 @@ type Status struct {
 	Port    string
 	Host    string
 	Mode    Mode
+	// Dir is the storage directory the running daemon uses. Callers that
+	// write to the server's data — minting a pairing grant, for one — must
+	// use this directory and not the current mode's, or they would write to
+	// a server that is not the one running.
+	Dir string
 }
 
 // GetStatus checks ConsoleDir first, then AlternateConsoleDir, clearing any
@@ -53,6 +58,6 @@ func buildRunningStatus(pid int, dir string) Status {
 	}
 	return Status{
 		Running: true, Pid: pid, Uptime: uptime,
-		Port: cfg.Port, Host: cfg.Host, Mode: mode,
+		Port: cfg.Port, Host: cfg.Host, Mode: mode, Dir: dir,
 	}
 }

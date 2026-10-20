@@ -93,6 +93,8 @@ interface ConsoleApi {
     suspend fun getApprovalModes(): List<ApprovalModeOption>
     // server pairing/authentication (shared protobuf types)
     suspend fun pair(request: console.v1.PairDeviceRequest): console.v1.PairDeviceResponse
+    /** Pair against a specific server address, as named by a pasted pairing URL. */
+    suspend fun pairWithUrl(baseUrl: String, request: console.v1.PairDeviceRequest): console.v1.PairDeviceResponse
     suspend fun createPairingGrant(request: console.v1.PairingGrantRequest): console.v1.PairingGrantResponse
     suspend fun listAuthDevices(): List<console.v1.ServerDevice>
     suspend fun revokeAuthDevice(id: String)

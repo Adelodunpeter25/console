@@ -70,6 +70,26 @@ class EnvironmentsRepository(
         return env
     }
 
+    /**
+     * Point the app at a server, reusing its environment if it already has
+     * one.
+     *
+     * Used after pairing: the pairing URL named the server, and a device
+     * token is only valid on the machine that issued it, so the app has to
+     * end up pointed at that machine. An existing environment for the same
+     * address is reused rather than duplicated.
+     */
+    fun activateUrl(name: String, rawUrl: String): Environment {
+        val url = rawUrl.trim().trimEnd('/')
+        val current = environmentsState.state.value
+        val existing = current.environments.firstOrNull { it.url.trimEnd('/') == url }
+        if (existing != null) {
+            activateEnvironment(existing.id)
+            return existing
+        }
+        return addEnvironment(name, url)
+    }
+
     fun activateEnvironment(id: String) {
         val current = environmentsState.state.value
         val target = current.environments.firstOrNull { it.id == id } ?: return

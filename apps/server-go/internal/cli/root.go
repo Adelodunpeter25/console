@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/commands"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 )
 
@@ -65,6 +66,32 @@ func Execute() {
 			return commands.StatusDaemon()
 		},
 	})
+
+	// `console pair` is the explicit re-pair path: `status` and `start`
+	// print a pairing URL as a convenience, but this is the command an
+	// operator reaches for when they need another one on purpose.
+	pairDev := false
+	pairCmd := &cobra.Command{
+		Use:   "pair",
+		Short: "Print a pairing URL to connect a new device to this server",
+		Long: "Print a copy-pasteable URL that pairs a device with this server.\n" +
+			"The URL carries a one-time grant, so it works once. Paste it into the\n" +
+			"Console app on the device you want to connect.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// The dev flag has to move the storage mode before anything
+			// resolves a path, or the grant would be minted against the
+			// wrong server.
+			if pairDev {
+				_ = os.Setenv("CONSOLE_ENV", "dev")
+			} else if os.Getenv("CONSOLE_ENV") == "" {
+				_ = os.Setenv("CONSOLE_ENV", "production")
+			}
+			commands.PrintPairingURL(daemon.ConsoleDir())
+			return nil
+		},
+	}
+	pairCmd.Flags().BoolVar(&pairDev, "dev", false, "Use dev storage (~/.console-dev) instead of production (~/.console)")
+	root.AddCommand(pairCmd)
 
 	logsFollow := false
 	logsLines := "50"

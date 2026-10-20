@@ -504,6 +504,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return http.unwrapOrRawAdapter(raw, pairDeviceResponseAdapter, "pair with server")
     }
 
+    override suspend fun pairWithUrl(baseUrl: String, request: PairingRequest): PairingData {
+        val body = pairDeviceAdapter.toJson(request)
+        val raw = http.postAbsolute(baseUrl, "/api/auth/pair", body)
+        return http.unwrapOrRawAdapter(raw, pairDeviceResponseAdapter, "pair with server")
+    }
+
     override suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData {
         val body = pairingGrantAdapter.toJson(request)
         val raw = http.post("/api/auth/pairing-grants", body)

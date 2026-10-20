@@ -7,7 +7,7 @@
 //! proto/console/v1/auth.proto), so they are decoded with the same
 //! protojson-named serde impls the rest of the client uses.
 
-use crate::utils::HttpTransport;
+use crate::utils::{HttpTransport, parse_pairing_url};
 use anyhow::{Context, Result, anyhow};
 
 pub use console_proto::{
@@ -39,6 +39,38 @@ impl ServerAuthService {
             .context("Failed to pair with server")?;
         let data = decode_data(response).await.context("Failed to pair with server")?;
         serde_json::from_value(data).context("Failed to parse pairing response")
+    }
+
+    /// Pair with a server using a pasted pairing URL.
+    ///
+    /// The URL carries both the server's address and the one-time grant, so
+    /// one paste is the whole connection. The request goes to the URL's own
+    /// address, not to whatever server the app is currently pointed at — the
+    /// URL is the instruction.
+    pub async fn pair_with_url(
+        &self,
+        url: &str,
+        device_name: &str,
+        platform: &str,
+    ) -> Result<(PairingData, String)> {
+        let parsed = parse_pairing_url(url).map_err(anyhow::Error::msg)?;
+        let response = self
+            .transport
+            .client()
+            .post(format!("{}/api/auth/pair", parsed.base_url))
+            .headers(self.transport.build_headers().await)
+            .json(&PairingRequest {
+                grant: parsed.grant.clone(),
+                device_name: device_name.to_string(),
+                platform: platform.to_string(),
+            })
+            .send()
+            .await
+            .context("Failed to pair with server")?;
+        let data = decode_data(response).await.context("Failed to pair with server")?;
+        let paired: PairingData =
+            serde_json::from_value(data).context("Failed to parse pairing response")?;
+        Ok((paired, parsed.base_url))
     }
 
     /// Create a short-lived, single-use grant another device can redeem.

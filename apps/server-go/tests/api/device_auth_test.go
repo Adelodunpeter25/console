@@ -123,9 +123,45 @@ func TestDeviceListUsesTheSharedWireType(t *testing.T) {
 	if device.GetId() != paired.ID {
 		t.Fatalf("device id = %q want %q", device.GetId(), paired.ID)
 	}
-	if device.GetLastSeenAt() != 0 {
-		t.Fatalf("a device that has never been seen must not report a timestamp: %d", device.GetLastSeenAt())
+	// The request that fetched the list was itself authenticated, so the
+	// device has been seen — the list must say so.
+	if device.GetLastSeenAt() == 0 {
+		t.Fatal("a device that just made an authenticated request must report a last-seen time")
 	}
+}
+
+// A device that has never made a request reports no last-seen time at
+// all: "never seen" must stay distinguishable from "seen at the epoch".
+func TestDeviceThatHasNeverConnectedHasNoLastSeen(t *testing.T) {
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	issuer := auth.NewTokenIssuerWithSecret([]byte("never-seen-secret-32-bytes-long"))
+	manager := auth.NewManager(database, issuer)
+	grant, _, err := manager.CreateBootstrapGrant()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paired, err := manager.Pair(grant, "Desktop", "desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The manager is asked for the list directly, so this device's token
+	// is never presented and it is never seen.
+	devices, err := manager.Devices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("expected one device, got %d", len(devices))
+	}
+	if devices[0].LastSeenAt != nil {
+		t.Fatalf("a device that has never connected must not report a timestamp: %v", devices[0].LastSeenAt)
+	}
+	_ = paired
 }
 
 func decodePairData(t *testing.T, body io.Reader) *consolev1.PairDeviceResponse {

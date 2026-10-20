@@ -71,6 +71,19 @@ class HttpTransport(
         return execute(requestBuilder(url(path)).post(body).build())
     }
 
+    /**
+     * POST to an absolute URL, ignoring the configured backend.
+     *
+     * Used by pairing: the pasted URL names the server to pair with, which
+     * may not be the one the app is currently pointed at.
+     */
+    fun postAbsolute(absoluteUrl: String, path: String, bodyJson: String? = null): String {
+        val base = "$absoluteUrl${path}".toHttpUrlOrNull()
+            ?: throw ApiException("Invalid backend URL: $absoluteUrl$path")
+        val body = (bodyJson ?: "").toRequestBody(jsonMedia)
+        return execute(requestBuilder(base.toString()).post(body).build())
+    }
+
     fun patch(path: String, bodyJson: String? = null): String {
         val body = (bodyJson ?: "").toRequestBody(jsonMedia)
         return execute(requestBuilder(url(path)).patch(body).build())

@@ -19,6 +19,8 @@ pub struct SettingsWindow {
     editing_env_id: Option<String>,
     new_env_name_input: Entity<ComposerInput>,
     new_env_url_input: Entity<ComposerInput>,
+    /// The pairing URL pasted by the user, redeemed with the Pair button.
+    pairing_url_input: Entity<ComposerInput>,
     new_env_probe: ProbeState,
     model_vision_input: Entity<ComposerInput>,
     model_smol_input: Entity<ComposerInput>,
@@ -59,6 +61,15 @@ impl SettingsWindow {
         let new_env_url_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
             input.set_placeholder("e.g. http://localhost:3000", cx);
+            input
+        });
+
+        // The pairing URL field. Created up front like the other settings
+        // inputs so its entity identity is stable across renders — rebuilding
+        // it each render would drop focus and any half-pasted URL.
+        let pairing_url_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("http://host:3000/console/pair#v=1&server=…&grant=…", cx);
             input
         });
 
@@ -179,6 +190,7 @@ impl SettingsWindow {
             api_key_inputs: std::collections::HashMap::new(),
             new_env_url_input,
             new_env_probe: ProbeState::Unknown,
+            pairing_url_input,
             model_vision_input,
             model_smol_input,
             model_menus,
@@ -662,6 +674,30 @@ impl Render for SettingsWindow {
                     })
                 };
 
+                let on_pair: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    let entity = cx.entity().clone();
+                    let pairing_input = self.pairing_url_input.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        let url = pairing_input.read(cx).content().trim().to_string();
+                        if url.is_empty() {
+                            return;
+                        }
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.pair_with_url(url.clone(), "Desktop".to_string(), cx);
+                            });
+                        }
+                        // The URL is a one-time credential: it is dropped from
+                        // the field as soon as it is handed over, so it does
+                        // not linger on screen.
+                        entity.update(cx, |_this, cx| {
+                            pairing_input.update(cx, |input, cx| input.set_content("", cx));
+                            cx.notify();
+                        });
+                    })
+                };
+
                 ServersPage {
                     environments: app.environment_rows(),
                     is_adding: self.is_adding_env,
@@ -669,6 +705,10 @@ impl Render for SettingsWindow {
                     name_input: Some(self.new_env_name_input.clone()),
                     url_input: Some(self.new_env_url_input.clone()),
                     new_probe_state: self.new_env_probe,
+                    pairing_input: Some(self.pairing_url_input.clone()),
+                    pairing_busy: app.server_auth_busy,
+                    pairing_error: app.server_auth_error.clone(),
+                    on_pair,
                     on_activate,
                     on_probe,
                     on_edit,

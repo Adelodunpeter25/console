@@ -18,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 )
 
@@ -149,35 +150,28 @@ func TestTokenSecretPersistsAcrossIssuers(t *testing.T) {
 	}
 }
 
+// The old freely-mintable token route is gone: a device credential is
+// issued only by exchanging a one-time pairing grant. The issuer itself
+// still exists — it signs the device tokens the pairing flow hands out —
+// and is covered above.
+//
+// What replaced the route's coverage is the device-token middleware, which
+// is exercised in device_auth_test.go. The query-string credential path
+// that the route also accepted is gone from ordinary HTTP entirely.
 func tokenRouteApp() (*fiber.App, *auth.TokenIssuer) {
 	issuer := tokenTestIssuer()
 	app := fiber.New()
-	routes.RegisterTokenRoutes(app, issuer)
 	return app, issuer
 }
 
-func TestTokenMintRoute(t *testing.T) {
-	app, issuer := tokenRouteApp()
+// The freely-mintable token route is gone for good: there is no path that
+// turns a caller-supplied device id into a credential.
+func TestTokenMintRouteIsGone(t *testing.T) {
+	app, _ := tokenRouteApp()
 
 	code, out := do(t, app, "POST", "/api/auth/token", `{"deviceId":"phone-1"}`)
-	if code != http.StatusOK || out["success"] != true {
-		t.Fatalf("mint: %d %v", code, out)
-	}
-	data, _ := out["data"].(map[string]any)
-	token, _ := data["token"].(string)
-	exp, _ := data["expiresAt"].(float64)
-	if token == "" || exp <= float64(time.Now().UnixMilli()) {
-		t.Fatalf("mint payload: %v", data)
-	}
-	if deviceID, err := issuer.Validate(token); err != nil || deviceID != "phone-1" {
-		t.Fatalf("minted token must validate: %v %q", err, deviceID)
-	}
-
-	if code, _ := do(t, app, "POST", "/api/auth/token", `{"deviceId":"  "}`); code != http.StatusBadRequest {
-		t.Fatalf("blank deviceId should 400, got %d", code)
-	}
-	if code, _ := do(t, app, "POST", "/api/auth/token", `not-json`); code != http.StatusBadRequest {
-		t.Fatalf("bad JSON should 400, got %d", code)
+	if code == http.StatusOK {
+		t.Fatalf("the mint route must not exist: %d %v", code, out)
 	}
 }
 
@@ -199,35 +193,40 @@ func doTokenRequest(t *testing.T, app *fiber.App, method, target, authHeader str
 	return resp.StatusCode, out
 }
 
-func TestRequireAPITokenMiddleware(t *testing.T) {
-	_, issuer := tokenRouteApp()
-	token, _, err := issuer.Mint("device-9", 0)
+// The device-token middleware replaces the old bearer middleware.
+//
+// The important difference is the query string: a credential in a URL
+// leaks into access logs, proxy logs and browser history, so ordinary
+// HTTP routes accept the header only. The WebTransport handshake keeps
+// its own scoped copy of that path, because a CONNECT request from some
+// clients cannot carry headers.
+func TestDeviceTokenMiddlewareRejectsQueryStringToken(t *testing.T) {
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	expired, _, err := issuer.Mint("device-9", -time.Second)
+	defer database.Close()
+	issuer := auth.NewTokenIssuerWithSecret([]byte("device-token-middleware-secret!"))
+	manager := auth.NewManager(database, issuer)
+	grant, _, err := manager.CreateBootstrapGrant()
 	if err != nil {
 		t.Fatal(err)
 	}
-	revoked, _, err := issuer.Mint("device-9", 0)
+	paired, err := manager.Pair(grant, "Desktop", "desktop")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := issuer.Revoke(revoked); err != nil {
 		t.Fatal(err)
 	}
 
 	app := fiber.New()
-	app.Get("/protected",
-		routes.RequireAPIToken(issuer),
-		func(c *fiber.Ctx) error {
-			deviceID, ok := routes.DeviceIDFromContext(c)
-			if !ok {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false})
-			}
-			return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"deviceId": deviceID}})
-		},
-	)
+	routes.RegisterPairingRoutes(app, manager)
+	app.Use(routes.RequireDeviceToken(manager))
+	app.Get("/protected", func(c *fiber.Ctx) error {
+		deviceID, ok := routes.DeviceIDFromContext(c)
+		if !ok {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"deviceId": deviceID}})
+	})
 
 	if code, _ := doTokenRequest(t, app, "GET", "/protected", ""); code != http.StatusUnauthorized {
 		t.Fatalf("missing token should 401, got %d", code)
@@ -235,31 +234,23 @@ func TestRequireAPITokenMiddleware(t *testing.T) {
 	if code, _ := doTokenRequest(t, app, "GET", "/protected", "Bearer bogus"); code != http.StatusUnauthorized {
 		t.Fatalf("bad token should 401, got %d", code)
 	}
-	if code, _ := doTokenRequest(t, app, "GET", "/protected", "Basic "+token); code != http.StatusUnauthorized {
+	if code, _ := doTokenRequest(t, app, "GET", "/protected", "Basic "+paired.Token); code != http.StatusUnauthorized {
 		t.Fatalf("wrong scheme should 401, got %d", code)
 	}
-	for _, bad := range []string{expired, revoked} {
-		if code, _ := doTokenRequest(t, app, "GET", "/protected", "Bearer "+bad); code != http.StatusUnauthorized {
-			t.Fatalf("dead token should 401, got %d", code)
-		}
+	// A credential in the query string must not authenticate anything.
+	if code, _ := doTokenRequest(t, app, "GET", "/protected?token="+paired.Token, ""); code != http.StatusUnauthorized {
+		t.Fatalf("query token must be rejected, got %d", code)
 	}
 
-	code, out := doTokenRequest(t, app, "GET", "/protected", "Bearer "+token)
+	code, out := doTokenRequest(t, app, "GET", "/protected", "Bearer "+paired.Token)
 	if code != http.StatusOK {
 		t.Fatalf("header token should pass, got %d %v", code, out)
 	}
-	if data, _ := out["data"].(map[string]any); data["deviceId"] != "device-9" {
+	if data, _ := out["data"].(map[string]any); data["deviceId"] != paired.ID {
 		t.Fatalf("device id must reach the handler: %v", data)
 	}
-	// Lowercase scheme is valid per RFC 9110; the query fallback works too.
-	if code, _ := doTokenRequest(t, app, "GET", "/protected", "bearer "+token); code != http.StatusOK {
+	// Lowercase scheme is valid per RFC 9110.
+	if code, _ := doTokenRequest(t, app, "GET", "/protected", "bearer "+paired.Token); code != http.StatusOK {
 		t.Fatalf("lowercase bearer should pass, got %d", code)
-	}
-	code, out = doTokenRequest(t, app, "GET", "/protected?token="+token, "")
-	if code != http.StatusOK {
-		t.Fatalf("query token should pass, got %d %v", code, out)
-	}
-	if data, _ := out["data"].(map[string]any); data["deviceId"] != "device-9" {
-		t.Fatalf("device id must reach the handler: %v", data)
 	}
 }

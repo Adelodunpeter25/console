@@ -1,7 +1,11 @@
 // Debug routes for load testing and profiling: process/WT snapshots and
-// synthetic notification injection for fanout blasts. Every route requires
-// a valid API bearer token (the middleware's first production use), but
-// like all local-daemon endpoints they assume loopback-adjacent trust.
+// synthetic notification injection for fanout blasts.
+//
+// These sit behind the same device-token boundary as every other route —
+// they are registered after the middleware, so a caller must already hold a
+// paired device credential. The old dedicated bearer middleware is gone: two
+// token systems meant two revocation states, and the looser one leaked
+// through the query string.
 package routes
 
 import (
@@ -9,7 +13,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
@@ -17,8 +20,8 @@ import (
 
 // RegisterDebugRoutes wires /api/debug/*: snapshot reads wt.Stats through
 // the provider so serve.go owns the server object. Exported for route tests.
-func RegisterDebugRoutes(app *fiber.App, issuer *auth.TokenIssuer, notifications *services.NotificationService, snapshot func() wt.Stats) {
-	h := app.Group("/api/debug", RequireAPIToken(issuer))
+func RegisterDebugRoutes(app *fiber.App, notifications *services.NotificationService, snapshot func() wt.Stats) {
+	h := app.Group("/api/debug")
 
 	h.Get("/stats", func(c *fiber.Ctx) error {
 		snap := snapshot()

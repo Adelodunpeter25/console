@@ -1,7 +1,9 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
+import com.console.mobile.data.api.ApiException
 import com.console.mobile.data.local.TokenStore
+import com.console.mobile.data.model.parsePairingUrl
 import console.v1.AuthStatusResponse
 import console.v1.GitHubAuthStatus
 import console.v1.OAuthLoginUrlResponse
@@ -41,6 +43,42 @@ class AuthRepository(
         val device = paired.device
         tokenStore.save(
             serverUrl,
+            com.console.mobile.data.local.StoredServerAuth(
+                token = paired.token,
+                deviceId = device?.id.orEmpty(),
+                deviceName = device?.name.orEmpty(),
+                expiresAt = paired.expires_at,
+            ),
+        )
+        paired
+    }
+
+    /**
+     * Pair with a server using a pasted pairing URL.
+     *
+     * The URL carries both the server's address and the one-time grant, so
+     * one paste is the whole connection. The request goes to the URL's own
+     * address — the URL is the instruction, not whatever server the app
+     * happens to be pointed at.
+     *
+     * The token is stored against that address, so the app talks to the
+     * server it just paired with from then on.
+     */
+    suspend fun pairWithUrl(url: String, deviceName: String, platform: String): PairingData = withContext(Dispatchers.IO) {
+        val parsed = parsePairingUrl(url).getOrElse { error ->
+            throw ApiException(error.message ?: "That is not a pairing URL.")
+        }
+        val paired = api.pairWithUrl(
+            parsed.baseUrl,
+            PairingRequest(
+                grant = parsed.grant,
+                device_name = deviceName,
+                platform = platform,
+            ),
+        )
+        val device = paired.device
+        tokenStore.save(
+            parsed.baseUrl,
             com.console.mobile.data.local.StoredServerAuth(
                 token = paired.token,
                 deviceId = device?.id.orEmpty(),

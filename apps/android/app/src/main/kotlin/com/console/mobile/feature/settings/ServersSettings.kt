@@ -46,6 +46,7 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHostPort
 import com.console.mobile.data.store.Environment
+import com.console.mobile.data.model.pairingBaseUrl
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
@@ -141,6 +142,7 @@ fun ServersSettings(onBack: () -> Unit) {
                         }
                     }
                 }
+                PairingSection()
                 if (envState.activeId != null) {
                     Section("Connection") {
                         ActionRow(icon = TablerIcons.Outline.PlugConnected, title = "Disconnect backend", tint = NewTheme.TextPrimary) {
@@ -152,6 +154,62 @@ fun ServersSettings(onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Pair this phone with a server.
+ *
+ * The pairing URL is the one line `console pair` prints on the server. It
+ * carries the server's address and a one-time grant, so one paste is the
+ * whole connection — no separate "which server" step.
+ */
+@Composable
+private fun PairingSection() {
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    Section("Pair This Device") {
+        TextInput(
+            "Pairing URL",
+            url,
+            { url = it; status = null },
+            "http://host:3000/console/pair#v=1&server=…&grant=…",
+        )
+        status?.let { message ->
+            Note(message)
+        }
+        ActionButton(
+            text = if (busy) "Pairing…" else "Pair",
+            onClick = {
+                if (busy) return@ActionButton
+                busy = true
+                status = null
+                scope.launch {
+                    try {
+                        val paired = AppContainer.authRepository.pairWithUrl(url.trim(), "Android", "android")
+                        val server = paired.server
+                        val name = server?.name?.takeIf { it.isNotBlank() } ?: "Paired Server"
+                        // The URL named the server, so the app points at it:
+                        // a device token is only valid on the machine that
+                        // issued it.
+                        AppContainer.environmentsRepository.activateUrl(name, pairingBaseUrl(url.trim()) ?: "")
+                        status = "Paired with $name."
+                        url = ""
+                    } catch (e: Exception) {
+                        status = e.message ?: "Pairing failed."
+                    } finally {
+                        busy = false
+                    }
+                }
+            },
+            enabled = !busy && url.isNotBlank(),
+            loading = busy,
+            kind = ActionButtonKind.Primary,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        )
     }
 }
 

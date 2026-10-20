@@ -7,7 +7,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 )
 
-// StatusDaemon prints whether the daemon is running.
+// StatusDaemon prints whether the daemon is running, and how to pair a
+// device with it.
 func StatusDaemon() error {
 	status := daemon.GetStatus()
 	if !status.Running {
@@ -24,5 +25,11 @@ func StatusDaemon() error {
 	}
 	fmt.Printf("Uptime: %s\n", uptime)
 	fmt.Printf("Server: http://%s:%s\n", status.Host, status.Port)
+	// The pairing URL is the thing an operator actually wants from
+	// `console status`: it is the copy-pasteable line that connects a
+	// phone or another machine. It is minted against the *running*
+	// server's storage directory, not the current mode's, so a dev daemon
+	// gets a grant the dev daemon will honour.
+	PrintPairingURL(status.Dir)
 	return nil
 }

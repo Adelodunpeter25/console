@@ -1,1 +1,1 @@
-{"device":{"id":"device-1","name":"My desktop","platform":"desktop"},"token":"ct1_device_token","expiresAt":"1762592000000"}
+{"device":{"id":"device-1","name":"My desktop","platform":"desktop"},"token":"ct1_device_token","expiresAt":"1762592000000","server":{"id":"server-1","name":"Studio Mac","version":"1.0.1"}}

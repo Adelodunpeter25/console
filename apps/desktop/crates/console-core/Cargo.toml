@@ -118,5 +118,9 @@ name = "server_auth_store_test"
 path = "tests/server_auth_store_test.rs"
 
 [[test]]
+name = "pairing_url_test"
+path = "tests/pairing_url_test.rs"
+
+[[test]]
 name = "sidebar_sort_timestamp_test"
 path = "tests/session/sidebar_sort_timestamp_test.rs"

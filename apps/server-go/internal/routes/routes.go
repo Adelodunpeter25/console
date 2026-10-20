@@ -29,6 +29,9 @@ type Config struct {
 	// TokenIssuer mints the API bearer tokens the WT handshake validates.
 	// Nil builds one internally (persistent secret, ephemeral fallback).
 	TokenIssuer *auth.TokenIssuer
+	// Identity is the server's public identity, reported in the pairing
+	// responses so a client can confirm which machine it paired with.
+	Identity auth.ServerIdentity
 	// AltSvc advertises the H3 port (e.g. "443" renders h3=":443").
 	// Empty disables the header. Registered before all routes.
 	AltSvc string
@@ -74,6 +77,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 		tokenIssuer = auth.NewTokenIssuer()
 	}
 	authManager := auth.NewManager(cfg.DB, tokenIssuer)
+	authManager.Identity = cfg.Identity
 	RegisterPairingRoutes(app, authManager)
 	app.Use(RequireDeviceToken(authManager))
 

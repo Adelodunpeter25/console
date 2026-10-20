@@ -169,6 +169,22 @@ message PairedDevice {
   string platform = 3;
 }
 
+// The server's own identity: who a client is about to trust.
+//
+// A device pairing with a server is handing over a credential, so it needs
+// to know which server that is. `id` is a stable random identifier the
+// client checks against the id in the pairing URL it was given — a mismatch
+// means the URL came from a different machine, and the client should say
+// so rather than connect. `name` is the human-readable label shown in the
+// confirmation prompt, and `base_url` is the address the client should
+// talk to (present when the server knows it).
+message ServerIdentity {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  string base_url = 4;
+}
+
 // Response of POST /api/auth/pair. The grant was consumed to issue this
 // device token; the grant itself is never returned.
 //
@@ -178,6 +194,9 @@ message PairDeviceResponse {
   PairedDevice device = 1;
   string token = 2;
   int64 expires_at = 3;
+  // The server that issued the token, so the client can confirm it paired
+  // with the server it meant to.
+  ServerIdentity server = 4;
 }
 
 // Response of POST /api/auth/pairing-grants: a short-lived, single-use grant
@@ -185,6 +204,9 @@ message PairDeviceResponse {
 message PairingGrantResponse {
   string grant = 1;
   int64 expires_at = 2;
+  // The server the grant is for. The phone shows this before redeeming the
+  // grant, so the user can see which machine they are about to trust.
+  ServerIdentity server = 3;
 }
 
 // One device paired with the server.
@@ -205,4 +227,29 @@ message ServerDevice {
 // Response of GET /api/auth/devices.
 message ServerDevicesResponse {
   repeated ServerDevice devices = 1;
+}
+
+// Request of POST /api/auth/devices/rename: set this device's own display
+// name.
+//
+// A device may only rename itself, so the request carries no device id —
+// the server uses the authenticated one. A client that wanted to rename a
+// different device would have to forge the caller's identity, which it
+// cannot.
+message RenameDeviceRequest {
+  string name = 1;
+}
+
+// Response of POST /api/auth/devices/rename.
+message RenameDeviceResponse {
+  ServerDevice device = 1;
+}
+
+// Response of POST /api/auth/devices/revoke-others: every device except the
+// caller's has been revoked.
+//
+// `revoked_count` is how many were actually revoked, which is not always
+// the number of other devices: already-revoked ones are not re-revoked.
+message RevokeOthersResponse {
+  int64 revoked_count = 1;
 }

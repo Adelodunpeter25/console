@@ -22,6 +22,71 @@ use console_core::services::{DeviceInfo, PairingData, PairingGrantData, PairingG
 use gpui::Context;
 
 impl ConsoleDesktopApp {
+    /// Pair this app with a server using a pasted pairing URL.
+    ///
+    /// The URL carries the server's address and the one-time grant, so one
+    /// paste is the whole connection — no separate "which server" step. On
+    /// success the device token is stored against that server's URL and
+    /// installed on the shared transport, so every subsequent request — and
+    /// the WebTransport handshake — is authenticated.
+    pub fn pair_with_url(&mut self, url: String, device_name: String, cx: &mut Context<Self>) {
+        if url.trim().is_empty() {
+            self.server_auth_error = Some("Paste the pairing URL from the server.".to_string());
+            cx.notify();
+            return;
+        }
+        self.server_auth_busy = true;
+        self.server_auth_error = None;
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = client
+                .server_auth
+                .pair_with_url(&url, &device_name, "desktop")
+                .await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.server_auth_busy = false;
+                        match result {
+                            Ok((data, base_url)) => {
+                                this.server_auth_error = None;
+                                let device = data.device.as_ref().cloned();
+                                this.server_device = device.as_ref().map(|device| ServerDevice {
+                                    id: device.id.clone(),
+                                    name: device.name.clone(),
+                                    platform: device.platform.clone(),
+                                    created_at: None,
+                                    last_seen_at: None,
+                                    revoked_at: None,
+                                });
+                                this.apply_paired_device(base_url.clone(), &data, device, cx);
+                                // The pairing URL named the server, so the app
+                                // has to point at it: the environment it was on
+                                // before may be a different machine, and a
+                                // token for one server is not valid on
+                                // another.
+                                let server_name = data
+                                    .server
+                                    .as_ref()
+                                    .map(|server| server.name.clone())
+                                    .filter(|name| !name.trim().is_empty())
+                                    .unwrap_or_else(|| "Paired Server".to_string());
+                                this.adopt_paired_server(server_name, base_url, cx);
+                            }
+                            Err(error) => {
+                                this.server_auth_error = Some(error.to_string());
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
     /// Pair this app with the active server using a one-time grant.
     ///
     /// On success the device token is stored against that server's URL and
@@ -217,6 +282,32 @@ impl ConsoleDesktopApp {
             client.set_auth_token(Some(token)).await;
         })
         .detach();
+    }
+
+    /// Point the app at the server it just paired with.
+    ///
+    /// A pairing URL names its server, so pairing with one means "connect to
+    /// this machine" — the environment the app was on before may be a
+    /// different one, and a device token is only valid on the server that
+    /// issued it. An environment for that address is reused if it already
+    /// exists, so pairing twice does not litter the list.
+    fn adopt_paired_server(&mut self, name: String, url: String, cx: &mut Context<Self>) {
+        let existing = self
+            .environments
+            .iter()
+            .find(|env| env.url.trim_end_matches('/') == url.trim_end_matches('/'))
+            .map(|env| env.id.clone());
+        let env_id = match existing {
+            Some(id) => id,
+            None => {
+                self.add_environment(name, url, cx);
+                match self.environments.last() {
+                    Some(env) => env.id.clone(),
+                    None => return,
+                }
+            }
+        };
+        self.activate_environment(env_id, cx);
     }
 
     /// Drop the device credential from the transport and from disk.

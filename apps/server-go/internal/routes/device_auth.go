@@ -2,6 +2,8 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
+	"html"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -16,7 +18,10 @@ type authManager interface {
 	Pair(string, string, string) (auth.PairedDevice, error)
 	CreateDeviceGrant(string, string, string) (string, int64, error)
 	RevokeDevice(string) error
+	RevokeOtherDevices(string) (int64, error)
+	RenameDevice(string, string) error
 	Devices() ([]db.AuthDevice, error)
+	ServerInfo() auth.ServerIdentity
 }
 
 func bearer(c *fiber.Ctx) string {
@@ -43,6 +48,25 @@ func RequireDeviceToken(manager authManager) fiber.Handler {
 func RegisterPairingRoutes(app *fiber.App, manager authManager) {
 	h := app.Group("/api/auth")
 
+	// The pairing URL's path, so opening it in a browser explains itself
+	// instead of 404ing. It shows only the server's public identity — the
+	// grant lives in the URL fragment, which the browser never sends, so
+	// this endpoint cannot leak it.
+	app.Get("/console/pair", func(c *fiber.Ctx) error {
+		info := manager.ServerInfo()
+		return c.Type("html").SendString(fmt.Sprintf(
+			`<!doctype html><html><head><meta charset="utf-8">`+
+				`<title>Pair with %s</title></head><body>`+
+				`<h1>%s</h1>`+
+				`<p>Console server <code>%s</code>, version %s.</p>`+
+				`<p>Open the Console app on the device you want to connect and paste `+
+				`the whole pairing URL into it.</p>`+
+				`</body></html>`,
+			html.EscapeString(info.Name), html.EscapeString(info.Name),
+			html.EscapeString(info.ID), html.EscapeString(info.Version),
+		))
+	})
+
 	h.Post("/pair", func(c *fiber.Ctx) error {
 		var req consolev1.PairDeviceRequest
 		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
@@ -60,12 +84,27 @@ func RegisterPairingRoutes(app *fiber.App, manager authManager) {
 			},
 			Token:     device.Token,
 			ExpiresAt: device.ExpiresAt,
+			Server:    serverIdentityProto(manager.ServerInfo()),
 		})
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"success": false, "error": "encode failed"})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
+}
+
+// serverIdentityProto converts the server's identity for the wire.
+//
+// The base URL is omitted when empty: protojson drops an implicit empty
+// string anyway, and a client that sees no base_url knows the server did
+// not claim one rather than being handed a blank.
+func serverIdentityProto(info auth.ServerIdentity) *consolev1.ServerIdentity {
+	return &consolev1.ServerIdentity{
+		Id:      info.ID,
+		Name:    info.Name,
+		Version: info.Version,
+		BaseUrl: info.BaseURL,
+	}
 }
 
 // RegisterDeviceRoutes wires the authenticated device-management routes.
@@ -85,6 +124,7 @@ func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
 		raw, err := protoMarshal.Marshal(&consolev1.PairingGrantResponse{
 			Grant:     grant,
 			ExpiresAt: exp,
+			Server:    serverIdentityProto(manager.ServerInfo()),
 		})
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"success": false, "error": "encode failed"})
@@ -120,5 +160,61 @@ func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
 			return c.Status(500).JSON(fiber.Map{"success": false, "error": "Could not revoke device."})
 		}
 		return c.JSON(fiber.Map{"success": true})
+	})
+
+	// Revoke every device except the caller's. The caller's own credential
+	// keeps working — the point is to sign out everything else.
+	h.Post("/devices/revoke-others", func(c *fiber.Ctx) error {
+		caller, _ := c.Locals("authenticatedDeviceID").(string)
+		count, err := manager.RevokeOtherDevices(caller)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"success": false, "error": "Could not revoke other devices."})
+		}
+		raw, err := protoMarshal.Marshal(&consolev1.RevokeOthersResponse{RevokedCount: count})
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"success": false, "error": "encode failed"})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+
+	// Rename the caller's own device. There is no id in the request: the
+	// server renames whoever is authenticated, so a device cannot rename
+	// another one.
+	h.Post("/devices/rename", func(c *fiber.Ctx) error {
+		var req consolev1.RenameDeviceRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		caller, _ := c.Locals("authenticatedDeviceID").(string)
+		if caller == "" {
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": "Authentication required."})
+		}
+		if err := manager.RenameDevice(caller, req.GetName()); err != nil {
+			return c.Status(400).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		devices, err := manager.Devices()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"success": false, "error": "Could not list devices."})
+		}
+		for _, device := range devices {
+			if device.ID != caller {
+				continue
+			}
+			raw, err := protoMarshal.Marshal(&consolev1.RenameDeviceResponse{
+				Device: &consolev1.ServerDevice{
+					Id:         device.ID,
+					Name:       device.Name,
+					Platform:   device.Platform,
+					CreatedAt:  device.CreatedAt,
+					LastSeenAt: device.LastSeenAt,
+					RevokedAt:  device.RevokedAt,
+				},
+			})
+			if err != nil {
+				return c.Status(500).JSON(fiber.Map{"success": false, "error": "encode failed"})
+			}
+			return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+		}
+		return c.Status(404).JSON(fiber.Map{"success": false, "error": "Device not found."})
 	})
 }

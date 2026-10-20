@@ -192,6 +192,9 @@ func StartDaemon(options StartOptions) error {
 		}
 		fmt.Printf("Daemon started successfully (PID: %d)\n", pid)
 		fmt.Printf("Server: http://%s:%s\n", host, port)
+		// The pairing URL is printed after the daemon is confirmed up, so
+		// the grant it carries is one the running server will honour.
+		PrintPairingURL(daemon.ConsoleDir())
 		fmt.Println("Logs: ~/.console/logs/daemon.log")
 		fmt.Println("Run 'console logs' to view logs")
 		fmt.Println("Run 'console stop' to stop the daemon")
@@ -205,6 +208,7 @@ func StartDaemon(options StartOptions) error {
 		printWebTransport(wtCert, wtAddr(host, options.WTPort))
 	}
 	fmt.Println(firecrawlStatus)
+	PrintPairingURL(daemon.ConsoleDir())
 	fmt.Println("Press Ctrl+C to stop")
 
 	child := exec.Command(launch.cmd, launch.args...)

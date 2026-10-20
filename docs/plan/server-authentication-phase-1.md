@@ -132,6 +132,18 @@ https://server.example/console/pair#v=1&server=<server-id>&grant=<one-time-grant
 
 The URL is a transport for pairing data, not an authenticated API URL. The client must exchange the grant immediately and then discard it.
 
+**As implemented.** The URL is minted and printed by the CLI, not by the
+daemon: `console pair` prints one on demand, and `console start` and
+`console status` print one as part of their output. The daemon prints
+nothing — its output is a log file, and a grant is a credential. The grant
+is minted straight into the server's database by the CLI, so no
+unauthenticated HTTP endpoint exists purely to hand out credentials.
+
+The URL's base is the server's own address, so one paste is the whole
+connection: the client learns both which server to talk to and how to
+prove it may. A `0.0.0.0` bind address is replaced with the machine's LAN
+address, because a phone cannot dial a wildcard.
+
 If the server is configured for plain HTTP in a trusted local network, print a warning. Authentication protects access, but production remote use should still use TLS. The existing WebTransport configuration already has TLS-related startup behavior and should remain the source of transport configuration.
 
 ### 4.2 Desktop exchange

@@ -1,5 +1,9 @@
-// Debug route coverage: bearer gating, snapshot shape, and notification
-// injection delivery for fanout blasts.
+// Debug route coverage: snapshot shape and notification injection delivery
+// for fanout blasts.
+//
+// The debug routes sit behind the same device-token boundary as every
+// other route — they used to have their own bearer middleware, which
+// meant two token systems and two revocation states.
 package tests
 
 import (
@@ -10,36 +14,46 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
-func debugTestApp() (*fiber.App, *auth.TokenIssuer, *services.NotificationService) {
-	issuer := auth.NewTokenIssuerWithSecret([]byte("debug-test-secret-32-bytes-!!!"))
-	notifications := services.NewNotificationService()
-	app := fiber.New()
-	routes.RegisterDebugRoutes(app, issuer, notifications, func() wt.Stats {
-		return wt.Stats{UptimeMillis: 1234, Goroutines: 42, HeapAlloc: 1000, HeapSys: 2000, SessionsTotal: 3, StreamsByKind: map[string]uint64{"CHAT_RUN": 5}}
-	})
-	return app, issuer, notifications
-}
-
-func debugToken(t *testing.T, issuer *auth.TokenIssuer) string {
+func debugTestApp(t *testing.T) (*fiber.App, string, *services.NotificationService) {
 	t.Helper()
-	token, _, err := issuer.Mint("bench", 0)
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return token
+	t.Cleanup(database.Close)
+
+	issuer := auth.NewTokenIssuerWithSecret([]byte("debug-test-secret-32-bytes-!!!"))
+	manager := auth.NewManager(database, issuer)
+	grant, _, err := manager.CreateBootstrapGrant()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paired, err := manager.Pair(grant, "Bench", "desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	notifications := services.NewNotificationService()
+	app := fiber.New()
+	app.Use(routes.RequireDeviceToken(manager))
+	routes.RegisterDebugRoutes(app, notifications, func() wt.Stats {
+		return wt.Stats{UptimeMillis: 1234, Goroutines: 42, HeapAlloc: 1000, HeapSys: 2000, SessionsTotal: 3, StreamsByKind: map[string]uint64{"CHAT_RUN": 5}}
+	})
+	return app, paired.Token, notifications
 }
 
 func TestDebugStatsRequiresToken(t *testing.T) {
-	app, issuer, _ := debugTestApp()
+	app, token, _ := debugTestApp(t)
 	if code, _ := doTokenRequest(t, app, "GET", "/api/debug/stats", ""); code != http.StatusUnauthorized {
 		t.Fatalf("missing token should 401, got %d", code)
 	}
-	code, out := doTokenRequest(t, app, "GET", "/api/debug/stats", "Bearer "+debugToken(t, issuer))
+	code, out := doTokenRequest(t, app, "GET", "/api/debug/stats", "Bearer "+token)
 	if code != http.StatusOK || out["success"] != true {
 		t.Fatalf("stats: %d %v", code, out)
 	}
@@ -55,13 +69,13 @@ func TestDebugStatsRequiresToken(t *testing.T) {
 }
 
 func TestDebugNotifyInjectsAndDelivers(t *testing.T) {
-	app, issuer, notifications := debugTestApp()
+	app, token, notifications := debugTestApp(t)
 	if code, _ := doTokenRequest(t, app, "POST", "/api/debug/notify", ""); code != http.StatusUnauthorized {
 		t.Fatalf("missing token should 401, got %d", code)
 	}
 	ch := notifications.Subscribe()
 	defer notifications.Unsubscribe(ch)
-	code, out := doTokenRequest(t, app, "POST", "/api/debug/notify", "Bearer "+debugToken(t, issuer))
+	code, out := doTokenRequest(t, app, "POST", "/api/debug/notify", "Bearer "+token)
 	// doTokenRequest sends no body: defaults (bench/test) apply.
 	if code != http.StatusOK || out["success"] != true {
 		t.Fatalf("notify: %d %v", code, out)
