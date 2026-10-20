@@ -157,9 +157,15 @@ message PairDeviceRequest {
 
 // Request of POST /api/auth/pairing-grants: ask for a short-lived grant that
 // another device can redeem.
+//
+// base_url is the address this device reaches the server at. The server
+// cannot know it — it may be behind a proxy, a tunnel or a LAN address it
+// does not recognise — so the client says which address the other device
+// should be pointed at, and the server builds the QR code from it.
 message PairingGrantRequest {
   string device_name = 1;
   string platform = 2;
+  string base_url = 3;
 }
 
 // One paired device, as reported by the server.
@@ -201,12 +207,19 @@ message PairDeviceResponse {
 
 // Response of POST /api/auth/pairing-grants: a short-lived, single-use grant
 // another device can exchange for its own token (the QR flow).
+//
+// qr_png is the same pairing URL rendered as a QR code, so the requesting
+// device can show it and the other device can scan it without either of
+// them typing anything. It is empty when the server could not render one —
+// the grant and the URL are still usable on their own.
 message PairingGrantResponse {
   string grant = 1;
   int64 expires_at = 2;
   // The server the grant is for. The phone shows this before redeeming the
   // grant, so the user can see which machine they are about to trust.
   ServerIdentity server = 3;
+  // The pairing URL, rendered as a PNG.
+  bytes qr_png = 4;
 }
 
 // One device paired with the server.

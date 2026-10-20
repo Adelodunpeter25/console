@@ -844,10 +844,16 @@ func (x *PairDeviceRequest) GetPlatform() string {
 
 // Request of POST /api/auth/pairing-grants: ask for a short-lived grant that
 // another device can redeem.
+//
+// base_url is the address this device reaches the server at. The server
+// cannot know it — it may be behind a proxy, a tunnel or a LAN address it
+// does not recognise — so the client says which address the other device
+// should be pointed at, and the server builds the QR code from it.
 type PairingGrantRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DeviceName    string                 `protobuf:"bytes,1,opt,name=device_name,json=deviceName,proto3" json:"device_name,omitempty"`
 	Platform      string                 `protobuf:"bytes,2,opt,name=platform,proto3" json:"platform,omitempty"`
+	BaseUrl       string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -892,6 +898,13 @@ func (x *PairingGrantRequest) GetDeviceName() string {
 func (x *PairingGrantRequest) GetPlatform() string {
 	if x != nil {
 		return x.Platform
+	}
+	return ""
+}
+
+func (x *PairingGrantRequest) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
 	}
 	return ""
 }
@@ -1111,13 +1124,20 @@ func (x *PairDeviceResponse) GetServer() *ServerIdentity {
 
 // Response of POST /api/auth/pairing-grants: a short-lived, single-use grant
 // another device can exchange for its own token (the QR flow).
+//
+// qr_png is the same pairing URL rendered as a QR code, so the requesting
+// device can show it and the other device can scan it without either of
+// them typing anything. It is empty when the server could not render one —
+// the grant and the URL are still usable on their own.
 type PairingGrantResponse struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	Grant     string                 `protobuf:"bytes,1,opt,name=grant,proto3" json:"grant,omitempty"`
 	ExpiresAt int64                  `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
 	// The server the grant is for. The phone shows this before redeeming the
 	// grant, so the user can see which machine they are about to trust.
-	Server        *ServerIdentity `protobuf:"bytes,3,opt,name=server,proto3" json:"server,omitempty"`
+	Server *ServerIdentity `protobuf:"bytes,3,opt,name=server,proto3" json:"server,omitempty"`
+	// The pairing URL, rendered as a PNG.
+	QrPng         []byte `protobuf:"bytes,4,opt,name=qr_png,json=qrPng,proto3" json:"qr_png,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1169,6 +1189,13 @@ func (x *PairingGrantResponse) GetExpiresAt() int64 {
 func (x *PairingGrantResponse) GetServer() *ServerIdentity {
 	if x != nil {
 		return x.Server
+	}
+	return nil
+}
+
+func (x *PairingGrantResponse) GetQrPng() []byte {
+	if x != nil {
+		return x.QrPng
 	}
 	return nil
 }
@@ -1535,11 +1562,12 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\x05grant\x18\x01 \x01(\tR\x05grant\x12\x1f\n" +
 	"\vdevice_name\x18\x02 \x01(\tR\n" +
 	"deviceName\x12\x1a\n" +
-	"\bplatform\x18\x03 \x01(\tR\bplatform\"R\n" +
+	"\bplatform\x18\x03 \x01(\tR\bplatform\"m\n" +
 	"\x13PairingGrantRequest\x12\x1f\n" +
 	"\vdevice_name\x18\x01 \x01(\tR\n" +
 	"deviceName\x12\x1a\n" +
-	"\bplatform\x18\x02 \x01(\tR\bplatform\"N\n" +
+	"\bplatform\x18\x02 \x01(\tR\bplatform\x12\x19\n" +
+	"\bbase_url\x18\x03 \x01(\tR\abaseUrl\"N\n" +
 	"\fPairedDevice\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
@@ -1554,12 +1582,13 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\x03R\texpiresAt\x122\n" +
-	"\x06server\x18\x04 \x01(\v2\x1a.console.v1.ServerIdentityR\x06server\"\x7f\n" +
+	"\x06server\x18\x04 \x01(\v2\x1a.console.v1.ServerIdentityR\x06server\"\x96\x01\n" +
 	"\x14PairingGrantResponse\x12\x14\n" +
 	"\x05grant\x18\x01 \x01(\tR\x05grant\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x02 \x01(\x03R\texpiresAt\x122\n" +
-	"\x06server\x18\x03 \x01(\v2\x1a.console.v1.ServerIdentityR\x06server\"\xec\x01\n" +
+	"\x06server\x18\x03 \x01(\v2\x1a.console.v1.ServerIdentityR\x06server\x12\x15\n" +
+	"\x06qr_png\x18\x04 \x01(\fR\x05qrPng\"\xec\x01\n" +
 	"\fServerDevice\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +

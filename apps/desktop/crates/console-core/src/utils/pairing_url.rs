@@ -102,6 +102,39 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
     })
 }
 
+/// Split a pasted line into an address and a pairing code.
+///
+/// Three shapes are accepted, and they all mean the same thing:
+/// - "192.168.1.100:8080" — an address, no code
+/// - "192.168.1.100:8080#abc-123-xyz" — an address and a code
+/// - "http://192.168.1.100:8080/console/pair#v=1&server=..&code=abc" — the whole URL
+///
+/// The rule is one line: everything after the "#" is the code, everything
+/// before it is the address. The code lives in the fragment because a
+/// browser never sends a fragment to the server, so it stays out of access
+/// logs.
+pub fn split_pairing_line(text: &str) -> (String, String) {
+    let trimmed = text.trim();
+    let Some((base, fragment)) = trimmed.split_once('#') else {
+        return (trimmed.to_string(), String::new());
+    };
+    let address = match base.split_once("://") {
+        Some((_, rest)) => rest.split('/').next().unwrap_or(rest).trim(),
+        None => base.trim(),
+    };
+    // A bare code, or a query string the full URL carries.
+    if !fragment.contains('=') {
+        return (address.to_string(), fragment.to_string());
+    }
+    let code = fragment
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find(|(key, _)| *key == "code")
+        .map(|(_, value)| value.to_string())
+        .unwrap_or_default();
+    (address.to_string(), code)
+}
+
 /// Percent-decode a fragment value.
 ///
 /// Only the escapes that can appear in a URL-encoded query value are

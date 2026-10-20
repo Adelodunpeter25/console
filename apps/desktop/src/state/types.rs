@@ -371,24 +371,17 @@ pub struct ConsoleDesktopApp {
     pub provider_credential_forms_open: std::collections::HashSet<String>,
     /// Server-authored failure text for the key fields, shown verbatim.
     pub provider_credential_error: Option<String>,
-    // Server device pairing. The fields are read by the pairing UI, which
-    // lands in a later change; until then they are written but not read, so
-    // the dead-code lint is silenced for this group only.
+    // Server device pairing.
     /// The device this app is paired as on the active server. `None` means
     /// "not paired" — the server rejects every request in that state.
-    #[allow(dead_code)]
     pub server_device: Option<console_core::services::ServerDevice>,
     /// Devices paired with the active server, for the device list.
-    #[allow(dead_code)]
     pub server_devices: Vec<console_core::services::ServerDevice>,
     /// A short-lived pairing grant for another device (the QR flow).
-    #[allow(dead_code)]
     pub server_pairing_grant: Option<console_core::services::PairingGrantData>,
     /// True while a pairing or device request is in flight.
-    #[allow(dead_code)]
     pub server_auth_busy: bool,
     /// Server-authored failure text for the pairing flows, shown verbatim.
-    #[allow(dead_code)]
     pub server_auth_error: Option<String>,
     /// Server ids whose first-run setup panel was dismissed. Read from the
     /// local store at boot; see state/onboarding.rs for why nothing about

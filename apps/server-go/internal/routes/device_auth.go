@@ -121,10 +121,15 @@ func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
 		if err != nil {
 			return c.Status(400).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
+		info := manager.ServerInfo()
+		// The QR carries the address the *other* device should use, which
+		// only the caller knows, and the code, which only the server knows.
+		payload := auth.PairingPayload(req.GetBaseUrl(), info.ID, grant)
 		raw, err := protoMarshal.Marshal(&consolev1.PairingGrantResponse{
 			Grant:     grant,
 			ExpiresAt: exp,
-			Server:    serverIdentityProto(manager.ServerInfo()),
+			Server:    serverIdentityProto(info),
+			QrPng:     auth.RenderPairingQR(payload),
 		})
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"success": false, "error": "encode failed"})

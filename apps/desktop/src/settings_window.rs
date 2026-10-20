@@ -4,6 +4,7 @@ use console_ui::settings::{
     DeletedChatsPage, IntegrationsPage, KeybindingsPage, ModelsPage, ProbeState, ProjectsPage,
     ProvidersPage, ServersPage, SettingsShell, SettingsTab, UsagePage,
 };
+use gpui::prelude::FluentBuilder;
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
     KeyDownEvent, ParentElement, Render, Styled, WeakEntity, Window, div,
@@ -19,6 +20,10 @@ pub struct SettingsWindow {
     editing_env_id: Option<String>,
     new_env_name_input: Entity<ComposerInput>,
     new_env_url_input: Entity<ComposerInput>,
+    /// The pairing code, redeemed for this device's own credential.
+    new_env_code_input: Entity<ComposerInput>,
+    /// True while the "pair a phone" modal is open.
+    pair_modal_open: bool,
     new_env_probe: ProbeState,
     model_vision_input: Entity<ComposerInput>,
     model_smol_input: Entity<ComposerInput>,
@@ -58,7 +63,16 @@ impl SettingsWindow {
 
         let new_env_url_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
-            input.set_placeholder("e.g. http://localhost:3000", cx);
+            input.set_placeholder("e.g. 192.168.1.50:3000", cx);
+            input
+        });
+
+        // The pairing code field. Created up front like the other settings
+        // inputs so its entity identity is stable across renders — rebuilding
+        // it each render would drop focus and any half-typed code.
+        let new_env_code_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("e.g. abc-123-xyz", cx);
             input
         });
 
@@ -128,6 +142,29 @@ impl SettingsWindow {
 
         let mut subscriptions = Vec::new();
         subscriptions.extend(subscription);
+        // A pasted pairing line is the whole connection: the host and the
+        // code travel together, separated by a "#". Splitting it here means
+        // the user pastes one line and the two fields fill themselves.
+        {
+            let code_input = new_env_code_input.clone();
+            let url_input = new_env_url_input.clone();
+            subscriptions.push(cx.subscribe(
+                &url_input,
+                move |_this, input, event: &console_ui::input::ComposerEvent, cx| match event {
+                    console_ui::input::ComposerEvent::Edited
+                    | console_ui::input::ComposerEvent::Focus => {
+                        let text = input.read(cx).content();
+                        let (address, code) = console_core::utils::split_pairing_line(&text);
+                        if code.is_empty() {
+                            return;
+                        }
+                        input.update(cx, |input, cx| input.set_content(address, cx));
+                        code_input.update(cx, |input, cx| input.set_content(code, cx));
+                    }
+                    _ => {}
+                },
+            ));
+        }
         for search in &model_searches {
             subscriptions.push(cx.subscribe(
                 search,
@@ -178,7 +215,9 @@ impl SettingsWindow {
             github_token_input,
             api_key_inputs: std::collections::HashMap::new(),
             new_env_url_input,
+            new_env_code_input,
             new_env_probe: ProbeState::Unknown,
+            pair_modal_open: false,
             model_vision_input,
             model_smol_input,
             model_menus,
@@ -428,6 +467,135 @@ impl Render for SettingsWindow {
             })
         };
 
+        let on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = cx.entity().clone();
+            let url_input = self.new_env_url_input.clone();
+            Rc::new(move |_w: &mut Window, cx: &mut App| {
+                let url = url_input.read(cx).content().trim().to_string();
+                if url.is_empty() {
+                    return;
+                }
+                entity.update(cx, |this, cx| {
+                    this.new_env_probe = ProbeState::Probing;
+                    cx.notify();
+                });
+                let ent = entity.clone();
+                cx.spawn(async move |cx| {
+                    let ok =
+                        console_core::utils::probe_backend(&url, Duration::from_secs(3))
+                            .await;
+                    let _ = cx.update(|cx| {
+                        ent.update(cx, |this, cx| {
+                            this.new_env_probe = if ok.is_ok() {
+                                ProbeState::Ok
+                            } else {
+                                ProbeState::Failed
+                            };
+                            cx.notify();
+                        });
+                    });
+                })
+                .detach();
+            })
+        };
+
+        let on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let app_handle = self.app.clone();
+            let entity = cx.entity().clone();
+            let name_input = self.new_env_name_input.clone();
+            let url_input = self.new_env_url_input.clone();
+            let code_input = self.new_env_code_input.clone();
+            Rc::new(move |_w: &mut Window, cx: &mut App| {
+                let name = name_input.read(cx).content().trim().to_string();
+                let url = url_input.read(cx).content().trim().to_string();
+                let code = code_input.read(cx).content().trim().to_string();
+                if url.is_empty() {
+                    return;
+                }
+
+                // A pairing code means the server wants this device
+                // to pair: exchange it for a credential, and only then
+                // point the app at that address. The host field may
+                // also carry the whole pairing URL, in which case the
+                // app splits it into the two.
+                if !code.is_empty() {
+                    let (host, split_code) = console_core::utils::split_pairing_line(&url);
+                    let code = if split_code.is_empty() {
+                        code
+                    } else {
+                        split_code
+                    };
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.pair_with_code(
+                                host,
+                                code,
+                                "Desktop".to_string(),
+                                cx,
+                            );
+                        });
+                    }
+                    entity.update(cx, |this, cx| {
+                        this.is_adding_env = false;
+                        this.editing_env_id = None;
+                        this.new_env_probe = ProbeState::Unknown;
+                        cx.notify();
+                    });
+                    return;
+                }
+
+                let final_name = if name.is_empty() {
+                    "Custom Server".to_string()
+                } else {
+                    name
+                };
+
+                let editing_id = entity.read(cx).editing_env_id.clone();
+
+                if let Some(app) = app_handle.upgrade() {
+                    app.update(cx, |app_state, cx| {
+                        if let Some(id) = editing_id {
+                            app_state.update_environment(id, final_name, url, cx);
+                        } else {
+                            app_state.add_environment(final_name, url, cx);
+                        }
+                    });
+                }
+
+                entity.update(cx, |this, cx| {
+                    this.is_adding_env = false;
+                    this.editing_env_id = None;
+                    this.new_env_probe = ProbeState::Unknown;
+                    cx.notify();
+                });
+            })
+        };
+
+        // Open the "pair a phone" modal, and ask the server for a
+        // one-time code to show in it.
+        let on_pair_device: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let app_handle = self.app.clone();
+            let entity = cx.entity().clone();
+            Rc::new(move |_w: &mut Window, cx: &mut App| {
+                entity.update(cx, |this, cx| {
+                    this.pair_modal_open = true;
+                    cx.notify();
+                });
+                if let Some(app) = app_handle.upgrade() {
+                    app.update(cx, |app_state, cx| {
+                        app_state.create_pairing_grant("My phone".to_string(), cx);
+                    });
+                }
+            })
+        };
+        // The read guard below cannot outlive the match (one arm needs
+        // &mut cx), so the pairing state the modals show is copied out
+        // first.
+        let pairing_grant = app.server_pairing_grant.clone();
+        let pairing_error = app.server_auth_error.clone();
+        let this_device = app.server_device.clone();
+        let paired_devices = app.server_devices.clone();
+
         let content = match active_tab {
             SettingsTab::Providers => {
                 let on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
@@ -592,116 +760,14 @@ impl Render for SettingsWindow {
                     })
                 };
 
-                let on_probe_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-                    let entity = cx.entity().clone();
-                    let url_input = self.new_env_url_input.clone();
-                    Rc::new(move |_w: &mut Window, cx: &mut App| {
-                        let url = url_input.read(cx).content().trim().to_string();
-                        if url.is_empty() {
-                            return;
-                        }
-                        entity.update(cx, |this, cx| {
-                            this.new_env_probe = ProbeState::Probing;
-                            cx.notify();
-                        });
-                        let ent = entity.clone();
-                        cx.spawn(async move |cx| {
-                            let ok =
-                                console_core::utils::probe_backend(&url, Duration::from_secs(3))
-                                    .await;
-                            let _ = cx.update(|cx| {
-                                ent.update(cx, |this, cx| {
-                                    this.new_env_probe = if ok.is_ok() {
-                                        ProbeState::Ok
-                                    } else {
-                                        ProbeState::Failed
-                                    };
-                                    cx.notify();
-                                });
-                            });
-                        })
-                        .detach();
-                    })
-                };
-
-                let on_save_new: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
-                    let app_handle = self.app.clone();
-                    let entity = cx.entity().clone();
-                    let name_input = self.new_env_name_input.clone();
-                    let url_input = self.new_env_url_input.clone();
-                    Rc::new(move |_w: &mut Window, cx: &mut App| {
-                        let name = name_input.read(cx).content().trim().to_string();
-                        let url = url_input.read(cx).content().trim().to_string();
-                        if url.is_empty() {
-                            return;
-                        }
-
-                        // A pairing URL in the address field is the whole
-                        // connection: it names the server and carries the
-                        // one-time code. Pairing replaces adding a plain
-                        // environment, because the URL's server is the one
-                        // this app is meant to talk to.
-                        if let Ok(pairing) = console_core::utils::parse_pairing_url(&url) {
-                            if let Some(app) = app_handle.upgrade() {
-                                app.update(cx, |app_state, cx| {
-                                    app_state.pair_with_url(
-                                        url.clone(),
-                                        "Desktop".to_string(),
-                                        cx,
-                                    );
-                                });
-                            }
-                            entity.update(cx, |this, cx| {
-                                this.is_adding_env = false;
-                                this.editing_env_id = None;
-                                this.new_env_probe = ProbeState::Unknown;
-                                cx.notify();
-                            });
-                            let _ = pairing;
-                            return;
-                        }
-
-                        let final_name = if name.is_empty() {
-                            "Custom Server".to_string()
-                        } else {
-                            name
-                        };
-
-                        let editing_id = entity.read(cx).editing_env_id.clone();
-
-                        if let Some(app) = app_handle.upgrade() {
-                            app.update(cx, |app_state, cx| {
-                                if let Some(id) = editing_id {
-                                    app_state.update_environment(id, final_name, url, cx);
-                                } else {
-                                    app_state.add_environment(final_name, url, cx);
-                                }
-                            });
-                        }
-
-                        entity.update(cx, |this, cx| {
-                            this.is_adding_env = false;
-                            this.editing_env_id = None;
-                            this.new_env_probe = ProbeState::Unknown;
-                            cx.notify();
-                        });
-                    })
-                };
-
                 ServersPage {
                     environments: app.environment_rows(),
-                    is_adding: self.is_adding_env,
-                    is_editing: self.editing_env_id.is_some(),
-                    name_input: Some(self.new_env_name_input.clone()),
-                    url_input: Some(self.new_env_url_input.clone()),
-                    new_probe_state: self.new_env_probe,
                     on_activate,
                     on_probe,
                     on_edit,
                     on_remove,
                     on_toggle_add,
-                    on_probe_new,
-                    on_save_new,
+                    on_pair_device,
                 }
                 .into_any_element()
             }
@@ -938,11 +1004,95 @@ impl Render for SettingsWindow {
             .into_any_element(),
         };
 
+        // The modals. They are built here rather than inside the tab so
+        // they can sit above the whole window.
+        let show_server_modal = active_tab == SettingsTab::Servers && self.is_adding_env;
+        let show_pair_modal = active_tab == SettingsTab::Servers && self.pair_modal_open;
+
+        let on_modal_close: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+            let entity = cx.entity().clone();
+            Rc::new(move |_w: &mut Window, cx: &mut App| {
+                entity.update(cx, |this, cx| {
+                    this.is_adding_env = false;
+                    this.editing_env_id = None;
+                    this.new_env_probe = ProbeState::Unknown;
+                    cx.notify();
+                });
+            })
+        };
+
+        let server_modal = console_ui::settings::ServerModal {
+            is_edit: self.editing_env_id.is_some(),
+            name_input: Some(self.new_env_name_input.clone()),
+            host_input: Some(self.new_env_url_input.clone()),
+            code_input: Some(self.new_env_code_input.clone()),
+            probe_state: self.new_env_probe,
+            error: pairing_error.clone(),
+            on_close: on_modal_close.clone(),
+            on_probe: on_probe_new.clone(),
+            on_save: on_save_new.clone(),
+        };
+
+        let pair_modal = console_ui::settings::PairDeviceModal {
+            grant: pairing_grant,
+            this_device,
+            devices: paired_devices,
+            error: pairing_error,
+            on_close: {
+                let entity = cx.entity().clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    entity.update(cx, |this, cx| {
+                        this.pair_modal_open = false;
+                        cx.notify();
+                    });
+                })
+            },
+            on_revoke: {
+                let app_handle = self.app.clone();
+                Rc::new(move |device_id: String, _w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.revoke_server_device(device_id, cx);
+                        });
+                    }
+                })
+            },
+            on_unpair: {
+                let app_handle = self.app.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.unpair_server(cx);
+                        });
+                    }
+                })
+            },
+            on_refresh: {
+                let app_handle = self.app.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.create_pairing_grant("My phone".to_string(), cx);
+                        });
+                    }
+                })
+            },
+        };
+
         div()
             .size_full()
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" {
+                    // The modals close on escape; the window itself only
+                    // closes when nothing is open on top of it.
+                    if this.pair_modal_open || this.is_adding_env {
+                        this.pair_modal_open = false;
+                        this.is_adding_env = false;
+                        this.editing_env_id = None;
+                        cx.notify();
+                        return;
+                    }
                     if let Some(app) = this.app.upgrade() {
                         if app.read(cx).settings_window_handle.is_some() {
                             app.update(cx, |app_state, _cx| {
@@ -955,6 +1105,10 @@ impl Render for SettingsWindow {
                 }
             }))
             .child(SettingsShell::new(active_tab, on_select_tab, content))
+            // The modals sit above the whole window, not inside the
+            // scrolling content, so they read as dialogs.
+            .when(show_server_modal, |el| el.child(server_modal))
+            .when(show_pair_modal, |el| el.child(pair_modal))
             .into_any_element()
     }
 }

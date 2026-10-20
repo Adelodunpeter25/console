@@ -14,6 +14,6 @@ pub use file_kind::{
     file_kind_for_path, is_lock_file,
 };
 pub use http_transport::{HttpTransport, decode_json_bytes, fetch_url_bytes, probe_backend};
-pub use pairing_url::{PairingUrl, parse_pairing_url};
+pub use pairing_url::{PairingUrl, parse_pairing_url, split_pairing_line};
 pub use server_auth_store::StoredServerAuth;
 pub use sse_reader::SseStreamReader;
