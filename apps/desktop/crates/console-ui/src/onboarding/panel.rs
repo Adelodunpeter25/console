@@ -240,6 +240,11 @@ fn step_card(step: Step, loading: bool, theme: &Theme) -> impl IntoElement {
         .child(
             div()
                 .flex_1()
+                // A flex item's width never drops below its content's
+                // minimum, and a text run reports its *whole* line as the
+                // minimum: without this the detail never wraps, the row
+                // grows past the card, and the button ends up outside it.
+                .min_w(px(0.0))
                 .flex()
                 .flex_col()
                 .gap(px(3.0))
