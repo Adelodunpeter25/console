@@ -147,6 +147,53 @@ Error strings matter as much as the actions — the agent recovers from them.
 
 ---
 
+## Agent interface — `/browser-use`
+
+`/computer-use` is the precedent: the tool schema ships as two fixed fields, and
+the real instructions live in an embedded `SKILL.md` appended to the invoking
+message (`internal/services/cua/skill.go`). The model reads the playbook once,
+when it needs it, instead of carrying it on every turn.
+
+The browser deserves the same, because the `browser` schema cannot teach
+snapshot discipline. `/browser-use` should ship an embedded `SKILL.md` with the
+rules that make the driver feel good:
+
+- Observe narrowly: scope the first snapshot with a selector; use `-i` when
+  only actionable elements matter.
+- Snapshot and act in the same block; refs are per-document and expire.
+- Never guess a ref. Re-snapshot after navigation or a UI change.
+- Use `wait_for` for selector/text/URL conditions instead of sleeping or
+  looping snapshots.
+- `get_content` to read, `snapshot` to act.
+- `run_js` for extraction and for actions the verbs do not cover; return
+  JSON-serializable values.
+- Read the error before retrying: `covered by ...`, `stale ref`, `No option`.
+- Screenshot when visual state matters, not as a substitute for a snapshot.
+- Tabs are for parallel work; `switch_tab` changes the agent's target, not
+  what the user sees.
+
+Scaffolding mirrors `cua`:
+
+- `internal/services/browseruse/SKILL.md` + `skill.go` (embedded).
+- `invoke.go` with `SplitInvocation`, prefix `/browser-use`, same narrow
+  matching (`/browser-useful` must not trigger).
+- `run/turns.go` detects the invocation and appends the skill text.
+- Session memory like `run/computer_use.go`.
+
+Two options for the tool itself:
+
+- **A (recommended): keep `browser` in `DefaultToolNames`.** The command adds
+  instructions only; existing sessions keep working. Lower risk.
+- **B: mirror `/computer-use` exactly.** Remove `browser` from the default
+  inventory and load it through a `Loader` on invocation. Saves schema tokens
+  per turn but makes the tool invisible until the command is typed.
+
+The skill text must live next to the driver's capabilities and be updated when
+verbs or error strings change. Treat it as part of the driver contract, not
+documentation.
+
+---
+
 ## Phase 4 — Native parity (1–2 weeks)
 
 - `run_js` async + exception text.
