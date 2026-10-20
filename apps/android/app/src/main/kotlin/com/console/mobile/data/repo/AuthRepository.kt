@@ -16,6 +16,9 @@ import com.console.mobile.data.model.PairingData
 import com.console.mobile.data.model.PairingGrantData
 import com.console.mobile.data.model.PairingGrantRequest
 import com.console.mobile.data.model.PairingRequest
+import com.console.mobile.data.model.PLATFORM_ANDROID
+import com.console.mobile.data.model.parsePairingUrl
+import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
 import com.console.mobile.data.store.AuthStateHolder
@@ -54,9 +57,48 @@ class AuthRepository(
     }
 
     /**
+     * Pair with a server using a host and a pairing code.
+     *
+     * This is the flow the Add Environment sheet drives: the operator
+     * copies a host and a short code off the server (or scans the QR code
+     * that carries both), and the phone exchanges the code for its own
+     * credential.
+     *
+     * The token is stored against that host, so the app talks to the
+     * server it just paired with from then on.
+     */
+    suspend fun pairWithCode(
+        host: String,
+        code: String,
+        deviceName: String,
+    ): PairingData = withContext(Dispatchers.IO) {
+        val baseUrl = normalizeBackendUrl(host)
+            ?: throw ApiException("That host cannot be used.")
+        val paired = api.pairWithUrl(
+            baseUrl,
+            PairingRequest(
+                grant = code.trim(),
+                device_name = deviceName,
+                platform = PLATFORM_ANDROID,
+            ),
+        )
+        val device = paired.device
+        tokenStore.save(
+            baseUrl,
+            com.console.mobile.data.local.StoredServerAuth(
+                token = paired.token,
+                deviceId = device?.id.orEmpty(),
+                deviceName = device?.name.orEmpty(),
+                expiresAt = paired.expires_at,
+            ),
+        )
+        paired
+    }
+
+    /**
      * Pair with a server using a pasted pairing URL.
      *
-     * The URL carries both the server's address and the one-time grant, so
+     * The URL carries both the server's address and the one-time code, so
      * one paste is the whole connection. The request goes to the URL's own
      * address — the URL is the instruction, not whatever server the app
      * happens to be pointed at.
@@ -71,7 +113,7 @@ class AuthRepository(
         val paired = api.pairWithUrl(
             parsed.baseUrl,
             PairingRequest(
-                grant = parsed.grant,
+                grant = parsed.code,
                 device_name = deviceName,
                 platform = platform,
             ),

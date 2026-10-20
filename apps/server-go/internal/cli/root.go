@@ -86,7 +86,7 @@ func Execute() {
 			} else if os.Getenv("CONSOLE_ENV") == "" {
 				_ = os.Setenv("CONSOLE_ENV", "production")
 			}
-			commands.PrintPairingURL(daemon.ConsoleDir())
+			commands.PrintPairing(daemon.ConsoleDir())
 			return nil
 		},
 	}

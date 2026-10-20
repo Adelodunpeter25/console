@@ -1,19 +1,22 @@
 package com.console.mobile.data.model
 
 /**
- * The pairing URL: the one string a user copies and pastes to connect.
+ * The pairing details a user copies off the server.
  *
- * Shape (produced by `console pair` / `console status`):
+ * The server prints two things: a host ("192.168.1.100:8080") and a short
+ * pairing code ("abc-123-xyz"). They can be typed into the two fields of
+ * the Add Environment sheet, or the camera can read them off a QR code.
+ *
+ * A QR code carries the whole pairing URL:
+ *
  * ```
- * http://server.example:3000/console/pair#v=1&server=<server-id>&grant=<one-time-grant>
+ * http://192.168.1.100:8080/console/pair#v=1&server=481e2796&code=abc-123-xyz
  * ```
  *
- * The secret lives in the fragment, which a browser never sends to the
- * server, so the grant does not end up in access logs. The base URL is part
- * of the same string, so pasting it is enough: the app learns both which
- * server to talk to and how to prove it may.
+ * The code is in the fragment, which a browser never sends to the server, so
+ * it does not end up in access logs.
  *
- * The parser is strict on purpose. The grant is a credential, and a lenient
+ * The parser is strict on purpose. The code is a credential, and a lenient
  * parser is how a malformed paste becomes a pairing with the wrong machine.
  */
 data class PairingUrl(
@@ -21,8 +24,8 @@ data class PairingUrl(
     val baseUrl: String,
     /** The server the URL was minted by. */
     val serverId: String,
-    /** The one-time pairing grant. */
-    val grant: String,
+    /** The one-time pairing code. */
+    val code: String,
 )
 
 /**
@@ -57,7 +60,7 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> {
 
     var version = ""
     var serverId = ""
-    var grant = ""
+    var code = ""
     for (pair in fragment.split('&')) {
         val equals = pair.indexOf('=')
         if (equals < 0) continue
@@ -66,7 +69,7 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> {
         when (key) {
             "v" -> version = value
             "server" -> serverId = value
-            "grant" -> grant = value
+            "code" -> code = value
         }
     }
     if (version != "1") {
@@ -75,17 +78,39 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> {
     if (serverId.isEmpty()) {
         return Result.failure(IllegalArgumentException("That pairing URL does not name a server."))
     }
-    if (grant.isEmpty()) {
+    if (code.isEmpty()) {
         return Result.failure(IllegalArgumentException("That pairing URL has no pairing code."))
     }
-    return Result.success(PairingUrl(baseUrl = "$scheme://$authority", serverId = serverId, grant = grant))
+    return Result.success(PairingUrl(baseUrl = "$scheme://$authority", serverId = serverId, code = code))
 }
 
 /**
- * The server's base URL from a pairing URL, or null when the input is not
- * a pairing URL at all.
+ * The host of a pairing URL, in the "host:port" form the host field takes.
  */
-fun pairingBaseUrl(raw: String): String? = parsePairingUrl(raw).getOrNull()?.baseUrl
+fun pairingHost(raw: String): String? =
+    parsePairingUrl(raw).getOrNull()?.baseUrl?.let { urlHostPortOf(it) }
+
+/**
+ * The pairing code of a pairing URL.
+ */
+fun pairingCode(raw: String): String? = parsePairingUrl(raw).getOrNull()?.code
+
+/**
+ * "192.168.1.102:2003" — the host plus its port, since two servers on the
+ * same LAN are told apart by the port rather than the host.
+ */
+private fun urlHostPortOf(url: String): String = try {
+    val uri = java.net.URI(url)
+    val host = uri.host
+    val port = uri.port
+    when {
+        host == null -> url
+        port > 0 -> "$host:$port"
+        else -> host
+    }
+} catch (_: Exception) {
+    url
+}
 
 /**
  * Percent-decode a fragment value.

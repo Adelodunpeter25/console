@@ -163,6 +163,14 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.02.01")
     implementation(composeBom)
     androidTestImplementation(composeBom)
+
+    // QR scanning for the "Add Environment" sheet: the pairing code is
+    // printed by the server, and a camera beats transcribing it.
+    //
+    // zxing-android-embedded is one dependency with its own capture activity
+    // and permission handling, which is a lot less code than wiring CameraX
+    // and an image analyser by hand.
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 

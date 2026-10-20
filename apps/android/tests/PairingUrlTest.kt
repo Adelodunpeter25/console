@@ -1,5 +1,7 @@
 package com.console.mobile
 
+import com.console.mobile.data.model.pairingCode
+import com.console.mobile.data.model.pairingHost
 import com.console.mobile.data.model.parsePairingUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,35 +18,42 @@ class PairingUrlTest {
     @Test
     fun parsesAPairingUrl() {
         val parsed = parsePairingUrl(
-            "http://192.168.1.10:3000/console/pair#v=1&server=srv-1&grant=cp1_abc"
+            "http://192.168.1.10:3000/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc"
         ).getOrThrow()
         assertEquals("http://192.168.1.10:3000", parsed.baseUrl)
-        assertEquals("srv-1", parsed.serverId)
-        assertEquals("cp1_abc", parsed.grant)
+        assertEquals("481e2796", parsed.serverId)
+        assertEquals("vw9g-zu89-aphc", parsed.code)
     }
 
     @Test
     fun parsesAnHttpsPairingUrl() {
-        val parsed = parsePairingUrl("https://server.example/console/pair#v=1&server=s&grant=g")
+        val parsed = parsePairingUrl("https://server.example/console/pair#v=1&server=s&code=c")
             .getOrThrow()
         assertEquals("https://server.example", parsed.baseUrl)
     }
 
     @Test
-    fun keepsTheGrantOutOfTheAddress() {
-        val parsed = parsePairingUrl("http://host:3000/console/pair#v=1&server=s&grant=secret")
+    fun keepsTheCodeOutOfTheAddress() {
+        val parsed = parsePairingUrl("http://host:3000/console/pair#v=1&server=s&code=secret")
             .getOrThrow()
         assertTrue(
-            "the grant must not end up in the address: ${parsed.baseUrl}",
+            "the code must not end up in the address: ${parsed.baseUrl}",
             !parsed.baseUrl.contains("secret"),
         )
     }
 
     @Test
-    fun acceptsAPercentEncodedGrant() {
-        val parsed = parsePairingUrl("http://host:3000/console/pair#v=1&server=s&grant=a%2Bb")
+    fun readsTheHostAndCodeSeparately() {
+        val url = "http://192.168.1.10:3000/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc"
+        assertEquals("192.168.1.10:3000", pairingHost(url))
+        assertEquals("vw9g-zu89-aphc", pairingCode(url))
+    }
+
+    @Test
+    fun acceptsAPercentEncodedCode() {
+        val parsed = parsePairingUrl("http://host:3000/console/pair#v=1&server=s&code=a%2Bb")
             .getOrThrow()
-        assertEquals("a+b", parsed.grant)
+        assertEquals("a+b", parsed.code)
     }
 
     @Test
@@ -55,17 +64,17 @@ class PairingUrlTest {
             // No fragment at all: nothing to redeem.
             "http://host:3000/console/pair",
             // No scheme.
-            "host:3000/console/pair#v=1&server=s&grant=g",
+            "host:3000/console/pair#v=1&server=s&code=c",
             // A scheme we do not speak.
-            "ftp://host/console/pair#v=1&server=s&grant=g",
+            "ftp://host/console/pair#v=1&server=s&code=c",
             // No host.
-            "http:///console/pair#v=1&server=s&grant=g",
+            "http:///console/pair#v=1&server=s&code=c",
             // A version this app does not know.
-            "http://host/console/pair#v=2&server=s&grant=g",
+            "http://host/console/pair#v=2&server=s&code=c",
             // Missing pieces.
-            "http://host/console/pair#v=1&grant=g",
+            "http://host/console/pair#v=1&code=c",
             "http://host/console/pair#v=1&server=s",
-            "http://host/console/pair#server=s&grant=g",
+            "http://host/console/pair#server=s&code=c",
         )
         for (url in bad) {
             assertTrue("should have been rejected: $url", parsePairingUrl(url).isFailure)

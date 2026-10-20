@@ -60,7 +60,7 @@ impl ServerAuthService {
             .post(format!("{}/api/auth/pair", parsed.base_url))
             .headers(self.transport.build_headers().await)
             .json(&PairingRequest {
-                grant: parsed.grant.clone(),
+                grant: parsed.code.clone(),
                 device_name: device_name.to_string(),
                 platform: platform.to_string(),
             })

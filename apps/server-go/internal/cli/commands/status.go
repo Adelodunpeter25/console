@@ -30,6 +30,6 @@ func StatusDaemon() error {
 	// phone or another machine. It is minted against the *running*
 	// server's storage directory, not the current mode's, so a dev daemon
 	// gets a grant the dev daemon will honour.
-	PrintPairingURL(status.Dir)
+	PrintPairing(status.Dir)
 	return nil
 }

@@ -17,12 +17,6 @@ pub struct ServersPage {
     pub name_input: Option<Entity<ComposerInput>>,
     pub url_input: Option<Entity<ComposerInput>>,
     pub new_probe_state: ProbeState,
-    /// The pairing URL pasted by the user, and the button that redeems it.
-    pub pairing_input: Option<Entity<ComposerInput>>,
-    pub pairing_busy: bool,
-    /// The server's failure text, shown verbatim.
-    pub pairing_error: Option<String>,
-    pub on_pair: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_activate: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_probe: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -42,7 +36,6 @@ impl RenderOnce for ServersPage {
         let on_toggle_add = self.on_toggle_add.clone();
         let on_probe_new = self.on_probe_new.clone();
         let on_save_new = self.on_save_new.clone();
-        let on_pair = self.on_pair.clone();
 
         div()
             .flex()
@@ -282,78 +275,6 @@ impl RenderOnce for ServersPage {
                         ),
                 )
             })
-            // Pairing section
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_size(px(13.5))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child("Pair This Device"),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_secondary)
-                            .child("Run 'console pair' on the server and paste the URL it prints."),
-                    )
-                    .when_some(self.pairing_input, |d, input| {
-                        d.child(
-                            div()
-                                .p(px(6.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(theme.border)
-                                .bg(theme.canvas)
-                                .child(input),
-                        )
-                    })
-                    .when_some(self.pairing_error.clone(), |d, error| {
-                        d.child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(theme.danger)
-                                .child(error),
-                        )
-                    })
-                    .child(
-                        div()
-                            .id("btn-pair-device")
-                            .px(px(10.0))
-                            .py(px(5.0))
-                            .rounded(px(6.0))
-                            .bg(if self.pairing_busy {
-                                theme.raised
-                            } else {
-                                theme.accent
-                            })
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.9))
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_pair)(window, cx);
-                            })
-                            .child(
-                                div()
-                                    .text_size(px(12.0))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(if self.pairing_busy {
-                                        theme.text_secondary
-                                    } else {
-                                        theme.on_inverse
-                                    })
-                                    .child(if self.pairing_busy {
-                                        "Pairing..."
-                                    } else {
-                                        "Pair"
-                                    }),
-                            ),
-                    ),
-            )
             // Existing environments list
             .child(
                 div()

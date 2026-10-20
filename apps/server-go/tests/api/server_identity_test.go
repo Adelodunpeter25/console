@@ -5,6 +5,7 @@ package tests
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,9 +14,9 @@ import (
 )
 
 func TestPairingURLRoundTrips(t *testing.T) {
-	url := auth.PairingURL("http://192.168.1.10:3000", "server-123", "cp1_grant")
+	url := auth.PairingURL("http://192.168.1.10:3000", "server-123", "vw9g-zu89-aphc")
 	// The fragment is query-encoded, so its keys come out sorted.
-	if url != "http://192.168.1.10:3000/console/pair#grant=cp1_grant&server=server-123&v=1" {
+	if url != "http://192.168.1.10:3000/console/pair#code=vw9g-zu89-aphc&server=server-123&v=1" {
 		t.Fatalf("url: %s", url)
 	}
 
@@ -29,8 +30,8 @@ func TestPairingURLRoundTrips(t *testing.T) {
 	if parsed.ServerID != "server-123" {
 		t.Fatalf("server id: %q", parsed.ServerID)
 	}
-	if parsed.Grant != "cp1_grant" {
-		t.Fatalf("grant: %q", parsed.Grant)
+	if parsed.Code != "vw9g-zu89-aphc" {
+		t.Fatalf("code: %q", parsed.Code)
 	}
 }
 
@@ -38,33 +39,69 @@ func TestPairingURLRoundTrips(t *testing.T) {
 // that carried it in the query string would put a credential in every
 // access log along the path.
 func TestPairingURLKeepsTheGrantOutOfThePath(t *testing.T) {
-	url := auth.PairingURL("http://host:3000", "server-123", "cp1_secret")
+	url := auth.PairingURL("http://host:3000", "server-123", "secret-code")
 	if !contains(url, "#") {
-		t.Fatalf("the grant must live in the fragment: %s", url)
+		t.Fatalf("the code must live in the fragment: %s", url)
 	}
 	beforeFragment := url[:indexOf(url, "#")]
-	if contains(beforeFragment, "cp1_secret") {
-		t.Fatalf("the grant leaked outside the fragment: %s", url)
+	if contains(beforeFragment, "secret-code") {
+		t.Fatalf("the code leaked outside the fragment: %s", url)
 	}
 }
 
 func TestParsePairingURLRejectsMalformed(t *testing.T) {
 	for name, raw := range map[string]string{
 		"empty":            "",
-		"no scheme":        "192.168.1.10:3000/console/pair#v=1&server=s&grant=g",
-		"bad scheme":       "ftp://host/console/pair#v=1&server=s&grant=g",
-		"no host":          "http:///console/pair#v=1&server=s&grant=g",
+		"no scheme":        "192.168.1.10:3000/console/pair#v=1&server=s&code=c",
+		"bad scheme":       "ftp://host/console/pair#v=1&server=s&code=c",
+		"no host":          "http:///console/pair#v=1&server=s&code=c",
 		"no fragment":      "http://host:3000/console/pair",
-		"bad version":      "http://host:3000/console/pair#v=9&server=s&grant=g",
-		"no server id":     "http://host:3000/console/pair#v=1&grant=g",
-		"no grant":         "http://host:3000/console/pair#v=1&server=s",
-		"missing version":  "http://host:3000/console/pair#server=s&grant=g",
+		"bad version":      "http://host:3000/console/pair#v=9&server=s&code=c",
+		"no server id":     "http://host:3000/console/pair#v=1&code=c",
+		"no code":          "http://host:3000/console/pair#v=1&server=s",
+		"missing version":  "http://host:3000/console/pair#server=s&code=c",
 		"missing all":      "http://host:3000/console/pair#v=1",
 		"not a url at all": "://",
 	} {
 		if _, err := auth.ParsePairingURL(raw); err == nil {
 			t.Fatalf("%s must be rejected", name)
 		}
+	}
+}
+
+// The pairing code is what a user types, so it has to be short, and it has
+// to survive being typed in a different case or without the dashes.
+func TestPairingCodeIsShortAndForgiving(t *testing.T) {
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	issuer := auth.NewTokenIssuerWithSecret([]byte("short-code-secret-32-bytes-lon"))
+	manager := auth.NewManager(database, issuer)
+
+	grant, _, err := manager.CreateBootstrapGrant()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Short enough to read out loud: three groups of four.
+	if len(grant) > 15 {
+		t.Fatalf("a pairing code must be short, got %q", grant)
+	}
+	if !strings.Contains(grant, "-") {
+		t.Fatalf("a pairing code must be grouped for reading, got %q", grant)
+	}
+
+	// The same code typed in a different case, without the dashes and with
+	// extra spaces redeems the same grant.
+	typed := strings.ToUpper(grant)
+	typed = strings.ReplaceAll(typed, "-", " ")
+	paired, err := manager.Pair(typed, "Phone", "android")
+	if err != nil {
+		t.Fatalf("a code typed differently must still redeem: %v", err)
+	}
+	if paired.Platform != "android" {
+		t.Fatalf("platform = %q", paired.Platform)
 	}
 }
 

@@ -1,14 +1,13 @@
-// Pairing URL generation for the CLI.
+// Pairing output for the CLI.
 //
-// The operator needs one string they can copy and paste into a client. It
-// has to name the server (so the client can confirm it is talking to the
-// right machine) and carry a one-time grant (so the paste alone is
-// enough to pair).
+// The operator needs one thing they can copy and one thing they can scan.
+// The pairing code is short enough to read out loud and type, and the URL
+// carries the same code so a camera can pick it up instead.
 //
 // The grant is minted directly against the database rather than asked of
-// the running server, so `console status` works even before the daemon is
-// up, and so no unauthenticated HTTP endpoint has to exist purely to hand
-// out credentials.
+// the running server, so `console status` works before the daemon is up,
+// and so no unauthenticated HTTP endpoint has to exist purely to hand out
+// credentials.
 package commands
 
 import (
@@ -17,53 +16,108 @@ import (
 	"os"
 	"strings"
 
+	qrcode "github.com/skip2/go-qrcode"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 )
 
-// PairingURL mints a one-time grant and renders the copy-pasteable URL.
-//
-// Every call mints a fresh grant: running the CLI is an explicit act by
-// someone who already has the server's signing secret on disk, so handing
-// them a pairing invitation grants them nothing they did not already have.
-// The grant is single-use and short-lived, so even a leaked URL buys one
-// pairing and nothing more.
-//
-// dir is the storage directory of the server the grant is for. It matters:
-// a dev server and a production server have separate databases, and a
-// grant written to the wrong one would never be seen by the server the
-// client is about to talk to.
-func PairingURL(dir string) (string, error) {
+// PairingInfo is everything the operator needs to connect a device.
+type PairingInfo struct {
+	// Host is the server's address as "host:port" — the form the client's
+	// host field takes.
+	Host string
+	// Code is the short pairing code.
+	Code string
+	// URL is the whole thing, with the code in the fragment.
+	URL string
+	// ServerName is the server's display name, for the confirmation prompt
+	// on the client.
+	ServerName string
+	// ServerID identifies the server the code came from.
+	ServerID string
+}
+
+// Pairing mints a one-time pairing code and describes how to use it.
+func Pairing(dir string) (PairingInfo, error) {
 	database, err := db.Open(db.OpenOptions{StorageDir: dir})
 	if err != nil {
-		return "", fmt.Errorf("open database: %w", err)
+		return PairingInfo{}, fmt.Errorf("open database: %w", err)
 	}
 	defer database.Close()
 
 	identity, err := auth.LoadServerIdentityIn(dir)
 	if err != nil {
-		return "", err
+		return PairingInfo{}, err
 	}
 
 	// A server that has never been paired gets the first-run grant; one
 	// that has gets an operator grant. Both are one-time and unscoped, so
 	// either pairs one device — the distinction is in the audit trail, not
-	// in what the grant can do.
-	grant := ""
+	// in what the code can do.
+	code := ""
 	if paired, err := database.CountAllAuthDevices(); err == nil && paired == 0 {
-		grant, _, err = auth.CreateGrant(database, auth.PairingKind, "", "", "", auth.PairingTTL())
+		code, _, err = auth.CreateGrant(database, auth.PairingKind, "", "", "", auth.PairingTTL())
 		if err != nil {
-			return "", fmt.Errorf("create pairing grant: %w", err)
+			return PairingInfo{}, fmt.Errorf("create pairing code: %w", err)
 		}
 	}
-	if grant == "" {
-		grant, _, err = auth.CreateGrant(database, auth.OperatorKind, "", "", "", auth.PairingTTL())
+	if code == "" {
+		code, _, err = auth.CreateGrant(database, auth.OperatorKind, "", "", "", auth.PairingTTL())
 		if err != nil {
-			return "", fmt.Errorf("create pairing grant: %w", err)
+			return PairingInfo{}, fmt.Errorf("create pairing code: %w", err)
 		}
 	}
-	return auth.PairingURL(publicBaseURL(dir), identity.ID, grant), nil
+
+	base := publicBaseURL(dir)
+	return PairingInfo{
+		Host:       hostPort(base),
+		Code:       code,
+		URL:        auth.PairingURL(base, identity.ID, code),
+		ServerName: identity.Name,
+		ServerID:   identity.ID,
+	}, nil
+}
+
+// PrintPairing writes the pairing details to stdout.
+//
+// The code is the thing a user types; the URL is the thing a user copies;
+// the QR is the thing a user scans. All three carry the same one-time
+// code, so only one of them is ever needed.
+func PrintPairing(dir string) {
+	info, err := Pairing(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Could not create a pairing code: %v\n", err)
+		return
+	}
+	fmt.Printf("Pair this device by pasting the code into the Console app:\n\n")
+	fmt.Printf("  Host: %s\n", info.Host)
+	fmt.Printf("  Code: %s\n\n", info.Code)
+	fmt.Println("Or scan this:")
+	fmt.Println()
+	printQR(info.URL)
+	fmt.Println()
+	fmt.Printf("Or paste the whole URL:\n  %s\n", info.URL)
+}
+
+// printQR draws a QR code in the terminal.
+//
+// A camera pointed at the terminal picks the code up without anyone
+// transcribing it — which is the point of having a code short enough to
+// read but a URL worth scanning.
+//
+// The compact rendering is used: it is half as wide, so the code does not
+// wrap in a narrow terminal (a wrapped QR does not scan), and it uses the
+// half-block characters every modern terminal renders.
+func printQR(content string) {
+	code, err := qrcode.New(content, qrcode.Medium)
+	if err != nil {
+		// A QR that cannot be drawn is not worth failing over: the code
+		// and the URL above are still on screen.
+		return
+	}
+	fmt.Println(code.ToSmallString(false))
 }
 
 // publicBaseURL is the address a client should use to reach this server.
@@ -95,6 +149,13 @@ func publicBaseURL(dir string) string {
 	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
+// hostPort renders a base URL as "host:port" — the form a client's host
+// field takes, and the shorter of the two to read.
+func hostPort(baseURL string) string {
+	trimmed := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
+	return strings.TrimRight(trimmed, "/")
+}
+
 // lanAddress finds the machine's address on the local network.
 //
 // A client on the same LAN (a phone) can only reach the server by a
@@ -124,19 +185,4 @@ func lanAddress() string {
 		}
 	}
 	return "127.0.0.1"
-}
-
-// PrintPairingURL writes the pairing URL to stdout, or an explanation when
-// there is nothing to print.
-//
-// The URL is the one line a user copies, so it is printed on its own line
-// with no decoration around it.
-func PrintPairingURL(dir string) {
-	url, err := PairingURL(dir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not create a pairing URL: %v\n", err)
-		return
-	}
-	fmt.Println("Pair this device by pasting the URL below into the Console app:")
-	fmt.Println(url)
 }

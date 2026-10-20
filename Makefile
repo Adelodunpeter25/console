@@ -28,6 +28,7 @@ WT_PORT ?= 14443
 dev-server:
 ifeq ($(WT),1)
 	@CONSOLE_ENV=dev go -C apps/server-go run ./cmd/console cert-fingerprint --dev > /dev/null
+	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
 	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
 	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
 	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
@@ -35,6 +36,7 @@ ifeq ($(WT),1)
 	$(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
 else
+	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
 	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
 endif

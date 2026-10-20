@@ -36,11 +36,14 @@ const PairingURLPath = "/console/pair"
 // does not recognise it refuses the URL rather than guessing.
 const pairingURLVersion = "1"
 
-// PairingURL renders the copy-pasteable pairing URL for a grant.
+// PairingURL renders the copy-pasteable pairing URL for a code.
 //
 // baseURL is the server's externally reachable address (scheme, host and
-// port). The fragment carries the version, the server id and the grant.
-func PairingURL(baseURL, serverID, grant string) string {
+// port). The fragment carries the version, the server id and the code.
+//
+// The code is in the fragment so it never reaches the server in a request:
+// a browser does not send it, so it does not land in access logs.
+func PairingURL(baseURL, serverID, code string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmed == "" {
 		trimmed = "http://localhost:3000"
@@ -48,7 +51,7 @@ func PairingURL(baseURL, serverID, grant string) string {
 	fragment := url.Values{}
 	fragment.Set("v", pairingURLVersion)
 	fragment.Set("server", serverID)
-	fragment.Set("grant", grant)
+	fragment.Set("code", code)
 	return trimmed + PairingURLPath + "#" + fragment.Encode()
 }
 
@@ -58,14 +61,13 @@ type ParsedPairingURL struct {
 	BaseURL string
 	// ServerID is the server the URL was minted by.
 	ServerID string
-	// Grant is the one-time pairing grant.
-	Grant string
+	// Code is the one-time pairing code.
+	Code string
 }
 
 // ParsePairingURL reads a pairing URL back into its parts.
 //
-// It is strict on purpose. A URL that cannot be parsed exactly must be
-// rejected, not repaired: the grant is a credential, and a lenient parser
+// It is strict on purpose. The code is a credential, and a lenient parser
 // is how a malformed input becomes a wrong-server pairing.
 func ParsePairingURL(raw string) (ParsedPairingURL, error) {
 	trimmed := strings.TrimSpace(raw)
@@ -90,16 +92,16 @@ func ParsePairingURL(raw string) (ParsedPairingURL, error) {
 		return ParsedPairingURL{}, fmt.Errorf("unsupported pairing URL version %q", fragment.Get("v"))
 	}
 	serverID := strings.TrimSpace(fragment.Get("server"))
-	grant := strings.TrimSpace(fragment.Get("grant"))
+	code := strings.TrimSpace(fragment.Get("code"))
 	if serverID == "" {
 		return ParsedPairingURL{}, fmt.Errorf("pairing URL has no server id")
 	}
-	if grant == "" {
-		return ParsedPairingURL{}, fmt.Errorf("pairing URL has no grant")
+	if code == "" {
+		return ParsedPairingURL{}, fmt.Errorf("pairing URL has no pairing code")
 	}
 	return ParsedPairingURL{
 		BaseURL:  parsed.Scheme + "://" + parsed.Host,
 		ServerID: serverID,
-		Grant:    grant,
+		Code:     code,
 	}, nil
 }

@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -91,12 +89,12 @@ func NewManager(database *db.DB, issuer *TokenIssuer) *Manager {
 	}
 }
 
+// randomGrant mints a pairing code.
+//
+// The code is what a user copies off the server and pastes into a client;
+// see pairing_code.go for the format and why it is short.
 func randomGrant() (string, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	return "cp1_" + base64.RawURLEncoding.EncodeToString(raw), nil
+	return randomPairingCode()
 }
 
 // CreateBootstrapGrant mints the first-device grant, but only while the
@@ -151,15 +149,20 @@ func (m *Manager) createGrant(kind, creator, platform, name string, ttl time.Dur
 // It is a plain function rather than a method so the CLI can mint a grant
 // without a token issuer: the grant is a random secret, not a signed
 // token, so issuing one needs nothing but the database. That is what lets
-// `console status` hand the operator a pairing URL without the server
+// `console status` hand the operator a pairing code without the server
 // process having to be involved.
+//
+// The code is stored hashed, and looked up by the hash of its *normalised*
+// form, so a user who types it in a different case, with or without the
+// dashes, still redeems the same grant.
 func CreateGrant(database *db.DB, kind, creator, platform, name string, ttl time.Duration) (string, int64, error) {
 	grant, err := randomGrant()
 	if err != nil {
 		return "", 0, err
 	}
 	exp := time.Now().Add(ttl).UnixMilli()
-	if err := database.InsertPairingGrant(uuid.NewString(), db.HashAuthSecret(grant), kind, creator, platform, name, exp); err != nil {
+	hash := db.HashAuthSecret(normalizePairingCode(grant))
+	if err := database.InsertPairingGrant(uuid.NewString(), hash, kind, creator, platform, name, exp); err != nil {
 		return "", 0, err
 	}
 	return grant, exp, nil
@@ -180,7 +183,14 @@ func (m *Manager) Pair(grant, name, platform string) (PairedDevice, error) {
 	if strings.TrimSpace(grant) == "" {
 		return PairedDevice{}, ErrPairingUnavailable
 	}
-	kind, _, targetPlatform, targetName, err := m.DB.ConsumePairingGrant(db.HashAuthSecret(grant), time.Now().UnixMilli())
+	// The code is looked up by the hash of its normalised form, so the
+	// dashes, the spacing and the capitalisation a user typed it with do
+	// not matter.
+	code := normalizePairingCode(grant)
+	if err := validatePairingCode(code); err != nil {
+		return PairedDevice{}, ErrPairingUnavailable
+	}
+	kind, _, targetPlatform, targetName, err := m.DB.ConsumePairingGrant(db.HashAuthSecret(code), time.Now().UnixMilli())
 	if err != nil {
 		return PairedDevice{}, ErrPairingUnavailable
 	}

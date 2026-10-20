@@ -16,6 +16,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,7 +27,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/version"
-	"github.com/google/uuid"
 )
 
 // identityFileVersion guards the on-disk shape. A future format change
@@ -158,10 +159,20 @@ func readIdentityFile(path string) (*identityFile, error) {
 }
 
 // createIdentityFile mints and persists a new identity.
+//
+// The id is eight hex characters rather than a full UUID: it appears in
+// every pairing URL, where a 36-character id makes the URL twice as long
+// as it needs to be, and it identifies a server among the handful an
+// operator actually has. It is not a secret — it is in the URL on purpose
+// — it is only ever checked for equality.
 func createIdentityFile(path string) (*identityFile, error) {
+	raw := make([]byte, 4)
+	if _, err := rand.Read(raw); err != nil {
+		return nil, fmt.Errorf("generate server id: %w", err)
+	}
 	file := &identityFile{
 		Version:   identityFileVersion,
-		ID:        uuid.NewString(),
+		ID:        hex.EncodeToString(raw),
 		CreatedAt: time.Now().UnixMilli(),
 	}
 	if err := writeIdentityFile(path, file); err != nil {

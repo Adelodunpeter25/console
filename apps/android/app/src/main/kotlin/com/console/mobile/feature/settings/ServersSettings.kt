@@ -1,6 +1,7 @@
 package com.console.mobile.feature.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Camera
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
@@ -46,7 +48,11 @@ import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHostPort
 import com.console.mobile.data.store.Environment
-import com.console.mobile.data.model.pairingBaseUrl
+import com.console.mobile.data.model.deviceName
+import com.console.mobile.data.model.pairingCode
+import com.console.mobile.data.model.pairingHost
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 import com.console.mobile.ui.components.ConfirmButton
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
@@ -78,6 +84,28 @@ fun ServersSettings(onBack: () -> Unit) {
     var probes by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     val scope = rememberCoroutineScope()
 
+    // The add sheet's two fields. They live here rather than in the form so
+    // the camera button in the header can fill them.
+    var pairingHost by remember { mutableStateOf("") }
+    var pairingCode by remember { mutableStateOf("") }
+    var scanError by remember { mutableStateOf<String?>(null) }
+
+    // The QR code the server prints carries the whole pairing URL: the host
+    // and the code. Scanning it fills both fields.
+    val scannerLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
+        val scanned = result.contents
+        if (scanned.isNullOrBlank()) return@rememberLauncherForActivityResult
+        val host = pairingHost(scanned)
+        val code = pairingCode(scanned)
+        if (host == null || code == null) {
+            scanError = "That QR code is not a Console pairing code."
+        } else {
+            pairingHost = host
+            pairingCode = code
+            scanError = null
+        }
+    }
+
     LaunchedEffect(envState.environments) {
         val envs = envState.environments
         if (envs.isEmpty()) return@LaunchedEffect
@@ -97,8 +125,42 @@ fun ServersSettings(onBack: () -> Unit) {
         if (editing != null) {
             val envId = editing!!.takeIf { it != "__create__" }
             val editingEnv = envState.environments.firstOrNull { it.id == envId }
-            PageHeader(title = if (envId != null) "Edit environment" else "Add environment", onBack = { editing = null })
-            EnvironmentEditorForm(env = editingEnv, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
+            if (envId == null) {
+                // The add sheet: a host and a pairing code, with a camera
+                // for reading the QR code the server prints.
+                PageHeader(
+                    title = "Add environment",
+                    onBack = { editing = null },
+                    actions = {
+                        HeaderIconButton(
+                            icon = TablerIcons.Outline.Camera,
+                            contentDescription = "Scan pairing QR code",
+                            onClick = {
+                                scanError = null
+                                scannerLauncher.launch(
+                                    ScanOptions().apply {
+                                        setPrompt("Scan the server's pairing code")
+                                        setBeepEnabled(false)
+                                        setOrientationLocked(false)
+                                    }
+                                )
+                            },
+                        )
+                    },
+                )
+                AddEnvironmentForm(
+                    host = pairingHost,
+                    code = pairingCode,
+                    onHostChange = { pairingHost = it },
+                    onCodeChange = { pairingCode = it },
+                    error = scanError,
+                    onDone = { editing = null },
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
+                )
+            } else {
+                PageHeader(title = "Edit environment", onBack = { editing = null })
+                EnvironmentEditorForm(env = editingEnv, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
+            }
         } else {
             PageHeader(
                 title = "Connection",
@@ -142,7 +204,6 @@ fun ServersSettings(onBack: () -> Unit) {
                         }
                     }
                 }
-                PairingSection()
                 if (envState.activeId != null) {
                     Section("Connection") {
                         ActionRow(icon = TablerIcons.Outline.PlugConnected, title = "Disconnect backend", tint = NewTheme.TextPrimary) {
@@ -158,57 +219,86 @@ fun ServersSettings(onBack: () -> Unit) {
 }
 
 /**
- * Pair this phone with a server.
+ * Add a server: its host, and the pairing code that proves this phone may
+ * join it.
  *
- * The pairing URL is the one line `console pair` prints on the server. It
- * carries the server's address and a one-time grant, so one paste is the
- * whole connection — no separate "which server" step.
+ * The two fields are what the server prints (`console pair`), so a user
+ * copies one line and types two short things. The camera button reads the
+ * same details off a QR code, which the server also prints.
  */
 @Composable
-private fun PairingSection() {
+private fun AddEnvironmentForm(
+    host: String,
+    code: String,
+    onHostChange: (String) -> Unit,
+    onCodeChange: (String) -> Unit,
+    error: String?,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<String?>(null) }
 
-    Section("Pair This Device") {
-        TextInput(
-            "Pairing URL",
-            url,
-            { url = it; status = null },
-            "http://host:3000/console/pair#v=1&server=…&grant=…",
-        )
-        status?.let { message ->
-            Note(message)
+    Column(modifier = modifier) {
+        Section("Server") {
+            TextInput(
+                "Host",
+                host,
+                { onHostChange(it); failure = null },
+                "192.168.1.100:8080",
+                monospace = true,
+            )
+            SectionDivider(startInset = 0.dp)
+            TextInput(
+                "Pairing code",
+                code,
+                { onCodeChange(it); failure = null },
+                "abc-123-xyz",
+                monospace = true,
+            )
+        }
+        (failure ?: error)?.let { message ->
+            Text(message, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
         ActionButton(
-            text = if (busy) "Pairing…" else "Pair",
+            text = if (busy) "Adding…" else "Add environment",
             onClick = {
                 if (busy) return@ActionButton
+                val normalized = normalizeBackendUrl(host) ?: run {
+                    failure = "That host cannot be used."
+                    return@ActionButton
+                }
                 busy = true
-                status = null
+                failure = null
                 scope.launch {
                     try {
-                        val paired = AppContainer.authRepository.pairWithUrl(url.trim(), "Android", "android")
-                        val server = paired.server
-                        val name = server?.name?.takeIf { it.isNotBlank() } ?: "Paired Server"
-                        // The URL named the server, so the app points at it:
-                        // a device token is only valid on the machine that
-                        // issued it.
-                        AppContainer.environmentsRepository.activateUrl(name, pairingBaseUrl(url.trim()) ?: "")
-                        status = "Paired with $name."
-                        url = ""
+                        // A code means the server wants this phone to pair:
+                        // exchange it for a credential, and only then add
+                        // the environment.
+                        var serverName = ""
+                        if (code.isNotBlank()) {
+                            val paired = AppContainer.authRepository.pairWithCode(normalized, code, deviceName())
+                            serverName = paired.server?.name?.takeIf { it.isNotBlank() }.orEmpty()
+                        }
+                        // The server names itself; without a pairing code
+                        // there is nobody to ask, so the host stands in.
+                        val label = serverName.ifBlank { urlHostPort(normalized) }
+                        withContext(Dispatchers.IO) {
+                            AppContainer.environmentsRepository.activateUrl(label, normalized)
+                        }
+                        onDone()
                     } catch (e: Exception) {
-                        status = e.message ?: "Pairing failed."
+                        failure = e.message ?: "Could not add the server."
                     } finally {
                         busy = false
                     }
                 }
             },
-            enabled = !busy && url.isNotBlank(),
+            enabled = !busy && host.isNotBlank(),
             loading = busy,
             kind = ActionButtonKind.Primary,
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         )
     }
 }

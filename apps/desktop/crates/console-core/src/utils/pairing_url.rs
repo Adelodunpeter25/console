@@ -22,8 +22,8 @@ pub struct PairingUrl {
     pub base_url: String,
     /// The server the URL was minted by.
     pub server_id: String,
-    /// The one-time pairing grant.
-    pub grant: String,
+    /// The one-time pairing code.
+    pub code: String,
 }
 
 /// Parse a pairing URL into its parts.
@@ -57,7 +57,7 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
 
     let mut version = String::new();
     let mut server_id = String::new();
-    let mut grant = String::new();
+    let mut code = String::new();
     for pair in fragment.split('&') {
         let Some((key, value)) = pair.split_once('=') else {
             continue;
@@ -66,7 +66,7 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
         match key {
             "v" => version = value,
             "server" => server_id = value,
-            "grant" => grant = value,
+            "code" => code = value,
             _ => {}
         }
     }
@@ -76,13 +76,13 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
     if server_id.is_empty() {
         return Err("That pairing URL does not name a server.".to_string());
     }
-    if grant.is_empty() {
+    if code.is_empty() {
         return Err("That pairing URL has no pairing code.".to_string());
     }
     Ok(PairingUrl {
         base_url: format!("{scheme}://{host}"),
         server_id,
-        grant,
+        code,
     })
 }
 
