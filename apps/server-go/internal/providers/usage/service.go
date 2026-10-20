@@ -12,9 +12,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/opencode"
 )
 
-var usageProviders = []string{"antigravity", "codex", "claude"}
+var usageProviders = []string{"antigravity", "codex", "claude", "opencode"}
 
 const cacheTTL = 60 * time.Second
 const upstreamTimeout = 5 * time.Second
@@ -80,7 +81,7 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 	if !IsValidProvider(provider) {
 		return nil, &invalidProviderError{provider}
 	}
-	if provider != "codex" && provider != "claude" && provider != "antigravity" {
+	if provider != "codex" && provider != "claude" && provider != "antigravity" && provider != "opencode" {
 		return nil, nil
 	}
 	s.mu.Lock()
@@ -107,6 +108,8 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 		c.report = s.fetchClaude(ctx)
 	case "antigravity":
 		c.report = s.fetchAntigravity(ctx)
+	case "opencode":
+		c.report = s.fetchOpenCode(ctx)
 	default:
 		c.report = s.fetchCodex(ctx)
 	}
@@ -153,6 +156,23 @@ func (s *Service) fetchClaude(ctx context.Context) *Report {
 	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
 	defer cancel()
 	report, _ := FetchClaudeUsage(timeoutCtx, nil, base, cred.AccessToken, cred.Email, cred.ExpiresAtMs)
+	return report
+}
+
+// fetchOpenCode reads the Go allowance windows with the provider's API key.
+//
+// The base URL and key both come from the opencode provider package, so the
+// env overrides (OPENCODE_BASE_URL, OPENCODE_API_KEY) and the stored-key
+// lookup work exactly as they do for inference. There is no OAuth refresh
+// here: a Go key is pasted once and never renewed by this server.
+func (s *Service) fetchOpenCode(ctx context.Context) *Report {
+	key, err := opencode.APIKey()
+	if err != nil {
+		return nil
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, upstreamTimeout)
+	defer cancel()
+	report, _ := FetchOpenCodeUsage(timeoutCtx, s.HTTPClient, opencode.BaseURL(), key)
 	return report
 }
 

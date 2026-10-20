@@ -1,8 +1,8 @@
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use console_core::types::{
-    AuthStatusResponse, ProviderCatalogEntry, UsageLimit, UsageLimitExt, UsageReport,
-    auth_status_for,
+    AuthStatusResponse, ProviderCatalogEntry, ProviderCredentialStatus, UsageLimit, UsageLimitExt,
+    UsageReport, auth_status_for,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -17,6 +17,9 @@ pub struct UsagePage {
     pub reports: Option<Rc<HashMap<String, Option<UsageReport>>>>,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub auth_status: Option<AuthStatusResponse>,
+    /// Pasted provider API keys, keyed by provider id. Only "is there a key"
+    /// is read here — the key itself never reaches a client.
+    pub credentials: Rc<HashMap<String, ProviderCredentialStatus>>,
     pub loading: bool,
     pub on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -128,14 +131,28 @@ impl RenderOnce for UsagePage {
                     .flex_col()
                     .gap(px(12.0))
                     .children(self.providers.iter().filter(|p| {
-                        matches!(p.name.as_str(), "antigravity" | "codex" | "claude")
+                        matches!(p.name.as_str(), "antigravity" | "codex" | "claude" | "opencode")
                     }).map(|provider| {
                         let provider_id = provider.name.clone();
                         let prov_status = auth_status
                             .as_ref()
                             .and_then(|st| auth_status_for(st, &provider_id));
 
-                        let is_logged_in = prov_status.map_or(false, |s| s.logged_in);
+                        // A provider whose credential is a pasted key has no
+                        // OAuth session, so "signed in" means "a key is
+                        // configured" — the only thing the server reports.
+                        let uses_api_key = provider.auth_method == "api-key";
+                        let key_configured = self
+                            .credentials
+                            .get(&provider_id)
+                            .and_then(|c| c.configured)
+                            .unwrap_or(false);
+
+                        let is_logged_in = if uses_api_key {
+                            key_configured
+                        } else {
+                            prov_status.map_or(false, |s| s.logged_in)
+                        };
                         let user_email = prov_status.and_then(|s| s.email.clone());
 
                         let report_opt = reports_map.as_ref().and_then(|map| {
@@ -201,7 +218,16 @@ impl RenderOnce for UsagePage {
                                                         div()
                                                             .text_size(px(11.5))
                                                             .text_color(theme.text_tertiary)
-                                                            .child(if is_logged_in {
+                                                            .child(if uses_api_key {
+                                                                // A pasted key has no account
+                                                                // behind it, so there is no
+                                                                // email to show.
+                                                                if is_logged_in {
+                                                                    "Using your API key".to_string()
+                                                                } else {
+                                                                    "No API key set".to_string()
+                                                                }
+                                                            } else if is_logged_in {
                                                                 if let Some(ref email) = user_email {
                                                                     format!("Connected as {email}")
                                                                 } else {
@@ -213,7 +239,11 @@ impl RenderOnce for UsagePage {
                                                     ),
                                             ),
                                     )
-                                    .when(!is_logged_in, |header| {
+                                    // OAuth login only. A key provider is
+                                    // configured under Providers, and a
+                                    // "Login" button that silently does
+                                    // nothing would be worse than none.
+                                    .when(!is_logged_in && !uses_api_key, |header| {
                                         let p = pid.clone();
                                         let cb = on_login_click.clone();
                                         header.child(
@@ -369,6 +399,20 @@ impl RenderOnce for UsagePage {
                                             })),
                                     )
                                 }
+                            })
+                            // A key provider with no key cannot report quota.
+                            // Say where to fix it instead of showing an empty
+                            // card.
+                            .when(!is_logged_in && uses_api_key, |card| {
+                                card.child(
+                                    div()
+                                        .pt(px(6.0))
+                                        .border_t_1()
+                                        .border_color(theme.border)
+                                        .text_size(px(12.0))
+                                        .text_color(theme.text_tertiary)
+                                        .child("Add an API key under Providers to see quota."),
+                                )
                             })
                     }))
             )

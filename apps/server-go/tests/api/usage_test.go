@@ -121,6 +121,10 @@ func loggedOutEnv(t *testing.T) {
 	t.Setenv("CLAUDE_OAUTH_TOKEN", "")
 	t.Setenv("ANTHROPIC_OAUTH_TOKEN", "")
 	t.Setenv("ANTIGRAVITY_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
+	// OpenCode Go reads a pasted key, not an OAuth session. Both sources have
+	// to be cut off or the fetcher would reach the real endpoint.
+	t.Setenv("OPENCODE_API_KEY", "")
+	t.Setenv("CONSOLE_PROVIDER_KEYS_PATH", filepath.Join(dir, "missing-provider-keys.json"))
 }
 
 func TestUsageRoutesLoggedOut(t *testing.T) {
@@ -141,7 +145,7 @@ func TestUsageRoutesLoggedOut(t *testing.T) {
 	if err := json.Unmarshal(raw, &envelope); err != nil || !envelope.Success {
 		t.Fatalf("envelope: %s", raw)
 	}
-	for _, p := range []string{"antigravity", "codex", "claude"} {
+	for _, p := range []string{"antigravity", "codex", "claude", "opencode"} {
 		v, ok := envelope.Data[p]
 		if !ok {
 			t.Fatalf("missing provider %s: %s", p, raw)

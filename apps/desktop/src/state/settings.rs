@@ -118,7 +118,12 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         match tab {
-            console_ui::settings::SettingsTab::Usage => self.fetch_usage(cx),
+            console_ui::settings::SettingsTab::Usage => {
+                self.fetch_usage(cx);
+                // A key provider's usage card reads "signed in" from whether a
+                // key is stored, so the credential status has to be current.
+                self.refresh_provider_credentials(cx);
+            }
             console_ui::settings::SettingsTab::Integrations => self.refresh_integrations(cx),
             console_ui::settings::SettingsTab::Providers => {
                 self.refresh_github_status(cx);

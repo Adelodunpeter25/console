@@ -279,6 +279,10 @@ func TestUsageServiceLoggedOut(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CODEX_CREDENTIALS_PATH", filepath.Join(dir, "missing.json"))
 	t.Setenv("OPENAI_CODEX_OAUTH_TOKEN", "")
+	// OpenCode Go authenticates with a pasted key. Both sources have to be cut
+	// off, or GetAllUsage would reach the real endpoint.
+	t.Setenv("OPENCODE_API_KEY", "")
+	t.Setenv("CONSOLE_PROVIDER_KEYS_PATH", filepath.Join(dir, "missing-provider-keys.json"))
 	svc := usage.NewService()
 	report, err := svc.GetUsage(context.Background(), "codex")
 	if err != nil || report != nil {
@@ -288,7 +292,7 @@ func TestUsageServiceLoggedOut(t *testing.T) {
 		t.Fatal("invalid provider must error")
 	}
 	all := svc.GetAllUsage(context.Background())
-	for _, p := range []string{"antigravity", "codex", "claude"} {
+	for _, p := range []string{"antigravity", "codex", "claude", "opencode"} {
 		if _, ok := all[p]; !ok {
 			t.Fatalf("missing key %s: %v", p, all)
 		}

@@ -820,6 +820,7 @@ impl Render for SettingsWindow {
                     reports: app.usage_reports.clone(),
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
+                    credentials: std::rc::Rc::new(app.provider_credentials.clone()),
                     loading: app.usage_loading,
                     on_refresh,
                     on_login,

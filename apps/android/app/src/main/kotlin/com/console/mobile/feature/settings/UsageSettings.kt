@@ -69,13 +69,19 @@ fun UsageSettings(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         AppContainer.authRepository.loadStatus()
+        // A key provider's card reads "connected" from whether a key is
+        // stored, so the credential status has to be loaded too.
+        AppContainer.authRepository.loadProviderCredentials()
         AppContainer.usageRepository.loadAllUsage()
     }
 
     val cards = listOf(
-        Triple("antigravity", "Google Antigravity", authState.status?.get("antigravity")),
-        Triple("codex", "OpenAI Codex", authState.status?.get("codex")),
-        Triple("claude", "Anthropic Claude", authState.status?.get("claude")),
+        UsageCard("antigravity", "Google Antigravity", connected = authState.status?.get("antigravity")?.logged_in == true, email = authState.status?.get("antigravity")?.email),
+        UsageCard("codex", "OpenAI Codex", connected = authState.status?.get("codex")?.logged_in == true, email = authState.status?.get("codex")?.email),
+        UsageCard("claude", "Anthropic Claude", connected = authState.status?.get("claude")?.logged_in == true, email = authState.status?.get("claude")?.email),
+        // OpenCode Go authenticates with a pasted key, not an OAuth session,
+        // so its card is driven by the credential status instead.
+        UsageCard("opencode", "OpenCode Go", connected = authState.providerCredentials["opencode"]?.configured == true, email = null, usesApiKey = true),
     )
     val isLoading = usageState.loading && usageState.reports.isEmpty()
 
@@ -111,8 +117,15 @@ fun UsageSettings(onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
                     Text("Remaining quota for your signed-in providers. Pull to refresh.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
-                    cards.forEach { (key, displayName, auth) ->
-                        UsageProviderCard(provider = key, displayName = displayName, report = usageState.reports[key], loggedIn = auth?.logged_in == true, email = auth?.email)
+                    cards.forEach { card ->
+                        UsageProviderCard(
+                            provider = card.providerId,
+                            displayName = card.displayName,
+                            report = usageState.reports[card.providerId],
+                            connected = card.connected,
+                            email = card.email,
+                            usesApiKey = card.usesApiKey,
+                        )
                     }
                 }
             }
@@ -120,8 +133,28 @@ fun UsageSettings(onBack: () -> Unit) {
     }
 }
 
+/**
+ * One provider row on the usage screen. `usesApiKey` marks a provider whose
+ * credential is a pasted key rather than an OAuth session: it has no account
+ * email and is not "signed in", so the wording differs.
+ */
+private data class UsageCard(
+    val providerId: String,
+    val displayName: String,
+    val connected: Boolean,
+    val email: String?,
+    val usesApiKey: Boolean = false,
+)
+
 @Composable
-private fun UsageProviderCard(provider: String, displayName: String, report: UsageReport?, loggedIn: Boolean, email: String?) {
+private fun UsageProviderCard(
+    provider: String,
+    displayName: String,
+    report: UsageReport?,
+    connected: Boolean,
+    email: String?,
+    usesApiKey: Boolean = false,
+) {
     val mostPressured = report?.limits?.firstOrNull()
     val pressure = mostPressured?.let { usedPercent(it) }
     // Heading is the provider; the card holds its limits (or why there are none).
@@ -129,22 +162,31 @@ private fun UsageProviderCard(provider: String, displayName: String, report: Usa
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             ProviderIcon(provider = provider, sizeDp = 24)
             Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-                Text(if (loggedIn) (email ?: "Connected") else "Not connected", color = if (loggedIn) NewTheme.TextPrimary else NewTheme.TextMuted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val statusText = if (usesApiKey) {
+                    if (connected) "Using your API key" else "No API key set"
+                } else {
+                    if (connected) (email ?: "Connected") else "Not connected"
+                }
+                Text(statusText, color = if (connected) NewTheme.TextPrimary else NewTheme.TextMuted, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (mostPressured != null && pressure != null) {
                 Text("${pressure.toInt()}%", color = limitTone(mostPressured, pressure).color(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         when {
-            !loggedIn -> {
+            !connected -> {
                 SectionDivider()
-                Note("Sign in under Providers to see quota.")
+                Note(if (usesApiKey) "Add an API key under Providers to see quota." else "Sign in under Providers to see quota.")
             }
             report == null -> {
                 SectionDivider()
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Warning, modifier = Modifier.size(18.dp))
-                    Text("Quota unavailable — token expired, project missing, or billing disabled. Re-login under Providers.", color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp))
+                    Text(
+                        if (usesApiKey) "Quota unavailable — the key may be invalid or the subscription inactive. Check it under Providers."
+                        else "Quota unavailable — token expired, project missing, or billing disabled. Re-login under Providers.",
+                        color = NewTheme.TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp),
+                    )
                 }
             }
             report.limits.isEmpty() -> {
