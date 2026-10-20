@@ -15,13 +15,11 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 )
 
-// DeviceIDKey is the c.Locals key RequireAPIToken stores the validated
-// device id under for downstream handlers.
-const DeviceIDKey = "apiTokenDeviceID"
+// DeviceIDKey is retained for WT/legacy isolated tests.
+const DeviceIDKey = "authenticatedDeviceID"
 
-// RegisterTokenRoutes wires POST /api/auth/token (mint). Exported so route
-// tests can build a Fiber app with only these routes, mirroring
-// RegisterAuthRoutes.
+// RegisterTokenRoutes is deprecated and intentionally not registered by the
+// production route graph. It remains available to focused migration tests.
 func RegisterTokenRoutes(app *fiber.App, issuer *auth.TokenIssuer) {
 	h := app.Group("/api/auth")
 
@@ -48,6 +46,9 @@ func RegisterTokenRoutes(app *fiber.App, issuer *auth.TokenIssuer) {
 	})
 }
 
+// RequireAPIToken is retained for the isolated WebTransport migration tests.
+// Production HTTP routes use RequireDeviceToken, which also checks the database
+// device record and never accepts query-string credentials.
 // RequireAPIToken enforces a valid API token from either the
 // `Authorization: Bearer` header or the `?token=` query parameter, so the WT
 // handshake path and the legacy path share one validator. The validated

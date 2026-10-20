@@ -193,10 +193,15 @@ func AssistantToProto(m AssistantMessage) *consolev1.AgentAssistantMessage {
 	return out
 }
 
+// toolResultsToProto encodes tool results for storage. Inline image payloads
+// are stripped first: the base64 is only useful to the model on the turn that
+// produced it, and persisting it would store megabytes per image and re-upload
+// them on every later turn. The in-memory history keeps the real image, so the
+// model still sees it on the turn it acts on.
 func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, error) {
 	out := make([]*consolev1.ToolResult, 0, len(results))
 	for _, r := range results {
-		content, err := json.Marshal(r.Content)
+		content, err := json.Marshal(StripImagePayloads(r.Content))
 		if err != nil {
 			return nil, fmt.Errorf("tool result content: %w", err)
 		}

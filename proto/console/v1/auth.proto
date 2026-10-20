@@ -132,3 +132,77 @@ message SetProviderCredentialResponse {
   optional string source = 3;
   bool removed = 4;
 }
+
+// --- Server device pairing -------------------------------------------------
+//
+// These are the *server's* own credentials, not provider credentials: a
+// device token authenticates a client (desktop, phone) to this Console
+// server. The server issues one only in exchange for a one-time pairing
+// grant, and the token is what every later request carries.
+//
+// Kept in this file because the routes live under /api/auth/* alongside the
+// provider auth routes, and because a client that already speaks this
+// envelope needs no second decoder.
+
+// Request of POST /api/auth/pair: redeem a one-time pairing grant for this
+// device's own credential.
+//
+// The grant is a secret, so it only ever travels in this direction — no
+// response message carries one back.
+message PairDeviceRequest {
+  string grant = 1;
+  string device_name = 2;
+  string platform = 3;
+}
+
+// Request of POST /api/auth/pairing-grants: ask for a short-lived grant that
+// another device can redeem.
+message PairingGrantRequest {
+  string device_name = 1;
+  string platform = 2;
+}
+
+// One paired device, as reported by the server.
+message PairedDevice {
+  string id = 1;
+  string name = 2;
+  string platform = 3;
+}
+
+// Response of POST /api/auth/pair. The grant was consumed to issue this
+// device token; the grant itself is never returned.
+//
+// expires_at is a protojson int64, so it encodes as a *string* — the
+// convention the rest of the schema uses for millisecond timestamps.
+message PairDeviceResponse {
+  PairedDevice device = 1;
+  string token = 2;
+  int64 expires_at = 3;
+}
+
+// Response of POST /api/auth/pairing-grants: a short-lived, single-use grant
+// another device can exchange for its own token (the QR flow).
+message PairingGrantResponse {
+  string grant = 1;
+  int64 expires_at = 2;
+}
+
+// One device paired with the server.
+//
+// The timestamps are optional (explicit presence) for the same reason
+// ProviderCredentialStatus uses it: protojson omits an implicit zero, and
+// "never seen" must stay distinguishable from "seen at the epoch". They
+// encode as protojson strings.
+message ServerDevice {
+  string id = 1;
+  string name = 2;
+  string platform = 3;
+  optional int64 created_at = 4;
+  optional int64 last_seen_at = 5;
+  optional int64 revoked_at = 6;
+}
+
+// Response of GET /api/auth/devices.
+message ServerDevicesResponse {
+  repeated ServerDevice devices = 1;
+}

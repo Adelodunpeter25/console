@@ -40,8 +40,8 @@ func TestGitConfigConfigureSetsTriples(t *testing.T) {
 	}
 
 	count := os.Getenv("GIT_CONFIG_COUNT")
-	if count != "3" {
-		t.Fatalf("expected 3 config entries (helper + two insteadOf), got %q", count)
+	if count != "5" {
+		t.Fatalf("expected 5 config entries (helper + two insteadOf + identity), got %q", count)
 	}
 	if got := os.Getenv("GIT_CONFIG_KEY_0"); got != "credential.helper" {
 		t.Fatalf("key 0: %q", got)
@@ -68,6 +68,18 @@ func TestGitConfigConfigureSetsTriples(t *testing.T) {
 		if got := os.Getenv(fmt.Sprintf("GIT_CONFIG_VALUE_%d", i+1)); got != want {
 			t.Fatalf("value %d: got %q want %q", i+1, got, want)
 		}
+	}
+	if got := os.Getenv("GIT_CONFIG_KEY_3"); got != "user.name" {
+		t.Fatalf("identity name key: %q", got)
+	}
+	if got := os.Getenv("GIT_CONFIG_VALUE_3"); got == "" {
+		t.Fatal("identity name must be configured")
+	}
+	if got := os.Getenv("GIT_CONFIG_KEY_4"); got != "user.email" {
+		t.Fatalf("identity email key: %q", got)
+	}
+	if got := os.Getenv("GIT_CONFIG_VALUE_4"); got == "" {
+		t.Fatal("identity email must be configured")
 	}
 }
 

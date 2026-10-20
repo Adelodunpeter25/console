@@ -56,6 +56,14 @@ func shakeResults(results []tools.ToolResult, maxChars int) ([]tools.ToolResult,
 	truncated := false
 	for i, r := range results {
 		out[i] = r
+		// An inline image carries megabytes of base64 that no character
+		// ceiling would ever trim, so drop the payload and keep a marker.
+		// The image is only useful on the turn that produced it.
+		if loop.HasImageParts(r.Content) {
+			out[i].Content = loop.StripImagePayloads(r.Content)
+			truncated = true
+			continue
+		}
 		content, ok := r.Content.(string)
 		if !ok || r.IsError || len([]rune(content)) <= maxChars {
 			continue

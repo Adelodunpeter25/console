@@ -1,13 +1,19 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
+import com.console.mobile.data.local.TokenStore
 import console.v1.AuthStatusResponse
 import console.v1.GitHubAuthStatus
 import console.v1.OAuthLoginUrlResponse
 import console.v1.ProviderAuthStatus
 import console.v1.ProviderCredentialStatus
+import com.console.mobile.data.model.DeviceInfo
 import com.console.mobile.data.model.GitHubTokenDto
 import com.console.mobile.data.model.OAuthCallbackDto
+import com.console.mobile.data.model.PairingData
+import com.console.mobile.data.model.PairingGrantData
+import com.console.mobile.data.model.PairingGrantRequest
+import com.console.mobile.data.model.PairingRequest
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
 import com.console.mobile.data.store.AuthStateHolder
@@ -20,8 +26,44 @@ import kotlinx.coroutines.withContext
 class AuthRepository(
     private val api: ConsoleApi,
     private val authState: AuthStateHolder,
+    private val tokenStore: TokenStore,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
+    /**
+     * Exchange a pairing grant for a device token and persist it against the
+     * server it came from. Pairing is per-server: the same app can be paired
+     * to several environments without their tokens overwriting each other.
+     */
+    suspend fun pair(serverUrl: String, request: PairingRequest): PairingData = withContext(Dispatchers.IO) {
+        val paired = api.pair(request)
+        // The device is optional in the schema, so it is read defensively:
+        // the token is what the client actually needs.
+        val device = paired.device
+        tokenStore.save(
+            serverUrl,
+            com.console.mobile.data.local.StoredServerAuth(
+                token = paired.token,
+                deviceId = device?.id.orEmpty(),
+                deviceName = device?.name.orEmpty(),
+                expiresAt = paired.expires_at,
+            ),
+        )
+        paired
+    }
+
+    /** Forget one server's device credential (e.g. the server revoked us). */
+    suspend fun unpair(serverUrl: String) = withContext(Dispatchers.IO) {
+        tokenStore.clear(serverUrl)
+    }
+
+    suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData = withContext(Dispatchers.IO) {
+        api.createPairingGrant(request)
+    }
+
+    suspend fun listDevices(): List<DeviceInfo> = withContext(Dispatchers.IO) { api.listAuthDevices() }
+
+    suspend fun revokeDevice(id: String) = withContext(Dispatchers.IO) { api.revokeAuthDevice(id) }
+
     fun loadStatus() {
         scope.launch {
             authState.patch { it.copy(loading = true, error = null) }

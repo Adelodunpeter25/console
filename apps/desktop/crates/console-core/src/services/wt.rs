@@ -12,7 +12,6 @@
 //! they have no stream to ride.
 
 use crate::net::{WtClient, WtSession, WtStreamKind, WtStreamReader, WtStreamWriter, WtTls};
-use crate::services::auth::AuthService;
 use crate::types::*;
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
@@ -47,9 +46,10 @@ impl WtService {
         origin: Option<&str>,
         tls: WtTls,
     ) -> Result<Self> {
-        let token = AuthService::new(transport.clone())
-            .mint_api_token(&device_id())
-            .await?;
+        let token = transport
+            .auth_token()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("Server authentication is required before WebTransport"))?;
         let base_url = match origin {
             Some(origin) => origin.to_string(),
             None => upgrade_to_https(&transport.base_url().await),
@@ -663,21 +663,4 @@ pub fn upgrade_to_https(base_url: &str) -> String {
         Some(rest) => format!("https://{rest}"),
         None => base_url.to_string(),
     }
-}
-
-/// Stable device id for the handshake token, so repeated connects in one app
-/// run share one server-side identity. Process-scoped by design: the token
-/// itself is short-lived, and the server binds the id to the QUIC connection
-/// rather than persisting it.
-fn device_id() -> String {
-    static DEVICE_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    DEVICE_ID
-        .get_or_init(|| {
-            let nanos = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|elapsed| elapsed.as_nanos())
-                .unwrap_or_default();
-            format!("desktop-{}-{nanos}", std::process::id())
-        })
-        .clone()
 }

@@ -62,6 +62,9 @@ object WtNative {
      * @param streamId chat runs use the session id; other kinds pass an empty
      *   string.
      * @param requestJson protojson request body for the stream.
+     * @param authToken the paired device token. The WebTransport handshake is
+     *   authenticated by it; an empty string means "not paired" and the open
+     *   fails so the caller falls back to the authenticated legacy path.
      */
     external fun openStream(
         apiUrl: String,
@@ -71,6 +74,7 @@ object WtNative {
         streamId: String,
         requestType: String,
         requestJson: String,
+        authToken: String,
     ): Long
 
     /**
@@ -196,6 +200,7 @@ class WtStream private constructor(
             streamId: String = "",
             requestType: String,
             requestJson: String,
+            authToken: String = "",
             closeFrame: String = "",
         ): WtStream? {
             if (!WtNative.available) return null
@@ -207,6 +212,7 @@ class WtStream private constructor(
                 streamId,
                 requestType,
                 requestJson,
+                authToken,
             )
             if (handle == 0L) return null
             return WtStream(handle, closeFrame)

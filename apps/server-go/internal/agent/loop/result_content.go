@@ -57,3 +57,88 @@ func isImagePart(part any) bool {
 	m, ok := part.(map[string]any)
 	return ok && m["type"] == "image"
 }
+
+// StripImagePayloads returns a tool result's content with every inline image
+// part replaced by a short text placeholder naming the mime type. The base64
+// payload is dropped entirely: it is only ever useful to the model on the turn
+// that produced it, and keeping it would store megabytes per image in the
+// session database and re-upload them on every later turn.
+//
+// A result with no image parts is returned unchanged, so text-only results keep
+// their exact shape.
+func StripImagePayloads(content any) any {
+	switch v := content.(type) {
+	case []map[string]any:
+		out := make([]map[string]any, 0, len(v))
+		changed := false
+		for _, item := range v {
+			if item["type"] == "image" {
+				out = append(out, map[string]any{
+					"type": "text",
+					"text": imagePlaceholderText(item["mimeType"]),
+				})
+				changed = true
+				continue
+			}
+			out = append(out, item)
+		}
+		if !changed {
+			return content
+		}
+		return out
+	case []any:
+		out := make([]any, 0, len(v))
+		changed := false
+		for _, item := range v {
+			if isImagePart(item) {
+				mime := ""
+				if m, ok := item.(map[string]any); ok {
+					mime, _ = m["mimeType"].(string)
+				}
+				out = append(out, map[string]any{
+					"type": "text",
+					"text": imagePlaceholderText(mime),
+				})
+				changed = true
+				continue
+			}
+			out = append(out, item)
+		}
+		if !changed {
+			return content
+		}
+		return out
+	default:
+		return content
+	}
+}
+
+// HasImageParts reports whether a tool result's content carries any inline
+// image part. Callers use it to tell "nothing was stripped" from "the content
+// changed shape", which interface equality cannot express for slice values.
+func HasImageParts(content any) bool {
+	switch v := content.(type) {
+	case []map[string]any:
+		for _, item := range v {
+			if item["type"] == "image" {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if isImagePart(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// imagePlaceholderText is the stand-in left behind by a stripped image. It
+// tells the model the image existed without pretending it can still see it.
+func imagePlaceholderText(mime any) string {
+	if s, ok := mime.(string); ok && s != "" {
+		return "[image omitted: " + s + " image content was not retained]"
+	}
+	return "[image omitted: image content was not retained]"
+}

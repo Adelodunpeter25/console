@@ -32,6 +32,10 @@ class WatchesOverWebTransportTest {
 
     private val apiUrl: String get() = setting("WT_SPIKE_API_URL", "http://10.0.2.2:18091")!!
 
+    /** Paired device token; the WebTransport handshake is authenticated by it. */
+    private fun deviceToken(): String? =
+        ServerPairing.pair(apiUrl, setting("WT_SPIKE_PAIR_GRANT"))
+
     @Before
     fun configure() {
         WtTransport.originOverride = setting("WT_SPIKE_ORIGIN", "https://10.0.2.2:18454")
@@ -54,10 +58,13 @@ class WatchesOverWebTransportTest {
             .build()
             .adapter<Any>(Map::class.java)
 
+        val token = deviceToken()
+        assumeTrue("no WT_SPIKE_PAIR_GRANT provided", token != null)
         val watch = WtTransport.watch(
             baseUrl = apiUrl,
             requestJson = WtTransport.watchRequest(WtTransport.TARGET_GIT_STATUS, path = repo),
             frameType = WtTransport.FRAME_GIT_STATUS,
+            authToken = token,
             decode = { raw ->
                 // Decoding loosely is enough here: the assertion is that a
                 // gitStatus frame arrived and carried an object.
@@ -77,10 +84,13 @@ class WatchesOverWebTransportTest {
         // Nothing to assert about frames (the server is silent until something
         // notifies), so this pins that the stream opens at all — a rejected
         // request comes back as an error frame rather than hanging.
+        val token = deviceToken()
+        assumeTrue("no WT_SPIKE_PAIR_GRANT provided", token != null)
         val watch = WtTransport.watch(
             baseUrl = apiUrl,
             requestJson = WtTransport.watchRequest(WtTransport.TARGET_NOTIFICATIONS),
             frameType = WtTransport.FRAME_NOTIFICATION,
+            authToken = token,
             decode = { it },
         )
         assertNotNull("notifications watch did not open: ${WtNative.lastError()}", watch)

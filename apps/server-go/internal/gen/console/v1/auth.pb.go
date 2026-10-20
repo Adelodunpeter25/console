@@ -777,6 +777,440 @@ func (x *SetProviderCredentialResponse) GetRemoved() bool {
 	return false
 }
 
+// Request of POST /api/auth/pair: redeem a one-time pairing grant for this
+// device's own credential.
+//
+// The grant is a secret, so it only ever travels in this direction — no
+// response message carries one back.
+type PairDeviceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Grant         string                 `protobuf:"bytes,1,opt,name=grant,proto3" json:"grant,omitempty"`
+	DeviceName    string                 `protobuf:"bytes,2,opt,name=device_name,json=deviceName,proto3" json:"device_name,omitempty"`
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairDeviceRequest) Reset() {
+	*x = PairDeviceRequest{}
+	mi := &file_console_v1_auth_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairDeviceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairDeviceRequest) ProtoMessage() {}
+
+func (x *PairDeviceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairDeviceRequest.ProtoReflect.Descriptor instead.
+func (*PairDeviceRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *PairDeviceRequest) GetGrant() string {
+	if x != nil {
+		return x.Grant
+	}
+	return ""
+}
+
+func (x *PairDeviceRequest) GetDeviceName() string {
+	if x != nil {
+		return x.DeviceName
+	}
+	return ""
+}
+
+func (x *PairDeviceRequest) GetPlatform() string {
+	if x != nil {
+		return x.Platform
+	}
+	return ""
+}
+
+// Request of POST /api/auth/pairing-grants: ask for a short-lived grant that
+// another device can redeem.
+type PairingGrantRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DeviceName    string                 `protobuf:"bytes,1,opt,name=device_name,json=deviceName,proto3" json:"device_name,omitempty"`
+	Platform      string                 `protobuf:"bytes,2,opt,name=platform,proto3" json:"platform,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingGrantRequest) Reset() {
+	*x = PairingGrantRequest{}
+	mi := &file_console_v1_auth_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingGrantRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingGrantRequest) ProtoMessage() {}
+
+func (x *PairingGrantRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingGrantRequest.ProtoReflect.Descriptor instead.
+func (*PairingGrantRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PairingGrantRequest) GetDeviceName() string {
+	if x != nil {
+		return x.DeviceName
+	}
+	return ""
+}
+
+func (x *PairingGrantRequest) GetPlatform() string {
+	if x != nil {
+		return x.Platform
+	}
+	return ""
+}
+
+// One paired device, as reported by the server.
+type PairedDevice struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairedDevice) Reset() {
+	*x = PairedDevice{}
+	mi := &file_console_v1_auth_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairedDevice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairedDevice) ProtoMessage() {}
+
+func (x *PairedDevice) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairedDevice.ProtoReflect.Descriptor instead.
+func (*PairedDevice) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PairedDevice) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PairedDevice) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PairedDevice) GetPlatform() string {
+	if x != nil {
+		return x.Platform
+	}
+	return ""
+}
+
+// Response of POST /api/auth/pair. The grant was consumed to issue this
+// device token; the grant itself is never returned.
+//
+// expires_at is a protojson int64, so it encodes as a *string* — the
+// convention the rest of the schema uses for millisecond timestamps.
+type PairDeviceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Device        *PairedDevice          `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,3,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairDeviceResponse) Reset() {
+	*x = PairDeviceResponse{}
+	mi := &file_console_v1_auth_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairDeviceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairDeviceResponse) ProtoMessage() {}
+
+func (x *PairDeviceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairDeviceResponse.ProtoReflect.Descriptor instead.
+func (*PairDeviceResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PairDeviceResponse) GetDevice() *PairedDevice {
+	if x != nil {
+		return x.Device
+	}
+	return nil
+}
+
+func (x *PairDeviceResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *PairDeviceResponse) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+// Response of POST /api/auth/pairing-grants: a short-lived, single-use grant
+// another device can exchange for its own token (the QR flow).
+type PairingGrantResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Grant         string                 `protobuf:"bytes,1,opt,name=grant,proto3" json:"grant,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairingGrantResponse) Reset() {
+	*x = PairingGrantResponse{}
+	mi := &file_console_v1_auth_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairingGrantResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairingGrantResponse) ProtoMessage() {}
+
+func (x *PairingGrantResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairingGrantResponse.ProtoReflect.Descriptor instead.
+func (*PairingGrantResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *PairingGrantResponse) GetGrant() string {
+	if x != nil {
+		return x.Grant
+	}
+	return ""
+}
+
+func (x *PairingGrantResponse) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+// One device paired with the server.
+//
+// The timestamps are optional (explicit presence) for the same reason
+// ProviderCredentialStatus uses it: protojson omits an implicit zero, and
+// "never seen" must stay distinguishable from "seen at the epoch". They
+// encode as protojson strings.
+type ServerDevice struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Platform      string                 `protobuf:"bytes,3,opt,name=platform,proto3" json:"platform,omitempty"`
+	CreatedAt     *int64                 `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3,oneof" json:"created_at,omitempty"`
+	LastSeenAt    *int64                 `protobuf:"varint,5,opt,name=last_seen_at,json=lastSeenAt,proto3,oneof" json:"last_seen_at,omitempty"`
+	RevokedAt     *int64                 `protobuf:"varint,6,opt,name=revoked_at,json=revokedAt,proto3,oneof" json:"revoked_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerDevice) Reset() {
+	*x = ServerDevice{}
+	mi := &file_console_v1_auth_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerDevice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerDevice) ProtoMessage() {}
+
+func (x *ServerDevice) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerDevice.ProtoReflect.Descriptor instead.
+func (*ServerDevice) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ServerDevice) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ServerDevice) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ServerDevice) GetPlatform() string {
+	if x != nil {
+		return x.Platform
+	}
+	return ""
+}
+
+func (x *ServerDevice) GetCreatedAt() int64 {
+	if x != nil && x.CreatedAt != nil {
+		return *x.CreatedAt
+	}
+	return 0
+}
+
+func (x *ServerDevice) GetLastSeenAt() int64 {
+	if x != nil && x.LastSeenAt != nil {
+		return *x.LastSeenAt
+	}
+	return 0
+}
+
+func (x *ServerDevice) GetRevokedAt() int64 {
+	if x != nil && x.RevokedAt != nil {
+		return *x.RevokedAt
+	}
+	return 0
+}
+
+// Response of GET /api/auth/devices.
+type ServerDevicesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Devices       []*ServerDevice        `protobuf:"bytes,1,rep,name=devices,proto3" json:"devices,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServerDevicesResponse) Reset() {
+	*x = ServerDevicesResponse{}
+	mi := &file_console_v1_auth_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServerDevicesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServerDevicesResponse) ProtoMessage() {}
+
+func (x *ServerDevicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServerDevicesResponse.ProtoReflect.Descriptor instead.
+func (*ServerDevicesResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ServerDevicesResponse) GetDevices() []*ServerDevice {
+	if x != nil {
+		return x.Devices
+	}
+	return nil
+}
+
 var File_console_v1_auth_proto protoreflect.FileDescriptor
 
 const file_console_v1_auth_proto_rawDesc = "" +
@@ -854,7 +1288,44 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\x06source\x18\x03 \x01(\tH\x01R\x06source\x88\x01\x01\x12\x18\n" +
 	"\aremoved\x18\x04 \x01(\bR\aremovedB\r\n" +
 	"\v_configuredB\t\n" +
-	"\a_sourceBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\a_source\"f\n" +
+	"\x11PairDeviceRequest\x12\x14\n" +
+	"\x05grant\x18\x01 \x01(\tR\x05grant\x12\x1f\n" +
+	"\vdevice_name\x18\x02 \x01(\tR\n" +
+	"deviceName\x12\x1a\n" +
+	"\bplatform\x18\x03 \x01(\tR\bplatform\"R\n" +
+	"\x13PairingGrantRequest\x12\x1f\n" +
+	"\vdevice_name\x18\x01 \x01(\tR\n" +
+	"deviceName\x12\x1a\n" +
+	"\bplatform\x18\x02 \x01(\tR\bplatform\"N\n" +
+	"\fPairedDevice\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bplatform\x18\x03 \x01(\tR\bplatform\"{\n" +
+	"\x12PairDeviceResponse\x120\n" +
+	"\x06device\x18\x01 \x01(\v2\x18.console.v1.PairedDeviceR\x06device\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x03 \x01(\x03R\texpiresAt\"K\n" +
+	"\x14PairingGrantResponse\x12\x14\n" +
+	"\x05grant\x18\x01 \x01(\tR\x05grant\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x02 \x01(\x03R\texpiresAt\"\xec\x01\n" +
+	"\fServerDevice\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
+	"\bplatform\x18\x03 \x01(\tR\bplatform\x12\"\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\x03H\x00R\tcreatedAt\x88\x01\x01\x12%\n" +
+	"\flast_seen_at\x18\x05 \x01(\x03H\x01R\n" +
+	"lastSeenAt\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"revoked_at\x18\x06 \x01(\x03H\x02R\trevokedAt\x88\x01\x01B\r\n" +
+	"\v_created_atB\x0f\n" +
+	"\r_last_seen_atB\r\n" +
+	"\v_revoked_at\"K\n" +
+	"\x15ServerDevicesResponse\x122\n" +
+	"\adevices\x18\x01 \x03(\v2\x18.console.v1.ServerDeviceR\adevicesBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_auth_proto_rawDescOnce sync.Once
@@ -868,7 +1339,7 @@ func file_console_v1_auth_proto_rawDescGZIP() []byte {
 	return file_console_v1_auth_proto_rawDescData
 }
 
-var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_console_v1_auth_proto_goTypes = []any{
 	(*ProviderAuthStatus)(nil),            // 0: console.v1.ProviderAuthStatus
 	(*GitHubAuthStatus)(nil),              // 1: console.v1.GitHubAuthStatus
@@ -882,7 +1353,14 @@ var file_console_v1_auth_proto_goTypes = []any{
 	(*ProviderCredentialStatus)(nil),      // 9: console.v1.ProviderCredentialStatus
 	(*ProviderCredentialStatuses)(nil),    // 10: console.v1.ProviderCredentialStatuses
 	(*SetProviderCredentialResponse)(nil), // 11: console.v1.SetProviderCredentialResponse
-	nil,                                   // 12: console.v1.ProviderCredentialStatuses.ProvidersEntry
+	(*PairDeviceRequest)(nil),             // 12: console.v1.PairDeviceRequest
+	(*PairingGrantRequest)(nil),           // 13: console.v1.PairingGrantRequest
+	(*PairedDevice)(nil),                  // 14: console.v1.PairedDevice
+	(*PairDeviceResponse)(nil),            // 15: console.v1.PairDeviceResponse
+	(*PairingGrantResponse)(nil),          // 16: console.v1.PairingGrantResponse
+	(*ServerDevice)(nil),                  // 17: console.v1.ServerDevice
+	(*ServerDevicesResponse)(nil),         // 18: console.v1.ServerDevicesResponse
+	nil,                                   // 19: console.v1.ProviderCredentialStatuses.ProvidersEntry
 }
 var file_console_v1_auth_proto_depIdxs = []int32{
 	0,  // 0: console.v1.AuthStatusResponse.antigravity:type_name -> console.v1.ProviderAuthStatus
@@ -890,13 +1368,15 @@ var file_console_v1_auth_proto_depIdxs = []int32{
 	0,  // 2: console.v1.AuthStatusResponse.devin:type_name -> console.v1.ProviderAuthStatus
 	0,  // 3: console.v1.AuthStatusResponse.claude:type_name -> console.v1.ProviderAuthStatus
 	1,  // 4: console.v1.AuthStatusResponse.github:type_name -> console.v1.GitHubAuthStatus
-	12, // 5: console.v1.ProviderCredentialStatuses.providers:type_name -> console.v1.ProviderCredentialStatuses.ProvidersEntry
-	9,  // 6: console.v1.ProviderCredentialStatuses.ProvidersEntry.value:type_name -> console.v1.ProviderCredentialStatus
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	19, // 5: console.v1.ProviderCredentialStatuses.providers:type_name -> console.v1.ProviderCredentialStatuses.ProvidersEntry
+	14, // 6: console.v1.PairDeviceResponse.device:type_name -> console.v1.PairedDevice
+	17, // 7: console.v1.ServerDevicesResponse.devices:type_name -> console.v1.ServerDevice
+	9,  // 8: console.v1.ProviderCredentialStatuses.ProvidersEntry.value:type_name -> console.v1.ProviderCredentialStatus
+	9,  // [9:9] is the sub-list for method output_type
+	9,  // [9:9] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_auth_proto_init() }
@@ -912,13 +1392,14 @@ func file_console_v1_auth_proto_init() {
 	file_console_v1_auth_proto_msgTypes[8].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[9].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[11].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[17].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_auth_proto_rawDesc), len(file_console_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

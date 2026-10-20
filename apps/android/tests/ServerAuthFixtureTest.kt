@@ -1,0 +1,64 @@
+package com.console.mobile
+
+import com.squareup.moshi.Moshi
+import com.squareup.wire.WireJsonAdapterFactory
+import console.v1.PairDeviceResponse
+import console.v1.PairingGrantResponse
+import console.v1.ServerDevicesResponse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Test
+import java.io.File
+
+/**
+ * Golden-fixture tests for the server-pairing payloads. The fixtures live in
+ * proto/testdata/auth and are shared by Go, Rust, and Kotlin — the payloads
+ * are the shared protobuf types, so all three must read them identically.
+ */
+class ServerAuthFixtureTest {
+    private val moshi: Moshi = Moshi.Builder()
+        .add(WireJsonAdapterFactory())
+        .build()
+    private val pairAdapter = moshi.adapter(PairDeviceResponse::class.java)
+    private val grantAdapter = moshi.adapter(PairingGrantResponse::class.java)
+    private val devicesAdapter = moshi.adapter(ServerDevicesResponse::class.java)
+
+    private fun fixture(name: String): String =
+        File("../../../proto/testdata/auth/$name").readText().trim()
+
+    @Test
+    fun decodesGoldenPairDeviceFixture() {
+        val data = pairAdapter.fromJson(fixture("pair_device.json"))!!
+        assertEquals("ct1_device_token", data.token)
+        // Timestamps arrive as protojson strings, not numbers.
+        assertEquals(1762592000000L, data.expires_at)
+        val device = data.device
+        assertNotNull("device must be reported", device)
+        assertEquals("device-1", device!!.id)
+        assertEquals("My desktop", device.name)
+        assertEquals("desktop", device.platform)
+    }
+
+    @Test
+    fun decodesGoldenPairingGrantFixture() {
+        val grant = grantAdapter.fromJson(fixture("pairing_grant.json"))!!
+        assertEquals("cp1_grant", grant.grant)
+        assertEquals(1760000030000L, grant.expires_at)
+    }
+
+    @Test
+    fun decodesGoldenServerDevicesFixture() {
+        val list = devicesAdapter.fromJson(fixture("server_devices.json"))!!
+        assertEquals(2, list.devices.size)
+        val desktop = list.devices[0]
+        assertEquals("device-1", desktop.id)
+        assertEquals(1760000000000L, desktop.created_at)
+        // A device that has never been seen carries no timestamp at all.
+        assertNull(desktop.last_seen_at)
+        assertNull(desktop.revoked_at)
+        val phone = list.devices[1]
+        assertEquals(1760000099000L, phone.last_seen_at)
+        assertEquals(1760000100000L, phone.revoked_at)
+    }
+}

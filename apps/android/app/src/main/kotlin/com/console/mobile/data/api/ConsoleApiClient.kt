@@ -19,5 +19,5 @@ open class ConsoleApiClient(
             ?: "http://localhost:3000"
 
     open val authToken: String?
-        get() = if (hasAuthOverride) authTokenOverride else tokenStore?.authToken ?: authTokenOverride
+        get() = if (hasAuthOverride) authTokenOverride else tokenStore?.tokenFor(baseUrl) ?: authTokenOverride
 }

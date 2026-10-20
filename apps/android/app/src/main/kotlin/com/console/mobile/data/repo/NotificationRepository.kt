@@ -43,6 +43,7 @@ class NotificationRepository(
             baseUrl = apiClient.baseUrl,
             requestJson = WtTransport.watchRequest(WtTransport.TARGET_NOTIFICATIONS),
             frameType = WtTransport.FRAME_NOTIFICATION,
+            authToken = apiClient.authToken,
             decode = { raw -> notificationAdapter.fromJson(raw) },
         ) ?: notificationsOverSse()
 

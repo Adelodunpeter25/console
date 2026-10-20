@@ -123,7 +123,7 @@ class CronetWebTransportSpikeTest {
      */
     @Test
     fun bidirectionalStreamBuilderIsSupported() {
-        val token = mintToken() ?: return
+        val token = pairDevice() ?: return
         val failure = CountDownLatch(1)
         var message: String? = null
         engine.newBidirectionalStreamBuilder(
@@ -170,7 +170,7 @@ class CronetWebTransportSpikeTest {
      */
     @Test
     fun webTransportSessionOpens() {
-        val token = mintToken() ?: return
+        val token = pairDevice() ?: return
 
         val headers = CountDownLatch(1)
         var status: Int? = null
@@ -217,31 +217,14 @@ class CronetWebTransportSpikeTest {
         assertNotNull("onStreamReady never delivered a stream", stream)
     }
 
-    /** Mint a handshake token over REST, the way the client will. */
-    private fun mintToken(): String? {
-        val conn = try {
-            URL("$apiUrl/api/auth/token").openConnection() as HttpURLConnection
-        } catch (e: Exception) {
-            assumeTrue("bad WT_SPIKE_API_URL: $e", false)
-            return null
-        }
-        return try {
-            conn.requestMethod = "POST"
-            conn.doOutput = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write("""{"deviceId":"spike"}""".toByteArray()) }
-            val body = BufferedReader(InputStreamReader(conn.inputStream)).readText()
-            val token = Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
-            if (token == null) println("token mint failed: $body")
-            token
-        } catch (e: Exception) {
-            // No server reachable is "not configured", not a QUIC failure —
-            // skip rather than report a false negative.
-            assumeTrue("no dev server at $apiUrl ($e)", false)
-            null
-        }
+    /**
+     * Exchange a pairing grant for a device token, the way the client will.
+     * There is no freely mintable token endpoint any more.
+     */
+    private fun pairDevice(): String? {
+        val token = ServerPairing.pair(apiUrl, env("WT_SPIKE_PAIR_GRANT"))
+        if (token == null) assumeTrue("no WT_SPIKE_PAIR_GRANT provided", false)
+        return token
     }
 
     private fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }

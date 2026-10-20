@@ -61,10 +61,16 @@ var (
 
 type tokenPayload struct {
 	V      int    `json:"v"`
+	Kind   string `json:"kind,omitempty"`
 	Device string `json:"device"`
 	Iat    int64  `json:"iat"`
 	Exp    int64  `json:"exp"`
 	Jti    string `json:"jti"`
+}
+
+type Claims struct {
+	Kind, Device, JTI   string
+	IssuedAt, ExpiresAt int64
 }
 
 // TokenIssuer mints and validates API bearer tokens. Safe for concurrent use
@@ -80,16 +86,25 @@ type TokenIssuer struct {
 // on first run. A storage failure falls back to an ephemeral secret with a
 // warning: the server keeps working, and only token survival across restarts
 // is lost (tokens are minutes-lived handshake credentials).
-func NewTokenIssuer() *TokenIssuer {
+func NewTokenIssuerStrict() (*TokenIssuer, error) {
 	secret, err := loadOrCreateTokenSecret()
 	if err != nil {
-		slog.Warn("API token secret unavailable, using an ephemeral secret", "error", err)
-		secret = make([]byte, 32)
-		if _, randErr := rand.Read(secret); randErr != nil {
-			panic(randErr) // crypto/rand never fails on supported platforms
-		}
+		return nil, fmt.Errorf("initialize API token secret: %w", err)
 	}
-	return &TokenIssuer{secret: secret, revoked: map[string]int64{}}
+	return &TokenIssuer{secret: secret, revoked: map[string]int64{}}, nil
+}
+
+func NewTokenIssuer() *TokenIssuer {
+	issuer, err := NewTokenIssuerStrict()
+	if err != nil {
+		slog.Warn("API token secret unavailable, using an ephemeral secret", "error", err)
+		secret := make([]byte, 32)
+		if _, randErr := rand.Read(secret); randErr != nil {
+			panic(randErr)
+		}
+		return &TokenIssuer{secret: secret, revoked: map[string]int64{}}
+	}
+	return issuer
 }
 
 // NewTokenIssuerWithSecret builds an issuer around an explicit secret
@@ -145,7 +160,18 @@ func loadOrCreateTokenSecret() ([]byte, error) {
 // non-positive ttl selects DefaultTokenTTL; a negative ttl mints an
 // already-expired token (deterministic expiry tests, never used by callers).
 // The returned expiresAt is unix millis, matching the rest of the API.
+func (t *TokenIssuer) MintKind(kind, deviceID string, ttl time.Duration) (token string, expiresAt int64, err error) {
+	if strings.TrimSpace(kind) == "" {
+		return "", 0, ErrTokenInvalid
+	}
+	return t.mint(kind, deviceID, ttl)
+}
+
 func (t *TokenIssuer) Mint(deviceID string, ttl time.Duration) (token string, expiresAt int64, err error) {
+	return t.mint("device", deviceID, ttl)
+}
+
+func (t *TokenIssuer) mint(kind, deviceID string, ttl time.Duration) (token string, expiresAt int64, err error) {
 	if strings.TrimSpace(deviceID) == "" {
 		return "", 0, fmt.Errorf("device ID is required.")
 	}
@@ -159,6 +185,7 @@ func (t *TokenIssuer) Mint(deviceID string, ttl time.Duration) (token string, ex
 	}
 	payload := tokenPayload{
 		V:      tokenVersion,
+		Kind:   kind,
 		Device: deviceID,
 		Iat:    now,
 		Exp:    now + ttl.Milliseconds(),
@@ -181,6 +208,25 @@ func (t *TokenIssuer) Mint(deviceID string, ttl time.Duration) (token string, ex
 // Validate checks a presented token and returns the bound device ID. The
 // caller (WT accept in Phase 2, the shared middleware) binds it to the
 // connection.
+func (t *TokenIssuer) Claims(token string) (Claims, error) {
+	payload, err := t.parse(token)
+	if err != nil {
+		return Claims{}, err
+	}
+	now := utils.NowMillis()
+	if now >= payload.Exp {
+		return Claims{}, ErrTokenExpired
+	}
+	t.mu.Lock()
+	t.sweepLocked(now)
+	_, revoked := t.revoked[payload.Jti]
+	t.mu.Unlock()
+	if revoked {
+		return Claims{}, ErrTokenRevoked
+	}
+	return Claims{Kind: payload.Kind, Device: payload.Device, JTI: payload.Jti, IssuedAt: payload.Iat, ExpiresAt: payload.Exp}, nil
+}
+
 func (t *TokenIssuer) Validate(token string) (string, error) {
 	payload, err := t.parse(token)
 	if err != nil {
@@ -227,13 +273,13 @@ func (t *TokenIssuer) parse(token string) (tokenPayload, error) {
 		return out, ErrTokenInvalid
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(body)
-	if err != nil {
+	if err != nil || base64.RawURLEncoding.EncodeToString(raw) != body {
 		return out, ErrTokenInvalid
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return out, ErrTokenInvalid
 	}
-	if out.V != tokenVersion || out.Device == "" || out.Jti == "" || out.Exp <= 0 {
+	if out.V != tokenVersion || out.Kind == "" || out.Device == "" || out.Jti == "" || out.Exp <= 0 {
 		return out, ErrTokenInvalid
 	}
 	mac := hmac.New(sha256.New, t.secret)

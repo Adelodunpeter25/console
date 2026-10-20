@@ -103,6 +103,41 @@ func TestEstimateTokensToolResultImages(t *testing.T) {
 	}
 }
 
+// A tool result carrying an inline image must be recoverable by shaking: the
+// base64 payload is dropped and replaced by a marker, because no character
+// ceiling could ever trim it.
+func TestShakeConversationStripsImagePayload(t *testing.T) {
+	big := strings.Repeat("A", 2_000_000)
+	history := []any{
+		loop.ToolResultMessage{Role: loop.RoleToolResult, Results: []tools.ToolResult{
+			{ToolCallID: "c1", ToolName: "read_file", Content: []map[string]any{
+				{"type": "text", "text": "Image read: /tmp/a.png"},
+				{"type": "image", "data": big, "mimeType": "image/png"},
+			}},
+		}},
+	}
+	shaken := compaction.ShakeConversation(history, 2000, len(history), true)
+	results := shaken[0].(loop.ToolResultMessage).Results
+	parts, ok := results[0].Content.([]map[string]any)
+	if !ok {
+		t.Fatalf("content type: %T", results[0].Content)
+	}
+	for _, p := range parts {
+		if p["type"] == "image" {
+			t.Fatalf("shake must drop the image payload: %#v", p)
+		}
+	}
+	marker, _ := parts[1]["text"].(string)
+	if !strings.Contains(marker, "image/png") {
+		t.Fatalf("shake marker should name the image type: %q", marker)
+	}
+	// The original is never mutated.
+	original := history[0].(loop.ToolResultMessage).Results[0].Content.([]map[string]any)
+	if original[1]["data"] != big {
+		t.Fatal("shake must not mutate inputs")
+	}
+}
+
 func TestShakeConversation(t *testing.T) {
 	big := strings.Repeat("x", 9000)
 	history := []any{
