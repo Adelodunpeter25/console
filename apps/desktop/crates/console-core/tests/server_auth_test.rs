@@ -43,6 +43,14 @@ fn decodes_the_golden_pairing_grant_fixture() {
     let server = msg.server.as_ref().expect("server reported");
     assert_eq!(server.id, "server-1");
     assert_eq!(server.name, "Studio Mac");
+    // The QR code the other device scans comes through as bytes, not as a
+    // string: it is a PNG, and a client that mangles it renders nothing.
+    assert!(
+        msg.qr_png.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "the QR must arrive as PNG bytes: {:?}",
+        msg.qr_png
+    );
+    assert_eq!(msg.qr_png.len(), 68);
 }
 
 // A device that has never been seen carries no lastSeenAt: the timestamp has

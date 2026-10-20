@@ -8,6 +8,7 @@ import console.v1.ServerDevicesResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -55,6 +56,11 @@ class ServerAuthFixtureTest {
         val server = grant.server
         assertNotNull("server must be reported", server)
         assertEquals("server-1", server!!.id)
+        // The QR code the other device scans travels as PNG bytes, and it
+        // has to arrive intact: a phone that mangles it scans nothing.
+        val qr = grant.qr_png.toByteArray()
+        assertEquals("the QR must arrive as PNG bytes", 68, qr.size)
+        assertTrue("the QR must be a PNG", qr.copyOfRange(0, 8).contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)))
     }
 
     @Test

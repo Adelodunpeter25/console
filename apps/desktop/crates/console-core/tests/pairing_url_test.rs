@@ -4,7 +4,7 @@
 //! read exactly is rejected rather than repaired, and the grant never
 //! ends up in the address the client will talk to.
 
-use console_core::utils::parse_pairing_url;
+use console_core::utils::{host_port, parse_pairing_url};
 
 #[test]
 fn parses_a_pairing_url() {
@@ -73,4 +73,14 @@ fn accepts_an_address_with_no_scheme() {
     let parsed = parse_pairing_url("192.168.1.10:3000#vw9g-zu89-aphc").expect("valid pairing URL");
     assert_eq!(parsed.base_url, "http://192.168.1.10:3000");
     assert_eq!(parsed.code, "vw9g-zu89-aphc");
+}
+
+#[test]
+fn names_a_server_by_its_address() {
+    // A server that has not named itself is still worth calling
+    // something.
+    assert_eq!(host_port("http://192.168.1.10:3000"), "192.168.1.10:3000");
+    assert_eq!(host_port("192.168.1.10:3000"), "192.168.1.10:3000");
+    assert_eq!(host_port("http://server.example/path"), "server.example");
+    assert_eq!(host_port("  "), "");
 }

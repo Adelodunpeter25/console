@@ -545,7 +545,11 @@ impl Render for SettingsWindow {
                 }
 
                 let final_name = if name.is_empty() {
-                    "Custom Server".to_string()
+                    // The server names itself when this device pairs with
+                    // it. Without a code there is nobody to ask, so the
+                    // address stands in — the same fallback the phone
+                    // app uses.
+                    console_core::utils::host_port(&url)
                 } else {
                     name
                 };
@@ -702,12 +706,18 @@ impl Render for SettingsWindow {
                     let entity = cx.entity().clone();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
+                    let code_input = self.new_env_code_input.clone();
                     Rc::new(move |is_adding: bool, _w: &mut Window, cx: &mut App| {
                         if is_adding {
                             name_input.update(cx, |input, cx| {
                                 input.clear(cx);
                             });
                             url_input.update(cx, |input, cx| {
+                                input.clear(cx);
+                            });
+                            // A code left over from an earlier pairing would
+                            // send this server somewhere else entirely.
+                            code_input.update(cx, |input, cx| {
                                 input.clear(cx);
                             });
                         }
@@ -725,6 +735,7 @@ impl Render for SettingsWindow {
                     let app_handle = self.app.clone();
                     let name_input = self.new_env_name_input.clone();
                     let url_input = self.new_env_url_input.clone();
+                    let code_input = self.new_env_code_input.clone();
                     Rc::new(move |env_id: String, _w: &mut Window, cx: &mut App| {
                         let (name, url, probe) = if let Some(app) = app_handle.upgrade() {
                             let app_state = app.read(cx);
@@ -749,6 +760,12 @@ impl Render for SettingsWindow {
                         });
                         url_input.update(cx, |input, cx| {
                             input.set_content(url, cx);
+                        });
+                        // The code is single-use, and one left over from an
+                        // earlier pairing would send this server somewhere
+                        // else entirely.
+                        code_input.update(cx, |input, cx| {
+                            input.clear(cx);
                         });
 
                         entity.update(cx, |this, cx| {

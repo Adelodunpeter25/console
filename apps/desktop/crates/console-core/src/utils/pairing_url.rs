@@ -135,6 +135,24 @@ pub fn split_pairing_line(text: &str) -> (String, String) {
     (address.to_string(), code)
 }
 
+/// The host and port of an address, for use as a display name.
+///
+/// A server that has not named itself is still worth calling something:
+///
+/// "http://192.168.1.10:3000/some/path" -> "192.168.1.10:3000"
+pub fn host_port(address: &str) -> String {
+    let trimmed = address.trim();
+    let authority = match trimmed.split_once("://") {
+        Some((_, rest)) => rest,
+        None => trimmed,
+    };
+    let authority = authority.split('/').next().unwrap_or_default().trim();
+    if authority.is_empty() {
+        return trimmed.to_string();
+    }
+    authority.to_string()
+}
+
 /// Percent-decode a fragment value.
 ///
 /// Only the escapes that can appear in a URL-encoded query value are

@@ -4,6 +4,7 @@
 package tests
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,11 +101,20 @@ func TestPairDeviceFixture(t *testing.T) {
 }
 
 func TestPairingGrantFixture(t *testing.T) {
+	// The grant response carries the QR code the other device scans, so
+	// the bytes have to survive the wire as bytes.
+	qr, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAC0lEQVR4nGNggAEAAAoAAX+AdF4AAAAASUVORK5CYII=",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	checkAuthFixture(t, "pairing_grant.json", &consolev1.PairingGrantResponse{
 		Grant: "cp1_grant", ExpiresAt: 1760000030000,
 		Server: &consolev1.ServerIdentity{
 			Id: "server-1", Name: "Studio Mac", Version: "1.0.1",
 		},
+		QrPng: qr,
 	})
 }
 

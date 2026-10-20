@@ -99,18 +99,29 @@ impl ConsoleDesktopApp {
             cx.notify();
             return;
         }
+        let base_url = self.active_environment_url();
+        // Only a paired device may mint a grant, so say so plainly instead
+        // of letting the server answer "Authentication required." to a
+        // question the user did not ask.
+        if crate::persistence::server_auth_token(&base_url).is_none() {
+            self.server_auth_error = Some(
+                "Pair this device with the server first: add the server with its host and pairing code."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        }
         self.server_auth_busy = true;
         self.server_auth_error = None;
         cx.notify();
 
         let client = self.client.clone();
-        let base_url = self.active_environment_url();
         cx.spawn(async move |entity, cx| {
             let result = client
                 .server_auth
                 .create_pairing_grant(PairingGrantRequest {
                     device_name: device_name.clone(),
-                    platform: "android".to_string(),
+                    platform: "desktop".to_string(),
                     base_url: base_url.clone(),
                 })
                 .await;
@@ -235,7 +246,14 @@ impl ConsoleDesktopApp {
             .find(|env| env.url.trim_end_matches('/') == url.trim_end_matches('/'))
             .map(|env| env.id.clone());
         let env_id = match existing {
-            Some(id) => id,
+            Some(id) => {
+                // The server names itself, and a paired environment is
+                // named after the server it talks to. Without this the
+                // name stays whatever placeholder the user typed before
+                // the server had a chance to answer.
+                self.update_environment(id.clone(), name, url, cx);
+                id
+            }
             None => {
                 self.add_environment(name, url, cx);
                 match self.environments.last() {
