@@ -37,6 +37,18 @@ data class BackgroundWork(
     val metadata: Map<String, String> = emptyMap(),
 )
 
+/** One read of a detached shell's buffered output (see the background-work output route). */
+@Serializable
+data class BackgroundWorkOutput(
+    val stdout: String = "",
+    val stderr: String = "",
+    val nextCursor: Int = 0,
+    val truncated: Boolean = false,
+    val status: String = "",
+    val exitCode: Int? = null,
+    val timedOut: Boolean = false,
+)
+
 /** Agent session SSE event. */
 @Serializable
 data class AgentSessionEvent(

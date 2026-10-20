@@ -2,7 +2,14 @@ package routes
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -48,5 +55,58 @@ func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
 	}
 	if _, ok := payload["Type"]; ok {
 		t.Fatalf("nested background event leaked into wire payload: %#v", payload)
+	}
+}
+
+func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
+	app := fiber.New()
+	runs := run.NewService(nil)
+	jobs := services.NewBashJobManager(nil)
+	runs.SetBashJobs(jobs)
+	RegisterRunRoutes(app, runs)
+
+	snapshot, err := jobs.Start(services.StartBashJobOptions{
+		Command:        "printf hello-route",
+		OwnerSessionID: "session-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(jobs.KillAll)
+
+	var work services.BackgroundWork
+	items := runs.BackgroundWorkManager().List("session-1")
+	if len(items) == 0 {
+		t.Fatal("background work was not registered")
+	}
+	work = items[0]
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		status, err := jobs.Status(snapshot.JobID, "session-1")
+		if err == nil && status.Status != services.BashJobRunning {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("background shell did not finish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/session-1/background-work/"+work.ID+"/output", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d body = %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "hello-route") {
+		t.Fatalf("body = %s", body)
 	}
 }

@@ -4,6 +4,8 @@ import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
+import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.AuthStatusResponse
 import console.v1.OAuthLoginUrlResponse
 import com.console.mobile.data.model.CreateSessionDto
@@ -222,6 +224,29 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             subagentAdapter.fromJson(item.toString())
                 ?: throw ApiException("Failed to get session subagents")
         }
+    }
+
+    override suspend fun getBackgroundWork(id: String): List<BackgroundWork> {
+        val raw = http.get("/api/sessions/${enc(id)}/background-work")
+        return http.unwrap(raw, ListSerializer(BackgroundWork.serializer()), "get background work")
+    }
+
+    override suspend fun cancelBackgroundWork(id: String, workId: String): BackgroundWork {
+        val raw = http.post("/api/sessions/${enc(id)}/background-work/${enc(workId)}/cancel")
+        return http.unwrap(raw, BackgroundWork.serializer(), "cancel background work")
+    }
+
+    override suspend fun getBackgroundWorkOutput(
+        id: String,
+        workId: String,
+        cursor: Int,
+        limit: Int,
+    ): BackgroundWorkOutput {
+        val raw = http.get(
+            "/api/sessions/${enc(id)}/background-work/${enc(workId)}/output",
+            mapOf("cursor" to cursor.toString(), "limit" to limit.toString()),
+        )
+        return http.unwrap(raw, BackgroundWorkOutput.serializer(), "get background work output")
     }
 
     override suspend fun getChanges(id: String): List<SessionFileChange> {

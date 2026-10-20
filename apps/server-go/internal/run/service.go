@@ -182,6 +182,12 @@ func (s *Service) BackgroundWorkManager() *services.BackgroundWorkManager {
 	return s.background
 }
 
+// BashJobs exposes the process-wide background job manager so read-only
+// routes can page a detached shell's output without starting a run.
+func (s *Service) BashJobs() *services.BashJobManager {
+	return s.bashJobManager()
+}
+
 func (s *Service) bashJobManager() *services.BashJobManager {
 	s.mu.Lock()
 	defer s.mu.Unlock()

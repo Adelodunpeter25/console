@@ -33,6 +33,7 @@ import com.console.mobile.core.chat.ChatSessionState
 import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
+import com.console.mobile.core.chat.runningBackgroundShells
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
@@ -56,8 +57,10 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -104,6 +107,7 @@ fun ChatScreen(
     var todoSheet by remember { mutableStateOf(false) }
     var subagentSheet by remember { mutableStateOf(false) }
     var subagentSelected by remember { mutableStateOf<String?>(null) }
+    var shellSheet by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
@@ -113,6 +117,7 @@ fun ChatScreen(
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
+            launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }
             launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
             detail.await()
         }
@@ -174,6 +179,18 @@ fun ChatScreen(
     val nextTodo = nextPendingTodo(todos)
     val subagents = chat.subagents
     val hasSubagents = subagents.isNotEmpty()
+    val liveShells = runningBackgroundShells(chat.backgroundWork)
+    val hasLiveShells = liveShells.isNotEmpty()
+
+    // A detached shell outlives its run, so no SSE stream is attached while it
+    // keeps running. Poll only while shells are live to keep the chip honest.
+    LaunchedEffect(sessionId, hasLiveShells) {
+        if (!hasLiveShells) return@LaunchedEffect
+        while (isActive) {
+            delay(5_000)
+            AppContainer.chatRepository.loadBackgroundWork(sessionId)
+        }
+    }
 
     val chatTitle = remember(sessionId, messages, projectState.sessions) {
         val header = projectState.sessions.firstOrNull { it.id == sessionId }
@@ -380,6 +397,9 @@ fun ChatScreen(
                     if (hasSubagents) {
                         SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
                     }
+                    if (hasLiveShells) {
+                        BackgroundShellBanner(works = liveShells, onPress = { shellSheet = true })
+                    }
                     InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
                 }
             } else {
@@ -389,6 +409,9 @@ fun ChatScreen(
                     }
                     if (hasSubagents) {
                         SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
+                    }
+                    if (hasLiveShells) {
+                        BackgroundShellBanner(works = liveShells, onPress = { shellSheet = true })
                     }
                     Composer(
                         sessionId = sessionId,
@@ -420,6 +443,14 @@ fun ChatScreen(
             AppContainer.appStateHolder.setActiveTab(MobileTab.SubagentDetails)
             onOpenSubagentDetails(id)
         })
+    }
+    if (shellSheet) {
+        BackgroundShellSheet(
+            sessionId = sessionId,
+            works = liveShells,
+            onCancel = { workId -> AppContainer.chatRepository.cancelBackgroundWork(sessionId, workId) },
+            onDismiss = { shellSheet = false },
+        )
     }
 
     ChatDiffSheet(

@@ -25,6 +25,7 @@ import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.AssistantMessage
+import com.console.mobile.data.model.BackgroundWorkOutput
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
@@ -155,6 +156,38 @@ class ChatRepository(
             }
         }
     }
+
+    /** Hydrate the chat's detached shell list; the chip filters it to running shells. */
+    fun loadBackgroundWork(sessionId: String) {
+        scope.launch {
+            try {
+                val work = withContext(Dispatchers.IO) { api.getBackgroundWork(sessionId) }
+                chats.update(sessionId) { if (it.backgroundWork == work) it else it.copy(backgroundWork = work) }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Stop one detached shell and fold the server's cancelled record back into state. */
+    fun cancelBackgroundWork(sessionId: String, workId: String) {
+        scope.launch {
+            try {
+                val work = withContext(Dispatchers.IO) { api.cancelBackgroundWork(sessionId, workId) }
+                chats.update(sessionId) { state ->
+                    state.copy(backgroundWork = state.backgroundWork.map { if (it.id == work.id) work else it })
+                }
+            } catch (_: Exception) {
+                // A completed shell's cancel can 404; refresh so the chip drops it.
+                loadBackgroundWork(sessionId)
+            }
+        }
+    }
+
+    /** One output poll for the background-shell sheet; null means the job is gone. */
+    suspend fun backgroundWorkOutput(sessionId: String, workId: String): BackgroundWorkOutput? =
+        withContext(Dispatchers.IO) {
+            runCatching { api.getBackgroundWorkOutput(sessionId, workId) }.getOrNull()
+        }
 
     /** Load any staged next-turn prompt into state on session open. */
     fun loadQueuedPrompt(sessionId: String) {

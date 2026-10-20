@@ -3,6 +3,8 @@ package com.console.mobile.data.api
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
+import com.console.mobile.data.model.BackgroundWork
+import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.ConsoleSettings
 import com.console.mobile.data.model.CreateSessionDto
 import console.v1.FileSearchResult
@@ -49,6 +51,9 @@ interface ConsoleApi {
     suspend fun forkSession(id: String, messageId: String): SessionHeader
     suspend fun getTodos(id: String): List<TodoItem>
     suspend fun getSubagents(id: String): List<SubagentInfo>
+    suspend fun getBackgroundWork(id: String): List<BackgroundWork>
+    suspend fun cancelBackgroundWork(id: String, workId: String): BackgroundWork
+    suspend fun getBackgroundWorkOutput(id: String, workId: String, cursor: Int = 0, limit: Int = 50_000): BackgroundWorkOutput
     suspend fun getChanges(id: String): List<SessionFileChange>
     suspend fun getChangeDiff(id: String, path: String, turnIndex: Int): String?
     suspend fun markChangeReviewed(id: String, path: String, turnIndex: Int, reviewed: Boolean)

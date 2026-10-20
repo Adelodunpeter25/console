@@ -3,6 +3,7 @@ package com.console.mobile.core.chat
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AssistantMessage
+import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.ThinkingPart
 import com.console.mobile.data.model.TextPart
 import com.console.mobile.data.model.ToolCallPart
@@ -81,6 +82,11 @@ private fun finalizePendingToolCalls(events: List<ActivityEvent>): List<Activity
             e.copy(result = ToolResult(toolCallId = e.call.id, toolName = e.call.name, content = null, isError = true))
         } else e
     }
+
+private fun upsertBackgroundWork(current: List<BackgroundWork>, work: BackgroundWork): List<BackgroundWork> {
+    val index = current.indexOfFirst { it.id == work.id }
+    return if (index >= 0) current.toMutableList().also { it[index] = work } else current + work
+}
 
 /**
  * Clears the streaming buffers, first flushing whatever partial assistant text is
@@ -298,7 +304,10 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             session.copy(subagents = updatedList)
         }
-        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> session
+        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> {
+            val work = event.work ?: return session
+            session.copy(backgroundWork = upsertBackgroundWork(session.backgroundWork, work))
+        }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {
             val msg = event.error?.message ?: "Unknown agent error"
@@ -340,6 +349,7 @@ fun toChatSnapshot(session: ChatSessionState): ChatSnapshot {
         pendingQuestions = session.pendingQuestions,
         todoItems = session.todoItems,
         subagents = session.subagents,
+        backgroundWork = session.backgroundWork,
         running = session.running,
         runs = session.runs,
         queuedPrompt = session.queuedPrompt,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -116,6 +117,35 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": item})
+	})
+	// GET /api/sessions/:id/background-work/:workId/output — paged stdout and
+	// the buffered stderr tail for a detached shell. Mobile polls this while
+	// its background-shell output sheet is open; the desktop uses the bashJob
+	// tool for the same data.
+	app.Get("/api/sessions/:id/background-work/:workId/output", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		work, err := runs.BackgroundWorkManager().Get(c.Params("workId"), sessionID)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		jobID := work.Metadata["job_id"]
+		jobs := runs.BashJobs()
+		if work.Kind != services.BackgroundWorkShell || jobID == "" || jobs == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Background work has no shell job."})
+		}
+		out, err := jobs.Output(jobID, sessionID, c.QueryInt("cursor", 0), c.QueryInt("limit", 50000))
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
+			"stdout":     out.Stdout,
+			"stderr":     out.Stderr,
+			"nextCursor": out.NextCursor,
+			"truncated":  out.Truncated,
+			"status":     out.Snapshot.Status,
+			"exitCode":   out.Snapshot.ExitCode,
+			"timedOut":   out.Snapshot.TimedOut,
+		}})
 	})
 
 	// GET /api/sessions/:id/context — estimated context-window occupancy

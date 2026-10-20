@@ -1,6 +1,7 @@
 package com.console.mobile.core.chat
 
 import com.console.mobile.data.model.AgentMessage
+import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.AskQuestionRequest
@@ -47,6 +48,7 @@ data class ChatSessionState(
     val activeToolCalls: List<ToolCall> = emptyList(),
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),
+    val backgroundWork: List<BackgroundWork> = emptyList(),
     val runs: List<RunActivityState> = emptyList(),
     val queuedPrompt: console.v1.QueuedPrompt? = null,
     // Context-window occupancy for the footer ring; null until first known.
@@ -74,9 +76,14 @@ data class ChatSnapshot(
     val pendingQuestions: List<PendingQuestion> = emptyList(),
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),
+    val backgroundWork: List<BackgroundWork> = emptyList(),
     val running: Boolean = false,
     val runs: List<RunActivityState> = emptyList(),
     val queuedPrompt: console.v1.QueuedPrompt? = null,
 )
 
 fun createChatSessionState(): ChatSessionState = ChatSessionState()
+
+/** Only detached shells that are still running: what the chat chip and sheet show. */
+fun runningBackgroundShells(works: List<BackgroundWork>): List<BackgroundWork> =
+    works.filter { it.kind == "shell" && it.status == "running" }
