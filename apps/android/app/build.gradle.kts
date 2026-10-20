@@ -67,8 +67,10 @@ android {
             // Installs side by side with the release app (com.console.mobile).
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            // Sign with the fixed release key when available so CI debug APKs can
-            // update each other (the runner's auto-generated debug key changes per job).
+            // Sign with the fixed release key when available so a debug build
+            // replaces an earlier one instead of failing with
+            // INSTALL_FAILED_UPDATE_INCOMPATIBLE — the auto-generated debug
+            // key differs per machine.
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }

@@ -19,7 +19,8 @@
   in `app/build.gradle.kts`). They are JVM unit tests (JUnit + kotlin-test) named `*FixtureTest.kt`
   that decode the shared `proto/testdata` fixtures. Run only the relevant one:
   `cd apps/android && ./gradlew :app:testDebugUnitTest --tests "<FullyQualifiedTestClass>"`
-- CI only builds Android on manual dispatch, so Kotlin tests are not enforced automatically.
+- CI builds the Android release APK on every push to main, but it does not run the
+  Kotlin unit tests, so they are not enforced automatically.
 
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.

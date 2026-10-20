@@ -1,18 +1,24 @@
-# Builds the native Kotlin/Compose Android app (apps/android) release and debug
-# APKs manually via workflow_dispatch, then uploads them to a rolling GitHub Release
-# tagged `console-android` (latest always wins), mirroring console-server.yml /
+# Builds the native Kotlin/Compose Android app (apps/android) release APK on
+# each push to main, then uploads it to a rolling GitHub Release tagged
+# `console-android` (latest always wins), mirroring console-server.yml /
 # console-desktop.yml.
 #
-# Assets: app-release.apk (com.console.mobile), app-debug.apk (com.console.mobile.dev)
+# Assets: app-release.apk (com.console.mobile)
 #
-# The release keystore is reconstructed from repo secrets on every run. This
-# must stay a *fixed* key: the debug build type is configured to sign with it
-# too, because the runner's auto-generated debug keystore changes on every job,
-# so no two builds could ever update one another on a device
+# Release only. The debug APK was a second artifact on the same job, and it
+# doubled the build for a variant nobody installs from a release tag — the
+# debug build type is still available locally (`./gradlew assembleDebug`), it
+# just is not published.
+#
+# The release keystore is reconstructed from repo secrets on every run. It
+# must stay a *fixed* key: a per-run generated key would make each APK a
+# different app, so no two builds could ever update one another on a device
 # (INSTALL_FAILED_UPDATE_INCOMPATIBLE).
 name: Build console-android
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -21,6 +27,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # One publisher at a time: two pushes racing on the same rolling release
+    # would let the older build overwrite the newer assets.
+    concurrency:
+      group: console-android-release
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 
@@ -108,37 +119,42 @@ jobs:
           echo "Staging WebTransport with NDK at $NDK_DIR"
           ANDROID_NDK_HOME="$NDK_DIR" bash rust-wt/build.sh
 
-      - name: Build release and debug APKs
+      - name: Build the release APK
         working-directory: apps/android
-        run: ./gradlew assembleRelease assembleDebug
+        run: ./gradlew assembleRelease
 
       # The app runs without the library (SSE/WS fallback), so a packaging
       # mistake here is invisible on the device — only WebTransport quietly
       # stops being used. Assert it instead of trusting the step above.
-      - name: Verify the APKs carry WebTransport
+      - name: Verify the APK carries WebTransport
         run: |
           set -euo pipefail
-          for apk in \
-            apps/android/app/build/outputs/apk/release/app-release.apk \
-            apps/android/app/build/outputs/apk/debug/app-debug.apk
-          do
-            unzip -l "$apk" | grep -q 'lib/arm64-v8a/libconsole_wt_android.so' \
-              || { echo "$apk is missing libconsole_wt_android.so" >&2; exit 1; }
-          done
+          apk=apps/android/app/build/outputs/apk/release/app-release.apk
+          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libconsole_wt_android.so' \
+            || { echo "$apk is missing libconsole_wt_android.so" >&2; exit 1; }
 
-      - name: Collect APKs
+      - name: Collect the APK
         run: |
           cp apps/android/app/build/outputs/apk/release/app-release.apk app-release.apk
-          cp apps/android/app/build/outputs/apk/debug/app-debug.apk app-debug.apk
 
+      # Retried: the upload itself usually succeeds but the action's final
+      # release API call occasionally times out (Headers Timeout Error).
+      # Re-runs are safe — assets are deleted then re-uploaded.
       - name: Upload to rolling release
-        uses: softprops/action-gh-release@v2
+        uses: Wandalen/wretry.action@v3
         with:
-          tag_name: console-android
-          name: console-android (latest)
-          prerelease: false
-          # console-server owns the repo's "latest" pointer; don't flap it.
-          make_latest: false
-          files: |
-            app-release.apk
-            app-debug.apk
+          attempt_limit: 3
+          attempt_delay: 15000
+          action: softprops/action-gh-release@v2
+          with: |
+            tag_name: console-android
+            name: console-android (latest)
+            prerelease: false
+            # console-server owns the repo's "latest" pointer; don't flap it.
+            make_latest: false
+            # This workflow owns the tag, so the release is emptied first. The
+            # debug APK from the old builds would otherwise sit there forever,
+            # frozen at whatever commit last shipped it.
+            remove_artifacts: true
+            files: |
+              app-release.apk
