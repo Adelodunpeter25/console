@@ -462,6 +462,14 @@ impl Render for SettingsWindow {
                 }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
+                    // The modals belong to the servers tab. Leaving it
+                    // closes them, so they do not reappear out of nowhere
+                    // when the tab comes back.
+                    if tab != SettingsTab::Servers {
+                        this.is_adding_env = false;
+                        this.editing_env_id = None;
+                        this.pair_modal_open = false;
+                    }
                     cx.notify();
                 });
             })
@@ -1098,6 +1106,9 @@ impl Render for SettingsWindow {
 
         div()
             .size_full()
+            // The modals are positioned against this box, so they cover
+            // the whole window.
+            .relative()
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" {
