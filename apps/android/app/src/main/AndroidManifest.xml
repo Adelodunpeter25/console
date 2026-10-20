@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Cronet reads the active network on every engine build (QUIC hints and
@@ -20,6 +21,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ConsoleMobile"
         android:usesCleartextTraffic="true">
+
+        <!--
+            The QR scanner's own activity is locked to sensorLandscape, so
+            opening the scanner spins the phone sideways — the preview lands
+            in landscape while the phone is held upright, which makes the
+            code harder to line up. Portrait is the orientation a person
+            holds a phone in, so the orientation is overridden here.
+        -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="portrait"
+            tools:replace="android:screenOrientation" />
 
         <activity
             android:name=".MainActivity"
