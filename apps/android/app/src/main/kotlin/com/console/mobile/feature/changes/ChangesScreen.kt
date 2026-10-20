@@ -97,6 +97,10 @@ fun ChangesScreen(onBack: () -> Unit) {
     var diffLoading by remember { mutableStateOf(false) }
     var diffError by remember { mutableStateOf<String?>(null) }
     val diffCache = remember(sessionId) { mutableMapOf<String, String?>() }
+    // Kept above the diff branch on purpose: opening a file removes the list
+    // from the composition, so a state remembered inside it would be thrown
+    // away and the list would come back scrolled to the top.
+    val listScroll = rememberScrollState()
 
     fun refresh() {
         val sid = sessionId ?: return
@@ -212,7 +216,7 @@ fun ChangesScreen(onBack: () -> Unit) {
             else -> Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(listScroll)
                     .padding(horizontal = 16.dp)
                     .padding(top = PageHeaderHeight, bottom = 24.dp),
             ) {
