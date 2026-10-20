@@ -49,7 +49,7 @@ import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.AddButton
 import com.console.mobile.ui.components.common.new.Banner
 import com.console.mobile.ui.components.common.new.LoadingState
-import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
@@ -111,7 +111,10 @@ fun McpSettings(onBack: () -> Unit) {
                     } else if (mcpState.servers.isEmpty()) {
                         McpEmptyState { editing = "__create__" }
                     } else {
-                        Section("Servers") {
+                        // No section heading: the page is already called
+                        // "MCP Servers", and a second "Servers" under it
+                        // says the same thing twice.
+                        SectionCard {
                             mcpState.servers.forEachIndexed { index, server ->
                                 McpServerCard(
                                     server = server,

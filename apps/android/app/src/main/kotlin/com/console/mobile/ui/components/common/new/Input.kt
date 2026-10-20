@@ -1,6 +1,7 @@
 package com.console.mobile.ui.components.common.new
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -116,30 +117,41 @@ fun TextFieldRow(
         color = NewTheme.TextSecondary,
         fontSize = 12.sp,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 2.dp),
+        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 6.dp),
     )
-    TextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
-        singleLine = singleLine,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        textStyle = TextStyle(
-            color = NewTheme.TextPrimary,
-            fontSize = 16.sp,
-            fontFamily = if (monospace) ConsoleMonoFamily else null,
-        ),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            cursorColor = NewTheme.Accent,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
+    // The field is its own rounded box inside the card, so the label above
+    // it reads as a caption rather than as a heading for the whole card.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .clip(RoundedCornerShape(NewTheme.FieldRadius))
+            .border(1.dp, NewTheme.Divider, RoundedCornerShape(NewTheme.FieldRadius))
+            .background(NewTheme.Field),
+    ) {
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
+            singleLine = singleLine,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            textStyle = TextStyle(
+                color = NewTheme.TextPrimary,
+                fontSize = 16.sp,
+                fontFamily = if (monospace) ConsoleMonoFamily else null,
+            ),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                cursorColor = NewTheme.Accent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 /**

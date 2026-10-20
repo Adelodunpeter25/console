@@ -42,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Camera
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
-import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
@@ -66,9 +65,7 @@ import java.util.concurrent.TimeUnit
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
-import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.Note
-import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TextFieldRow
@@ -214,9 +211,12 @@ fun ServersSettings(onBack: () -> Unit) {
                 },
             )
             Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-                Section("Environments") {
+                // No section heading: the page is already called
+                // "Connection", and a second "Environments" under it says
+                // the same thing twice.
+                SectionCard {
                     if (envState.environments.isEmpty()) {
-                        Note("No environments yet. Add a backend URL to get started.")
+                        Note("No servers yet. Add one to get started.")
                     } else {
                         envState.environments.forEachIndexed { index, env ->
                             val probe = probes[env.id]
