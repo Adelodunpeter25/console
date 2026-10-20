@@ -22,6 +22,28 @@ browser-action boundary. The server barely changes.
 
 ---
 
+## Verification and handoff
+
+This is a UI-and-behavior change, and it cannot be accepted from automated
+tests alone. The implementing agent must **not** launch the desktop app, drive
+the UI, or self-certify the result.
+
+Acceptance is manual and owned by the user:
+
+1. The user runs the desktop app.
+2. The user asks an agent to exercise the `browser` tool (snapshot, click,
+   type, `run_js`, `get_content`, `wait_for`, screenshot) against real pages.
+3. That agent audits what it saw — refs, error messages, page state,
+   screenshots.
+4. The user reports findings, and the implementation agent fixes those.
+
+Automated tests and the differential corpus in Phase 6 remain the safety net
+and the regression gate, but they are not the acceptance signal. Treat a green
+suite as "ready for the user's audit", not as "done". The implementing agent
+should hand off at that point instead of trying to verify the feature itself.
+
+---
+
 ## Module layout
 
 ```
@@ -193,3 +215,6 @@ weeks. Phase 4: ~1–2 weeks. Phase 5: days plus a decision. Phase 6: ~1 week.
 A vertical slice: WKWebView tab + snapshot + click + type + screenshot, driven
 through the real `browser` tool on a local fixture. That is days, not weeks,
 and it proves the plumbing before the long tail.
+
+Hand it off once it builds and the automated tests pass. The user's audit is
+what decides whether it is good.
