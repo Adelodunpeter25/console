@@ -29,6 +29,14 @@ pub struct PairingUrl {
 /// Parse a pairing URL into its parts.
 ///
 /// Rejects anything it cannot read exactly, rather than repairing it.
+///
+/// Three shapes are accepted, and they all mean the same thing:
+/// - "http://host:3000/console/pair#v=1&server=..&code=abc" — the full URL
+/// - "192.168.1.10:3000#abc" — an address and a code
+/// - "192.168.1.10:3000" — an address, no code
+///
+/// The rule is one line: everything after the "#" is the code, everything
+/// before it is the address.
 pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -38,30 +46,31 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
         .split_once('#')
         .ok_or_else(|| "That is not a pairing URL — it has no pairing code.".to_string())?;
 
-    let (scheme, authority) = base
-        .split_once("://")
-        .ok_or_else(|| "That is not a pairing URL — it has no address.".to_string())?;
+    // The address, with or without a scheme. A scheme is only assumed when
+    // the text has none at all, so "192.168.1.10:3000" and
+    // "http://192.168.1.10:3000" both work.
+    let (scheme, authority) = match base.split_once("://") {
+        Some((scheme, rest)) => (scheme.to_string(), rest.to_string()),
+        None => ("http".to_string(), base.to_string()),
+    };
     if scheme != "http" && scheme != "https" {
         return Err("A pairing URL must start with http:// or https://.".to_string());
     }
-    // The path is /console/pair; anything before the authority would be a
-    // different shape entirely, and the host must be a host.
-    let host = authority
-        .split('/')
-        .next()
-        .unwrap_or_default()
-        .trim();
+    // The path is /console/pair; the address is just the authority.
+    let host = authority.split('/').next().unwrap_or_default().trim();
     if host.is_empty() {
         return Err("A pairing URL must name a server.".to_string());
     }
 
-    let mut version = String::new();
     let mut server_id = String::new();
     let mut code = String::new();
+    let mut version = String::new();
+    let mut query = false;
     for pair in fragment.split('&') {
         let Some((key, value)) = pair.split_once('=') else {
             continue;
         };
+        query = true;
         let value = percent_decode(value);
         match key {
             "v" => version = value,
@@ -70,14 +79,21 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
             _ => {}
         }
     }
-    if version != "1" {
-        return Err("That pairing URL was made by a newer version of Console.".to_string());
-    }
-    if server_id.is_empty() {
-        return Err("That pairing URL does not name a server.".to_string());
-    }
-    if code.is_empty() {
-        return Err("That pairing URL has no pairing code.".to_string());
+    if query {
+        // The full URL carries a version, so an unknown one is refused
+        // rather than guessed at.
+        if version != "1" {
+            return Err("That pairing URL was made by a newer version of Console.".to_string());
+        }
+        if code.is_empty() {
+            return Err("That pairing URL has no pairing code.".to_string());
+        }
+    } else {
+        // A bare fragment is the code itself.
+        code = fragment.to_string();
+        if code.is_empty() {
+            return Err("That pairing URL has no pairing code.".to_string());
+        }
     }
     Ok(PairingUrl {
         base_url: format!("{scheme}://{host}"),

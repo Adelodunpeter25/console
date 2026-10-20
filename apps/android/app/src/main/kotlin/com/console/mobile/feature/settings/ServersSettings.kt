@@ -51,6 +51,7 @@ import com.console.mobile.data.store.Environment
 import com.console.mobile.data.model.deviceName
 import com.console.mobile.data.model.pairingCode
 import com.console.mobile.data.model.pairingHost
+import com.console.mobile.data.model.splitHostAndCode
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import com.console.mobile.ui.components.ConfirmButton
@@ -68,7 +69,9 @@ import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TextFieldRow
 import com.console.mobile.ui.components.common.new.TextInput
 import com.console.mobile.ui.components.common.new.PageHeader
 
@@ -84,11 +87,22 @@ fun ServersSettings(onBack: () -> Unit) {
     var probes by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
     val scope = rememberCoroutineScope()
 
-    // The add sheet's two fields. They live here rather than in the form so
-    // the camera button in the header can fill them.
+    // The add and edit sheets' server fields. They live here rather than in
+    // the forms so the camera button in the header can fill them.
     var pairingHost by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var scanError by remember { mutableStateOf<String?>(null) }
+
+    // Opening a sheet starts from that environment's own details: the
+    // address it is at, and no code (a code is used once, and the server
+    // hands out a new one whenever it is asked).
+    LaunchedEffect(editing) {
+        val envId = editing?.takeIf { it != "__create__" }
+        val env = envState.environments.firstOrNull { it.id == envId }
+        pairingHost = env?.url.orEmpty()
+        pairingCode = ""
+        scanError = null
+    }
 
     // The QR code the server prints carries the whole pairing URL: the host
     // and the code. Scanning it fills both fields.
@@ -111,11 +125,10 @@ fun ServersSettings(onBack: () -> Unit) {
         if (envs.isEmpty()) return@LaunchedEffect
         val results = withContext(Dispatchers.IO) {
             envs.associate { env ->
-                env.id to try {
-                    val client = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(6, TimeUnit.SECONDS).callTimeout(6, TimeUnit.SECONDS).build()
-                    val req = Request.Builder().url("${env.url.trimEnd('/')}/api/projects").get().build()
-                    client.newCall(req).execute().use { it.isSuccessful }
-                } catch (_: Exception) { false }
+                // The probe carries that server's own credential: a paired
+                // server answers 401 without it, and the dot would show
+                // every paired server as unreachable.
+                env.id to AppContainer.authRepository.probeServer(env.url)
             }
         }
         probes = results
@@ -158,8 +171,35 @@ fun ServersSettings(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
                 )
             } else {
-                PageHeader(title = "Edit environment", onBack = { editing = null })
-                EnvironmentEditorForm(env = editingEnv, onDone = { editing = null }, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp))
+                PageHeader(
+                    title = "Edit environment",
+                    onBack = { editing = null },
+                    actions = {
+                        HeaderIconButton(
+                            icon = TablerIcons.Outline.Camera,
+                            contentDescription = "Scan pairing QR code",
+                            onClick = {
+                                scanError = null
+                                scannerLauncher.launch(
+                                    ScanOptions().apply {
+                                        setPrompt("Scan the server's pairing code")
+                                        setBeepEnabled(false)
+                                        setOrientationLocked(false)
+                                    }
+                                )
+                            },
+                        )
+                    },
+                )
+                EnvironmentEditorForm(
+                    env = editingEnv,
+                    host = pairingHost,
+                    code = pairingCode,
+                    onHostChange = { pairingHost = it },
+                    onCodeChange = { pairingCode = it },
+                    onDone = { editing = null },
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
+                )
             }
         } else {
             PageHeader(
@@ -219,12 +259,46 @@ fun ServersSettings(onBack: () -> Unit) {
 }
 
 /**
- * Add a server: its host, and the pairing code that proves this phone may
+ * The server card: where the server is, and the code that lets this phone
  * join it.
  *
- * The two fields are what the server prints (`console pair`), so a user
- * copies one line and types two short things. The camera button reads the
- * same details off a QR code, which the server also prints.
+ * Shared by the add and edit sheets so they read the same. The two fields
+ * are what the server prints (`console pair`), so a user copies one line
+ * and types two short things.
+ *
+ * Pasting the whole URL into the host field works too: anything after the
+ * "#" is the code, so the app splits it into the two fields itself.
+ */
+@Composable
+private fun ServerCard(
+    host: String,
+    code: String,
+    onHostChange: (String) -> Unit,
+    onCodeChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    SectionCard(modifier = modifier) {
+        TextFieldRow(
+            "Host",
+            host,
+            { onHostChange(it) },
+            "192.168.1.100:8080",
+            monospace = true,
+        )
+        SectionDivider(startInset = 18.dp)
+        TextFieldRow(
+            "Pairing code",
+            code,
+            { onCodeChange(it) },
+            "abc-123-xyz",
+            monospace = true,
+        )
+    }
+}
+
+/**
+ * Add a server: its host, and the pairing code that proves this phone may
+ * join it.
  */
 @Composable
 private fun AddEnvironmentForm(
@@ -241,23 +315,18 @@ private fun AddEnvironmentForm(
     var failure by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = modifier) {
-        Section("Server") {
-            TextInput(
-                "Host",
-                host,
-                { onHostChange(it); failure = null },
-                "192.168.1.100:8080",
-                monospace = true,
-            )
-            SectionDivider(startInset = 0.dp)
-            TextInput(
-                "Pairing code",
-                code,
-                { onCodeChange(it); failure = null },
-                "abc-123-xyz",
-                monospace = true,
-            )
-        }
+        ServerCard(
+            host = host,
+            code = code,
+            onHostChange = { text ->
+                // A pasted pairing URL carries the code in its fragment, so
+                // the field splits it into the two.
+                val (address, pasted) = splitHostAndCode(text)
+                onHostChange(address)
+                if (pasted.isNotBlank()) onCodeChange(pasted)
+            },
+            onCodeChange = onCodeChange,
+        )
         (failure ?: error)?.let { message ->
             Text(message, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
         }
@@ -303,36 +372,68 @@ private fun AddEnvironmentForm(
     }
 }
 
+/**
+ * Edit an environment: its name, where it is, and the code that pairs this
+ * phone with it.
+ *
+ * The layout matches the add sheet so the two read as one thing: a name
+ * card, then the server card.
+ */
 @Composable
-private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifier: Modifier = Modifier) {
+private fun EnvironmentEditorForm(
+    env: Environment?,
+    host: String,
+    code: String,
+    onHostChange: (String) -> Unit,
+    onCodeChange: (String) -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val scope = rememberCoroutineScope()
     val envState by AppContainer.environmentsStateHolder.state.collectAsStateWithLifecycle()
     var name by remember(env?.id) { mutableStateOf(env?.name ?: "") }
-    var url by remember(env?.id) { mutableStateOf(env?.url ?: "") }
     var status by remember(env?.id) { mutableStateOf("idle") } // idle|testing|test-ok|test-fail|saving
+    var failure by remember(env?.id) { mutableStateOf<String?>(null) }
     val isActive = env != null && envState.activeId == env.id
     val canDelete = env != null && !(isActive && envState.environments.size == 1)
 
     Column(modifier = modifier) {
-        TextInput("Name", name, { name = it; if (status != "testing" && status != "saving") status = "idle" }, "My server")
-        TextInput("Backend URL", url, { url = it; if (status != "testing" && status != "saving") status = "idle" }, "http://192.168.1.X:3000")
+        SectionCard {
+            TextFieldRow(
+                "Name",
+                name,
+                { name = it; if (status != "testing" && status != "saving") status = "idle" },
+                "My server",
+            )
+        }
+        ServerCard(
+            host = host,
+            code = code,
+            onHostChange = { text ->
+                // A pasted pairing URL carries the code in its fragment, so
+                // the field splits it into the two.
+                val (address, pasted) = splitHostAndCode(text)
+                onHostChange(address)
+                if (pasted.isNotBlank()) onCodeChange(pasted)
+                if (status != "testing" && status != "saving") status = "idle"
+            },
+            onCodeChange = { onCodeChange(it); if (status != "testing" && status != "saving") status = "idle" },
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        failure?.let { message ->
+            Text(message, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
         ActionButton(
             text = if (status == "testing") "Testing…" else "Test connection",
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@ActionButton
+                if (host.isBlank()) return@ActionButton
                 status = "testing"
                 scope.launch {
-                    val ok = withContext(Dispatchers.IO) {
-                        try {
-                            val client = OkHttpClient.Builder().connectTimeout(6, TimeUnit.SECONDS).readTimeout(6, TimeUnit.SECONDS).callTimeout(6, TimeUnit.SECONDS).build()
-                            val req = Request.Builder().url("${normalized.trimEnd('/')}/api/projects").get().build()
-                            client.newCall(req).execute().use { it.isSuccessful }
-                        } catch (_: Exception) { false }
-                    }
+                    val ok = AppContainer.authRepository.probeServer(host)
                     status = if (ok) "test-ok" else "test-fail"
                 }
             },
-            enabled = url.isNotBlank() && status != "testing",
+            enabled = host.isNotBlank() && status != "testing",
             loading = status == "testing",
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
         )
@@ -350,7 +451,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
             val doSave: () -> Unit = {
-                val normalized = normalizeBackendUrl(url)
+                val normalized = normalizeBackendUrl(host)
                 if (normalized == null) {
                     confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.")
                 } else if (status != "test-ok") {
@@ -358,10 +459,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                         scope.launch {
                             status = "saving"
                             try {
-                                withContext(Dispatchers.IO) {
-                                    if (env != null) AppContainer.environmentsRepository.updateEnvironment(env.id, name.ifBlank { env.name }, normalized)
-                                    else AppContainer.environmentsRepository.addEnvironment(name.ifBlank { "Default" }, normalized)
-                                }
+                                saveEnvironment(env, name, normalized, code)
                                 onDone()
                             } catch (e: Exception) {
                                 confirmAlert("Error", e.message ?: "Failed to save.")
@@ -372,10 +470,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     scope.launch {
                         status = "saving"
                         try {
-                            withContext(Dispatchers.IO) {
-                                if (env != null) AppContainer.environmentsRepository.updateEnvironment(env.id, name.ifBlank { env.name }, normalized)
-                                else AppContainer.environmentsRepository.addEnvironment(name.ifBlank { "Default" }, normalized)
-                            }
+                            saveEnvironment(env, name, normalized, code)
                             onDone()
                         } catch (e: Exception) {
                             confirmAlert("Error", e.message ?: "Failed to save.")
@@ -387,7 +482,7 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                 text = if (env != null) "Save changes" else "Save",
                 onClick = doSave,
                 kind = ActionButtonKind.Primary,
-                enabled = url.isNotBlank() && status != "saving",
+                enabled = host.isNotBlank() && status != "saving",
                 loading = status == "saving",
                 modifier = Modifier.weight(1f),
             )
@@ -405,6 +500,26 @@ private fun EnvironmentEditorForm(env: Environment?, onDone: () -> Unit, modifie
                     modifier = Modifier.weight(1f).padding(start = 12.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Save an environment, pairing with it first when a code was given.
+ *
+ * The order matters: a device token is only valid on the machine that
+ * issued it, so the credential is taken before the app starts talking to
+ * the new address.
+ */
+private suspend fun saveEnvironment(env: Environment?, name: String, url: String, code: String) {
+    withContext(Dispatchers.IO) {
+        if (code.isNotBlank()) {
+            AppContainer.authRepository.pairWithCode(url, code, deviceName())
+        }
+        if (env != null) {
+            AppContainer.environmentsRepository.updateEnvironment(env.id, name.ifBlank { env.name }, url)
+        } else {
+            AppContainer.environmentsRepository.addEnvironment(name.ifBlank { "Default" }, url)
         }
     }
 }

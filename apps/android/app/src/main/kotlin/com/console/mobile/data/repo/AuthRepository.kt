@@ -19,6 +19,9 @@ import com.console.mobile.data.model.PairingRequest
 import com.console.mobile.data.model.PLATFORM_ANDROID
 import com.console.mobile.data.model.parsePairingUrl
 import com.console.mobile.core.util.normalizeBackendUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import com.console.mobile.data.store.AuthState
 import com.console.mobile.data.store.AuthStateHolder
@@ -129,6 +132,34 @@ class AuthRepository(
             ),
         )
         paired
+    }
+
+    /**
+     * Check that a server is reachable, using that server's own credential.
+     *
+     * The probe has to carry the token: a paired server answers 401 to a
+     * request without its credential, so probing without the header would
+     * report every paired server as unreachable.
+     */
+    suspend fun probeServer(url: String): Boolean = withContext(Dispatchers.IO) {
+        val normalized = normalizeBackendUrl(url) ?: return@withContext false
+        try {
+            val request = Request.Builder()
+                .url("${normalized.trimEnd('/')}/api/projects")
+                .get()
+                .apply {
+                    tokenStore.tokenFor(normalized)?.let { header("Authorization", "Bearer $it") }
+                }
+                .build()
+            val client = OkHttpClient.Builder()
+                .connectTimeout(6, TimeUnit.SECONDS)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .callTimeout(6, TimeUnit.SECONDS)
+                .build()
+            client.newCall(request).execute().use { it.isSuccessful }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** Forget one server's device credential (e.g. the server revoked us). */

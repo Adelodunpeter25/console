@@ -3,6 +3,7 @@ package com.console.mobile
 import com.console.mobile.data.model.pairingCode
 import com.console.mobile.data.model.pairingHost
 import com.console.mobile.data.model.parsePairingUrl
+import com.console.mobile.data.model.splitHostAndCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -50,6 +51,29 @@ class PairingUrlTest {
     }
 
     @Test
+    fun splitsAHostAndCodeFromOneLine() {
+        // The one-liner a user pastes into the host field.
+        val (host, code) = splitHostAndCode("192.168.1.10:3000#vw9g-zu89-aphc")
+        assertEquals("192.168.1.10:3000", host)
+        assertEquals("vw9g-zu89-aphc", code)
+    }
+
+    @Test
+    fun splitsTheFullUrlIntoAHostAndCode() {
+        val (host, code) =
+            splitHostAndCode("http://192.168.1.10:3000/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc")
+        assertEquals("192.168.1.10:3000", host)
+        assertEquals("vw9g-zu89-aphc", code)
+    }
+
+    @Test
+    fun splitsAPlainAddressWithNoCode() {
+        val (host, code) = splitHostAndCode("192.168.1.10:3000")
+        assertEquals("192.168.1.10:3000", host)
+        assertEquals("", code)
+    }
+
+    @Test
     fun acceptsAPercentEncodedCode() {
         val parsed = parsePairingUrl("http://host:3000/console/pair#v=1&server=s&code=a%2Bb")
             .getOrThrow()
@@ -63,8 +87,6 @@ class PairingUrlTest {
             "   ",
             // No fragment at all: nothing to redeem.
             "http://host:3000/console/pair",
-            // No scheme.
-            "host:3000/console/pair#v=1&server=s&code=c",
             // A scheme we do not speak.
             "ftp://host/console/pair#v=1&server=s&code=c",
             // No host.
@@ -72,12 +94,20 @@ class PairingUrlTest {
             // A version this app does not know.
             "http://host/console/pair#v=2&server=s&code=c",
             // Missing pieces.
-            "http://host/console/pair#v=1&code=c",
+            "http://host/console/pair#v=1&code=",
             "http://host/console/pair#v=1&server=s",
-            "http://host/console/pair#server=s&code=c",
         )
         for (url in bad) {
             assertTrue("should have been rejected: $url", parsePairingUrl(url).isFailure)
         }
+    }
+
+    @Test
+    fun acceptsAnAddressWithNoScheme() {
+        // The one-liner a user pastes: no scheme, just the address and the
+        // code.
+        val parsed = parsePairingUrl("192.168.1.10:3000#vw9g-zu89-aphc").getOrThrow()
+        assertEquals("http://192.168.1.10:3000", parsed.baseUrl)
+        assertEquals("vw9g-zu89-aphc", parsed.code)
     }
 }

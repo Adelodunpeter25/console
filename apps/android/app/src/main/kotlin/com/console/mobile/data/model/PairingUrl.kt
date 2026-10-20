@@ -46,24 +46,35 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> {
     val fragment = trimmed.substring(hashIndex + 1)
 
     val schemeEnd = base.indexOf("://")
+    val scheme: String
+    val authority: String
     if (schemeEnd <= 0) {
-        return Result.failure(IllegalArgumentException("That is not a pairing URL — it has no address."))
+        // No scheme: an address on its own. The scheme is only assumed when
+        // the text has none at all, so "192.168.1.10:3000" and
+        // "http://192.168.1.10:3000" both work.
+        scheme = "http"
+        authority = base
+    } else {
+        scheme = base.substring(0, schemeEnd)
+        if (scheme != "http" && scheme != "https") {
+            return Result.failure(IllegalArgumentException("A pairing URL must start with http:// or https://."))
+        }
+        authority = base.substring(schemeEnd + 3)
     }
-    val scheme = base.substring(0, schemeEnd)
-    if (scheme != "http" && scheme != "https") {
-        return Result.failure(IllegalArgumentException("A pairing URL must start with http:// or https://."))
-    }
-    val authority = base.substring(schemeEnd + 3).substringBefore('/')
-    if (authority.isBlank()) {
+    // The path is /console/pair; the address is just the authority.
+    val host = authority.substringBefore('/')
+    if (host.isBlank()) {
         return Result.failure(IllegalArgumentException("A pairing URL must name a server."))
     }
 
     var version = ""
     var serverId = ""
     var code = ""
+    var query = false
     for (pair in fragment.split('&')) {
         val equals = pair.indexOf('=')
-        if (equals < 0) continue
+        if (equals <= 0) continue
+        query = true
         val key = pair.substring(0, equals)
         val value = percentDecode(pair.substring(equals + 1))
         when (key) {
@@ -72,16 +83,66 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> {
             "code" -> code = value
         }
     }
-    if (version != "1") {
-        return Result.failure(IllegalArgumentException("That pairing URL was made by a newer version of Console."))
+    if (query) {
+        // The full URL carries a version, so an unknown one is refused
+        // rather than guessed at.
+        if (version != "1") {
+            return Result.failure(IllegalArgumentException("That pairing URL was made by a newer version of Console."))
+        }
+        if (code.isEmpty()) {
+            return Result.failure(IllegalArgumentException("That pairing URL has no pairing code."))
+        }
+    } else {
+        // A bare fragment is the code itself.
+        code = fragment
+        if (code.isEmpty()) {
+            return Result.failure(IllegalArgumentException("That pairing URL has no pairing code."))
+        }
     }
-    if (serverId.isEmpty()) {
-        return Result.failure(IllegalArgumentException("That pairing URL does not name a server."))
-    }
-    if (code.isEmpty()) {
-        return Result.failure(IllegalArgumentException("That pairing URL has no pairing code."))
-    }
-    return Result.success(PairingUrl(baseUrl = "$scheme://$authority", serverId = serverId, code = code))
+    return Result.success(PairingUrl(baseUrl = "$scheme://$host", serverId = serverId, code = code))
+}
+
+/**
+ * Split pasted text into an address and a pairing code.
+ *
+ * Three shapes are accepted, and they all mean the same thing:
+ *
+ *  - "192.168.1.100:8080" — an address, no code
+ *  - "192.168.1.100:8080#abc-123-xyz" — an address and a code
+ *  - "http://192.168.1.100:8080/console/pair#v=1&server=..&code=abc-123-xyz" — the whole URL
+ *
+ * The rule is one line: everything after the "#" is the code, everything
+ * before it is the address. The code lives in the fragment because a
+ * browser never sends a fragment to the server, so it stays out of access
+ * logs.
+ *
+ * The code is empty when the text carries none, which is the plain
+ * "add a server without pairing" case.
+ */
+fun splitHostAndCode(text: String): Pair<String, String> {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return "" to ""
+
+    val hash = trimmed.indexOf('#')
+    if (hash < 0) return trimmed to ""
+
+    val base = trimmed.substring(0, hash)
+    val fragment = trimmed.substring(hash + 1)
+
+    // A bare code, or a query string the full URL carries.
+    if (!fragment.contains('=')) return base to fragment
+    val params = fragment.split('&').mapNotNull { pair ->
+        val equals = pair.indexOf('=')
+        if (equals <= 0) null else pair.substring(0, equals) to pair.substring(equals + 1)
+    }.toMap()
+    val code = params["code"].orEmpty()
+    if (code.isEmpty()) return base to ""
+    // The full URL carries a version, so an unknown one is refused rather
+    // than guessed at.
+    if (params["v"] != null && params["v"] != "1") return base to ""
+    // The URL carries a path; the address is just the authority.
+    val authority = base.substringAfter("://", base).substringBefore('/')
+    return authority to code
 }
 
 /**

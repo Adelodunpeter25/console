@@ -94,6 +94,55 @@ fun TextInput(
 }
 
 /**
+ * A labelled field that lives inside an existing card.
+ *
+ * [TextInput] is the standalone version — an accent heading over its own
+ * card. This is the row form, for a sheet that puts several fields in one
+ * card: the label sits inside the card, above the field, the way a form
+ * reads.
+ */
+@Composable
+fun TextFieldRow(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    singleLine: Boolean = true,
+    monospace: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
+) {
+    Text(
+        label.uppercase(),
+        color = NewTheme.TextSecondary,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 2.dp),
+    )
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder, color = NewTheme.TextGhost, fontSize = 15.sp) },
+        singleLine = singleLine,
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        textStyle = TextStyle(
+            color = NewTheme.TextPrimary,
+            fontSize = 16.sp,
+            fontFamily = if (monospace) ConsoleMonoFamily else null,
+        ),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            cursorColor = NewTheme.Accent,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
  * A choice between a few options, as pills in a [Section] card. The selected
  * option takes the accent.
  */

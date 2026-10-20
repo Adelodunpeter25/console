@@ -49,8 +49,6 @@ fn rejects_malformed_urls() {
         "   ",
         // No fragment at all: nothing to redeem.
         "http://host:3000/console/pair",
-        // No scheme.
-        "host:3000/console/pair#v=1&server=s&code=c",
         // A scheme we do not speak.
         "ftp://host/console/pair#v=1&server=s&code=c",
         // No host.
@@ -58,13 +56,21 @@ fn rejects_malformed_urls() {
         // A version this client does not know.
         "http://host/console/pair#v=2&server=s&code=c",
         // Missing pieces.
-        "http://host/console/pair#v=1&code=c",
+        "http://host/console/pair#v=1&code=",
         "http://host/console/pair#v=1&server=s",
-        "http://host/console/pair#server=s&code=c",
     ] {
         assert!(
             parse_pairing_url(bad).is_err(),
             "should have been rejected: {bad}"
         );
     }
+}
+
+#[test]
+fn accepts_an_address_with_no_scheme() {
+    // The one-liner a user pastes: no scheme, just the address and the
+    // code.
+    let parsed = parse_pairing_url("192.168.1.10:3000#vw9g-zu89-aphc").expect("valid pairing URL");
+    assert_eq!(parsed.base_url, "http://192.168.1.10:3000");
+    assert_eq!(parsed.code, "vw9g-zu89-aphc");
 }

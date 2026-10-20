@@ -85,6 +85,9 @@ func Pairing(dir string) (PairingInfo, error) {
 // The code is the thing a user types; the URL is the thing a user copies;
 // the QR is the thing a user scans. All three carry the same one-time
 // code, so only one of them is ever needed.
+//
+// The URL comes before the QR on purpose: a QR is a picture, and a user
+// who wants to copy something needs a line of text above it.
 func PrintPairing(dir string) {
 	info, err := Pairing(dir)
 	if err != nil {
@@ -94,11 +97,10 @@ func PrintPairing(dir string) {
 	fmt.Printf("Pair this device by pasting the code into the Console app:\n\n")
 	fmt.Printf("  Host: %s\n", info.Host)
 	fmt.Printf("  Code: %s\n\n", info.Code)
+	fmt.Printf("Or paste the whole URL:\n  %s\n\n", info.URL)
 	fmt.Println("Or scan this:")
 	fmt.Println()
 	printQR(info.URL)
-	fmt.Println()
-	fmt.Printf("Or paste the whole URL:\n  %s\n", info.URL)
 }
 
 // printQR draws a QR code in the terminal.
