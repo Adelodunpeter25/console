@@ -152,9 +152,5 @@ jobs:
             prerelease: false
             # console-server owns the repo's "latest" pointer; don't flap it.
             make_latest: false
-            # This workflow owns the tag, so the release is emptied first. The
-            # debug APK from the old builds would otherwise sit there forever,
-            # frozen at whatever commit last shipped it.
-            remove_artifacts: true
             files: |
               app-release.apk
