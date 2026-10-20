@@ -388,12 +388,19 @@ impl RenderOnce for PairDeviceModal {
                             .justify_center()
                             .child(
                                 div()
-                                    .w(px(220.0))
-                                    .h(px(220.0))
                                     .p(px(10.0))
                                     .rounded(px(8.0))
                                     .bg(gpui::white())
-                                    .child(img(image)),
+                                    // The size belongs on the image itself:
+                                    // an image lays out at its natural
+                                    // size, so a box around it does not
+                                    // shrink it.
+                                    .child(
+                                        img(image)
+                                            .w(px(200.0))
+                                            .h(px(200.0))
+                                            .flex_none(),
+                                    ),
                             ),
                     )
                 })
@@ -500,6 +507,9 @@ impl RenderOnce for PairDeviceModal {
             card = card.child(
                 div()
                     .id("btn-unpair-device")
+                    // A column stretches its children across the card;
+                    // this button is a small action, not a bar.
+                    .self_start()
                     .px(px(8.0))
                     .py(px(4.0))
                     .rounded(px(5.0))
