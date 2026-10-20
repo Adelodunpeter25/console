@@ -81,6 +81,7 @@ import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.SectionSkeleton
 import com.console.mobile.ui.components.common.new.StatusPill
 import com.console.mobile.ui.components.common.new.TintPill
+import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 
 /**
@@ -221,7 +222,7 @@ fun HomeScreen(
                     LazyColumn(
                         state = listState,
                         contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 16.dp),
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
