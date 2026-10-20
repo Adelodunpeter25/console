@@ -56,6 +56,10 @@ struct Registry {
 struct CachedTransport {
     origin: String,
     cert_sha256: String,
+    /// The device credential the cached QUIC session was dialed with. Pairing
+    /// again (or switching servers) must redial rather than keep a session
+    /// authenticated as the previous device.
+    auth_token: String,
     transport: Transport,
 }
 
@@ -71,10 +75,13 @@ fn registry() -> &'static Registry {
 
 /// Session shared by every stream on this device. One QUIC connection for the
 /// app's lifetime, redialed by `Transport` when it dies or the server changes.
-fn transport(origin: &str, cert_sha256: &str) -> Result<Transport, String> {
+fn transport(origin: &str, cert_sha256: &str, auth_token: &str) -> Result<Transport, String> {
     let mut slot = registry().transport.lock().map_err(|_| "transport lock poisoned")?;
     if let Some(cached) = slot.as_ref() {
-        if cached.origin == origin && cached.cert_sha256 == cert_sha256 {
+        if cached.origin == origin
+            && cached.cert_sha256 == cert_sha256
+            && cached.auth_token == auth_token
+        {
             return Ok(cached.transport.clone());
         }
     }
@@ -95,6 +102,7 @@ fn transport(origin: &str, cert_sha256: &str) -> Result<Transport, String> {
     *slot = Some(CachedTransport {
         origin: origin.to_string(),
         cert_sha256: cert_sha256.to_string(),
+        auth_token: auth_token.to_string(),
         transport: transport.clone(),
     });
     Ok(transport)
@@ -128,11 +136,16 @@ pub fn open_stream(
     stream_id: &str,
     request_type: &str,
     request_json: &str,
+    auth_token: &str,
 ) -> u64 {
     let result = (|| -> Result<u64, String> {
         log::debug!("open_stream: begin kind={kind} origin={origin}");
-        let transport = transport(origin, cert_sha256)?;
-        let client = ConsoleClient::new(Some(api_url.to_string()));
+        let transport = transport(origin, cert_sha256, auth_token)?;
+        // The WT handshake validates the device token, so the client must carry
+        // the paired credential. An empty token means "not paired": connect
+        // fails here and Kotlin falls back to the authenticated legacy paths.
+        let token = (!auth_token.is_empty()).then(|| auth_token.to_string());
+        let client = ConsoleClient::new_with_auth(Some(api_url.to_string()), token);
         let kind = match kind {
             KIND_CHAT_RUN => WtStreamKind::ChatRun,
             KIND_TERMINAL => WtStreamKind::Terminal,

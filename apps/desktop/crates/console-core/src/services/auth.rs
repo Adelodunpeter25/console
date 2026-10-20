@@ -11,15 +11,6 @@ pub struct AuthService {
     transport: HttpTransport,
 }
 
-/// `data` of `POST /api/auth/token`. `expiresAt` is a JSON number
-/// server-side (hand-shaped like the other control responses), not a
-/// protojson string, and is not needed client-side — the token is used
-/// immediately after minting.
-#[derive(Debug, Deserialize)]
-struct ApiToken {
-    token: String,
-}
-
 impl AuthService {
     pub fn new(transport: HttpTransport) -> Self {
         Self { transport }
@@ -300,39 +291,9 @@ impl AuthService {
         }
     }
 
-    /// `POST /api/auth/token` — mint a short-lived API bearer token for the
-    /// WebTransport handshake (QUIC migration, Phase 0).
-    ///
-    /// Not a provider credential: the server only checks it before accepting
-    /// a WT session and binds `device_id` to the connection. Tokens live five
-    /// minutes, so mint one per connect rather than caching it.
-    pub async fn mint_api_token(&self, device_id: &str) -> Result<String> {
-        let url = self.transport.url("/api/auth/token").await;
-        let resp = self
-            .transport
-            .client()
-            .post(&url)
-            .headers(self.transport.build_headers().await)
-            .json(&serde_json::json!({ "deviceId": device_id }))
-            .send()
-            .await
-            .context("Failed to mint API token")?;
-
-        let body: ApiResponse<ApiToken> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse API token response")?;
-        if !body.success {
-            return Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to mint API token".into())
-            ));
-        }
-        body.data
-            .map(|data| data.token)
-            .ok_or_else(|| anyhow!("API token response missing data"))
-    }
+    // There is no `POST /api/auth/token` client call: the server issues device
+    // credentials only through a consumed pairing grant (see
+    // `services::server_auth::ServerAuthService`).
 
     /// `POST /api/auth/github/logout` — remove the stored token. Idempotent.
     pub async fn disconnect_github(&self) -> Result<()> {

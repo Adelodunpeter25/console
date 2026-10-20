@@ -83,6 +83,7 @@ class GitRepository(
             baseUrl = apiClient.baseUrl,
             requestJson = WtTransport.watchRequest(WtTransport.TARGET_GIT_STATUS, path = path),
             frameType = WtTransport.FRAME_GIT_STATUS,
+            authToken = apiClient.authToken,
             decode = { raw -> gitStatusMoshi.fromJson(raw) },
         ) ?: watchStatusOverSse(path)
 

@@ -29,13 +29,28 @@ class AuthRepository(
     private val tokenStore: TokenStore,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
 ) {
-    suspend fun pair(request: PairingRequest): PairingData = withContext(Dispatchers.IO) {
+    /**
+     * Exchange a pairing grant for a device token and persist it against the
+     * server it came from. Pairing is per-server: the same app can be paired
+     * to several environments without their tokens overwriting each other.
+     */
+    suspend fun pair(serverUrl: String, request: PairingRequest): PairingData = withContext(Dispatchers.IO) {
         val paired = api.pair(request)
-        tokenStore.authToken = paired.token
-        tokenStore.deviceId = paired.device.id
-        tokenStore.deviceName = paired.device.name
-        tokenStore.tokenExpiresAt = paired.expiresAt
+        tokenStore.save(
+            serverUrl,
+            com.console.mobile.data.local.StoredServerAuth(
+                token = paired.token,
+                deviceId = paired.device.id,
+                deviceName = paired.device.name,
+                expiresAt = paired.expiresAt,
+            ),
+        )
         paired
+    }
+
+    /** Forget one server's device credential (e.g. the server revoked us). */
+    suspend fun unpair(serverUrl: String) = withContext(Dispatchers.IO) {
+        tokenStore.clear(serverUrl)
     }
 
     suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData = withContext(Dispatchers.IO) {

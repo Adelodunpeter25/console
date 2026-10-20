@@ -94,6 +94,12 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         cx.spawn(async move |_entity, _cx| {
             client.set_base_url(&active_url).await;
+            // Restore this server's paired device token, if there is one. The
+            // token is per-server, so a fresh environment starts unpaired
+            // rather than inheriting the previous server's credential.
+            client
+                .set_auth_token(crate::persistence::server_auth_token(&active_url))
+                .await;
         })
         .detach();
 
@@ -282,6 +288,9 @@ impl ConsoleDesktopApp {
 
         cx.spawn(async move |entity, cx| {
             client.set_base_url(&url).await;
+            client
+                .set_auth_token(crate::persistence::server_auth_token(&url))
+                .await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {

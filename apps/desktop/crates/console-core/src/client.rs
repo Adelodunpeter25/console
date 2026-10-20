@@ -29,7 +29,14 @@ pub struct ConsoleClient {
 
 impl ConsoleClient {
     pub fn new(base_url: Option<String>) -> Self {
-        let transport = HttpTransport::new(base_url);
+        Self::new_with_auth(base_url, None)
+    }
+
+    /// Build a client that already carries a stored device token, so every
+    /// service (and the WebTransport handshake) is authenticated from the
+    /// first request. Callers that pair at runtime use [`Self::set_auth_token`].
+    pub fn new_with_auth(base_url: Option<String>, auth_token: Option<String>) -> Self {
+        let transport = HttpTransport::new_with_auth(base_url, auth_token);
         Self {
             sessions: SessionService::new(transport.clone()),
             runs: RunService::new(transport.clone()),

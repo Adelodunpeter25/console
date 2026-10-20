@@ -42,6 +42,10 @@ class ChatRunOverWebTransportTest {
 
     private val apiUrl: String get() = setting("WT_SPIKE_API_URL", "http://10.0.2.2:18091")!!
 
+    /** Paired device token; the WebTransport handshake is authenticated by it. */
+    private fun deviceToken(): String? =
+        ServerPairing.pair(apiUrl, setting("WT_SPIKE_PAIR_GRANT"))
+
     @Before
     fun configure() {
         // The dev server serves plain HTTP on one port and QUIC on another, so
@@ -60,7 +64,9 @@ class ChatRunOverWebTransportTest {
             com.console.mobile.data.model.RunPromptDto(prompt = "hello"),
         )
 
-        val outcomes = collect(client.startRun(apiUrl, sessionId, body))
+        val token = deviceToken()
+        assumeTrue("no WT_SPIKE_PAIR_GRANT provided", token != null)
+        val outcomes = collect(client.startRun(apiUrl, sessionId, body, token))
 
         val end = outcomes.filterIsInstance<StreamOutcome.End>().lastOrNull()
         assertTrue("no terminal outcome: $outcomes", end != null)
@@ -88,7 +94,7 @@ class ChatRunOverWebTransportTest {
             com.console.mobile.data.model.RunPromptDto(prompt = "hello"),
         )
 
-        val outcomes = collect(client.startRun(apiUrl, "wt-e2e-fallback", body))
+        val outcomes = collect(client.startRun(apiUrl, "wt-e2e-fallback", body, "ct1_unused"))
         // SSE to the (nonexistent) session fails with an HTTP status, which is
         // the point: it got that far, so the fallback happened.
         assertTrue("expected some outcome, got none", outcomes.isNotEmpty())

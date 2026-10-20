@@ -40,6 +40,14 @@ class RustWebTransportTest {
     private fun setting(name: String, default: String? = null): String? =
         (args.getString(name) ?: System.getenv(name))?.takeIf { it.isNotBlank() } ?: default
 
+    /**
+     * The server issues a device token only through a pairing grant
+     * (`POST /api/auth/pair`); there is no freely mintable token endpoint any
+     * more. Pass the grant the server printed on startup as
+     * `WT_SPIKE_PAIR_GRANT`.
+     */
+    private val pairingGrant: String? get() = setting("WT_SPIKE_PAIR_GRANT")
+
     private val apiUrl: String get() = setting("WT_SPIKE_API_URL", "http://10.0.2.2:18091")!!
     private val wtOrigin: String get() = setting("WT_SPIKE_ORIGIN", "https://10.0.2.2:18454")!!
     private val certSha256: String get() = setting("WT_SPIKE_CERT_SHA256").orEmpty()
@@ -59,7 +67,7 @@ class RustWebTransportTest {
      */
     @Test
     fun chatRunStreamDeliversServerFrames() {
-        val token = mintToken() ?: return
+        val token = pairDevice() ?: return
         val stream = WtStream.open(
             apiUrl = apiUrl,
             origin = wtOrigin,
@@ -68,6 +76,7 @@ class RustWebTransportTest {
             streamId = "wt-spike-missing-session",
             requestType = WtStream.REQUEST_START,
             requestJson = """{"sessionId":"wt-spike-missing-session","start":{"text":"hi"}}""",
+            authToken = token,
         )
         assertNotNull("WebTransport stream did not open: ${WtNative.lastError()}", stream)
         stream!!
@@ -97,6 +106,7 @@ class RustWebTransportTest {
             streamId = "wt-spike-bad-token",
             requestType = WtStream.REQUEST_START,
             requestJson = """{"sessionId":"wt-spike-bad-token","start":{"text":"hi"}}""",
+            authToken = "ct1_invalid",
         )
         if (stream == null) {
             // Rejected at the handshake, which is a valid outcome.
@@ -120,15 +130,21 @@ class RustWebTransportTest {
             streamId = "wt-spike-unreachable",
             requestType = WtStream.REQUEST_START,
             requestJson = """{"sessionId":"wt-spike-unreachable","start":{"text":"hi"}}""",
+            authToken = "ct1_unused",
         )
         assertNull("an unreachable origin must not open a stream", stream)
         println("unreachable origin rejected: ${WtNative.lastError()}")
     }
 
-    /** Mint a handshake token over REST, the way the client will. */
-    private fun mintToken(): String? {
+    /** Exchange a pairing grant for a device token, the way the client will. */
+    private fun pairDevice(): String? {
+        val grant = pairingGrant
+        if (grant == null) {
+            assumeTrue("no WT_SPIKE_PAIR_GRANT provided", false)
+            return null
+        }
         val conn = try {
-            URL("$apiUrl/api/auth/token").openConnection() as HttpURLConnection
+            URL("$apiUrl/api/auth/pair").openConnection() as HttpURLConnection
         } catch (e: Exception) {
             assumeTrue("bad WT_SPIKE_API_URL: $e", false)
             return null
@@ -139,7 +155,11 @@ class RustWebTransportTest {
             conn.connectTimeout = 5000
             conn.readTimeout = 5000
             conn.setRequestProperty("Content-Type", "application/json")
-            conn.outputStream.use { it.write("""{"deviceId":"spike"}""".toByteArray()) }
+            conn.outputStream.use {
+                it.write(
+                    """{"grant":"$grant","deviceName":"WT spike","platform":"android"}""".toByteArray(),
+                )
+            }
             val body = BufferedReader(InputStreamReader(conn.inputStream)).readText()
             Regex("\"token\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
         } catch (e: Exception) {

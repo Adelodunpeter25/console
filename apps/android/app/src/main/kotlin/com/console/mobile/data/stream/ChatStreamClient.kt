@@ -63,6 +63,7 @@ class ChatStreamClient(
             sessionId = sessionId,
             requestType = WtStream.REQUEST_START,
             requestJson = runBodyToWtStart(bodyJson, sessionId),
+            authToken = authToken,
         )?.let { return it }
         return stream(
             url = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/run",
@@ -82,6 +83,7 @@ class ChatStreamClient(
             sessionId = sessionId,
             requestType = WtStream.REQUEST_ATTACH,
             requestJson = attachRequestJson(sessionId, since),
+            authToken = authToken,
         )?.let { return it }
         val base = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/run/stream"
         val url = if (since != null) "$base?since=$since" else base

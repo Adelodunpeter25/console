@@ -102,7 +102,7 @@ pub extern "system" fn Java_com_console_mobile_WtNative_lastError(
     }
 }
 
-/// `WtNative.openStream(apiUrl, origin, certSha256, kind, streamId, requestType, requestJson)`
+/// `WtNative.openStream(apiUrl, origin, certSha256, kind, streamId, requestType, requestJson, authToken)`
 ///
 /// Connects if needed and registers the stream. Returns a handle, or 0 on
 /// failure.
@@ -118,6 +118,7 @@ pub extern "system" fn Java_com_console_mobile_WtNative_openStream(
     stream_id: JString,
     request_type: JString,
     request_json: JString,
+    auth_token: JString,
 ) -> jint {
     init_logging();
     guard(ERR_ARG, || {
@@ -127,13 +128,15 @@ pub extern "system" fn Java_com_console_mobile_WtNative_openStream(
     let stream_id = arg(&mut env, &stream_id);
     let request_type = arg(&mut env, &request_type);
     let request_json = arg(&mut env, &request_json);
-    let (Some(api_url), Some(origin), Some(cert), Some(stream_id), Some(request_type), Some(request_json)) = (
+    let auth_token = arg(&mut env, &auth_token);
+    let (Some(api_url), Some(origin), Some(cert), Some(stream_id), Some(request_type), Some(request_json), Some(auth_token)) = (
         api_url,
         origin,
         cert,
         stream_id,
         request_type,
         request_json,
+        auth_token,
     ) else {
         bridge::record_error("null argument".into());
         return ERR_ARG;
@@ -146,6 +149,7 @@ pub extern "system" fn Java_com_console_mobile_WtNative_openStream(
         &stream_id,
         &request_type,
         &request_json,
+        &auth_token,
     ) as jint
     })
 }

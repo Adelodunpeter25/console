@@ -66,9 +66,18 @@ object WtTransport {
      * A chat-run stream over WebTransport, or null when this server cannot
      * serve it (caller falls back to SSE).
      */
-    fun openChatRun(baseUrl: String, sessionId: String, requestType: String, requestJson: String): WtStream? {
+    fun openChatRun(
+        baseUrl: String,
+        sessionId: String,
+        requestType: String,
+        requestJson: String,
+        authToken: String? = null,
+    ): WtStream? {
         if (!WtNative.available) return null
         val origin = originFor(baseUrl) ?: return null
+        // Unpaired means no handshake: returning null keeps the caller on the
+        // legacy path instead of dialing a connection the server will reject.
+        val token = authToken?.takeIf { it.isNotBlank() } ?: return null
         return WtStream.open(
             apiUrl = baseUrl.trimEnd('/'),
             origin = origin,
@@ -77,6 +86,7 @@ object WtTransport {
             streamId = sessionId,
             requestType = requestType,
             requestJson = requestJson,
+            authToken = token,
         )
     }
 
@@ -100,8 +110,9 @@ object WtTransport {
         sessionId: String,
         requestType: String,
         requestJson: String,
+        authToken: String? = null,
     ): Flow<StreamOutcome>? {
-        val stream = openChatRun(baseUrl, sessionId, requestType, requestJson) ?: return null
+        val stream = openChatRun(baseUrl, sessionId, requestType, requestJson, authToken) ?: return null
         return callbackFlow {
             val reader = launch(Dispatchers.IO) {
                 var outcome: StreamOutcome? = null
@@ -155,10 +166,12 @@ object WtTransport {
         baseUrl: String,
         requestJson: String,
         frameType: String,
+        authToken: String? = null,
         decode: (String) -> T?,
     ): Flow<T>? {
         if (!WtNative.available) return null
         val origin = originFor(baseUrl) ?: return null
+        val token = authToken?.takeIf { it.isNotBlank() } ?: return null
         val stream = WtStream.open(
             apiUrl = baseUrl.trimEnd('/'),
             origin = origin,
@@ -167,6 +180,7 @@ object WtTransport {
             streamId = "",
             requestType = WtStream.REQUEST_WATCH,
             requestJson = requestJson,
+            authToken = token,
         ) ?: return null
         return callbackFlow {
             val reader = launch(Dispatchers.IO) {

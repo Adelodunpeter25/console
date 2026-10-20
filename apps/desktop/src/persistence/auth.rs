@@ -1,42 +1,39 @@
-use std::fs;
+//! Per-server device credentials: the desktop app's own store.
+//!
+//! The storage *format* lives in `console-core` (`utils::server_auth_store`)
+//! so it can be tested next to the rest of the client's wire types; this
+//! module only supplies the directory the desktop app already uses for its
+//! state and adapts the call sites to it.
+
+pub use console_core::utils::server_auth_store::StoredServerAuth;
+use console_core::utils::server_auth_store;
 use std::path::PathBuf;
 
-fn path() -> PathBuf {
-    super::store::storage_directory().join("server-auth.json")
+fn directory() -> PathBuf {
+    super::store::storage_directory()
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
-pub struct StoredServerAuth {
-    pub server_url: String,
-    pub token: String,
-    pub device_id: String,
-    pub device_name: String,
-    pub expires_at: i64,
+/// The credential stored for [server_url], if any.
+pub fn load_for(server_url: &str) -> Option<StoredServerAuth> {
+    server_auth_store::load_for(&directory(), server_url)
 }
 
-pub fn load() -> Option<StoredServerAuth> {
-    let bytes = fs::read(path()).ok()?;
-    serde_json::from_slice(&bytes).ok()
+/// Just the token, for the transport to install.
+pub fn token_for(server_url: &str) -> Option<String> {
+    server_auth_store::token_for(&directory(), server_url)
 }
 
-pub fn save(value: &StoredServerAuth) -> std::io::Result<()> {
-    let dir = path().parent().unwrap();
-    fs::create_dir_all(dir)?;
-    // This file is deliberately mode 0600 and written atomically. The desktop
-    // core keeps the token in memory; callers should prefer the platform
-    // credential store when one is available and use this only as a local
-    // fallback for headless/Linux installations.
-    let tmp = path().with_extension(format!("json.{}.tmp", std::process::id()));
-    let bytes = serde_json::to_vec(value).map_err(std::io::Error::other)?;
-    fs::write(&tmp, bytes)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
-    }
-    fs::rename(tmp, path())
+/// Store a credential for one server, leaving other servers untouched.
+pub fn save(server_url: &str, auth: StoredServerAuth) -> std::io::Result<()> {
+    server_auth_store::save(&directory(), server_url, auth)
 }
 
-pub fn clear() -> std::io::Result<()> {
-    match fs::remove_file(path()) { Ok(()) | Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()), Err(e) => Err(e) }
+/// Forget one server's credential.
+pub fn clear(server_url: &str) -> std::io::Result<()> {
+    server_auth_store::clear(&directory(), server_url)
+}
+
+/// The store's own directory, for callers that need to point it elsewhere.
+pub fn dir() -> PathBuf {
+    directory()
 }

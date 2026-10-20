@@ -33,6 +33,7 @@ mod projects;
 mod providers;
 mod right_sidebar;
 mod run;
+mod server_auth;
 mod session_titles;
 mod sessions;
 mod settings;
