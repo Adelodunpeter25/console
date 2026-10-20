@@ -2,14 +2,18 @@ package tests
 
 import (
 	"encoding/json"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/gofiber/fiber/v2"
 )
 
 func TestPairingGrantIsSingleUseAndProtectsRoutes(t *testing.T) {
@@ -45,20 +49,26 @@ func TestPairingGrantIsSingleUseAndProtectsRoutes(t *testing.T) {
 	if response.StatusCode != 200 {
 		t.Fatalf("pair status = %d", response.StatusCode)
 	}
-	var paired struct {
-		Data struct {
-			Token string `json:"token"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(response.Body).Decode(&paired); err != nil {
-		t.Fatal(err)
-	}
-	if paired.Data.Token == "" {
+	// The payload is protojson, so it decodes with the shared wire type.
+	paired := decodePairData(t, response.Body)
+	if paired.GetToken() == "" {
 		t.Fatal("pair response omitted token")
+	}
+	if paired.GetDevice().GetId() == "" {
+		t.Fatal("pair response omitted the device")
+	}
+	if paired.GetDevice().GetName() != "Desktop" {
+		t.Fatalf("device name = %q", paired.GetDevice().GetName())
+	}
+	if paired.GetDevice().GetPlatform() != "desktop" {
+		t.Fatalf("device platform = %q", paired.GetDevice().GetPlatform())
+	}
+	if paired.GetExpiresAt() == 0 {
+		t.Fatal("pair response omitted the expiry")
 	}
 
 	authorizedReq := httptest.NewRequest("GET", "/private", nil)
-	authorizedReq.Header.Set("Authorization", "Bearer "+paired.Data.Token)
+	authorizedReq.Header.Set("Authorization", "Bearer "+paired.GetToken())
 	authorized, _ := app.Test(authorizedReq)
 	if authorized.StatusCode != 200 {
 		t.Fatalf("authorized route status = %d", authorized.StatusCode)
@@ -72,6 +82,82 @@ func TestPairingGrantIsSingleUseAndProtectsRoutes(t *testing.T) {
 	}
 }
 
-type requestBody string
+// The device list is protojson too, and its timestamps are optional: a
+// device that has never been seen must not report an epoch timestamp.
+func TestDeviceListUsesTheSharedWireType(t *testing.T) {
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	issuer := auth.NewTokenIssuerWithSecret([]byte("device-list-secret-32-bytes-long"))
+	manager := auth.NewManager(database, issuer)
+	grant, _, err := manager.CreateBootstrapGrant()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paired, err := manager.Pair(grant, "Desktop", "desktop")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := fiber.New()
+	routes.RegisterPairingRoutes(app, manager)
+	app.Use(routes.RequireDeviceToken(manager))
+	routes.RegisterDeviceRoutes(app, manager)
+
+	req := httptest.NewRequest("GET", "/api/auth/devices", nil)
+	req.Header.Set("Authorization", "Bearer "+paired.Token)
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != 200 {
+		t.Fatalf("device list status = %d", response.StatusCode)
+	}
+	list := decodeDeviceList(t, response.Body)
+	if len(list.GetDevices()) != 1 {
+		t.Fatalf("expected one device, got %d", len(list.GetDevices()))
+	}
+	device := list.GetDevices()[0]
+	if device.GetId() != paired.ID {
+		t.Fatalf("device id = %q want %q", device.GetId(), paired.ID)
+	}
+	if device.GetLastSeenAt() != 0 {
+		t.Fatalf("a device that has never been seen must not report a timestamp: %d", device.GetLastSeenAt())
+	}
+}
+
+func decodePairData(t *testing.T, body io.Reader) *consolev1.PairDeviceResponse {
+	t.Helper()
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(body).Decode(&envelope); err != nil {
+		t.Fatal(err)
+	}
+	out := &consolev1.PairDeviceResponse{}
+	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := unmarshal.Unmarshal(envelope.Data, out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func decodeDeviceList(t *testing.T, body io.Reader) *consolev1.ServerDevicesResponse {
+	t.Helper()
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(body).Decode(&envelope); err != nil {
+		t.Fatal(err)
+	}
+	out := &consolev1.ServerDevicesResponse{}
+	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
+	if err := unmarshal.Unmarshal(envelope.Data, out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
 
 func newBody(value string) *strings.Reader { return strings.NewReader(value) }

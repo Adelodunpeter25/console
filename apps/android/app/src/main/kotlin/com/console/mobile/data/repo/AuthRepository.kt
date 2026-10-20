@@ -36,13 +36,16 @@ class AuthRepository(
      */
     suspend fun pair(serverUrl: String, request: PairingRequest): PairingData = withContext(Dispatchers.IO) {
         val paired = api.pair(request)
+        // The device is optional in the schema, so it is read defensively:
+        // the token is what the client actually needs.
+        val device = paired.device
         tokenStore.save(
             serverUrl,
             com.console.mobile.data.local.StoredServerAuth(
                 token = paired.token,
-                deviceId = paired.device.id,
-                deviceName = paired.device.name,
-                expiresAt = paired.expiresAt,
+                deviceId = device?.id.orEmpty(),
+                deviceName = device?.name.orEmpty(),
+                expiresAt = paired.expires_at,
             ),
         )
         paired

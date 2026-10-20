@@ -18,7 +18,7 @@
 #![allow(dead_code)]
 
 use super::ConsoleDesktopApp;
-use console_core::services::{PairingData, PairingGrantData, PairingGrantRequest, PairingRequest, ServerDeviceInfo};
+use console_core::services::{DeviceInfo, PairingData, PairingGrantData, PairingGrantRequest, PairingRequest, ServerDevice};
 use gpui::Context;
 
 impl ConsoleDesktopApp {
@@ -49,9 +49,9 @@ impl ConsoleDesktopApp {
             let result = client
                 .server_auth
                 .pair(PairingRequest {
-                    grant: &grant,
-                    device_name: &device_name,
-                    platform: "desktop",
+                    grant: grant.clone(),
+                    device_name: device_name.clone(),
+                    platform: "desktop".to_string(),
                 })
                 .await;
             let _ = cx.update(|cx| {
@@ -61,8 +61,19 @@ impl ConsoleDesktopApp {
                         match result {
                             Ok(data) => {
                                 this.server_auth_error = None;
-                                this.server_device = Some(data.device.clone());
-                                this.apply_paired_device(server_url, &data, cx);
+                                // The paired device and the token live in one
+                                // response; the device is optional in the
+                                // schema, so it is read defensively.
+                                let device = data.device.as_ref().cloned();
+                                this.server_device = device.as_ref().map(|device| ServerDevice {
+                                    id: device.id.clone(),
+                                    name: device.name.clone(),
+                                    platform: device.platform.clone(),
+                                    created_at: None,
+                                    last_seen_at: None,
+                                    revoked_at: None,
+                                });
+                                this.apply_paired_device(server_url, &data, device, cx);
                             }
                             Err(error) => {
                                 this.server_auth_error = Some(error.to_string());
@@ -100,8 +111,8 @@ impl ConsoleDesktopApp {
             let result = client
                 .server_auth
                 .create_pairing_grant(PairingGrantRequest {
-                    device_name: &device_name,
-                    platform: "android",
+                    device_name: device_name.clone(),
+                    platform: "android".to_string(),
                 })
                 .await;
             let _ = cx.update(|cx| {
@@ -188,14 +199,15 @@ impl ConsoleDesktopApp {
         &mut self,
         server_url: String,
         data: &PairingData,
+        device: Option<DeviceInfo>,
         cx: &mut Context<Self>,
     ) {
         let _ = crate::persistence::save_server_auth(
             &server_url,
             crate::persistence::StoredServerAuth {
                 token: data.token.clone(),
-                device_id: data.device.id.clone(),
-                device_name: data.device.name.clone(),
+                device_id: device.as_ref().map(|d| d.id.clone()).unwrap_or_default(),
+                device_name: device.as_ref().map(|d| d.name.clone()).unwrap_or_default(),
                 expires_at: data.expires_at,
             },
         );
@@ -226,7 +238,7 @@ impl ConsoleDesktopApp {
 }
 
 /// Convenience: the device rows the settings screen will render.
-pub fn device_label(device: &ServerDeviceInfo) -> String {
+pub fn device_label(device: &ServerDevice) -> String {
     if device.name.trim().is_empty() {
         device.platform.clone()
     } else {

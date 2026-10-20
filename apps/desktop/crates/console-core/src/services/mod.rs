@@ -23,7 +23,10 @@ pub mod wt;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
-pub use server_auth::{DeviceInfo as ServerDeviceInfo, PairingData, PairingGrantData, PairingGrantRequest, PairingRequest, ServerAuthService};
+pub use server_auth::{
+    DeviceInfo, PairingData, PairingGrantData, PairingGrantRequest, PairingRequest, ServerAuthService,
+    ServerDevice, ServerDevicesResponse,
+};
 pub use device::DeviceService;
 pub use fs::{FsService, RawFileError};
 pub use git::GitService;

@@ -86,10 +86,10 @@ interface ConsoleApi {
     suspend fun getProviders(): List<ProviderCatalogEntry>
     suspend fun getProviderModels(providerId: String): List<Model>
     suspend fun getApprovalModes(): List<ApprovalModeOption>
-    // server pairing/authentication
-    suspend fun pair(request: com.console.mobile.data.model.PairingRequest): com.console.mobile.data.model.PairingData
-    suspend fun createPairingGrant(request: com.console.mobile.data.model.PairingGrantRequest): com.console.mobile.data.model.PairingGrantData
-    suspend fun listAuthDevices(): List<com.console.mobile.data.model.DeviceInfo>
+    // server pairing/authentication (shared protobuf types)
+    suspend fun pair(request: console.v1.PairDeviceRequest): console.v1.PairDeviceResponse
+    suspend fun createPairingGrant(request: console.v1.PairingGrantRequest): console.v1.PairingGrantResponse
+    suspend fun listAuthDevices(): List<console.v1.ServerDevice>
     suspend fun revokeAuthDevice(id: String)
     // provider auth
     suspend fun getAuthStatus(): console.v1.AuthStatusResponse

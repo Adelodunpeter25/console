@@ -84,3 +84,40 @@ func TestAuthGithubStatusFixture(t *testing.T) {
 		Scopes: []string{"repo", "workflow"},
 	})
 }
+
+// The server-pairing payloads are part of the same shared schema, so they
+// are pinned by the same golden fixtures.
+func TestPairDeviceFixture(t *testing.T) {
+	checkAuthFixture(t, "pair_device.json", &consolev1.PairDeviceResponse{
+		Device: &consolev1.PairedDevice{
+			Id: "device-1", Name: "My desktop", Platform: "desktop",
+		},
+		Token: "ct1_device_token", ExpiresAt: 1762592000000,
+	})
+}
+
+func TestPairingGrantFixture(t *testing.T) {
+	checkAuthFixture(t, "pairing_grant.json", &consolev1.PairingGrantResponse{
+		Grant: "cp1_grant", ExpiresAt: 1760000030000,
+	})
+}
+
+// A device that has never been seen has no lastSeenAt at all: the timestamp
+// is explicit-presence, so "never" must stay distinguishable from "at the
+// epoch".
+func TestServerDevicesFixture(t *testing.T) {
+	checkAuthFixture(t, "server_devices.json", &consolev1.ServerDevicesResponse{
+		Devices: []*consolev1.ServerDevice{
+			{
+				Id: "device-1", Name: "My desktop", Platform: "desktop",
+				CreatedAt: proto.Int64(1760000000000),
+			},
+			{
+				Id: "device-2", Name: "My phone", Platform: "android",
+				CreatedAt:  proto.Int64(1760000001000),
+				LastSeenAt: proto.Int64(1760000099000),
+				RevokedAt:  proto.Int64(1760000100000),
+			},
+		},
+	})
+}

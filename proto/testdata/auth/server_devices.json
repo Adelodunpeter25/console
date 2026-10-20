@@ -1,0 +1,1 @@
+{"devices":[{"id":"device-1","name":"My desktop","platform":"desktop","createdAt":"1760000000000"},{"id":"device-2","name":"My phone","platform":"android","createdAt":"1760000001000","lastSeenAt":"1760000099000","revokedAt":"1760000100000"}]}

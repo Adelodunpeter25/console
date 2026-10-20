@@ -119,6 +119,11 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val fsFileContentAdapter by lazy { wireMoshi.adapter(FsFileContent::class.java) }
     private val writeFileAdapter by lazy { wireMoshi.adapter(WriteFileRequest::class.java) }
     private val createDirAdapter by lazy { wireMoshi.adapter(CreateDirRequest::class.java) }
+    private val pairDeviceAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceRequest::class.java) }
+    private val pairDeviceResponseAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceResponse::class.java) }
+    private val pairingGrantAdapter by lazy { wireMoshi.adapter(console.v1.PairingGrantRequest::class.java) }
+    private val pairingGrantResponseAdapter by lazy { wireMoshi.adapter(console.v1.PairingGrantResponse::class.java) }
+    private val serverDevicesAdapter by lazy { wireMoshi.adapter(console.v1.ServerDevicesResponse::class.java) }
     private fun enc(v: String): String = URLEncoder.encode(v, "UTF-8")
 
     override suspend fun getSessions(cwd: String?, projectId: String?, onlyDeleted: Boolean): List<SessionHeader> {
@@ -469,18 +474,20 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun pair(request: PairingRequest): PairingData {
-        val raw = http.post("/api/auth/pair", http.encodeBody(PairingRequest.serializer(), request))
-        return http.unwrap(raw, PairingData.serializer(), "pair with server")
+        val body = pairDeviceAdapter.toJson(request)
+        val raw = http.post("/api/auth/pair", body)
+        return http.unwrapOrRawAdapter(raw, pairDeviceResponseAdapter, "pair with server")
     }
 
     override suspend fun createPairingGrant(request: PairingGrantRequest): PairingGrantData {
-        val raw = http.post("/api/auth/pairing-grants", http.encodeBody(PairingGrantRequest.serializer(), request))
-        return http.unwrap(raw, PairingGrantData.serializer(), "create pairing grant")
+        val body = pairingGrantAdapter.toJson(request)
+        val raw = http.post("/api/auth/pairing-grants", body)
+        return http.unwrapOrRawAdapter(raw, pairingGrantResponseAdapter, "create pairing grant")
     }
 
     override suspend fun listAuthDevices(): List<DeviceInfo> {
         val raw = http.get("/api/auth/devices")
-        return http.unwrap(raw, DeviceListData.serializer(), "list devices").devices
+        return http.unwrapOrRawAdapter(raw, serverDevicesAdapter, "list devices").devices
     }
 
     override suspend fun revokeAuthDevice(id: String) {

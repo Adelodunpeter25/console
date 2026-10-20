@@ -1,49 +1,18 @@
 package com.console.mobile.data.model
 
-import kotlinx.serialization.Serializable
-
-@Serializable
-data class PairingRequest(
-    val grant: String,
-    val deviceName: String,
-    val platform: String = "android",
-)
-
-@Serializable
-data class PairingData(
-    val device: PairedDevice,
-    val token: String,
-    val expiresAt: Long,
-)
-
-@Serializable
-data class PairedDevice(
-    val id: String,
-    val name: String,
-    val platform: String,
-)
-
-@Serializable
-data class PairingGrantRequest(
-    val deviceName: String,
-    val platform: String = "android",
-)
-
-@Serializable
-data class PairingGrantData(
-    val grant: String,
-    val expiresAt: Long,
-)
-
-@Serializable
-data class DeviceInfo(
-    val id: String,
-    val name: String,
-    val platform: String,
-    val createdAt: Long? = null,
-    val lastSeenAt: Long? = null,
-    val revokedAt: Long? = null,
-)
-
-@Serializable
-data class DeviceListData(val devices: List<DeviceInfo> = emptyList())
+/**
+ * The server-pairing payloads are shared protobuf types (`console.v1`, see
+ * proto/console/v1/auth.proto), so they are decoded through the Wire
+ * adapters rather than hand-written DTOs.
+ *
+ * The request bodies are shared too: `PairDeviceRequest` carries the one-time
+ * pairing grant, and `PairingGrantRequest` asks the server for a grant
+ * another device can redeem.
+ */
+typealias PairingRequest = console.v1.PairDeviceRequest
+typealias PairingData = console.v1.PairDeviceResponse
+typealias PairedDevice = console.v1.PairedDevice
+typealias PairingGrantRequest = console.v1.PairingGrantRequest
+typealias PairingGrantData = console.v1.PairingGrantResponse
+typealias DeviceInfo = console.v1.ServerDevice
+typealias DeviceListData = console.v1.ServerDevicesResponse

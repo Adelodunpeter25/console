@@ -377,10 +377,10 @@ pub struct ConsoleDesktopApp {
     /// The device this app is paired as on the active server. `None` means
     /// "not paired" — the server rejects every request in that state.
     #[allow(dead_code)]
-    pub server_device: Option<console_core::services::ServerDeviceInfo>,
+    pub server_device: Option<console_core::services::ServerDevice>,
     /// Devices paired with the active server, for the device list.
     #[allow(dead_code)]
-    pub server_devices: Vec<console_core::services::ServerDeviceInfo>,
+    pub server_devices: Vec<console_core::services::ServerDevice>,
     /// A short-lived pairing grant for another device (the QR flow).
     #[allow(dead_code)]
     pub server_pairing_grant: Option<console_core::services::PairingGrantData>,
