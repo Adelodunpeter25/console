@@ -16,6 +16,41 @@ import androidx.compose.ui.unit.dp
 import com.console.mobile.ui.theme.NewTheme
 
 /**
+ * The scrim a blurred header is drawn on: a vertical gradient that is nearly
+ * solid at the top and thins out towards the bottom, so content scrolling
+ * underneath fades away rather than being cut off at a hard edge.
+ *
+ * Sized to its parent [Box], so call it from the box that also holds the sharp
+ * header content. Note that `Modifier.blur` softens this gradient — Compose
+ * cannot blur siblings — so the visible effect is the fade, not true backdrop
+ * frosting.
+ */
+@Composable
+fun BoxScope.BlurredHeaderScrim(
+    backgroundColor: Color = NewTheme.Background,
+    blurRadius: Dp = 20.dp,
+) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .then(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Modifier.blur(blurRadius)
+                } else {
+                    Modifier
+                }
+            )
+            .background(
+                Brush.verticalGradient(
+                    0.0f to backgroundColor.copy(alpha = 0.95f),
+                    0.75f to backgroundColor.copy(alpha = 0.85f),
+                    1.0f to backgroundColor.copy(alpha = 0.65f),
+                )
+            ),
+    )
+}
+
+/**
  * A shared progressive/frosted blur header container for screens whose content scrolls
  * underneath the header bar.
  *
@@ -30,24 +65,7 @@ fun BlurredHeaderContainer(
     content: @Composable () -> Unit,
 ) {
     Box(modifier = modifier.fillMaxWidth().height(height)) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .then(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        Modifier.blur(blurRadius)
-                    } else {
-                        Modifier
-                    }
-                )
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to backgroundColor.copy(alpha = 0.95f),
-                        0.75f to backgroundColor.copy(alpha = 0.85f),
-                        1.0f to backgroundColor.copy(alpha = 0.65f),
-                    )
-                ),
-        )
+        BlurredHeaderScrim(backgroundColor, blurRadius)
         content()
     }
 }

@@ -196,10 +196,17 @@ fun FilesScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .padding(top = PageHeaderHeight, bottom = 16.dp),
+                    .padding(bottom = 16.dp),
             ) {
                 when {
-                    block != null -> Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.CardRadius)).background(NewTheme.Card).padding(20.dp)) {
+                    block != null -> Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = PageHeaderHeight)
+                            .clip(RoundedCornerShape(NewTheme.CardRadius))
+                            .background(NewTheme.Card)
+                            .padding(20.dp),
+                    ) {
                         Text(block.title, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(block.message, color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
                     }
@@ -208,11 +215,26 @@ fun FilesScreen(onBack: () -> Unit) {
                     else -> {
                         val content = fileContent ?: ""
                         if (isMarkdownPath(sel)) {
-                            Column(modifier = Modifier.fillMaxSize().verticalScroll2().padding(4.dp)) {
+                            // The document scrolls under the header on purpose:
+                            // its scrim fades the text out as it leaves instead
+                            // of cutting it off at a hard edge. The top padding
+                            // lives inside the scroll so the first line still
+                            // starts below the header.
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll2()
+                                    .padding(top = PageHeaderHeight)
+                                    .padding(4.dp),
+                            ) {
                                 CustomMarkdown(content = content)
                             }
                         } else {
-                            CodePreview(content = content, path = sel)
+                            // The code viewer scrolls itself and cannot pad its
+                            // own content, so it starts below the header.
+                            Box(modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight)) {
+                                CodePreview(content = content, path = sel)
+                            }
                         }
                     }
                 }
