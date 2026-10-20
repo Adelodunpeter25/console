@@ -22,30 +22,38 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
+import com.console.mobile.core.util.urlHostPort
+import com.console.mobile.data.model.deviceName
+import com.console.mobile.data.model.splitHostAndCode
 import com.console.mobile.ui.components.confirmAlert
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
-import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.TextFieldRow
 import com.console.mobile.ui.theme.NewTheme
 import androidx.compose.foundation.background
-import androidx.compose.ui.text.input.KeyboardType
 
 /**
  * Port of OnboardingScreen in apps/mobile/index.tsx.
- * Name + backend URL, Connect (persist via EnvironmentsRepository) + Test Connection
- * (GET {url}/api/projects, 6s timeout — mirrors useServerConnection.testConnection).
+ *
+ * Host + pairing code, Connect (pair if a code was given, then persist via
+ * EnvironmentsRepository) + Test Connection (GET {url}/api/projects with the
+ * server's own credential — mirrors useServerConnection.testConnection).
+ *
+ * The two fields are what the server prints: `console pair` on the server
+ * shows a host and a short code. A code means the server wants this phone
+ * to pair, so the phone exchanges it for a credential before it starts
+ * talking to the server.
  */
 @Composable
 fun OnboardingScreen(onConnected: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    var host by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
     var testState by remember { mutableStateOf("idle") } // idle|testing|success|error
 
@@ -56,44 +64,69 @@ fun OnboardingScreen(onConnected: () -> Unit) {
     ) {
         Text("Console Mobile", color = NewTheme.TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         Text(
-            "Enter your Console server URL to connect.",
+            "Enter the host and pairing code from your Console server.",
             color = NewTheme.TextSecondary,
             fontSize = 15.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
-        TextInput("Name", name, { name = it }, "My server")
-        TextInput(
-            label = "Server URL",
-            value = url,
-            onValueChange = { url = it; if (testState == "success" || testState == "error") testState = "idle" },
-            placeholder = "http://192.168.1.X:3000",
-            keyboardType = KeyboardType.Uri,
-        )
+        SectionCard {
+            TextFieldRow(
+                "Host",
+                host,
+                { text ->
+                    // A pasted pairing URL carries the code in its
+                    // fragment, so the field splits it into the two.
+                    val (address, pasted) = splitHostAndCode(text)
+                    host = address
+                    if (pasted.isNotBlank()) code = pasted
+                    if (testState == "success" || testState == "error") testState = "idle"
+                },
+                "192.168.1.100:8080",
+                monospace = true,
+            )
+            SectionDivider(startInset = 18.dp)
+            TextFieldRow(
+                "Pairing code",
+                code,
+                { code = it; if (testState == "success" || testState == "error") testState = "idle" },
+                "abc-123-xyz",
+                monospace = true,
+            )
+        }
         ActionButton(
-            text = "Connect",
+            text = if (saving) "Connecting…" else "Connect",
             onClick = {
-                val normalized = normalizeBackendUrl(url)
+                val normalized = normalizeBackendUrl(host)
                 if (normalized == null) {
-                    confirmAlert("Invalid URL", "Backend server endpoint cannot be empty.")
+                    confirmAlert("Invalid host", "The server host cannot be empty.")
                     return@ActionButton
                 }
                 saving = true
                 scope.launch {
                     try {
+                        // A code means the server wants this phone to pair:
+                        // exchange it for a credential before the app starts
+                        // talking to the new address.
+                        var serverName = ""
+                        if (code.isNotBlank()) {
+                            val paired = AppContainer.authRepository.pairWithCode(normalized, code, deviceName())
+                            serverName = paired.server?.name?.takeIf { it.isNotBlank() }.orEmpty()
+                        }
+                        val label = serverName.ifBlank { urlHostPort(normalized) }
                         withContext(Dispatchers.IO) {
-                            AppContainer.environmentsRepository.addEnvironment(name.ifBlank { "Default" }, normalized)
+                            AppContainer.environmentsRepository.activateUrl(label, normalized)
                         }
                         onConnected()
                     } catch (e: Exception) {
-                        confirmAlert("Error", "Failed to save endpoint URL: ${e.message ?: e}")
+                        confirmAlert("Error", "Failed to connect: ${e.message ?: e}")
                     } finally {
                         saving = false
                     }
                 }
             },
             kind = ActionButtonKind.Primary,
-            enabled = !saving && url.isNotBlank(),
+            enabled = !saving && host.isNotBlank(),
             loading = saving,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
         )
@@ -105,14 +138,14 @@ fun OnboardingScreen(onConnected: () -> Unit) {
                 else -> "Test connection"
             },
             onClick = {
-                val normalized = normalizeBackendUrl(url) ?: return@ActionButton
+                if (host.isBlank()) return@ActionButton
                 testState = "testing"
                 scope.launch {
-                    val ok = withContext(Dispatchers.IO) { probeBackend(normalized) }
+                    val ok = AppContainer.authRepository.probeServer(host)
                     testState = if (ok) "success" else "error"
                 }
             },
-            enabled = url.isNotBlank() && testState != "testing",
+            enabled = host.isNotBlank() && testState != "testing",
             loading = testState == "testing",
             modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
         )
@@ -121,19 +154,5 @@ fun OnboardingScreen(onConnected: () -> Unit) {
             "success" -> Text("Reachable", color = NewTheme.Success, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
             "error" -> Text("Could not reach the server", color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
         }
-    }
-}
-
-private fun probeBackend(baseUrl: String): Boolean {
-    return try {
-        val client = OkHttpClient.Builder()
-            .connectTimeout(6, TimeUnit.SECONDS)
-            .readTimeout(6, TimeUnit.SECONDS)
-            .callTimeout(6, TimeUnit.SECONDS)
-            .build()
-        val req = Request.Builder().url("${baseUrl.trimEnd('/')}/api/projects").get().build()
-        client.newCall(req).execute().use { it.isSuccessful }
-    } catch (_: Exception) {
-        false
     }
 }

@@ -33,19 +33,18 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Server
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.normalizeBackendUrl
 import com.console.mobile.core.util.urlHostPort
+import com.console.mobile.data.model.deviceName
+import com.console.mobile.data.model.splitHostAndCode
 import com.console.mobile.data.store.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.TextInput
+import com.console.mobile.ui.components.common.new.TextFieldRow
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.SectionCard
@@ -54,6 +53,11 @@ import com.console.mobile.ui.components.common.new.SectionCard
  * Port of components/environments/environment-switcher.tsx.
  * Server-icon trigger → bottom sheet with env list + probe dots, inline add form.
  * Probes are local UI state (GET {url}/api/projects, 6s) — mirrors probeEnvironment.
+ *
+ * The add form asks for a host and a pairing code, the same two things the
+ * server prints: a code means the server wants this phone to pair, and the
+ * phone exchanges it for its own credential before it starts talking to
+ * the server.
  */
 @Composable
 fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
@@ -62,22 +66,19 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
     var sheetOpen by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var probes by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var newHost by remember { mutableStateOf("") }
+    var newCode by remember { mutableStateOf("") }
+    var adding by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<String?>(null) }
 
     fun probeAll(envs: List<Environment>) {
         scope.launch {
             val results = withContext(Dispatchers.IO) {
                 envs.associate { env ->
-                    env.id to try {
-                        val client = OkHttpClient.Builder()
-                            .connectTimeout(6, TimeUnit.SECONDS)
-                            .readTimeout(6, TimeUnit.SECONDS)
-                            .callTimeout(6, TimeUnit.SECONDS)
-                            .build()
-                        val req = Request.Builder().url("${env.url.trimEnd('/')}/api/projects").get().build()
-                        client.newCall(req).execute().use { it.isSuccessful }
-                    } catch (_: Exception) {
-                        false
-                    }
+                    // The probe carries that server's own credential: a
+                    // paired server answers 401 without it, and the dot
+                    // would show every paired server as unreachable.
+                    env.id to AppContainer.authRepository.probeServer(env.url)
                 }
             }
             probes = results
@@ -98,26 +99,75 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
     if (sheetOpen) {
         BaseSheet(onDismiss = { sheetOpen = false }, title = if (creating) "Add environment" else "Environments") {
             if (creating) {
-                var newName by remember { mutableStateOf("") }
-                var newUrl by remember { mutableStateOf("") }
                 Column(modifier = Modifier.fillMaxWidth()) {
                     ActionRow(icon = TablerIcons.Outline.ArrowNarrowLeft, title = "Back to environments") { creating = false }
-                    TextInput("Name", newName, { newName = it }, "My server")
-                    TextInput("Backend URL", newUrl, { newUrl = it }, "http://192.168.1.X:3000")
+                    SectionCard {
+                        TextFieldRow(
+                            "Host",
+                            newHost,
+                            { text ->
+                                // A pasted pairing URL carries the code in
+                                // its fragment, so the field splits it into
+                                // the two.
+                                val (address, pasted) = splitHostAndCode(text)
+                                newHost = address
+                                if (pasted.isNotBlank()) newCode = pasted
+                                failure = null
+                            },
+                            "192.168.1.100:8080",
+                            monospace = true,
+                        )
+                        SectionDivider(startInset = 18.dp)
+                        TextFieldRow(
+                            "Pairing code",
+                            newCode,
+                            { newCode = it; failure = null },
+                            "abc-123-xyz",
+                            monospace = true,
+                        )
+                    }
+                    failure?.let { message ->
+                        Text(message, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                    }
                     ActionButton(
-                        text = "Save",
+                        text = if (adding) "Adding…" else "Add environment",
                         onClick = {
-                            val normalized = normalizeBackendUrl(newUrl) ?: return@ActionButton
+                            if (adding) return@ActionButton
+                            val normalized = normalizeBackendUrl(newHost) ?: run {
+                                failure = "That host cannot be used."
+                                return@ActionButton
+                            }
+                            adding = true
+                            failure = null
                             scope.launch {
-                                withContext(Dispatchers.IO) {
-                                    AppContainer.environmentsRepository.addEnvironment(newName.ifBlank { "Default" }, normalized)
+                                try {
+                                    // A code means the server wants this phone
+                                    // to pair: exchange it for a credential
+                                    // before the app starts talking to the
+                                    // new address.
+                                    var serverName = ""
+                                    if (newCode.isNotBlank()) {
+                                        val paired = AppContainer.authRepository.pairWithCode(normalized, newCode, deviceName())
+                                        serverName = paired.server?.name?.takeIf { it.isNotBlank() }.orEmpty()
+                                    }
+                                    val label = serverName.ifBlank { urlHostPort(normalized) }
+                                    withContext(Dispatchers.IO) {
+                                        AppContainer.environmentsRepository.activateUrl(label, normalized)
+                                    }
+                                    newHost = ""
+                                    newCode = ""
+                                    creating = false
+                                    sheetOpen = false
+                                } catch (e: Exception) {
+                                    failure = e.message ?: "Could not add the server."
+                                } finally {
+                                    adding = false
                                 }
-                                creating = false
-                                sheetOpen = false
                             }
                         },
                         kind = ActionButtonKind.Primary,
-                        enabled = newUrl.isNotBlank(),
+                        enabled = !adding && newHost.isNotBlank(),
+                        loading = adding,
                         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     )
                 }
