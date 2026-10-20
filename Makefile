@@ -8,29 +8,45 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 .DEFAULT_GOAL := help
 
 ## dev-server: Start the Go agent server in dev mode (uses ~/.console-dev storage)
-dev-server:
-	CONSOLE_ENV=dev go -C apps/server-go run ./cmd/server
-
-## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
-##   `console cert-fingerprint` creates the dev certificate on first use (and
-##   replaces it when expired) so there is nothing to generate by hand and no
-##   openssl involved. A client pins it with CONSOLE_WT_TLS=pin:<fingerprint>;
-##   `make dev-desktop-wt` wires that up for you.
-##   Usage: make dev-server-wt              (HTTP 3000 + QUIC :14443)
-##          make dev-server-wt PORT=2003    (HTTP 2003 + QUIC :14443)
-##          make dev-server-wt WT_PORT=24443
+##   Usage: make dev-server              (dev: port 3000, ~/.console-dev storage)
+##          make dev-server PORT=3001    (dev: port 3001)
+##          make dev-server WT=1          (also serve WebTransport over QUIC)
+##          make dev-server WT=1 WT_PORT=24443 PORT=2003
 ##
-##   Runs the server directly rather than through `console start`, matching
-##   dev-server: this target is a foreground server, not a managed daemon, and
-##   must not refuse to start because a daemon from another mode is running.
+## WT=1 turns on the QUIC/WebTransport listener. `console cert-fingerprint`
+## creates the dev certificate on first use (and replaces it when expired) so
+## there is nothing to generate by hand and no openssl involved. A client pins
+## it with CONSOLE_WT_TLS=pin:<fingerprint>; `make dev-desktop-wt` wires that
+## up for you.
+##
+## Runs the server directly rather than through `console start`: this is a
+## foreground server, not a managed daemon, and it must not refuse to start
+## because a daemon from another mode is running.
+PORT ?=
+WT ?= 0
 WT_PORT ?= 14443
-dev-server-wt:
+dev-server:
+ifeq ($(WT),1)
 	@CONSOLE_ENV=dev go -C apps/server-go run ./cmd/console cert-fingerprint --dev > /dev/null
 	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
 	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
 	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
 	CONSOLE_WT_ADDR=:$(WT_PORT) \
+	$(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
+else
+	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
+	go -C apps/server-go run ./cmd/server
+endif
+
+## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
+##   The same as `make dev-server WT=1`; kept as its own name because that is
+##   what the docs and the run-together workflow say.
+##   Usage: make dev-server-wt              (HTTP 3000 + QUIC :14443)
+##          make dev-server-wt PORT=2003    (HTTP 2003 + QUIC :14443)
+##          make dev-server-wt WT_PORT=24443
+dev-server-wt:
+	@$(MAKE) dev-server WT=1 WT_PORT=$(WT_PORT) $(if $(PORT),PORT=$(PORT),)
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
@@ -135,7 +151,7 @@ proto:
 ## help: Show this help message
 help:
 	@echo "Available commands:"
-	@echo "  make dev-server        - Start the backend agent server"
+	@echo "  make dev-server        - Start the backend agent server (PORT=nnnn, WT=1 for WebTransport)"
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile        - Build and run the native Android app in dev mode"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
