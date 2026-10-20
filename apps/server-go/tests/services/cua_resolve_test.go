@@ -138,6 +138,36 @@ func TestResolveExplicitTokenWinsOverID(t *testing.T) {
 	}
 }
 
+func TestParseSnapshotRowsKeepsSpacesInID(t *testing.T) {
+	markdown := "- [1] AXTextArea [id=First Text View actions=[showmenu]]\n" +
+		`- [18] AXMenuButton "¶" [id=_NS:353 help="Choose a paragraph style" actions=[showmenu,press]]` + "\n"
+	rows := cua.ParseSnapshotRowsForTest(markdown)
+	if len(rows) != 2 {
+		t.Fatalf("got %v", rows)
+	}
+	if rows[0].Row != 1 || rows[0].ID != "First Text View" || rows[0].Role != "AXTextArea" {
+		t.Errorf("spaced id = %+v", rows[0])
+	}
+	if rows[1].ID != "_NS:353" {
+		t.Errorf("help attribute leaked into id: %+v", rows[1])
+	}
+}
+
+func TestParseSnapshotRowsReadsMultilineValues(t *testing.T) {
+	markdown := "- [1] AXTextArea = \"first line\nsecond line\nthird line\" [id=First Text View actions=[showmenu]]\n" +
+		"- [2] AXButton (7) [id=Seven actions=[press]]\n"
+	rows := cua.ParseSnapshotRowsForTest(markdown)
+	if len(rows) != 2 {
+		t.Fatalf("got %v", rows)
+	}
+	if rows[0].Row != 1 || rows[0].ID != "First Text View" || rows[0].Role != "AXTextArea" {
+		t.Errorf("multiline row = %+v", rows[0])
+	}
+	if rows[1].Row != 2 || rows[1].ID != "Seven" {
+		t.Errorf("next row = %+v", rows[1])
+	}
+}
+
 func TestParseSnapshotRowsIgnoresNonRows(t *testing.T) {
 	markdown := "- [5] AXButton (7) [id=Seven actions=[press]]\n" +
 		"- AXStaticText = \"0\"\n" +

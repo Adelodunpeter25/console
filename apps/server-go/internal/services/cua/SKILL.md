@@ -25,7 +25,8 @@ native window ids intact; do not convert them to 32-bit integers.
 
 `print()` narrates and shows intermediate values. The final value is returned
 to you as well. Returned `{type: "image"}` objects are shown to you as
-pictures.
+pictures: leave the image object in the final expression. There is no
+`image()` helper, and printing only its text will not attach the picture.
 
 ## Observe narrowly, act by element, verify at checkpoints
 

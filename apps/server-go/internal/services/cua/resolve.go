@@ -56,14 +56,6 @@ type SnapshotRow struct {
 	Label string
 }
 
-// snapshotRowRe matches one addressable tree row. The id= match is anchored
-// to the trailing metadata block so a description that merely mentions
-// "[id=...]" mid-line can never resolve: only the driver's own attribute
-// block counts.
-//
-//   - [5] AXButton (7) [id=Seven actions=[press]]
-var snapshotRowRe = regexp.MustCompile(`^\s*- \[(\d+)\][^\n]*\[id=([^\s\]]+)(?:\s+.*)?\]\s*$`)
-
 // ParseSnapshotRowsForTest exposes row parsing so adversarial shapes are
 // pinned without a driver: descriptions mentioning ids, rows without index,
 // rows without id block.
@@ -71,20 +63,65 @@ func ParseSnapshotRowsForTest(markdown string) []SnapshotRow {
 	return parseSnapshotRows(markdown)
 }
 
+// parseSnapshotRows reads the driver's tree as blocks, not lines. A value may
+// contain embedded newlines, putting the trailing id= block on a later line.
+// Only the driver's own trailing metadata counts, so a description that merely
+// mentions "[id=...]" mid-line remains unaddressable.
 func parseSnapshotRows(markdown string) []SnapshotRow {
+	lines := strings.Split(markdown, "\n")
 	var out []SnapshotRow
-	for _, line := range strings.Split(markdown, "\n") {
-		m := snapshotRowRe.FindStringSubmatch(line)
-		if m == nil {
+	for i := 0; i < len(lines); i++ {
+		head := rowHeadRe.FindStringSubmatch(lines[i])
+		if head == nil {
+			continue
+		}
+		start := i
+		block := lines[i]
+		if _, ok := trailingSnapshotID(block); !ok {
+			// A new row head ends this block: the current row has no id, so
+			// never let a later row's metadata attach to it.
+			for i+1 < len(lines) && !rowHeadRe.MatchString(lines[i+1]) {
+				i++
+				block += "\n" + lines[i]
+				if _, ok := trailingSnapshotID(block); ok {
+					break
+				}
+			}
+		}
+		id, ok := trailingSnapshotID(block)
+		if !ok {
 			continue
 		}
 		var row SnapshotRow
-		fmt.Sscanf(m[1], "%d", &row.Row)
-		row.ID = m[2]
-		row.Role, row.Label = describeRowLine(line)
+		fmt.Sscanf(head[1], "%d", &row.Row)
+		row.ID = id
+		row.Role, row.Label = describeRowLine(lines[start])
 		out = append(out, row)
 	}
 	return out
+}
+
+// trailingSnapshotID returns the stable id= value from a row's trailing
+// metadata block. The driver leaves ids unquoted, so an id may contain spaces
+// ("First Text View"); it ends at help=, actions=, or the block's closing ].
+func trailingSnapshotID(row string) (string, bool) {
+	trimmed := strings.TrimRight(row, " \t\r\n")
+	if !strings.HasSuffix(trimmed, "]") {
+		return "", false
+	}
+	open := strings.LastIndex(trimmed, "[id=")
+	if open < 0 {
+		return "", false
+	}
+	meta := trimmed[open+4 : len(trimmed)-1]
+	if end := strings.Index(meta, " help="); end >= 0 {
+		meta = meta[:end]
+	}
+	if end := strings.Index(meta, " actions="); end >= 0 {
+		meta = meta[:end]
+	}
+	id := strings.TrimSpace(meta)
+	return id, id != ""
 }
 
 // rowHeadRe splits the row head: "- [5] AXButton ..." into row 5, role
