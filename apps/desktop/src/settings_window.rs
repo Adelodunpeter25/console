@@ -595,6 +595,10 @@ impl Render for SettingsWindow {
                 });
                 if let Some(app) = app_handle.upgrade() {
                     app.update(cx, |app_state, cx| {
+                        // The old grant is spent by now, and showing it
+                        // next to a fresh one would invite a scan of a code
+                        // that no longer works.
+                        app_state.server_pairing_grant = None;
                         app_state.create_pairing_grant("My phone".to_string(), cx);
                     });
                 }
@@ -1097,6 +1101,7 @@ impl Render for SettingsWindow {
                 Rc::new(move |_w: &mut Window, cx: &mut App| {
                     if let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
+                            app_state.server_pairing_grant = None;
                             app_state.create_pairing_grant("My phone".to_string(), cx);
                         });
                     }
