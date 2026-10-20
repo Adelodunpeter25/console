@@ -111,13 +111,15 @@ fun TextFieldRow(
     singleLine: Boolean = true,
     monospace: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
+    /** True for the last field in a card: it stands off the card's bottom edge. */
+    last: Boolean = false,
 ) {
     Text(
         label.uppercase(),
         color = NewTheme.TextSecondary,
         fontSize = 12.sp,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 6.dp),
+        modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 6.dp),
     )
     // The field is its own rounded box inside the card, so the label above
     // it reads as a caption rather than as a heading for the whole card.
@@ -125,6 +127,7 @@ fun TextFieldRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp)
+            .padding(bottom = if (last) 14.dp else 0.dp)
             .clip(RoundedCornerShape(NewTheme.FieldRadius))
             .border(1.dp, NewTheme.Divider, RoundedCornerShape(NewTheme.FieldRadius))
             .background(NewTheme.Field),

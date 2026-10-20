@@ -31,9 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.TextFieldRow
+import com.console.mobile.ui.components.common.new.ServerCard
 import com.console.mobile.ui.theme.NewTheme
 import androidx.compose.foundation.background
 
@@ -70,30 +68,19 @@ fun OnboardingScreen(onConnected: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
-        SectionCard {
-            TextFieldRow(
-                "Host",
-                host,
-                { text ->
-                    // A pasted pairing URL carries the code in its
-                    // fragment, so the field splits it into the two.
-                    val (address, pasted) = splitHostAndCode(text)
-                    host = address
-                    if (pasted.isNotBlank()) code = pasted
-                    if (testState == "success" || testState == "error") testState = "idle"
-                },
-                "192.168.1.100:8080",
-                monospace = true,
-            )
-            SectionDivider(startInset = 18.dp)
-            TextFieldRow(
-                "Pairing code",
-                code,
-                { code = it; if (testState == "success" || testState == "error") testState = "idle" },
-                "abc-123-xyz",
-                monospace = true,
-            )
-        }
+        ServerCard(
+            host = host,
+            code = code,
+            onHostChange = { text ->
+                // A pasted pairing URL carries the code in its
+                // fragment, so the field splits it into the two.
+                val (address, pasted) = splitHostAndCode(text)
+                host = address
+                if (pasted.isNotBlank()) code = pasted
+                if (testState == "success" || testState == "error") testState = "idle"
+            },
+            onCodeChange = { code = it; if (testState == "success" || testState == "error") testState = "idle" },
+        )
         ActionButton(
             text = if (saving) "Connecting…" else "Connect",
             onClick = {

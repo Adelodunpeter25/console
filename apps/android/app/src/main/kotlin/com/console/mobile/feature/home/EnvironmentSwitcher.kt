@@ -44,7 +44,7 @@ import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.HeaderIconButton
 import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.TextFieldRow
+import com.console.mobile.ui.components.common.new.ServerCard
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.SectionCard
@@ -101,31 +101,20 @@ fun EnvironmentSwitcher(modifier: Modifier = Modifier) {
             if (creating) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     ActionRow(icon = TablerIcons.Outline.ArrowNarrowLeft, title = "Back to environments") { creating = false }
-                    SectionCard {
-                        TextFieldRow(
-                            "Host",
-                            newHost,
-                            { text ->
-                                // A pasted pairing URL carries the code in
-                                // its fragment, so the field splits it into
-                                // the two.
-                                val (address, pasted) = splitHostAndCode(text)
-                                newHost = address
-                                if (pasted.isNotBlank()) newCode = pasted
-                                failure = null
-                            },
-                            "192.168.1.100:8080",
-                            monospace = true,
-                        )
-                        SectionDivider(startInset = 18.dp)
-                        TextFieldRow(
-                            "Pairing code",
-                            newCode,
-                            { newCode = it; failure = null },
-                            "abc-123-xyz",
-                            monospace = true,
-                        )
-                    }
+                    ServerCard(
+                        host = newHost,
+                        code = newCode,
+                        onHostChange = { text ->
+                            // A pasted pairing URL carries the code in
+                            // its fragment, so the field splits it into
+                            // the two.
+                            val (address, pasted) = splitHostAndCode(text)
+                            newHost = address
+                            if (pasted.isNotBlank()) newCode = pasted
+                            failure = null
+                        },
+                        onCodeChange = { newCode = it; failure = null },
+                    )
                     failure?.let { message ->
                         Text(message, color = NewTheme.Danger, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     }

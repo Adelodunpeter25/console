@@ -67,6 +67,7 @@ import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.ServerCard
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TextFieldRow
 import com.console.mobile.ui.components.common.new.TextInput
@@ -246,44 +247,6 @@ fun ServersSettings(onBack: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-/**
- * The server card: where the server is, and the code that lets this phone
- * join it.
- *
- * Shared by the add and edit sheets so they read the same. The two fields
- * are what the server prints (`console pair`), so a user copies one line
- * and types two short things.
- *
- * Pasting the whole URL into the host field works too: anything after the
- * "#" is the code, so the app splits it into the two fields itself.
- */
-@Composable
-private fun ServerCard(
-    host: String,
-    code: String,
-    onHostChange: (String) -> Unit,
-    onCodeChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    SectionCard(modifier = modifier) {
-        TextFieldRow(
-            "Host",
-            host,
-            { onHostChange(it) },
-            "192.168.1.100:8080",
-            monospace = true,
-        )
-        SectionDivider(startInset = 18.dp)
-        TextFieldRow(
-            "Pairing code",
-            code,
-            { onCodeChange(it) },
-            "abc-123-xyz",
-            monospace = true,
-        )
     }
 }
 
