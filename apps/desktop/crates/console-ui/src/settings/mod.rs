@@ -46,13 +46,17 @@ pub enum SettingsTab {
 }
 
 impl SettingsTab {
+    /// The name of the section, as the navigation shows it.
+    ///
+    /// The same names the phone app uses, so a setting is called the same
+    /// thing in both clients.
     pub fn title(&self) -> &'static str {
         match self {
-            Self::Providers => "AI Providers",
-            Self::Servers => "Environments",
-            Self::Usage => "Usage & Activity",
+            Self::Providers => "Providers",
+            Self::Servers => "Servers",
+            Self::Usage => "Usage",
             Self::Projects => "Projects",
-            Self::Models => "Model Roles",
+            Self::Models => "Models",
             Self::Integrations => "Integrations",
             Self::Mcp => "MCP Servers",
             Self::DeletedChats => "Deleted Chats",

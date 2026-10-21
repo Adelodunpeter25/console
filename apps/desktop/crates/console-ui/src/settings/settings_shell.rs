@@ -16,21 +16,29 @@ struct SettingsGroup {
     tabs: &'static [(SettingsTab, IconName, &'static str)],
 }
 
+/// The settings are grouped the same way the phone app groups them, so the
+/// two clients read as one product: the same names, in the same places.
 const SETTINGS_GROUPS: &[SettingsGroup] = &[
     SettingsGroup {
-        title: "AI & Models",
+        title: "Connections",
         tabs: &[
-            (SettingsTab::Providers, IconName::Sparkle, "AI Providers"),
-            (SettingsTab::Models, IconName::Brain, "Model Roles"),
+            (SettingsTab::Servers, IconName::Server, "Servers"),
+            (SettingsTab::Providers, IconName::CircleUser, "Providers"),
+            (SettingsTab::Usage, IconName::ChartColumn, "Usage"),
+        ],
+    },
+    SettingsGroup {
+        title: "AI & tools",
+        tabs: &[
+            (SettingsTab::Models, IconName::Brain, "Models"),
+            (SettingsTab::Integrations, IconName::Package, "Integrations"),
             (SettingsTab::Mcp, IconName::Cpu, "MCP Servers"),
         ],
     },
     SettingsGroup {
-        title: "Workspace",
+        title: "Projects & chats",
         tabs: &[
             (SettingsTab::Projects, IconName::Folder, "Projects"),
-            (SettingsTab::Servers, IconName::Server, "Environments"),
-            (SettingsTab::Integrations, IconName::Package, "Integrations"),
             (
                 SettingsTab::DeletedChats,
                 IconName::TrashBinMinimalistic,
@@ -38,12 +46,12 @@ const SETTINGS_GROUPS: &[SettingsGroup] = &[
             ),
         ],
     },
+    // The phone has no keyboard, so it has no shortcuts page. The desktop
+    // keeps it in a group of its own rather than filing it under one of the
+    // others, where it would not belong.
     SettingsGroup {
         title: "Preferences",
-        tabs: &[
-            (SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts"),
-            (SettingsTab::Usage, IconName::LayoutDashboard, "Usage & Activity"),
-        ],
+        tabs: &[(SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts")],
     },
 ];
 
