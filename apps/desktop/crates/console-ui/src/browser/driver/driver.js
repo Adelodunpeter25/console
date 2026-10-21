@@ -158,6 +158,24 @@
 
   const isVisible = (el) => isRendered(el) && hasBox(el);
 
+  // An accessibility snapshot should not advertise subtrees the accessibility
+  // tree removes. `aria-hidden` is the common case on sites that keep
+  // duplicate desktop/mobile or template markup in the DOM; `inert` is the
+  // modern equivalent for non-interactive regions.
+  const isA11yHidden = (el) => {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return true;
+    if (el.hasAttribute && (el.hasAttribute('inert') || el.inert)) return true;
+    return false;
+  };
+
+  const isA11yHiddenDeep = (el) => {
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      if (isA11yHidden(node)) return true;
+    }
+    return false;
+  };
+
   const textOf = (el) => {
     if (!el) return '';
     const tag = tagOf(el);
@@ -167,6 +185,22 @@
     } catch (_) {
       return norm(el.textContent);
     }
+  };
+
+  // Structured extraction keeps line breaks so a table row or result card
+  // stays readable, while collapsing the horizontal whitespace Amazon and
+  // friends leave between inline elements.
+  const queryText = (el) => {
+    const tag = tagOf(el);
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return '';
+    let text = '';
+    try {
+      text = (el.innerText || el.textContent || '').trim();
+    } catch (_) {
+      text = '';
+    }
+    text = text.replace(/[ \t\f\v]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+    return text.length > 400 ? text.slice(0, 399) + '…' : text;
   };
 
   const accessibleName = (el, role) => {
@@ -362,6 +396,7 @@
       const tag = tagOf(node);
       if (SKIP_TAGS.has(tag)) return;
       if (!isRendered(node)) return;
+      if (isA11yHidden(node)) return;
 
       if (tag === 'IFRAME' || tag === 'FRAME') {
         const name = accessibleName(node, 'Iframe') || clip(node.getAttribute('title'), 100);
@@ -400,6 +435,7 @@
     // walk its children.
     const seeRoot = (el) => {
       if (!isRendered(el)) return;
+      if (isA11yHiddenDeep(el)) return;
       seen.add(el);
       visited += 1;
       const didEmit = hasBox(el) ? emitNode(el, 0) : false;
@@ -453,7 +489,7 @@
     if (!entry || !entry.role) return null;
     const candidates = [];
     for (const el of allElements()) {
-      if (isStale(el) || !isVisible(el)) continue;
+      if (isStale(el) || !isVisible(el) || isA11yHiddenDeep(el)) continue;
       if (roleOf(el) !== entry.role) continue;
       if (accessibleName(el, entry.role) !== entry.name) continue;
       candidates.push(el);
@@ -536,6 +572,11 @@
   const click = (el) => {
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
       return { error: 'Element is disabled.' };
+    }
+    if (!isVisible(el)) {
+      return {
+        error: 'Element is not visible (hidden by display, visibility, opacity, or has no clickable box).',
+      };
     }
     const { rect, hit, x, y } = scrollAndHit(el);
     if (rect.width <= 0 || rect.height <= 0) {
@@ -688,18 +729,89 @@
       return out.join('\n\n');
     }
 
+    if (req.op === 'query') {
+      const selector = (req.selector || '').trim();
+      if (!selector) return 'Missing selector for query.';
+      let elements;
+      try {
+        elements = Array.from(document.querySelectorAll(selector));
+      } catch (error) {
+        return 'Invalid selector: ' + error.message;
+      }
+      if (!elements.length) return 'No match for selector: ' + selector;
+
+      const MAX_QUERY = 30;
+      const MAX_QUERY_CHARS = 24000;
+      const items = [];
+      let visibleCount = 0;
+      let size = 0;
+      for (const el of elements) {
+        if (!isVisible(el) || isA11yHiddenDeep(el)) continue;
+        visibleCount += 1;
+        if (items.length >= MAX_QUERY) continue;
+
+        const tag = tagOf(el).toLowerCase();
+        const role = roleOf(el) || '';
+        const text = queryText(el);
+        const item = { tag };
+        if (role) item.role = role;
+        if (text) item.text = text;
+        const name = role ? accessibleName(el, role) : '';
+        if (name && name !== text) item.name = clip(name, 100);
+        let href = '';
+        if (tagOf(el) === 'A' && el.href) href = el.href;
+        else if (el.getAttribute) href = el.getAttribute('href') || '';
+        if (!href && el.querySelector) {
+          // A result card is usually a wrapper, not the link itself. Surface
+          // its primary link so the agent can open the exact item.
+          const link = el.querySelector('a[href]');
+          if (link && link.href) href = link.href;
+        }
+        if (href) item.href = String(href).slice(0, 300);
+        const image = el.querySelector ? el.querySelector('img[src]') : null;
+        const src = el.currentSrc || el.src
+          || (el.getAttribute && el.getAttribute('src'))
+          || (image && (image.currentSrc || image.src)) || '';
+        if (src) item.src = String(src).slice(0, 300);
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+          const value = String(el.value || '');
+          if (value) item.value = value.slice(0, 120);
+        }
+        if (tag === 'input' && typeof el.checked === 'boolean') item.checked = el.checked;
+        if (el.disabled === true) item.disabled = true;
+        const itemJson = JSON.stringify(item);
+        if (size + itemJson.length > MAX_QUERY_CHARS) continue;
+        items.push(item);
+        size += itemJson.length;
+      }
+      if (!items.length) return 'No visible match for selector: ' + selector;
+      const payload = { selector, count: visibleCount, items };
+      if (visibleCount > items.length) payload.truncated = true;
+      return JSON.stringify(payload);
+    }
+
     if (req.op === 'wait') {
       const selector = (req.selector || '').trim();
       const urlPart = req.urlContains || '';
       const waitText = req.text || '';
-      try {
-        if (selector && !document.querySelector(selector)) return 'WF_NO';
-      } catch (error) {
-        return 'WF_ERR: Invalid selector: ' + error.message;
+      let matches = null;
+      if (selector) {
+        try {
+          matches = Array.from(document.querySelectorAll(selector));
+        } catch (error) {
+          return 'WF_ERR: Invalid selector: ' + error.message;
+        }
       }
       if (urlPart && !location.href.includes(urlPart)) return 'WF_NO';
       if (waitText && !(document.body && document.body.innerText.includes(waitText))) {
         return 'WF_NO';
+      }
+      if (matches) {
+        if (!matches.length) return 'WF_NO';
+        const visible = matches.some(
+          (el) => isVisible(el) && !isA11yHiddenDeep(el)
+        );
+        if (!visible) return 'WF_HIDDEN';
       }
       return 'WF_OK';
     }
@@ -716,6 +828,10 @@
     const label = describe(el, role, accessibleName(el, role));
     if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
       return 'Element ' + label + ' is disabled.';
+    }
+    if (isA11yHiddenDeep(el)) {
+      return 'Element ' + label
+        + ' is hidden from the accessibility tree. Take a new snapshot and use a visible control.';
     }
 
     const op = req.op;
@@ -767,12 +883,17 @@
       } catch (_) {}
     };
     try {
-      post({ ok: true, value: await execute(req) });
+      post({
+        ok: true,
+        value: await execute(req),
+        url: location.href,
+        title: document.title,
+      });
     } catch (error) {
       const message = error && error.message
         ? (error.name || 'Error') + ': ' + error.message
         : String(error);
-      post({ ok: false, error: message });
+      post({ ok: false, error: message, url: location.href, title: document.title });
     }
   };
 

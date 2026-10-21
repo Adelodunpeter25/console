@@ -139,8 +139,11 @@ Error strings matter as much as the actions — the agent recovers from them.
 
 - `wait_for`: selector (visible/attached/detached/hidden), text, URL, JS
   expression; 100 ms poll from Rust; timeout 10s default, 60s max. Load state
-  from `WKNavigationDelegate`.
+  from `WKNavigationDelegate`. Selector waits must be visible, not merely
+  present, or a lazily rendered control passes the wait and fails the click.
 - `get_content`: port the existing `content_script`; add `outerHTML`.
+- `query`: visible elements matching a selector as compact JSON (text, href,
+  form state); cap at 30 items and 24 KB so one result page fits in context.
 - **Screenshot**: native `takeSnapshot`; add selector + annotated mode (inject
   numbered labels, capture, remove — same trick as theirs). Full-page behind a
   resize hack, or defer.
@@ -164,7 +167,8 @@ rules that make the driver feel good:
 - Never guess a ref. Re-snapshot after navigation or a UI change.
 - Use `wait_for` for selector/text/URL conditions instead of sleeping or
   looping snapshots.
-- `get_content` to read, `snapshot` to act.
+- `get_content` to read, `query` for repeated cards and tables, `snapshot`
+  to act.
 - `run_js` for extraction and for actions the verbs do not cover; return
   JSON-serializable values.
 - Read the error before retrying: `covered by ...`, `stale ref`, `No option`.

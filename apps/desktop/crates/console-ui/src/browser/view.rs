@@ -37,6 +37,15 @@ use crate::theme::Theme;
 
 const TOOLBAR_HEIGHT: f32 = 42.0;
 
+/// A script/driver result plus the live page identity at completion. The
+/// committed tab URL lags behind `pushState` routes, so callers should prefer
+/// `url`/`title` from here when they are present.
+pub struct ScriptOutcome {
+    pub value: Result<String, String>,
+    pub url: Option<String>,
+    pub title: Option<String>,
+}
+
 #[cfg(target_os = "macos")]
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
@@ -110,7 +119,7 @@ pub struct BrowserView {
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
     /// Results posted back by agent-run scripts, keyed by request id.
-    script_results: HashMap<String, Result<String, String>>,
+    script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -392,16 +401,25 @@ impl BrowserView {
                     ok,
                     value,
                     error,
+                    url,
+                    title,
                 } => {
                     if self.script_results.len() >= 64 {
                         self.script_results.clear();
                     }
-                    let result = if ok {
+                    let value = if ok {
                         Ok(cap_result(value.unwrap_or_default()))
                     } else {
                         Err(error.unwrap_or_else(|| "Script failed".to_string()))
                     };
-                    self.script_results.insert(request_id, result);
+                    self.script_results.insert(
+                        request_id,
+                        ScriptOutcome {
+                            value,
+                            url: url.filter(|u| !u.is_empty()),
+                            title: title.filter(|t| !t.trim().is_empty()),
+                        },
+                    );
                 }
             }
         }
@@ -438,16 +456,12 @@ impl BrowserView {
         self.evaluate_script(&wrap_script(request_id, script));
     }
 
-    /// Run one page-driver request (snapshot/click/type/run_js/content/wait).
+    /// Run one page-driver request (snapshot/click/type/run_js/content/query/wait).
     /// The driver is installed at document start, so this is a plain call
     /// rather than an `eval`; strict Content-Security-Policy pages keep
     /// working for everything except `run_js`, which is the agent's own code.
     /// The result arrives under `request_id` like any other script result.
-    pub fn run_driver_script(
-        &self,
-        request_id: &str,
-        request: &super::driver::Request<'_>,
-    ) {
+    pub fn run_driver_script(&self, request_id: &str, request: &super::driver::Request<'_>) {
         let script = super::driver::request_script(request_id, request);
         self.evaluate_script(&script);
     }
@@ -464,7 +478,7 @@ impl BrowserView {
     }
 
     /// Remove and return the result posted for `request_id`, if it arrived.
-    pub fn take_script_result(&mut self, request_id: &str) -> Option<Result<String, String>> {
+    pub fn take_script_result(&mut self, request_id: &str) -> Option<ScriptOutcome> {
         self.script_results.remove(request_id)
     }
 

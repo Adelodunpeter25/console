@@ -51,8 +51,12 @@ fn eval_content_and_wait_requests_carry_their_payloads() {
     assert!(content.contains("\"op\":\"content\""));
     assert!(content.contains("\"selector\":\"main\""));
 
+    let query = request_script("req-6", &Request::query(".result-card"));
+    assert!(query.contains("\"op\":\"query\""));
+    assert!(query.contains("\"selector\":\".result-card\""));
+
     let wait = request_script(
-        "req-6",
+        "req-7",
         &Request::wait(Some("#done"), Some("/app"), Some("Ready")),
     );
     assert!(wait.contains("\"op\":\"wait\""));
@@ -70,8 +74,14 @@ fn driver_keeps_its_result_and_error_contract_strings() {
         "is covered by",
         "No option",
         "WF_OK",
+        "WF_HIDDEN",
         "WF_ERR",
         "MAX_RESULT_CHARS",
+        "aria-hidden",
+        "hidden from the accessibility tree",
+        "No visible match",
+        "url: location.href",
+        "title: document.title",
     ] {
         assert!(js.contains(needle), "driver lost {needle:?}");
     }

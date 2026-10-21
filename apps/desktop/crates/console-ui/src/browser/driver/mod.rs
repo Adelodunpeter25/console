@@ -3,10 +3,10 @@
 //! The driver is plain JavaScript injected at document start into whichever
 //! webview is running (WKWebView today, Chromium via the in-page fallback). It
 //! owns the page model: the accessibility snapshot, per-document refs, the
-//! actions that operate on those refs, plus script evaluation, content reading
-//! and wait probes. Keeping it out of the host means the same code runs on
-//! every engine, and the snapshot format stays the shared contract between the
-//! driver and the agent.
+//! actions that operate on those refs, plus script evaluation, structured
+//! queries, content reading and wait probes. Keeping it out of the host means
+//! the same code runs on every engine, and the snapshot format stays the
+//! shared contract between the driver and the agent.
 //!
 //! Installation and calls are separate on purpose: the install script is a
 //! `WKUserScript`/CEF init script, so a call is a plain function invocation.
@@ -82,6 +82,18 @@ impl<'a> Request<'a> {
             text: None,
             submit: false,
             selector,
+            script: None,
+            url_contains: None,
+        }
+    }
+
+    pub fn query(selector: &'a str) -> Self {
+        Self {
+            op: "query",
+            element_ref: None,
+            text: None,
+            submit: false,
+            selector: Some(selector),
             script: None,
             url_contains: None,
         }

@@ -61,6 +61,13 @@ func TestBrowserTool_Validation(t *testing.T) {
 		t.Fatalf("expected script error, got %v", err)
 	}
 
+	// Missing selector on query
+	args = helpers.MustJSONRaw(t, map[string]any{"action": "query"})
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "'query' needs a selector") {
+		t.Fatalf("expected query selector error, got %v", err)
+	}
+
 	// Unknown action
 	args = helpers.MustJSONRaw(t, map[string]any{"action": "invalid_action"})
 	_, err = tool.Execute(context.Background(), args)

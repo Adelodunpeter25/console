@@ -1,11 +1,11 @@
 //! Browser action dispatch and execution for agent automation.
 //!
 //! Handles `AgentSessionEvent::BrowserAction` requests from the backend agent
-//! (`navigate`, `run_js`, `get_content`, `tabs`, `switch_tab`, `close_tab`) against open workspace browser tabs.
+//! (`navigate`, `run_js`, `get_content`, `query`, `tabs`, `switch_tab`, `close_tab`) against open workspace browser tabs.
 
 use console_core::{BrowserActionRequest, ResolveBrowserActionDto};
-use console_ui::browser::BrowserView;
 use console_ui::browser::driver::Request as DriverRequest;
+use console_ui::browser::{BrowserView, ScriptOutcome};
 use gpui::{App, AsyncApp, Context, Entity, WeakEntity};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -47,7 +47,7 @@ async fn poll_script_result(
     cx: &mut AsyncApp,
     view: &Entity<BrowserView>,
     script_id: &str,
-) -> Result<String, String> {
+) -> Result<ScriptOutcome, String> {
     poll_script_result_within(this, cx, view, script_id, SCRIPT_RESULT_POLLS).await
 }
 
@@ -58,7 +58,7 @@ async fn poll_script_result_within(
     view: &Entity<BrowserView>,
     script_id: &str,
     polls: u32,
-) -> Result<String, String> {
+) -> Result<ScriptOutcome, String> {
     for _ in 0..polls {
         cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
         let Ok(found) = this.update(cx, |_, cx| {
@@ -67,13 +67,37 @@ async fn poll_script_result_within(
             return Err("Console window closed".to_string());
         };
         if let Some(result) = found {
-            return result;
+            return Ok(result);
         }
     }
     Err(format!(
         "Script produced no result after {}s (the page may be blocking script evaluation, or the script never finished)",
         (polls as u64 * BROWSER_POLL_INTERVAL.as_millis() as u64) / 1000
     ))
+}
+
+/// Prefer the page identity the driver reported when the script finished.
+/// The committed tab URL lags behind `pushState` routes, so it is only a
+/// fallback for older scripts that do not send `url`/`title`.
+fn format_tab_header(
+    view: &Entity<BrowserView>,
+    tab_id: &str,
+    url: Option<&str>,
+    title: Option<&str>,
+    cx: &App,
+) -> String {
+    let bv = view.read(cx);
+    let url = url
+        .filter(|u| !u.is_empty())
+        .map(str::to_owned)
+        .or_else(|| bv.current_url().map(str::to_owned))
+        .unwrap_or_default();
+    let title = title
+        .filter(|t| !t.trim().is_empty())
+        .map(str::to_owned)
+        .or_else(|| bv.tab_label())
+        .unwrap_or_default();
+    format!("Tab: {tab_id}\nTitle: {title}\nURL: {url}")
 }
 
 impl ConsoleDesktopApp {
@@ -201,13 +225,7 @@ impl ConsoleDesktopApp {
                                         view.update(cx, |bv, _| {
                                             bv.run_driver_script(&rid, &request)
                                         });
-                                        let bv = view.read(cx);
-                                        let header = format!(
-                                            "Tab: {}\nTitle: {}\nURL: {}",
-                                            id,
-                                            bv.tab_label().unwrap_or_default(),
-                                            bv.current_url().unwrap_or(&url)
-                                        );
+                                        let header = format_tab_header(&view, &id, None, None, cx);
                                         (view.clone(), rid, header)
                                     })
                                 })
@@ -220,8 +238,12 @@ impl ConsoleDesktopApp {
                                 format!("Navigation to {url} is still loading after {secs}s.");
                             if let Some((view, rid, header)) = partial {
                                 msg.push_str(&format!("\n{header}"));
-                                if let Ok(text) = poll_script_result(&this, cx, &view, &rid).await {
-                                    msg.push_str(&format!("\nText loaded so far:\n{text}"));
+                                if let Ok(outcome) =
+                                    poll_script_result(&this, cx, &view, &rid).await
+                                {
+                                    if let Ok(text) = outcome.value {
+                                        msg.push_str(&format!("\nText loaded so far:\n{text}"));
+                                    }
                                 }
                             }
                             (Some(msg), None)
@@ -305,25 +327,30 @@ impl ConsoleDesktopApp {
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
-                        Ok(value) => {
+                        Ok(outcome) => {
                             let header = this
                                 .update(cx, |_, cx| {
-                                    let bv = view.read(cx);
-                                    format!(
-                                        "Tab: {}\nTitle: {}\nURL: {}",
-                                        tab_id,
-                                        bv.tab_label().unwrap_or_default(),
-                                        bv.current_url().unwrap_or_default()
+                                    format_tab_header(
+                                        &view,
+                                        &tab_id,
+                                        outcome.url.as_deref(),
+                                        outcome.title.as_deref(),
+                                        cx,
                                     )
                                 })
                                 .unwrap_or_default();
                             let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
-                            let hint = if is_snapshot {
-                                ""
-                            } else {
-                                "\n(Take a new snapshot if the page changed.)"
-                            };
-                            (Some(format!("{note}{header}\n\n{value}{hint}")), None)
+                            match outcome.value {
+                                Ok(value) => {
+                                    let hint = if is_snapshot {
+                                        ""
+                                    } else {
+                                        "\n(Take a new snapshot if the page changed.)"
+                                    };
+                                    (Some(format!("{note}{header}\n\n{value}{hint}")), None)
+                                }
+                                Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
+                            }
                         }
                         Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
                     };
@@ -457,6 +484,9 @@ impl ConsoleDesktopApp {
                     let started = std::time::Instant::now();
                     let mut attempt = 0u32;
                     let mut last_problem: Option<String> = None;
+                    let mut last_url: Option<String> = None;
+                    let mut last_title: Option<String> = None;
+                    let mut hidden = false;
                     let mut met = false;
                     // Short one-shot checks (rather than one long in-page promise) so the
                     // wait survives full page loads that destroy the JS context.
@@ -475,16 +505,30 @@ impl ConsoleDesktopApp {
                             return;
                         }
                         match poll_script_result_within(&this, cx, &view, &check_id, WAIT_FOR_CHECK_POLLS).await {
-                            Ok(value) if value.contains("WF_OK") => {
-                                met = true;
-                                break;
+                            Ok(outcome) => {
+                                let ScriptOutcome { value, url, title } = outcome;
+                                last_url = url;
+                                last_title = title;
+                                match value {
+                                    Ok(value) if value.contains("WF_OK") => {
+                                        met = true;
+                                        break;
+                                    }
+                                    Ok(value) if value.contains("WF_ERR") => {
+                                        last_problem = Some(value);
+                                        break;
+                                    }
+                                    Ok(value) if value.contains("WF_HIDDEN") => {
+                                        hidden = true;
+                                    }
+                                    Ok(value) if value.contains("WF_NO") => {
+                                        hidden = false;
+                                    }
+                                    Ok(_) => {}
+                                    // No result usually means the page is mid-navigation; keep waiting.
+                                    Err(_) => {}
+                                }
                             }
-                            Ok(value) if value.contains("WF_ERR") => {
-                                last_problem = Some(value);
-                                break;
-                            }
-                            Ok(_) => {}
-                            // No result usually means the page is mid-navigation; keep waiting.
                             Err(_) => {}
                         }
                         if started.elapsed() >= timeout {
@@ -495,18 +539,26 @@ impl ConsoleDesktopApp {
                     let elapsed_ms = started.elapsed().as_millis();
                     let (result, error) = this
                         .update(cx, |_, cx| {
-                            let bv = view.read(cx);
-                            let header = format!(
-                                "Tab: {}\nTitle: {}\nURL: {}",
-                                tab_id,
-                                bv.tab_label().unwrap_or_default(),
-                                bv.current_url().unwrap_or_default()
+                            let header = format_tab_header(
+                                &view,
+                                &tab_id,
+                                last_url.as_deref(),
+                                last_title.as_deref(),
+                                cx,
                             );
                             let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
                             if met {
                                 (Some(format!("{note}Condition met after {elapsed_ms}ms\n{header}")), None)
                             } else if let Some(problem) = last_problem {
                                 (None, Some(format!("{note}{problem}\n{header}")))
+                            } else if hidden {
+                                (
+                                    None,
+                                    Some(format!(
+                                        "{note}Timed out after {}ms: the selector matched an element that is not visible\n{header}",
+                                        timeout.as_millis()
+                                    )),
+                                )
                             } else {
                                 (
                                     None,
@@ -525,7 +577,7 @@ impl ConsoleDesktopApp {
                 .detach();
             }
 
-            "run_js" | "get_content" => {
+            "run_js" | "get_content" | "query" => {
                 let is_js = action == "run_js";
                 let request = if is_js {
                     let js = req.script.as_deref().unwrap_or("");
@@ -540,6 +592,19 @@ impl ConsoleDesktopApp {
                         return;
                     }
                     DriverRequest::eval(js)
+                } else if action == "query" {
+                    let selector = req.selector.as_deref().unwrap_or("");
+                    if selector.trim().is_empty() {
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some("Missing selector for query action".to_string()),
+                            cx,
+                        );
+                        return;
+                    }
+                    DriverRequest::query(selector)
                 } else {
                     DriverRequest::content(req.selector.as_deref())
                 };
@@ -585,25 +650,28 @@ impl ConsoleDesktopApp {
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
-                        Ok(value) if is_js => {
-                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
-                            (Some(format!("{note}Tab: {tab_id}\n{value}")), None)
-                        }
-                        Ok(value) => {
-                            let header = this
-                                .update(cx, |_, cx| {
-                                    let bv = view.read(cx);
-                                    format!(
-                                        "Tab: {}\nTitle: {}\nURL: {}",
-                                        tab_id,
-                                        bv.tab_label().unwrap_or_default(),
-                                        bv.current_url().unwrap_or_default()
-                                    )
-                                })
-                                .unwrap_or_default();
-                            let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
-                            (Some(format!("{note}{header}\n\n{value}")), None)
-                        }
+                        Ok(outcome) => match outcome.value {
+                            Ok(value) if is_js => {
+                                let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                                (Some(format!("{note}Tab: {tab_id}\n{value}")), None)
+                            }
+                            Ok(value) => {
+                                let header = this
+                                    .update(cx, |_, cx| {
+                                        format_tab_header(
+                                            &view,
+                                            &tab_id,
+                                            outcome.url.as_deref(),
+                                            outcome.title.as_deref(),
+                                            cx,
+                                        )
+                                    })
+                                    .unwrap_or_default();
+                                let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
+                                (Some(format!("{note}{header}\n\n{value}")), None)
+                            }
+                            Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
+                        },
                         Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
                     };
                     let _ = this.update(cx, |app, cx| {

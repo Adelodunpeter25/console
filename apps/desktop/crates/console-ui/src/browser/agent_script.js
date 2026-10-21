@@ -50,10 +50,10 @@
     if (text.length > max) {
       text = text.slice(0, max) + '\n...[truncated: ' + text.length + ' chars total]';
     }
-    post({ ok: true, value: text });
+    post({ ok: true, value: text, url: location.href, title: document.title });
   } catch (error) {
     const message =
       error && error.message ? (error.name || 'Error') + ': ' + error.message : String(error);
-    post({ ok: false, error: message });
+    post({ ok: false, error: message, url: location.href, title: document.title });
   }
 })();

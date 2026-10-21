@@ -47,5 +47,11 @@ pub enum InspectorIpcMessage {
         value: Option<String>,
         #[serde(default)]
         error: Option<String>,
+        /// Live page identity at the moment the script finished. Used instead
+        /// of the tab's committed URL, which goes stale on pushState routes.
+        #[serde(default)]
+        url: Option<String>,
+        #[serde(default)]
+        title: Option<String>,
     },
 }
