@@ -119,12 +119,23 @@ pub fn split_pairing_line(text: &str) -> (String, String) {
         return (trimmed.to_string(), String::new());
     };
     let address = match base.split_once("://") {
-        Some((_, rest)) => rest.split('/').next().unwrap_or(rest).trim(),
-        None => base.trim(),
+        Some((scheme, rest)) => {
+            let authority = rest.split('/').next().unwrap_or(rest).trim();
+            // The host field assumes http when it carries no scheme, so the
+            // scheme is only dropped when it is the default one. An https
+            // address has to keep its own or it would be spoken to in the
+            // wrong protocol.
+            if scheme.eq_ignore_ascii_case("http") {
+                authority.to_string()
+            } else {
+                format!("{scheme}://{authority}")
+            }
+        }
+        None => base.trim().to_string(),
     };
     // A bare code, or a query string the full URL carries.
     if !fragment.contains('=') {
-        return (address.to_string(), fragment.to_string());
+        return (address, fragment.to_string());
     }
     let code = fragment
         .split('&')
@@ -132,7 +143,7 @@ pub fn split_pairing_line(text: &str) -> (String, String) {
         .find(|(key, _)| *key == "code")
         .map(|(_, value)| value.to_string())
         .unwrap_or_default();
-    (address.to_string(), code)
+    (address, code)
 }
 
 /// The host and port of an address, for use as a display name.

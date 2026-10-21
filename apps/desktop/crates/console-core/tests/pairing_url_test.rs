@@ -4,7 +4,7 @@
 //! read exactly is rejected rather than repaired, and the grant never
 //! ends up in the address the client will talk to.
 
-use console_core::utils::{host_port, parse_pairing_url};
+use console_core::utils::{host_port, parse_pairing_url, split_pairing_line};
 
 #[test]
 fn parses_a_pairing_url() {
@@ -83,4 +83,33 @@ fn names_a_server_by_its_address() {
     assert_eq!(host_port("192.168.1.10:3000"), "192.168.1.10:3000");
     assert_eq!(host_port("http://server.example/path"), "server.example");
     assert_eq!(host_port("  "), "");
+}
+
+// The host field assumes http when it carries no scheme, so the scheme is
+// only dropped when it is the default one. An https address that loses its
+// scheme is spoken to in the wrong protocol.
+#[test]
+fn a_split_line_keeps_an_https_scheme() {
+    let (address, code) =
+        split_pairing_line("https://k7m2xq9pa4dn.hostc.app#vw9g-zu89-aphc");
+    assert_eq!(address, "https://k7m2xq9pa4dn.hostc.app");
+    assert_eq!(code, "vw9g-zu89-aphc");
+}
+
+#[test]
+fn a_split_line_keeps_an_https_scheme_from_a_full_url() {
+    let (address, code) = split_pairing_line(
+        "https://k7m2xq9pa4dn.hostc.app/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc",
+    );
+    assert_eq!(address, "https://k7m2xq9pa4dn.hostc.app");
+    assert_eq!(code, "vw9g-zu89-aphc");
+}
+
+#[test]
+fn a_split_line_still_drops_the_default_scheme() {
+    // http is what the host field assumes, so the short form is unchanged.
+    let (address, code) =
+        split_pairing_line("http://192.168.1.10:3000/console/pair#v=1&server=s&code=abc");
+    assert_eq!(address, "192.168.1.10:3000");
+    assert_eq!(code, "abc");
 }
