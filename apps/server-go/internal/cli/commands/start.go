@@ -82,7 +82,8 @@ func StartDaemon(options StartOptions) error {
 	status := daemon.GetStatus()
 	if status.Running {
 		fmt.Printf("Daemon is already running (PID: %d)\n", status.Pid)
-		fmt.Printf("Server: http://%s:%s\n", status.Host, status.Port)
+		// The address a client should use, not the bind address.
+		fmt.Printf("Server: %s\n", publicBaseURL(status.Dir))
 		fmt.Printf("Uptime: %s\n", status.Uptime)
 		os.Exit(1)
 	}
@@ -191,7 +192,9 @@ func StartDaemon(options StartOptions) error {
 			return fmt.Errorf("write pid file: %w", err)
 		}
 		fmt.Printf("Daemon started successfully (PID: %d)\n", pid)
-		fmt.Printf("Server: http://%s:%s\n", host, port)
+		// The address a client should use, not the bind address: a wildcard
+		// bind or a tunnel means the two differ.
+		fmt.Printf("Server: %s\n", publicBaseURL(daemon.ConsoleDir()))
 		// The pairing URL is printed after the daemon is confirmed up, so
 		// the grant it carries is one the running server will honour.
 		PrintPairing(daemon.ConsoleDir())

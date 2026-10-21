@@ -124,15 +124,23 @@ func printQR(content string) {
 
 // publicBaseURL is the address a client should use to reach this server.
 //
+// CONSOLE_PUBLIC_URL wins outright: a server behind a tunnel, reverse proxy
+// or load balancer is not reachable at the address it binds, so the operator
+// states the address clients should use instead. It carries its own scheme,
+// so an https endpoint stays https.
+//
 // The environment wins over the saved config, because that is the order the
 // server itself resolves its listen address in: a server started with
 // PORT=3999 listens on 3999, whatever the saved config says, and a URL
 // pointing somewhere else would simply not connect.
 //
 // The configured host is often 0.0.0.0 — a bind address, not a dialable
-// one. A wildcard is replaced with the machine's LAN address so the URL
+// one. A wildcard is replaced with the machine's dialable address so the URL
 // works from a phone, and with loopback when there is no LAN at all.
 func publicBaseURL(dir string) string {
+	if override := strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")); override != "" {
+		return strings.TrimRight(override, "/")
+	}
 	cfg := daemon.LoadConfig(dir)
 	host := strings.TrimSpace(os.Getenv("HOST"))
 	if host == "" {
@@ -153,9 +161,13 @@ func publicBaseURL(dir string) string {
 
 // hostPort renders a base URL as "host:port" — the form a client's host
 // field takes, and the shorter of the two to read.
+//
+// The scheme is dropped only when it is the default one. A client's host
+// field assumes http when it carries no scheme, so an https address has to
+// keep its own or it would be spoken to in the wrong protocol.
 func hostPort(baseURL string) string {
-	trimmed := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
-	return strings.TrimRight(trimmed, "/")
+	trimmed := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
+	return strings.TrimPrefix(trimmed, "http://")
 }
 
 // lanAddress finds the address a client should use to reach this machine.

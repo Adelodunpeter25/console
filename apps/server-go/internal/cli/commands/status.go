@@ -24,7 +24,9 @@ func StatusDaemon() error {
 		uptime = "unknown"
 	}
 	fmt.Printf("Uptime: %s\n", uptime)
-	fmt.Printf("Server: http://%s:%s\n", status.Host, status.Port)
+	// The address a client should use, not the bind address: a wildcard
+	// bind or a tunnel means the two differ.
+	fmt.Printf("Server: %s\n", publicBaseURL(status.Dir))
 	// The pairing URL is the thing an operator actually wants from
 	// `console status`: it is the copy-pasteable line that connects a
 	// phone or another machine. It is minted against the *running*
