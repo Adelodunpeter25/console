@@ -113,9 +113,14 @@ type OpenMessage struct {
 	Path    string     `json:"path"`
 	Headers HeaderList `json:"headers"`
 	Body    bool       `json:"body"`
-	// WebSocket lists the subprotocols a public client offered. It is
-	// present only for WebSocket upgrades.
-	WebSocket []string `json:"websocket,omitempty"`
+	// WebSocket marks the stream as a WebSocket upgrade and lists the
+	// subprotocols the public client offered.
+	//
+	// The key's presence is what marks the upgrade, not its length: a
+	// public client that offers no subprotocol sends an empty list, and
+	// that is still a WebSocket. A nil pointer means the key was absent,
+	// which means a plain HTTP request.
+	WebSocket *[]string `json:"websocket,omitempty"`
 }
 
 // HeadMessage answers an OpenMessage with the local response's status and

@@ -59,7 +59,9 @@ func (s *webSocketStream) start() {
 		header.Add(h[0], h[1])
 	}
 	dialer := *s.client.dialer()
-	dialer.Subprotocols = s.open.WebSocket
+	if s.open.WebSocket != nil {
+		dialer.Subprotocols = *s.open.WebSocket
+	}
 	conn, resp, err := dialer.DialContext(context.Background(), target, header)
 	if err != nil {
 		if resp != nil {

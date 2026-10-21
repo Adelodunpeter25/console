@@ -320,11 +320,12 @@ func TestHostcTunnelForwardsWebSocket(t *testing.T) {
 	}
 
 	tunnel := newFakeTunnel(t, func(conn *websocket.Conn) {
+		offered := []string{"chat"}
 		if err := writeJSON(conn, hostc.FrameOpen, 1, hostc.OpenMessage{
 			Method:    "GET",
 			Path:      "/ws",
 			Headers:   hostc.HeaderList{{"host", "tunnel123.example"}},
-			WebSocket: []string{"chat"},
+			WebSocket: &offered,
 		}); err != nil {
 			t.Errorf("write OPEN: %v", err)
 			return
@@ -349,6 +350,70 @@ func TestHostcTunnelForwardsWebSocket(t *testing.T) {
 		}
 		if text.Type != hostc.FrameText {
 			t.Errorf("expected TEXT, got type %d", text.Type)
+		}
+		if string(text.Payload) != "echo:hello" {
+			t.Errorf("payload = %q", text.Payload)
+		}
+	})
+	openClient(t, tunnel, target)
+	tunnel.wait(t)
+}
+
+func TestHostcTunnelForwardsWebSocketWithNoSubprotocols(t *testing.T) {
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			typ, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if typ == websocket.TextMessage {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte("echo:"+string(data)))
+			}
+		}
+	}))
+	t.Cleanup(local.Close)
+	target, err := url.Parse(local.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tunnel := newFakeTunnel(t, func(conn *websocket.Conn) {
+		// A public client that offers no subprotocol sends an empty list.
+		// The key's presence still marks the stream as a WebSocket upgrade,
+		// so it must not be handled as a plain HTTP request.
+		offered := []string{}
+		if err := writeJSON(conn, hostc.FrameOpen, 1, hostc.OpenMessage{
+			Method:    "GET",
+			Path:      "/ws",
+			Headers:   hostc.HeaderList{{"host", "tunnel123.example"}},
+			WebSocket: &offered,
+		}); err != nil {
+			t.Errorf("write OPEN: %v", err)
+			return
+		}
+		head, err := readHead(conn)
+		if err != nil {
+			t.Errorf("read HEAD: %v", err)
+			return
+		}
+		if head.Status != 101 {
+			t.Errorf("status = %d, want 101", head.Status)
+			return
+		}
+		if err := writeFrame(conn, hostc.FrameText, 1, []byte("hello")); err != nil {
+			t.Errorf("write TEXT: %v", err)
+			return
+		}
+		text, err := readData(conn)
+		if err != nil {
+			t.Errorf("read TEXT: %v", err)
+			return
 		}
 		if string(text.Payload) != "echo:hello" {
 			t.Errorf("payload = %q", text.Payload)

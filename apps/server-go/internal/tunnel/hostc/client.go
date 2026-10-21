@@ -219,7 +219,9 @@ func (c *Client) startStream(f Frame) {
 		return
 	}
 	var s stream
-	if len(open.WebSocket) > 0 {
+	// The websocket key's presence marks an upgrade, not its length: a
+	// public client that offers no subprotocol sends an empty list.
+	if open.WebSocket != nil {
 		s = newWebSocketStream(c, f.Stream, open)
 	} else {
 		s = newHTTPStream(c, f.Stream, open)
