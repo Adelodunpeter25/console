@@ -80,6 +80,10 @@ class DeviceRepository(
 
     /**
      * Builds the WebSocket URL for live H.264 streaming.
+     *
+     * The player page opens the socket from a webview, which cannot attach an
+     * Authorization header, so the device token rides in the query string —
+     * the server accepts it there for this upgrade only.
      */
     fun getStreamUrl(id: String, platform: String): String {
         val base = apiClient.baseUrl.trimEnd('/')
@@ -92,7 +96,10 @@ class DeviceRepository(
         }
         val encId = URLEncoder.encode(id, "UTF-8")
         val encPlat = URLEncoder.encode(platform, "UTF-8")
-        return "$wsBase/api/devices/$encId/stream?platform=$encPlat"
+        val token = apiClient.authToken?.takeIf { it.isNotBlank() }
+            ?.let { "&token=" + URLEncoder.encode(it, "UTF-8") }
+            .orEmpty()
+        return "$wsBase/api/devices/$encId/stream?platform=$encPlat$token"
     }
 
     val serverBaseUrl: String

@@ -6,8 +6,8 @@ pub mod workspace;
 pub mod workspace_state;
 
 pub use auth::{
-    StoredServerAuth, clear as clear_server_auth, save as save_server_auth,
-    token_for as server_auth_token,
+    StoredServerAuth, clear as clear_server_auth, load_for as load_server_auth,
+    save as save_server_auth, token_for as server_auth_token,
 };
 pub use layout::PersistedLayoutState;
 pub(crate) use store::read_document;

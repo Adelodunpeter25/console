@@ -164,6 +164,81 @@ func TestDeviceThatHasNeverConnectedHasNoLastSeen(t *testing.T) {
 	_ = paired
 }
 
+// A browser cannot put an Authorization header on a WebSocket handshake, so
+// the device stream accepts the device token in the query string instead.
+// That carve-out must stay narrow: ordinary HTTP remains header-only, the
+// player page stays public because a webview navigation cannot carry a header
+// either, and a bad token still fails the upgrade.
+func TestDeviceStreamAcceptsQueryTokenOnlyForWebSocketUpgrades(t *testing.T) {
+	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	issuer := auth.NewTokenIssuerWithSecret([]byte("stream-token-secret-32-bytes-long"))
+	manager := auth.NewManager(database, issuer)
+	grant, _, err := manager.CreateBootstrapGrant()
+	if err != nil {
+		t.Fatal(err)
+	}
+	paired, err := manager.Pair(grant, "Phone", "android")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	app := fiber.New()
+	routes.RegisterPairingRoutes(app, manager)
+	app.Use(routes.RequireDeviceToken(manager))
+	app.Get("/api/devices/player", func(c *fiber.Ctx) error { return c.SendString("player") })
+	app.Get("/api/devices", func(c *fiber.Ctx) error { return c.SendString("devices") })
+	app.Get("/api/devices/:id/stream", func(c *fiber.Ctx) error { return c.SendString("stream") })
+
+	player, err := app.Test(httptest.NewRequest("GET", "/api/devices/player", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if player.StatusCode != 200 {
+		t.Fatalf("player page status = %d", player.StatusCode)
+	}
+
+	plain, err := app.Test(httptest.NewRequest("GET", "/api/devices/abc/stream?token="+paired.Token, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plain.StatusCode != 401 {
+		t.Fatalf("ordinary HTTP with a query token status = %d, want 401", plain.StatusCode)
+	}
+
+	upgrade := func(token string) int {
+		req := httptest.NewRequest("GET", "/api/devices/abc/stream?platform=android&token="+token, nil)
+		req.Header.Set("Connection", "Upgrade")
+		req.Header.Set("Upgrade", "websocket")
+		response, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response.StatusCode
+	}
+	if status := upgrade(paired.Token); status != 200 {
+		t.Fatalf("websocket upgrade with a query token status = %d", status)
+	}
+	if status := upgrade("nope"); status != 401 {
+		t.Fatalf("websocket upgrade with a bad token status = %d", status)
+	}
+
+	// The query token is only honoured on the stream path.
+	other := httptest.NewRequest("GET", "/api/devices?token="+paired.Token, nil)
+	other.Header.Set("Connection", "Upgrade")
+	other.Header.Set("Upgrade", "websocket")
+	otherResponse, err := app.Test(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if otherResponse.StatusCode != 401 {
+		t.Fatalf("upgrade on a non-stream path with a query token status = %d, want 401", otherResponse.StatusCode)
+	}
+}
+
 func decodePairData(t *testing.T, body io.Reader) *consolev1.PairDeviceResponse {
 	t.Helper()
 	var envelope struct {

@@ -63,6 +63,9 @@ pub struct DeviceViewer {
     host: Option<Rc<WebviewHost>>,
     host_error: Option<String>,
     base_url: Option<String>,
+    /// Device token for the stream handshake: a webview cannot send an
+    /// Authorization header on the websocket, so it travels in the URL.
+    auth_token: Option<String>,
     /// Backend origin the player page was last loaded from: the page only
     /// reloads when the origin changes, so selection churn never reloads it.
     loaded_player_base: Option<String>,
@@ -96,6 +99,7 @@ impl DeviceViewer {
             host: None,
             host_error: None,
             base_url: None,
+            auth_token: None,
             loaded_player_base: None,
             start_generation: 0,
             start_reported: None,
@@ -206,6 +210,7 @@ impl DeviceViewer {
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             let base_url = client.base_url().await;
+            let auth_token = client.transport().auth_token().await;
             let result = client.devices.list().await;
             cx.update(|cx| {
                 if let Some(view) = view.upgrade() {
@@ -213,6 +218,7 @@ impl DeviceViewer {
                         this.loading = false;
                         let trimmed = base_url.trim_end_matches('/').to_string();
                         this.base_url = (!trimmed.is_empty()).then_some(trimmed);
+                        this.auth_token = auth_token;
                         match result {
                             Ok(devices) => {
                                 if let Some(selected) = &this.selected_id {
@@ -268,9 +274,15 @@ impl DeviceViewer {
 
     /// Update the backend origin (e.g. after a Server Environment switch)
     /// and restart the selected stream against it.
-    pub fn set_base_url(&mut self, url: String, cx: &mut Context<Self>) {
+    pub fn set_base_url(
+        &mut self,
+        url: String,
+        auth_token: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let trimmed = url.trim_end_matches('/').to_string();
         self.base_url = (!trimmed.is_empty()).then_some(trimmed);
+        self.auth_token = auth_token;
         self.start_selected_stream(cx);
         cx.notify();
     }
@@ -296,7 +308,12 @@ impl DeviceViewer {
             self.stream_status = None;
             return;
         }
-        let config = PlayerConfig::for_device(&base, &device.id, device_platform(&device).as_str());
+        let config = PlayerConfig::for_device(
+            &base,
+            &device.id,
+            device_platform(&device).as_str(),
+            self.auth_token.as_deref(),
+        );
         host.set_visible(true);
         // Load the player page for this origin once; the start script below
         // is retried until the page reports back, so a page still mid-load
@@ -464,6 +481,7 @@ impl DeviceViewer {
                     .timer(std::time::Duration::from_millis(3000))
                     .await;
                 let base_url = client.base_url().await;
+                let auth_token = client.transport().auth_token().await;
                 let result = client.devices.list().await;
                 let done = cx.update(|cx| {
                     let Some(view) = view.upgrade() else {
@@ -474,6 +492,7 @@ impl DeviceViewer {
                         // changed while booting.
                         let trimmed = base_url.trim_end_matches('/').to_string();
                         this.base_url = (!trimmed.is_empty()).then_some(trimmed);
+                        this.auth_token = auth_token;
                         let Ok(devices) = result else {
                             return false;
                         };

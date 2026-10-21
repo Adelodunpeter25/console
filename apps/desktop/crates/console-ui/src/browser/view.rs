@@ -86,7 +86,6 @@ pub struct BrowserView {
     snapshot_epoch: u64,
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
-    annotation_input: Entity<ComposerInput>,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, Result<String, String>>,
     _subscriptions: Vec<Subscription>,
@@ -175,11 +174,6 @@ impl BrowserView {
             }
         });
 
-        let annotation_input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
-                .placeholder("Ask AI about this element... (Press Enter to attach)")
-        });
-
         // No native browser yet: it is created on the first navigation (see
         // `render`), so opening a tab does not spin one up just to sit on
         // about:blank. An idle tab is pure GPUI (start page) until it has a
@@ -206,7 +200,6 @@ impl BrowserView {
             snapshot_epoch: 0,
             inspecting: false,
             active_inspection: None,
-            annotation_input,
             script_results: HashMap::new(),
             _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
         }

@@ -35,7 +35,16 @@ impl PlayerConfig {
     }
 
     /// Build the stream URL from the HTTP backend origin.
-    pub fn for_device(base: &str, id: &str, platform: &str) -> Self {
+    ///
+    /// The player page opens the socket from a webview, which cannot attach an
+    /// Authorization header, so the backend accepts the device token in the
+    /// query string for this upgrade only.
+    pub fn for_device(
+        base: &str,
+        id: &str,
+        platform: &str,
+        auth_token: Option<&str>,
+    ) -> Self {
         let base = base.trim_end_matches('/');
         let ws_base = if let Some(rest) = base.strip_prefix("https://") {
             format!("wss://{rest}")
@@ -44,9 +53,12 @@ impl PlayerConfig {
         } else {
             base.to_string()
         };
+        let token = auth_token
+            .map(|token| format!("&token={}", urlencoding_component(token)))
+            .unwrap_or_default();
         Self {
             stream_url: format!(
-                "{ws_base}/api/devices/{}/stream?platform={}",
+                "{ws_base}/api/devices/{}/stream?platform={}{token}",
                 urlencoding_component(id),
                 urlencoding_component(platform)
             ),

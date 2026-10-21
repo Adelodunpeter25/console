@@ -32,9 +32,35 @@ func bearer(c *fiber.Ctx) string {
 	return strings.TrimSpace(value)
 }
 
+// deviceStreamPath reports whether path is `/api/devices/<id>/stream`, the
+// websocket a player page opens on the device's behalf.
+func deviceStreamPath(path string) bool {
+	return strings.HasPrefix(path, "/api/devices/") && strings.HasSuffix(path, "/stream")
+}
+
+// isWebSocketUpgrade mirrors the handshake test the upgrader performs. Browser
+// scripting cannot set an Authorization header on a WebSocket handshake.
+func isWebSocketUpgrade(c *fiber.Ctx) bool {
+	return strings.EqualFold(c.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(c.Get("Connection")), "upgrade")
+}
+
 func RequireDeviceToken(manager authManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		claims, err := manager.Authenticate(bearer(c))
+		// The player page is inert HTML with no data or secrets, and a webview
+		// navigation cannot carry an Authorization header.
+		if c.Method() == fiber.MethodGet && c.Path() == "/api/devices/player" {
+			return c.Next()
+		}
+		credential := bearer(c)
+		// A player page opening the stream websocket cannot send the header
+		// either, so the device stream accepts its credential in the query
+		// string — the same carve-out the WebTransport handshake makes.
+		// Ordinary HTTP stays header-only, keeping tokens out of access logs.
+		if credential == "" && isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) {
+			credential = strings.TrimSpace(c.Query("token"))
+		}
+		claims, err := manager.Authenticate(credential)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"success": false, "error": "Authentication required."})
 		}

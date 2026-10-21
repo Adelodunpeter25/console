@@ -33,7 +33,3 @@ pub fn clear(server_url: &str) -> std::io::Result<()> {
     server_auth_store::clear(&directory(), server_url)
 }
 
-/// The store's own directory, for callers that need to point it elsewhere.
-pub fn dir() -> PathBuf {
-    directory()
-}

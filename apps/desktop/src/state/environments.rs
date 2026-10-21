@@ -91,6 +91,25 @@ impl ConsoleDesktopApp {
         self.maybe_show_onboarding(self.active_env_id.clone().as_deref(), cx);
 
         let active_url = self.active_environment_url();
+
+        // The device this app is known as on the server, restored beside the
+        // token. The server never sends it back, so it is read from the
+        // credential store; without it the app cannot tell which entry on
+        // the server's device list is this one, and would offer to revoke
+        // itself.
+        if let Some(auth) = crate::persistence::load_server_auth(&active_url)
+            && !auth.device_id.is_empty()
+        {
+            self.server_device = Some(console_core::services::ServerDevice {
+                id: auth.device_id,
+                name: auth.device_name,
+                platform: "desktop".to_string(),
+                created_at: None,
+                last_seen_at: None,
+                revoked_at: None,
+            });
+        }
+
         let client = self.client.clone();
         cx.spawn(async move |_entity, _cx| {
             client.set_base_url(&active_url).await;
@@ -333,8 +352,9 @@ impl ConsoleDesktopApp {
                         // stream/screenshot URLs follow the active server.
                         if let Some(ref device) = this.device_view {
                             let url = url.clone();
+                            let token = crate::persistence::server_auth_token(&url);
                             device.update(cx, |view, cx| {
-                                view.set_base_url(url, cx);
+                                view.set_base_url(url, token, cx);
                             });
                         }
                         cx.notify();

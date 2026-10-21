@@ -79,7 +79,6 @@ pub struct PersistedOnboardingState {
 pub(crate) struct StorageDocument {
     pub(crate) version: u32,
     pub(crate) window: Option<PersistedWindowState>,
-    pub(crate) settings_window: Option<PersistedWindowState>,
     pub(crate) layout: Option<PersistedLayoutState>,
     pub(crate) environments: Option<PersistedEnvironmentsState>,
     pub(crate) drafts: Option<PersistedDraftsState>,
@@ -198,14 +197,6 @@ pub fn load_window() -> Option<PersistedWindowState> {
 
 pub fn save_window(state: PersistedWindowState) {
     update_document(|document| document.window = Some(state));
-}
-
-pub fn load_settings_window() -> Option<PersistedWindowState> {
-    read_document().settings_window
-}
-
-pub fn save_settings_window(state: PersistedWindowState) {
-    update_document(|document| document.settings_window = Some(state));
 }
 
 pub fn save_layout(state: PersistedLayoutState) {

@@ -181,16 +181,6 @@ impl ConsoleDesktopApp {
         true
     }
 
-    /// Stage a pasted clipboard image / file path into the card.
-    pub fn floating_paste_attachments(
-        &mut self,
-        entries: Vec<gpui::ClipboardEntry>,
-        cx: &mut Context<Self>,
-    ) {
-        self.stage_clipboard_attachments(FLOATING_KEY, entries, cx);
-        cx.notify();
-    }
-
     /// Drop image files onto the card.
     pub fn floating_drop_files(
         &mut self,
