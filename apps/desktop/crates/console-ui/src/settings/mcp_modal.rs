@@ -27,6 +27,9 @@ pub struct McpModal {
     pub command_input: Option<Entity<ComposerInput>>,
     pub args_input: Option<Entity<ComposerInput>>,
     pub env_input: Option<Entity<ComposerInput>>,
+    /// The static-auth secret. Only shown for a remote server with static
+    /// auth, and only ever empty: the stored token is never sent back.
+    pub token_input: Option<Entity<ComposerInput>>,
     pub action_error: Option<String>,
     pub is_submitting: bool,
     pub on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -412,6 +415,41 @@ impl RenderOnce for McpModal {
                     ),
             )
             .child(body)
+            // The static-auth secret. Only a remote server authenticates
+            // with a token, and the field is always empty: the server
+            // stores the token and never sends it back, so an empty field
+            // leaves the stored one alone.
+            .when(
+                self.selected_transport == McpTransportType::Http
+                    && self.selected_auth == McpAuthType::Static,
+                |el| {
+                    el.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.text)
+                                    .child("Token"),
+                            )
+                            .when_some(self.token_input.clone(), |el, input| {
+                                el.child(
+                                    div()
+                                        .px(px(8.0))
+                                        .py(px(4.0))
+                                        .rounded(px(6.0))
+                                        .border_1()
+                                        .border_color(theme.border)
+                                        .bg(theme.canvas)
+                                        .child(input),
+                                )
+                            }),
+                    )
+                },
+            )
             // Footer Action buttons
             .child(
                 div()

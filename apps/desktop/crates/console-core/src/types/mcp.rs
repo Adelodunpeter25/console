@@ -74,6 +74,13 @@ pub struct McpServerConfig {
     pub status: McpConnectionStatus,
     pub auth_url: Option<String>,
     pub tools: Vec<McpToolInfo>,
+    /// The static-auth secret, on the way out only.
+    ///
+    /// The server stores it in the credential file and never sends it back,
+    /// so a decoded config never carries one: an empty field on an edit
+    /// leaves the stored token alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
 }
 
 /// The wire shape: every spelling either side might send. Only the fields
@@ -115,6 +122,10 @@ struct McpServerConfigWire {
     auth_url: Option<String>,
     #[serde(default)]
     tools: Vec<McpToolInfo>,
+    /// The static-auth secret. The server never sends it back, so this is
+    /// only ever what the user just typed.
+    #[serde(default)]
+    token: Option<String>,
 }
 
 /// The server's `auth` member. Only the type is read; `tokenRef` is a server
@@ -195,6 +206,7 @@ impl From<McpServerConfigWire> for McpServerConfig {
             },
             auth_url: wire.auth_url,
             tools: wire.tools,
+            token: wire.token,
         }
     }
 }

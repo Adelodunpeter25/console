@@ -26,6 +26,10 @@ pub struct McpTabState {
     pub command_input: Entity<ComposerInput>,
     pub args_input: Entity<ComposerInput>,
     pub env_input: Entity<ComposerInput>,
+    /// The static-auth secret. The server stores it and never sends it
+    /// back, so this field is always empty when a server is opened for
+    /// editing: an empty field leaves the stored token alone.
+    pub token_input: Entity<ComposerInput>,
     pub expanded_server_id: Option<String>,
     pub action_error: Option<String>,
     pub is_submitting: bool,
@@ -65,6 +69,11 @@ impl McpTabState {
             input.set_placeholder("API_KEY=xyz, DEBUG=true", cx);
             input
         });
+        let token_input = cx.new(|cx| {
+            let mut input = ComposerInput::new(window, cx);
+            input.set_placeholder("Bearer token (stored server-side, never shown again)", cx);
+            input
+        });
         Self {
             app,
             servers: Vec::new(),
@@ -77,6 +86,7 @@ impl McpTabState {
             command_input,
             args_input,
             env_input,
+            token_input,
             expanded_server_id: None,
             action_error: None,
             is_submitting: false,
@@ -124,12 +134,17 @@ impl McpTabState {
             let command_input = self.command_input.clone();
             let args_input = self.args_input.clone();
             let env_input = self.env_input.clone();
+            let token_input = self.token_input.clone();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 name_input.update(cx, |input, cx| input.clear(cx));
                 url_input.update(cx, |input, cx| input.clear(cx));
                 command_input.update(cx, |input, cx| input.clear(cx));
                 args_input.update(cx, |input, cx| input.clear(cx));
                 env_input.update(cx, |input, cx| input.clear(cx));
+                token_input.update(cx, |input, cx| {
+                    input.set_placeholder("Bearer token (stored server-side, never shown again)", cx);
+                    input.clear(cx);
+                });
                 entity.update(cx, |this, cx| {
                     this.mcp.is_modal_open = true;
                     this.mcp.modal_mode = McpModalMode::Add;
@@ -148,6 +163,7 @@ impl McpTabState {
             let command_input = self.command_input.clone();
             let args_input = self.args_input.clone();
             let env_input = self.env_input.clone();
+            let token_input = self.token_input.clone();
             Rc::new(move |server_id: String, _w: &mut Window, cx: &mut App| {
                 entity.update(cx, |this, cx| {
                     if let Some(srv) = this.mcp.servers.iter().find(|s| s.id == server_id) {
@@ -167,6 +183,12 @@ impl McpTabState {
                             .collect::<Vec<_>>()
                             .join(", ");
                         env_input.update(cx, |input, cx| input.set_content(env_str, cx));
+                        // The stored token is never echoed back, so the
+                        // field starts empty: leaving it empty keeps it.
+                        token_input.update(cx, |input, cx| {
+                            input.set_placeholder("Leave blank to keep the stored token", cx);
+                            input.clear(cx);
+                        });
 
                         this.mcp.is_modal_open = true;
                         this.mcp.modal_mode = McpModalMode::Edit(server_id.clone());
@@ -218,6 +240,7 @@ impl McpTabState {
             let command_input = self.command_input.clone();
             let args_input = self.args_input.clone();
             let env_input = self.env_input.clone();
+            let token_input = self.token_input.clone();
 
             Rc::new(move |_w: &mut Window, cx: &mut App| {
                 let Some(app) = app_handle.upgrade() else {
@@ -229,6 +252,7 @@ impl McpTabState {
                 let cmd = command_input.read(cx).content().trim().to_string();
                 let args_str = args_input.read(cx).content().trim().to_string();
                 let env_str = env_input.read(cx).content().trim().to_string();
+                let token_str = token_input.read(cx).content().trim().to_string();
 
                 if name.is_empty() {
                     entity.update(cx, |this, cx| {
@@ -281,7 +305,7 @@ impl McpTabState {
                     } else {
                         None
                     },
-                    auth_type: auth,
+                    auth_type: auth.clone(),
                     command: if transport == McpTransportType::Stdio {
                         Some(cmd)
                     } else {
@@ -292,6 +316,16 @@ impl McpTabState {
                     status: McpConnectionStatus::Disconnected,
                     auth_url: None,
                     tools: Vec::new(),
+                    // A blank field keeps the stored token: the server
+                    // only replaces it when a new one is sent.
+                    token: if transport == McpTransportType::Http
+                        && auth == McpAuthType::Static
+                        && !token_str.is_empty()
+                    {
+                        Some(token_str)
+                    } else {
+                        None
+                    },
                 };
 
                 entity.update(cx, |this, cx| {
@@ -619,6 +653,7 @@ impl McpTabState {
             command_input: Some(self.command_input.clone()),
             args_input: Some(self.args_input.clone()),
             env_input: Some(self.env_input.clone()),
+            token_input: Some(self.token_input.clone()),
             action_error: self.action_error.clone(),
             is_submitting: self.is_submitting,
             on_close_modal: modal.on_close_modal,

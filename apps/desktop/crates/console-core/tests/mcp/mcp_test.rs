@@ -19,6 +19,7 @@ fn test_mcp_config_serialization() {
             name: "jira_search".to_string(),
             description: Some("Search Jira issues".to_string()),
         }],
+        token: None,
     };
 
     let serialized = serde_json::to_string(&config).expect("failed to serialize MCP config");
@@ -49,6 +50,7 @@ fn test_mcp_stdio_config() {
         status: McpConnectionStatus::Disconnected,
         auth_url: None,
         tools: vec![],
+        token: None,
     };
 
     let serialized = serde_json::to_string(&config).expect("failed to serialize stdio config");
@@ -60,4 +62,39 @@ fn test_mcp_stdio_config() {
     assert_eq!(deserialized.command.as_deref(), Some("npx"));
     assert_eq!(deserialized.args.len(), 2);
     assert_eq!(deserialized.env.len(), 1);
+}
+
+// The static token is a secret that only ever travels one way: out, in the
+// save body, and never back. The server stores it in its credential file,
+// so a config that comes back from the server has no token in it.
+#[test]
+fn test_mcp_static_token_travels_out_and_never_back() {
+    let config = McpServerConfig {
+        id: "atlassian".to_string(),
+        name: "Atlassian MCP".to_string(),
+        transport: McpTransportType::Http,
+        url: Some("https://mcp.atlassian.com/v2/mcp".to_string()),
+        auth_type: McpAuthType::Static,
+        command: None,
+        args: vec![],
+        env: vec![],
+        status: McpConnectionStatus::Disconnected,
+        auth_url: None,
+        tools: vec![],
+        token: Some("s3cret".to_string()),
+    };
+
+    let serialized = serde_json::to_string(&config).expect("failed to serialize MCP config");
+    // The server reads a top-level "token" beside the config.
+    assert!(
+        serialized.contains("\"token\":\"s3cret\""),
+        "the token must be in the save body: {serialized}"
+    );
+
+    // What the server sends back carries no token: it never echoes one.
+    let from_server: McpServerConfig = serde_json::from_str(
+        r#"{"id":"atlassian","name":"Atlassian MCP","transport":"http","auth_type":"static"}"#,
+    )
+    .expect("failed to decode MCP config");
+    assert_eq!(from_server.token, None);
 }
