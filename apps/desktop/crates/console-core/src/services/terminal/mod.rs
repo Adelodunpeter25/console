@@ -319,8 +319,13 @@ impl TerminalService {
         // over the wire they travel as regular Input messages.
         let reply_sender = tx.clone();
 
+        // The server guards `/api/*` with its auth middleware, so the
+        // handshake has to carry the bearer token; failing here is a real
+        // spawn error, not something to discover after a retry loop.
+        let request = self.transport.ws_request(&url).await?;
+
         let task = tokio::spawn(async move {
-            let ws_stream = match tokio_tungstenite::connect_async(&url).await {
+            let ws_stream = match tokio_tungstenite::connect_async(request).await {
                 Ok((stream, _)) => stream,
                 Err(e) => {
                     *status_clone.write().await = TerminalStatus::Error;

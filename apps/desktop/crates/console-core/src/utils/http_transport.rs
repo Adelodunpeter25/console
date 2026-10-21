@@ -57,6 +57,25 @@ impl HttpTransport {
         headers
     }
 
+    /// Build a websocket handshake request carrying the same bearer token as
+    /// HTTP requests. Sockets to `/api/*` are behind the auth middleware and a
+    /// native client has no other way to present its credential.
+    pub async fn ws_request(
+        &self,
+        url: &str,
+    ) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request> {
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        let mut request = url.into_client_request()?;
+        if let Some(token) = self.auth_token.read().await.as_ref() {
+            if !token.is_empty() {
+                let value = HeaderValue::from_str(&format!("Bearer {}", token))
+                    .context("invalid auth token for websocket handshake")?;
+                request.headers_mut().insert(AUTHORIZATION, value);
+            }
+        }
+        Ok(request)
+    }
+
     pub async fn url(&self, path: &str) -> String {
         let base = self.base_url.read().await;
         format!("{}{}", base.trim_end_matches('/'), path)

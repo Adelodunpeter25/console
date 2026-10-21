@@ -174,7 +174,16 @@ async fn accept_loop(listener: TcpListener, transport: HttpTransport, remote_por
         };
         tokio::spawn(async move {
             let ws_url = manager.tunnel_url(remote_port).await;
-            if let Err(error) = pipe_connection(stream, &ws_url).await {
+            let request = match manager.transport.ws_request(&ws_url).await {
+                Ok(request) => request,
+                Err(error) => {
+                    log::warn!(
+                        "Tunnel localhost -> remote {remote_port} via {ws_url} failed: {error:#}"
+                    );
+                    return;
+                }
+            };
+            if let Err(error) = pipe_connection(stream, request).await {
                 // Warn (not debug): a failing tunnel is the difference between
                 // a working preview and about:blank. The URL carries no secret.
                 log::warn!(
@@ -187,8 +196,11 @@ async fn accept_loop(listener: TcpListener, transport: HttpTransport, remote_por
 
 /// Pipe one local TCP connection through one tunnel WebSocket.
 /// Each WS message is one TCP chunk in either direction.
-async fn pipe_connection(local: TcpStream, ws_url: &str) -> Result<()> {
-    let (ws_stream, _) = connect_async(ws_url).await?;
+async fn pipe_connection(
+    local: TcpStream,
+    request: tokio_tungstenite::tungstenite::handshake::client::Request,
+) -> Result<()> {
+    let (ws_stream, _) = connect_async(request).await?;
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
     let (mut tcp_read, mut tcp_write) = local.into_split();
     let tcp_to_ws = async move {
