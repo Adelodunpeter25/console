@@ -5,6 +5,7 @@
 
 use console_core::{BrowserActionRequest, ResolveBrowserActionDto};
 use console_ui::browser::BrowserView;
+use console_ui::browser::driver::Request as DriverRequest;
 use gpui::{App, AsyncApp, Context, Entity, WeakEntity};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -40,7 +41,7 @@ enum NavigationState {
     Failed(String),
 }
 
-/// Waits for the result of a script started with `run_agent_script`.
+/// Waits for the result of a script or driver request.
 async fn poll_script_result(
     this: &WeakEntity<ConsoleDesktopApp>,
     cx: &mut AsyncApp,
@@ -196,11 +197,9 @@ impl ConsoleDesktopApp {
                                         app.navigation_view(matching_view.as_ref(), &known_ids);
                                     entry.map(|(id, view)| {
                                         let rid = format!("{request_id}-partial");
+                                        let request = DriverRequest::content(None);
                                         view.update(cx, |bv, _| {
-                                            bv.run_agent_script(
-                                                &rid,
-                                                "(document.body ? document.body.innerText : '')",
-                                            )
+                                            bv.run_driver_script(&rid, &request)
                                         });
                                         let bv = view.read(cx);
                                         let header = format!(
@@ -293,22 +292,16 @@ impl ConsoleDesktopApp {
                     return;
                 }
 
+                let request = DriverRequest::action(
+                    &action,
+                    element_ref.as_deref(),
+                    req.text.as_deref(),
+                    req.submit.unwrap_or(false),
+                    req.selector.as_deref(),
+                );
                 let is_snapshot = action == "snapshot";
                 let script_id = request_id.clone();
-                let driver_ref = element_ref.clone();
-                let driver_text = req.text.clone();
-                let driver_submit = req.submit.unwrap_or(false);
-                let driver_selector = req.selector.clone();
-                view.update(cx, |bv, _| {
-                    bv.run_driver_script(
-                        &script_id,
-                        &action,
-                        driver_ref.as_deref(),
-                        driver_text.as_deref(),
-                        driver_submit,
-                        driver_selector.as_deref(),
-                    )
-                });
+                view.update(cx, |bv, _| bv.run_driver_script(&script_id, &request));
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
@@ -460,11 +453,6 @@ impl ConsoleDesktopApp {
                         .unwrap_or(WAIT_FOR_DEFAULT_MS)
                         .clamp(100, WAIT_FOR_MAX_MS),
                 );
-                let script = wait_for_script(
-                    selector.as_deref(),
-                    url_contains.as_deref(),
-                    text.as_deref(),
-                );
                 cx.spawn(async move |this, cx| {
                     let started = std::time::Instant::now();
                     let mut attempt = 0u32;
@@ -475,8 +463,13 @@ impl ConsoleDesktopApp {
                     loop {
                         attempt += 1;
                         let check_id = format!("{request_id}-wf-{attempt}");
+                        let request = DriverRequest::wait(
+                            selector.as_deref(),
+                            url_contains.as_deref(),
+                            text.as_deref(),
+                        );
                         let started_check = this.update(cx, |_, cx| {
-                            view.update(cx, |bv, _| bv.run_agent_script(&check_id, &script))
+                            view.update(cx, |bv, _| bv.run_driver_script(&check_id, &request))
                         });
                         if started_check.is_err() {
                             return;
@@ -534,9 +527,9 @@ impl ConsoleDesktopApp {
 
             "run_js" | "get_content" => {
                 let is_js = action == "run_js";
-                let js = if is_js {
-                    let js = req.script.clone().unwrap_or_default();
-                    if js.is_empty() {
+                let request = if is_js {
+                    let js = req.script.as_deref().unwrap_or("");
+                    if js.trim().is_empty() {
                         self.resolve_browser_action_result(
                             &sess_id,
                             request_id,
@@ -546,9 +539,9 @@ impl ConsoleDesktopApp {
                         );
                         return;
                     }
-                    js
+                    DriverRequest::eval(js)
                 } else {
-                    content_script(req.selector.as_deref())
+                    DriverRequest::content(req.selector.as_deref())
                 };
 
                 let entry = match self.pick_browser_view(
@@ -588,7 +581,7 @@ impl ConsoleDesktopApp {
                     return;
                 }
                 let script_id = request_id.clone();
-                view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
+                view.update(cx, |bv, _| bv.run_driver_script(&script_id, &request));
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
@@ -1036,49 +1029,6 @@ impl ConsoleDesktopApp {
                 .await;
         })
         .detach();
-    }
-}
-
-/// Page-side one-shot check for `wait_for`. Returns WF_OK when every given
-/// condition holds, WF_NO otherwise, or WF_ERR on an invalid selector.
-fn wait_for_script(
-    selector: Option<&str>,
-    url_contains: Option<&str>,
-    text: Option<&str>,
-) -> String {
-    let q = |v: Option<&str>| {
-        serde_json::to_string(&v.unwrap_or("")).unwrap_or_else(|_| "\"\"".to_string())
-    };
-    format!(
-        "(() => {{ const sel = {}; const u = {}; const t = {}; \
-         try {{ if (sel && !document.querySelector(sel)) return 'WF_NO'; }} \
-         catch (e) {{ return 'WF_ERR: Invalid selector: ' + e.message; }} \
-         if (u && !location.href.includes(u)) return 'WF_NO'; \
-         if (t && !(document.body && document.body.innerText.includes(t))) return 'WF_NO'; \
-         return 'WF_OK'; }})()",
-        q(selector),
-        q(url_contains),
-        q(text)
-    )
-}
-
-/// Page-side script for `get_content`: visible text, or the text of every
-/// element matching `selector` (or a "no match" message).
-fn content_script(selector: Option<&str>) -> String {
-    match selector.map(str::trim).filter(|s| !s.is_empty()) {
-        None => "(document.body ? document.body.innerText : '')".to_string(),
-        Some(sel) => {
-            let quoted = serde_json::to_string(sel).unwrap_or_else(|_| "\"\"".to_string());
-            format!(
-                "(() => {{ const sel = {quoted}; let els; \
-                 try {{ els = Array.from(document.querySelectorAll(sel)); }} \
-                 catch (e) {{ return 'Invalid selector: ' + e.message; }} \
-                 if (!els.length) return 'No match for selector: ' + sel; \
-                 const out = els.slice(0, 20).map((el, i) => '[' + i + '] ' + (el.innerText || el.textContent || '').trim()); \
-                 if (els.length > 20) out.push('...(' + els.length + ' matches total, showing 20)'); \
-                 return out.join('\\n\\n'); }})()"
-            )
-        }
     }
 }
 

@@ -15,6 +15,7 @@
   const MAX_LINES = 200;
   const MAX_NODES = 20000;
   const MAX_TEXT = 120;
+  const MAX_RESULT_CHARS = 30000;
 
   const state = {
     refs: new Map(), // ref -> { el: WeakRef, role, name, nth }
@@ -33,6 +34,42 @@
     } catch (_) {
       return '"' + String(value).replace(/"/g, '\\"') + '"';
     }
+  };
+
+  const serialize = (value) => {
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'string') return value;
+    if (typeof Node !== 'undefined' && value instanceof Node) {
+      return value.outerHTML || value.textContent || String(value);
+    }
+    const seen = new WeakSet();
+    try {
+      const json = JSON.stringify(
+        value,
+        (_key, item) => {
+          if (typeof item === 'function') return '[Function]';
+          if (typeof item === 'bigint') return item.toString();
+          if (typeof Node !== 'undefined' && item instanceof Node) return '[' + item.nodeName + ']';
+          if (item && typeof item === 'object') {
+            if (seen.has(item)) return '[Circular]';
+            seen.add(item);
+          }
+          return item;
+        },
+        2
+      );
+      return json === undefined ? String(value) : json;
+    } catch (_) {
+      return String(value);
+    }
+  };
+
+  const cap = (text) => {
+    if (text.length > MAX_RESULT_CHARS) {
+      return text.slice(0, MAX_RESULT_CHARS)
+        + '\n...[truncated: ' + text.length + ' chars total]';
+    }
+    return text;
   };
 
   const SKIP_TAGS = new Set([
@@ -622,8 +659,50 @@
 
   // --- entry point --------------------------------------------------------
 
-  const execute = (req) => {
+  const execute = async (req) => {
     if (req.op === 'snapshot') return snapshot(req.selector);
+
+    if (req.op === 'eval') {
+      let value = (0, eval)(req.script || '');
+      if (typeof value === 'function') value = value();
+      value = await value;
+      return cap(serialize(value));
+    }
+
+    if (req.op === 'content') {
+      const selector = (req.selector || '').trim();
+      if (!selector) return document.body ? document.body.innerText : '';
+      let elements;
+      try {
+        elements = Array.from(document.querySelectorAll(selector));
+      } catch (error) {
+        return 'Invalid selector: ' + error.message;
+      }
+      if (!elements.length) return 'No match for selector: ' + selector;
+      const out = elements.slice(0, 20).map(
+        (el, i) => '[' + i + '] ' + (el.innerText || el.textContent || '').trim()
+      );
+      if (elements.length > 20) {
+        out.push('...(' + elements.length + ' matches total, showing 20)');
+      }
+      return out.join('\n\n');
+    }
+
+    if (req.op === 'wait') {
+      const selector = (req.selector || '').trim();
+      const urlPart = req.urlContains || '';
+      const waitText = req.text || '';
+      try {
+        if (selector && !document.querySelector(selector)) return 'WF_NO';
+      } catch (error) {
+        return 'WF_ERR: Invalid selector: ' + error.message;
+      }
+      if (urlPart && !location.href.includes(urlPart)) return 'WF_NO';
+      if (waitText && !(document.body && document.body.innerText.includes(waitText))) {
+        return 'WF_NO';
+      }
+      return 'WF_OK';
+    }
 
     const ref = norm(req.ref);
     if (!ref) return 'A ref is required. Take a snapshot first.';
@@ -678,7 +757,7 @@
     return 'Unknown op: ' + op;
   };
 
-  const run = (requestId, req) => {
+  const run = async (requestId, req) => {
     const post = (payload) => {
       try {
         window.ipc.postMessage(JSON.stringify(Object.assign(
@@ -688,7 +767,7 @@
       } catch (_) {}
     };
     try {
-      post({ ok: true, value: execute(req) });
+      post({ ok: true, value: await execute(req) });
     } catch (error) {
       const message = error && error.message
         ? (error.name || 'Error') + ': ' + error.message
