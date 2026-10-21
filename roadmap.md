@@ -12,7 +12,7 @@ High-level direction only — implementation details live in `docs/`.
 ## Agent capabilities
 
 - [x] Browser use — agent controls a built-in browser on desktop (navigate, click, type, screenshot)
-- [ ] Computer use — agent controls the computer (keyboard, mouse, screen)
+- [x] Computer use — agent controls the computer (keyboard, mouse, screen)
 
 ## Accounts
 
@@ -20,5 +20,4 @@ High-level direction only — implementation details live in `docs/`.
 
 ## Developer experience
 
-- [x] Server path aliases — `@/…` imports like mobile already has; eliminate fragile `../../` chains
 - [ ] Native codemod support — let the harness execute scripted bulk refactors across the codebase (e.g. the import-alias migration) safely, with dry-run and verification built in
