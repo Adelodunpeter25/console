@@ -49,9 +49,21 @@ const (
 
 	// CloseShutdown releases the tunnel immediately.
 	CloseShutdown = 4000
+	// CloseReplaced is sent by the server when a newer connection took the
+	// tunnel over. Reconnecting would take it back and start a tug of war.
+	CloseReplaced = 4001
 	// CloseProtocolError signals a protocol violation.
 	CloseProtocolError = 1002
 )
+
+// ErrTunnelGone means the tunnel no longer exists, or its token is no longer
+// valid, so a new one has to be created. It is the only failure that costs
+// the public URL.
+var ErrTunnelGone = errors.New("hostc: the tunnel is gone")
+
+// ErrUpgradeRequired means the tunnel server needs a newer client. There is
+// nothing to retry: the client has to be updated.
+var ErrUpgradeRequired = errors.New("hostc: the tunnel server needs a newer client")
 
 // Frame types on the tunnel wire.
 const (

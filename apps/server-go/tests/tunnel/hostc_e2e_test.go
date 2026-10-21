@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -195,6 +196,50 @@ func TestHostcRealServiceForwardsWebSocket(t *testing.T) {
 	}
 	if string(data) != "echo:hello" {
 		t.Errorf("payload = %q, want %q", data, "echo:hello")
+	}
+}
+
+// A restart must not cost the public URL: the tunnel is resumed, so a
+// client paired with the old URL stays paired.
+func TestHostcRealServiceKeepsTheURLAcrossARestart(t *testing.T) {
+	requireHostcE2E(t)
+
+	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "still here")
+	}))
+	t.Cleanup(local.Close)
+	target, err := url.Parse(local.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := hostc.NewFileStore(filepath.Join(t.TempDir(), "tunnel.json"))
+
+	first := &hostc.Manager{ServerURL: hostcServerURL, Target: target, Store: store}
+	if err := first.Start(t.Context()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	public := first.PublicURL()
+	if public == "" {
+		t.Fatal("the manager should have a public URL")
+	}
+	// Stopping drops the connection, which leaves the tunnel resumable.
+	_ = first.Stop()
+
+	second := &hostc.Manager{ServerURL: hostcServerURL, Target: target, Store: store}
+	t.Cleanup(func() { _ = second.Stop() })
+	if err := second.Start(t.Context()); err != nil {
+		t.Fatalf("resume after a restart: %v", err)
+	}
+	if got := second.PublicURL(); got != public {
+		t.Errorf("the public URL changed across a restart: %q, want %q", got, public)
+	}
+	// And the resumed tunnel still carries traffic.
+	status, body := fetchThrough(t, public)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if body != "still here" {
+		t.Errorf("body = %q", body)
 	}
 }
 
