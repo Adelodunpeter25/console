@@ -75,6 +75,9 @@ impl ConsoleDesktopApp {
             // Never restore a workspace containing another folder's tabs
             // (heals saves written before folder-change partitioning).
             console_ui::workspace::ops::retain_project_tabs(&mut root, &ws.project_id);
+            // The settings took over the window; a Settings tab saved by an
+            // older build must not come back as one.
+            console_ui::workspace::ops::retain_non_settings_tabs(&mut root);
             if let Some(pane_id) = ws.active_pane_id {
                 if root.leaves().iter().any(|leaf| leaf.id == pane_id) {
                     project_active_panes.insert(ws.project_id.clone(), pane_id);
@@ -717,9 +720,8 @@ impl ConsoleDesktopApp {
             env_probes: std::collections::HashMap::new(),
             server_menu: console_ui::primitives::ContextMenuHandle::new(cx),
             deleted_sessions: Vec::new(),
-            settings_window_handle: None,
-            settings_window_view: None,
             settings_view: None,
+            settings_open: false,
             new_project_dialog_handle: None,
             file_browser_window_handle: None,
             new_project_dialog_view: None,

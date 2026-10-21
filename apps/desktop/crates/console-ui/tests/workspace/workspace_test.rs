@@ -326,3 +326,43 @@ fn test_browser_ids_lists_only_browser_tabs() {
     assert_eq!(ops::browser_ids(&root), vec!["browser-1".to_string()]);
     assert!(ops::browser_ids(&WorkspaceNode::leaf("empty")).is_empty());
 }
+
+// The settings are not a tab any more: they take over the window. A
+// workspace saved by an older build can still name a Settings tab, and
+// restoring it must not bring that tab back.
+#[test]
+fn test_settings_tabs_are_dropped_from_a_restored_workspace() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "session-123".into(),
+            title: "First Chat".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: None,
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Settings {
+            title: "Settings".into(),
+            active_tab: Some("providers".into()),
+            last_active_at_ms: None,
+        },
+    );
+
+    ops::retain_non_settings_tabs(&mut root);
+
+    let leaves = root.leaves();
+    assert_eq!(leaves.len(), 1);
+    assert_eq!(leaves[0].tabs.len(), 1);
+    assert!(matches!(
+        leaves[0].tabs[0],
+        WorkspaceTabConfig::Chat { .. }
+    ));
+    // The chat is the active tab again, not the settings that were.
+    assert_eq!(leaves[0].active_tab_id.as_deref(), Some("chat:session-123"));
+}

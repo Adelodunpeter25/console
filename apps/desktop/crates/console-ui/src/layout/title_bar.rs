@@ -15,6 +15,17 @@ use gpui::{
 use crate::primitives::{IconName, app_icon};
 use crate::theme::{TITLEBAR_HEIGHT, Theme};
 
+/// The action in the title bar's leading slot.
+enum LeadingAction {
+    /// Show or hide the session sidebar.
+    SidebarToggle,
+    /// Go back to whatever the window was showing before.
+    ///
+    /// Used by the views that take the window over — the settings have no
+    /// sidebar to toggle, but they do have a way back.
+    Back(Rc<dyn Fn(&mut Window, &mut App) + 'static>),
+}
+
 /// Full-width window title bar. Shows `title` centered (e.g.
 /// "can you see this image — Gpui-ui") plus a sidebar toggle on the left
 /// and an inspector toggle on the right.
@@ -23,6 +34,7 @@ pub struct TitleBar {
     title: Option<String>,
     sidebar_width: f32,
     on_toggle_sidebar: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    leading: LeadingAction,
     on_toggle_right_sidebar: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     right_sidebar_open: bool,
     ports_element: Option<gpui::AnyElement>,
@@ -38,10 +50,20 @@ impl TitleBar {
             title,
             sidebar_width,
             on_toggle_sidebar,
+            leading: LeadingAction::SidebarToggle,
             on_toggle_right_sidebar: None,
             right_sidebar_open: false,
             ports_element: None,
         }
+    }
+
+    /// Replace the sidebar toggle with a back arrow.
+    pub fn with_back_action(
+        mut self,
+        on_back: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    ) -> Self {
+        self.leading = LeadingAction::Back(on_back);
+        self
     }
 
     pub fn with_right_sidebar_toggle(
@@ -88,21 +110,38 @@ impl RenderOnce for TitleBar {
                     .flex()
                     .items_center()
                     .pl(px(72.0))
-                    .child(
-                        div()
-                            .id("titlebar-sidebar-toggle")
-                            .mt(px(4.0))
-                            .size(px(26.0))
-                            .rounded(px(6.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .cursor_default()
-                            .hover(|s| s.bg(theme.overlay))
-                            .active(|s| s.bg(theme.overlay_strong))
-                            .on_click(move |_, window, cx| (on_toggle)(window, cx))
-                            .child(app_icon(IconName::PanelLeft, 14.0, theme.text_tertiary)),
-                    ),
+                    .child(match self.leading {
+                        LeadingAction::SidebarToggle => {
+                            div()
+                                .id("titlebar-sidebar-toggle")
+                                .mt(px(4.0))
+                                .size(px(26.0))
+                                .rounded(px(6.0))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_default()
+                                .hover(|s| s.bg(theme.overlay))
+                                .active(|s| s.bg(theme.overlay_strong))
+                                .on_click(move |_, window, cx| (on_toggle)(window, cx))
+                                .child(app_icon(IconName::PanelLeft, 14.0, theme.text_tertiary))
+                        }
+                        LeadingAction::Back(on_back) => {
+                            div()
+                                .id("titlebar-back")
+                                .mt(px(4.0))
+                                .size(px(26.0))
+                                .rounded(px(6.0))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_default()
+                                .hover(|s| s.bg(theme.overlay))
+                                .active(|s| s.bg(theme.overlay_strong))
+                                .on_click(move |_, window, cx| (on_back)(window, cx))
+                                .child(app_icon(IconName::ArrowLeft, 14.0, theme.text_tertiary))
+                        }
+                    }),
             )
             // Center: the selected session's chat title — folder name. It is
             // dead-center because the side blocks are equal width.

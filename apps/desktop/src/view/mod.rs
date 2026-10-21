@@ -1,3 +1,4 @@
+mod settings_takeover;
 mod workspace_content;
 
 use std::rc::Rc;
@@ -27,6 +28,16 @@ impl Render for ConsoleDesktopApp {
         // they are rebuilt here each frame rather than pushed by events. Skipped
         // while closed so a hidden card costs nothing.
         self.refresh_floating_composer(window, cx);
+
+        // The settings take over the window: they replace the sidebar, the
+        // workspace and the inspector, so a settings page is not something you
+        // read next to a chat. Returned before the workspace is built, so
+        // there is nothing underneath to show through — and before the
+        // onboarding, so a step that opens the settings (providers) is not
+        // hidden behind the panel that asked for it.
+        if self.settings_open {
+            return self.render_settings_takeover(window, cx);
+        }
 
         // First-run setup replaces the entire window — title bar, sidebar and
         // inspector included — rather than floating over the workspace. Returned

@@ -231,6 +231,25 @@ pub fn retain_project_tabs(root: &mut WorkspaceNode, project_id: &Option<String>
     }
 }
 
+/// Drop every Settings tab from the tree.
+///
+/// The settings are no longer a tab: they take over the window. The variant
+/// stays in the workspace model so a workspace saved by an older build still
+/// parses, but a restored one must not bring the old tab back.
+pub fn retain_non_settings_tabs(root: &mut WorkspaceNode) {
+    let mut to_close: Vec<(String, String)> = Vec::new();
+    for leaf in root.leaves() {
+        for tab in &leaf.tabs {
+            if matches!(tab, console_core::WorkspaceTabConfig::Settings { .. }) {
+                to_close.push((leaf.id.clone(), tab.id()));
+            }
+        }
+    }
+    for (pane_id, tab_id) in to_close {
+        let _ = close_tab(root, &pane_id, &tab_id);
+    }
+}
+
 /// Find a tab by id anywhere in the tree.
 pub fn find_tab(root: &WorkspaceNode, tab_id: &str) -> Option<WorkspaceTabConfig> {
     for leaf in root.leaves() {

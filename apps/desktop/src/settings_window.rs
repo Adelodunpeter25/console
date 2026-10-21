@@ -269,6 +269,36 @@ impl SettingsWindow {
         cx.notify();
     }
 
+    /// The tab the settings are showing.
+    pub fn active_tab(&self) -> SettingsTab {
+        self.active_tab
+    }
+
+    /// The focus handle the settings hold while they own the window.
+    ///
+    /// The workspace is unmounted while the settings are open, so the
+    /// composer that had the focus goes with it. The settings take the focus
+    /// instead, or the window root would swallow every keystroke.
+    pub fn settings_focus_handle(&self) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+
+    /// True while a modal is open on top of the settings.
+    ///
+    /// The window root uses this to tell "close the modal" from "close the
+    /// settings": one Escape must only close one thing.
+    pub fn modal_open(&self) -> bool {
+        self.is_adding_env || self.pair_modal_open
+    }
+
+    /// Close any modal open on top of the settings.
+    pub fn close_modals(&mut self, cx: &mut Context<Self>) {
+        self.is_adding_env = false;
+        self.pair_modal_open = false;
+        self.editing_env_id = None;
+        cx.notify();
+    }
+
     /// Build one row per key-taking provider, creating each row's key field on
     /// first render.
     ///
@@ -397,16 +427,6 @@ impl Focusable for SettingsWindow {
 
 impl Render for SettingsWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self
-            .app
-            .upgrade()
-            .map_or(false, |app| app.read(cx).settings_window_handle.is_some())
-        {
-            if let Some(state) = crate::persistence::window::capture(window) {
-                crate::persistence::store::save_settings_window(state);
-            }
-        }
-
         let Some(app_entity) = self.app.upgrade() else {
             return div()
                 .size_full()
@@ -954,24 +974,9 @@ impl Render for SettingsWindow {
                     Rc::new(move |window: &mut Window, cx: &mut App| {
                         if let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
-                                if app_state.settings_window_handle.is_some() {
-                                    window.remove_window();
-                                    app_state.settings_window_handle = None;
-                                    app_state.settings_window_view = None;
-                                    if let Some(main_handle) = app_state.main_window_handle {
-                                        let app_entity = cx.entity().clone();
-                                        cx.defer(move |cx| {
-                                            let _ = main_handle.update(cx, |_root, main_window, cx| {
-                                                main_window.activate_window();
-                                                app_entity.update(cx, |this, cx| {
-                                                    this.open_project_browse(main_window, cx);
-                                                });
-                                            });
-                                        });
-                                    }
-                                } else {
-                                    app_state.open_project_browse(window, cx);
-                                }
+                                // The palette belongs to the workspace, so the
+                                // settings step aside for it.
+                                app_state.open_project_browse(window, cx);
                             });
                         }
                     })
@@ -1115,26 +1120,21 @@ impl Render for SettingsWindow {
             // the whole window.
             .relative()
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 if event.keystroke.key == "escape" {
-                    // The modals close on escape; the window itself only
-                    // closes when nothing is open on top of it.
+                    // A modal on top of the settings closes first, and the
+                    // event stops there: one Escape must not close the modal
+                    // *and* the settings behind it.
                     if this.pair_modal_open || this.is_adding_env {
                         this.pair_modal_open = false;
                         this.is_adding_env = false;
                         this.editing_env_id = None;
+                        cx.stop_propagation();
                         cx.notify();
                         return;
                     }
-                    if let Some(app) = this.app.upgrade() {
-                        if app.read(cx).settings_window_handle.is_some() {
-                            app.update(cx, |app_state, _cx| {
-                                app_state.settings_window_handle = None;
-                                app_state.settings_window_view = None;
-                            });
-                            window.remove_window();
-                        }
-                    }
+                    // Otherwise the event is left to bubble: the window root
+                    // closes the settings and gives the workspace back.
                 }
             }))
             .child(SettingsShell::new(active_tab, on_select_tab, content))

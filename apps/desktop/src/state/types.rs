@@ -416,9 +416,15 @@ pub struct ConsoleDesktopApp {
     pub env_probes: std::collections::HashMap<String, console_ui::settings::ProbeState>,
     pub server_menu: console_ui::primitives::ContextMenuHandle,
     pub deleted_sessions: Vec<SessionHeader>,
-    pub settings_window_handle: Option<gpui::AnyWindowHandle>,
-    pub settings_window_view: Option<gpui::WeakEntity<crate::settings_window::SettingsWindow>>,
+    /// The settings view. One per window, reused across openings, so a
+    /// half-filled form keeps what was typed into it.
     pub settings_view: Option<gpui::Entity<crate::settings_window::SettingsWindow>>,
+    /// True while the settings are taking over the window.
+    ///
+    /// The settings replace the whole window — sidebar, tabs, chat and
+    /// inspector — rather than sitting in a tab beside a conversation: a
+    /// settings page is not something you read next to a chat.
+    pub settings_open: bool,
     /// New Project dialog window (File ▸ New Project…). Tracked like the
     /// settings window so a second menu click focuses the open dialog instead
     /// of stacking copies.

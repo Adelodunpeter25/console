@@ -8,6 +8,9 @@ use gpui::{
 };
 use std::rc::Rc;
 
+/// The width of the settings navigation column.
+pub const SETTINGS_NAV_WIDTH: f32 = 220.0;
+
 struct SettingsGroup {
     title: &'static str,
     tabs: &'static [(SettingsTab, IconName, &'static str)],
@@ -78,7 +81,7 @@ impl RenderOnce for SettingsShell {
             // Left navigation sidebar
             .child(
                 div()
-                    .w(px(220.0))
+                    .w(px(SETTINGS_NAV_WIDTH))
                     .flex_shrink_0()
                     .h_full()
                     .border_r_1()

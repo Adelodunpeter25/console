@@ -39,23 +39,13 @@ impl ConsoleDesktopApp {
     fn apply_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
         if let Some(settings_view) = &self.settings_view {
             settings_view.update(cx, |view, cx| view.apply_model_settings(&settings, cx));
-        } else if let Some(settings_view) = self
-            .settings_window_view
-            .as_ref()
-            .and_then(|view| view.upgrade())
-        {
-            settings_view.update(cx, |view, cx| view.apply_model_settings(&settings, cx));
         }
         cx.notify();
     }
 
     pub fn save_model_settings(&mut self, settings: ConsoleSettings, cx: &mut Context<Self>) {
         let client = self.client.clone();
-        let Some(settings_view) = self.settings_view.clone().or_else(|| {
-            self.settings_window_view
-                .as_ref()
-                .and_then(|view| view.upgrade())
-        }) else {
+        let Some(settings_view) = self.settings_view.clone() else {
             return;
         };
 
@@ -103,14 +93,22 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let view = cx.new(|cx| SettingsWindow::new(app_weak, client, tab, window, cx));
         self.settings_view = Some(view.clone());
-        self.settings_window_view = Some(view.downgrade());
         view
     }
 
+    /// Open the settings, or close them if they are already open.
+    ///
+    /// The settings take over the window rather than opening as a tab: they
+    /// are a place you go to, not something you read next to a chat.
     pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings_open {
+            self.close_settings(window, cx);
+            return;
+        }
         self.open_settings_tab(console_ui::settings::SettingsTab::Providers, window, cx);
     }
 
+    /// Open the settings on a given tab, taking over the window.
     pub fn open_settings_tab(
         &mut self,
         tab: console_ui::settings::SettingsTab,
@@ -144,76 +142,31 @@ impl ConsoleDesktopApp {
             view.set_tab(tab, cx);
         });
 
-        // If settings tab is already open in any pane, switch to it:
-        let existing = self.workspace_root.leaves().iter().find_map(|leaf| {
-            if leaf
-                .tabs
-                .iter()
-                .any(|t| matches!(t, console_core::WorkspaceTabConfig::Settings { .. }))
-            {
-                Some(leaf.id.clone())
-            } else {
-                None
-            }
-        });
-
-        if let Some(existing_pane_id) = existing {
-            if let Some(leaf) = self.workspace_root.leaf_mut(&existing_pane_id) {
-                for t in &mut leaf.tabs {
-                    if let console_core::WorkspaceTabConfig::Settings {
-                        active_tab: at,
-                        ..
-                    } = t
-                    {
-                        *at = Some(tab.as_str().to_string());
-                    }
-                }
-            }
-            console_ui::workspace::ops::select_tab(
-                &mut self.workspace_root,
-                &existing_pane_id,
-                "settings",
-            );
-            self.active_pane_id = Some(existing_pane_id);
-            self.sync_workspace_webviews(cx);
-            self.persist_workspaces();
-            self.refresh_auth_status(cx);
-            self.refresh_deleted_sessions(cx);
-            cx.notify();
-            return;
-        }
-
-        let pane_id = self.active_pane_id.clone().unwrap_or_else(|| {
-            self.workspace_root
-                .first_leaf()
-                .map(|l| l.id.clone())
-                .unwrap_or_else(|| "pane-main".to_string())
-        });
-
-        let tab_config = console_core::WorkspaceTabConfig::Settings {
-            title: "Settings".into(),
-            active_tab: Some(tab.as_str().to_string()),
-            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
-        };
-
-        console_ui::workspace::ops::open_tab(&mut self.workspace_root, &pane_id, tab_config);
-        self.active_pane_id = Some(pane_id);
-        self.sync_workspace_webviews(cx);
-        self.persist_workspaces();
-
-        // Refresh dynamic status when opening settings
-        self.refresh_auth_status(cx);
-        self.refresh_deleted_sessions(cx);
+        self.settings_open = true;
+        // The workspace is unmounted while the settings are open, so the
+        // composer that had the focus goes with it. The settings take the
+        // focus instead, or the window root would swallow every keystroke.
+        let focus = settings_view.read(cx).settings_focus_handle();
+        window.focus(&focus, cx);
         cx.notify();
     }
 
-    pub fn close_settings(&mut self, cx: &mut Context<Self>) {
-        if let Some(handle) = self.settings_window_handle.take() {
-            self.settings_window_view = None;
-            let _ = cx.update_window(handle, |_root, window, _cx| {
-                window.remove_window();
-            });
+    /// Close the settings and give the window back to the workspace.
+    pub fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.settings_open {
+            return;
         }
+        self.settings_open = false;
+        // A modal that was open on top of the settings goes with them: it
+        // belongs to a view that is no longer on screen.
+        if let Some(view) = &self.settings_view {
+            view.update(cx, |view, cx| view.close_modals(cx));
+        }
+        // The composer had the focus before the settings took the window, so
+        // it gets it back: the user lands where they left off.
+        let focus = self.active_composer_input().read(cx).focus();
+        window.focus(&focus, cx);
+        cx.notify();
     }
 
     /// File ▸ New Project… — open (or focus) the new-project dialog.
