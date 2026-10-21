@@ -55,28 +55,27 @@ func (s *Service) watchRun(sessionID string, hub *Hub, done <-chan struct{}) {
 // can never be disturbed: its broadcasts become safe no-ops.
 func (s *Service) forceSettle(sessionID string, hub *Hub) {
 	s.cancelActive(sessionID)
-	s.mu.Lock()
-	ar, ok := s.active[sessionID]
-	if !ok || ar.hub != hub {
-		s.mu.Unlock()
+	if !s.releaseSlot(sessionID, hub) {
 		return
 	}
-	delete(s.active, sessionID)
-	s.mu.Unlock()
 	slog.Error("run watchdog: no hub frames, force-settling run", "session", sessionID)
 	hub.Close(OutcomeAborted)
 	s.decisions.RejectAllForSession(sessionID, "Run watchdog timeout")
 }
 
-// removeActiveIf drops the session's active entry only when it still belongs
-// to hub, so a force-settled run (or any replaced entry) can never delete a
-// newer run's entry on its way out.
-func (s *Service) removeActiveIf(sessionID string, hub *Hub) {
+// releaseSlot drops the session's active entry only when it still belongs
+// to this run's hub, and reports whether this run held the slot. A newer run
+// that already took the slot is left alone, so a run settling late can never
+// disturb it.
+func (s *Service) releaseSlot(sessionID string, hub *Hub) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if ar, ok := s.active[sessionID]; ok && ar.hub == hub {
-		delete(s.active, sessionID)
+	ar, ok := s.active[sessionID]
+	if !ok || ar.hub != hub {
+		return false
 	}
+	delete(s.active, sessionID)
+	return true
 }
 
 // cancelActive cancels the active run's current context while holding the

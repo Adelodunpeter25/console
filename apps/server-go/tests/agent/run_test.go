@@ -5,6 +5,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"testing"
 	"time"
 
@@ -248,6 +249,60 @@ func TestRunStatusAbortedSettlesDone(t *testing.T) {
 	}
 	if got := sessionStatus(t, sessions, header.ID); got != "done" {
 		t.Fatalf("aborted status: %q, want done", got)
+	}
+}
+
+// waitHubClosed waits for a hub to settle.
+//
+// It spins rather than parking on the channel. A parked goroutine has to be
+// woken and scheduled before it looks at the server's state, and by then the
+// run goroutine has usually finished tidying up — so a parked waiter cannot
+// tell whether the state was already correct at the moment the hub closed.
+// A spinning waiter looks immediately, which is what the assertion needs.
+func waitHubClosed(t *testing.T, hub *run.Hub) {
+	t.Helper()
+	done := hub.Done()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			runtime.Gosched()
+		}
+	}
+}
+
+// A settled run must free the session the moment it settles: a client that
+// starts the next run the instant the previous one ends must not be told the
+// session is busy. The check repeats because the release and the waiter run
+// on different goroutines — a single pass would only catch the regression
+// when it lost that race.
+func TestSettledRunFreesTheSessionForTheNext(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	var released bool
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return &blockingProvider{release: release, released: &released}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	close(release)
+
+	for i := 0; i < 10; i++ {
+		hub, err := svc.StartRun(header.ID, run.Prompt{Text: "go", Provider: "mock", ModelID: "m"})
+		if err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+		waitHubClosed(t, hub)
+		if svc.IsActive(header.ID) {
+			t.Fatalf("run %d: a settled run must leave the session free", i)
+		}
+		// The next run must be accepted straight away, with no pause.
+		next, err := svc.StartRun(header.ID, run.Prompt{Text: "again", Provider: "mock", ModelID: "m"})
+		if err != nil {
+			t.Fatalf("run %d: a settled run must leave the session free to start the next: %v", i, err)
+		}
+		waitHubClosed(t, next)
 	}
 }
 

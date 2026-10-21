@@ -47,16 +47,10 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 		// them; release them with the run so the map cannot grow unbounded
 		// across a long-lived server.
 		s.snapshots.drop(sessionID)
-		// Only tear down state this run still owns: after a watchdog
-		// force-settle a newer run may hold the slot and its decisions.
-		s.mu.Lock()
-		ar, owned := s.active[sessionID]
-		owned = owned && ar.hub == hub
-		if owned {
-			delete(s.active, sessionID)
-		}
-		s.mu.Unlock()
-		if owned {
+		// Backstop for the paths that never reach the terminal branch: the
+		// slot is normally released before the hub closes, so that a run
+		// which has observably finished frees the session for the next one.
+		if s.releaseSlot(sessionID, hub) {
 			s.decisions.RejectAllForSession(sessionID, "Run ended")
 		}
 	}()
@@ -87,18 +81,35 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 					}
 				}
 			}
-			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
-			if currentCtx.Err() != nil {
+			aborted := currentCtx.Err() != nil
+			if aborted {
 				// Abort/steer is a user action, not a failure: settle done
 				// never needs_attention.
 				s.setStatus(sessionID, "done")
+			} else if runErr == nil {
+				s.setStatus(sessionID, "done")
+			} else {
+				s.setStatus(sessionID, "needs_attention")
+			}
+			// Release the session before the hub closes: a run that has
+			// observably finished must leave the session free, or a client
+			// that starts the next run the moment this one ends is told the
+			// session is busy. The status is written first, and this run's
+			// pending decisions are cleared before a new run can install its
+			// own, so neither can be clobbered by the other.
+			// Release the session before the hub closes: a run that has
+			// observably finished must leave the session free, or a client
+			// that starts the next run the moment this one ends is told the
+			// session is busy. The status is written first, and this run's
+			// pending decisions are cleared before a new run can install its
+			// own, so neither can be clobbered by the other.
+			if s.releaseSlot(sessionID, hub) {
+				s.decisions.RejectAllForSession(sessionID, "Run ended")
+			}
+			hub.Broadcast(loop.Event{Kind: loop.EventSessionEnd})
+			if aborted {
 				hub.Close(OutcomeAborted)
 			} else {
-				if runErr == nil {
-					s.setStatus(sessionID, "done")
-				} else {
-					s.setStatus(sessionID, "needs_attention")
-				}
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)
