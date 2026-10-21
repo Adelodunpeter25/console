@@ -15,6 +15,9 @@ SIGN_IDENTITY="-"
 MAIN_ENTITLEMENTS=""
 HELPER_ENTITLEMENTS=""
 EXTRA_CARGO_ARGS=()
+# Chromium is opt-in. The default build uses the system WKWebView and does not
+# download, link, bundle or sign CEF.
+CEF_ENABLED=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -50,9 +53,10 @@ while [[ $# -gt 0 ]]; do
             TARGET_TRIPLE="$2"
             shift 2
             ;;
-        # Retired: the Chromium (CEF) backend is always built and bundled
-        # now. Accepted as a no-op so old invocations keep working.
+        # Optional Chromium (CEF) backend. Off by default: the browser tab
+        # runs on the system WKWebView. Pass --cef to build and bundle it.
         --cef)
+            CEF_ENABLED=true
             shift
             ;;
         # Signing identity (`-` = ad-hoc, the default). Pass a Developer ID
@@ -138,6 +142,10 @@ if [[ "$IS_RELEASE" == true || "$MODE" == "prod" ]]; then
     TARGET_SUBDIR="release"
 fi
 
+if [[ "$CEF_ENABLED" == true ]]; then
+    BUILD_FLAGS+=("--features" "cef")
+fi
+
 echo "==> Building binary with cargo..."
 if [[ -n "$TARGET_TRIPLE" ]]; then
     BUILD_FLAGS+=("--target" "$TARGET_TRIPLE")
@@ -167,6 +175,7 @@ APP_DIR="$OUT_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
 echo "==> Assembling .app bundle at $APP_DIR..."
 rm -rf "$APP_DIR"
@@ -217,6 +226,7 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
 </plist>
 PLIST
 
+if [[ "$CEF_ENABLED" == true ]]; then
 # 4b. CEF framework + helper apps. Requires CEF_PATH pointing at a shared CEF
 # download (scripts/dev.sh exports a default; the `cef` crate's build script
 # fills it on first build).
@@ -248,7 +258,6 @@ if [[ ! -d "$CEF_FW_SRC" ]]; then
     exit 1
 fi
 
-FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 mkdir -p "$FRAMEWORKS_DIR"
 echo "    Copying framework (one-time cost, ~330MB)..."
 rm -rf "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework"
@@ -334,6 +343,7 @@ if [[ "$HELPER_LINK" == true ]]; then
     rm -f "$HELPER_SEED"
 fi
 echo "    Helpers installed: $HELPER_BASE{, (GPU),(Renderer),(Plugin),(Alerts)}"
+fi
 
 # 5. Code signing, inside-out so nested code is sealed before the container.
 # Ad-hoc (`-`) by default; pass --sign with a Developer ID for distribution.
@@ -345,16 +355,18 @@ sign() {
         codesign --force --sign "$SIGN_IDENTITY" "$1"
     fi
 }
-sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
-if [[ "$HELPER_LINK" == true ]]; then
-    # Dev helpers share one executable signed with the helper identifier
-    # (see section 4b). Re-signing each helper would replace that file and
-    # restore the five full copies this is avoiding.
-    echo "    Helper executable is shared and pre-signed; skipping per-helper signing."
-else
-    for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
-        sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
-    done
+if [[ "$CEF_ENABLED" == true ]]; then
+    sign "$FRAMEWORKS_DIR/Chromium Embedded Framework.framework" ""
+    if [[ "$HELPER_LINK" == true ]]; then
+        # Dev helpers share one executable signed with the helper identifier
+        # (see section 4b). Re-signing each helper would replace that file and
+        # restore the five full copies this is avoiding.
+        echo "    Helper executable is shared and pre-signed; skipping per-helper signing."
+    else
+        for HELPER_APP in "$FRAMEWORKS_DIR"/*.app; do
+            sign "$HELPER_APP" "$HELPER_ENTITLEMENTS"
+        done
+    fi
 fi
 sign "$APP_DIR" "$MAIN_ENTITLEMENTS"
 

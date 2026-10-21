@@ -26,7 +26,9 @@ use super::address::{
     url_host,
 };
 use super::agent_script::{cap_result, wrap_script};
-use super::host::{HostCallbacks, HostContent, NativeNavigationError, WebviewHost};
+use super::host::{
+    BrowserBackend, BrowserHost, HostCallbacks, HostContent, NativeNavigationError,
+};
 use super::inspector::{BrowserElementInspection, INSPECTOR_SCRIPT, InspectorIpcMessage};
 use crate::common::input::{ComposerEvent, ComposerInput};
 use crate::primitives::tooltip::Tooltip;
@@ -38,6 +40,27 @@ const TOOLBAR_HEIGHT: f32 = 42.0;
 #[cfg(target_os = "macos")]
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
+
+/// Browser-tab engine. The system webview (WKWebView) is the default; CEF is
+/// only available in builds compiled with the `cef` feature and is selected
+/// with `CONSOLE_BROWSER_BACKEND=cef`.
+#[cfg(target_os = "macos")]
+fn browser_backend() -> BrowserBackend {
+    let requested = std::env::var("CONSOLE_BROWSER_BACKEND").unwrap_or_default();
+    let wants_cef = requested.eq_ignore_ascii_case("cef")
+        || requested.eq_ignore_ascii_case("chromium");
+    if wants_cef {
+        #[cfg(feature = "cef")]
+        {
+            return BrowserBackend::Cef;
+        }
+        #[cfg(not(feature = "cef"))]
+        log::warn!(
+            "CONSOLE_BROWSER_BACKEND={requested} ignored: this build has no cef feature; using the system webview"
+        );
+    }
+    BrowserBackend::System
+}
 
 #[derive(Clone)]
 #[cfg(target_os = "macos")]
@@ -63,7 +86,7 @@ impl Deferred {
 pub struct BrowserView {
     focus_handle: FocusHandle,
     address: Entity<ComposerInput>,
-    host: Option<Rc<WebviewHost>>,
+    host: Option<Rc<BrowserHost>>,
     host_error: Option<String>,
     navigation_error: Option<NativeNavigationError>,
     navigation_requested: bool,
@@ -292,7 +315,10 @@ impl BrowserView {
 
         let content = HostContent {
             user_agent: Some(USER_AGENT.to_owned()),
-            initialization_script: Some(INSPECTOR_SCRIPT.to_owned()),
+            initialization_script: Some(format!(
+                "{INSPECTOR_SCRIPT}\n{}",
+                super::driver::init_script()
+            )),
             html: None,
             allow_navigation: Some(Box::new(|_| true)),
             on_ipc: Some(Box::new(move |body| {
@@ -311,7 +337,7 @@ impl BrowserView {
             on_nav_finish,
             on_nav_error,
         };
-        match WebviewHost::create(window, content, callbacks) {
+        match BrowserHost::create(browser_backend(), window, content, callbacks) {
             Ok(host) => {
                 self.host = Some(Rc::new(host));
             }
@@ -412,6 +438,30 @@ impl BrowserView {
         self.evaluate_script(&wrap_script(request_id, script));
     }
 
+    /// Run one page-driver request (snapshot/click/type). The driver is
+    /// installed at document start, so this is a plain call rather than an
+    /// `eval`; strict Content-Security-Policy pages keep working. The result
+    /// arrives under `request_id` like any other script result.
+    pub fn run_driver_script(
+        &self,
+        request_id: &str,
+        op: &str,
+        element_ref: Option<&str>,
+        text: Option<&str>,
+        submit: bool,
+        selector: Option<&str>,
+    ) {
+        let script = super::driver::request_script(
+            request_id,
+            op,
+            element_ref,
+            text,
+            submit,
+            selector,
+        );
+        self.evaluate_script(&script);
+    }
+
     /// Start a native PNG snapshot of the visible page. The returned slot
     /// fills once the webview finishes; `None` when there is no live webview.
     pub fn start_snapshot(
@@ -465,7 +515,7 @@ impl BrowserView {
         }
     }
 
-    pub fn with_host(mut self, host: Rc<WebviewHost>) -> Self {
+    pub fn with_host(mut self, host: Rc<BrowserHost>) -> Self {
         self.host = Some(host);
         self
     }

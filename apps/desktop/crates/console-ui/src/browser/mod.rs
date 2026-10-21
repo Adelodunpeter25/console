@@ -6,9 +6,12 @@
 
 mod actions;
 pub mod address;
+#[cfg(feature = "cef")]
 pub mod agent_driver;
 pub mod agent_script;
+#[cfg(feature = "cef")]
 pub mod cef;
+pub mod driver;
 pub mod host;
 pub mod inspector;
 #[cfg(target_os = "macos")]

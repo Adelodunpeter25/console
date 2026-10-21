@@ -8,6 +8,12 @@ license.workspace = true
 name = "console"
 path = "main.rs"
 
+[features]
+default = []
+# Chromium/CEF browser backend. Off by default; the browser tab runs on the
+# system WKWebView. Enable with `cargo build -p console-app --features cef`.
+cef = ["console-ui/cef"]
+
 [dependencies]
 gpui = { workspace = true }
 gpui_macros = { workspace = true }

@@ -19,7 +19,7 @@ use gpui::App;
 fn main() {
     // CEF helpers re-execute this binary: run the helper entry point and
     // exit before touching the app. No-op in unbundled development binaries.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "cef"))]
     if let Some(code) = console_ui::browser::cef::runtime::run_helper_process() {
         std::process::exit(code);
     }
@@ -41,7 +41,7 @@ fn main() {
     // inside a run-loop callout (first browser tab, or `applicationDidFinishLaunching`)
     // trips a Chromium message-pump check and crashes. It also makes the CDP
     // port available without opening a tab first.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "cef"))]
     console_ui::browser::cef::runtime::init_before_run_loop();
 
     app.run(|cx: &mut App| {

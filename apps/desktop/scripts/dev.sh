@@ -12,6 +12,8 @@ DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUN_APP=true
 WATCH_MODE=true
 EXTRA_ARGS=()
+# Chromium is opt-in. The default dev build is the system WKWebView.
+CEF_FEATURE=false
 
 for arg in "$@"; do
     if [[ "$arg" == "--no-run" ]]; then
@@ -19,26 +21,21 @@ for arg in "$@"; do
     elif [[ "$arg" == "--no-watch" ]]; then
         WATCH_MODE=false
     elif [[ "$arg" == "--cef" ]]; then
-        # Retired: Chromium is always built now. Accepted as a no-op.
-        :
+        CEF_FEATURE=true
     else
         EXTRA_ARGS+=("$arg")
     fi
 done
 
 build_dev_bundle() {
-    if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
-        "$SCRIPT_DIR/build.sh" \
-            --mode dev \
-            --bundle-id com.console.desktop.dev \
-            --app-name "Console Dev" \
-            "${EXTRA_ARGS[@]}"
-    else
-        "$SCRIPT_DIR/build.sh" \
-            --mode dev \
-            --bundle-id com.console.desktop.dev \
-            --app-name "Console Dev"
+    local args=(--mode dev --bundle-id com.console.desktop.dev --app-name "Console Dev")
+    if [[ "$CEF_FEATURE" == true ]]; then
+        args+=(--cef)
     fi
+    if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
+        args+=("${EXTRA_ARGS[@]}")
+    fi
+    "$SCRIPT_DIR/build.sh" "${args[@]}"
 }
 
 APP_PATH="$DESKTOP_DIR/dist/Console Dev.app"
@@ -83,6 +80,9 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
 
     # cargo watch with --postpone so it waits for file changes instead of immediately rebuilding
     WATCH_BUILD="build -p console-app"
+    if [[ "$CEF_FEATURE" == true ]]; then
+        WATCH_BUILD="$WATCH_BUILD --features cef"
+    fi
     cargo watch \
         --postpone \
         -w "$DESKTOP_DIR/src" \

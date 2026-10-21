@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use crate::state::app::ConsoleDesktopApp;
 
+#[cfg(feature = "cef")]
 mod agent_cdp;
 
 /// Interval between tab-lookup / page-load polls.
@@ -292,16 +293,22 @@ impl ConsoleDesktopApp {
                     return;
                 }
 
-                let js = console_ui::browser::agent_script::element_script(
-                    &action,
-                    element_ref.as_deref(),
-                    req.text.as_deref(),
-                    req.submit.unwrap_or(false),
-                    req.selector.as_deref(),
-                );
                 let is_snapshot = action == "snapshot";
                 let script_id = request_id.clone();
-                view.update(cx, |bv, _| bv.run_agent_script(&script_id, &js));
+                let driver_ref = element_ref.clone();
+                let driver_text = req.text.clone();
+                let driver_submit = req.submit.unwrap_or(false);
+                let driver_selector = req.selector.clone();
+                view.update(cx, |bv, _| {
+                    bv.run_driver_script(
+                        &script_id,
+                        &action,
+                        driver_ref.as_deref(),
+                        driver_text.as_deref(),
+                        driver_submit,
+                        driver_selector.as_deref(),
+                    )
+                });
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
@@ -1072,5 +1079,24 @@ fn content_script(selector: Option<&str>) -> String {
                  return out.join('\\n\\n'); }})()"
             )
         }
+    }
+}
+
+/// Without the `cef` feature there is no CDP target and no agent-browser path;
+/// every page action runs through the in-page driver.
+#[cfg(not(feature = "cef"))]
+impl ConsoleDesktopApp {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn try_agent_browser(
+        &mut self,
+        _sess_id: &str,
+        _req: &BrowserActionRequest,
+        _tab_id: &str,
+        _view: &Entity<BrowserView>,
+        _note: Option<String>,
+        _retries_left: u32,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        false
     }
 }

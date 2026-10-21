@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+# Chromium/CEF browser backend. Off by default: the browser tab runs on the
+# system WKWebView. Build with `--features cef` to bring Chromium back.
+cef = ["dep:cef"]
+
 [dependencies]
 gpui = { workspace = true }
 gpui_macros = { workspace = true }
@@ -30,9 +36,9 @@ imagesize = "0.14"
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# Chromium (CEF) is the browser-tab backend; wry/WKWebView stays compiled in
-# for the Devices tab (see `browser::host::SystemWebviewHost`).
-cef = "154.4.0"
+# Chromium (CEF) browser backend, behind the `cef` feature. The default
+# browser tab uses the system WKWebView (`browser::host::SystemWebviewHost`).
+cef = { version = "154.4.0", optional = true }
 wry = { version = "0.56", features = ["devtools"] }
 # Same major version gpui/wry use, so `HasWindowHandle` impls interoperate.
 raw-window-handle = "0.6"
@@ -129,6 +135,10 @@ path = "tests/browser/agent_driver_test.rs"
 [[test]]
 name = "browser_visibility_test"
 path = "tests/browser/visibility_test.rs"
+
+[[test]]
+name = "browser_driver_script_test"
+path = "tests/browser/driver_script_test.rs"
 
 [[test]]
 name = "watch_streams_test"
