@@ -66,6 +66,24 @@ class PairingUrlTest {
         assertEquals("vw9g-zu89-aphc", code)
     }
 
+    // The host field assumes http when it carries no scheme, so the scheme
+    // is only dropped when it is the default one. An https address that
+    // loses its scheme is spoken to in the wrong protocol.
+    @Test
+    fun keepsAnHttpsSchemeWhenSplittingAFullUrl() {
+        val (host, code) =
+            splitHostAndCode("https://k7m2xq9pa4dn.hostc.app/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc")
+        assertEquals("https://k7m2xq9pa4dn.hostc.app", host)
+        assertEquals("vw9g-zu89-aphc", code)
+    }
+
+    @Test
+    fun keepsAnHttpsSchemeWhenSplittingOneLine() {
+        val (host, code) = splitHostAndCode("https://k7m2xq9pa4dn.hostc.app#vw9g-zu89-aphc")
+        assertEquals("https://k7m2xq9pa4dn.hostc.app", host)
+        assertEquals("vw9g-zu89-aphc", code)
+    }
+
     @Test
     fun splitsAPlainAddressWithNoCode() {
         val (host, code) = splitHostAndCode("192.168.1.10:3000")

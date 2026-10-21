@@ -140,9 +140,18 @@ fun splitHostAndCode(text: String): Pair<String, String> {
     // The full URL carries a version, so an unknown one is refused rather
     // than guessed at.
     if (params["v"] != null && params["v"] != "1") return base to ""
-    // The URL carries a path; the address is just the authority.
+    // The URL carries a path; the address is just the authority. The host
+    // field assumes http when it carries no scheme, so the scheme is only
+    // dropped when it is the default one — an https address has to keep its
+    // own or it would be spoken to in the wrong protocol.
+    val scheme = base.substringBefore("://", missingDelimiterValue = "")
     val authority = base.substringAfter("://", base).substringBefore('/')
-    return authority to code
+    val address = when {
+        scheme.isEmpty() -> authority
+        scheme.equals("http", ignoreCase = true) -> authority
+        else -> "$scheme://$authority"
+    }
+    return address to code
 }
 
 /**
