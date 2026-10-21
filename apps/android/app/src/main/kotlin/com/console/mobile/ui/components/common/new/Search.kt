@@ -4,15 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -84,8 +79,10 @@ fun SearchInput(
 
 /**
  * Sticky bottom search: a [SearchInput] plus an optional round compose button.
- * It holds the only text input on its screen, so it rides above the keyboard
- * (the navigation bars are excluded because the window already insets for them).
+ *
+ * It holds the only text input on its screen, so it rides above the keyboard.
+ * The keyboard inset belongs to the frosted bar that holds it — the blur has
+ * to lift with the bar, or the scrim is left behind under the keyboard.
  */
 @Composable
 fun SearchBar(
@@ -98,7 +95,6 @@ fun SearchBar(
 ) {
     Row(
         modifier = modifier.fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

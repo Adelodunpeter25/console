@@ -9,11 +9,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +64,7 @@ import console.v1.SessionHeader
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.model.UpdateSessionDto
 import com.console.mobile.ui.components.ConfirmButton
+import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.components.common.new.SearchBar
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
@@ -186,7 +192,7 @@ fun HomeScreen(
                     }
                 } else if (sections.isEmpty() && projectState.error != null) {
                     LazyColumn(
-                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     ) {
                         item {
@@ -200,7 +206,7 @@ fun HomeScreen(
                     }
                 } else if (sections.isEmpty()) {
                     LazyColumn(
-                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                     ) {
                         item {
@@ -221,7 +227,7 @@ fun HomeScreen(
                     LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 16.dp),
+                        contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 96.dp),
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
@@ -298,13 +304,22 @@ fun HomeScreen(
                 actions = { EnvironmentSwitcher() },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
+            // The search bar rides over the list rather than sitting below it:
+            // the rows scroll underneath it and the frosted bar fades them out
+            // instead of being cut off at a hard edge.
+            BlurredBottomBar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+            ) {
+                SearchBar(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    onComposePress = ::composeSession,
+                    composeEnabled = !creatingSession,
+                )
+            }
         }
-        SearchBar(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            onComposePress = ::composeSession,
-            composeEnabled = !creatingSession,
-        )
     }
 
     val sheetSession = activeSession
