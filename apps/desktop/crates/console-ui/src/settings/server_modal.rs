@@ -11,8 +11,8 @@ use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    Styled, Window, div, img, px,
+    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, px,
 };
 use std::rc::Rc;
 use std::sync::Arc;
@@ -58,50 +58,16 @@ impl RenderOnce for ServerModal {
             ProbeState::Unknown => ("Click Test to verify connection", theme.text_ghost),
         };
 
-        // The backdrop closes the modal; the card stops the click so
-        // clicking inside it does not dismiss.
-        let backdrop_close = on_close.clone();
-        let card = div()
-            .w(px(520.0))
-            .p(px(16.0))
-            .rounded(px(10.0))
-            .border_1()
-            .border_color(theme.border_strong)
-            .bg(theme.surface)
-            .shadow_lg()
+        // The fields scroll inside the card: on a short window the
+        // buttons below have to stay reachable.
+        let body = div()
+            .id("server-modal-body")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
             .flex()
             .flex_col()
             .gap(px(12.0))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child(if self.is_edit {
-                                "Edit Server"
-                            } else {
-                                "Add Server"
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("btn-close-server-modal")
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_close)(window, cx);
-                            })
-                            .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
-                    ),
-            )
             // The name is only editable for a server that already exists:
             // a new one is named after the server it pairs with.
             .when(self.is_edit, |el| {
@@ -185,7 +151,54 @@ impl RenderOnce for ServerModal {
                         .text_color(theme.danger)
                         .child(error),
                 )
+            });
+
+        // The backdrop closes the modal; the card stops the click so
+        // clicking inside it does not dismiss.
+        let backdrop_close = on_close.clone();
+        let card = div()
+            .w(px(520.0))
+            .max_h_full()
+            .p(px(16.0))
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(theme.border_strong)
+            .bg(theme.surface)
+            .shadow_lg()
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                cx.stop_propagation();
             })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(14.0))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(theme.text)
+                            .child(if self.is_edit {
+                                "Edit Server"
+                            } else {
+                                "Add Server"
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("btn-close-server-modal")
+                            .cursor_pointer()
+                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                cx.stop_propagation();
+                                (on_close)(window, cx);
+                            })
+                            .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
+                    ),
+            )
+            .child(body)
             .child(
                 div()
                     .flex()
@@ -196,13 +209,7 @@ impl RenderOnce for ServerModal {
                             .flex()
                             .items_center()
                             .gap(px(6.0))
-                            .child(
-                                div()
-                                    .w(px(7.0))
-                                    .h(px(7.0))
-                                    .rounded_full()
-                                    .bg(probe_color),
-                            )
+                            .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(probe_color))
                             .child(
                                 div()
                                     .text_size(px(11.5))
@@ -335,8 +342,143 @@ impl RenderOnce for PairDeviceModal {
             })
         });
 
+        // The card is bounded by the window and its middle scrolls: a
+        // server with a dozen paired devices must not push the buttons
+        // off the bottom of the screen.
+        let mut body = div()
+            .id("pair-modal-body")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .child("Scan this with the Console app. It works once."),
+            );
+
+        if let Some(grant) = self.grant.as_ref() {
+            body = body
+                .when_some(qr, |el, image| {
+                    el.child(
+                        div().flex().justify_center().child(
+                            div()
+                                .p(px(10.0))
+                                .rounded(px(8.0))
+                                .bg(gpui::white())
+                                // The size belongs on the image itself:
+                                // an image lays out at its natural
+                                // size, so a box around it does not
+                                // shrink it.
+                                .child(img(image).w(px(200.0)).h(px(200.0)).flex_none()),
+                        ),
+                    )
+                })
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.0))
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(theme.text_secondary)
+                                .child("Or type this code"),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(16.0))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(theme.text)
+                                .child(grant.grant.clone()),
+                        ),
+                );
+        } else {
+            body = body.child(
+                div()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_secondary)
+                    .child("Making a code..."),
+            );
+        }
+
+        // The devices already paired with this server. The QR code above
+        // adds one more.
+        let others: Vec<_> = self
+            .devices
+            .iter()
+            .filter(|device| {
+                self.this_device
+                    .as_ref()
+                    .map(|this| device.id != this.id)
+                    .unwrap_or(true)
+            })
+            .collect();
+        if !others.is_empty() {
+            body = body.child(
+                div()
+                    .text_size(px(11.5))
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(theme.text_secondary)
+                    .child("Paired devices"),
+            );
+            for device in others {
+                let id = device.id.clone();
+                let on_revoke_click = on_revoke.clone();
+                body = body.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .text_color(theme.text)
+                                .child(device_label(device)),
+                        )
+                        .child(
+                            div()
+                                .id(ElementId::from(format!("btn-revoke-device-{id}")))
+                                .flex_shrink_0()
+                                .px(px(8.0))
+                                .py(px(4.0))
+                                .rounded(px(5.0))
+                                .border_1()
+                                .border_color(theme.border_strong)
+                                .bg(theme.raised)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(theme.overlay))
+                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                    cx.stop_propagation();
+                                    (on_revoke_click)(id.clone(), window, cx);
+                                })
+                                .child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(theme.text_secondary)
+                                        .child("Revoke"),
+                                ),
+                        ),
+                );
+            }
+        }
+
+        if let Some(error) = self.error.clone() {
+            body = body.child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(theme.danger)
+                    .child(error),
+            );
+        }
+
         let mut card = div()
             .w(px(360.0))
+            .max_h_full()
             .p(px(16.0))
             .rounded(px(10.0))
             .border_1()
@@ -372,135 +514,7 @@ impl RenderOnce for PairDeviceModal {
                             .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
                     ),
             )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
-                    .child("Scan this with the Console app. It works once."),
-            );
-
-        if let Some(grant) = self.grant.as_ref() {
-            card = card
-                .when_some(qr, |el, image| {
-                    el.child(
-                        div()
-                            .flex()
-                            .justify_center()
-                            .child(
-                                div()
-                                    .p(px(10.0))
-                                    .rounded(px(8.0))
-                                    .bg(gpui::white())
-                                    // The size belongs on the image itself:
-                                    // an image lays out at its natural
-                                    // size, so a box around it does not
-                                    // shrink it.
-                                    .child(
-                                        img(image)
-                                            .w(px(200.0))
-                                            .h(px(200.0))
-                                            .flex_none(),
-                                    ),
-                            ),
-                    )
-                })
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(theme.text_secondary)
-                                .child("Or type this code"),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(16.0))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(theme.text)
-                                .child(grant.grant.clone()),
-                        ),
-                );
-        } else {
-            card = card.child(
-                div()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_secondary)
-                    .child("Making a code..."),
-            );
-        }
-
-        // The devices already paired with this server. The QR code above
-        // adds one more.
-        let others: Vec<_> = self
-            .devices
-            .iter()
-            .filter(|device| {
-                self.this_device
-                    .as_ref()
-                    .map(|this| device.id != this.id)
-                    .unwrap_or(true)
-            })
-            .collect();
-        if !others.is_empty() {
-            card = card.child(
-                div()
-                    .text_size(px(11.5))
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(theme.text_secondary)
-                    .child("Paired devices"),
-            );
-            for device in others {
-                let id = device.id.clone();
-                let on_revoke_click = on_revoke.clone();
-                card = card.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            div()
-                                .text_size(px(12.5))
-                                .text_color(theme.text)
-                                .child(device_label(device)),
-                        )
-                        .child(
-                            div()
-                                .id(ElementId::from(format!("btn-revoke-device-{id}")))
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(5.0))
-                                .border_1()
-                                .border_color(theme.border_strong)
-                                .bg(theme.raised)
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                    cx.stop_propagation();
-                                    (on_revoke_click)(id.clone(), window, cx);
-                                })
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .text_color(theme.text_secondary)
-                                        .child("Revoke"),
-                                ),
-                        ),
-                );
-            }
-        }
-
-        if let Some(error) = self.error.clone() {
-            card = card.child(
-                div()
-                    .text_size(px(11.5))
-                    .text_color(theme.danger)
-                    .child(error),
-            );
-        }
+            .child(body);
 
         if self.this_device.is_some() {
             let on_unpair_click = on_unpair.clone();
