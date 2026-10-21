@@ -288,7 +288,7 @@ impl SettingsWindow {
     /// The window root uses this to tell "close the modal" from "close the
     /// settings": one Escape must only close one thing.
     pub fn modal_open(&self) -> bool {
-        self.is_adding_env || self.pair_modal_open
+        self.is_adding_env || self.pair_modal_open || self.mcp.is_modal_open
     }
 
     /// Close any modal open on top of the settings.
@@ -1042,6 +1042,8 @@ impl Render for SettingsWindow {
         // they can sit above the whole window.
         let show_server_modal = active_tab == SettingsTab::Servers && self.is_adding_env;
         let show_pair_modal = active_tab == SettingsTab::Servers && self.pair_modal_open;
+        let show_mcp_modal = active_tab == SettingsTab::Mcp && self.mcp.is_modal_open;
+        let mcp_modal = self.mcp.render_mcp_modal(window, cx);
 
         let on_modal_close: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
@@ -1125,9 +1127,10 @@ impl Render for SettingsWindow {
                     // A modal on top of the settings closes first, and the
                     // event stops there: one Escape must not close the modal
                     // *and* the settings behind it.
-                    if this.pair_modal_open || this.is_adding_env {
+                    if this.pair_modal_open || this.is_adding_env || this.mcp.is_modal_open {
                         this.pair_modal_open = false;
                         this.is_adding_env = false;
+                        this.mcp.is_modal_open = false;
                         this.editing_env_id = None;
                         cx.stop_propagation();
                         cx.notify();
@@ -1142,6 +1145,7 @@ impl Render for SettingsWindow {
             // scrolling content, so they read as dialogs.
             .when(show_server_modal, |el| el.child(server_modal))
             .when(show_pair_modal, |el| el.child(pair_modal))
+            .when(show_mcp_modal, |el| el.child(mcp_modal))
             .into_any_element()
     }
 }

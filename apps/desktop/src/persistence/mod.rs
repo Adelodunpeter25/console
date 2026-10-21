@@ -11,7 +11,7 @@ pub use auth::{
 };
 pub use layout::PersistedLayoutState;
 pub(crate) use store::read_document;
-pub use store::{dismiss_onboarding, load_onboarding};
+pub use store::{dismiss_onboarding, onboarding_seen};
 pub use workspace::{
     PersistedScriptTabs, PersistedWorkspace, WorkspacesDocument, load_workspaces,
     save_workspaces_bytes,

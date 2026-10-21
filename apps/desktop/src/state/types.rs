@@ -386,7 +386,9 @@ pub struct ConsoleDesktopApp {
     /// Server ids whose first-run setup panel was dismissed. Read from the
     /// local store at boot; see state/onboarding.rs for why nothing about
     /// server setup is kept here.
-    pub onboarding_dismissed: std::collections::HashSet<String>,
+    /// True once the setup panel has been skipped. It never comes back —
+    /// not on this server, not on one added later.
+    pub onboarding_seen: bool,
     /// The server whose setup panel is currently open, if any.
     pub onboarding_env_id: Option<String>,
     /// Live setup status for the panel's steps. Never persisted.

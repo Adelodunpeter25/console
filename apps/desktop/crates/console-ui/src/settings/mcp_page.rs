@@ -1,13 +1,10 @@
-use crate::input::ComposerInput;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
-use console_core::types::mcp::{
-    McpAuthType, McpConnectionStatus, McpServerConfig, McpTransportType,
-};
+use console_core::types::mcp::{McpConnectionStatus, McpServerConfig, McpTransportType};
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
+    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;
 
@@ -20,26 +17,12 @@ pub enum McpModalMode {
 #[derive(IntoElement)]
 pub struct McpPage {
     pub servers: Vec<McpServerConfig>,
-    pub is_modal_open: bool,
-    pub modal_mode: McpModalMode,
-    pub selected_transport: McpTransportType,
-    pub selected_auth: McpAuthType,
-    pub name_input: Option<Entity<ComposerInput>>,
-    pub url_input: Option<Entity<ComposerInput>>,
-    pub command_input: Option<Entity<ComposerInput>>,
-    pub args_input: Option<Entity<ComposerInput>>,
-    pub env_input: Option<Entity<ComposerInput>>,
     pub expanded_server_id: Option<String>,
     pub action_error: Option<String>,
-    pub is_submitting: bool,
 
     // Callbacks
     pub on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_open_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    pub on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    pub on_select_transport: Rc<dyn Fn(McpTransportType, &mut Window, &mut App) + 'static>,
-    pub on_select_auth: Rc<dyn Fn(McpAuthType, &mut Window, &mut App) + 'static>,
-    pub on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_connect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     pub on_disconnect: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
@@ -85,11 +68,10 @@ impl RenderOnce for McpPage {
                                     .child("Connect external tools and services via local stdio or remote HTTP servers."),
                             ),
                     )
-                    .when(!self.is_modal_open, |el| {
+                    .child({
                         let on_add = on_open_add.clone();
-                        el.child(
-                            div()
-                                .id("btn-add-mcp-server")
+                        div()
+                            .id("btn-add-mcp-server")
                                 .px(px(10.0))
                                 .py(px(5.0))
                                 .rounded(px(6.0))
@@ -111,9 +93,8 @@ impl RenderOnce for McpPage {
                                         .font_weight(gpui::FontWeight::MEDIUM)
                                         .text_color(theme.on_inverse)
                                         .child("Add Server"),
-                                ),
-                        )
-                    }),
+                                )
+                        }),
             )
             // Error banner if any
             .when_some(self.action_error.clone(), |el, err| {
@@ -131,8 +112,6 @@ impl RenderOnce for McpPage {
                         .child(err),
                 )
             })
-            // Add/Edit Modal / Inline Form
-            .when(self.is_modal_open, |el| el.child(self.render_modal(cx)))
             // Main Content: Empty State or Server Cards
             .child(if self.servers.is_empty() {
                 self.render_empty_state(cx).into_any_element()
@@ -507,410 +486,5 @@ impl McpPage {
                         )
                     })
             }))
-    }
-
-    fn render_modal(&self, cx: &mut App) -> impl IntoElement {
-        let theme = Theme::current(cx);
-        let on_close = self.on_close_modal.clone();
-        let on_save = self.on_save.clone();
-        let on_select_trans = self.on_select_transport.clone();
-        let on_select_auth = self.on_select_auth.clone();
-
-        let is_edit = match self.modal_mode {
-            McpModalMode::Add => false,
-            McpModalMode::Edit(_) => true,
-        };
-
-        div()
-            .p(px(14.0))
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(theme.accent)
-            .bg(theme.surface)
-            .flex()
-            .flex_col()
-            .gap(px(12.0))
-            // Modal Title
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child(if is_edit {
-                                "Edit MCP Server"
-                            } else {
-                                "Add MCP Server"
-                            }),
-                    )
-                    .child(
-                        div()
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_close)(window, cx);
-                            })
-                            .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
-                    ),
-            )
-            // Name Input
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child("Server Name / ID"),
-                    )
-                    .when_some(self.name_input.clone(), |el, input| {
-                        el.child(
-                            div()
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(theme.border)
-                                .bg(theme.canvas)
-                                .child(input),
-                        )
-                    }),
-            )
-            // Transport Type Selector (stdio vs http)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.text)
-                            .child("Transport Type"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.0))
-                            .child({
-                                let on_sel = on_select_trans.clone();
-                                let is_sel = self.selected_transport == McpTransportType::Stdio;
-                                div()
-                                    .px(px(10.0))
-                                    .py(px(5.0))
-                                    .rounded(px(6.0))
-                                    .cursor_pointer()
-                                    .bg(if is_sel { theme.accent } else { theme.overlay })
-                                    .text_color(if is_sel { theme.on_inverse } else { theme.text })
-                                    .text_size(px(12.0))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                        cx.stop_propagation();
-                                        (on_sel)(McpTransportType::Stdio, window, cx);
-                                    })
-                                    .child("Local (stdio)")
-                            })
-                            .child({
-                                let on_sel = on_select_trans.clone();
-                                let is_sel = self.selected_transport == McpTransportType::Http;
-                                div()
-                                    .px(px(10.0))
-                                    .py(px(5.0))
-                                    .rounded(px(6.0))
-                                    .cursor_pointer()
-                                    .bg(if is_sel { theme.accent } else { theme.overlay })
-                                    .text_color(if is_sel { theme.on_inverse } else { theme.text })
-                                    .text_size(px(12.0))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                        cx.stop_propagation();
-                                        (on_sel)(McpTransportType::Http, window, cx);
-                                    })
-                                    .child("Remote (HTTP / SSE)")
-                            }),
-                    ),
-            )
-            // Fields for stdio
-            .when(self.selected_transport == McpTransportType::Stdio, |el| {
-                el.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Command"),
-                                )
-                                .when_some(self.command_input.clone(), |el, input| {
-                                    el.child(
-                                        div()
-                                            .px(px(8.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .border_1()
-                                            .border_color(theme.border)
-                                            .bg(theme.canvas)
-                                            .child(input),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Arguments (space-delimited)"),
-                                )
-                                .when_some(self.args_input.clone(), |el, input| {
-                                    el.child(
-                                        div()
-                                            .px(px(8.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .border_1()
-                                            .border_color(theme.border)
-                                            .bg(theme.canvas)
-                                            .child(input),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Environment Variables (KEY=VAL, comma-separated)"),
-                                )
-                                .when_some(self.env_input.clone(), |el, input| {
-                                    el.child(
-                                        div()
-                                            .px(px(8.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .border_1()
-                                            .border_color(theme.border)
-                                            .bg(theme.canvas)
-                                            .child(input),
-                                    )
-                                }),
-                        ),
-                )
-            })
-            // Fields for HTTP
-            .when(self.selected_transport == McpTransportType::Http, |el| {
-                el.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Endpoint URL"),
-                                )
-                                .when_some(self.url_input.clone(), |el, input| {
-                                    el.child(
-                                        div()
-                                            .px(px(8.0))
-                                            .py(px(4.0))
-                                            .rounded(px(6.0))
-                                            .border_1()
-                                            .border_color(theme.border)
-                                            .bg(theme.canvas)
-                                            .child(input),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(4.0))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Authentication"),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .gap(px(8.0))
-                                        .child({
-                                            let on_sel = on_select_auth.clone();
-                                            let is_sel = self.selected_auth == McpAuthType::Oauth2;
-                                            div()
-                                                .px(px(10.0))
-                                                .py(px(5.0))
-                                                .rounded(px(6.0))
-                                                .cursor_pointer()
-                                                .bg(if is_sel {
-                                                    theme.accent
-                                                } else {
-                                                    theme.overlay
-                                                })
-                                                .text_color(if is_sel {
-                                                    theme.on_inverse
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .text_size(px(12.0))
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_event, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_sel)(McpAuthType::Oauth2, window, cx);
-                                                    },
-                                                )
-                                                .child("OAuth 2.1 (Browser)")
-                                        })
-                                        .child({
-                                            let on_sel = on_select_auth.clone();
-                                            let is_sel = self.selected_auth == McpAuthType::Static;
-                                            div()
-                                                .px(px(10.0))
-                                                .py(px(5.0))
-                                                .rounded(px(6.0))
-                                                .cursor_pointer()
-                                                .bg(if is_sel {
-                                                    theme.accent
-                                                } else {
-                                                    theme.overlay
-                                                })
-                                                .text_color(if is_sel {
-                                                    theme.on_inverse
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .text_size(px(12.0))
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_event, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_sel)(McpAuthType::Static, window, cx);
-                                                    },
-                                                )
-                                                .child("Static Token")
-                                        })
-                                        .child({
-                                            let on_sel = on_select_auth.clone();
-                                            let is_sel = self.selected_auth == McpAuthType::None;
-                                            div()
-                                                .px(px(10.0))
-                                                .py(px(5.0))
-                                                .rounded(px(6.0))
-                                                .cursor_pointer()
-                                                .bg(if is_sel {
-                                                    theme.accent
-                                                } else {
-                                                    theme.overlay
-                                                })
-                                                .text_color(if is_sel {
-                                                    theme.on_inverse
-                                                } else {
-                                                    theme.text
-                                                })
-                                                .text_size(px(12.0))
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_event, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_sel)(McpAuthType::None, window, cx);
-                                                    },
-                                                )
-                                                .child("None")
-                                        }),
-                                ),
-                        ),
-                )
-            })
-            // Footer Action buttons
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_end()
-                    .gap(px(8.0))
-                    .mt(px(6.0))
-                    .child({
-                        let on_cl = self.on_close_modal.clone();
-                        div()
-                            .px(px(10.0))
-                            .py(px(5.0))
-                            .rounded(px(6.0))
-                            .cursor_pointer()
-                            .bg(theme.overlay)
-                            .hover(|s| s.bg(theme.overlay_strong))
-                            .text_size(px(12.0))
-                            .text_color(theme.text)
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_cl)(window, cx);
-                            })
-                            .child("Cancel")
-                    })
-                    .child({
-                        let on_sv = on_save.clone();
-                        let disabled = self.is_submitting;
-                        div()
-                            .px(px(12.0))
-                            .py(px(5.0))
-                            .rounded(px(6.0))
-                            .cursor_pointer()
-                            .bg(theme.accent)
-                            .hover(|s| if !disabled { s.opacity(0.9) } else { s })
-                            .text_size(px(12.0))
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(theme.on_inverse)
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                if !disabled {
-                                    cx.stop_propagation();
-                                    (on_sv)(window, cx);
-                                }
-                            })
-                            .child(if self.is_submitting {
-                                "Saving..."
-                            } else {
-                                "Save Server"
-                            })
-                    }),
-            )
     }
 }

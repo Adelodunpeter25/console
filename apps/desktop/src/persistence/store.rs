@@ -62,6 +62,15 @@ pub struct PersistedDraftsState {
 /// re-opening, because the tour only records that it was dismissed once.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PersistedOnboardingState {
+    /// True once the setup panel has been skipped.
+    ///
+    /// One bit for the whole app: the panel is a first-run screen, not a
+    /// per-server checklist, and a server added later is not a reason to
+    /// show it again.
+    #[serde(default)]
+    pub seen: bool,
+    /// Older builds stored a per-server set of dismissed ids. Any entry
+    /// means the panel was seen, so it is read as "seen" too.
     #[serde(default)]
     pub dismissed: std::collections::HashSet<String>,
 }
@@ -215,12 +224,22 @@ pub fn load_onboarding() -> Option<PersistedOnboardingState> {
 
 /// Mark one server's setup panel as dismissed, leaving every other server's
 /// state alone.
-pub fn dismiss_onboarding(env_id: &str) {
+pub fn dismiss_onboarding() {
     update_document(|document| {
         let mut state = document.onboarding.clone().unwrap_or_default();
-        state.dismissed.insert(env_id.to_string());
+        state.seen = true;
         document.onboarding = Some(state);
     });
+}
+
+/// Whether the setup panel has already been skipped.
+///
+/// The panel is shown once, to the person, and never again — including on
+/// a server added later.
+pub fn onboarding_seen() -> bool {
+    load_onboarding()
+        .map(|state| state.seen || !state.dismissed.is_empty())
+        .unwrap_or(false)
 }
 
 pub fn save_environments(state: PersistedEnvironmentsState) {

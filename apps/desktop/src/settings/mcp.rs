@@ -102,13 +102,21 @@ impl McpTabState {
     }
 }
 
+/// The callbacks the add/edit MCP server form needs.
+///
+/// The form is a dialog over the settings, so it is built apart from the
+/// list it sits on top of.
+struct McpModalCallbacks {
+    on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_open_edit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_close_modal: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_select_transport: Rc<dyn Fn(McpTransportType, &mut Window, &mut App) + 'static>,
+    on_select_auth: Rc<dyn Fn(McpAuthType, &mut Window, &mut App) + 'static>,
+    on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
+
 impl McpTabState {
-    pub fn render_mcp_tab(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<SettingsWindow>,
-    ) -> gpui::AnyElement {
-        let _ = window;
+    fn modal_callbacks(&self, cx: &mut Context<SettingsWindow>) -> McpModalCallbacks {
         let on_open_add: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
             let name_input = self.name_input.clone();
@@ -321,6 +329,31 @@ impl McpTabState {
                 .detach();
             })
         };
+
+        McpModalCallbacks {
+            on_open_add,
+            on_open_edit,
+            on_close_modal,
+            on_select_transport,
+            on_select_auth,
+            on_save,
+        }
+    }
+}
+
+impl McpTabState {
+    pub fn render_mcp_tab(
+        &self,
+        window: &mut Window,
+        cx: &mut Context<SettingsWindow>,
+    ) -> gpui::AnyElement {
+        let _ = window;
+        let modal = self.modal_callbacks(cx);
+
+
+
+
+
 
         let on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
@@ -558,7 +591,26 @@ impl McpTabState {
 
         McpPage {
             servers: self.servers.clone(),
-            is_modal_open: self.is_modal_open,
+            expanded_server_id: self.expanded_server_id.clone(),
+            action_error: self.action_error.clone(),
+            on_open_add: modal.on_open_add,
+            on_open_edit: modal.on_open_edit,
+            on_delete,
+            on_connect,
+            on_disconnect,
+            on_toggle_expand,
+        }
+        .into_any_element()
+    }
+
+    /// The add/edit MCP server form, as a dialog over the settings.
+    pub fn render_mcp_modal(
+        &self,
+        _window: &mut Window,
+        cx: &mut Context<SettingsWindow>,
+    ) -> gpui::AnyElement {
+        let modal = self.modal_callbacks(cx);
+        console_ui::settings::McpModal {
             modal_mode: self.modal_mode.clone(),
             selected_transport: self.selected_transport.clone(),
             selected_auth: self.selected_auth.clone(),
@@ -567,19 +619,12 @@ impl McpTabState {
             command_input: Some(self.command_input.clone()),
             args_input: Some(self.args_input.clone()),
             env_input: Some(self.env_input.clone()),
-            expanded_server_id: self.expanded_server_id.clone(),
             action_error: self.action_error.clone(),
             is_submitting: self.is_submitting,
-            on_open_add,
-            on_open_edit,
-            on_close_modal,
-            on_select_transport,
-            on_select_auth,
-            on_save,
-            on_delete,
-            on_connect,
-            on_disconnect,
-            on_toggle_expand,
+            on_close_modal: modal.on_close_modal,
+            on_select_transport: modal.on_select_transport,
+            on_select_auth: modal.on_select_auth,
+            on_save: modal.on_save,
         }
         .into_any_element()
     }

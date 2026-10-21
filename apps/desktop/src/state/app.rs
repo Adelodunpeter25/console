@@ -704,7 +704,7 @@ impl ConsoleDesktopApp {
             server_pairing_grant: None,
             server_auth_busy: false,
             server_auth_error: None,
-            onboarding_dismissed: std::collections::HashSet::new(),
+            onboarding_seen: false,
             onboarding_env_id: None,
             setup_status: Default::default(),
             setup_status_loading: false,
@@ -756,12 +756,10 @@ impl ConsoleDesktopApp {
             }
             _ => None,
         };
-        // Restore the per-server setup dismissals *before* environments init, which
-        // is where the panel is first considered. Loading it afterwards would
-        // open the panel once on every launch for a server already dismissed.
-        app.onboarding_dismissed = crate::persistence::load_onboarding()
-            .map(|state| state.dismissed)
-            .unwrap_or_default();
+        // Restore the "the panel has been seen" bit *before* environments
+        // init, which is where the panel is first considered. Loading it
+        // afterwards would open the panel once on every launch.
+        app.onboarding_seen = crate::persistence::onboarding_seen();
         app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
         app.refresh_auth_status(cx);
         app.init_notifications(cx);

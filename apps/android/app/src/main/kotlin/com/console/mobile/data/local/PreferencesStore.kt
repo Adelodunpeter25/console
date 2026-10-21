@@ -65,22 +65,26 @@ class PreferencesStore(context: Context) {
         prefs.getStringSet(KEY_ONBOARDING_DISMISSED, emptySet())?.toSet() ?: emptySet()
 
     /**
-     * Mark one server's setup panel dismissed, leaving every other server's bit
-     * alone.
+     * Whether the setup panel has been dismissed, for good.
      *
-     * A `StringSet` is copied before writing because Android hands back the live
-     * stored instance — mutating it in place updates memory only, and the change
-     * is silently lost.
+     * The panel is a first-run screen, not a per-server checklist: once it has
+     * been skipped it does not come back, not on this server and not on one
+     * added later. It used to be keyed by environment id, and the panel came
+     * back anyway — pairing a server creates a *new* environment with a new
+     * id, and the bit recorded for the old one did not apply to it.
      */
-    fun dismissOnboarding(envId: String) {
-        val next = loadOnboardingDismissed().toMutableSet()
-        next.add(envId)
-        prefs.edit().putStringSet(KEY_ONBOARDING_DISMISSED, next).apply()
+    fun isOnboardingDismissed(): Boolean =
+        prefs.getBoolean(KEY_ONBOARDING_SEEN, false) || loadOnboardingDismissed().isNotEmpty()
+
+    /** Dismiss the setup panel for good. */
+    fun dismissOnboardingForever() {
+        prefs.edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
     }
 
     companion object {
         const val KEY_BACKEND_URL = "backend_url"
         const val KEY_ENVIRONMENTS = "environments_data"
         const val KEY_ONBOARDING_DISMISSED = "onboarding_dismissed"
+        const val KEY_ONBOARDING_SEEN = "onboarding_seen"
     }
 }

@@ -42,7 +42,9 @@ class SetupRepository(
      */
     fun maybeShow(envId: String?) {
         val id = envId ?: return
-        if (preferencesStore.loadOnboardingDismissed().contains(id)) {
+        // Dismissed means dismissed, for every server: this is a first-run
+        // screen, and it does not come back.
+        if (preferencesStore.isOnboardingDismissed()) {
             setupState.close()
             return
         }
@@ -67,14 +69,10 @@ class SetupRepository(
     )
 
     /**
-     * Dismiss the panel for the active server.
-     *
-     * Latching and per server: dismissing on one server leaves every other
-     * server's bit alone, so a remote box that has been set up stays quiet when
-     * a newly added server is still bare.
+     * Dismiss the panel. It never comes back.
      */
     fun dismiss() {
-        setupState.state.value.activeEnvId?.let { preferencesStore.dismissOnboarding(it) }
+        preferencesStore.dismissOnboardingForever()
         setupState.close()
     }
 }

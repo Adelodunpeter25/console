@@ -1,9 +1,9 @@
-//! First-run setup panel: shown once per server, dismissed forever.
+//! First-run setup panel: shown once, dismissed forever.
 //!
 //! The distinction that makes this simple is between the two kinds of state:
 //!
-//!   - **Stored** — one bit per server: has this person seen the panel? That is
-//!     a fact about the human, not the server, and no endpoint can tell us it.
+//!   - **Stored** — one bit: has this person seen the panel? That is a fact
+//!     about the human, not the server, and no endpoint can tell us it.
 //!   - **Derived** — is this server actually set up (has a project, a provider
 //!     key, a GitHub key)? Read live from the server every time the panel
 //!     opens.
@@ -13,6 +13,13 @@
 //! lie ("all done" over an empty server) or re-open itself at someone who
 //! already did the work. Because only the dismissal is stored, deleting a
 //! project correctly shows that step as unmet again while the panel stays shut.
+//!
+//! The dismissal is one bit for the whole app, not one per server. It used to
+//! be per server, keyed by the environment's local id — and the panel came
+//! back anyway, because pairing a server creates a *new* environment with a
+//! new id, and the bit recorded for the old one did not apply to it. A
+//! first-run screen that reappears after you dismissed it is worse than one
+//! that never appears, so skipping it now means never seeing it again.
 
 use super::ConsoleDesktopApp;
 use gpui::{AnyElement, Context, IntoElement, ParentElement, Styled, Window, div};
@@ -38,7 +45,7 @@ impl SetupStatus {
 }
 
 impl ConsoleDesktopApp {
-    /// Show the setup panel if this server has never had it dismissed *and*
+    /// Show the setup panel if it has never been dismissed *and* this server
     /// has something left to set up.
     ///
     /// Called from both places that change which server is active — the boot
@@ -59,7 +66,9 @@ impl ConsoleDesktopApp {
         let Some(env_id) = env_id.map(str::to_string) else {
             return;
         };
-        if self.onboarding_dismissed.contains(&env_id) {
+        // Dismissed means dismissed, for every server: this is a first-run
+        // screen, and it does not come back.
+        if self.onboarding_seen {
             self.onboarding_env_id = None;
             return;
         }
@@ -103,15 +112,11 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Dismiss the panel for the active server.
-    ///
-    /// Latching, per server: other servers keep their own bit, so dismissing
-    /// setup on a remote box does not silence the panel on the local one.
+    /// Dismiss the panel. It never comes back.
     pub fn dismiss_onboarding(&mut self, cx: &mut Context<Self>) {
-        if let Some(env_id) = self.onboarding_env_id.take() {
-            self.onboarding_dismissed.insert(env_id.clone());
-            crate::persistence::dismiss_onboarding(&env_id);
-        }
+        self.onboarding_env_id = None;
+        self.onboarding_seen = true;
+        crate::persistence::dismiss_onboarding();
         cx.notify();
     }
 
