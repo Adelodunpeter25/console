@@ -158,16 +158,53 @@ func hostPort(baseURL string) string {
 	return strings.TrimRight(trimmed, "/")
 }
 
-// lanAddress finds the machine's address on the local network.
+// lanAddress finds the address a client should use to reach this machine.
 //
-// A client on the same LAN (a phone) can only reach the server by a
-// routable address, so 0.0.0.0 has to become something real. Loopback is
-// the fallback when the machine has no external interface.
+// The default route's source address wins: it is the address the kernel
+// itself picks for outbound traffic, so it is the one the outside world can
+// reach. A cloud host usually carries several routable addresses at once —
+// docker0, a VPC NIC, a public NIC — and the first one the interface list
+// happens to yield is frequently the wrong one.
+//
+// Loopback is the fallback when the machine has no external interface.
 func lanAddress() string {
+	return SelectDialableAddress(defaultRouteIP(), interfaceAddresses())
+}
+
+// defaultRouteIP asks the kernel which source address it would use for an
+// outbound connection.
+//
+// A UDP "connect" is a local route lookup — it sends no packets — so this
+// costs no network traffic and needs no external service. It fails only when
+// the machine has no default route at all, such as an isolated container.
+func defaultRouteIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return nil
+	}
+	defer conn.Close()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr.IP == nil {
+		return nil
+	}
+	ip := addr.IP
+	if ip.IsLoopback() || ip.IsUnspecified() {
+		return nil
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return v4
+	}
+	return nil
+}
+
+// interfaceAddresses lists the routable IPv4 addresses on the machine's
+// interfaces, in the order the OS reports them.
+func interfaceAddresses() []net.IP {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "127.0.0.1"
+		return nil
 	}
+	var out []net.IP
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
 			continue
@@ -182,8 +219,33 @@ func lanAddress() string {
 				continue
 			}
 			if ip := ipNet.IP.To4(); ip != nil && !ip.IsLoopback() {
-				return ip.String()
+				out = append(out, ip)
 			}
+		}
+	}
+	return out
+}
+
+// SelectDialableAddress picks the address a client should use to reach a
+// machine.
+//
+// routeIP is the source address the kernel would use for outbound traffic,
+// and is nil when the machine has no default route. interfaceIPs are the
+// routable addresses found on the machine's interfaces.
+//
+// The default route's address is preferred because it is the one the outside
+// world can reach; the interface addresses are only a fallback for a machine
+// with no default route, where the first routable address is the best guess
+// available.
+func SelectDialableAddress(routeIP net.IP, interfaceIPs []net.IP) string {
+	if routeIP != nil {
+		if v4 := routeIP.To4(); v4 != nil && !v4.IsLoopback() && !v4.IsUnspecified() {
+			return v4.String()
+		}
+	}
+	for _, ip := range interfaceIPs {
+		if v4 := ip.To4(); v4 != nil && !v4.IsLoopback() && !v4.IsUnspecified() {
+			return v4.String()
 		}
 	}
 	return "127.0.0.1"
