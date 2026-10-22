@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
+import com.console.mobile.core.util.PageTitles
+import com.console.mobile.core.util.bareWebUrls
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.filePathOrNull
 import com.console.mobile.ui.components.Favicon
@@ -88,7 +92,12 @@ fun CustomMarkdown(content: String, modifier: Modifier = Modifier, streaming: Bo
         // The parser object survives token updates. Streaming updates only replace
         // the unstable tail when possible; completed blocks retain their model.
         val parser = remember { StreamingMarkdownParser() }
-        val blocks = parser.update(content, streaming)
+        // A title arriving later must rebuild blocks that were parsed without it.
+        val blocks = parser.update(content, streaming, PageTitles.version)
+        // Only settled text is looked up, so a URL still streaming in is never fetched.
+        LaunchedEffect(content, streaming) {
+            if (!streaming) bareWebUrls(content).forEach(PageTitles::request)
+        }
         Column(Modifier.fillMaxWidth()) {
             MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
             if (streaming) Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
@@ -164,9 +173,12 @@ private fun rememberInlineContent(text: AnnotatedString): Map<String, InlineText
     text.getStringAnnotations(TAG_ICON, 0, text.length).forEach { a ->
         val value = a.item.substringAfter(':')
         out[a.item] = InlineTextContent(
-            Placeholder(15.sp, 15.sp, PlaceholderVerticalAlign.Center),
+            Placeholder(21.sp, 16.sp, PlaceholderVerticalAlign.Center),
             children = {
-                if (a.item.startsWith("file:")) FileIcon(filename = value, sizeDp = 14) else Favicon(host = value, sizeDp = 14)
+                // Icon at the start of a wider box: the empty tail is the gap before the label.
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    if (a.item.startsWith("file:")) FileIcon(filename = value, sizeDp = 14) else Favicon(host = value, sizeDp = 14)
+                }
             },
         )
     }
@@ -343,7 +355,10 @@ private class StreamingMarkdownParser {
     private var blocks: List<MdBlock> = emptyList()
     private var renderedStreaming = false
 
-    fun update(next: String, streaming: Boolean): List<MdBlock> {
+    private var titleVersion = 0
+
+    fun update(next: String, streaming: Boolean, titles: Int): List<MdBlock> {
+        if (titles != titleVersion) { titleVersion = titles; source = "" }
         if (next == source && streaming == renderedStreaming) return blocks
         if (next == source && !streaming && renderedStreaming) {
             blocks = parseBlocks(next)
@@ -530,8 +545,8 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         MarkdownElementTypes.INLINE_LINK -> appendInlineLink(this, n, src, refs, linked)
         MarkdownElementTypes.FULL_REFERENCE_LINK, MarkdownElementTypes.SHORT_REFERENCE_LINK -> appendReferenceLink(this, n, src, refs, linked)
         MarkdownElementTypes.IMAGE -> imageInfo(n, src, refs)?.second?.let(::append)
-        MarkdownElementTypes.AUTOLINK -> { val url = src.substring(n.startOffset + 1, n.endOffset - 1); if (linked) append(url) else link(url) { append(url) } }
-        GFMTokenTypes.GFM_AUTOLINK -> { val shown = n.text(src); link(if (shown.startsWith("www.")) "https://$shown" else shown) { append(shown) } }
+        MarkdownElementTypes.AUTOLINK -> { val url = src.substring(n.startOffset + 1, n.endOffset - 1); if (linked) append(url) else link(url) { append(PageTitles.get(url) ?: url) } }
+        GFMTokenTypes.GFM_AUTOLINK -> { val shown = n.text(src); val target = if (shown.startsWith("www.")) "https://$shown" else shown; link(target) { append(PageTitles.get(target) ?: shown) } }
         GFMElementTypes.INLINE_MATH -> {
             val expression = n.text(src).removeSurrounding("$").trim()
             appendInlineContent(expression, " ")
