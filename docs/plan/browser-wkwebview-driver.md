@@ -1,6 +1,9 @@
 # Replacing CEF with a native WKWebView driver
 
-CEF is in the desktop app for one reason: `agent-browser` speaks CDP, and CDP is
+Status: complete. The desktop browser is WKWebView-only; the former CEF/CDP
+backend has been removed. The notes below are the historical design record.
+
+CEF was in the desktop app for one reason: `agent-browser` speaks CDP, and CDP is
 Chromium-only. The embedded WKWebView host already exists (`SystemWebviewHost`,
 used by the Devices tab), but the agent cannot drive it, so the browser tab
 stays on Chromium.
@@ -237,11 +240,11 @@ green — not on vibes.
 
 ---
 
-## Phase 7 — Delete Chromium
+## Phase 7 — Delete Chromium (done)
 
-Remove `browser/cef/`, `agent_browser.rs`, the npm auto-install,
-`agent_driver`, the debug port, CEF from `Cargo.toml`, and the CEF bootstrap in
-`main.rs`. Update CI and the browser docs.
+`browser/cef/`, `agent_driver.rs`, the CDP dispatch, debug port, CEF feature and
+Cargo dependency, CEF bootstrap in `main.rs`, and the CEF build/bundle/CI paths
+have been removed. The desktop browser is WKWebView-only.
 
 ---
 

@@ -12,9 +12,6 @@ use std::time::Duration;
 
 use crate::state::app::ConsoleDesktopApp;
 
-#[cfg(feature = "cef")]
-mod agent_cdp;
-
 /// Interval between tab-lookup / page-load polls.
 const BROWSER_POLL_INTERVAL: Duration = Duration::from_millis(150);
 /// How many times to retry finding a browser tab (~3s) before failing.
@@ -302,17 +299,6 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(
-                    &sess_id,
-                    &req,
-                    &tab_id,
-                    &view,
-                    note.clone(),
-                    retries_left,
-                    cx,
-                ) {
-                    return;
-                }
 
                 let request = DriverRequest::action(
                     &action,
@@ -463,17 +449,6 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(
-                    &sess_id,
-                    &req,
-                    &tab_id,
-                    &view,
-                    note.clone(),
-                    retries_left,
-                    cx,
-                ) {
-                    return;
-                }
 
                 let timeout = Duration::from_millis(
                     req.timeout_ms
@@ -634,17 +609,6 @@ impl ConsoleDesktopApp {
 
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(
-                    &sess_id,
-                    &req,
-                    &tab_id,
-                    &view,
-                    note.clone(),
-                    retries_left,
-                    cx,
-                ) {
-                    return;
-                }
                 let script_id = request_id.clone();
                 view.update(cx, |bv, _| bv.run_driver_script(&script_id, &request));
                 cx.spawn(async move |this, cx| {
@@ -706,17 +670,6 @@ impl ConsoleDesktopApp {
                 };
                 let note = self.tab_choice_note(req.tab_id.is_some(), &tab_id, cx);
                 self.agent_browser_tab = Some(tab_id.clone());
-                if self.try_agent_browser(
-                    &sess_id,
-                    &req,
-                    &tab_id,
-                    &view,
-                    note.clone(),
-                    retries_left,
-                    cx,
-                ) {
-                    return;
-                }
                 let Some(slot) = view.read(cx).start_snapshot() else {
                     self.resolve_browser_action_result(
                         &sess_id,
@@ -1097,24 +1050,5 @@ impl ConsoleDesktopApp {
                 .await;
         })
         .detach();
-    }
-}
-
-/// Without the `cef` feature there is no CDP target and no agent-browser path;
-/// every page action runs through the in-page driver.
-#[cfg(not(feature = "cef"))]
-impl ConsoleDesktopApp {
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn try_agent_browser(
-        &mut self,
-        _sess_id: &str,
-        _req: &BrowserActionRequest,
-        _tab_id: &str,
-        _view: &Entity<BrowserView>,
-        _note: Option<String>,
-        _retries_left: u32,
-        _cx: &mut Context<Self>,
-    ) -> bool {
-        false
     }
 }

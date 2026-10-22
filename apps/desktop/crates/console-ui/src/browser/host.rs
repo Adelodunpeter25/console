@@ -8,7 +8,6 @@
 use gpui::{Bounds, Pixels};
 #[cfg(not(target_os = "macos"))]
 use std::cell::Cell;
-use std::rc::Rc;
 
 /// Categorized native navigation failure reason.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,8 +114,7 @@ impl NativeNavigationError {
 
 /// Callbacks the host invokes on the owning view. The host calls these from
 /// native handlers, so each callback must hop to the GPUI context itself (see
-/// the `Deferred` helper at each call site). Backend-neutral: consumed by
-/// both the wry and CEF hosts.
+/// the `Deferred` helper at each call site).
 pub struct HostCallbacks {
     pub on_responder_change: Box<dyn Fn(bool)>,
     pub on_nav_start: Box<dyn Fn()>,
@@ -126,7 +124,7 @@ pub struct HostCallbacks {
 
 /// Optional web content and behavior for a new host surface. The wry backend
 /// maps every field 1:1 to a `WebViewBuilder` option; unset fields keep wry
-/// defaults. The CEF backend consumes this same struct.
+/// defaults.
 pub struct HostContent {
     pub user_agent: Option<String>,
     pub initialization_script: Option<String>,
@@ -242,18 +240,16 @@ mod macos_host {
     }
 
     impl WebviewHost {
-        /// Backend-neutral surface constructor: builds the native child view
-        /// for `window`, wiring `content` and `callbacks`. This is the
-        /// wry/WKWebView backend; the CEF backend plugs into the same
-        /// `create` signature in `browser::cef`.
+        /// Builds the native child view for `window`, wiring `content` and
+        /// `callbacks`.
         pub fn create(
             window: &mut Window,
             content: HostContent,
             callbacks: HostCallbacks,
         ) -> Result<Self, String> {
-            // Hidden at a sane size (the same as the CEF backend's initial
-            // bounds), not 0x0: a page loading in a background tab would lay
-            // out at zero width. `sync_bounds` sets the real size when shown.
+            // Hidden at a sane size, not 0x0: a page loading in a background
+            // tab would lay out at zero width. `sync_bounds` sets the real
+            // size when shown.
             let mut builder = wry::WebViewBuilder::new()
                 .with_bounds(wry::Rect {
                     position: LogicalPosition::new(0.0, 0.0).into(),
@@ -550,240 +546,17 @@ mod macos_host {
     }
 }
 
-#[cfg(all(target_os = "macos", feature = "cef"))]
-pub use super::cef::host::WebviewHost;
-
-/// The system webview (WKWebView via wry), next to `WebviewHost` (Chromium).
-/// The Devices tab uses this one: it decodes the sim-go H.264 stream with
-/// WebCodecs, and stock CEF builds ship without proprietary codecs ("H.264
-/// decoding is not supported"), while WKWebView hands H.264 to the OS decoder.
+/// The desktop's only native webview backend: WKWebView via wry. The Devices
+/// tab uses this same host; it decodes the sim-go H.264 stream with WebCodecs
+/// because WKWebView hands H.264 to the OS decoder.
 #[cfg(target_os = "macos")]
 pub use macos_host::WebviewHost as SystemWebviewHost;
 
 #[cfg(not(target_os = "macos"))]
 pub type SystemWebviewHost = WebviewHost;
 
-/// Which native engine backs a browser tab.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BrowserBackend {
-    /// Chromium via CEF, addressed over CDP.
-    Cef,
-    /// The system webview (WKWebView on macOS).
-    System,
-}
-
-/// Backend-neutral handle to a browser tab's native view.
-///
-/// The browser tab keeps one of these so the workspace UI does not care which
-/// engine is behind it. `target_id` is CEF-only; the agent driver works on
-/// both, so an absent target id simply selects the in-page path.
-pub enum BrowserHost {
-    #[cfg(all(target_os = "macos", feature = "cef"))]
-    Cef(Rc<super::cef::host::WebviewHost>),
-    #[cfg(target_os = "macos")]
-    System(Rc<macos_host::WebviewHost>),
-    #[cfg(not(target_os = "macos"))]
-    System(Rc<WebviewHost>),
-}
-
-#[cfg(target_os = "macos")]
-impl BrowserHost {
-    pub fn create(
-        backend: BrowserBackend,
-        window: &mut gpui::Window,
-        content: HostContent,
-        callbacks: HostCallbacks,
-    ) -> Result<Self, String> {
-        match backend {
-            #[cfg(feature = "cef")]
-            BrowserBackend::Cef => {
-                super::cef::host::WebviewHost::create(window, content, callbacks)
-                    .map(|host| Self::Cef(Rc::new(host)))
-            }
-            #[cfg(not(feature = "cef"))]
-            BrowserBackend::Cef => Err(
-                "This build has no Chromium backend. Rebuild with `--features cef` to use it."
-                    .to_string(),
-            ),
-            BrowserBackend::System => macos_host::WebviewHost::create(window, content, callbacks)
-                .map(|host| Self::System(Rc::new(host))),
-        }
-    }
-}
-
-impl BrowserHost {
-    pub fn sync_bounds(&self, bounds: gpui::Bounds<gpui::Pixels>, scale: f32) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.sync_bounds(bounds, scale),
-            Self::System(host) => host.sync_bounds(bounds, scale),
-        }
-    }
-
-    pub fn set_visible(&self, visible: bool) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.set_visible(visible),
-            Self::System(host) => host.set_visible(visible),
-        }
-    }
-
-    pub fn native_focus_within(&self) -> bool {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.native_focus_within(),
-            Self::System(host) => host.native_focus_within(),
-        }
-    }
-
-    pub fn load_url(&self, url: &str) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.load_url(url),
-            Self::System(host) => host.load_url(url),
-        }
-    }
-
-    pub fn current_url(&self) -> Option<String> {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.current_url(),
-            Self::System(host) => host.current_url(),
-        }
-    }
-
-    pub fn go_back(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.go_back(),
-            Self::System(host) => host.go_back(),
-        }
-    }
-
-    pub fn go_forward(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.go_forward(),
-            Self::System(host) => host.go_forward(),
-        }
-    }
-
-    pub fn reload(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.reload(),
-            Self::System(host) => host.reload(),
-        }
-    }
-
-    pub fn hard_reload(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.hard_reload(),
-            Self::System(host) => host.hard_reload(),
-        }
-    }
-
-    pub fn stop(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.stop(),
-            Self::System(host) => host.stop(),
-        }
-    }
-
-    pub fn evaluate_script(&self, script: &str) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.evaluate_script(script),
-            Self::System(host) => host.evaluate_script(script),
-        }
-    }
-
-    pub fn take_snapshot(
-        &self,
-        slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
-    ) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.take_snapshot(slot),
-            Self::System(host) => host.take_snapshot(slot),
-        }
-    }
-
-    pub fn open_devtools(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.open_devtools(),
-            Self::System(host) => host.open_devtools(),
-        }
-    }
-
-    pub fn close_devtools(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.close_devtools(),
-            Self::System(host) => host.close_devtools(),
-        }
-    }
-
-    pub fn is_devtools_open(&self) -> bool {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.is_devtools_open(),
-            Self::System(host) => host.is_devtools_open(),
-        }
-    }
-
-    pub fn focus(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.focus(),
-            Self::System(host) => host.focus(),
-        }
-    }
-
-    pub fn focus_parent(&self) {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.focus_parent(),
-            Self::System(host) => host.focus_parent(),
-        }
-    }
-
-    pub fn can_go_back(&self) -> bool {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.can_go_back(),
-            Self::System(host) => host.can_go_back(),
-        }
-    }
-
-    pub fn can_go_forward(&self) -> bool {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.can_go_forward(),
-            Self::System(host) => host.can_go_forward(),
-        }
-    }
-
-    pub fn estimated_progress(&self) -> f64 {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.estimated_progress(),
-            Self::System(host) => host.estimated_progress(),
-        }
-    }
-
-    /// CDP target id, when this tab is a CEF page.
-    pub fn target_id(&self) -> Option<String> {
-        match self {
-            #[cfg(all(target_os = "macos", feature = "cef"))]
-            Self::Cef(host) => host.target_id(),
-            _ => None,
-        }
-    }
-}
+/// The browser and device tabs share the system webview host.
+pub type BrowserHost = SystemWebviewHost;
 
 #[cfg(not(target_os = "macos"))]
 pub struct WebviewHost {

@@ -1,9 +1,8 @@
 // The device-stream player page served at GET /api/devices/player (see
 // registerDeviceRoutes). Client webviews load it from the server origin so
-// the page and its `ws://` device stream are always same-origin: Chromium
-// (CEF) refuses cross-context `ws://` upgrades from a locally embedded
-// `data:` page, which left the desktop Devices tab reporting "disconnected"
-// even though the stream itself was healthy.
+// the page and its `ws://` device stream are always same-origin; a locally
+// embedded `data:` page cannot open the upgrade, which left the desktop
+// Devices tab reporting "disconnected" even though the stream was healthy.
 //
 // Wire (identical for iOS and Android), owned by the Go pump:
 //

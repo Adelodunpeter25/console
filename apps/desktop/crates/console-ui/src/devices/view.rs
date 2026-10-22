@@ -632,10 +632,8 @@ impl DeviceViewer {
         if !show {
             // The surface cannot use the keyboard while it is hidden; give
             // keyboard focus back unconditionally. `native_focus_within()`
-            // is not trusted as a gate here: under the CEF backend it can
-            // report false while Chromium's child still holds first
-            // responder, which is how the composer looked focused yet
-            // received no keystrokes.
+            // can lag the responder transition, so it is not a safe gate
+            // for handing focus back.
             self.reclaim_native_keyboard(cx);
         }
         host.set_visible(show);
@@ -670,7 +668,7 @@ impl DeviceViewer {
             && self.was_natively_focused
         {
             // Same hand-back, probed the other way: GPUI moved focus but the
-            // CEF backend failed to report the native focus transition
+            // native webview failed to report the focus transition
             // (`native_focus_within()` just flipped off). Without this the
             // composer kept rendering its focus ring while the embedded
             // page swallowed every keystroke.

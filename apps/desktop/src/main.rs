@@ -17,13 +17,6 @@ use console_ui::init_input_keybindings;
 use gpui::App;
 
 fn main() {
-    // CEF helpers re-execute this binary: run the helper entry point and
-    // exit before touching the app. No-op in unbundled development binaries.
-    #[cfg(all(target_os = "macos", feature = "cef"))]
-    if let Some(code) = console_ui::browser::cef::runtime::run_helper_process() {
-        std::process::exit(code);
-    }
-
     // Route log:: macros to stderr (see scripts/dev.sh: RUST_LOG controls the
     // level, reload.sh captures output to dist/.dev_console.log). Without this
     // every log:: call in the codebase is silently discarded.
@@ -36,13 +29,6 @@ fn main() {
     let _guard = tokio_runtime.enter();
 
     let app = gpui_platform::application().with_assets(Assets);
-
-    // Start Chromium now, before the AppKit run loop exists. Doing it from
-    // inside a run-loop callout (first browser tab, or `applicationDidFinishLaunching`)
-    // trips a Chromium message-pump check and crashes. It also makes the CDP
-    // port available without opening a tab first.
-    #[cfg(all(target_os = "macos", feature = "cef"))]
-    console_ui::browser::cef::runtime::init_before_run_loop();
 
     app.run(|cx: &mut App| {
         // Core weights only: the remaining 7 register after first paint

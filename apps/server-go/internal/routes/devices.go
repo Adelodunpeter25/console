@@ -46,8 +46,8 @@ func registerDeviceRoutes(app *fiber.App, svc *services.DeviceService) {
 
 	// The stream player page. Clients load the child webview from this URL
 	// instead of embedding HTML locally: a same-origin page can always open
-	// the `ws://` device stream, while Chromium (CEF) refuses `ws://` from a
-	// `data:` URL page the wry/WebKit backend previously embedded.
+	// the `ws://` device stream, which a locally embedded data: URL page
+	// cannot.
 	h.Get("/player", func(c *fiber.Ctx) error {
 		c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
 		c.Set(fiber.HeaderCacheControl, "no-store")

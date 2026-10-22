@@ -1,15 +1,14 @@
 //! Engine-agnostic page driver.
 //!
-//! The driver is plain JavaScript injected at document start into whichever
-//! webview is running (WKWebView today, Chromium via the in-page fallback). It
-//! owns the page model: the accessibility snapshot, per-document refs, the
+//! The driver is plain JavaScript injected at document start into the WKWebView.
+//! It owns the page model: the accessibility snapshot, per-document refs, the
 //! actions that operate on those refs, plus script evaluation, structured
 //! queries, content reading and wait probes. Keeping it out of the host means
-//! the same code runs on every engine, and the snapshot format stays the
+//! the same code runs on every platform, and the snapshot format stays the
 //! shared contract between the driver and the agent.
 //!
 //! Installation and calls are separate on purpose: the install script is a
-//! `WKUserScript`/CEF init script, so a call is a plain function invocation.
+//! `WKUserScript`, so a call is a plain function invocation.
 //! That avoids `eval` for the page model; only `eval`/`run_js` itself needs it.
 
 use serde_json::json;
@@ -116,8 +115,8 @@ impl<'a> Request<'a> {
     }
 }
 
-/// Script that installs the driver in a document. Injected at document start
-/// (WKWebView) or load end (CEF), once per document.
+/// Script that installs the driver in a document. Injected at document start,
+/// once per document.
 pub fn init_script() -> &'static str {
     INSTALL
 }

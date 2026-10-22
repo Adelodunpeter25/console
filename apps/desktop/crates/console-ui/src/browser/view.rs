@@ -27,7 +27,7 @@ use super::address::{
 };
 use super::agent_script::{cap_result, wrap_script};
 use super::host::{
-    BrowserBackend, BrowserHost, HostCallbacks, HostContent, NativeNavigationError,
+    BrowserHost, HostCallbacks, HostContent, NativeNavigationError, SystemWebviewHost,
 };
 use super::inspector::{BrowserElementInspection, INSPECTOR_SCRIPT, InspectorIpcMessage};
 use crate::common::input::{ComposerEvent, ComposerInput};
@@ -49,27 +49,6 @@ pub struct ScriptOutcome {
 #[cfg(target_os = "macos")]
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
      AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
-
-/// Browser-tab engine. The system webview (WKWebView) is the default; CEF is
-/// only available in builds compiled with the `cef` feature and is selected
-/// with `CONSOLE_BROWSER_BACKEND=cef`.
-#[cfg(target_os = "macos")]
-fn browser_backend() -> BrowserBackend {
-    let requested = std::env::var("CONSOLE_BROWSER_BACKEND").unwrap_or_default();
-    let wants_cef = requested.eq_ignore_ascii_case("cef")
-        || requested.eq_ignore_ascii_case("chromium");
-    if wants_cef {
-        #[cfg(feature = "cef")]
-        {
-            return BrowserBackend::Cef;
-        }
-        #[cfg(not(feature = "cef"))]
-        log::warn!(
-            "CONSOLE_BROWSER_BACKEND={requested} ignored: this build has no cef feature; using the system webview"
-        );
-    }
-    BrowserBackend::System
-}
 
 #[derive(Clone)]
 #[cfg(target_os = "macos")]
@@ -346,7 +325,7 @@ impl BrowserView {
             on_nav_finish,
             on_nav_error,
         };
-        match BrowserHost::create(browser_backend(), window, content, callbacks) {
+        match SystemWebviewHost::create(window, content, callbacks) {
             Ok(host) => {
                 self.host = Some(Rc::new(host));
             }
@@ -529,19 +508,6 @@ impl BrowserView {
         self
     }
 
-    /// This tab's CDP target id, once the browser has reported it. Lets
-    /// agent-browser address exactly this tab. Always `None` off macOS.
-    pub fn cdp_target_id(&self) -> Option<String> {
-        #[cfg(target_os = "macos")]
-        {
-            self.host.as_ref().and_then(|host| host.target_id())
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            None
-        }
-    }
-
     /// Tab label shown in the right sidebar tab bar.
     pub fn tab_label(&self) -> Option<String> {
         if let Some(title) = self.page_title.as_deref().filter(|t| !t.trim().is_empty()) {
@@ -616,11 +582,10 @@ impl BrowserView {
     /// clearing state here is what makes reopening a fresh browser session.
     pub fn close(&mut self, cx: &mut Context<Self>) {
         // Take the host instead of cloning it, and drop it on the next tick.
-        // Destroying the native surface inline re-enters Chromium (CEF) while
-        // GPUI is still tearing this entity down; with CEF's NSApplication
-        // conformance that takes the whole app window down with the tab.
-        // `about:blank` is gone too: navigating during teardown fires load
-        // callbacks on a half-dead tab.
+        // Destroying the native surface inline can re-enter the webview while
+        // GPUI is still tearing this entity down, which has taken the app
+        // window down with the tab. `about:blank` is gone too: navigating
+        // during teardown fires load callbacks on a half-dead tab.
         if let Some(host) = self.host.take() {
             host.stop();
             host.set_visible(false);

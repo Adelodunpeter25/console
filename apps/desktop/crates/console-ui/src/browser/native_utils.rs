@@ -1,6 +1,6 @@
-//! Shared native-app plumbing for the browser backends (wry and CEF).
+//! Shared native-app plumbing for the WKWebView browser and device hosts.
 //!
-//! Both backends embed a native child `NSView` in the GPUI window, so both
+//! Both hosts embed a native child `NSView` in the GPUI window, so both
 //! need native focus tracking (`ResponderObserver`, via `firstResponder`
 //! KVO) and overlay z-order repair (`lower_below_scene_overlay`).
 

@@ -16,9 +16,7 @@
 //!
 //! The page itself lives on the server (`GET /api/devices/player`, see
 //! `routes/device_player.go`): a same-origin page can always open the stream
-//! websocket, while Chromium (CEF) refuses `ws://` from a locally embedded
-//! `data:` page, which left the Devices tab reporting "disconnected" with the
-//! stream itself perfectly healthy.
+//! websocket, which a locally embedded `data:` page cannot.
 
 /// Config passed to `window.__consoleDevice.start(...)`.
 #[derive(Clone, Debug)]

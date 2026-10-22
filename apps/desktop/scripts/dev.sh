@@ -1,27 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# CEF binary cache: the `cef` crate downloads the Chromium distribution once
-# here instead of once per target directory and build profile. Seeded from a previous build's
-# `target/.../out/cef_macos_*` (must contain `archive.json`).
-export CEF_PATH="${CEF_PATH:-$HOME/.local/share/cef}"
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 RUN_APP=true
 WATCH_MODE=true
 EXTRA_ARGS=()
-# Chromium is opt-in. The default dev build is the system WKWebView.
-CEF_FEATURE=false
 
 for arg in "$@"; do
     if [[ "$arg" == "--no-run" ]]; then
         RUN_APP=false
     elif [[ "$arg" == "--no-watch" ]]; then
         WATCH_MODE=false
-    elif [[ "$arg" == "--cef" ]]; then
-        CEF_FEATURE=true
     else
         EXTRA_ARGS+=("$arg")
     fi
@@ -29,9 +20,6 @@ done
 
 build_dev_bundle() {
     local args=(--mode dev --bundle-id com.console.desktop.dev --app-name "Console Dev")
-    if [[ "$CEF_FEATURE" == true ]]; then
-        args+=(--cef)
-    fi
     if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then
         args+=("${EXTRA_ARGS[@]}")
     fi
@@ -80,9 +68,6 @@ if [[ "$WATCH_MODE" == true ]] && command -v cargo-watch >/dev/null 2>&1; then
 
     # cargo watch with --postpone so it waits for file changes instead of immediately rebuilding
     WATCH_BUILD="build -p console-app"
-    if [[ "$CEF_FEATURE" == true ]]; then
-        WATCH_BUILD="$WATCH_BUILD --features cef"
-    fi
     cargo watch \
         --postpone \
         -w "$DESKTOP_DIR/src" \
@@ -93,7 +78,5 @@ else
     echo "==> Launching Console Dev ($APP_PATH)..."
     export CONSOLE_ENV=dev
     export RUST_LOG="${RUST_LOG:-warn,console_ui=debug,console_core=debug,console_app=debug}"
-    # See reload.sh: mock keychain avoids repeated login-keychain prompts
-    # for ad-hoc-signed dev binaries.
-    exec "$APP_EXEC" --use-mock-keychain
+    exec "$APP_EXEC"
 fi
