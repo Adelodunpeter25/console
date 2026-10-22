@@ -11,6 +11,15 @@ parser — a *credential* parser — exists in both languages with different
 strictness. That is the kind of divergence that turns a malformed paste into a
 pairing with the wrong machine.
 
+**Markdown scope: only `mend`.** The Markdown *parser* is **not** being
+migrated. Desktop parses with `pulldown-cmark` (`console-ui/src/markdown/parser.rs`,
+1014 lines, incremental); Android parses with `org.jetbrains:markdown` and
+renders through its own Compose pipeline. Those are two different engines
+producing two different trees, and each renderer is built around its own
+parser's output. What *is* shared is `mend` (streaming-tail repair, a pure
+string-to-string function that runs before either parser) and `file_links`.
+See §3.2.
+
 This plan covers the crate and the JNI surface. The **HTTP API client** is a
 separate, larger decision and is analysed in §7 but deliberately *not* part of
 this plan's scope.
@@ -71,13 +80,14 @@ JNI boundary is not new territory.
 
 **There is a pure-Rust sub-tree ready to extract.** `console-ui` depends on
 `gpui`, so it cannot be consumed by Android as a whole. But these files
-import **no** `gpui` symbols and depend only on `std`, `serde`, `regex`,
-`pulldown_cmark`, `unicode_segmentation` and `chrono`:
+import **no** `gpui` symbols and depend only on `std`, `unicode_segmentation`,
+`chrono` and `similar`. (`parser.rs` also qualifies technically — it needs
+`pulldown_cmark` + `regex` — but it is **deliberately excluded**, §3.2.)
 
 | File | Lines | Notes |
 | :--- | ---: | :--- |
 | `crates/console-ui/src/markdown/mend.rs` | 301 | zero imports beyond `std` |
-| `crates/console-ui/src/markdown/parser.rs` | 1014 | `pulldown_cmark` + `regex` |
+| `crates/console-ui/src/markdown/parser.rs` | 1014 | `pulldown_cmark` + `regex` — **not migrated**, stays in `console-ui` |
 | `crates/console-ui/src/markdown/file_links.rs` | 146 | zero imports |
 | `crates/console-ui/src/common/input/mentions.rs` | 89 | zero imports |
 | `crates/console-ui/src/common/input/boundaries.rs` | 142 | `unicode_segmentation` |
@@ -88,6 +98,7 @@ import **no** `gpui` symbols and depend only on `std`, `serde`, `regex`,
 | `crates/console-core/src/utils/pairing_url.rs` | 201 | zero imports |
 | `crates/console-core/src/utils/page_title.rs` | 108 | zero imports |
 | `crates/console-core/src/utils/file_kind.rs` | 93 | zero imports |
+| `crates/console-core/src/utils/diff.rs` | 405 | `similar` (+ `serde_json` for tool-call args) |
 
 ---
 
@@ -95,12 +106,12 @@ import **no** `gpui` symbols and depend only on `std`, `serde`, `regex`,
 
 1. **Pure means pure.** `console-shared` has **no** `reqwest`, no `tokio`, no
    `gpui`, no `wtransport`, no `termy`. Its only dependencies are `serde`
-   (optional), `regex`, `chrono`, `unicode_segmentation`, `similar`, and
-   `pulldown-cmark` (optional, behind the `markdown` feature). This is what
-   makes it cheap to cross-compile and impossible to accidentally drag a
-   runtime into the JNI surface. The spike (§4.4) measured the result: a
-   shared crate with no reachable dependencies adds **~4 KB** to the Android
-   `.so`.
+   (optional), `chrono`, `unicode_segmentation` and `similar`. There is no
+   Markdown parser and no `regex` in it (§3.2). This is what makes it cheap
+   to cross-compile and impossible to accidentally drag a runtime into the
+   JNI surface. The spike (§4.4) measured the result: a shared crate adds
+   **~4 KB** to the Android `.so`, and reaching `similar` through it adds
+   ~17 KB.
 2. **One implementation, two callers.** The crate is the *only* home for the
    logic. The desktop imports it as a Rust dependency; Android calls it over
    JNI. Neither keeps a private copy. A second copy is a bug.
@@ -128,20 +139,22 @@ import **no** `gpui` symbols and depend only on `std`, `serde`, `regex`,
 
 | Logic | Desktop | Android | Status |
 | :--- | :--- | :--- | :--- |
-| Pairing URL parse | `console-core/src/utils/pairing_url.rs` (201) | `data/model/PairingUrl.kt` (219) | **Diverged** — see below |
+| Pairing URL parse | `console-core/src/utils/pairing_url.rs` (201) | `data/model/PairingUrl.kt` (219) | **Diverged** — §3.0 |
 | HTML page title | `console-core/src/utils/page_title.rs` (108) | `core/util/PageTitles.kt` (112) | Duplicated |
 | Markdown mend | `console-ui/src/markdown/mend.rs` (301) | `feature/chat/markdown/MarkdownMend.kt` (284) | Duplicated — Android file says "Port of … mend.rs" |
-| Unified diff | `console-core/src/utils/diff.rs` (405) | `core/util/DiffUtils.kt` (98) | **Different algorithms** |
+| Markdown **parser** | `console-ui/src/markdown/parser.rs` (1014, `pulldown-cmark`) | `CustomMarkdown.kt` (595, `org.jetbrains:markdown`) | **Not migrated** — §3.2 |
+| Line diff (old→new) | `diff_lines` — Myers via `similar` | `computeLineDiff` — hand-rolled LCS | **Diverged** — §3.1 |
+| Unified-diff parse | `parse_unified_diff` | `parseUnifiedDiff` | **Diverged, Kotlin has bugs** — §3.1 |
 | Local port forward | `console-core/src/services/local_forward.rs` (239) | `core/forward/LocalForwardManager.kt` (290) | Duplicated |
 | SSE frame parse | `console-core/src/utils/sse_reader.rs` (37) | `data/stream/ChatStreamClient.kt` (inline) | Duplicated |
-| File-type icons | `console-ui/src/primitives/file_icons.rs` (213 arms) | `core/icons/FileTypeRegistry.kt` (166 + 53 lang aliases) | **Diverged** — see below |
+| File-type icons | `console-ui/src/primitives/file_icons.rs` (213 arms) | `core/icons/FileTypeRegistry.kt` (166 + 53 lang aliases) | **Diverged** — §3.0 |
 | Tool call labels | `console-ui/src/chat/toolcalls.rs:189` | `core/util/ToolHelpers.kt` | Duplicated |
 | MCP tool name split | `console-ui/src/chat/toolcalls.rs:1147` | `core/util/ToolHelpers.kt` | Duplicated |
 | Mention parsing | `console-ui/src/common/input/mentions.rs` | `core/util/MentionParser.kt` | **Different semantics** |
 | Time / path / format | `console-ui/src/utils/{time,path}.rs` | `core/util/{Time,Format}.kt` | Duplicated |
 | Terminal grid | `console-core/src/services/terminal/termy.rs` | C++ Ghostty VT | **Do not share** |
 
-### 3.1 The two divergences that matter
+### 3.0 Divergences outside diff and Markdown
 
 **Pairing URL.** The desktop accepts `"HTTP://host"` — the scheme comparison
 is case-sensitive (`console-core/src/utils/pairing_url.rs:57`:
@@ -161,19 +174,169 @@ entries plus 53 code-fence language aliases
 must be the **union**, with the desktop's precedence rules (prefix match
 before exact match before extension match) preserved.
 
-**Unified diff.** The desktop computes a *real* diff with `similar`'s Myers
-algorithm (`console-core/src/utils/diff.rs:9`) and can diff two arbitrary
-texts. Android *parses* a unified diff that the server already produced
-(`core/util/DiffUtils.kt:8`). These are different operations, not the same
-operation written twice. **Both** are worth sharing — the desktop's
-`diff_lines` and Android's `parse_unified_diff` — but they are two functions,
-not one.
+**Diff.** Not "two different operations" — **each side has both operations**,
+implemented differently. This is the one divergence with real bugs on the
+mobile side, so it is analysed in full in §3.1.
 
 **Mention parsing.** The desktop reconciles *ranges* against edited text
 (`mentions.rs::adjust_mentions` / `reconcile_mentions`). Android scans text
 for `@token` and returns ranges (`MentionParser.kt:15`). The Android version
 is a *subset* of the desktop's model with a different entry point. The
 scanner is worth sharing; the reconciliation is desktop-only for now.
+
+### 3.1 Diff: the two implementations compared
+
+There are **two operations** in a diff stack, and both clients carry both:
+
+| Operation | Input | Desktop | Mobile | Used for |
+| :--- | :--- | :--- | :--- | :--- |
+| **Compute** a diff | old text + new text | `diff_lines()` | `computeLineDiff()` | Tool-call cards (`editFile`, `writeFile`, `batchWrite`) — the arguments carry both sides |
+| **Parse** a diff | unified-diff text from the server | `parse_unified_diff()` | `parseUnifiedDiff()` | The Changes tab / review sheet — the Go server already produced the diff |
+
+The server itself uses a *third* implementation: `go-difflib` (Python's
+`SequenceMatcher` family) in `apps/server-go/internal/run/file_changes.go:207`,
+with auto-junk turned off. So the repo has three diff engines. This plan
+shares the two Rust-vs-Kotlin ones; the Go server is out of scope.
+
+#### Compute: Myers (`similar`) vs hand-rolled LCS
+
+| | Desktop `diff_lines` | Mobile `computeLineDiff` |
+| :--- | :--- | :--- |
+| Algorithm | **Myers**, via `similar::capture_diff_slices` — O(ND) | **Longest-common-subsequence DP table** — O(N·M) time **and memory** |
+| Large files | Fast when changes are small (the `editFile` case) | **Guard at `n*m > 4,000,000`: gives up and reports the *whole file* as removed + re-added** |
+| Context window | **Yes** — `context` param (tool cards use 3); `0` = changes only | **No** — returns every unchanged line |
+| Trailing newline | Drops the phantom empty last element; documents why, and matches the Go emitter | Same handling (`splitLines`) |
+| Output | Flat list, file order, old/new line numbers, `added`/`removed` | Same shape |
+| Tests | `console-core/tests/types/write_files_test.rs` (trailing newline, blank lines, batchWrite, no-change) | **None** |
+
+**Measured, not assumed.** I ported the Kotlin LCS line-for-line to Rust and
+ran it against `similar`'s Myers on 20,000 random edit scripts (inserts,
+deletes, replaces on small files, trailing newline):
+
+- **+/− counts: identical in 20,000 / 20,000.** Both are correct diffs.
+- **Exact line ordering: identical in only 17,045 / 20,000 (85%).** In the
+  other ~15% both are *valid* minimal diffs but they pick different ones.
+  Example — swapping two lines `[a,b,c] → [b,a,c]`: Myers emits
+  `+b  a  −b  c`; the LCS emits `−a  b  +a  c`. Neither is wrong.
+  Consequence: the same tool call can render slightly differently on desktop
+  and mobile today, and a shared implementation removes that.
+- **The 4M-cell guard is a visible bug.** A 2,100-line file with one line
+  changed: Myers reports `+1 −1`; the Kotlin guard reports **`+2100 −2100`**
+  (2100² = 4,410,000 > 4,000,000). The guard's own comment calls this a
+  "fallback". The cap is also unnecessary: the same LCS took ~36 ms and
+  ~17 MB at that size, which is fine — the guard exists to protect against
+  O(N·M) blow-up, and Myers does not have that failure mode.
+- **Memory.** The DP table is `(n+1)×(m+1)` `Int`s allocated up front. On a
+  phone, 4M cells is 16 MB of short-lived garbage per tool card.
+
+**Winner: desktop (Myers).** It is faster in the common case, has no size
+cliff, supports the context window mobile has no equivalent of, and has
+tests. The only thing LCS has going for it is that it is easy to read — which
+is not a reason to keep a second copy. Mobile also never trims context, so a
+tool card for an edit deep in a long file carries every unchanged line
+(collapsed behind "Show N more lines" at 60), where desktop keeps a 3-line
+window around each change.
+
+#### Parse: desktop is stricter, mobile is looser — and mobile is wrong in edge cases
+
+| | Desktop `parse_unified_diff` | Mobile `parseUnifiedDiff` |
+| :--- | :--- | :--- |
+| File headers (`diff --git`, `index`, `---`, `+++`) | Ignored **structurally**: nothing counts until the first `@@` (`in_hunk`) | Ignored by **line prefix**: any line starting `---`, `+++`, `diff `, `index ` is dropped, *anywhere* |
+| `@@` header | Hand-parsed; **`-N`/`+N`** with or without `,len` | Regex `@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@` — same forms; **ignores a malformed header** and keeps the previous counters |
+| `\ No newline at end of file` | **Skipped** | **Rendered as a context line** |
+| Trailing newline of the input | `lines()` — no phantom last line | `split("\n")` — **emits a spurious empty context line at the end** |
+| Line-number start | `0` until a header is read | `1` |
+| Unknown-prefix line | Context | Context |
+
+The mobile bugs are reproducible. Running both parsers (ported
+faithfully) over one diff:
+
+```
+@@ -1,3 +1,2 @@
+ keep
+--- drop            <- a removed line whose content is "-- drop" (an SQL comment)
+-last
+\ No newline at end of file
++end
+```
+
+| | Desktop | Mobile |
+| :--- | :--- | :--- |
+| line 2 | `− old2  "-- drop"` ✅ | **dropped** — it starts with `---`, so it is mistaken for a file header |
+| `\ No newline…` | skipped ✅ | **shown as a context row** `"\ No newline at end of file"` |
+| trailing | — | **extra blank context row** at old4/new4 |
+| new line number | `+ new2` ✅ | `+ new3` ❌ — off by one, because the dropped line never advanced the counter |
+
+So on mobile, **any removed line whose text begins with `--` (SQL/Lua/Haskell
+comments, YAML `---` document markers, Markdown horizontal rules written as
+`---`) silently vanishes from the diff and shifts every following line
+number.** That is a correctness bug in the review screen, not a style
+difference. The `+`-side has the same hole for added lines starting with `++`.
+
+**Winner: desktop.** Structural hunk tracking is the right design — it is
+immune to content that merely *looks like* a header.
+
+#### What this means for the plan
+
+1. **Share both.** `console-shared::diff` exposes `diff_lines` and
+   `parse_unified_diff`, both from `console-core/src/utils/diff.rs`.
+2. **Both Kotlin implementations are deleted**, not wrapped.
+   `computeLineDiff`, `computeNewFileDiff`, `parseUnifiedDiff` and
+   `splitLines` in `core/util/DiffUtils.kt`; callers are `ToolHelpers.kt:284`
+   (`fileCallDiffs`), `ChatDiffSheet.kt:83` and `ChangesScreen.kt:195`.
+3. **Mobile's visible behaviour changes, deliberately:** tool cards gain the
+   3-line context window; the `---`/`++` content bug and the phantom trailing
+   row go away; the 2,100-line "+2100 −2100" cliff disappears.
+4. **`fileCallDiffs` goes with it.** Desktop's `file_call_diffs` already
+   handles `editFile`, `writeFile` and `batchWrite` and the argument aliases
+   (`path` / `filePath` / `targetFile` / `absolutePath`); Kotlin re-implements
+   this in `ToolHelpers.kt`. Sharing the whole `file_call_diffs` entry point,
+   not just `diff_lines`, removes `extractEditArgs` / `extractWriteFiles` too.
+5. **Add the missing tests first.** Neither Kotlin parser has a test, and the
+   desktop `parse_unified_diff` has no test of its own either (only
+   `file_and_diff.rs` exercises it indirectly). Phase 1 adds
+   `console-shared/tests/diff_test.rs` covering at minimum the case above
+   (`-- drop`, `\ No newline…`, trailing newline), short and long `@@`
+   forms, and a 2,100-line single-edit file.
+6. **Marshalling.** A diff is a list of records, so it uses the *list* shape
+   from §5.2 (`[tag u8][old_no i32][new_no i32][len u32][utf8 text]` per
+   line, with `added`/`removed` in the header). Measured cost of making
+   `similar` reachable from the `.so`: **+17,344 B (~17 KB)** — see §4.4.
+
+### 3.2 Markdown: only `mend` is shared; the parser is not migrated
+
+Decision: **the Markdown parser stays where it is on each platform.**
+
+| | Desktop | Mobile |
+| :--- | :--- | :--- |
+| Parser | `pulldown-cmark` + custom block tree + incremental reparse (`parser.rs`, 1014 lines) | `org.jetbrains:markdown` 0.7.9 (`ASTNode`, `MarkdownElementTypes`, `GFMTokenTypes`) |
+| Renderer | GPUI (`render.rs`, 2112 lines) | Compose (`CustomMarkdown.kt`, 595 lines) |
+| Tree shape | desktop's own `BlockTree` | the library's `ASTNode` |
+
+Why not migrate it:
+
+- **The two renderers are written against two different trees.** Sharing the
+  parser would mean choosing one tree and rewriting the *other* renderer
+  against it — i.e. rewriting `CustomMarkdown.kt` (595 lines) *and* defining
+  a JNI wire format for an entire block tree. That is a rewrite, not an
+  extraction.
+- **It is the expensive dependency.** Reaching `pulldown-cmark` adds
+  **~304 KB** (11%) to the Android `.so` (§4.4). `mend` and `file_links` add
+  nothing.
+- **The parser is the part that is *supposed* to differ.** Each platform's
+  parser feeds that platform's native text layout. `mend` is different in
+  kind: it is `&str → Option<String>`, runs *before* either parser, and has
+  no tree.
+
+What this changes in the plan:
+
+- `console-shared` has **no** `markdown` feature, **no** `pulldown-cmark` and
+  **no** `regex`. `parser.rs` stays in `console-ui`.
+- `mend` and `file_links` (pure string logic, zero dependencies) *are*
+  shared.
+- The fixture contract for `mend` still matters: `MarkdownMendFixtureTest`
+  keeps guarding the Kotlin call site until Phase 3, item 3 deletes the
+  Kotlin copy.
 
 ---
 
@@ -187,11 +350,10 @@ apps/desktop/crates/console-shared/
 │   ├── pairing.rs        # from console-core/src/utils/pairing_url.rs
 │   ├── page_title.rs     # from console-core/src/utils/page_title.rs
 │   ├── file_kind.rs      # from console-core/src/utils/file_kind.rs
-│   ├── diff.rs           # from console-core/src/utils/diff.rs
-│   ├── markdown/
+│   ├── diff.rs           # from console-core/src/utils/diff.rs (diff_lines, parse_unified_diff, file_call_diffs)
+│   ├── markdown/         # NOT the parser — see §3.2
 │   │   ├── mod.rs
 │   │   ├── mend.rs       # from console-ui/src/markdown/mend.rs
-│   │   ├── parser.rs     # from console-ui/src/markdown/parser.rs  [feature = "markdown"]
 │   │   └── file_links.rs # from console-ui/src/markdown/file_links.rs
 │   ├── composer/
 │   │   ├── mod.rs
@@ -223,24 +385,19 @@ license.workspace = true
 
 [dependencies]
 serde = { workspace = true, optional = true }
-regex = { workspace = true }
+serde_json = { workspace = true }   # tool-call arguments in `file_call_diffs`
 chrono = { workspace = true }
 unicode-segmentation = { workspace = true }
 similar = { workspace = true }
-# ~300 KB of the Android `.so`. Feature-gated so the mobile build can leave
-# it out — see §4.4 for the measurement.
-pulldown-cmark = { workspace = true, optional = true }
 
 [features]
 default = []
 serde = ["dep:serde"]
-# The Markdown *parser* only. `mend` and `file_links` are pure string logic
-# and are available without it.
-markdown = ["dep:pulldown-cmark"]
 ```
 
-`similar` is already a `console-core` dependency, so the diff engine costs
-nothing extra in either build (§4.4).
+There is deliberately **no** `regex`, `pulldown-cmark` or `markdown` feature
+(§3.2). `similar` is already a `console-core` dependency, so the diff engine
+adds only ~17 KB to the Android build (§4.4).
 
 ### 4.2 Dependency rules
 
@@ -250,8 +407,9 @@ nothing extra in either build (§4.4).
   a review rule.
 - `console-core` **may** depend on `console-shared` (it needs `pairing_url`,
   `page_title`, `file_kind`, `diff`).
-- `console-ui` **may** depend on `console-shared` (it needs `mend`, `parser`,
-  `file_links`, `mentions`, `format`, `icons`, `tools`).
+- `console-ui` **may** depend on `console-shared` (it needs `mend`,
+  `file_links`, `mentions`, `format`, `icons`, `tools`). Its Markdown *parser*
+  stays local to `console-ui` (§3.2).
 - `console-shared` **must not** depend on either. The dependency arrow points
   one way: `console-ui` → `console-shared` → (nothing).
 
@@ -302,28 +460,27 @@ profile as the real crate: `opt-level = "z"`, `lto = true`, `strip = true`):
 | Crate contents | `.so` size | Delta |
 | :--- | ---: | ---: |
 | Baseline (no `console-shared`) | 2,626,304 B | — |
-| `console-shared`, minimal (no deps used) | 2,626,976 B | **+4 KB** |
-| `console-shared`, full minus `similar` | 2,626,304 B | **+0 B** |
-| `console-shared`, full (incl. `pulldown-cmark`) | 2,930,112 B | **+304 KB** |
+| `console-shared`, pairing + format only | 2,626,976 B | **+4 KB** |
+| `console-shared`, + chrono / regex / unicode-segmentation, no `pulldown-cmark` | 2,626,304 B | **+0 B** |
+| `console-shared`, + `pulldown-cmark` | 2,930,112 B | **+304 KB** |
+| Baseline (separate build) → `diff_lines` reachable from the `.so` | 2,621,664 B → 2,639,008 B | **+17 KB** |
 
-Two conclusions, both load-bearing:
+Conclusions:
 
-1. **The crate itself is free.** A `console-shared` with no reachable
-   dependencies adds ~4 KB. The code is not the cost.
-2. **`pulldown-cmark` is the cost: ~300 KB.** The Markdown parser pulls in
-   `pulldown-cmark` + `pulldown-cmark-escape` + `unicase` + `bitflags`, and
-   that is ~11% of the `.so`. `similar` adds **0 bytes** because it is
-   already in the tree via `console-core` (`console-core/Cargo.toml`
-   depends on it) and the linker was already carrying it.
+1. **The crate itself is free.** ~4 KB with nothing reachable.
+2. **`pulldown-cmark` is the one expensive dependency: ~300 KB** (~11% of the
+   `.so`), because it pulls in `pulldown-cmark-escape`, `unicase` and
+   `bitflags` too. This is a second, independent reason (alongside §3.2) the
+   Markdown parser is not migrated.
+3. **Diff is cheap but not free: ~17 KB.** `similar` was in the dependency
+   tree already (via `console-core`) but the linker was discarding it as
+   unreachable; making `diff_lines` callable over JNI keeps it. This is the
+   right price for deleting the Kotlin LCS.
 
-**Decision:** `pulldown-cmark` stays behind a **feature flag** (§4.1), off by
-default for the Android build. The Markdown *parser* is the one module that
-needs it; `mend.rs` and `file_links.rs` are pure string logic and need
-nothing. The desktop enables the feature; the Android `.so` does not, unless
-a later phase decides the Android Markdown renderer should also be shared.
-
-This keeps the Android `.so` at its current size while still sharing every
-other module.
+**Decision:** `console-shared` carries **no Markdown parser and no `regex`**
+(§3.2), so there is no feature flag to manage — the expensive dependency is
+simply absent. Expected total growth for the Android `.so` with every module
+in §4 reachable: **~20–25 KB** (about 1% of 2.6 MB).
 
 ---
 
@@ -514,7 +671,11 @@ pub use console_shared::pairing::*;
 ```rust
 // apps/desktop/crates/console-ui/src/markdown/mend.rs
 pub use console_shared::markdown::mend::*;
+// (parser.rs is NOT moved — §3.2)
 ```
+
+Before moving `diff.rs`, add `console-shared/tests/diff_test.rs` with the
+cases in §3.1 — the desktop `parse_unified_diff` currently has no direct test.
 
 Move the existing unit tests with the code (the repo rule is that Rust tests
 live in `tests/`, never inline `#[cfg(test)]` modules — see `AGENTS.md`).
@@ -548,7 +709,7 @@ the shared call and **deletes** the Kotlin duplicate in the same change.
 | 3 | Markdown mend | `feature/chat/markdown/MarkdownMend.kt` | `tests/MarkdownMendFixtureTest.kt` |
 | 4 | File-type icons | `core/icons/FileTypeRegistry.kt` | (none) |
 | 5 | Pairing URL | `data/model/PairingUrl.kt` | `tests/PairingUrlTest.kt` |
-| 6 | Diff | `core/util/DiffUtils.kt` | (none) |
+| 6 | Diff (compute + parse + `fileCallDiffs`) | `core/util/DiffUtils.kt`; `fileCallDiffs`, `extractEditArgs`, `extractWriteFiles` in `core/util/ToolHelpers.kt` | (none exist — add `diff_test.rs` first, §3.1) |
 
 **The pairing URL is last on purpose.** It is the highest-value fix and also
 the one where a mistake is a security bug. It goes in after the mechanism is
@@ -823,7 +984,9 @@ negligible size cost" — is an empirical claim, not an architectural one.
 - The JNI symbols export alongside the existing `WtNative` ones, in the same
   `.so`. **One library, one `loadLibrary`, one CI step** — as §5.3 requires.
 - The cost is ~4 KB for the crate and ~300 KB for `pulldown-cmark` alone,
-  which is why §4.1 feature-gates it.
+  which — together with the renderer mismatch (§3.2) — is why the Markdown
+  parser is not migrated. A follow-up spike measured `diff_lines` at ~17 KB
+  and compared the two diff implementations on 20,000 random edits (§3.1).
 
 **What the spike did not test:** the Kotlin side. The JNI *encoding* is
 specified in §5.2 but the Kotlin decoder and the `available` fallback are
@@ -843,9 +1006,11 @@ half is unproven.
   Kotlin duplicates are deleted.
 - The `.so` still builds for `aarch64-linux-android` and `x86_64-linux-android`
   via `apps/android/rust-wt/build.sh`.
-- The Android `.so` size grows by **less than 20 KB** over the current
-  2.6 MB baseline (§4.4) — i.e. `pulldown-cmark` stays behind the
-  `markdown` feature and is not enabled for the mobile build.
+- The Android `.so` size grows by **less than 40 KB** over the current
+  2.6 MB baseline (§4.4). `pulldown-cmark` and `regex` are not dependencies of
+  `console-shared` at all (§3.2).
+- `console-shared/tests/diff_test.rs` exists and covers the §3.1 cases; the
+  Kotlin `computeLineDiff` / `parseUnifiedDiff` are deleted.
 - `cd apps/android && ./gradlew :app:assembleDebug` succeeds.
 - `cd apps/android && ./gradlew :app:testDebugUnitTest` passes.
 - `cd apps/desktop && cargo test -p console-shared -p console-core -p console-ui` passes.
