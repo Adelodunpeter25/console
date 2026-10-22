@@ -1,6 +1,5 @@
 package com.console.mobile.feature.chat.markdown
 
-import android.widget.ImageView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -37,10 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -59,7 +56,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
 import com.console.mobile.core.util.FILE_LINK_PREFIX
 import com.console.mobile.core.util.PageTitles
@@ -84,7 +80,6 @@ import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.parser.MarkdownParser
-import ru.noties.jlatexmath.JLatexMathDrawable
 
 /** Native markdown renderer used by chat, tools, subagents, and the file viewer. */
 @Composable
@@ -164,11 +159,18 @@ private fun MarkdownTextBlock(text: AnnotatedString, color: Color, size: TextUni
 
 /** Inline placeholders (latex, file icons, favicons) referenced by [text]. */
 @Composable
-private fun rememberInlineContent(text: AnnotatedString): Map<String, InlineTextContent> = remember(text) {
+private fun rememberInlineContent(text: AnnotatedString): Map<String, InlineTextContent> {
+    // Sizes need typesetting, which is composable-scoped; collect them first, then build the map once.
+    val sizes = text.getStringAnnotations(TAG_LATEX, 0, text.length).associate { it.item to rememberInlineMathSize(it.item) }
+    return remember(text, sizes) { buildInlineContent(text, sizes) }
+}
+
+private fun buildInlineContent(text: AnnotatedString, sizes: Map<String, InlineMathSize>): Map<String, InlineTextContent> {
     val out = HashMap<String, InlineTextContent>()
     text.getStringAnnotations(TAG_LATEX, 0, text.length).forEach { a ->
+        val size = sizes.getValue(a.item)
         out[a.item] = InlineTextContent(
-            Placeholder(20.sp, 20.sp, PlaceholderVerticalAlign.Center),
+            Placeholder(size.widthSp.sp, size.heightSp.sp, PlaceholderVerticalAlign.Center),
             children = { Latex(a.item, false) },
         )
     }
@@ -184,7 +186,7 @@ private fun rememberInlineContent(text: AnnotatedString): Map<String, InlineText
             },
         )
     }
-    out
+    return out
 }
 
 private const val TAG_LATEX = "latex"
@@ -208,31 +210,6 @@ private fun MarkdownImage(url: String, alt: String) {
             modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
         )
         if (alt.isNotBlank()) Text(alt, color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-    }
-}
-
-@Composable
-private fun Latex(expression: String, display: Boolean) {
-    val context = LocalContext.current
-    val color = NewTheme.TextPrimary.toArgb()
-    val drawable = remember(expression, display, color) {
-        runCatching {
-            JLatexMathDrawable.builder(expression.trim())
-                .textSize(if (display) 20f else 15f)
-                .color(color)
-                .padding(if (display) 8 else 2)
-                .fitCanvas(true)
-                .build()
-        }.getOrNull()
-    }
-    if (drawable == null) {
-        Text(expression, color = NewTheme.TextSecondary, fontFamily = ConsoleMonoFamily, modifier = Modifier.padding(vertical = 6.dp))
-    } else {
-        AndroidView(
-            factory = { ImageView(context).apply { adjustViewBounds = true } },
-            update = { it.setImageDrawable(drawable) },
-            modifier = Modifier.fillMaxWidth().padding(vertical = if (display) 8.dp else 0.dp),
-        )
     }
 }
 

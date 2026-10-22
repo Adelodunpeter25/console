@@ -23,3 +23,8 @@
     static **$Companion Companion;
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# RaTeX (LaTeX): the native library binds Java_io_ratex_RaTeXEngine_* by name and the
+# display list is decoded reflectively by kotlinx.serialization. The AAR ships no
+# consumer rules, so without this R8 can rename or strip them in release builds.
+-keep class io.ratex.** { *; }

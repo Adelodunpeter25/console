@@ -209,8 +209,10 @@ dependencies {
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
     implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
-    // Native Android LaTeX drawable for inline and display math.
-    implementation("ru.noties:jlatexmath-android:0.2.0")
+    // LaTeX typesetting: RaTeX, the same KaTeX-compatible Rust engine the desktop
+    // client uses, so formulas look identical on both. Ships the native library
+    // (arm64-v8a, armeabi-v7a, x86_64) and the KaTeX fonts.
+    implementation("io.github.erweixin:ratex-android:0.1.15")
     // language-textmate artifact coordinates vary by publish; keep commented until Phase 4 spike
     // implementation("io.github.Rosemoe.sora-editor:language-textmate:0.21.1")
 
