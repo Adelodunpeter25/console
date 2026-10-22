@@ -2,6 +2,7 @@
 
 use gpui::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, div, px};
 
+use super::select::Selectable;
 use crate::theme::Theme;
 
 pub(super) fn metric(
@@ -11,6 +12,7 @@ pub(super) fn metric(
     trend: &Option<String>,
     caption: &Option<String>,
     theme: Theme,
+    sel: &Selectable,
 ) -> AnyElement {
     let mut col = div()
         .min_w(px(96.0))
@@ -20,15 +22,12 @@ pub(super) fn metric(
         .child(
             div()
                 .text_size(px(12.0))
-                .text_color(theme.text_secondary)
-                .child(label.to_string()),
+                .child(sel.text(label.to_string(), FontWeight::NORMAL, theme.text_secondary, true)),
         )
         .child(
             div()
                 .text_size(px(22.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.text)
-                .child(value.to_string()),
+                .child(sel.text(value.to_string(), FontWeight::SEMIBOLD, theme.text, false)),
         );
     if let Some(delta) = delta {
         // Arrow glyph plus color so the trend is never color-only.
@@ -41,17 +40,14 @@ pub(super) fn metric(
         col = col.child(
             div()
                 .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(tint)
-                .child(format!("{arrow}{delta}")),
+                .child(sel.text(format!("{arrow}{delta}"), FontWeight::MEDIUM, tint, false)),
         );
     }
     if let Some(caption) = caption {
         col = col.child(
             div()
                 .text_size(px(11.0))
-                .text_color(theme.text_tertiary)
-                .child(caption.clone()),
+                .child(sel.text(caption.clone(), FontWeight::NORMAL, theme.text_tertiary, false)),
         );
     }
     col.into_any_element()

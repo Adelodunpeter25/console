@@ -1385,10 +1385,12 @@ fn transcript_row(
                                 ActivityEvent::ToolCall(entry) => entry
                                     .result
                                     .as_ref()
-                                    .and_then(|result| result.visual.clone()),
+                                    .and_then(|result| result.visual.clone())
+                                    .map(|visual| (entry.call.id.clone(), visual)),
                                 _ => None,
                             })
                             .collect();
+                        let visual_selection = view_ref.selection.clone();
                         let activity = ToolCalls::new(
                             format!("run-{index}"),
                             entries,
@@ -1409,7 +1411,13 @@ fn transcript_row(
                         });
                         element
                             .child(activity)
-                            .children(visuals.into_iter().map(crate::chat::visual::VisualCard::new))
+                            .children(visuals.into_iter().map(|(call_id, visual)| {
+                                crate::chat::visual::VisualCard::new(
+                                    call_id,
+                                    visual,
+                                    visual_selection.clone(),
+                                )
+                            }))
                     },
                 )
                 .into_any_element()

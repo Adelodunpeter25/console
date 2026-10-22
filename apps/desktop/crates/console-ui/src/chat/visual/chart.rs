@@ -5,17 +5,16 @@ use console_core::{VisualChart, describe_chart};
 use gpui::{AnyElement, FontWeight, IntoElement, ParentElement, Styled, canvas, div, px};
 
 use super::paint;
+use super::select::Selectable;
 use crate::theme::Theme;
 
-pub(super) fn chart_block(chart: &VisualChart, theme: Theme) -> AnyElement {
+pub(super) fn chart_block(chart: &VisualChart, theme: Theme, sel: &Selectable) -> AnyElement {
     let mut col = div().flex().flex_col().gap(px(8.0));
     if let Some(title) = &chart.title {
         col = col.child(
             div()
                 .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_secondary)
-                .child(title.clone()),
+                .child(sel.text(title.clone(), FontWeight::MEDIUM, theme.text_secondary, true)),
         );
     }
     let painted = chart.clone();
@@ -43,10 +42,12 @@ pub(super) fn chart_block(chart: &VisualChart, theme: Theme) -> AnyElement {
                                 .bg(paint::series_color(theme, i)),
                         )
                         .child(
-                            div()
-                                .text_size(px(11.0))
-                                .text_color(theme.text_secondary)
-                                .child(s.name.clone()),
+                            div().text_size(px(11.0)).child(sel.text(
+                                s.name.clone(),
+                                FontWeight::NORMAL,
+                                theme.text_secondary,
+                                false,
+                            )),
                         )
                 }),
             ),
@@ -64,15 +65,16 @@ pub(super) fn chart_block(chart: &VisualChart, theme: Theme) -> AnyElement {
         col = col.child(
             div()
                 .text_size(px(11.0))
-                .text_color(theme.text_tertiary)
-                .child(notes.join("   ")),
+                .child(sel.text(notes.join("   "), FontWeight::NORMAL, theme.text_tertiary, false)),
         );
     }
     col.child(
-        div()
-            .text_size(px(11.0))
-            .text_color(theme.text_ghost)
-            .child(describe_chart(chart)),
+        div().text_size(px(11.0)).child(sel.text(
+            describe_chart(chart),
+            FontWeight::NORMAL,
+            theme.text_ghost,
+            false,
+        )),
     )
     .into_any_element()
 }

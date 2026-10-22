@@ -4,9 +4,10 @@
 use console_core::looks_numeric;
 use gpui::{
     AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
-    Styled, div, prelude::*, px,
+    Styled, div, px,
 };
 
+use super::select::Selectable;
 use crate::theme::Theme;
 
 pub(super) fn table(
@@ -14,6 +15,7 @@ pub(super) fn table(
     columns: &[String],
     rows: &[Vec<String>],
     theme: Theme,
+    sel: &Selectable,
 ) -> AnyElement {
     let numeric: Vec<bool> = (0..columns.len())
         .map(|c| {
@@ -23,15 +25,20 @@ pub(super) fn table(
                     .all(|r| r.get(c).is_some_and(|cell| looks_numeric(cell)))
         })
         .collect();
+    // Cells register in paint order (header, then row by row), so a copy
+    // reads in table order, one cell per line.
     let cell = |text: &str, right: bool, header: bool| {
+        let (weight, color) = if header {
+            (FontWeight::MEDIUM, theme.text_secondary)
+        } else {
+            (FontWeight::NORMAL, theme.text)
+        };
         let mut d = div()
             .min_w(px(84.0))
             .px(px(8.0))
             .py(px(6.0))
             .text_size(px(12.0))
-            .text_color(if header { theme.text_secondary } else { theme.text })
-            .when(header, |d| d.font_weight(FontWeight::MEDIUM))
-            .child(text.to_string());
+            .child(sel.text(text.to_string(), weight, color, false));
         if right {
             d = d.flex().justify_end();
         }
@@ -64,9 +71,7 @@ pub(super) fn table(
         col = col.child(
             div()
                 .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(theme.text_secondary)
-                .child(caption.clone()),
+                .child(sel.text(caption.clone(), FontWeight::MEDIUM, theme.text_secondary, true)),
         );
     }
     col.child(grid).into_any_element()
