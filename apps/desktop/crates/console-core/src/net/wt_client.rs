@@ -10,6 +10,9 @@ use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
+use wtransport::tls::client::build_default_tls_config;
+use wtransport::tls::rustls::RootCertStore;
+use wtransport::tls::build_native_cert_store;
 use wtransport::{ClientConfig, Endpoint, endpoint::ConnectOptions, endpoint::endpoint_side};
 
 /// Stream kinds: numeric values must match `console.v1.WtStreamKind`.
@@ -29,6 +32,29 @@ pub enum WtStreamKind {
 pub enum WtTls {
     Native,
     PinnedHashes(Vec<[u8; 32]>),
+}
+
+/// Trust anchors for [`WtTls::Native`]: the platform store, or the bundled
+/// Mozilla roots when the platform store is empty.
+///
+/// `wtransport`'s own native loader reads PEM files from well-known Linux
+/// paths. Android has none of them (its trust store lives behind the Java
+/// `TrustManager`; the only Android path probed is Termux's), so the store
+/// came back empty and every publicly-trusted server failed the handshake —
+/// only a pinned self-signed dev cert worked. Falling back to the same
+/// bundled roots `reqwest` already uses for HTTP gives the QUIC path the
+/// same trust as the HTTP path. Where the platform store loads (macOS,
+/// desktop Linux, Windows) it is used unchanged.
+///
+/// User- or MDM-installed CAs are not visible to this fallback; such a
+/// server needs `WtTls::PinnedHashes`.
+pub fn wt_root_store(native: RootCertStore) -> RootCertStore {
+    if !native.is_empty() {
+        return native;
+    }
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    roots
 }
 
 /// 8MB frame cap, mirroring the server bound.
@@ -155,7 +181,10 @@ impl WtClient {
         let config = match tls {
             WtTls::Native => ClientConfig::builder()
                 .with_bind_default()
-                .with_native_certs()
+                .with_custom_tls(build_default_tls_config(
+                    Arc::new(wt_root_store(build_native_cert_store())),
+                    None,
+                ))
                 .build(),
             WtTls::PinnedHashes(hashes) => {
                 let digests: Vec<_> = hashes

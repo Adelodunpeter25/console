@@ -10,6 +10,7 @@ serde_json = { workspace = true }
 console-proto = { workspace = true }
 reqwest = { workspace = true }
 wtransport = { workspace = true }
+webpki-roots = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
@@ -100,6 +101,10 @@ path = "tests/session/changes_scope_test.rs"
 [[test]]
 name = "fork_dto_test"
 path = "tests/session/fork_dto_test.rs"
+
+[[test]]
+name = "wt_tls_roots_test"
+path = "tests/network/wt_tls_roots_test.rs"
 
 [[test]]
 name = "wt_frame_test"

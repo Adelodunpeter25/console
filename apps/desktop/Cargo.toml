@@ -41,6 +41,9 @@ prost-build = "0.14"
 pbjson = "0.9"
 pbjson-build = "0.9"
 protoc-bin-vendored = "3.3"
+# Bundled Mozilla roots: the WebTransport trust fallback when the platform
+# store is empty (Android exposes no PEM store to native code).
+webpki-roots = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 wtransport = "0.7"
 futures-util = "0.3"

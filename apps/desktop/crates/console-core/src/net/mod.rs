@@ -10,5 +10,5 @@ pub mod wt_client;
 pub use wt_client::{
     WT_MAX_FRAME_BYTES, WT_MAX_STREAM_ID_LEN, WtClient, WtSession, WtStream, WtStreamKind,
     WtStreamReader, WtStreamWriter, WtTls, decode_varint, decode_wt_frame, encode_stream_header,
-    encode_varint, encode_wt_frame,
+    encode_varint, encode_wt_frame, wt_root_store,
 };
