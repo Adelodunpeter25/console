@@ -61,9 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
+import com.console.mobile.core.util.FILE_LINK_PREFIX
 import com.console.mobile.core.util.PageTitles
 import com.console.mobile.core.util.bareWebUrls
 import com.console.mobile.core.util.faviconHostOrNull
+import com.console.mobile.core.util.fileLinkTarget
 import com.console.mobile.core.util.filePathOrNull
 import com.console.mobile.ui.components.Favicon
 import com.console.mobile.ui.components.FileIcon
@@ -517,14 +519,15 @@ private fun trimEdges(nodes: List<ASTNode>): List<ASTNode> {
 private inline fun AnnotatedString.Builder.styled(style: SpanStyle, block: () -> Unit) { pushStyle(style); block(); pop() }
 private inline fun AnnotatedString.Builder.link(url: String, block: () -> Unit) {
     if (url.isBlank()) { block(); return }
-    // File paths get their file-type icon, web links the site favicon.
+    // File paths get their file-type icon and open in the Files tab; web
+    // links get the site favicon.
     val host = faviconHostOrNull(url)
-    val path = if (host == null && !url.contains("://")) filePathOrNull(url) else null
+    val path = if (host == null) fileLinkTarget(url) else null
     when {
         host != null -> appendIcon("favicon", host)
         path != null -> appendIcon("file", path)
     }
-    pushLink(LinkAnnotation.Url(url, LINK_STYLES)); block(); pop()
+    pushLink(LinkAnnotation.Url(if (path != null) FILE_LINK_PREFIX + path else url, LINK_STYLES)); block(); pop()
 }
 private fun withoutMarkers(nodes: List<ASTNode>): List<ASTNode> = nodes.filter { it.type != MarkdownTokenTypes.EMPH && it.type != GFMTokenTypes.TILDE }
 
@@ -539,8 +542,17 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         MarkdownElementTypes.STRONG -> styled(BOLD_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         GFMElementTypes.STRIKETHROUGH -> styled(STRIKE_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         MarkdownElementTypes.CODE_SPAN -> {
-            if (!linked) filePathOrNull(n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }.joinToString("") { it.text(src) })?.let { appendIcon("file", it) }
-            styled(CODE_SPAN) { n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }.forEach { append(src, it.startOffset, it.endOffset) } }
+            val code = n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }
+            val path = if (linked) null else filePathOrNull(code.joinToString("") { it.text(src) })
+            if (path == null) {
+                styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
+            } else {
+                // A path in backticks: icon, then a tappable code chip that opens the file.
+                appendIcon("file", path)
+                pushLink(LinkAnnotation.Url(FILE_LINK_PREFIX + path, LINK_STYLES))
+                styled(CODE_SPAN) { code.forEach { append(src, it.startOffset, it.endOffset) } }
+                pop()
+            }
         }
         MarkdownElementTypes.INLINE_LINK -> appendInlineLink(this, n, src, refs, linked)
         MarkdownElementTypes.FULL_REFERENCE_LINK, MarkdownElementTypes.SHORT_REFERENCE_LINK -> appendReferenceLink(this, n, src, refs, linked)

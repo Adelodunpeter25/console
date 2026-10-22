@@ -14,6 +14,8 @@ data class AppState(
     val selectedSubagentId: String? = null,
     val backendUrl: String? = null,
     val pendingServersSection: Boolean = false,
+    /** A file a link asked to open; the Files screen consumes it. */
+    val pendingFilePath: String? = null,
 )
 
 class AppStateHolder(initial: AppState = AppState()) {
@@ -25,6 +27,18 @@ class AppStateHolder(initial: AppState = AppState()) {
         if (cur.activeTab == tab) return
         _state.value = cur.copy(previousTab = cur.activeTab, activeTab = tab)
     }
+
+    /** Jump to the Files tab and open [path] there. */
+    fun openFile(path: String) {
+        val cur = _state.value
+        _state.value = cur.copy(
+            previousTab = if (cur.activeTab != MobileTab.Files) cur.activeTab else cur.previousTab,
+            activeTab = MobileTab.Files,
+            pendingFilePath = path,
+        )
+    }
+
+    fun consumePendingFile() { _state.value = _state.value.copy(pendingFilePath = null) }
 
     fun setSelectedProjectId(id: String?) { _state.value = _state.value.copy(selectedProjectId = id) }
     fun setSelectedSessionId(id: String?) { _state.value = _state.value.copy(selectedSessionId = id) }

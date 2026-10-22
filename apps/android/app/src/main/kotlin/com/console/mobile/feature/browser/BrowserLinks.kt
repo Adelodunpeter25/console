@@ -2,6 +2,7 @@ package com.console.mobile.feature.browser
 
 import android.util.Log
 import androidx.compose.ui.platform.UriHandler
+import com.console.mobile.core.util.filePathFromLink
 
 private const val LOG_TAG = "ConsoleBrowser"
 
@@ -27,10 +28,16 @@ fun opensInBrowser(url: String): Boolean =
  */
 class BrowserUriHandler(
     private val system: UriHandler,
+    private val openFile: (String) -> Unit = {},
     private val openInBrowser: (String) -> Unit,
 ) : UriHandler {
     override fun openUri(uri: String) {
-        if (opensInBrowser(uri)) openInBrowser(uri) else handOffToSystem(system, uri)
+        val file = filePathFromLink(uri)
+        when {
+            file != null -> openFile(file)
+            opensInBrowser(uri) -> openInBrowser(uri)
+            else -> handOffToSystem(system, uri)
+        }
     }
 }
 

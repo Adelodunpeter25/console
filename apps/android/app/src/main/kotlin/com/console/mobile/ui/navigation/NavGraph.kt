@@ -113,6 +113,23 @@ fun AppNavGraph() {
         }
     }
 
+    // Links in markdown open in the app's own browser rather than handing off
+    // to Chrome (the ones worth tapping point at a forwarded port or tunnel on
+    // the server this app already talks to), and file paths open in the Files
+    // tab. Overriding LocalUriHandler is the whole hook: Compose's text links
+    // read it, so every markdown renderer below comes through here without
+    // knowing. Provided above the NavHost so every screen gets it.
+    val systemUriHandler = LocalUriHandler.current
+    val linkHandler = remember(systemUriHandler) {
+        BrowserUriHandler(
+            system = systemUriHandler,
+            openFile = { path ->
+                AppContainer.appStateHolder.openFile(path)
+                navController.navigate(RouteFiles) { launchSingleTop = true }
+            },
+        ) { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } }
+    }
+    CompositionLocalProvider(LocalUriHandler provides linkHandler) {
     Scaffold(
         containerColor = NewTheme.Background,
     ) { padding ->
@@ -128,21 +145,7 @@ fun AppNavGraph() {
                 )
             }
             composable<RouteChat> {
-                // Links in a bubble open in the app's own browser rather than
-                // handing off to Chrome: the ones worth tapping point at a
-                // forwarded port or tunnel on the server this screen is already
-                // talking to, and the in-app WebView can reach those.
-                //
-                // Overriding LocalUriHandler is the whole hook — Compose's text
-                // links read it, so every link the markdown renderer draws in
-                // this subtree comes through here without it knowing.
-                val systemUriHandler = LocalUriHandler.current
-                val linkHandler = remember(systemUriHandler) {
-                    BrowserUriHandler(systemUriHandler) { url ->
-                        navController.navigate(RouteBrowser(url)) { launchSingleTop = true }
-                    }
-                }
-                CompositionLocalProvider(LocalUriHandler provides linkHandler) {
+                run {
                     ChatScreen(
                         onBackToHome = {
                             AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
@@ -169,7 +172,6 @@ fun AppNavGraph() {
             // business (BrowserScreen consumes back while it can go back).
             composable<RouteBrowser> { entry ->
                 val url = entry.toRoute<RouteBrowser>().url
-                val systemUriHandler = LocalUriHandler.current
                 BrowserScreen(
                     state = rememberBrowserState(url),
                     toolbarTrailing = {
@@ -314,6 +316,7 @@ fun AppNavGraph() {
             }
         }
         ConfirmPromptHost()
+    }
     }
 }
 

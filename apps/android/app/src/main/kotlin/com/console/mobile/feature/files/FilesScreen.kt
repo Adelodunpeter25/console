@@ -48,6 +48,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import console.v1.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
+import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.data.model.isMarkdownPath
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
@@ -179,6 +180,14 @@ fun FilesScreen(onBack: () -> Unit) {
                 if (selectedPath == path) fileLoading = false
             }
         }
+    }
+
+    // A link in chat asked for this file: open it once the project is known.
+    val pendingFile = appState.pendingFilePath
+    LaunchedEffect(pendingFile, projectRoot) {
+        if (pendingFile == null || projectRoot == null) return@LaunchedEffect
+        AppContainer.appStateHolder.consumePendingFile()
+        selectFile(resolveFilePath(pendingFile, projectRoot), null)
     }
 
     // File preview view.

@@ -1,6 +1,10 @@
 package com.console.mobile
 
+import com.console.mobile.core.util.FILE_LINK_PREFIX
 import com.console.mobile.core.util.faviconHostOrNull
+import com.console.mobile.core.util.fileLinkTarget
+import com.console.mobile.core.util.filePathFromLink
+import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.core.util.faviconUrl
 import com.console.mobile.core.util.filePathOrNull
 import org.junit.Assert.assertEquals
@@ -42,5 +46,30 @@ class LinkIconsTest {
     @Test
     fun faviconUrlUsesGoogleService() {
         assertEquals("https://www.google.com/s2/favicons?domain=example.com&sz=64", faviconUrl("example.com"))
+    }
+
+    @Test
+    fun fileLinksRoundTripThroughTheLinkScheme() {
+        assertEquals("apps/a/b.kt", fileLinkTarget("apps/a/b.kt:12"))
+        assertEquals("/tmp/x.md", fileLinkTarget("file:///tmp/x.md"))
+        assertNull(fileLinkTarget("https://example.com/a.md"))
+        assertNull(fileLinkTarget("mailto:a@b.com"))
+        assertEquals("src/lib.rs", filePathFromLink(FILE_LINK_PREFIX + "src/lib.rs"))
+        assertNull(filePathFromLink("https://example.com"))
+    }
+
+    @Test
+    fun relativePathsResolveAgainstTheProjectRoot() {
+        assertEquals("/proj/apps/a.kt", resolveFilePath("apps/a.kt", "/proj/"))
+        assertEquals("/proj/a.kt", resolveFilePath("./a.kt:3", "/proj"))
+        assertEquals("/abs/a.kt", resolveFilePath("/abs/a.kt", "/proj"))
+        assertEquals("a.kt", resolveFilePath("a.kt", null))
+    }
+
+    @Test
+    fun extensionlessNamesAreFilesToo() {
+        assertEquals("Makefile", filePathOrNull("Makefile"))
+        assertEquals("LICENSE", filePathOrNull("LICENSE"))
+        assertNull(filePathOrNull("hello"))
     }
 }
