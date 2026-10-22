@@ -18,6 +18,9 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
+/// Em space reserved in the shaped text where a link's inline icon is painted.
+pub const ICON_GAP: char = '\u{2003}';
+
 /// Stable identity for one painted text element. `row` scopes it to a
 /// transcript row so ids survive virtualized remounts; `index` orders elements
 /// within that row.
@@ -150,7 +153,9 @@ impl Selection {
                     out.push('\n');
                 }
             }
-            out.push_str(&span.text[span.range.clone()]);
+            // The renderer reserves an em space before icon-bearing links;
+            // it is layout only and must not leak into the clipboard.
+            out.push_str(&span.text[span.range.clone()].replace(ICON_GAP, ""));
             has_span = true;
         }
         out

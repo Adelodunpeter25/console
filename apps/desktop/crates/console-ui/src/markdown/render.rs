@@ -31,14 +31,16 @@ use gpui::{
 };
 
 use super::highlight::TokenClass;
+use super::file_links::{is_file_link, is_http_url, strip_line_suffix};
 use super::mend::PENDING_LINK_URL;
 use super::parser::{Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock};
 use super::selection::{
-    RegisteredText, SelectionRegistry, SelectionState, TextKey, line_range, word_range,
+    ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, line_range, word_range,
 };
 use super::veil::{RowVeil, apply_veil};
 use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{file_icon, file_icon_for_language};
+use crate::browser::{FaviconState, favicon_state};
+use crate::primitives::{IconName, app_icon, file_icon, file_icon_for_language, file_icon_for_path};
 use crate::theme::Theme;
 
 /// Selection geometry: the laid-out text handle for one painted element.
@@ -215,6 +217,53 @@ pub struct FlatText {
     pub runs: Vec<TextRun>,
     pub links: Vec<(Range<usize>, String)>,
     pub code_ranges: Vec<Range<usize>>,
+    /// Where file icons and favicons are painted, over the reserved gaps.
+    pub icons: Vec<IconSlot>,
+}
+
+/// What an inline link icon shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IconKind {
+    /// File-type icon for the link's path.
+    File(String),
+    /// Site favicon for the link's URL.
+    Favicon(String),
+}
+
+/// One icon to paint: the byte range of its reserved gap in the flat text.
+#[derive(Clone, Debug)]
+pub struct IconSlot {
+    pub range: Range<usize>,
+    pub kind: IconKind,
+    /// Tint for the globe fallback.
+    pub tint: Hsla,
+}
+
+const ICON_SIZE: f32 = 11.0;
+
+/// The icon a link deserves, or `None` for plain destinations.
+fn link_icon_kind(url: &str) -> Option<IconKind> {
+    if is_http_url(url) {
+        Some(IconKind::Favicon(url.to_owned()))
+    } else if !has_other_scheme(url) && is_file_link(url) {
+        Some(IconKind::File(url.to_owned()))
+    } else {
+        None
+    }
+}
+
+/// `mailto:a@b.com` and friends look like `name.ext` to the file-link check,
+/// so rule out any alphabetic scheme (but not `C:\\path` or `a.rs:12`).
+fn has_other_scheme(url: &str) -> bool {
+    let url = url.trim();
+    if url.starts_with("file://") {
+        return false;
+    }
+    url.split_once(':').is_some_and(|(scheme, rest)| {
+        scheme.len() > 1
+            && scheme.chars().all(|c| c.is_ascii_alphabetic())
+            && !rest.starts_with(|c: char| c.is_ascii_digit())
+    })
 }
 
 /// Flatten inline runs for shaping. Pure given the palette and base weight.
@@ -228,12 +277,36 @@ pub fn flatten(
     let mut out: Vec<TextRun> = Vec::with_capacity(runs.len());
     let mut links: Vec<(Range<usize>, String)> = Vec::new();
     let mut code_ranges: Vec<Range<usize>> = Vec::new();
+    let mut icons: Vec<IconSlot> = Vec::new();
 
     for run in runs {
         if run.text.is_empty() {
             continue;
         }
-        let start = text.len();
+        let mut start = text.len();
+        // The first run of a file or web link reserves a gap for its icon.
+        // The gap belongs to the run (and its code wash) but not the link,
+        // so only the label is clickable.
+        let mut gap = 0;
+        if let Some(url) = run.style.link.as_deref().filter(|url| *url != PENDING_LINK_URL) {
+            let continues = matches!(
+                links.last(),
+                Some((range, last)) if range.end == start && last == url
+            );
+            if !continues {
+                if let Some(kind) = link_icon_kind(url) {
+                    text.push(ICON_GAP);
+                    gap = ICON_GAP.len_utf8();
+                    icons.push(IconSlot {
+                        range: start..start + gap,
+                        kind,
+                        tint: palette.tertiary,
+                    });
+                }
+            }
+        }
+        let gap_start = start;
+        start = text.len();
         text.push_str(&run.text);
         let end = text.len();
 
@@ -256,8 +329,8 @@ pub fn flatten(
         if run.style.code {
             // Merge neighbouring code runs so their washes form one box.
             match code_ranges.last_mut() {
-                Some(range) if range.end == start => range.end = end,
-                _ => code_ranges.push(start..end),
+                Some(range) if range.end == gap_start => range.end = end,
+                _ => code_ranges.push(gap_start..end),
             }
         }
         if let Some(url) = &run.style.link {
@@ -275,7 +348,7 @@ pub fn flatten(
         // affordance is color + pointer cursor, not decoration.
         let is_link = run.style.link.is_some();
         out.push(TextRun {
-            len: run.text.len(),
+            len: gap + run.text.len(),
             font: run_font,
             color: if run.style.code {
                 palette.code_text
@@ -300,6 +373,7 @@ pub fn flatten(
         runs: out,
         links,
         code_ranges,
+        icons,
     }
 }
 
@@ -330,6 +404,7 @@ pub fn flatten_plain(
         runs,
         links: Vec::new(),
         code_ranges: Vec::new(),
+        icons: Vec::new(),
     }
 }
 
@@ -351,6 +426,7 @@ pub fn flatten_code(
         runs,
         links: Vec::new(),
         code_ranges: Vec::new(),
+        icons: Vec::new(),
     }
 }
 
@@ -718,14 +794,78 @@ fn text_element_with_selection(
     .absolute()
     .size_full();
 
-    div()
+    let mut container = div()
         .relative()
         .w_full()
         .min_w_0()
         .cursor(CursorStyle::IBeam)
         .child(underlay)
-        .child(body)
-        .into_any_element()
+        .child(body);
+    if !flat.icons.is_empty() {
+        container = container.child(icon_overlay(flat.icons.clone(), layout.clone()));
+    }
+    container.into_any_element()
+}
+
+/// The icon for one slot. A favicon that has not arrived (or never will)
+/// shows the globe so the reserved gap is never empty.
+fn icon_element(slot: &IconSlot, window: &mut Window) -> AnyElement {
+    match &slot.kind {
+        IconKind::File(link) => file_icon(file_icon_for_path(strip_line_suffix(link)), ICON_SIZE)
+            .into_any_element(),
+        IconKind::Favicon(url) => match favicon_state(url) {
+            FaviconState::Ready(image) => img(image)
+                .size(px(ICON_SIZE))
+                .rounded(px(2.0))
+                .flex_none()
+                .into_any_element(),
+            state => {
+                if matches!(state, FaviconState::Loading) {
+                    window.request_animation_frame();
+                }
+                app_icon(IconName::Globe, ICON_SIZE, slot.tint).into_any_element()
+            }
+        },
+    }
+}
+
+/// Paints link icons over the gaps the flattener reserved. It sits after the
+/// text in the container so the layout is shaped by the time it prepaints.
+fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
+    canvas(
+        move |_, window, cx| {
+            let mut placed: Vec<AnyElement> = Vec::new();
+            if layout_missing(&layout) {
+                return placed;
+            }
+            for slot in &icons {
+                let Some(rect) = range_rects(&layout, &slot.range, 0.0, 0.0).into_iter().next()
+                else {
+                    continue;
+                };
+                let origin = point(
+                    rect.left() + (rect.size.width - px(ICON_SIZE)) / 2.0,
+                    rect.top() + (rect.size.height - px(ICON_SIZE)) / 2.0,
+                );
+                let mut element = icon_element(slot, window);
+                element.prepaint_as_root(
+                    origin,
+                    size(px(ICON_SIZE).into(), px(ICON_SIZE).into()),
+                    window,
+                    cx,
+                );
+                placed.push(element);
+            }
+            placed
+        },
+        |_, mut placed, window, cx| {
+            for element in &mut placed {
+                element.paint(window, cx);
+            }
+        },
+    )
+    .absolute()
+    .size_full()
 }
 
 fn text_element(flat: &FlatText, key: TextKey, ctx: &Ctx) -> AnyElement {
@@ -1440,6 +1580,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
             runs: code_runs(code, lang, &code_font, ctx.palette),
             links: Vec::new(),
             code_ranges: Vec::new(),
+            icons: Vec::new(),
         }
     });
     let label = language

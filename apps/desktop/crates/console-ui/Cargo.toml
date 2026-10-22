@@ -91,6 +91,10 @@ name = "svg_test"
 path = "tests/viewer/svg_test.rs"
 
 [[test]]
+name = "link_icons_test"
+path = "tests/markdown/link_icons_test.rs"
+
+[[test]]
 name = "path_test"
 path = "tests/utils/path_test.rs"
 

@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 static FAVICON_CACHE: OnceLock<Mutex<HashMap<String, Arc<gpui::Image>>>> = OnceLock::new();
 static FAVICON_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static FAVICON_FAILED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 fn favicon_cache() -> &'static Mutex<HashMap<String, Arc<gpui::Image>>> {
     FAVICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -14,11 +15,23 @@ fn favicon_in_flight() -> &'static Mutex<HashSet<String>> {
     FAVICON_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-/// Retrieve a cached favicon `gpui::Image` for the given host or URL.
-/// If not yet cached, initiates an asynchronous background fetch and returns `None`
-/// until the image is decoded and ready in memory.
-pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
-    let host = url_host(url_or_host).to_string();
+fn favicon_failed() -> &'static Mutex<HashSet<String>> {
+    FAVICON_FAILED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Where a favicon lookup stands.
+#[derive(Clone)]
+pub enum FaviconState {
+    Ready(Arc<gpui::Image>),
+    /// A fetch is running; ask again on a later frame.
+    Loading,
+    /// Local host, or the fetch failed. Callers show a fallback glyph.
+    Unavailable,
+}
+
+/// The host worth fetching a favicon for, or `None` for local targets.
+pub fn favicon_host(url_or_host: &str) -> Option<String> {
+    let host = url_host(url_or_host);
     if host.is_empty()
         || host.eq_ignore_ascii_case("localhost")
         || host.starts_with("127.")
@@ -26,11 +39,36 @@ pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
     {
         return None;
     }
+    Some(host.to_string())
+}
+
+/// Retrieve a cached favicon `gpui::Image` for the given host or URL.
+/// If not yet cached, initiates an asynchronous background fetch and returns `None`
+/// until the image is decoded and ready in memory.
+pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
+    match favicon_state(url_or_host) {
+        FaviconState::Ready(image) => Some(image),
+        _ => None,
+    }
+}
+
+/// Like [`get_or_fetch_favicon`], but says whether an icon is still coming or
+/// will never arrive, so a caller can stop asking for repaints.
+pub fn favicon_state(url_or_host: &str) -> FaviconState {
+    let Some(host) = favicon_host(url_or_host) else {
+        return FaviconState::Unavailable;
+    };
 
     if let Ok(cache) = favicon_cache().lock() {
         if let Some(img) = cache.get(&host) {
-            return Some(img.clone());
+            return FaviconState::Ready(img.clone());
         }
+    }
+    if favicon_failed()
+        .lock()
+        .is_ok_and(|failed| failed.contains(&host))
+    {
+        return FaviconState::Unavailable;
     }
 
     let should_fetch = {
@@ -48,6 +86,7 @@ pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
             host
         );
         tokio::spawn(async move {
+            let mut loaded = false;
             if let Some(bytes_vec) =
                 console_core::fetch_url_bytes(&fav_url, std::time::Duration::from_secs(4)).await
             {
@@ -69,7 +108,13 @@ pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
                     let image = Arc::new(gpui::Image::from_bytes(format, bytes_vec));
                     if let Ok(mut cache) = favicon_cache().lock() {
                         cache.insert(host_for_task.clone(), image);
+                        loaded = true;
                     }
+                }
+            }
+            if !loaded {
+                if let Ok(mut failed) = favicon_failed().lock() {
+                    failed.insert(host_for_task.clone());
                 }
             }
             if let Ok(mut in_flight) = favicon_in_flight().lock() {
@@ -78,7 +123,7 @@ pub fn get_or_fetch_favicon(url_or_host: &str) -> Option<Arc<gpui::Image>> {
         });
     }
 
-    None
+    FaviconState::Loading
 }
 
 /// What the address input resolves to when the user submits it.
