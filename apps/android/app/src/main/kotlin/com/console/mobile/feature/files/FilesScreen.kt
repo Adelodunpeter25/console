@@ -98,7 +98,15 @@ fun FilesScreen(onBack: () -> Unit) {
     var childrenByPath by remember { mutableStateOf<Map<String, List<FsTreeEntry>>>(emptyMap()) }
     var loadingDirs by remember { mutableStateOf(setOf<String>()) }
     var selectedPath by remember { mutableStateOf<String?>(null) }
-    BackHandler(enabled = selectedPath != null) { selectedPath = null }
+    // True while the open file came from a chat link rather than the tree.
+    var openedFromLink by remember { mutableStateOf(false) }
+    // System back follows where you came from; the header arrow always shows the tree.
+    BackHandler(enabled = selectedPath != null) {
+        when (previewBackAction(openedFromLink)) {
+            PreviewBack.ToPreviousScreen -> { openedFromLink = false; onBack() }
+            PreviewBack.ToFileTree -> selectedPath = null
+        }
+    }
     var selectedSize by remember { mutableStateOf<Long?>(null) }
     var fileContent by remember { mutableStateOf<String?>(null) }
     var fileLoading by remember { mutableStateOf(false) }
@@ -163,7 +171,8 @@ fun FilesScreen(onBack: () -> Unit) {
         }
     }
 
-    fun selectFile(path: String, size: Long?) {
+    fun selectFile(path: String, size: Long?, fromLink: Boolean = false) {
+        openedFromLink = fromLink
         selectedPath = path
         selectedSize = size
         fileContent = null
@@ -187,7 +196,7 @@ fun FilesScreen(onBack: () -> Unit) {
     LaunchedEffect(pendingFile, projectRoot) {
         if (pendingFile == null || projectRoot == null) return@LaunchedEffect
         AppContainer.appStateHolder.consumePendingFile()
-        selectFile(resolveFilePath(pendingFile, projectRoot), null)
+        selectFile(resolveFilePath(pendingFile, projectRoot), null, fromLink = true)
     }
 
     // File preview view.
@@ -253,7 +262,7 @@ fun FilesScreen(onBack: () -> Unit) {
                 subtitle = subtitle,
                 blurred = true,
                 backgroundColor = NewTheme.Black,
-                onBack = { selectedPath = null },
+                onBack = { openedFromLink = false; selectedPath = null },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
         }
@@ -421,3 +430,10 @@ private fun CodePreview(content: String, path: String?) {
 private fun Modifier.verticalScroll2(): Modifier = this.verticalScroll(androidx.compose.foundation.rememberScrollState())
 @Composable
 private fun Modifier.hScroll2(): Modifier = this.horizontalScroll(androidx.compose.foundation.rememberScrollState())
+
+/** What system back does from a file preview. */
+enum class PreviewBack { ToPreviousScreen, ToFileTree }
+
+/** A file opened from a chat link returns to that chat; one opened from the tree returns to the tree. */
+fun previewBackAction(openedFromLink: Boolean): PreviewBack =
+    if (openedFromLink) PreviewBack.ToPreviousScreen else PreviewBack.ToFileTree
