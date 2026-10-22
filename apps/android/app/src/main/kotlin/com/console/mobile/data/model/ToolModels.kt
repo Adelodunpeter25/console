@@ -57,6 +57,15 @@ data class ToolResult(
     val toolName: String? = null,
     val content: kotlinx.serialization.json.JsonElement? = null,
     val isError: Boolean = false,
+    /** Client-rendered artifact (see feature/chat/visual). Never sent to a provider. */
+    val visual: VisualArtifact? = null,
+)
+
+/** A versioned visual spec riding on a tool result; the spec stays raw JSON until rendered. */
+@Serializable
+data class VisualArtifact(
+    val version: Int,
+    val spec: kotlinx.serialization.json.JsonElement,
 )
 
 class ToolError(message: String) : Exception(message)

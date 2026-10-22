@@ -116,6 +116,13 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
         }
         // Always drawn, collapsed or not — one rule closing each run block.
         HorizontalDivider(color = NewTheme.Divider, thickness = 1.dp, modifier = Modifier.padding(horizontal = 4.dp).padding(vertical = 4.dp))
+        // Visual artifacts sit outside the fold: the card is the result, the
+        // tool invocation is detail.
+        activity.events.forEach { e ->
+            if (e is ActivityEvent.ToolCallEvent) {
+                e.result?.visual?.let { com.console.mobile.feature.chat.visual.VisualResultCard(it) }
+            }
+        }
         if (expanded) {
             val groups = groupEvents(activity.events)
             groups.forEach { g ->

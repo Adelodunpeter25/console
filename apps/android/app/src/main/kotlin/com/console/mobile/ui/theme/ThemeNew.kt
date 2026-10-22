@@ -58,6 +58,12 @@ object NewTheme {
     /** Meter blue (theme.gauge): a healthy bar or ring. */
     val Gauge = Color(0xFF3B82F6)
 
+    /** Chart series colors by index; specs never carry colors. */
+    val VisualSeries = listOf(
+        Accent, Gauge, Success, Warning,
+        Color(0xFFB583E8), Color(0xFF4FC3C7), Color(0xFFE86FA6), Color(0xFF9AA64B),
+    )
+
     // ---- Buttons
     /** Primary action fill (white, like the send button). */
     val Primary = Color(0xFFFFFFFF)

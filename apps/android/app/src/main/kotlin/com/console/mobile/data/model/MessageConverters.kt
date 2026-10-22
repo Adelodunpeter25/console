@@ -33,6 +33,8 @@ internal fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(
     toolName = tool_name,
     content = bytesToJson(content),
     isError = is_error ?: false,
+    // A malformed spec drops only the artifact; the summary content stays.
+    visual = visual?.let { v -> bytesToJson(v.spec)?.let { VisualArtifact(v.version, it) } },
 )
 
 private fun console.v1.AssistantContentPart.toUi(): MessageContent? = when (val part = part) {

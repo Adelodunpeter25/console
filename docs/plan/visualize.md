@@ -786,13 +786,13 @@ cd apps/server-go && go test ./tests/agent/ -run 'TestVisualize' -v
 
 ### Phase 2 — Android renderer
 
-- [ ] Add `VisualArtifact` to `ToolResult` and decode `VisualPart` in
+- [x] Add `VisualArtifact` to `ToolResult` and decode `VisualPart` in
       `MessageConverters.kt`.
-- [ ] Add typed spec models and defensive decoding.
-- [ ] Add `VisualResultCard`, metric/table/chart renderers, and geometry helpers.
-- [ ] Render visuals from `RunActivity` outside the fold.
-- [ ] Add the `VisualSeries` palette to `ThemeNew`.
-- [ ] Add `VisualFixtureTest` decoding the shared fixtures and testing scale/tick
+- [x] Add typed spec models and defensive decoding.
+- [x] Add `VisualResultCard`, metric/table/chart renderers, and geometry helpers.
+- [x] Render visuals from `RunActivity` outside the fold.
+- [x] Add the `VisualSeries` palette to `ThemeNew`.
+- [x] Add `VisualFixtureTest` decoding the shared fixtures and testing scale/tick
       edge cases (flat series, negative values, single point, 2,000 points).
 - [x] Update `AssistFixtureTest` for the new command count.
 
