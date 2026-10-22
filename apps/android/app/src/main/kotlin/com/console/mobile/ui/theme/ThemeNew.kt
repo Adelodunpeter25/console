@@ -50,6 +50,14 @@ object NewTheme {
     val OnUserBubble = Color(0xFFF4EDE5)
     /** Inline surfaces inside the transcript (tool rows, thinking blocks). */
     val Inline = Color.White.copy(alpha = 0.04f)
+    /** Markdown link text: accent, no underline (desktop markdown palette). */
+    val Link = Accent
+    /** Inline code text (desktop theme.code_text). */
+    val CodeText = Color(0xFFE0A882)
+    /** The wash behind inline code (desktop theme.code_wash). */
+    val CodeWash = Color.White.copy(alpha = 0.08f)
+    /** The bar down the left edge of a block quote. */
+    val QuoteBar = Color.White.copy(alpha = 0.14f)
 
     // ---- Status (desktop success / warning / danger / gauge)
     val Success = Color(0xFF62C987)
