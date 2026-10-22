@@ -364,7 +364,8 @@ pub fn flatten_sized(
         // A bare web URL shows its page title once it resolves.
         let mut shown: &str = &run.text;
         let mut wants_title = false;
-        let mut title = String::new();
+        // Owns the resolved title that `shown` borrows; assigned only when one is ready.
+        let title: String;
         if let Some(url) = run.style.link.as_deref().filter(|url| *url != PENDING_LINK_URL) {
             if is_http_url(url) && run.text == url {
                 match page_title_state(url) {
