@@ -385,6 +385,16 @@ object AppContainer {
             while (isActive) {
                 try {
                     notificationRepository.notifications().collect { event ->
+                        if (event.kind == "resumed") {
+                            // Silent: an idle session woke itself for finished background
+                            // work. The old run stream ended, so re-attach to the new run
+                            // (after a beat, so the old run's sessionEnd lands first).
+                            launch {
+                                delay(400)
+                                chatRepository.attachServerRun(event.session_id)
+                            }
+                            return@collect
+                        }
                         val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
                             appStateHolder.state.value.selectedSessionId == event.session_id
                         if (!viewingSame) {

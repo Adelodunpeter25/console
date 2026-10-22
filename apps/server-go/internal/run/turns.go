@@ -529,6 +529,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if dto.Synthetic {
 		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
 		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart})
+		s.notifyResumed(sessionID, wakeMessage(dto.woken))
 	} else {
 		hub.Broadcast(loop.Event{Kind: loop.EventTurnStart, Text: dto.Text})
 	}

@@ -90,6 +90,22 @@ func DoneNotification(sessionID, sessionTitle, summary string) *consolev1.Notifi
 	return out
 }
 
+// ResumedNotification tells clients an idle session woke itself for finished
+// background work. It is a silent signal (no banner): clients re-attach to the
+// new run, since the old run stream has already ended.
+func ResumedNotification(sessionID, message string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "resumed", SessionId: sessionID, Body: message,
+	}
+}
+
+// notifyResumed pushes the silent resume signal for a wake turn.
+func (s *Service) notifyResumed(sessionID, message string) {
+	if bus := s.notifier(); bus != nil {
+		bus.Push(ResumedNotification(sessionID, message))
+	}
+}
+
 // notifyEvent pushes an attention banner for questions, approvals, and
 // errors (never for aborted runs).
 func (s *Service) notifyEvent(ctx context.Context, sessionID string, event loop.Event) {

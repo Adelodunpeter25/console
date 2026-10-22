@@ -41,6 +41,23 @@ impl ConsoleDesktopApp {
                         while let Some(event_res) = stream.next().await {
                             if let Ok(event) = event_res {
                                 let session_id = event.session_id.clone();
+                                if event.kind == "resumed" {
+                                    // Silent signal: an idle session woke itself for
+                                    // finished background work. Its old run stream has
+                                    // ended, so re-attach to the new run. Wait briefly
+                                    // so the old run's sessionEnd lands first.
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_millis(400))
+                                        .await;
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.attach_resumed_session(&session_id, cx);
+                                            });
+                                        }
+                                    });
+                                    continue;
+                                }
                                 let title = normalize_notification_title(&event.title);
                                 let subtitle = event.subtitle.clone();
                                 let body = event.body.clone();
@@ -97,5 +114,21 @@ impl ConsoleDesktopApp {
             }
         })
         .detach();
+    }
+
+    /// Re-attach every pane showing `session_id` to its freshly woken run.
+    fn attach_resumed_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        if session_id.is_empty() || self.is_session_running(session_id) {
+            return;
+        }
+        let pane = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .map(|leaf| leaf.id.clone())
+            .find(|id| self.active_session_for_pane(id).as_deref() == Some(session_id));
+        if let Some(pane_id) = pane {
+            self.attach_session_run_for_pane(pane_id, session_id.to_string(), cx);
+        }
     }
 }
