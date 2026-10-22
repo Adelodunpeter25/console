@@ -204,14 +204,8 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")
     implementation("io.coil-kt.coil3:coil-svg:3.0.0")
 
-    // Markdown (native Compose UI via mikepenz multiplatform-markdown-renderer).
-    // Pinned to 0.41.0: 0.42.0+ require compileSdk 37 (and a newer AGP).
-    implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.41.0")
-    implementation("com.mikepenz:multiplatform-markdown-renderer-m3-android:0.41.0")
-    // Markdown parser (AST only) used by CustomMarkdown; also a dependency of mikepenz above.
+    // Markdown parser (AST only, CommonMark + GFM) used by CustomMarkdown.
     implementation("org.jetbrains:markdown:0.7.9")
-    // Syntax-highlighted code fences with a language header + copy button.
-    implementation("com.mikepenz:multiplatform-markdown-renderer-code-android:0.41.0")
 
     // Code viewer — sora-editor read-only (Phase 4). Added now so viewer spike can compile.
     implementation("io.github.Rosemoe.sora-editor:editor:0.21.1")
@@ -228,10 +222,6 @@ dependencies {
     implementation("com.squareup.wire:wire-runtime:7.0.4")
     implementation("com.squareup.wire:wire-moshi-adapter:7.0.4")
     implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
-
-    // WebView for Mermaid/markdown fallbacks
-    // (no WebView is used anywhere in the app — MarkdownText uses the mikepenz
-    // renderer. Kept commented so it's easy to spot if a WebView is ever added.)
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
