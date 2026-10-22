@@ -32,8 +32,11 @@ use gpui::{
 
 use super::highlight::TokenClass;
 use super::file_links::{is_file_link, is_http_url, strip_line_suffix};
+use super::math::{self, MathMode};
 use super::mend::PENDING_LINK_URL;
-use super::parser::{Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock};
+use super::parser::{
+    Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock, format_math,
+};
 use super::selection::{
     ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, line_range, word_range,
 };
@@ -205,6 +208,16 @@ impl Palette {
     }
 }
 
+/// 0–255 RGB of a theme colour, for the formula rasterizer.
+fn rgb_of(color: Hsla) -> [u8; 3] {
+    let c: gpui::Rgba = color.into();
+    [
+        (c.r * 255.0).round() as u8,
+        (c.g * 255.0).round() as u8,
+        (c.b * 255.0).round() as u8,
+    ]
+}
+
 fn hue(is_dark: bool, dark: u32, light: u32) -> Hsla {
     gpui::rgb(if is_dark { dark } else { light }).into()
 }
@@ -230,6 +243,14 @@ pub enum IconKind {
     File(String),
     /// Site favicon for the link's URL.
     Favicon(String),
+    /// A typeset inline formula, painted over the gap reserved for it. The
+    /// image itself comes from [`math::render`]'s cache.
+    Math {
+        latex: String,
+        /// `f32::to_bits` of the font size, so the kind stays `Eq`.
+        size_bits: u32,
+        rgb: [u8; 3],
+    },
 }
 
 /// One icon to paint: the byte range of its reserved gap in the flat text.
@@ -270,12 +291,24 @@ fn has_other_scheme(url: &str) -> bool {
     })
 }
 
-/// Flatten inline runs for shaping. Pure given the palette and base weight.
+/// Flatten inline runs for shaping at the body text size.
 pub fn flatten(
     runs: &[InlineRun],
     palette: &Palette,
     base_weight: FontWeight,
     base_color: Hsla,
+) -> FlatText {
+    flatten_sized(runs, palette, base_weight, base_color, Metrics::BODY.text_size)
+}
+
+/// Flatten inline runs for shaping. Pure given the palette, base weight and
+/// size (`em`, in px — inline formulas are typeset to match it).
+pub fn flatten_sized(
+    runs: &[InlineRun],
+    palette: &Palette,
+    base_weight: FontWeight,
+    base_color: Hsla,
+    em: f32,
 ) -> FlatText {
     let mut text = String::new();
     let mut out: Vec<TextRun> = Vec::with_capacity(runs.len());
@@ -285,6 +318,42 @@ pub fn flatten(
 
     for run in runs {
         if run.text.is_empty() {
+            continue;
+        }
+        if run.style.math {
+            let rgb = rgb_of(base_color);
+            let rendered = math::render(&run.text, MathMode::Inline, em, rgb);
+            let (shown, kind) = match &rendered {
+                // The gap is what the layout sees; the formula is painted over it.
+                Some(image) => (
+                    math::gap_for_width(image.width, em),
+                    Some(IconKind::Math {
+                        latex: run.text.clone(),
+                        size_bits: em.to_bits(),
+                        rgb,
+                    }),
+                ),
+                // Not typesettable (e.g. still streaming): show readable text.
+                None => (format_math(&run.text), None),
+            };
+            let start = text.len();
+            text.push_str(&shown);
+            if let Some(kind) = kind {
+                icons.push(IconSlot {
+                    range: start..text.len(),
+                    kind,
+                    tint: palette.tertiary,
+                    wants_title: false,
+                });
+            }
+            out.push(TextRun {
+                len: shown.len(),
+                font: font(SANS_FAMILY),
+                color: base_color,
+                background_color: None,
+                underline: None,
+                strikethrough: None,
+            });
             continue;
         }
         let mut start = text.len();
@@ -836,6 +905,16 @@ fn text_element_with_selection(
 /// shows the globe so the reserved gap is never empty.
 fn icon_element(slot: &IconSlot, window: &mut Window) -> AnyElement {
     match &slot.kind {
+        IconKind::Math { latex, size_bits, rgb } => {
+            match math::render(latex, MathMode::Inline, f32::from_bits(*size_bits), *rgb) {
+                Some(formula) => img(formula.image.clone())
+                    .w(px(formula.width))
+                    .h(px(formula.height))
+                    .flex_none()
+                    .into_any_element(),
+                None => div().into_any_element(),
+            }
+        }
         IconKind::File(link) => file_icon(file_icon_for_path(strip_line_suffix(link)), ICON_SIZE)
             .into_any_element(),
         IconKind::Favicon(url) => match favicon_state(url) {
@@ -876,14 +955,25 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                         }
                     }
                 }
+                // A formula is painted at its own size from the gap's left edge;
+                // an icon is a small square nudged in from it.
+                let (inset, width, height) = match &slot.kind {
+                    IconKind::Math { latex, size_bits, rgb } => {
+                        match math::render(latex, MathMode::Inline, f32::from_bits(*size_bits), *rgb) {
+                            Some(formula) => (0.0, formula.width, formula.height),
+                            None => continue,
+                        }
+                    }
+                    _ => (2.0, ICON_SIZE, ICON_SIZE),
+                };
                 let origin = point(
-                    rect.left() + px(2.0),
-                    rect.top() + (rect.size.height - px(ICON_SIZE)) / 2.0,
+                    rect.left() + px(inset),
+                    rect.top() + (rect.size.height - px(height)) / 2.0,
                 );
                 let mut element = icon_element(slot, window);
                 element.prepaint_as_root(
                     origin,
-                    size(px(ICON_SIZE).into(), px(ICON_SIZE).into()),
+                    size(px(width).into(), px(height).into()),
                     window,
                     cx,
                 );
@@ -1340,7 +1430,13 @@ fn render_block(block: &Block, ctx: &Ctx) -> AnyElement {
         Block::Paragraph { runs } => {
             let key = ctx.next_key();
             let flat = ctx.flat(key.index, || {
-                flatten(runs, ctx.palette, FontWeight::NORMAL, ctx.palette.text)
+                flatten_sized(
+                    runs,
+                    ctx.palette,
+                    FontWeight::NORMAL,
+                    ctx.palette.text,
+                    ctx.metrics.text_size,
+                )
             });
             div()
                 .w_full()
@@ -1354,7 +1450,7 @@ fn render_block(block: &Block, ctx: &Ctx) -> AnyElement {
             let (size, line_height, weight) = heading_metrics(*level, &ctx.metrics);
             let key = ctx.next_key();
             let flat = ctx.flat(key.index, || {
-                flatten(runs, ctx.palette, weight, ctx.palette.text)
+                flatten_sized(runs, ctx.palette, weight, ctx.palette.text, size)
             });
             div()
                 .w_full()
@@ -1366,6 +1462,7 @@ fn render_block(block: &Block, ctx: &Ctx) -> AnyElement {
                 .into_any_element()
         }
         Block::Image { url, alt } => render_image(url, alt, ctx),
+        Block::Math { latex } => render_math_block(latex, ctx),
         Block::CodeBlock { language, code } => render_code_block(language.as_deref(), code, ctx),
         Block::BlockQuote { children } => {
             let rendered = children
@@ -1547,6 +1644,52 @@ fn render_image(url: &str, alt: &str, ctx: &Ctx) -> AnyElement {
             )
         })
         .into_any_element()
+}
+
+/// A display formula on its own line. RaTeX typesets it at a slightly larger
+/// size, centred; one that cannot be typeset (still streaming, or invalid)
+/// shows its source as code so nothing silently disappears.
+fn render_math_block(latex: &str, ctx: &Ctx) -> AnyElement {
+    let key = ctx.next_key();
+    let size = ctx.metrics.text_size * 1.25;
+    match math::render(latex, MathMode::Display, size, rgb_of(ctx.palette.text)) {
+        Some(formula) => {
+            let id = SharedString::from(format!("math-{}-{}", key.row, key.index));
+            div()
+                .w_full()
+                .min_w_0()
+                .flex()
+                .justify_center()
+                .child(
+                    img(formula.image.clone())
+                        .id(id)
+                        .w(px(formula.width))
+                        .h(px(formula.height))
+                        .max_w(relative(1.0))
+                        .object_fit(gpui::ObjectFit::ScaleDown),
+                )
+                .into_any_element()
+        }
+        None => {
+            let runs = [InlineRun {
+                text: latex.trim().to_owned(),
+                style: super::parser::InlineStyle {
+                    code: true,
+                    ..Default::default()
+                },
+            }];
+            let flat = ctx.flat(key.index, || {
+                flatten(&runs, ctx.palette, FontWeight::NORMAL, ctx.palette.text)
+            });
+            div()
+                .w_full()
+                .min_w_0()
+                .text_size(px(ctx.metrics.text_size))
+                .line_height(px(ctx.metrics.line_height))
+                .child(text_element(&flat, key, ctx))
+                .into_any_element()
+        }
+    }
 }
 
 const CODE_COPY_FEEDBACK_DURATION: Duration = Duration::from_secs(3);
@@ -1894,7 +2037,7 @@ fn table_row(
     for (index, cell) in cells.iter().enumerate() {
         let key = ctx.next_key();
         let flat = ctx.flat(key.index, || {
-            flatten(cell, ctx.palette, weight, ctx.palette.text)
+            flatten_sized(cell, ctx.palette, weight, ctx.palette.text, ctx.metrics.text_size)
         });
         let alignment = align.get(index).copied().unwrap_or_default();
         row = row.child(

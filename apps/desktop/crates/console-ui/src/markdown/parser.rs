@@ -48,6 +48,9 @@ pub struct InlineStyle {
     pub italic: bool,
     pub code: bool,
     pub strikethrough: bool,
+    /// The run is LaTeX source (`$…$`), typeset by the renderer; the text is
+    /// the formula, not display text.
+    pub math: bool,
     /// Destination URL when inside a link.
     pub link: Option<String>,
 }
@@ -90,6 +93,8 @@ pub struct ListItem {
 enum InlinePiece {
     Run(InlineRun),
     Image { url: String, alt: String },
+    /// `$$…$$`: a formula that owns its line.
+    DisplayMath(String),
 }
 
 /// A markdown block. Containers nest.
@@ -103,6 +108,10 @@ pub enum Block {
     Image {
         url: String,
         alt: String,
+    },
+    /// A display formula (`$$…$$`), as LaTeX source.
+    Math {
+        latex: String,
     },
     Heading {
         level: u8,
@@ -460,6 +469,14 @@ fn pieces_into_blocks(pieces: Vec<InlinePiece>) -> Vec<Block> {
                 }
                 blocks.push(Block::Image { url, alt });
             }
+            InlinePiece::DisplayMath(latex) => {
+                if !runs.is_empty() {
+                    blocks.push(Block::Paragraph {
+                        runs: std::mem::take(&mut runs),
+                    });
+                }
+                blocks.push(Block::Math { latex });
+            }
         }
     }
     if !runs.is_empty() {
@@ -476,6 +493,9 @@ fn pieces_into_runs(pieces: Vec<InlinePiece>) -> Vec<InlineRun> {
             .map(|piece| match piece {
                 InlinePiece::Run(run) => run,
                 InlinePiece::Image { alt, .. } => InlineRun::plain(alt),
+                // A table cell is one line of text, so a display formula
+                // degrades to its source rather than breaking the row.
+                InlinePiece::DisplayMath(latex) => InlineRun::plain(latex),
             })
             .collect(),
     )
@@ -563,17 +583,22 @@ fn parse_inline_event(cursor: &mut Cursor, pieces: &mut Vec<InlinePiece>, style:
             text: if checked { "[x] " } else { "[ ] " }.to_owned(),
             style: style.clone(),
         }),
-        Event::InlineMath(text) | Event::DisplayMath(text) => {
+        Event::InlineMath(text) => {
+            let mut style = style.clone();
+            style.math = true;
             push_run(InlineRun {
-                text: format_math(&text),
-                style: style.clone(),
+                text: text.to_string(),
+                style,
             });
         }
+        Event::DisplayMath(text) => pieces.push(InlinePiece::DisplayMath(text.to_string())),
         Event::End(_) | Event::Rule => {}
     }
 }
 
-fn format_math(text: &str) -> String {
+/// Readable fallback for a formula RaTeX cannot typeset (typically one still
+/// streaming in): common symbols swapped for Unicode, the rest left as source.
+pub fn format_math(text: &str) -> String {
     let mut out = text.to_string();
     let replacements = [
         (r"\rightarrow", "→"),
@@ -678,7 +703,7 @@ fn linkify_bare_urls(pieces: Vec<InlinePiece>) -> Vec<InlinePiece> {
             // Code spans keep their code styling but still linkify: `style.code`
             // is preserved on the split runs so `https://` inside backticks
             // stays brownish yet becomes clickable.
-            InlinePiece::Run(run) if run.style.link.is_none() => {
+            InlinePiece::Run(run) if run.style.link.is_none() && !run.style.math => {
                 match bare_file_name_link(&run) {
                     Some(link) => linked.push(InlinePiece::Run(link)),
                     None => push_linkified_run(run, &mut linked),

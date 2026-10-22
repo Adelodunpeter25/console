@@ -29,6 +29,12 @@ resvg = "0.46.0"
 usvg = "0.46.0"
 tiny-skia = "0.11.4"
 imagesize = "0.14"
+# LaTeX typesetting (KaTeX-compatible, pure Rust). The same engine backs the Android
+# client so a formula looks identical on both. `embed-fonts` bundles the KaTeX faces.
+ratex-parser = "0.1"
+ratex-layout = "0.1"
+ratex-types = "0.1"
+ratex-render = { version = "0.1", features = ["embed-fonts"] }
 # Pinned to a rev for reproducible builds (was floating on termy main).
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
 
@@ -97,6 +103,10 @@ path = "tests/markdown/file_links_test.rs"
 [[test]]
 name = "link_icons_test"
 path = "tests/markdown/link_icons_test.rs"
+
+[[test]]
+name = "math_test"
+path = "tests/markdown/math_test.rs"
 
 [[test]]
 name = "path_test"
