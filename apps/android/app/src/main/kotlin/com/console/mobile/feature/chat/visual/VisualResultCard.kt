@@ -1,6 +1,5 @@
 package com.console.mobile.feature.chat.visual
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,11 +42,10 @@ private fun VisualFallback(message: String, modifier: Modifier) {
 private fun VisualSurface(modifier: Modifier, content: @Composable () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
-        color = NewTheme.Card,
+        color = NewTheme.Background,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, NewTheme.Divider),
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             content()
         }
     }
