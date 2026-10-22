@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "title": "Growth dashboard",
+  "subtitle": "Q3",
+  "blocks": [
+    {
+      "type": "metric",
+      "label": "MRR",
+      "value": "$42.1k",
+      "delta": "+8.2%",
+      "trend": "up",
+      "caption": "vs. last month"
+    },
+    {
+      "type": "metric",
+      "label": "Churn",
+      "value": "1.4%",
+      "delta": "-0.3%",
+      "trend": "down"
+    },
+    {
+      "type": "chart",
+      "kind": "bar",
+      "title": "Signups by channel",
+      "xLabel": "Channel",
+      "yLabel": "Users",
+      "series": [
+        {
+          "name": "Signups",
+          "points": [
+            { "x": 0, "y": 640, "label": "Organic" },
+            { "x": 1, "y": 312, "label": "Referral" }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "caption": "Top channels",
+      "columns": ["Channel", "Users", "Share"],
+      "rows": [
+        ["Organic", "640", "49.8%"],
+        ["Referral", "312", "24.3%"]
+      ]
+    },
+    { "type": "text", "text": "Organic remains the largest channel." }
+  ]
+}

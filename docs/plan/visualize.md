@@ -322,18 +322,18 @@ contract and are decoded by Go, Kotlin, and Rust tests.
 
 ```
 apps/server-go/internal/services/visualize/
-  spec.go        # v1 structs, block union, limits
+  spec.go        # v1 structs, block union
   decode.go      # strict decode + custom block discriminator
-  validate.go    # field and cross-field validation
+  validate.go    # field and cross-field validation, limits
   normalize.go   # trim, sort, canonical JSON
   summary.go     # short model-facing summary
   tool.go        # NewTool, Envelope with Visual
+  tools.go       # Loader (the lazy activation path)
   invoke.go      # /visualize prefix detection
   skill.go       # embedded SKILL.md
   SKILL.md       # playbook + examples + limits
-  spec_test.go
-  validate_test.go
-  tool_test.go
+  visualize_test.go
+  fixtures_test.go
 ```
 
 No external chart library. No network. No filesystem. The kernel only touches
@@ -746,14 +746,14 @@ inline `#[cfg(test)]` modules.
 
 ### Phase 0 — Freeze the contract
 
-- [ ] Add `VisualPart` and `ToolResult.visual` to `proto/console/v1/message.proto`.
-- [ ] Regenerate with `make proto`.
-- [ ] Add `proto/testdata/visual/line.json` and `dashboard.json` (metric + table +
+- [x] Add `VisualPart` and `ToolResult.visual` to `proto/console/v1/message.proto`.
+- [x] Regenerate with `make proto`.
+- [x] Add `proto/testdata/visual/line.json` and `dashboard.json` (metric + table +
       text).
-- [ ] Add `proto/testdata/message/toolresult_visual.json` and
+- [x] Add `proto/testdata/message/toolresult_visual.json` and
       `proto/testdata/event/tool_execution_result_visual.json`.
-- [ ] Add `/visualize` to `proto/testdata/assist/commands.json`.
-- [ ] Write the v1 rules in this plan and mirror the grammar in `SKILL.md`.
+- [x] Add `/visualize` to `proto/testdata/assist/commands.json`.
+- [x] Write the v1 rules in this plan and mirror the grammar in `SKILL.md`.
 
 **Verify:** `make proto`; the tool-result fixtures parse as protojson; the raw
 spec fixtures round-trip through the Go decoder. Android/Rust fixture tests are
@@ -761,16 +761,19 @@ still pending until Phase 2/3.
 
 ### Phase 1 — Server kernel, tool, activation
 
-- [ ] Build `internal/services/visualize` (spec, decode, validate, normalize,
+- [x] Build `internal/services/visualize` (spec, decode, validate, normalize,
       summary, tool, invoke, skill).
-- [ ] Add `tools.VisualArtifact`, `Envelope.Visual`, `ToolResult.Visual`, and the
+- [x] Add `tools.VisualArtifact`, `Envelope.Visual`, `ToolResult.Visual`, and the
       executor copy-through.
-- [ ] Plumb persistence (`agent/loop/proto.go`) and live wire (`run/wire.go`).
-- [ ] Add `run/visualize.go` and wire `run/turns.go` + `run/service.go`.
-- [ ] Add the builtin autocomplete entry in `routes/assist.go`.
-- [ ] Add Go tests for valid specs, limits, errors, canonical output, narrow
+- [x] Plumb persistence (`agent/loop/proto.go`) and live wire (`run/wire.go`).
+- [x] Add `run/visualize.go` and wire `run/turns.go` + `run/service.go`.
+- [x] Add the builtin autocomplete entry in `routes/assist.go`.
+- [x] Add Go tests for valid specs, limits, errors, canonical output, narrow
       command parsing, and the artifact surviving proto round-trip.
-- [ ] Keep `visualize` out of the subagent tool source.
+- [x] Add the end-to-end run test (`tests/agent/visualize_run_test.go`): the
+      command activates the tool, the live event and the persisted row carry
+      the artifact, and the provider only sees the summary.
+- [x] Keep `visualize` out of the subagent tool source.
 
 **Verify:**
 
@@ -778,6 +781,7 @@ still pending until Phase 2/3.
 cd apps/server-go && go test ./internal/services/visualize/ -v
 cd apps/server-go && go test ./internal/run/ -run 'Visualize' -v
 cd apps/server-go && go test ./internal/agent/loop/ -run 'Visual' -v
+cd apps/server-go && go test ./tests/agent/ -run 'TestVisualize' -v
 ```
 
 ### Phase 2 — Android renderer
@@ -790,7 +794,7 @@ cd apps/server-go && go test ./internal/agent/loop/ -run 'Visual' -v
 - [ ] Add the `VisualSeries` palette to `ThemeNew`.
 - [ ] Add `VisualFixtureTest` decoding the shared fixtures and testing scale/tick
       edge cases (flat series, negative values, single point, 2,000 points).
-- [ ] Update `AssistFixtureTest` for the new command count.
+- [x] Update `AssistFixtureTest` for the new command count.
 
 **Verify:**
 
@@ -841,6 +845,7 @@ Manual: same matrix as Android, plus window resize and light theme.
 | Persistence | Proto round-trip keeps `Visual` and leaves `Content` unchanged. |
 | Live wire | Fixture decode of `toolExecutionResult` with a visual. |
 | Provider isolation | Test that the provider-facing `Content` is the short summary; the spec is on `Visual` only. |
+| End to end | `tests/agent/visualize_run_test.go`: the command activates the tool, the live event and the persisted row carry the artifact, and a session without the command never sees the tool. |
 | Android decode | `VisualFixtureTest` against shared fixtures. |
 | Android paint | Manual 2,000-point/30-row scroll; `assembleDebug`. |
 | Desktop decode | `console-core` / `console-proto` fixture tests. |

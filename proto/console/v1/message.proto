@@ -99,11 +99,21 @@ message AgentAssistantMessage {
   optional double tok_per_sec = 4;
 }
 
+// VisualPart is a client-rendered artifact attached to a tool result. It is
+// never sent to a model provider: the provider-facing side is ToolResult's
+// content summary. The spec is canonical UTF-8 JSON (base64 on the wire),
+// versioned independently so a new block type does not regenerate clients.
+message VisualPart {
+  uint32 version = 1;
+  bytes spec = 2;
+}
+
 message ToolResult {
   string tool_call_id = 1;
   optional string tool_name = 2;
   bytes content = 3;
   optional bool is_error = 4;
+  optional VisualPart visual = 5;
   // Note: the loop's echoed call args are dropped here — they already live
   // in the assistant turn's toolCall part, and no client reads them.
 }

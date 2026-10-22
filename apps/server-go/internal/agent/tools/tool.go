@@ -29,6 +29,14 @@ type ToolCall struct {
 	ThoughtSignature string `json:"thoughtSignature,omitempty"`
 }
 
+// VisualArtifact is a client-rendered artifact attached to a tool result. It
+// is not part of the provider-facing content: providers keep reading Content,
+// while the wire and persisted transcript carry the spec to the clients.
+type VisualArtifact struct {
+	Version uint32          `json:"version"`
+	Spec    json.RawMessage `json:"spec"`
+}
+
 // ToolResult is the outcome sent back to the model.
 type ToolResult struct {
 	ToolCallID string          `json:"toolCallId"`
@@ -36,6 +44,7 @@ type ToolResult struct {
 	Content    any             `json:"content"`
 	IsError    bool            `json:"isError,omitempty"`
 	Args       json.RawMessage `json:"args,omitempty"`
+	Visual     *VisualArtifact `json:"visual,omitempty"`
 }
 
 // ToolError signals a tool failure back to the harness (result carries it
@@ -58,6 +67,9 @@ func NewToolError(format string, args ...any) error {
 type Envelope struct {
 	Content any
 	IsError bool
+	// Visual is a client-rendered artifact carried alongside Content. Content
+	// remains the only part a provider sees.
+	Visual *VisualArtifact
 }
 
 // Tool is the agent-callable unit. Schema() is derived from the input

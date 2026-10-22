@@ -23,6 +23,10 @@ const (
 	// nothing until the user actually invokes it (see SplitInvocation).
 	computerUseCommandName        = "computer-use"
 	computerUseCommandDescription = "Drive the computer: read app windows and operate them with keyboard and mouse"
+	// visualizeCommandName is the chat command that activates the native
+	// visual tool. Like computer-use, the model learns nothing until invoked.
+	visualizeCommandName        = "visualize"
+	visualizeCommandDescription = "Render a chart, table, or metric card in the chat"
 )
 
 func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
@@ -31,6 +35,7 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 		commands := []*consolev1.SlashCommandInfo{
 			{Name: initCommandName, Description: initCommandDescription, Builtin: true},
 			{Name: computerUseCommandName, Description: computerUseCommandDescription, Builtin: true},
+			{Name: visualizeCommandName, Description: visualizeCommandDescription, Builtin: true},
 		}
 		for _, skill := range skills.Discover(cwd) {
 			commands = append(commands, &consolev1.SlashCommandInfo{

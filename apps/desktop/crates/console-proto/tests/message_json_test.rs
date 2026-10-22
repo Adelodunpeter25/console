@@ -67,6 +67,27 @@ fn decodes_golden_toolresult_fixture() {
 }
 
 #[test]
+fn decodes_golden_visual_toolresult_fixture() {
+    let msg: AgentMessage =
+        serde_json::from_str(fixture("toolresult_visual.json").trim()).expect("decode visual toolresult");
+    match msg.message {
+        Some(MessageEvent::ToolResult(t)) => {
+            assert_eq!(t.results.len(), 1);
+            let result = &t.results[0];
+            assert_eq!(result.tool_name.as_deref(), Some("visualize"));
+            let visual = result.visual.as_ref().expect("visual part");
+            assert_eq!(visual.version, 1);
+            let spec: serde_json::Value =
+                serde_json::from_slice(&visual.spec).expect("visual spec json");
+            assert_eq!(spec["version"], 1);
+            assert_eq!(spec["title"], "Weekly signups");
+            assert_eq!(spec["blocks"][0]["type"], "chart");
+        }
+        _ => panic!("wrong variant"),
+    }
+}
+
+#[test]
 fn ignores_unknown_fields() {
     let msg: AgentMessage = serde_json::from_str(
         r#"{"user":{"content":"x","annotations":[{"id":"a"}]},"futureField":1}"#,

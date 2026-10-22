@@ -31,14 +31,16 @@ class AssistFixtureTest {
     @Test
     fun decodesGoldenCommandsFixture() {
         val cmds = listAdapter.fromJson(fixture("commands.json"))!!
-        assertEquals(3, cmds.size)
+        assertEquals(4, cmds.size)
         assertEquals("init", cmds[0].name)
         assertTrue(cmds[0].builtin)
         assertEquals("computer-use", cmds[1].name)
         assertTrue(cmds[1].builtin)
+        assertEquals("visualize", cmds[2].name)
+        assertTrue(cmds[2].builtin)
         // A discovered skill omits `builtin` on the wire and reads as false.
-        assertEquals("find-skills", cmds[2].name)
-        assertFalse(cmds[2].builtin)
+        assertEquals("find-skills", cmds[3].name)
+        assertFalse(cmds[3].builtin)
     }
 
     @Test

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "title": "Weekly signups",
+  "subtitle": "Last 8 weeks",
+  "blocks": [
+    {
+      "type": "chart",
+      "kind": "line",
+      "title": "Signups by week",
+      "xLabel": "Week",
+      "yLabel": "Users",
+      "series": [
+        {
+          "name": "This quarter",
+          "points": [
+            { "x": 0, "y": 120, "label": "W1" },
+            { "x": 1, "y": 184, "label": "W2" },
+            { "x": 2, "y": 164, "label": "W3" }
+          ]
+        }
+      ]
+    }
+  ]
+}

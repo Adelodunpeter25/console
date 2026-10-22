@@ -212,6 +212,12 @@ func toolResultsToProto(results []tools.ToolResult) ([]*consolev1.ToolResult, er
 		if r.IsError {
 			item.IsError = &r.IsError
 		}
+		if r.Visual != nil {
+			item.Visual = &consolev1.VisualPart{
+				Version: r.Visual.Version,
+				Spec:    append([]byte(nil), r.Visual.Spec...),
+			}
+		}
 		out = append(out, item)
 	}
 	return out, nil
@@ -323,9 +329,18 @@ func protoToToolResults(items []*consolev1.ToolResult) ([]tools.ToolResult, erro
 				return nil, fmt.Errorf("tool result content: %w", err)
 			}
 		}
+		var visual *tools.VisualArtifact
+		if v := r.GetVisual(); v != nil && v.GetVersion() > 0 && json.Valid(v.GetSpec()) {
+			// A corrupt visual must not take the whole transcript row down:
+			// keep the summary content and drop the artifact.
+			visual = &tools.VisualArtifact{
+				Version: v.GetVersion(),
+				Spec:    append([]byte(nil), v.GetSpec()...),
+			}
+		}
 		out = append(out, tools.ToolResult{
 			ToolCallID: r.GetToolCallId(), ToolName: r.GetToolName(),
-			Content: content, IsError: r.GetIsError(),
+			Content: content, IsError: r.GetIsError(), Visual: visual,
 		})
 	}
 	return out, nil

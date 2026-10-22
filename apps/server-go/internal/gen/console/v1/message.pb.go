@@ -784,19 +784,76 @@ func (x *AgentAssistantMessage) GetTokPerSec() float64 {
 	return 0
 }
 
+// VisualPart is a client-rendered artifact attached to a tool result. It is
+// never sent to a model provider: the provider-facing side is ToolResult's
+// content summary. The spec is canonical UTF-8 JSON (base64 on the wire),
+// versioned independently so a new block type does not regenerate clients.
+type VisualPart struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       uint32                 `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
+	Spec          []byte                 `protobuf:"bytes,2,opt,name=spec,proto3" json:"spec,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VisualPart) Reset() {
+	*x = VisualPart{}
+	mi := &file_console_v1_message_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VisualPart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VisualPart) ProtoMessage() {}
+
+func (x *VisualPart) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_message_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VisualPart.ProtoReflect.Descriptor instead.
+func (*VisualPart) Descriptor() ([]byte, []int) {
+	return file_console_v1_message_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *VisualPart) GetVersion() uint32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *VisualPart) GetSpec() []byte {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
 type ToolResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ToolCallId    string                 `protobuf:"bytes,1,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
 	ToolName      *string                `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3,oneof" json:"tool_name,omitempty"`
 	Content       []byte                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
 	IsError       *bool                  `protobuf:"varint,4,opt,name=is_error,json=isError,proto3,oneof" json:"is_error,omitempty"`
+	Visual        *VisualPart            `protobuf:"bytes,5,opt,name=visual,proto3,oneof" json:"visual,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolResult) Reset() {
 	*x = ToolResult{}
-	mi := &file_console_v1_message_proto_msgTypes[10]
+	mi := &file_console_v1_message_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -808,7 +865,7 @@ func (x *ToolResult) String() string {
 func (*ToolResult) ProtoMessage() {}
 
 func (x *ToolResult) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_message_proto_msgTypes[10]
+	mi := &file_console_v1_message_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -821,7 +878,7 @@ func (x *ToolResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResult.ProtoReflect.Descriptor instead.
 func (*ToolResult) Descriptor() ([]byte, []int) {
-	return file_console_v1_message_proto_rawDescGZIP(), []int{10}
+	return file_console_v1_message_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ToolResult) GetToolCallId() string {
@@ -852,6 +909,13 @@ func (x *ToolResult) GetIsError() bool {
 	return false
 }
 
+func (x *ToolResult) GetVisual() *VisualPart {
+	if x != nil {
+		return x.Visual
+	}
+	return nil
+}
+
 type AgentToolResultMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Results       []*ToolResult          `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
@@ -861,7 +925,7 @@ type AgentToolResultMessage struct {
 
 func (x *AgentToolResultMessage) Reset() {
 	*x = AgentToolResultMessage{}
-	mi := &file_console_v1_message_proto_msgTypes[11]
+	mi := &file_console_v1_message_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +937,7 @@ func (x *AgentToolResultMessage) String() string {
 func (*AgentToolResultMessage) ProtoMessage() {}
 
 func (x *AgentToolResultMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_message_proto_msgTypes[11]
+	mi := &file_console_v1_message_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +950,7 @@ func (x *AgentToolResultMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentToolResultMessage.ProtoReflect.Descriptor instead.
 func (*AgentToolResultMessage) Descriptor() ([]byte, []int) {
-	return file_console_v1_message_proto_rawDescGZIP(), []int{11}
+	return file_console_v1_message_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AgentToolResultMessage) GetResults() []*ToolResult {
@@ -913,7 +977,7 @@ type AgentMessage struct {
 
 func (x *AgentMessage) Reset() {
 	*x = AgentMessage{}
-	mi := &file_console_v1_message_proto_msgTypes[12]
+	mi := &file_console_v1_message_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -925,7 +989,7 @@ func (x *AgentMessage) String() string {
 func (*AgentMessage) ProtoMessage() {}
 
 func (x *AgentMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_message_proto_msgTypes[12]
+	mi := &file_console_v1_message_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -938,7 +1002,7 @@ func (x *AgentMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentMessage.ProtoReflect.Descriptor instead.
 func (*AgentMessage) Descriptor() ([]byte, []int) {
-	return file_console_v1_message_proto_rawDescGZIP(), []int{12}
+	return file_console_v1_message_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AgentMessage) GetMessage() isAgentMessage_Message {
@@ -1087,17 +1151,23 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\vstop_reason\x18\x03 \x01(\tR\n" +
 	"stopReason\x12#\n" +
 	"\vtok_per_sec\x18\x04 \x01(\x01H\x00R\ttokPerSec\x88\x01\x01B\x0e\n" +
-	"\f_tok_per_sec\"\xa5\x01\n" +
+	"\f_tok_per_sec\":\n" +
+	"\n" +
+	"VisualPart\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\rR\aversion\x12\x12\n" +
+	"\x04spec\x18\x02 \x01(\fR\x04spec\"\xe5\x01\n" +
 	"\n" +
 	"ToolResult\x12 \n" +
 	"\ftool_call_id\x18\x01 \x01(\tR\n" +
 	"toolCallId\x12 \n" +
 	"\ttool_name\x18\x02 \x01(\tH\x00R\btoolName\x88\x01\x01\x12\x18\n" +
 	"\acontent\x18\x03 \x01(\fR\acontent\x12\x1e\n" +
-	"\bis_error\x18\x04 \x01(\bH\x01R\aisError\x88\x01\x01B\f\n" +
+	"\bis_error\x18\x04 \x01(\bH\x01R\aisError\x88\x01\x01\x123\n" +
+	"\x06visual\x18\x05 \x01(\v2\x16.console.v1.VisualPartH\x02R\x06visual\x88\x01\x01B\f\n" +
 	"\n" +
 	"_tool_nameB\v\n" +
-	"\t_is_error\"J\n" +
+	"\t_is_errorB\t\n" +
+	"\a_visual\"J\n" +
 	"\x16AgentToolResultMessage\x120\n" +
 	"\aresults\x18\x01 \x03(\v2\x16.console.v1.ToolResultR\aresults\"\xa6\x02\n" +
 	"\fAgentMessage\x122\n" +
@@ -1124,7 +1194,7 @@ func file_console_v1_message_proto_rawDescGZIP() []byte {
 	return file_console_v1_message_proto_rawDescData
 }
 
-var file_console_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_console_v1_message_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_console_v1_message_proto_goTypes = []any{
 	(*ImageAttachment)(nil),        // 0: console.v1.ImageAttachment
 	(*BrowserAnnotationRect)(nil),  // 1: console.v1.BrowserAnnotationRect
@@ -1136,14 +1206,15 @@ var file_console_v1_message_proto_goTypes = []any{
 	(*ImagePart)(nil),              // 7: console.v1.ImagePart
 	(*AssistantContentPart)(nil),   // 8: console.v1.AssistantContentPart
 	(*AgentAssistantMessage)(nil),  // 9: console.v1.AgentAssistantMessage
-	(*ToolResult)(nil),             // 10: console.v1.ToolResult
-	(*AgentToolResultMessage)(nil), // 11: console.v1.AgentToolResultMessage
-	(*AgentMessage)(nil),           // 12: console.v1.AgentMessage
-	nil,                            // 13: console.v1.BrowserAnnotation.ComputedStylesEntry
+	(*VisualPart)(nil),             // 10: console.v1.VisualPart
+	(*ToolResult)(nil),             // 11: console.v1.ToolResult
+	(*AgentToolResultMessage)(nil), // 12: console.v1.AgentToolResultMessage
+	(*AgentMessage)(nil),           // 13: console.v1.AgentMessage
+	nil,                            // 14: console.v1.BrowserAnnotation.ComputedStylesEntry
 }
 var file_console_v1_message_proto_depIdxs = []int32{
 	1,  // 0: console.v1.BrowserAnnotation.dimensions:type_name -> console.v1.BrowserAnnotationRect
-	13, // 1: console.v1.BrowserAnnotation.computed_styles:type_name -> console.v1.BrowserAnnotation.ComputedStylesEntry
+	14, // 1: console.v1.BrowserAnnotation.computed_styles:type_name -> console.v1.BrowserAnnotation.ComputedStylesEntry
 	0,  // 2: console.v1.AgentUserMessage.attachments:type_name -> console.v1.ImageAttachment
 	2,  // 3: console.v1.AgentUserMessage.annotations:type_name -> console.v1.BrowserAnnotation
 	4,  // 4: console.v1.AssistantContentPart.text:type_name -> console.v1.TextPart
@@ -1151,15 +1222,16 @@ var file_console_v1_message_proto_depIdxs = []int32{
 	6,  // 6: console.v1.AssistantContentPart.tool_call:type_name -> console.v1.ToolCall
 	7,  // 7: console.v1.AssistantContentPart.image:type_name -> console.v1.ImagePart
 	8,  // 8: console.v1.AgentAssistantMessage.content:type_name -> console.v1.AssistantContentPart
-	10, // 9: console.v1.AgentToolResultMessage.results:type_name -> console.v1.ToolResult
-	3,  // 10: console.v1.AgentMessage.user:type_name -> console.v1.AgentUserMessage
-	9,  // 11: console.v1.AgentMessage.assistant:type_name -> console.v1.AgentAssistantMessage
-	11, // 12: console.v1.AgentMessage.tool_result:type_name -> console.v1.AgentToolResultMessage
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	10, // 9: console.v1.ToolResult.visual:type_name -> console.v1.VisualPart
+	11, // 10: console.v1.AgentToolResultMessage.results:type_name -> console.v1.ToolResult
+	3,  // 11: console.v1.AgentMessage.user:type_name -> console.v1.AgentUserMessage
+	9,  // 12: console.v1.AgentMessage.assistant:type_name -> console.v1.AgentAssistantMessage
+	12, // 13: console.v1.AgentMessage.tool_result:type_name -> console.v1.AgentToolResultMessage
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_message_proto_init() }
@@ -1177,8 +1249,8 @@ func file_console_v1_message_proto_init() {
 		(*AssistantContentPart_Image)(nil),
 	}
 	file_console_v1_message_proto_msgTypes[9].OneofWrappers = []any{}
-	file_console_v1_message_proto_msgTypes[10].OneofWrappers = []any{}
-	file_console_v1_message_proto_msgTypes[12].OneofWrappers = []any{
+	file_console_v1_message_proto_msgTypes[11].OneofWrappers = []any{}
+	file_console_v1_message_proto_msgTypes[13].OneofWrappers = []any{
 		(*AgentMessage_User)(nil),
 		(*AgentMessage_Assistant)(nil),
 		(*AgentMessage_ToolResult)(nil),
@@ -1189,7 +1261,7 @@ func file_console_v1_message_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_message_proto_rawDesc), len(file_console_v1_message_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

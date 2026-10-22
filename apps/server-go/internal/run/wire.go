@@ -122,6 +122,12 @@ func toolResultToProto(r tools.ToolResult) *consolev1.ToolResult {
 	if r.IsError {
 		out.IsError = &r.IsError
 	}
+	if r.Visual != nil {
+		out.Visual = &consolev1.VisualPart{
+			Version: r.Visual.Version,
+			Spec:    append([]byte(nil), r.Visual.Spec...),
+		}
+	}
 	return out
 }
 

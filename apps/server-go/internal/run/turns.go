@@ -20,6 +20,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -228,6 +229,18 @@ func replaceTool(list []tools.Tool, name string, replacement tools.Tool) []tools
 	return out
 }
 
+// withoutTool filters one named tool from a list. Used for tools a nested
+// subagent must not inherit even when the parent run has activated them.
+func withoutTool(list []tools.Tool, name string) []tools.Tool {
+	out := make([]tools.Tool, 0, len(list))
+	for _, t := range list {
+		if t.Name() != name {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // runOneTurn builds the agent for one prompt and pumps its events to the
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
@@ -262,6 +275,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// in setup instead (sent every turn, never saved).
 	if _, computerInvoked := cua.SplitInvocation(dto.Text); computerInvoked {
 		s.computerUse.mark(sessionID)
+	}
+	// /visualize activates the visual tool the same way. The command text is
+	// left untouched; the grammar and examples travel in setup.
+	if _, visualizeInvoked := visualize.SplitInvocation(dto.Text); visualizeInvoked {
+		s.visualize.mark(sessionID)
 	}
 
 	providerID := dto.Provider
@@ -415,6 +433,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if s.computerUse.isActive(sessionID) {
 		setup = strings.TrimSpace(setup + "\n\n" + cua.SkillText())
 	}
+	if s.visualize.isActive(sessionID) {
+		setup = strings.TrimSpace(setup + "\n\n" + visualize.SkillText())
+	}
 	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
@@ -422,7 +443,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		Tools:    toolList,
 		// Subagents start from the parent's current tools, so MCP groups the
 		// parent already loaded carry over, and get their own loadTools.
-		ToolSource: func() []tools.Tool { return registry.Tools() },
+		// Visualize is excluded: a subagent transcript is folded into a
+		// summary, so a visual made there would have no card to render into.
+		ToolSource: func() []tools.Tool { return withoutTool(registry.Tools(), "visualize") },
 		NestedTools: func(nested *tools.Registry) {
 			if mcpManager != nil {
 				if lt := mcp.NewLoadToolsTool(mcpManager, nested); lt != nil {
@@ -469,6 +492,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		loader := cua.NewLoader(s.cuaManager, sessionID)
 		if _, err := loader.Load(registry); err != nil {
 			user.Content += "\n\nComputer use is unavailable: " + err.Error()
+		}
+	}
+	// Visualize restores the same way, appended after MCP/CUA so the cached
+	// tool prefix stays stable. The tool is stateless, so it cannot fail to
+	// load.
+	if s.visualize.isActive(sessionID) {
+		if _, err := visualize.NewLoader(sessionID).Load(registry); err != nil {
+			user.Content += "\n\nVisualize is unavailable: " + err.Error()
 		}
 	}
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
