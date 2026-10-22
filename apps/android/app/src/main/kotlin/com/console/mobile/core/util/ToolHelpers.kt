@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Book
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
+import io.github.lyxnx.compose.ui.tablericons.outline.ChartBar
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePencil
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePlus
 import io.github.lyxnx.compose.ui.tablericons.outline.FileText
@@ -46,6 +47,7 @@ val TOOL_LABELS: Map<String, String> = mapOf(
     "webFetch" to "Fetch URL", "fetch" to "Fetch URL",
     "webSearch" to "Web Search", "web_search" to "Web Search",
     "browser" to "Browser",
+    "visualize" to "Visualize",
     "subagent" to "Subagent",
     "ask" to "Ask Question", "askMany" to "Ask Questions", "todo" to "Todo",
     "memory" to "Memory", "readSkill" to "Read Skill",
@@ -88,6 +90,7 @@ val TOOL_ICONS: Map<String, ImageVector> = mapOf(
     "list_dir" to TablerIcons.Outline.FolderOpen, "listDir" to TablerIcons.Outline.FolderOpen, "ls" to TablerIcons.Outline.FolderOpen,
     "webFetch" to TablerIcons.Outline.Globe, "fetch" to TablerIcons.Outline.Globe,
     "webSearch" to TablerIcons.Outline.Globe, "web_search" to TablerIcons.Outline.Globe, "browser" to TablerIcons.Outline.Globe,
+    "visualize" to TablerIcons.Outline.ChartBar,
     "subagent" to TablerIcons.Outline.Users,
     "ask" to TablerIcons.Outline.HelpCircle, "askMany" to TablerIcons.Outline.Messages, "todo" to TablerIcons.Outline.ListCheck,
     "memory" to TablerIcons.Outline.Brain, "readSkill" to TablerIcons.Outline.Book,
