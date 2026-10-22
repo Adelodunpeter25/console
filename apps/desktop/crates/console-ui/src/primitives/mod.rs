@@ -124,6 +124,7 @@ pub fn activity_icon(tool_name: &str) -> &'static str {
         "list_files" | "list_dir" | "listDir" | "ls" => IconName::Folder,
         "search_files" | "grep" | "glob" | "find" | "findFile" | "find_file" => IconName::Search,
         "web_search" | "webSearch" | "browser" => IconName::Globe,
+        "visualize" => IconName::ChartColumn,
         "plan" => IconName::List,
         "memory" => IconName::MemoryStick,
         "loadTools" => IconName::Package,

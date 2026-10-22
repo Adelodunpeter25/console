@@ -6,6 +6,7 @@ pub mod message_bubble;
 pub mod thinking_block;
 pub mod toolcalls;
 pub mod transcript_view;
+pub mod visual;
 pub mod working_indicator;
 
 pub use console_core::{ActivityEvent, ToolCallEntry};

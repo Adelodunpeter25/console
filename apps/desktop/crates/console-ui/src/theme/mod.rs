@@ -65,6 +65,8 @@ pub struct Theme {
     pub accent: Hsla,
     pub resize_handle: Hsla,
     pub gauge: Hsla,
+    /// Chart series colors by index; visual specs never carry colors.
+    pub chart: [Hsla; 8],
 
     /// Text-selection wash.
     pub selection: Hsla,
@@ -130,6 +132,16 @@ impl Theme {
             accent: rgb(0xE2795B).into(),
             resize_handle: rgb(0x3B82F6).into(),
             gauge: rgb(0x3B82F6).into(),
+            chart: [
+                rgb(0xE2795B).into(),
+                rgb(0x3B82F6).into(),
+                rgb(0x62C987).into(),
+                rgb(0xE0B36A).into(),
+                rgb(0xB583E8).into(),
+                rgb(0x4FC3C7).into(),
+                rgb(0xE86FA6).into(),
+                rgb(0x9AA64B).into(),
+            ],
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.55),
             code_text: rgb(0xE0A882).into(),
@@ -182,6 +194,16 @@ impl Theme {
             accent: rgb(0xC85F44).into(),
             resize_handle: rgb(0x2563EB).into(),
             gauge: rgb(0x2563EB).into(),
+            chart: [
+                rgb(0xC85F44).into(),
+                rgb(0x2563EB).into(),
+                rgb(0x2F9E5B).into(),
+                rgb(0xB8862F).into(),
+                rgb(0x8B5CC6).into(),
+                rgb(0x1F9AA0).into(),
+                rgb(0xC8407F).into(),
+                rgb(0x6E7A2A).into(),
+            ],
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.35),
             code_text: rgb(0x9A5528).into(),

@@ -18,9 +18,11 @@ pub mod session;
 pub mod settings;
 pub mod terminal;
 pub mod usage;
+pub mod visual;
 pub mod workspace;
 
 pub use agent::*;
+pub use visual::*;
 pub use assist::*;
 pub use auth::*;
 pub use chat::*;

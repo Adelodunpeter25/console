@@ -1377,6 +1377,18 @@ fn transcript_row(
                 .when_some(
                     activity,
                     move |element, (entries, started_at, elapsed, working)| {
+                        // Visual artifacts render as their own item after the
+                        // run block, so folding the run never hides the card.
+                        let visuals: Vec<_> = entries
+                            .iter()
+                            .filter_map(|event| match event {
+                                ActivityEvent::ToolCall(entry) => entry
+                                    .result
+                                    .as_ref()
+                                    .and_then(|result| result.visual.clone()),
+                                _ => None,
+                            })
+                            .collect();
                         let activity = ToolCalls::new(
                             format!("run-{index}"),
                             entries,
@@ -1395,7 +1407,9 @@ fn transcript_row(
                                 });
                             }
                         });
-                        element.child(activity)
+                        element
+                            .child(activity)
+                            .children(visuals.into_iter().map(crate::chat::visual::VisualCard::new))
                     },
                 )
                 .into_any_element()

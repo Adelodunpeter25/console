@@ -200,6 +200,7 @@ impl ToolCalls {
             "fetch" => "Fetch URL".into(),
             "webSearch" | "web_search" => "Web Search".into(),
             "browser" => "Browser".into(),
+            "visualize" => "Visualize".into(),
             "subagent" => "Subagent".into(),
             "ask" => "Ask Question".into(),
             "todo" => "Todo".into(),

@@ -148,12 +148,7 @@ impl AgentMessage {
                 results: t
                     .results
                     .iter()
-                    .map(|r| ToolResult {
-                        tool_call_id: r.tool_call_id.clone(),
-                        tool_name: r.tool_name.clone(),
-                        content: decode_json_bytes(&r.content),
-                        is_error: r.is_error,
-                    })
+                    .map(ToolResult::from_proto)
                     .collect(),
                 created_at: msg.created_at,
             }),
@@ -290,6 +285,28 @@ pub struct ToolResult {
     pub content: serde_json::Value,
     #[serde(default)]
     pub is_error: Option<bool>,
+    /// Client-rendered artifact (chart/table/metric card). Never sent to a
+    /// model provider; a malformed spec decodes to `None`.
+    #[serde(default)]
+    pub visual: Option<VisualArtifact>,
+}
+
+/// A versioned visual spec riding on a tool result; the spec stays raw JSON
+/// until the renderer parses it (docs/plan/visualize.md).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VisualArtifact {
+    pub version: u32,
+    pub spec: serde_json::Value,
+}
+
+fn visual_from_proto(msg: &ProtoToolResult) -> Option<VisualArtifact> {
+    let v = msg.visual.as_ref()?;
+    let spec: serde_json::Value = serde_json::from_slice(&v.spec).ok()?;
+    Some(VisualArtifact {
+        version: v.version,
+        spec,
+    })
 }
 
 impl ToolResult {
@@ -301,6 +318,7 @@ impl ToolResult {
             tool_name: msg.tool_name.clone(),
             content: decode_json_bytes(&msg.content),
             is_error: msg.is_error,
+            visual: visual_from_proto(msg),
         }
     }
 }
