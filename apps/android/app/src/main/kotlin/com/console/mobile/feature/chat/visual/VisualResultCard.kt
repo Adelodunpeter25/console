@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,8 +46,13 @@ private fun VisualSurface(modifier: Modifier, content: @Composable () -> Unit) {
         color = NewTheme.Background,
         shape = RoundedCornerShape(12.dp),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            content()
+        // Selectable like the markdown around it: long-press and drag to copy
+        // titles, metrics, table cells, and chart legends. Chart tick numbers
+        // are painted on the canvas and stay unselectable.
+        SelectionContainer {
+            Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+            }
         }
     }
 }
