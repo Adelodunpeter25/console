@@ -1,7 +1,9 @@
 //! Address bar input resolution, display URL formatting, and search routing.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 static FAVICON_CACHE: OnceLock<Mutex<HashMap<String, Arc<gpui::Image>>>> = OnceLock::new();
 static FAVICON_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -17,6 +19,85 @@ fn favicon_in_flight() -> &'static Mutex<HashSet<String>> {
 
 fn favicon_failed() -> &'static Mutex<HashSet<String>> {
     FAVICON_FAILED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// How long a URL must stay on screen before anything is fetched for it. A URL
+/// still streaming in changes every few milliseconds, so this keeps every
+/// partial prefix from becoming a request.
+const SETTLE_DELAY: Duration = Duration::from_millis(400);
+
+static FIRST_SEEN: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
+
+/// True once `key` has been asked about for at least [`SETTLE_DELAY`].
+fn settled(key: &str) -> bool {
+    let Ok(mut seen) = FIRST_SEEN.get_or_init(|| Mutex::new(HashMap::new())).lock() else {
+        return false;
+    };
+    seen.entry(key.to_owned()).or_insert_with(Instant::now).elapsed() >= SETTLE_DELAY
+}
+
+static TITLE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+static TITLE_IN_FLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static TITLE_FAILED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static TITLE_GENERATION: AtomicUsize = AtomicUsize::new(0);
+
+/// Bumps whenever a title arrives, so cached text built before it can be
+/// rebuilt to show it.
+pub fn page_title_generation() -> usize {
+    TITLE_GENERATION.load(Ordering::Relaxed)
+}
+
+/// Where a page-title lookup stands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TitleState {
+    Ready(String),
+    /// Waiting to settle, or fetching; ask again on a later frame.
+    Loading,
+    /// No title will arrive; keep showing the URL.
+    Unavailable,
+}
+
+/// The title of a public web page, fetched in the background on first ask.
+pub fn page_title_state(url: &str) -> TitleState {
+    if favicon_host(url).is_none() {
+        return TitleState::Unavailable;
+    }
+    let cache = TITLE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(title) = cache.lock().ok().and_then(|c| c.get(url).cloned()) {
+        return TitleState::Ready(title);
+    }
+    let failed = TITLE_FAILED.get_or_init(|| Mutex::new(HashSet::new()));
+    if failed.lock().is_ok_and(|f| f.contains(url)) {
+        return TitleState::Unavailable;
+    }
+    if !settled(url) {
+        return TitleState::Loading;
+    }
+    let in_flight = TITLE_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new()));
+    let should_fetch = in_flight.lock().is_ok_and(|mut f| f.insert(url.to_owned()));
+    if should_fetch {
+        let url = url.to_owned();
+        tokio::spawn(async move {
+            let title = console_core::fetch_page_title(&url, Duration::from_secs(5)).await;
+            match title {
+                Some(title) => {
+                    if let Ok(mut cache) = TITLE_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+                        cache.insert(url.clone(), title);
+                    }
+                    TITLE_GENERATION.fetch_add(1, Ordering::Relaxed);
+                }
+                None => {
+                    if let Ok(mut failed) = TITLE_FAILED.get_or_init(|| Mutex::new(HashSet::new())).lock() {
+                        failed.insert(url.clone());
+                    }
+                }
+            }
+            if let Ok(mut f) = TITLE_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new())).lock() {
+                f.remove(&url);
+            }
+        });
+    }
+    TitleState::Loading
 }
 
 /// Where a favicon lookup stands.
@@ -69,6 +150,10 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
         .is_ok_and(|failed| failed.contains(&host))
     {
         return FaviconState::Unavailable;
+    }
+
+    if !settled(&host) {
+        return FaviconState::Loading;
     }
 
     let should_fetch = {

@@ -30,7 +30,7 @@ fn file_link_reserves_a_gap_and_a_file_icon() {
     let flat = flat(&[run("see ", None), run("src/lib.rs", Some("src/lib.rs"))]);
     assert_eq!(flat.icons.len(), 1);
     assert_eq!(flat.icons[0].kind, IconKind::File("src/lib.rs".into()));
-    assert_eq!(&flat.text[flat.icons[0].range.clone()], ICON_GAP.to_string());
+    assert_eq!(&flat.text[flat.icons[0].range.clone()], ICON_GAP);
     // The link covers the label only, never the gap.
     let (range, url) = &flat.links[0];
     assert_eq!(&flat.text[range.clone()], "src/lib.rs");

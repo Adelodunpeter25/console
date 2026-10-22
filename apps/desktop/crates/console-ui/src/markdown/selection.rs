@@ -18,8 +18,9 @@ use std::cell::RefCell;
 use std::ops::Range;
 use std::rc::Rc;
 
-/// Em space reserved in the shaped text where a link's inline icon is painted.
-pub const ICON_GAP: char = '\u{2003}';
+/// Space reserved in the shaped text where a link's inline icon is painted:
+/// an em space for the icon plus an en space of breathing room before the label.
+pub const ICON_GAP: &str = "\u{2003}\u{2002}";
 
 /// Stable identity for one painted text element. `row` scopes it to a
 /// transcript row so ids survive virtualized remounts; `index` orders elements

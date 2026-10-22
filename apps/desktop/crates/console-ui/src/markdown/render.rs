@@ -39,7 +39,9 @@ use super::selection::{
 };
 use super::veil::{RowVeil, apply_veil};
 use crate::primitives::tooltip::Tooltip;
-use crate::browser::{FaviconState, favicon_state};
+use crate::browser::{
+    FaviconState, TitleState, favicon_state, page_title_generation, page_title_state,
+};
 use crate::primitives::{IconName, app_icon, file_icon, file_icon_for_language, file_icon_for_path};
 use crate::theme::Theme;
 
@@ -237,6 +239,8 @@ pub struct IconSlot {
     pub kind: IconKind,
     /// Tint for the globe fallback.
     pub tint: Hsla,
+    /// The label is a bare URL whose page title is still pending.
+    pub wants_title: bool,
 }
 
 const ICON_SIZE: f32 = 11.0;
@@ -288,26 +292,41 @@ pub fn flatten(
         // The gap belongs to the run (and its code wash) but not the link,
         // so only the label is clickable.
         let mut gap = 0;
+        // A bare web URL shows its page title once it resolves.
+        let mut shown: &str = &run.text;
+        let mut wants_title = false;
+        let mut title = String::new();
         if let Some(url) = run.style.link.as_deref().filter(|url| *url != PENDING_LINK_URL) {
+            if is_http_url(url) && run.text == url {
+                match page_title_state(url) {
+                    TitleState::Ready(found) => {
+                        title = found;
+                        shown = &title;
+                    }
+                    TitleState::Loading => wants_title = true,
+                    TitleState::Unavailable => {}
+                }
+            }
             let continues = matches!(
                 links.last(),
                 Some((range, last)) if range.end == start && last == url
             );
             if !continues {
                 if let Some(kind) = link_icon_kind(url) {
-                    text.push(ICON_GAP);
-                    gap = ICON_GAP.len_utf8();
+                    text.push_str(ICON_GAP);
+                    gap = ICON_GAP.len();
                     icons.push(IconSlot {
                         range: start..start + gap,
                         kind,
                         tint: palette.tertiary,
+                        wants_title,
                     });
                 }
             }
         }
         let gap_start = start;
         start = text.len();
-        text.push_str(&run.text);
+        text.push_str(shown);
         let end = text.len();
 
         let mut run_font = font(if run.style.code {
@@ -348,7 +367,7 @@ pub fn flatten(
         // affordance is color + pointer cursor, not decoration.
         let is_link = run.style.link.is_some();
         out.push(TextRun {
-            len: gap + run.text.len(),
+            len: gap + shown.len(),
             font: run_font,
             color: if run.style.code {
                 palette.code_text
@@ -462,6 +481,9 @@ pub struct MarkdownView {
     /// a theme switch has to drop them or the transcript keeps painting the old
     /// palette.
     style: Cell<Option<(Palette, Metrics)>>,
+    /// Page-title generation the cached flats were built at; a new title
+    /// drops them so bare URLs are rebuilt with it.
+    titles: Cell<usize>,
     /// Per-element opacity spans for the live response. Text is committed to
     /// layout immediately; only these paint colors animate.
     veil: RefCell<RowVeil>,
@@ -486,6 +508,7 @@ impl MarkdownView {
             flats: RefCell::new(HashMap::new()),
             volatile_from: Cell::new(0),
             style: Cell::new(None),
+            titles: Cell::new(page_title_generation()),
             veil: RefCell::new(RowVeil::default()),
             copied_code_blocks: Rc::new(RefCell::new(HashMap::new())),
             streaming: Cell::new(false),
@@ -558,8 +581,10 @@ impl MarkdownView {
     /// Drop cached flats if the style they were built for no longer applies.
     fn sync_style(&self, palette: &Palette, metrics: &Metrics) {
         let current = (*palette, *metrics);
-        if self.style.get() != Some(current) {
+        let titles = page_title_generation();
+        if self.style.get() != Some(current) || self.titles.get() != titles {
             self.style.set(Some(current));
+            self.titles.set(titles);
             self.flats.borrow_mut().clear();
         }
     }
@@ -843,8 +868,16 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 else {
                     continue;
                 };
+                if slot.wants_title {
+                    // Keeps frames coming until the title lands (or fails).
+                    if let IconKind::Favicon(url) = &slot.kind {
+                        if page_title_state(url) == TitleState::Loading {
+                            window.request_animation_frame();
+                        }
+                    }
+                }
                 let origin = point(
-                    rect.left() + (rect.size.width - px(ICON_SIZE)) / 2.0,
+                    rect.left() + px(2.0),
                     rect.top() + (rect.size.height - px(ICON_SIZE)) / 2.0,
                 );
                 let mut element = icon_element(slot, window);

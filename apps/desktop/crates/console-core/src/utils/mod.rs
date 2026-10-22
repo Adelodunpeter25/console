@@ -1,6 +1,7 @@
 pub mod diff;
 pub mod file_kind;
 pub mod http_transport;
+mod page_title;
 pub mod pairing_url;
 pub mod server_auth_store;
 pub mod sse_reader;
@@ -13,6 +14,7 @@ pub use file_kind::{
     BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,
     file_kind_for_path, is_lock_file,
 };
+pub use page_title::{extract_html_title, fetch_page_title};
 pub use http_transport::{HttpTransport, decode_json_bytes, fetch_url_bytes, probe_backend};
 pub use pairing_url::{PairingUrl, host_port, parse_pairing_url, split_pairing_line};
 pub use server_auth_store::StoredServerAuth;
