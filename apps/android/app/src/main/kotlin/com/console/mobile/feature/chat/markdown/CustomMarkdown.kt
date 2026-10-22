@@ -42,6 +42,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
@@ -57,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
+import com.console.mobile.core.util.faviconHostOrNull
+import com.console.mobile.core.util.filePathOrNull
+import com.console.mobile.ui.components.Favicon
+import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
@@ -103,6 +109,7 @@ private fun MdBlockView(block: MdBlock, color: Color, size: TextUnit, lineHeight
         is MdBlock.Math -> Latex(block.expression, block.display)
         is MdBlock.Heading -> Text(
             block.text,
+            inlineContent = rememberInlineContent(block.text),
             color = NewTheme.TextPrimary,
             fontSize = when (block.level) {
                 1 -> 22.sp; 2 -> 19.sp; 3 -> 17.sp; 4 -> 16.sp; 5 -> 15.sp; else -> 14.sp
@@ -133,17 +140,7 @@ private fun MdBlockView(block: MdBlock, color: Color, size: TextUnit, lineHeight
 
 @Composable
 private fun MarkdownTextBlock(text: AnnotatedString, color: Color, size: TextUnit, lineHeight: TextUnit, gap: Dp) {
-    val inlineMath = remember(text) {
-        text.getStringAnnotations("latex", 0, text.length).associate { it.item to it.item }
-    }
-    val inlineContent = remember(inlineMath) {
-        inlineMath.keys.associateWith { expression ->
-            InlineTextContent(
-                placeholder = androidx.compose.ui.text.Placeholder(20.sp, 20.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.Center),
-                children = { Latex(expression, false) },
-            )
-        }
-    }
+    val inlineContent = rememberInlineContent(text)
     Text(
         text = text,
         color = color,
@@ -152,6 +149,39 @@ private fun MarkdownTextBlock(text: AnnotatedString, color: Color, size: TextUni
         inlineContent = inlineContent,
         modifier = Modifier.fillMaxWidth().padding(bottom = gap),
     )
+}
+
+/** Inline placeholders (latex, file icons, favicons) referenced by [text]. */
+@Composable
+private fun rememberInlineContent(text: AnnotatedString): Map<String, InlineTextContent> = remember(text) {
+    val out = HashMap<String, InlineTextContent>()
+    text.getStringAnnotations(TAG_LATEX, 0, text.length).forEach { a ->
+        out[a.item] = InlineTextContent(
+            Placeholder(20.sp, 20.sp, PlaceholderVerticalAlign.Center),
+            children = { Latex(a.item, false) },
+        )
+    }
+    text.getStringAnnotations(TAG_ICON, 0, text.length).forEach { a ->
+        val value = a.item.substringAfter(':')
+        out[a.item] = InlineTextContent(
+            Placeholder(15.sp, 15.sp, PlaceholderVerticalAlign.Center),
+            children = {
+                if (a.item.startsWith("file:")) FileIcon(filename = value, sizeDp = 14) else Favicon(host = value, sizeDp = 14)
+            },
+        )
+    }
+    out
+}
+
+private const val TAG_LATEX = "latex"
+private const val TAG_ICON = "icon"
+
+/** Icon placeholder + a space, so the label never touches it. */
+private fun AnnotatedString.Builder.appendIcon(kind: String, value: String) {
+    val id = "$kind:$value"
+    appendInlineContent(id, " ")
+    addStringAnnotation(TAG_ICON, id, length - 1, length)
+    append(' ')
 }
 
 @Composable
@@ -240,8 +270,10 @@ private fun TableView(block: MdBlock.Table) {
 private fun TableRowView(cells: List<AnnotatedString>, widths: List<Dp>, align: List<TableAlign>, header: Boolean) {
     Row(Modifier.height(IntrinsicSize.Min).background(if (header) NewTheme.Raised else Color.Transparent)) {
         widths.forEachIndexed { c, width ->
+            val cell = cells.getOrNull(c) ?: AnnotatedString("")
             Text(
-                cells.getOrNull(c) ?: AnnotatedString(""),
+                cell,
+                inlineContent = rememberInlineContent(cell),
                 color = NewTheme.TextPrimary,
                 fontSize = 13.sp,
                 fontWeight = if (header) FontWeight.SemiBold else null,
@@ -468,7 +500,17 @@ private fun trimEdges(nodes: List<ASTNode>): List<ASTNode> {
     return nodes.subList(start, end)
 }
 private inline fun AnnotatedString.Builder.styled(style: SpanStyle, block: () -> Unit) { pushStyle(style); block(); pop() }
-private inline fun AnnotatedString.Builder.link(url: String, block: () -> Unit) { if (url.isBlank()) block() else { pushLink(LinkAnnotation.Url(url, LINK_STYLES)); block(); pop() } }
+private inline fun AnnotatedString.Builder.link(url: String, block: () -> Unit) {
+    if (url.isBlank()) { block(); return }
+    // File paths get their file-type icon, web links the site favicon.
+    val host = faviconHostOrNull(url)
+    val path = if (host == null && !url.contains("://")) filePathOrNull(url) else null
+    when {
+        host != null -> appendIcon("favicon", host)
+        path != null -> appendIcon("file", path)
+    }
+    pushLink(LinkAnnotation.Url(url, LINK_STYLES)); block(); pop()
+}
 private fun withoutMarkers(nodes: List<ASTNode>): List<ASTNode> = nodes.filter { it.type != MarkdownTokenTypes.EMPH && it.type != GFMTokenTypes.TILDE }
 
 private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: String, refs: Map<String, String>, linked: Boolean) {
@@ -481,7 +523,10 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         MarkdownElementTypes.EMPH -> styled(ITALIC_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         MarkdownElementTypes.STRONG -> styled(BOLD_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
         GFMElementTypes.STRIKETHROUGH -> styled(STRIKE_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
-        MarkdownElementTypes.CODE_SPAN -> styled(CODE_SPAN) { n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }.forEach { append(src, it.startOffset, it.endOffset) } }
+        MarkdownElementTypes.CODE_SPAN -> {
+            if (!linked) filePathOrNull(n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }.joinToString("") { it.text(src) })?.let { appendIcon("file", it) }
+            styled(CODE_SPAN) { n.children.filter { it.type != MarkdownTokenTypes.BACKTICK }.forEach { append(src, it.startOffset, it.endOffset) } }
+        }
         MarkdownElementTypes.INLINE_LINK -> appendInlineLink(this, n, src, refs, linked)
         MarkdownElementTypes.FULL_REFERENCE_LINK, MarkdownElementTypes.SHORT_REFERENCE_LINK -> appendReferenceLink(this, n, src, refs, linked)
         MarkdownElementTypes.IMAGE -> imageInfo(n, src, refs)?.second?.let(::append)
@@ -490,7 +535,7 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
         GFMElementTypes.INLINE_MATH -> {
             val expression = n.text(src).removeSurrounding("$").trim()
             appendInlineContent(expression, " ")
-            addStringAnnotation("latex", expression, length - 1, length)
+            addStringAnnotation(TAG_LATEX, expression, length - 1, length)
         }
         else -> if (n.children.isEmpty()) append(formatMath(cleanHtml(n.text(src)))) else appendInline(n.children, src, refs, linked)
     }

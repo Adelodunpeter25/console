@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import io.github.lyxnx.compose.ui.tablericons.outline.Globe
 import coil3.svg.SvgDecoder
 import com.console.mobile.core.icons.getFileIconKey
 import com.console.mobile.core.icons.getLanguageIconKey
@@ -72,6 +73,34 @@ fun ProviderIcon(
             .build(),
         contentDescription = provider,
         contentScale = ContentScale.Fit,
+        modifier = modifier.size(sizeDp.dp),
+    )
+}
+
+/**
+ * Site favicon from Google's favicon service, with a globe while it loads and
+ * when the fetch fails (offline, or a host with no icon).
+ */
+@Composable
+fun Favicon(
+    host: String,
+    sizeDp: Int = 14,
+    modifier: Modifier = Modifier,
+) {
+    val fallback: @Composable () -> Unit = {
+        androidx.compose.material3.Icon(
+            io.github.lyxnx.compose.ui.tablericons.TablerIcons.Outline.Globe,
+            contentDescription = null,
+            tint = com.console.mobile.ui.theme.NewTheme.TextMuted,
+            modifier = Modifier.size(sizeDp.dp),
+        )
+    }
+    coil3.compose.SubcomposeAsyncImage(
+        model = com.console.mobile.core.util.faviconUrl(host),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        loading = { fallback() },
+        error = { fallback() },
         modifier = modifier.size(sizeDp.dp),
     )
 }
