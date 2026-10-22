@@ -14,7 +14,21 @@ actions!(console_app, [Quit]);
 
 /// Register the native application menu bar and its application-level actions.
 pub fn init(cx: &mut App) {
-    cx.on_action(|_: &Quit, cx| cx.quit());
+    cx.on_action(|_: &Quit, cx| {
+        if crate::window::any_agent_running(cx) {
+            if let Some(handle) = cx.active_window() {
+                handle
+                    .update(cx, |_, window, cx| {
+                        crate::window::confirm_then(window, cx, "Quit Console?", |_, cx| {
+                            cx.quit()
+                        });
+                    })
+                    .ok();
+                return;
+            }
+        }
+        cx.quit();
+    });
 
     // cmd-q — the standard macOS quit shortcut. Binding it here also gives
     // the "Quit" menu item its ⌘Q key equivalent (GPUI menu items derive

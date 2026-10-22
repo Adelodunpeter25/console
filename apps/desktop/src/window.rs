@@ -1,8 +1,9 @@
 use gpui::{
-    AnyWindowHandle, App, AppContext, Bounds, Pixels, TitlebarOptions, WeakEntity, WindowBounds,
-    WindowOptions, point, px,
+    AnyWindowHandle, App, AppContext, Bounds, Pixels, PromptLevel, TitlebarOptions, WeakEntity,
+    Window, WindowBounds, WindowOptions, point, px,
 };
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
@@ -149,6 +150,19 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
             let handle = window.window_handle();
             register_window(handle, app_view.downgrade());
+            let weak_app = app_view.downgrade();
+            let confirmed = Rc::new(Cell::new(false));
+            window.on_window_should_close(cx, move |window, cx| {
+                if confirmed.get() || !app_has_running_agent(&weak_app, cx) {
+                    return true;
+                }
+                let confirmed = confirmed.clone();
+                confirm_then(window, cx, "Close this window?", move |window, _| {
+                    confirmed.set(true);
+                    window.remove_window();
+                });
+                false
+            });
             cx.new(|cx| gpui_component::Root::new(app_view, window, cx))
         });
 
@@ -171,4 +185,42 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     } else {
         cx.defer(open);
     }
+}
+
+fn app_has_running_agent(app: &WeakEntity<ConsoleDesktopApp>, cx: &App) -> bool {
+    app.upgrade()
+        .is_some_and(|a| !a.read(cx).running_sessions_snapshot().is_empty())
+}
+
+/// True when any open workspace has an agent run in progress.
+pub fn any_agent_running(cx: &App) -> bool {
+    WORKSPACE_WINDOWS.with(|w| {
+        w.borrow()
+            .iter()
+            .any(|(_, app)| app_has_running_agent(app, cx))
+    })
+}
+
+/// Show a native confirmation dialog warning that an agent is running; runs
+/// `on_confirm` if the user picks the destructive option.
+pub fn confirm_then(
+    window: &mut Window,
+    cx: &mut App,
+    message: &str,
+    on_confirm: impl FnOnce(&mut Window, &mut App) + 'static,
+) {
+    let rx = window.prompt(
+        PromptLevel::Warning,
+        message,
+        Some("An agent is still running. Closing will stop its work."),
+        &["Close Anyway", "Cancel"],
+        cx,
+    );
+    window
+        .spawn(cx, async move |cx| {
+            if rx.await == Ok(0) {
+                cx.update(|window, cx| on_confirm(window, cx)).ok();
+            }
+        })
+        .detach();
 }
