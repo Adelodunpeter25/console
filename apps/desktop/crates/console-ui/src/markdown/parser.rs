@@ -679,12 +679,46 @@ fn linkify_bare_urls(pieces: Vec<InlinePiece>) -> Vec<InlinePiece> {
             // is preserved on the split runs so `https://` inside backticks
             // stays brownish yet becomes clickable.
             InlinePiece::Run(run) if run.style.link.is_none() => {
-                push_linkified_run(run, &mut linked);
+                match bare_file_name_link(&run) {
+                    Some(link) => linked.push(InlinePiece::Run(link)),
+                    None => push_linkified_run(run, &mut linked),
+                }
             }
             piece => linked.push(piece),
         }
     }
     linked
+}
+
+/// A backticked name with no directory (`README.md`, `Makefile`) as a file
+/// link. Only code spans qualify, and only names the icon set recognises, so
+/// `console.log` or `self.value` stay plain code.
+fn bare_file_name_link(run: &InlineRun) -> Option<InlineRun> {
+    if !run.style.code {
+        return None;
+    }
+    let name = run.text.trim();
+    if name.is_empty()
+        || name.len() > 100
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+' | ':'))
+    {
+        return None;
+    }
+    let recognised = super::file_links::is_known_bare_name(name)
+        || (super::file_links::is_file_link(name)
+            && crate::primitives::file_icon_for_path(super::file_links::strip_line_suffix(name))
+                != crate::primitives::FileTypeIcon::File.path());
+    if !recognised {
+        return None;
+    }
+    let mut style = run.style.clone();
+    style.link = Some(name.to_owned());
+    Some(InlineRun {
+        text: run.text.clone(),
+        style,
+    })
 }
 
 fn push_linkified_run(run: InlineRun, pieces: &mut Vec<InlinePiece>) {

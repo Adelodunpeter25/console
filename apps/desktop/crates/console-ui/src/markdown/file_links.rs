@@ -14,6 +14,28 @@ pub fn is_http_url(link: &str) -> bool {
             || (link.len() >= 8 && link[..8].eq_ignore_ascii_case("https://")))
 }
 
+/// Extensionless file names common enough to treat as files when they stand
+/// alone in backticks (`Makefile`, `LICENSE`).
+const KNOWN_BARE_NAMES: &[&str] = &[
+    "makefile",
+    "dockerfile",
+    "justfile",
+    "license",
+    "licence",
+    "gemfile",
+    "rakefile",
+    "procfile",
+    "brewfile",
+    "vagrantfile",
+    "codeowners",
+];
+
+/// True for an extensionless name from [`KNOWN_BARE_NAMES`].
+pub fn is_known_bare_name(name: &str) -> bool {
+    let name = strip_line_suffix(name.trim());
+    KNOWN_BARE_NAMES.iter().any(|known| name.eq_ignore_ascii_case(known))
+}
+
 /// True when `link` should open as a workspace file instead of a browser URL.
 /// Covers `file://` URLs plus anything that looks like a path with a file
 /// extension (bare linkified paths and `[label](path)` markdown destinations).
@@ -22,7 +44,7 @@ pub fn is_file_link(link: &str) -> bool {
     if link.is_empty() || is_http_url(link) {
         return false;
     }
-    if link.starts_with("file://") {
+    if link.starts_with("file://") || is_known_bare_name(link) {
         return true;
     }
     // Strip the :line:col suffix before checking for an extension.

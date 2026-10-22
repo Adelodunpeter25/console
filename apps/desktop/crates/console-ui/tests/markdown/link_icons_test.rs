@@ -65,3 +65,30 @@ fn plain_text_and_other_schemes_get_no_icon() {
     assert!(flat.icons.is_empty());
     assert!(!flat.text.contains(ICON_GAP));
 }
+
+#[test]
+fn backticked_names_without_a_directory_become_file_links() {
+    use console_ui::markdown::parser::{Block, parse};
+
+    fn collect(blocks: &[Block], links: &mut Vec<String>) {
+        for block in blocks {
+            match block {
+                Block::Paragraph { runs } => {
+                    links.extend(runs.iter().filter_map(|run| run.style.link.clone()));
+                }
+                Block::List { items, .. } => {
+                    for item in items {
+                        collect(&item.blocks, links);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let tree = parse("- `README.md`\n- `Makefile`\n- `console.log`\n- `1.2.3`\n");
+    let blocks: Vec<Block> = tree.blocks.into_iter().map(|top| top.block).collect();
+    let mut links = Vec::new();
+    collect(&blocks, &mut links);
+    assert_eq!(links, vec!["README.md".to_string(), "Makefile".to_string()]);
+}
