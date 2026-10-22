@@ -306,6 +306,7 @@ fun ChatScreen(
                         val runIdx = userRunMap[index]
                         if (runIdx != null && runIdx < runs.size) {
                             RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
+                            RunVisuals(runs[runIdx])
                         }
                     }
                     if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
@@ -315,6 +316,7 @@ fun ChatScreen(
                     } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
                         item(key = "unattached-run") {
                             RunActivity(activity = runs.last(), running = true, cwd = cwd)
+                            RunVisuals(runs.last())
                         }
                     }
                 }
