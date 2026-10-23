@@ -435,17 +435,20 @@ impl RunService {
         }
     }
 
-    /// Output of a detached shell. The server has no output stream, so
-    /// callers poll this while the shell is running.
-    pub async fn background_work_output(
+    /// Live output of a detached shell, pushed as the shell writes it. Each
+    /// frame is a delta; fold them with `BackgroundWorkOutput::apply_frame`.
+    /// The stream ends once the shell is no longer running.
+    pub async fn stream_background_work_output(
         &self,
         session_id: &str,
         work_id: &str,
-    ) -> Result<BackgroundWorkOutput> {
+    ) -> Result<
+        Pin<Box<dyn futures_util::Stream<Item = Result<BackgroundWorkOutputFrame>> + Send>>,
+    > {
         let url = self
             .transport
             .url(&format!(
-                "/api/sessions/{session_id}/background-work/{work_id}/output"
+                "/api/sessions/{session_id}/background-work/{work_id}/output/stream"
             ))
             .await;
         let resp = self
@@ -455,17 +458,14 @@ impl RunService {
             .headers(self.transport.build_headers().await)
             .send()
             .await
-            .context("Failed to read background work output")?;
-        let body: ApiResponse<BackgroundWorkOutput> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse background work output")?;
-        match (body.success, body.data) {
-            (true, Some(out)) => Ok(out),
-            _ => Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to read background work output".into()))),
+            .context("Failed to open background work output stream")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(anyhow!("Output stream failed with status {status}: {text}"));
         }
+        Ok(Box::pin(SseStreamReader::parse_typed_stream::<
+            BackgroundWorkOutputFrame,
+        >(resp)))
     }
 }

@@ -50,3 +50,22 @@ fn output_decodes_and_labels_status() {
         serde_json::from_str(r#"{"status":"killed","timedOut":true}"#).unwrap();
     assert_eq!(timed.status_label(), "Timed out");
 }
+
+#[test]
+fn stream_frames_accumulate_into_output() {
+    use console_core::types::BackgroundWorkOutputFrame;
+    let frame = |json: &str| -> BackgroundWorkOutputFrame { serde_json::from_str(json).unwrap() };
+
+    let mut out = BackgroundWorkOutput::default();
+    out.apply_frame(frame(r#"{"stdout":"one\n","nextCursor":4,"status":"running"}"#));
+    // stderr absent: keeps what it had; stdout appends.
+    out.apply_frame(frame(r#"{"stdout":"two\n","stderr":"warn","nextCursor":8,"status":"running"}"#));
+    out.apply_frame(frame(r#"{"stdout":"","nextCursor":8,"status":"exited","exitCode":0}"#));
+
+    assert_eq!(out.stdout, "one\ntwo\n");
+    assert_eq!(out.stderr, "warn");
+    assert_eq!(out.next_cursor, 8);
+    assert!(!out.is_running());
+    assert_eq!(out.status_label(), "Exited · code 0");
+    assert_eq!(out.combined(), "one\ntwo\nwarn");
+}

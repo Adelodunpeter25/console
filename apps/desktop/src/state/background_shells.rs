@@ -2,19 +2,18 @@
 //! `backgroundWork*` events and the session's work list, plus the Shells
 //! inspector tab's selected shell, output polling, and stop action.
 //!
-//! The server has no output stream for a detached shell, so the open output
-//! view polls `/background-work/:id/output` once a second while the shell
-//! runs and stops as soon as it settles.
+//! The open output view subscribes to the server's
+//! `/background-work/:id/output/stream` SSE feed: each frame is the new output
+//! since the last one, folded into the accumulated text. The feed ends when
+//! the shell settles, so there is nothing to poll or stop.
 
 use std::rc::Rc;
-use std::time::Duration;
 
 use console_core::{BackgroundWork, BackgroundWorkOutput};
+use futures_util::StreamExt;
 use gpui::Context;
 
 use super::ConsoleDesktopApp;
-
-const OUTPUT_POLL: Duration = Duration::from_millis(1000);
 
 /// What the Shells tab shows for one session.
 #[derive(Clone, Default)]
@@ -73,7 +72,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Open the Shells tab on one shell and start polling its output.
+    /// Open the Shells tab on one shell and subscribe to its output.
     pub(crate) fn select_shell(&mut self, session_id: String, work_id: String, cx: &mut Context<Self>) {
         self.shell_output = Some(ShellOutputState {
             work_id: work_id.clone(),
@@ -81,7 +80,7 @@ impl ConsoleDesktopApp {
             unavailable: false,
         });
         cx.notify();
-        self.poll_shell_output(session_id, work_id, cx);
+        self.stream_shell_output(session_id, work_id, cx);
     }
 
     /// Back to the shell list.
@@ -90,53 +89,57 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    fn poll_shell_output(&mut self, session_id: String, work_id: String, cx: &mut Context<Self>) {
+    fn stream_shell_output(&mut self, session_id: String, work_id: String, cx: &mut Context<Self>) {
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            loop {
-                let result = client
-                    .runs
-                    .background_work_output(&session_id, &work_id)
-                    .await;
-                let mut keep_polling = false;
-                let alive = cx
-                    .update(|cx| {
-                        let Some(app) = entity.upgrade() else {
+            let stream = client
+                .runs
+                .stream_background_work_output(&session_id, &work_id)
+                .await;
+            let mut stream = match stream {
+                Ok(stream) => stream,
+                Err(_) => {
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if let Some(state) = this.shell_output.as_mut() {
+                                    if state.work_id == work_id && state.output.is_none() {
+                                        state.unavailable = true;
+                                        cx.notify();
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    return;
+                }
+            };
+            while let Some(frame) = stream.next().await {
+                let Ok(frame) = frame else { break };
+                let still_open = cx.update(|cx| {
+                    let Some(app) = entity.upgrade() else {
+                        return false;
+                    };
+                    app.update(cx, |this, cx| {
+                        // Stop when the user left this shell or opened another.
+                        let Some(state) = this.shell_output.as_mut() else {
                             return false;
                         };
-                        app.update(cx, |this, cx| {
-                            // Stop when the user left this shell.
-                            let still_open = this
-                                .shell_output
-                                .as_ref()
-                                .is_some_and(|s| s.work_id == work_id);
-                            if !still_open {
-                                return false;
-                            }
-                            match &result {
-                                Ok(out) => {
-                                    keep_polling = out.is_running();
-                                    if let Some(state) = this.shell_output.as_mut() {
-                                        state.output = Some(out.clone());
-                                        state.unavailable = false;
-                                    }
-                                }
-                                Err(_) => {
-                                    if let Some(state) = this.shell_output.as_mut() {
-                                        if state.output.is_none() {
-                                            state.unavailable = true;
-                                        }
-                                    }
-                                }
-                            }
-                            cx.notify();
-                            true
-                        })
-                    });
-                if !alive || !keep_polling {
+                        if state.work_id != work_id {
+                            return false;
+                        }
+                        state
+                            .output
+                            .get_or_insert_with(BackgroundWorkOutput::default)
+                            .apply_frame(frame);
+                        state.unavailable = false;
+                        cx.notify();
+                        true
+                    })
+                });
+                if !still_open {
                     break;
                 }
-                cx.background_executor().timer(OUTPUT_POLL).await;
             }
         })
         .detach();

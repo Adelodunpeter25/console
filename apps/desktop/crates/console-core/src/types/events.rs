@@ -105,9 +105,46 @@ pub struct BackgroundWorkOutput {
     pub timed_out: bool,
 }
 
+/// One pushed frame of a shell's live output
+/// (`.../background-work/:workId/output/stream`). `stdout` is only what is new
+/// since the previous frame; `stderr` is present only when it changed.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundWorkOutputFrame {
+    #[serde(default)]
+    pub stdout: String,
+    #[serde(default)]
+    pub stderr: Option<String>,
+    #[serde(default)]
+    pub next_cursor: i64,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub timed_out: bool,
+}
+
 impl BackgroundWorkOutput {
     pub fn is_running(&self) -> bool {
         self.status == "running"
+    }
+
+    /// Fold one pushed frame into the accumulated output: new stdout is
+    /// appended, stderr is replaced when the frame carries it, and the status
+    /// fields always take the frame's values.
+    pub fn apply_frame(&mut self, frame: BackgroundWorkOutputFrame) {
+        self.stdout.push_str(&frame.stdout);
+        if let Some(stderr) = frame.stderr {
+            self.stderr = stderr;
+        }
+        self.next_cursor = frame.next_cursor;
+        self.truncated |= frame.truncated;
+        self.status = frame.status;
+        self.exit_code = frame.exit_code;
+        self.timed_out = frame.timed_out;
     }
 
     /// stdout followed by stderr, as one block of text.
