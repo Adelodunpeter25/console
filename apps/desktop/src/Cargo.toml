@@ -16,6 +16,7 @@ gpui = { workspace = true }
 gpui_macros = { workspace = true }
 gpui_platform = { workspace = true }
 console-core = { workspace = true }
+console-shared = { workspace = true }
 rust-embed = { workspace = true }
 console-ui = { workspace = true }
 syntax = { workspace = true }

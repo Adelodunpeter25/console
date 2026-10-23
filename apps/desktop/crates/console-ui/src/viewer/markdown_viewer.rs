@@ -9,7 +9,8 @@ use gpui::{
 };
 
 use crate::markdown::render::{
-    self, Ctx, MarkdownView, Metrics, Palette, TranscriptSelection, render_markdown_block,
+    self, Ctx, LinkHandler, MarkdownView, Metrics, Palette, TranscriptSelection,
+    render_markdown_block,
 };
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::theme::Theme;
@@ -21,6 +22,7 @@ pub struct MarkdownViewer {
     list_state: ListState,
     selection: Option<TranscriptSelection>,
     scrollbar_state: Option<Rc<ScrollbarState>>,
+    link_handler: Option<LinkHandler>,
 }
 
 impl MarkdownViewer {
@@ -35,11 +37,20 @@ impl MarkdownViewer {
             list_state,
             selection: None,
             scrollbar_state: None,
+            link_handler: None,
         }
     }
 
     pub fn selection(mut self, selection: TranscriptSelection) -> Self {
         self.selection = Some(selection);
+        self
+    }
+
+    /// Clicked-link routing (file paths → workspace tab, web → browser).
+    /// Without it links fall through to the OS URL opener, which rejects bare
+    /// file paths (macOS reports error -50).
+    pub fn link_handler(mut self, handler: LinkHandler) -> Self {
+        self.link_handler = Some(handler);
         self
     }
 
@@ -70,6 +81,7 @@ impl RenderOnce for MarkdownViewer {
 
         let view_rc = self.view.clone();
         let selection_for_list = selection.clone();
+        let link_handler = self.link_handler.clone();
         let scrollbar = self
             .scrollbar_state
             .as_ref()
@@ -109,6 +121,10 @@ impl RenderOnce for MarkdownViewer {
                         Metrics::BODY,
                         selection_for_list.clone(),
                     );
+                    let ctx = match &link_handler {
+                        Some(handler) => ctx.with_link_handler(handler.clone()),
+                        None => ctx,
+                    };
                     let view = view_rc.borrow();
                     if let Some(el) = render_markdown_block(&view, &ctx, block_ix) {
                         div()

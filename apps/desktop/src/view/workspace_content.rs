@@ -408,9 +408,30 @@ impl ConsoleDesktopApp {
                     let list_state =
                         self.viewer_list_state(&format!("md:{}", path), block_count, 60.0);
                     let scrollbar_state = self.viewer_scrollbar_state(&format!("md:{}", path));
+                    // Clicked links route like the transcript's: file paths open
+                    // as workspace tabs, web URLs open in the embedded browser.
+                    // Without a handler links fall through to the OS URL opener,
+                    // which rejects bare file paths (macOS error -50).
+                    let pane = pane_id.to_owned();
+                    let entity: gpui::WeakEntity<ConsoleDesktopApp> = cx.entity().downgrade();
+                    let link_handler: console_ui::markdown::render::LinkHandler =
+                        std::rc::Rc::new(move |url: &str, window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                if console_shared::markdown::file_links::is_http_url(url) {
+                                    app.update(cx, |this, cx| {
+                                        this.open_chat_url_in_browser(url.to_owned(), window, cx);
+                                    });
+                                } else if console_shared::markdown::file_links::is_file_link(url) {
+                                    app.update(cx, |this, cx| {
+                                        this.open_file_link(url.to_owned(), &pane.clone(), cx);
+                                    });
+                                }
+                            }
+                        });
                     return console_ui::MarkdownViewer::new(path.clone(), view, list_state)
                         .selection(selection)
                         .scrollbar_state(scrollbar_state)
+                        .link_handler(link_handler)
                         .into_any_element();
                 }
                 console_core::FileKind::Text => {
