@@ -9,6 +9,7 @@ pub mod composer;
 pub mod diff;
 pub mod file_kind;
 pub mod format;
+pub mod icons;
 pub mod markdown;
 pub mod page_title;
 pub mod pairing;

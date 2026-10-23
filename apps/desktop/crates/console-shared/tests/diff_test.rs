@@ -6,7 +6,8 @@
 //! own diff, in call order.
 
 use console_shared::diff::{
-    diff_lines, extract_write_args, extract_write_files, file_call_diffs,
+    DiffLineKind, DiffResult, diff_lines, extract_write_args, extract_write_files, file_call_diffs,
+    parse_unified_diff,
 };
 use serde_json::json;
 
@@ -168,7 +169,7 @@ fn trailing_newline_does_not_add_a_phantom_line() {
         !result
             .lines
             .iter()
-            .any(|l| l.kind == console_shared::diff::DiffLineKind::Added && l.text.is_empty()),
+            .any(|l| l.kind == DiffLineKind::Added && l.text.is_empty()),
         "no blank added line should be rendered"
     );
 }
@@ -200,4 +201,135 @@ fn edit_side_also_drops_only_the_trailing_phantom() {
     let result = diff_lines("a\nb\n", "a\nc\n", 3);
     assert_eq!(result.added, 1);
     assert_eq!(result.removed, 1);
+}
+
+// ── parse_unified_diff ─────────────────────────────────────────────────────
+//
+// The Android parser this replaces treated any line starting `---`/`+++` as a
+// file header, so a removed line whose *content* began with `--` (an SQL
+// comment, a YAML `---` marker) vanished and every later line number slipped.
+// Hunk tracking has to be structural, not prefix-based.
+
+fn kinds(result: &DiffResult) -> Vec<(DiffLineKind, String)> {
+    result
+        .lines
+        .iter()
+        .map(|l| (l.kind.clone(), l.text.clone()))
+        .collect()
+}
+
+#[test]
+fn removed_line_that_looks_like_a_file_header_is_kept() {
+    let raw = "diff --git a/q.sql b/q.sql\nindex 1..2 100644\n--- a/q.sql\n+++ b/q.sql\n\
+               @@ -1,3 +1,2 @@\n keep\n--- drop\n-last\n\\ No newline at end of file\n+end\n";
+    let parsed = parse_unified_diff(raw);
+    assert_eq!(
+        kinds(&parsed),
+        vec![
+            (DiffLineKind::Context, "keep".into()),
+            (DiffLineKind::Removed, "-- drop".into()),
+            (DiffLineKind::Removed, "last".into()),
+            (DiffLineKind::Added, "end".into()),
+        ]
+    );
+    assert_eq!((parsed.added, parsed.removed), (1, 2));
+}
+
+#[test]
+fn line_numbers_stay_correct_after_a_header_lookalike() {
+    let raw = "@@ -1,3 +1,2 @@\n keep\n--- drop\n-last\n+end\n";
+    let lines = parse_unified_diff(raw).lines;
+    assert_eq!((lines[1].old_no, lines[1].new_no), (Some(2), None));
+    assert_eq!((lines[2].old_no, lines[2].new_no), (Some(3), None));
+    assert_eq!((lines[3].old_no, lines[3].new_no), (None, Some(2)));
+}
+
+#[test]
+fn added_line_that_looks_like_a_file_header_is_kept() {
+    let raw = "@@ -1 +1,2 @@\n a\n+++ not a header\n";
+    let parsed = parse_unified_diff(raw);
+    assert_eq!(parsed.added, 1);
+    assert_eq!(parsed.lines[1].text, "++ not a header");
+}
+
+#[test]
+fn no_newline_marker_is_not_a_row() {
+    let raw = "@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n";
+    assert_eq!(parse_unified_diff(raw).lines.len(), 2);
+}
+
+#[test]
+fn trailing_newline_adds_no_phantom_row() {
+    let with = parse_unified_diff("@@ -1 +1 @@\n-a\n+b\n");
+    let without = parse_unified_diff("@@ -1 +1 @@\n-a\n+b");
+    assert_eq!(with.lines.len(), 2);
+    assert_eq!(with.lines.len(), without.lines.len());
+}
+
+#[test]
+fn short_and_long_hunk_headers_both_set_the_counters() {
+    // `-N`/`+N` (no length) is what difflib writes for a one-line range.
+    let short = parse_unified_diff("@@ -7 +9 @@\n-x\n+y\n");
+    assert_eq!(short.lines[0].old_no, Some(7));
+    assert_eq!(short.lines[1].new_no, Some(9));
+    let long = parse_unified_diff("@@ -7,3 +9,4 @@ fn ctx\n a\n");
+    assert_eq!((long.lines[0].old_no, long.lines[0].new_no), (Some(7), Some(9)));
+    // A zero-length old range: `-0,0`.
+    let new_file = parse_unified_diff("@@ -0,0 +1,2 @@\n+a\n+b\n");
+    assert_eq!(new_file.lines[0].new_no, Some(1));
+    assert_eq!(new_file.added, 2);
+}
+
+#[test]
+fn several_hunks_restart_the_counters() {
+    let raw = "@@ -1,2 +1,2 @@\n a\n-b\n+B\n@@ -20,2 +20,2 @@\n y\n-z\n+Z\n";
+    let lines = parse_unified_diff(raw).lines;
+    assert_eq!(lines[3].old_no, Some(20));
+    assert_eq!(lines[5].new_no, Some(21));
+}
+
+#[test]
+fn text_before_the_first_hunk_is_ignored() {
+    let raw = "diff --git a/f b/f\nnew file mode 100644\nindex 0..1\n--- /dev/null\n+++ b/f\n@@ -0,0 +1 @@\n+hi\n";
+    let parsed = parse_unified_diff(raw);
+    assert_eq!(parsed.lines.len(), 1);
+    assert_eq!(parsed.lines[0].text, "hi");
+}
+
+#[test]
+fn empty_input_is_an_empty_diff() {
+    assert!(parse_unified_diff("").is_empty());
+}
+
+// ── diff_lines on large inputs ─────────────────────────────────────────────
+
+#[test]
+fn one_edit_in_a_large_file_is_one_line_each_way() {
+    // The Kotlin LCS bailed out above 4M cells and reported the whole file as
+    // removed and re-added: a 2,100-line file with one edit read "+2100 −2100".
+    let old: String = (0..2100).map(|i| format!("line {i}\n")).collect();
+    let mut lines: Vec<String> = (0..2100).map(|i| format!("line {i}")).collect();
+    lines[1000] = "CHANGED".into();
+    let new = lines.join("\n") + "\n";
+    let result = diff_lines(&old, &new, 3);
+    assert_eq!((result.added, result.removed), (1, 1));
+    // Three lines of context either side of the change, nothing more.
+    assert_eq!(result.lines.len(), 2 + 6);
+}
+
+#[test]
+fn context_window_zero_keeps_only_the_changes() {
+    let result = diff_lines("a\nb\nc\n", "a\nB\nc\n", 0);
+    assert_eq!(result.lines.len(), 2);
+    assert!(result.lines.iter().all(|l| l.kind != DiffLineKind::Context));
+}
+
+#[test]
+fn context_window_trims_distant_unchanged_lines() {
+    let old: String = (0..20).map(|i| format!("l{i}\n")).collect();
+    let new = old.replace("l10\n", "X\n");
+    let result = diff_lines(&old, &new, 2);
+    // 2 before + removed + added + 2 after.
+    assert_eq!(result.lines.len(), 6);
+    assert_eq!(result.lines[0].old_no, Some(9));
 }

@@ -28,6 +28,10 @@ name = "format_test"
 path = "tests/format_test.rs"
 
 [[test]]
+name = "icons_test"
+path = "tests/icons_test.rs"
+
+[[test]]
 name = "mend_test"
 path = "tests/mend_test.rs"
 
