@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.getFileName
-import com.console.mobile.core.util.parseUnifiedDiff
+import com.console.mobile.SharedNative
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.SectionCard
@@ -80,7 +80,7 @@ fun ChatDiffSheet(
             }
             !diffText.isNullOrEmpty() -> {
                 DiffView(
-                    diff = parseUnifiedDiff(diffText ?: ""),
+                    diff = SharedNative.parseDiff(diffText ?: ""),
                     filePath = change.path,
                     maxCollapsedLines = 120,
                     showFileHeader = false,

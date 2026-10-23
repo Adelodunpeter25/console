@@ -9,6 +9,41 @@ pub struct ComposerMention {
     pub label: String,
 }
 
+/// `path` prefix marking a mention as a skill chip rather than a file. A skill
+/// rides the same range bookkeeping as a file mention (atomic delete, edit
+/// tracking, draft persistence); only what it sends and how it paints differ.
+pub const SKILL_PATH_PREFIX: &str = "skill:";
+
+impl ComposerMention {
+    /// A skill chip over `range`, whose text is `/<name>`.
+    pub fn skill(range: Range<usize>, name: &str) -> Self {
+        Self {
+            range,
+            path: format!("{SKILL_PATH_PREFIX}{name}"),
+            label: format!("/{name}"),
+        }
+    }
+
+    pub fn is_skill(&self) -> bool {
+        self.path.starts_with(SKILL_PATH_PREFIX)
+    }
+
+    /// The skill's name, when this is a skill chip.
+    pub fn skill_name(&self) -> Option<&str> {
+        self.path.strip_prefix(SKILL_PATH_PREFIX)
+    }
+}
+
+/// Paths of the file mentions only: skills are text the agent reads, not
+/// context files to attach.
+pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
+    mentions
+        .iter()
+        .filter(|mention| !mention.is_skill())
+        .map(|mention| mention.path.clone())
+        .collect()
+}
+
 pub fn adjust_mentions(
     mentions: &mut Vec<ComposerMention>,
     edit_range: &Range<usize>,

@@ -1,5 +1,6 @@
 package com.console.mobile.feature.chat.markdown
 
+import com.console.mobile.SharedNative
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -361,7 +362,7 @@ private class StreamingMarkdownParser {
         // canonical source remains untouched and is reparsed when streaming
         // ends or when a non-append update arrives.
         val tailSource = next.substring(boundary)
-        val displayTail = if (streaming) closeHanging(tailSource) ?: tailSource else tailSource
+        val displayTail = if (streaming) SharedNative.mendMarkdown(tailSource) ?: tailSource else tailSource
         val tail = parseBlocks(displayTail)
         blocks = prefix + tail
         renderedStreaming = streaming

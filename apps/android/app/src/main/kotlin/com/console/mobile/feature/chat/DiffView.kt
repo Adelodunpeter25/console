@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.sp
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
-import com.console.mobile.core.util.DiffLine
-import com.console.mobile.core.util.DiffLineType
-import com.console.mobile.core.util.DiffResult
+import com.console.mobile.SharedNative.Diff
+import com.console.mobile.SharedNative.DiffKind
+import com.console.mobile.SharedNative.DiffLine
 import com.console.mobile.core.util.getFileName
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleColors
@@ -51,7 +51,7 @@ private val RemovedLineBg = Color(0x15F87171)
  */
 @Composable
 fun DiffView(
-    diff: DiffResult,
+    diff: Diff,
     filePath: String? = null,
     maxCollapsedLines: Int = 60,
     showFileHeader: Boolean = true,
@@ -78,7 +78,7 @@ fun DiffView(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                DiffSummaryBadge(addedCount = diff.addedCount, removedCount = diff.removedCount)
+                DiffSummaryBadge(addedCount = diff.added, removedCount = diff.removed)
             }
         }
         val visible = if (!expanded && diff.lines.size > maxCollapsedLines) diff.lines.take(maxCollapsedLines) else diff.lines
@@ -113,15 +113,15 @@ fun DiffView(
 
 @Composable
 private fun DiffLineRow(line: DiffLine) {
-    val (gutter, fg, bg) = when (line.type) {
-        DiffLineType.Added -> Triple("+", NewTheme.Success, AddedLineBg)
-        DiffLineType.Removed -> Triple("-", NewTheme.Danger, RemovedLineBg)
-        DiffLineType.Context -> Triple(" ", NewTheme.TextSecondary, Color.Transparent)
+    val (gutter, fg, bg) = when (line.kind) {
+        DiffKind.Added -> Triple("+", NewTheme.Success, AddedLineBg)
+        DiffKind.Removed -> Triple("-", NewTheme.Danger, RemovedLineBg)
+        DiffKind.Context -> Triple(" ", NewTheme.TextSecondary, Color.Transparent)
     }
-    val lineNo = when (line.type) {
-        DiffLineType.Added -> line.newLineNo?.toString() ?: ""
-        DiffLineType.Removed -> line.oldLineNo?.toString() ?: ""
-        DiffLineType.Context -> line.newLineNo?.toString() ?: ""
+    val lineNo = when (line.kind) {
+        DiffKind.Added -> line.newNo?.toString() ?: ""
+        DiffKind.Removed -> line.oldNo?.toString() ?: ""
+        DiffKind.Context -> line.newNo?.toString() ?: ""
     }
 
     Row(

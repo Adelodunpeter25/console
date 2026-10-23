@@ -1,5 +1,6 @@
 package com.console.mobile
 
+import com.console.mobile.SharedNative
 import com.console.mobile.core.util.FILE_LINK_PREFIX
 import com.console.mobile.core.util.faviconHostOrNull
 import com.console.mobile.core.util.fileLinkTarget
@@ -9,12 +10,16 @@ import com.console.mobile.core.util.faviconUrl
 import com.console.mobile.core.util.filePathOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /** Which paths and links get an inline file icon or favicon in markdown. */
 class LinkIconsTest {
     @Test
     fun recognisesFilePaths() {
+        // "known file type" comes from the shared icon table, which lives in the
+        // native library; a JVM run has none (Rust `icons_test` covers the table).
+        assumeTrue(SharedNative.available)
         assertEquals("apps/server/index.ts", filePathOrNull("apps/server/index.ts"))
         assertEquals("./foo.rs", filePathOrNull("./foo.rs"))
         assertEquals("README.md", filePathOrNull("README.md"))
@@ -68,6 +73,7 @@ class LinkIconsTest {
 
     @Test
     fun extensionlessNamesAreFilesToo() {
+        assumeTrue(SharedNative.available)
         assertEquals("Makefile", filePathOrNull("Makefile"))
         assertEquals("LICENSE", filePathOrNull("LICENSE"))
         assertNull(filePathOrNull("hello"))

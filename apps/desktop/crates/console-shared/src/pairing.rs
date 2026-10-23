@@ -49,8 +49,12 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
     // The address, with or without a scheme. A scheme is only assumed when
     // the text has none at all, so "192.168.1.10:3000" and
     // "http://192.168.1.10:3000" both work.
+    // The scheme is compared case-insensitively (a URL copied from a browser or
+    // a chat app can be `HTTPS://`), and normalised to lowercase so the base
+    // URL the client talks to has one spelling. `split_pairing_line` already
+    // behaved this way; the two parsers disagreed on the same paste.
     let (scheme, authority) = match base.split_once("://") {
-        Some((scheme, rest)) => (scheme.to_string(), rest.to_string()),
+        Some((scheme, rest)) => (scheme.to_ascii_lowercase(), rest.to_string()),
         None => ("http".to_string(), base.to_string()),
     };
     if scheme != "http" && scheme != "https" {

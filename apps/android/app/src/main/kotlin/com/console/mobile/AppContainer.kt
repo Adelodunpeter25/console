@@ -375,6 +375,17 @@ object AppContainer {
             )
         }
 
+        // Pairing, diffs, tool labels and file icons come from the shared Rust
+        // library. Without it pairing is refused (never parsed leniently) and
+        // diffs render empty, so say so loudly rather than look like a bug.
+        if (!SharedNative.available) {
+            android.util.Log.e(
+                "ConsoleApp",
+                "console-shared unavailable (libconsole_wt_android.so missing or built for a different ABI): " +
+                    "pairing, diffs, labels and file icons are disabled",
+            )
+        }
+
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         // notifications() is a one-shot callbackFlow: the server closing the SSE
         // connection (idle timeout, restart, brief network drop) completes the flow

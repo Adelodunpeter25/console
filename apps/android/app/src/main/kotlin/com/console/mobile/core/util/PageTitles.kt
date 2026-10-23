@@ -3,6 +3,7 @@ package com.console.mobile.core.util
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import com.console.mobile.SharedNative
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -13,41 +14,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 private const val MAX_BODY_BYTES = 96 * 1024
-private const val MAX_TITLE_CHARS = 90
-
-/**
- * The page title from an HTML document, cleaned for display: entities
- * decoded, whitespace collapsed, length capped. Null when there is none.
- */
-fun extractHtmlTitle(html: String): String? {
-    val lower = html.lowercase()
-    val open = lower.indexOf("<title")
-    if (open < 0) return null
-    val gt = lower.indexOf('>', open)
-    if (gt < 0) return null
-    val close = lower.indexOf("</title", gt)
-    if (close < 0) return null
-    val collapsed = decodeEntities(html.substring(gt + 1, close)).trim().split(Regex("\\s+")).joinToString(" ")
-    if (collapsed.isEmpty()) return null
-    return if (collapsed.length > MAX_TITLE_CHARS) collapsed.take(MAX_TITLE_CHARS - 1).trimEnd() + "…" else collapsed
-}
-
-private val ENTITY = Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);")
-
-private fun decodeEntities(text: String): String = ENTITY.replace(text) { m ->
-    val e = m.groupValues[1]
-    when {
-        e == "amp" -> "&"
-        e == "lt" -> "<"
-        e == "gt" -> ">"
-        e == "quot" -> "\""
-        e == "apos" -> "'"
-        e == "nbsp" -> " "
-        e.startsWith("#x") -> e.drop(2).toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: m.value
-        e.startsWith("#") -> e.drop(1).toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value
-        else -> m.value
-    }
-}
 
 /** Bare http(s) URLs in [text] worth looking up a title for. */
 fun bareWebUrls(text: String): List<String> =
@@ -106,7 +72,7 @@ object PageTitles {
                 buffer.append(String(chunk, 0, n, Charsets.UTF_8))
                 if (buffer.contains("</title", ignoreCase = true)) break
             }
-            return extractHtmlTitle(buffer.toString())
+            return SharedNative.pageTitle(buffer.toString())
         }
     }
 }

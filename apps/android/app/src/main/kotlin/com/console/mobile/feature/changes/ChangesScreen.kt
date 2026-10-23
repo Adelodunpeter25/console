@@ -39,7 +39,7 @@ import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.util.ChangesRow
 import com.console.mobile.core.util.baseOf
 import com.console.mobile.core.util.buildRows
-import com.console.mobile.core.util.parseUnifiedDiff
+import com.console.mobile.SharedNative
 import com.console.mobile.core.util.statusColorHex
 import com.console.mobile.core.util.statusLetter
 import com.console.mobile.core.util.stripRepoPrefix
@@ -192,7 +192,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                 when {
                     diffLoading -> LoadingState()
                     diffError != null -> Banner(diffError ?: "Failed to load diff.")
-                    diffText != null -> DiffView(diff = parseUnifiedDiff(diffText ?: ""), filePath = sel)
+                    diffText != null -> DiffView(diff = SharedNative.parseDiff(diffText ?: ""), filePath = sel)
                     else -> Note("No diff available for this file.")
                 }
             }

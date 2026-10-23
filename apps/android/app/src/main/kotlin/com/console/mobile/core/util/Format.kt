@@ -1,6 +1,6 @@
 package com.console.mobile.core.util
 
-import java.util.Locale
+import com.console.mobile.SharedNative
 
 fun folderName(path: String?): String {
     if (path.isNullOrEmpty()) return ""
@@ -9,16 +9,13 @@ fun folderName(path: String?): String {
     return if (i != -1) trimmed.substring(i + 1) else trimmed
 }
 
-/** Human-size context window, mirroring the desktop's `format_context_window`:
- * 1_000_000 -> "1M", 272_000 -> "272k". */
+/** Human-size context window, from the desktop's formatter: 1_000_000 -> "1M", 272_000 -> "272k". */
 fun formatContextWindow(contextWindow: Int): String =
-    if (contextWindow >= 1_000_000) "${contextWindow / 1_000_000}M" else "${contextWindow / 1000}k"
+    SharedNative.contextWindow(contextWindow) ?: contextWindow.toString()
 
 fun formatModelName(modelId: String?): String {
     if (modelId.isNullOrEmpty()) return ""
-    return modelId.split('-', '_').joinToString(" ") { part ->
-        if (part.isNotEmpty()) part[0].uppercaseChar() + part.substring(1) else part
-    }
+    return SharedNative.modelName(modelId) ?: modelId
 }
 
 fun formatDurationMs(ms: Long): String {
@@ -31,8 +28,4 @@ fun formatDurationMs(ms: Long): String {
 
 /** Footer label for the server-computed output rate, e.g. "42.1 tok/s".
  *  The Go server owns the measurement and its gating; null hides the metric. */
-fun formatTokensPerSecond(tokPerSec: Double?): String? {
-    val rate = tokPerSec ?: return null
-    if (!rate.isFinite() || rate <= 0.0) return null
-    return String.format(Locale.US, "%.1f tok/s", rate)
-}
+fun formatTokensPerSecond(tokPerSec: Double?): String? = SharedNative.tokensPerSecond(tokPerSec)

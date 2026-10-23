@@ -42,7 +42,7 @@ import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
 import com.console.mobile.core.util.getToolIcon
-import com.console.mobile.core.util.getToolLabel
+import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.ui.theme.NewTheme
@@ -179,7 +179,7 @@ fun ToolGroupRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                getToolLabel(toolName),
+                SharedNative.label(toolName),
                 color = NewTheme.TextSecondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,

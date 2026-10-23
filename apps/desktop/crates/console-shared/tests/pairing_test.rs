@@ -113,3 +113,16 @@ fn a_split_line_still_drops_the_default_scheme() {
     assert_eq!(address, "192.168.1.10:3000");
     assert_eq!(code, "abc");
 }
+
+#[test]
+fn the_scheme_is_case_insensitive_and_normalised() {
+    // `split_pairing_line` already treated `HTTPS://` as https; the full
+    // parser used to reject it, so one paste got two answers.
+    let parsed = parse_pairing_url("HTTPS://Server.Example/console/pair#v=1&server=s&code=c")
+        .expect("uppercase scheme is still a valid pairing URL");
+    assert_eq!(parsed.base_url, "https://Server.Example");
+    let parsed = parse_pairing_url("Http://host:3000#abc").expect("mixed case");
+    assert_eq!(parsed.base_url, "http://host:3000");
+    // Case-insensitivity must not widen what is accepted.
+    assert!(parse_pairing_url("FTP://host#abc").is_err());
+}
