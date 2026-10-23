@@ -1,8 +1,8 @@
 //! Small, reusable, side-effect-free helpers (time formatting, grouping, …).
 
-pub mod path;
+pub use console_shared::path;
 pub mod session_groups;
-pub mod throughput;
+pub use console_shared::throughput;
 pub mod time;
 
 pub use path::{

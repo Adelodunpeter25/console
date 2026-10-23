@@ -5,7 +5,7 @@
 //! tests pin the desktop side to that behaviour: every written file yields its
 //! own diff, in call order.
 
-use console_core::utils::diff::{
+use console_shared::diff::{
     diff_lines, extract_write_args, extract_write_files, file_call_diffs,
 };
 use serde_json::json;
@@ -168,7 +168,7 @@ fn trailing_newline_does_not_add_a_phantom_line() {
         !result
             .lines
             .iter()
-            .any(|l| l.kind == console_core::utils::diff::DiffLineKind::Added && l.text.is_empty()),
+            .any(|l| l.kind == console_shared::diff::DiffLineKind::Added && l.text.is_empty()),
         "no blank added line should be rendered"
     );
 }

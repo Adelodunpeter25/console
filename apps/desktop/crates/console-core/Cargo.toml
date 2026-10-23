@@ -8,6 +8,7 @@ license.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 console-proto = { workspace = true }
+console-shared = { workspace = true }
 reqwest = { workspace = true }
 wtransport = { workspace = true }
 webpki-roots = { workspace = true }
@@ -21,10 +22,6 @@ urlencoding = { workspace = true }
 eventsource-stream = { workspace = true }
 similar = { workspace = true }
 termy_core = { git = "https://github.com/lassejlv/termy", rev = "f5ddada41eab55c26b582140b5ef4eb4c9d696d8" }
-
-[[test]]
-name = "page_title_test"
-path = "tests/page_title_test.rs"
 
 [[test]]
 name = "terminal_query_replies_test"
@@ -69,14 +66,6 @@ path = "tests/types/types_test.rs"
 [[test]]
 name = "message_convert_test"
 path = "tests/types/message_convert_test.rs"
-
-[[test]]
-name = "file_kind_test"
-path = "tests/types/file_kind_test.rs"
-
-[[test]]
-name = "write_files_test"
-path = "tests/types/write_files_test.rs"
 
 [[test]]
 name = "worktree_dto_test"
@@ -125,10 +114,6 @@ path = "tests/server_auth_test.rs"
 [[test]]
 name = "server_auth_store_test"
 path = "tests/server_auth_store_test.rs"
-
-[[test]]
-name = "pairing_url_test"
-path = "tests/pairing_url_test.rs"
 
 [[test]]
 name = "sidebar_sort_timestamp_test"

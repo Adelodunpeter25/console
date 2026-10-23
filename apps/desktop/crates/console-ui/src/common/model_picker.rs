@@ -29,30 +29,7 @@ pub fn provider_svg_path(provider: &str) -> &'static str {
     }
 }
 
-/// Human-size context window: 1_000_000 -> "1M", 272_000 -> "272k".
-pub fn format_context_window(context_window: u32) -> String {
-    if context_window >= 1_000_000 {
-        format!("{}M", context_window / 1_000_000)
-    } else {
-        format!("{}k", context_window / 1000)
-    }
-}
-
-pub fn format_model_name(model_id: &str) -> String {
-    model_id
-        .split(['-', '_'])
-        .map(|part| {
-            if !part.is_empty() {
-                let mut chars = part.chars();
-                let first = chars.next().unwrap().to_uppercase().to_string();
-                format!("{}{}", first, chars.as_str())
-            } else {
-                part.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
+pub use console_shared::format::{format_context_window, format_model_name};
 
 #[derive(Clone, IntoElement)]
 pub struct ModelDropdownMenu {

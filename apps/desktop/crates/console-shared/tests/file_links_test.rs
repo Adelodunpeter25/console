@@ -1,6 +1,6 @@
 //! File-path link helpers: telling files from URLs and resolving them.
 
-use console_ui::markdown::file_links::{
+use console_shared::markdown::file_links::{
     is_file_link, is_http_url, is_known_bare_name, resolve_file_link, strip_line_suffix,
 };
 

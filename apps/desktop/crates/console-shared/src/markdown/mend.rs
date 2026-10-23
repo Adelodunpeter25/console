@@ -8,7 +8,7 @@
 //!
 //! Appending synthetic closers to the *display* parse keeps styling stable from
 //! the moment content follows an opener. Only the display tree sees mended text
-//! ([`super::parser::IncrementalParser::display_tree`]); the canonical tree is
+//! (`IncrementalParser::display_tree` in `console-ui`); the canonical tree is
 //! untouched, so a marker that genuinely never closes settles honestly — one
 //! flip when the response completes — instead of jittering throughout.
 //!
@@ -20,7 +20,7 @@
 
 /// Destination for a link whose URL is still streaming. The renderer styles it
 /// like a link but must not make it clickable.
-pub const PENDING_LINK_URL: &str = "waku:pending-link";
+pub const PENDING_LINK_URL: &str = "console:pending-link";
 
 /// Zero-width space appended to defuse a would-be setext underline.
 const ZERO_WIDTH_SPACE: char = '\u{200B}';

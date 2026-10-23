@@ -3,7 +3,7 @@ pub mod boundaries;
 pub mod element;
 pub mod history;
 pub mod ime;
-pub mod mentions;
+pub use console_shared::composer::mentions;
 pub mod text_runs;
 
 use std::ops::Range;

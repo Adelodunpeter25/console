@@ -1,0 +1,52 @@
+[package]
+name = "console-shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Pure logic shared by the desktop (Rust/GPUI) and the Android app (over JNI,
+# via apps/android/rust-wt). No runtime, no network, no UI: keep it that way —
+# see docs/plan/console-shared.md §2 and §4.2.
+[dependencies]
+serde_json = { workspace = true }
+similar = { workspace = true }
+
+[[test]]
+name = "diff_test"
+path = "tests/diff_test.rs"
+
+[[test]]
+name = "file_kind_test"
+path = "tests/file_kind_test.rs"
+
+[[test]]
+name = "file_links_test"
+path = "tests/file_links_test.rs"
+
+[[test]]
+name = "format_test"
+path = "tests/format_test.rs"
+
+[[test]]
+name = "mend_test"
+path = "tests/mend_test.rs"
+
+[[test]]
+name = "page_title_test"
+path = "tests/page_title_test.rs"
+
+[[test]]
+name = "pairing_test"
+path = "tests/pairing_test.rs"
+
+[[test]]
+name = "path_test"
+path = "tests/path_test.rs"
+
+[[test]]
+name = "throughput_test"
+path = "tests/throughput_test.rs"
+
+[[test]]
+name = "tools_test"
+path = "tests/tools_test.rs"

@@ -1,8 +1,16 @@
-pub mod diff;
-pub mod file_kind;
+// The pure helpers live in `console-shared` (one implementation, shared with
+// the Android client); these modules keep the old paths working.
+pub mod diff {
+    pub use console_shared::diff::*;
+}
+pub mod file_kind {
+    pub use console_shared::file_kind::*;
+}
+pub mod pairing_url {
+    pub use console_shared::pairing::*;
+}
 pub mod http_transport;
 mod page_title;
-pub mod pairing_url;
 pub mod server_auth_store;
 pub mod sse_reader;
 

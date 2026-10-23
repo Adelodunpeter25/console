@@ -4,7 +4,7 @@
 //! read exactly is rejected rather than repaired, and the grant never
 //! ends up in the address the client will talk to.
 
-use console_core::utils::{host_port, parse_pairing_url, split_pairing_line};
+use console_shared::pairing::{host_port, parse_pairing_url, split_pairing_line};
 
 #[test]
 fn parses_a_pairing_url() {

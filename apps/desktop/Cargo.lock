@@ -1357,6 +1357,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "console-proto",
+ "console-shared",
  "eventsource-stream",
  "futures-util",
  "log",
@@ -1387,6 +1388,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "console-shared"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "similar",
+]
+
+[[package]]
 name = "console-ui"
 version = "0.1.0"
 dependencies = [
@@ -1395,6 +1404,7 @@ dependencies = [
  "block2 0.6.2",
  "chrono",
  "console-core",
+ "console-shared",
  "editor-ui",
  "gpui",
  "gpui-component",

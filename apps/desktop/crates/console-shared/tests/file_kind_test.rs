@@ -1,6 +1,6 @@
 //! Unit tests for FileKind classification and parity with TypeScript definitions.
 
-use console_core::utils::file_kind::{
+use console_shared::file_kind::{
     BLOCKED_FILE_EXTENSIONS, FileKind, MARKDOWN_EXTENSIONS, RASTER_IMAGE_EXTENSIONS,
     file_kind_for_path, is_lock_file,
 };

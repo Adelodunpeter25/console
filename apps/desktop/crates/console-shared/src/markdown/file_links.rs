@@ -114,10 +114,10 @@ pub fn resolve_file_link(link: &str, cwd: Option<&str>, project_path: Option<&st
     // Strip ./ prefix for clean joins.
     let relative = path.strip_prefix("./").unwrap_or(&path);
     if let Some(cwd) = cwd.filter(|c| !c.is_empty()) {
-        return crate::utils::join_path_lexical(cwd, relative);
+        return crate::path::join_path_lexical(cwd, relative);
     }
     if let Some(root) = project_path.filter(|p| !p.is_empty()) {
-        return crate::utils::join_path_lexical(root, relative);
+        return crate::path::join_path_lexical(root, relative);
     }
     relative.to_owned()
 }

@@ -1,6 +1,6 @@
 //! Extracting a display title from fetched HTML.
 
-use console_core::utils::extract_html_title;
+use console_shared::page_title::extract_html_title;
 
 #[test]
 fn reads_a_plain_title() {

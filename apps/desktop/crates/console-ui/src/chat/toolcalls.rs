@@ -27,6 +27,9 @@ use crate::markdown::render::{
 use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon, motion};
 use crate::theme::Theme;
 use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
+use console_shared::tools::{
+    is_edit_file, is_file_target_tool, is_read_file, is_subagent, is_write_file,
+};
 use crate::viewer::diff_viewer::{EditorDiff, build_editor_diff_from_parsed, file_diff_block};
 // `format_elapsed` was unified into `format_working_elapsed` (C); kept
 // re-exported so older imports keep resolving.
@@ -187,29 +190,7 @@ impl ToolCalls {
     }
 
     fn call_label(name: &str) -> String {
-        match name {
-            "readFile" | "read_file" => "Read File".into(),
-            "writeFile" | "write_file" => "Write File".into(),
-            "batchWrite" | "batch_write" => "Batch Write".into(),
-            "editFile" | "edit_file" | "str_replace" => "Edit File".into(),
-            "bash" | "shell" | "command" => "Run Command".into(),
-            "bashJob" | "bash_job" => "Bash Job".into(),
-            "grep" | "search_files" => "Search Code".into(),
-            "glob" | "list_files" => "Find Files".into(),
-            "listDir" | "list_dir" | "ls" => "List Directory".into(),
-            "fetch" => "Fetch URL".into(),
-            "webSearch" | "web_search" => "Web Search".into(),
-            "browser" => "Browser".into(),
-            "visualize" => "Visualize".into(),
-            "subagent" => "Subagent".into(),
-            "ask" => "Ask Question".into(),
-            "todo" => "Todo".into(),
-            "memory" => "Memory".into(),
-            "loadTools" => "Load Tools".into(),
-            name => parse_mcp_tool_name(name)
-                .map(|(server, tool)| format!("{} ({})", tool.replace('_', " "), server))
-                .unwrap_or_else(|| name.to_owned()),
-        }
+        console_shared::tools::tool_label(name)
     }
 
     fn argument_summary(&self, call: &ToolCall) -> Option<String> {
@@ -1138,56 +1119,6 @@ impl ToolCalls {
                     )),
             )
     }
-}
-
-/// Split an `mcp__<server>__<tool>` wire name into `(server, tool)`.
-/// Returns `None` when malformed. Segments are server-sanitized to
-/// `[A-Za-z0-9_-]`, so splitting on the double underscore is safe — single
-/// underscores never form one.
-fn parse_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
-    let rest = name.strip_prefix("mcp__")?;
-    let sep = rest.find("__")?;
-    if sep == 0 {
-        return None;
-    }
-    let server = &rest[..sep];
-    let tool = &rest[sep + 2..];
-    if server.is_empty() || tool.is_empty() {
-        return None;
-    }
-    Some((server, tool))
-}
-
-/// Whether a tool-call name represents a file-edit operation whose
-/// arguments carry `oldContent` / `newContent` for diffing.
-fn is_edit_file(name: &str) -> bool {
-    matches!(name, "editFile" | "edit_file" | "str_replace")
-}
-
-/// Whether a tool-call name writes complete file content.
-fn is_write_file(name: &str) -> bool {
-    matches!(
-        name,
-        "writeFile" | "write_file" | "batchWrite" | "batch_write"
-    )
-}
-
-/// Whether a row for this tool should show the target file's type icon
-/// instead of the generic tool glyph. Search/list tools also carry a `path`
-/// argument, but there it is only the search scope (often a directory) —
-/// those rows keep the tool glyph (e.g. the magnifier for grep).
-fn is_file_target_tool(name: &str) -> bool {
-    matches!(name, "readFile" | "read_file") || is_edit_file(name) || is_write_file(name)
-}
-
-/// Whether a tool-call name reads file content into its result.
-fn is_read_file(name: &str) -> bool {
-    matches!(name, "readFile" | "read_file" | "view" | "Read")
-}
-
-/// Whether a tool-call name is a subagent call whose result is prose markdown.
-fn is_subagent(name: &str) -> bool {
-    matches!(name, "subagent")
 }
 
 /// Parse a line-number prefix like `\s*123:\s?`, returning `(line_number_str, code_str)`.

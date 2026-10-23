@@ -1,6 +1,6 @@
 //! Unit tests for shared path display helpers.
 
-use console_ui::utils::{ParentDirDisplay, parent_dir, short_parent_dir, short_parent_dir_with};
+use console_shared::path::{ParentDirDisplay, parent_dir, short_parent_dir, short_parent_dir_with};
 
 #[test]
 fn parent_dir_handles_both_separators_and_bare_names() {

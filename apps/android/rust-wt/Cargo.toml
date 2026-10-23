@@ -17,6 +17,9 @@ wtransport = "0.7"
 # transport, framing, session cache and reconnect are NOT reimplemented here.
 console-core = { path = "../../desktop/crates/console-core" }
 console-proto = { path = "../../desktop/crates/console-proto" }
+# Pure logic shared with the desktop (docs/plan/console-shared.md). No runtime
+# or network deps, so it adds almost nothing to the .so.
+console-shared = { path = "../../desktop/crates/console-shared" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"
 log = "0.4"

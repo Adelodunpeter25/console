@@ -2,7 +2,7 @@
 //! provider-active stream time) and its gating live on the Go server; this
 //! covers only the number-to-text step.
 
-use console_ui::utils::format_tokens_per_second;
+use console_shared::throughput::format_tokens_per_second;
 
 #[test]
 fn formats_one_decimal_with_unit() {

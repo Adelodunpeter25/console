@@ -2,6 +2,7 @@
 members = [
     "crates/console-core",
     "crates/console-proto",
+    "crates/console-shared",
     "crates/console-ui",
     "src",
 ]
@@ -20,6 +21,7 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["fo
 # Internal workspace crates
 console-core = { path = "crates/console-core" }
 console-proto = { path = "crates/console-proto" }
+console-shared = { path = "crates/console-shared" }
 console-ui = { path = "crates/console-ui" }
 
 # Editor & Syntax

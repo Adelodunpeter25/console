@@ -1,7 +1,8 @@
-pub mod file_links;
+// Pure string helpers shared with Android live in `console-shared`; these
+// re-exports keep the old module paths.
+pub use console_shared::markdown::{file_links, mend};
 pub mod highlight;
 pub mod math;
-pub mod mend;
 pub mod parser;
 pub mod render;
 pub mod selection;

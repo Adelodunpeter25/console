@@ -13,6 +13,7 @@ gpui_macros = { workspace = true }
 gpui_platform = { workspace = true }
 gpui-component = { workspace = true }
 console-core = { workspace = true }
+console-shared = { workspace = true }
 syntax = { workspace = true }
 editor-ui = { workspace = true }
 serde = { workspace = true }
@@ -57,10 +58,6 @@ name = "input_test"
 path = "tests/composer/input_test.rs"
 
 [[test]]
-name = "model_picker_test"
-path = "tests/composer/model_picker_test.rs"
-
-[[test]]
 name = "floating_composer_test"
 path = "tests/composer/floating_composer_test.rs"
 
@@ -97,24 +94,12 @@ name = "svg_test"
 path = "tests/viewer/svg_test.rs"
 
 [[test]]
-name = "file_links_test"
-path = "tests/markdown/file_links_test.rs"
-
-[[test]]
 name = "link_icons_test"
 path = "tests/markdown/link_icons_test.rs"
 
 [[test]]
 name = "math_test"
 path = "tests/markdown/math_test.rs"
-
-[[test]]
-name = "path_test"
-path = "tests/utils/path_test.rs"
-
-[[test]]
-name = "throughput_test"
-path = "tests/utils/throughput_test.rs"
 
 [[test]]
 name = "tool_icon_test"

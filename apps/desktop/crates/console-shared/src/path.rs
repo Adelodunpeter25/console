@@ -1,7 +1,7 @@
 //! Path and folder display utilities.
 
-// NOTE: there is deliberately no `base_name` here — use
-// `crate::primitives::base_name`, the single shared implementation.
+// NOTE: there is deliberately no `base_name` here — the desktop UI uses
+// `console_ui::primitives::base_name`, the single shared implementation.
 
 /// Parent directory of a path, handling both separator styles.
 /// Returns `""` for bare filenames.
