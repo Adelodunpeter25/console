@@ -70,6 +70,9 @@ type bashJobRecord struct {
 	retentionTimer               *time.Timer
 	ownerSessionID               string
 	workManager                  *BackgroundWorkManager
+	// changed is closed and replaced whenever output arrives or the status
+	// moves, so any number of stream watchers can wait for the next change.
+	changed chan struct{}
 }
 
 // BashJobManager owns every background bash job for the process.
@@ -186,6 +189,7 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 		cmd:            cmd,
 		ownerSessionID: ownerSessionID,
 		workManager:    opts.WorkManager,
+		changed:        make(chan struct{}),
 	}
 	if opts.WorkManager != nil {
 		work, err := opts.WorkManager.Register(BackgroundWorkOptions{
@@ -265,6 +269,7 @@ func (m *BashJobManager) append(rec *bashJobRecord, stream, text string) {
 			rec.stderrDropped += excess
 		}
 	}
+	rec.signalLocked()
 }
 
 func (m *BashJobManager) trackExit(rec *bashJobRecord) {
@@ -301,6 +306,7 @@ func (m *BashJobManager) maybeFinish(rec *bashJobRecord) {
 	} else {
 		rec.Status = BashJobFailed
 	}
+	rec.signalLocked()
 	rec.mu.Unlock()
 	if m.ports != nil {
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
@@ -319,6 +325,7 @@ func (m *BashJobManager) expire(rec *bashJobRecord) {
 	rec.Status = BashJobExpired
 	rec.FinishedAt = nowISO()
 	pid := rec.cmd.Process.Pid
+	rec.signalLocked()
 	rec.mu.Unlock()
 	safeKillGroup(pid)
 	if m.ports != nil {
@@ -419,6 +426,7 @@ func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, er
 	rec.Status = BashJobKilled
 	rec.Aborted = true
 	rec.FinishedAt = nowISO()
+	rec.signalLocked()
 	rec.mu.Unlock()
 
 	safeKillGroup(pid)
@@ -500,6 +508,7 @@ func (m *BashJobManager) killRecord(rec *bashJobRecord) {
 	rec.Status = BashJobKilled
 	rec.Aborted = true
 	rec.FinishedAt = nowISO()
+	rec.signalLocked()
 	rec.mu.Unlock()
 
 	safeKillGroup(pid)
@@ -576,6 +585,22 @@ func (m *BashJobManager) delete(jobID string) {
 		return
 	}
 	delete(m.jobs, jobID)
+}
+
+// signalLocked wakes every watcher waiting on the current changed channel.
+// The caller holds r.mu.
+func (r *bashJobRecord) signalLocked() {
+	if r.changed == nil {
+		return
+	}
+	close(r.changed)
+	r.changed = make(chan struct{})
+}
+
+func (r *bashJobRecord) changedCh() <-chan struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.changed
 }
 
 func (r *bashJobRecord) snapshot() BashJobSnapshot {

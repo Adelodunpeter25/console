@@ -118,6 +118,47 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		}
 		return c.JSON(fiber.Map{"success": true, "data": item})
 	})
+	// GET /api/sessions/:id/background-work/:workId/output/stream — live
+	// output for a detached shell, replacing client polling. Each `output`
+	// frame carries the same fields as the paged route: stdout is only what is
+	// new since `nextCursor` of the previous frame, stderr is present only when
+	// it changed, and `status` is always current. The stream closes after the
+	// frame that reports the shell is no longer running. `?cursor=` resumes.
+	app.Get("/api/sessions/:id/background-work/:workId/output/stream", func(c *fiber.Ctx) error {
+		sessionID := c.Params("id")
+		work, err := runs.BackgroundWorkManager().Get(c.Params("workId"), sessionID)
+		if err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		jobID := work.Metadata["job_id"]
+		jobs := runs.BashJobs()
+		if work.Kind != services.BackgroundWorkShell || jobID == "" || jobs == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Background work has no shell job."})
+		}
+		if _, err := jobs.Status(jobID, sessionID); err != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+		cursor := c.QueryInt("cursor", 0)
+		return streamSSE(c, func(sse *sseStream) {
+			_ = jobs.StreamOutput(jobID, sessionID, cursor,
+				func(chunk services.BashJobChunk) error {
+					frame := fiber.Map{
+						"stdout":     chunk.Stdout,
+						"nextCursor": chunk.NextCursor,
+						"truncated":  chunk.Truncated,
+						"status":     chunk.Snapshot.Status,
+						"exitCode":   chunk.Snapshot.ExitCode,
+						"timedOut":   chunk.Snapshot.TimedOut,
+					}
+					if chunk.Stderr != nil {
+						frame["stderr"] = *chunk.Stderr
+					}
+					return sse.Send("output", mustJSON(frame))
+				},
+				sse.Ping,
+			)
+		})
+	})
 	// GET /api/sessions/:id/background-work/:workId/output — paged stdout and
 	// the buffered stderr tail for a detached shell. Mobile polls this while
 	// its background-shell output sheet is open; the desktop uses the bashJob
