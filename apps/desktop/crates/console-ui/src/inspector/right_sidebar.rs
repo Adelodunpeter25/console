@@ -14,6 +14,7 @@ use gpui::{
 use crate::inspector::bottom_split::RightSidebarBottomSplit;
 use crate::inspector::changes_list::ChangesListView;
 use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
+use crate::inspector::shell_list::ShellListView;
 use crate::inspector::subagent_list::SubagentListView;
 use crate::markdown::render::MarkdownView;
 use crate::primitives::icons::{IconName, app_icon};
@@ -32,16 +33,18 @@ pub enum PrimaryTab {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum AuxiliaryTab {
     Subagents,
+    Shells,
     Devices,
 }
 
 impl AuxiliaryTab {
     /// Auxiliary tabs currently available to users in the right sidebar.
-    pub const ALL: [Self; 2] = [Self::Subagents, Self::Devices];
+    pub const ALL: [Self; 3] = [Self::Subagents, Self::Shells, Self::Devices];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Subagents => "Subagents",
+            Self::Shells => "Shells",
             Self::Devices => "Devices",
         }
     }
@@ -96,6 +99,7 @@ pub struct RightSidebar {
     bottom_split: Option<RightSidebarBottomSplit>,
     subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     device_view: Option<AnyElement>,
+    shell_view: Option<ShellListView>,
     open_auxiliary_tabs: Vec<AuxiliaryTab>,
     add_tab_menu: ContextMenuHandle,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -158,6 +162,7 @@ impl RightSidebar {
             bottom_split: None,
             subagent_markdown_views: None,
             device_view: None,
+            shell_view: None,
             on_select_tab,
             on_open_auxiliary_tab,
             on_close_auxiliary_tab,
@@ -187,6 +192,11 @@ impl RightSidebar {
 
     pub fn with_device_view(mut self, device_view: Option<AnyElement>) -> Self {
         self.device_view = device_view;
+        self
+    }
+
+    pub fn with_shell_view(mut self, shell_view: ShellListView) -> Self {
+        self.shell_view = Some(shell_view);
         self
     }
 }
@@ -344,6 +354,10 @@ impl RenderOnce for RightSidebar {
                             "tab-subagents",
                             InspectorTab::Auxiliary(AuxiliaryTab::Subagents),
                         ),
+                        AuxiliaryTab::Shells => (
+                            "tab-shells",
+                            InspectorTab::Auxiliary(AuxiliaryTab::Shells),
+                        ),
                         AuxiliaryTab::Devices => (
                             "tab-devices",
                             InspectorTab::Auxiliary(AuxiliaryTab::Devices),
@@ -442,6 +456,10 @@ impl RenderOnce for RightSidebar {
                             }
                             list.into_any_element()
                         }
+                        InspectorTab::Auxiliary(AuxiliaryTab::Shells) => match self.shell_view {
+                            Some(view) => view.into_any_element(),
+                            None => div().into_any_element(),
+                        },
                         InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {
                             if let Some(device) = self.device_view {
                                 device

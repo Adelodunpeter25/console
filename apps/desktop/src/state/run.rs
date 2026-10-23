@@ -897,10 +897,9 @@ impl ConsoleDesktopApp {
             | AgentSessionEvent::BackgroundWorkCompleted { work }
             | AgentSessionEvent::BackgroundWorkFailed { work }
             | AgentSessionEvent::BackgroundWorkCancelled { work } => {
-                // Background work is already recoverable through the session
-                // API. Keep the event in the stream for clients that render a
-                // unified work panel without changing transcript semantics.
-                let _ = work;
+                // Feeds the shell banner and the Shells inspector tab; the
+                // transcript itself is untouched.
+                self.upsert_background_work(run_session_id, work, cx);
             }
             AgentSessionEvent::BackgroundWorkContinue { .. } => {
                 // The server resumed an idle session; the wake turn is hidden

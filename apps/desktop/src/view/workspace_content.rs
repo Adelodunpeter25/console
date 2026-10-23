@@ -3,7 +3,7 @@ use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
-    queued_prompts_stack, todo_card,
+    queued_prompts_stack, shell_banner, todo_card,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -575,6 +575,10 @@ impl ConsoleDesktopApp {
         let error_selection = self.error_selection.clone();
         let agent_notice = self.agent_notice_for_pane(&pane_id);
         let todo_items = self.todo_items_for_pane(&pane_id);
+        let running_shells = pane_session_id
+            .as_deref()
+            .map(|sid| self.running_shells_for_session(sid))
+            .unwrap_or_default();
         let selected_sid = pane_session_id.clone();
 
         div()
@@ -647,6 +651,23 @@ impl ConsoleDesktopApp {
                         });
                     }
                 })),
+                theme,
+            ))
+        })
+        .when(!running_shells.is_empty(), |el| {
+            let entity = entity.clone();
+            let command = running_shells
+                .last()
+                .map(|w| w.shell_command())
+                .unwrap_or_default();
+            el.child(shell_banner(
+                running_shells.len(),
+                command,
+                Rc::new(move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.view_shells_in_panel(None, cx));
+                    }
+                }),
                 theme,
             ))
         })

@@ -122,3 +122,7 @@ path = "tests/session/sidebar_sort_timestamp_test.rs"
 [[test]]
 name = "visual_test"
 path = "tests/types/visual_test.rs"
+
+[[test]]
+name = "background_shell_test"
+path = "tests/types/background_shell_test.rs"

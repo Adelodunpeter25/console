@@ -1377,6 +1377,126 @@ impl Render for ConsoleDesktopApp {
                             None
                         };
 
+                        // Shells tab: running detached shells for the active
+                        // session, plus the opened shell's polled output.
+                        let (shell_session_id, _) = self.active_inspector_target();
+                        let shell_rows: Vec<console_ui::ShellRow> = shell_session_id
+                            .as_deref()
+                            .map(|sid| {
+                                self.running_shells_for_session(sid)
+                                    .into_iter()
+                                    .map(|work| console_ui::ShellRow {
+                                        command: work.shell_command(),
+                                        id: work.id,
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let shell_detail = match (&shell_session_id, self.shell_output.clone()) {
+                            (Some(sid), Some(state)) => {
+                                let command = self
+                                    .session_background_work
+                                    .get(sid)
+                                    .and_then(|list| list.iter().find(|w| w.id == state.work_id))
+                                    .map(|w| w.shell_command())
+                                    .unwrap_or_else(|| "Shell".to_string());
+                                let out = state.output.clone();
+                                let running = out.as_ref().map(|o| o.is_running()).unwrap_or(true)
+                                    && !state.unavailable;
+                                let status = match (&out, state.unavailable) {
+                                    (None, true) => "Output unavailable".to_string(),
+                                    (None, false) => "Connecting…".to_string(),
+                                    (Some(o), _) => o.status_label(),
+                                };
+                                let viewer = out.as_ref().map(|o| {
+                                    let text = o.combined();
+                                    let lines: Rc<Vec<String>> =
+                                        Rc::new(text.lines().map(|l| l.to_string()).collect());
+                                    let count = lines.len().max(1);
+                                    let key = format!("shell:{}", state.work_id);
+                                    let prev_count = self
+                                        .viewer_list_states
+                                        .get(&key)
+                                        .map(|st| st.item_count());
+                                    let list_state = self
+                                        .viewer_list_states
+                                        .entry(key.clone())
+                                        .or_insert_with(|| {
+                                            gpui::ListState::new(
+                                                count,
+                                                gpui::ListAlignment::Top,
+                                                gpui::px(console_ui::ESTIMATED_LOG_ROW_HEIGHT),
+                                            )
+                                        });
+                                    if list_state.item_count() != count {
+                                        list_state.reset(count);
+                                    }
+                                    let list_state = list_state.clone();
+                                    let selection = self
+                                        .viewer_markdown_selections
+                                        .entry(key.clone())
+                                        .or_default()
+                                        .clone();
+                                    let scrollbar_state = self.viewer_scrollbar_state(&key);
+                                    // Follow new output unless the user is selecting text.
+                                    if prev_count != Some(count)
+                                        && selection.selection.borrow().is_empty()
+                                    {
+                                        list_state.scroll_to_end();
+                                    }
+                                    console_ui::LogsViewer::new(key, lines, list_state)
+                                        .selection(selection)
+                                        .scrollbar_state(scrollbar_state)
+                                });
+                                Some(console_ui::ShellDetail {
+                                    id: state.work_id,
+                                    command,
+                                    status,
+                                    running,
+                                    truncated: out.as_ref().is_some_and(|o| o.truncated),
+                                    unavailable: state.unavailable,
+                                    output: viewer,
+                                })
+                            }
+                            _ => None,
+                        };
+                        let shell_view = {
+                            let open_entity = entity.clone();
+                            let open_sid = shell_session_id.clone();
+                            let on_open: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> =
+                                Rc::new(move |work_id, _w, cx| {
+                                    if let (Some(app), Some(sid)) =
+                                        (open_entity.upgrade(), open_sid.clone())
+                                    {
+                                        app.update(cx, |this, cx| this.select_shell(sid, work_id, cx));
+                                    }
+                                });
+                            let back_entity = entity.clone();
+                            let on_back: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                                Rc::new(move |_w, cx| {
+                                    if let Some(app) = back_entity.upgrade() {
+                                        app.update(cx, |this, cx| this.deselect_shell(cx));
+                                    }
+                                });
+                            let stop_entity = entity.clone();
+                            let stop_sid = shell_session_id.clone();
+                            let on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> =
+                                Rc::new(move |work_id, _w, cx| {
+                                    if let (Some(app), Some(sid)) =
+                                        (stop_entity.upgrade(), stop_sid.clone())
+                                    {
+                                        app.update(cx, |this, cx| this.stop_shell(sid, work_id, cx));
+                                    }
+                                });
+                            console_ui::ShellListView::new(
+                                shell_rows,
+                                shell_detail,
+                                on_open,
+                                on_back,
+                                on_stop,
+                            )
+                        };
+
                         el.child(
                             RightSidebar::new(
                                 self.right_sidebar_width,
@@ -1407,6 +1527,7 @@ impl Render for ConsoleDesktopApp {
                             )
                             .with_bottom_split(Some(bottom_split))
                             .with_device_view(device_element)
+                            .with_shell_view(shell_view)
                             .subagent_markdown_views(self.subagent_markdown_views.clone()),
                         )
                     }),

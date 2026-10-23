@@ -417,6 +417,11 @@ impl ConsoleDesktopApp {
                 self.fetch_inspector_session_changes(cx);
             }
             InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => self.fetch_inspector_subagents(cx),
+            InspectorTab::Auxiliary(AuxiliaryTab::Shells) => {
+                if let (Some(session_id), _) = self.active_inspector_target() {
+                    self.load_background_work(session_id, cx);
+                }
+            }
             InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {}
         }
         cx.notify();
@@ -537,6 +542,17 @@ impl ConsoleDesktopApp {
         self.sync_inspector_watchers(cx);
         self.fetch_inspector_subagents(cx);
         self.persist_layout();
+        cx.notify();
+    }
+
+    /// Open the Shells tab (from the chat banner), optionally on one shell.
+    pub fn view_shells_in_panel(&mut self, select: Option<String>, cx: &mut Context<Self>) {
+        self.right_sidebar_visible = true;
+        self.open_auxiliary_tab(AuxiliaryTab::Shells, cx);
+        if let (Some(session_id), Some(work_id)) = (self.active_inspector_target().0, select) {
+            self.select_shell(session_id, work_id, cx);
+        }
+        self.sync_inspector_watchers(cx);
         cx.notify();
     }
 

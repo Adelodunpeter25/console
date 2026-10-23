@@ -658,6 +658,8 @@ impl ConsoleDesktopApp {
             inspector_expanded_folders: Rc::new(std::collections::HashSet::new()),
             inspector_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
+            session_background_work: std::collections::HashMap::new(),
+            shell_output: None,
             expanded_subagents: std::collections::HashSet::new(),
             subagent_markdown_views: Rc::new(RefCell::new(std::collections::HashMap::new())),
             preview_tab: None,

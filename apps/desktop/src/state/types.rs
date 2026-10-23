@@ -244,6 +244,12 @@ pub struct ConsoleDesktopApp {
     pub inspector_selected_path: Option<String>,
     pub session_subagents:
         std::collections::HashMap<String, Rc<Vec<console_core::types::SubagentInfo>>>,
+    /// Background work per session id (detached shells, subagents), fed by the
+    /// run stream and hydrated from the work list endpoint.
+    pub session_background_work:
+        std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
+    /// The shell open in the Shells inspector tab and its polled output.
+    pub shell_output: Option<super::background_shells::ShellOutputState>,
     pub expanded_subagents: std::collections::HashSet<String>,
     pub subagent_markdown_views: Rc<
         RefCell<

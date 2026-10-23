@@ -6,6 +6,7 @@
 //! so each domain stays reviewable without losing shared state.
 
 mod attachments;
+mod background_shells;
 mod auth;
 mod autocomplete;
 mod bootstrap;

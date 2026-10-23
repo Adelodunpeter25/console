@@ -59,6 +59,89 @@ pub struct BackgroundWork {
     pub metadata: HashMap<String, String>,
 }
 
+impl BackgroundWork {
+    /// A detached shell that is still running: what the chat banner and the
+    /// Shells tab list.
+    pub fn is_running_shell(&self) -> bool {
+        self.kind == "shell" && self.status == "running"
+    }
+
+    /// The command line to show for a shell: its first command line, else the
+    /// summary, else a short id.
+    pub fn shell_command(&self) -> String {
+        let first = |s: &str| s.lines().next().unwrap_or("").trim().to_string();
+        self.metadata
+            .get("command")
+            .map(|c| first(c))
+            .filter(|c| !c.is_empty())
+            .or_else(|| {
+                self.summary
+                    .as_deref()
+                    .map(first)
+                    .filter(|c| !c.is_empty())
+            })
+            .unwrap_or_else(|| format!("Shell {}", self.id.chars().take(6).collect::<String>()))
+    }
+}
+
+/// Paged output for a detached shell
+/// (`GET /api/sessions/:id/background-work/:workId/output`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackgroundWorkOutput {
+    #[serde(default)]
+    pub stdout: String,
+    #[serde(default)]
+    pub stderr: String,
+    #[serde(default)]
+    pub next_cursor: i64,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub timed_out: bool,
+}
+
+impl BackgroundWorkOutput {
+    pub fn is_running(&self) -> bool {
+        self.status == "running"
+    }
+
+    /// stdout followed by stderr, as one block of text.
+    pub fn combined(&self) -> String {
+        let mut out = self.stdout.clone();
+        if !self.stderr.trim().is_empty() {
+            if !out.is_empty() && !out.ends_with('\n') {
+                out.push('\n');
+            }
+            out.push_str(&self.stderr);
+        }
+        out
+    }
+
+    /// Status line: Running, Exited · code 0, Stopped, Timed out, ...
+    pub fn status_label(&self) -> String {
+        let code = self
+            .exit_code
+            .map(|c| format!(" · code {c}"))
+            .unwrap_or_default();
+        if self.timed_out {
+            "Timed out".into()
+        } else {
+            match self.status.as_str() {
+                "running" => "Running".into(),
+                "killed" => "Stopped".into(),
+                "exited" => format!("Exited{code}"),
+                "failed" => format!("Failed{code}"),
+                other => other.to_string(),
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentSessionEvent {

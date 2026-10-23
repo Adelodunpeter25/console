@@ -373,4 +373,99 @@ impl RunService {
             ))
         }
     }
+
+    /// Background work (detached shells, subagents) for a session.
+    pub async fn list_background_work(&self, session_id: &str) -> Result<Vec<BackgroundWork>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{session_id}/background-work"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list background work")?;
+        let body: ApiResponse<Vec<BackgroundWork>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse background work response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(body
+                .error
+                .unwrap_or_else(|| "Failed to list background work".into())))
+        }
+    }
+
+    /// Stop one detached shell; returns the server's updated record.
+    pub async fn cancel_background_work(
+        &self,
+        session_id: &str,
+        work_id: &str,
+    ) -> Result<BackgroundWork> {
+        let url = self
+            .transport
+            .url(&format!(
+                "/api/sessions/{session_id}/background-work/{work_id}/cancel"
+            ))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to cancel background work")?;
+        let body: ApiResponse<BackgroundWork> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse cancel response")?;
+        match (body.success, body.data) {
+            (true, Some(work)) => Ok(work),
+            _ => Err(anyhow!(body
+                .error
+                .unwrap_or_else(|| "Failed to cancel background work".into()))),
+        }
+    }
+
+    /// Output of a detached shell. The server has no output stream, so
+    /// callers poll this while the shell is running.
+    pub async fn background_work_output(
+        &self,
+        session_id: &str,
+        work_id: &str,
+    ) -> Result<BackgroundWorkOutput> {
+        let url = self
+            .transport
+            .url(&format!(
+                "/api/sessions/{session_id}/background-work/{work_id}/output"
+            ))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to read background work output")?;
+        let body: ApiResponse<BackgroundWorkOutput> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse background work output")?;
+        match (body.success, body.data) {
+            (true, Some(out)) => Ok(out),
+            _ => Err(anyhow!(body
+                .error
+                .unwrap_or_else(|| "Failed to read background work output".into()))),
+        }
+    }
 }
