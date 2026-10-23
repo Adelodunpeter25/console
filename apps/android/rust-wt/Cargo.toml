@@ -22,6 +22,7 @@ console-proto = { path = "../../desktop/crates/console-proto" }
 console-shared = { path = "../../desktop/crates/console-shared" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 anyhow = "1"
+serde_json = "1"
 log = "0.4"
 # Kotlin's `external fun` resolves to a JNI symbol, so the Rust side needs the
 # JNI ABI, not a plain `extern "C"` export.

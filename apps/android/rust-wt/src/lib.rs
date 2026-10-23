@@ -6,14 +6,16 @@
 //! one implementation of the protocol and one place to fix it.
 //!
 //! This crate is the JNI surface plus [`bridge`]: stream registry, blocking
-//! frame reads, and a shared tokio runtime.
+//! frame reads, and a shared tokio runtime. [`shared`] exposes the pure logic
+//! in `console-shared` (diffs, pairing, labels, icons) to Kotlin.
 //!
 //! Frame wire shape between Rust and Kotlin (one allocation per frame):
 //! `[u32BE type_len][type][u64BE seq][payload]`.
 //!
-//! Build: `apps/android/rust-wt-spike/build.sh`.
+//! Build: `apps/android/rust-wt/build.sh`.
 
 mod bridge;
+mod shared;
 
 /// Run a JNI entry point, turning a panic into an error code.
 ///

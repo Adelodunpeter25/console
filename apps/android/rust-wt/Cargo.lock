@@ -270,6 +270,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "console-proto",
+ "console-shared",
  "eventsource-stream",
  "futures-util",
  "log",
@@ -300,6 +301,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "console-shared"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "similar",
+]
+
+[[package]]
 name = "console-wt-android"
 version = "0.0.0"
 dependencies = [
@@ -307,8 +316,10 @@ dependencies = [
  "anyhow",
  "console-core",
  "console-proto",
+ "console-shared",
  "jni",
  "log",
+ "serde_json",
  "tokio",
  "wtransport",
 ]
