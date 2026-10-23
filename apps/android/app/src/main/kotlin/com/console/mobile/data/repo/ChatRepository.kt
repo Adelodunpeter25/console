@@ -25,7 +25,7 @@ import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.AssistantMessage
-import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.BackgroundWorkOutputFrame
 import com.console.mobile.data.model.ImageAttachment
 import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
@@ -46,6 +46,7 @@ import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -183,11 +184,13 @@ class ChatRepository(
         }
     }
 
-    /** One output poll for the background-shell sheet; null means the job is gone. */
-    suspend fun backgroundWorkOutput(sessionId: String, workId: String): BackgroundWorkOutput? =
-        withContext(Dispatchers.IO) {
-            runCatching { api.getBackgroundWorkOutput(sessionId, workId) }.getOrNull()
-        }
+    /**
+     * Live output for the background-shell sheet, pushed by the server as the
+     * shell writes. Emits one frame per update and completes when the shell is
+     * no longer running; it throws if the stream cannot be opened.
+     */
+    fun backgroundWorkOutputStream(sessionId: String, workId: String): Flow<BackgroundWorkOutputFrame> =
+        streamClient.shellOutput(apiClient.baseUrl, sessionId, workId, apiClient.authToken)
 
     /** Load any staged next-turn prompt into state on session open. */
     fun loadQueuedPrompt(sessionId: String) {

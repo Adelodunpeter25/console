@@ -49,6 +49,35 @@ data class BackgroundWorkOutput(
     val timedOut: Boolean = false,
 )
 
+/**
+ * One pushed frame of a shell's live output. [stdout] is only what is new since
+ * the previous frame; [stderr] is present only when it changed.
+ */
+@Serializable
+data class BackgroundWorkOutputFrame(
+    val stdout: String = "",
+    val stderr: String? = null,
+    val nextCursor: Int = 0,
+    val truncated: Boolean = false,
+    val status: String = "",
+    val exitCode: Int? = null,
+    val timedOut: Boolean = false,
+)
+
+/** Fold one pushed frame into the output accumulated so far. */
+fun BackgroundWorkOutput?.applyFrame(frame: BackgroundWorkOutputFrame): BackgroundWorkOutput {
+    val base = this ?: BackgroundWorkOutput()
+    return base.copy(
+        stdout = base.stdout + frame.stdout,
+        stderr = frame.stderr ?: base.stderr,
+        nextCursor = frame.nextCursor,
+        truncated = base.truncated || frame.truncated,
+        status = frame.status,
+        exitCode = frame.exitCode,
+        timedOut = frame.timedOut,
+    )
+}
+
 /** Agent session SSE event. */
 @Serializable
 data class AgentSessionEvent(

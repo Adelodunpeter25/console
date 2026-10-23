@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
+import com.console.mobile.data.model.applyFrame
+import kotlinx.coroutines.CancellationException
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
@@ -56,8 +58,6 @@ import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.TintPill
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
     val done = items.count { it.status == "completed" || it.status == "done" || it.status == "complete" }
@@ -257,17 +257,17 @@ private fun ShellOutputSheet(
     var stopping by remember(work.id) { mutableStateOf(false) }
     val scroll = rememberScrollState()
 
-    // The server has no output stream; poll the job while it is still running.
+    // Live output is pushed by the server as the shell writes; the flow ends
+    // when the shell stops running.
     LaunchedEffect(work.id) {
-        while (isActive) {
-            val next = AppContainer.chatRepository.backgroundWorkOutput(sessionId, work.id)
-            if (next == null) {
-                if (output == null) unavailable = true
-                break
+        try {
+            AppContainer.chatRepository.backgroundWorkOutputStream(sessionId, work.id).collect { frame ->
+                output = output.applyFrame(frame)
             }
-            output = next
-            if (next.status != "running") break
-            delay(1_000)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            if (output == null) unavailable = true
         }
     }
 

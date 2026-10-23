@@ -3,6 +3,7 @@ package com.console.mobile.data.stream
 import com.console.mobile.WtStream
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.AgentSessionEvent
+import com.console.mobile.data.model.BackgroundWorkOutputFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,6 +89,73 @@ class ChatStreamClient(
         val base = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/run/stream"
         val url = if (since != null) "$base?since=$since" else base
         return stream(url = url, method = Method.Get, authToken = authToken)
+    }
+
+    /**
+     * Live output of a detached shell over SSE. Each emission is one frame;
+     * the flow completes when the server closes the stream (the shell is no
+     * longer running) and throws if the stream cannot be opened or breaks.
+     */
+    fun shellOutput(
+        baseUrl: String,
+        sessionId: String,
+        workId: String,
+        authToken: String? = null,
+    ): Flow<BackgroundWorkOutputFrame> = callbackFlow {
+        val url = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/background-work/$workId/output/stream"
+        val builder = Request.Builder()
+            .url(url)
+            .addHeader("Accept", "text/event-stream")
+            .addHeader("Cache-Control", "no-cache")
+            .get()
+        if (authToken != null) builder.addHeader("Authorization", "Bearer $authToken")
+        val call = httpClient.newCall(builder.build())
+
+        val job = launch(Dispatchers.IO) {
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    close(if (call.isCanceled()) null else e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        if (!response.isSuccessful) {
+                            close(IOException("Server returned HTTP ${response.code}"))
+                            return
+                        }
+                        val body = response.body
+                        if (body == null) {
+                            close(IOException("Empty response body"))
+                            return
+                        }
+                        val reader = BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8))
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            if (call.isCanceled()) break
+                            val current = line?.trim() ?: continue
+                            if (!current.startsWith("data:")) continue // heartbeats, event names
+                            val raw = current.substring(5).trim()
+                            if (raw.isEmpty()) continue
+                            try {
+                                trySend(json.decodeFromString<BackgroundWorkOutputFrame>(raw))
+                            } catch (_: Exception) {
+                                // a malformed frame is skipped, like the run stream
+                            }
+                        }
+                        close()
+                    } catch (e: Exception) {
+                        close(if (call.isCanceled()) null else e)
+                    } finally {
+                        response.close()
+                    }
+                }
+            })
+        }
+
+        awaitClose {
+            job.cancel()
+            call.cancel()
+        }
     }
 
     private sealed interface Method {
