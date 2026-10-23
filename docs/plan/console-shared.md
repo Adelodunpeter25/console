@@ -1,5 +1,59 @@
 # `console-shared` — One implementation of the logic both clients need
 
+> ## Status — implemented, with open verification items
+>
+> Phases 0–3 are **done and committed**; Phase 4 and 5 are not started. Legend:
+> ✅ done and verified · ◐ done, not fully verified · ⬜ not done.
+>
+> | Phase | State | Commit(s) |
+> | :--- | :--- | :--- |
+> | 0 — crate + wiring | ✅ | `c94dcbff` |
+> | 1 — move the pure code | ◐ moved and re-exported; desktop build not confirmed | `c94dcbff`, `d29dc814` |
+> | 2 — JNI surface + `SharedNative` | ✅ builds; ◐ not run on a device | `81f2e540`, `4a330603` |
+> | 3 — cut Android callers over | ✅ Kotlin compiles; ◐ JVM tests pass except 2 I rewrote and have not re-run | `4a330603`, `6a5ddbb8` |
+> | 4 — delete the re-export shims | ⬜ deliberately left (they keep old paths working) | — |
+> | 5 — local port forward | ⬜ optional, not started | — |
+>
+> Also done outside the phases: the **WebTransport trust-store bug** (§7.2) is
+> fixed — `97685cbf`.
+>
+> **Not yet verified — do these before calling this closed:**
+>
+> 1. `cargo check -p console-core -p console-ui --tests` never finished (it
+>    timed out twice), so **the desktop app compiling against the moved code is
+>    unconfirmed.** This is the largest open risk.
+> 2. `icons_test`, `mentions_test` and the new `pairing_test` case were fixed
+>    after a failing run and **have not been seen passing since.**
+> 3. The two rewritten Android tests (`TokensPerSecondTest`, plus the
+>    `SharedNativeTest` ABI pin) have not been re-run.
+> 4. Nothing was run **on a device or emulator** with the new `.so`.
+> 5. The `.so` staged in `jniLibs/` locally is **stale** (zero `SharedNative`
+>    symbols). CI rebuilds it on push; locally run `rust-wt/build.sh`. A stale
+>    library degrades safely — `SharedNative.available` turns false — but
+>    pairing is refused and diffs render empty until it is rebuilt.
+>
+> **Decisions made while implementing** (the rest of this document describes
+> the plan; where it disagrees with these notes, these notes win):
+>
+> - **32-bit ABIs are not supported.** `build.sh` stages only `arm64-v8a` and
+>   `x86_64`. On `armeabi-v7a`/`x86` the library is absent, so pairing fails
+>   closed there. Accepted; not a goal.
+> - **Pairing scheme is case-insensitive** and normalised to lowercase, as §3.0
+>   proposed. This was a *behaviour change* to the moved parser, with a test.
+> - **Pending-link URL unified.** The shared `mend` uses `console:pending-link`.
+>   Desktop used `waku:pending-link` and Android `console:pending-link`; Android's
+>   value won because nothing else on desktop depended on the old string.
+> - **`less` resolves to the `css` icon on both clients** (desktop said `sass`).
+> - **`time.rs` was not moved.** It calls `chrono::Utc::now()`, which is not
+>   pure, so `format_time_ago` stays in `console-ui`. `session_groups.rs` was
+>   not moved for the same reason.
+> - **Mentions stay desktop-only** over JNI (§3.0): the models differ.
+>   `composer::mentions` is in the shared crate for the desktop's sake only.
+> - **`LinkIcons.kt` was not touched.** Its link/file-name rules are Android's
+>   own and were never part of the Phase 3 table.
+> - **The Rust `.so` grew by ~99 KB, not the ~20–25 KB projected** — see §4.4.
+>   Accepted; the cost was not investigated further.
+
 Extracts the pure, dependency-free logic that the desktop (Rust/GPUI) and the
 Android app (Kotlin/Compose) currently implement twice into a new
 `console-shared` crate, and exposes it to Android over the existing JNI bridge
@@ -479,8 +533,17 @@ Conclusions:
 
 **Decision:** `console-shared` carries **no Markdown parser and no `regex`**
 (§3.2), so there is no feature flag to manage — the expensive dependency is
-simply absent. Expected total growth for the Android `.so` with every module
-in §4 reachable: **~20–25 KB** (about 1% of 2.6 MB).
+simply absent.
+
+> **Measured result (implementation): +100,960 B (~99 KB), not ~20–25 KB.**
+> `aarch64-linux-android` release, same profile: **2,621,664 B** without
+> `shared.rs`, **2,722,624 B** with all 16 entry points (~3.9%). The earlier
+> spike numbers above are still right for what they measured; the gap is the
+> real surface being larger than the spike's two functions — notably
+> `fileCallDiffs` pulls `serde_json` parsing, and the icon tables are a few
+> hundred match arms. I started to bisect which function dominates and stopped
+> at the owner's request: the size is **accepted**, and the figure above is
+> the number to trust.
 
 ---
 
@@ -657,6 +720,12 @@ Each phase is independently shippable and independently revertable.
 
 **Verify:** `cd apps/desktop && cargo test -p console-shared`.
 
+> **Status ✅ (`c94dcbff`).** Crate created, added to the workspace members and
+> `workspace.dependencies`, and to `rust-wt/Cargo.toml`. It started with
+> `serde_json` + `similar` only. No `regex`, `chrono`, `unicode-segmentation`
+> or `pulldown-cmark` — nothing that was moved needed them (§4.1 shows the
+> original, larger list).
+
 ### Phase 1 — Move the pure code, change no callers
 
 Move each module's *contents* into `console-shared` and leave thin
@@ -682,7 +751,30 @@ live in `tests/`, never inline `#[cfg(test)]` modules — see `AGENTS.md`).
 
 **Verify:** `cd apps/desktop && cargo test -p console-core -p console-ui`.
 
-This phase alone removes ~2,000 lines of duplicated *desktop* code with zero
+> **Status ◐ (`c94dcbff`, `d29dc814`).** Moved with `git mv` so history follows,
+> and old paths kept alive by re-export shims:
+>
+> | Moved to `console-shared` | From |
+> | :--- | :--- |
+> | `pairing`, `file_kind`, `diff` | `console-core/src/utils/` |
+> | `page_title` (pure half) | `console-core` — the `reqwest` fetch **stayed** |
+> | `markdown::mend`, `markdown::file_links` | `console-ui/src/markdown/` |
+> | `composer::mentions` | `console-ui/src/common/input/` |
+> | `path`, `throughput` | `console-ui/src/utils/` |
+> | `format` (`format_context_window`, `format_model_name`) | `console-ui/src/common/model_picker.rs` |
+> | `tools` (new: labels, MCP split, 5 predicates) | `console-ui/src/chat/toolcalls.rs` private fns |
+> | `icons` (new: union of both tables) | `console-ui/src/primitives/file_icons.rs` + `FileTypeRegistry.kt` |
+>
+> Tests moved with the code. New tests written: `mend_test`, `mentions_test`,
+> `tools_test`, `icons_test`, and 12 cases in `diff_test` (§3.1). A mend test
+> did not exist on desktop before.
+>
+> **Not verified:** `console-ui`/`console-core` compiling against this. Also,
+> `file_icons.rs` in `console-ui` now keeps only the desktop-specific parts
+> (asset path, highlight-language table) and resolves keys through
+> `console_shared::icons`; `FileTypeIcon::from_key` was added to `icons.rs`.
+>
+> This phase alone removes ~2,000 lines of duplicated *desktop* code with zero
 behavioural risk. It is the bulk of the value at the lowest risk, and it can
 land even if the JNI work is deferred.
 
@@ -696,6 +788,28 @@ land even if the JNI work is deferred.
 - `cd apps/android/rust-wt && cargo build --release --target aarch64-linux-android`
   (or `bash apps/android/rust-wt/build.sh`).
 - `cd apps/android && ./gradlew :app:assembleDebug`.
+
+> **Status ✅ built, ◐ not run (`81f2e540`, `4a330603`).**
+> `rust-wt/src/shared.rs` exports **16** symbols (`abiVersion`,
+> `extractHtmlTitle`, `closeHanging`, `toolLabel`, `toolFlags`, `fileIconKey`,
+> `languageIconKey`, `formatContextWindow`, `formatModelName`,
+> `formatTokensPerSecond`, `parsePairingUrl`, `splitPairingLine`, `hostPort`,
+> `diffLines`, `parseUnifiedDiff`, `fileCallDiffs`) — confirmed with `nm -D`.
+> `SharedNative.kt` is the only Kotlin surface; its `external` functions are
+> private, so nothing else can call a symbol that might not resolve.
+>
+> Differences from the design in §5:
+>
+> - **ABI check replaced per-call version sniffing.** `SharedNative.EXPECTED_ABI`
+>   is compared with the Rust `ABI_VERSION` once at class init; a mismatch makes
+>   `available` false. Framed payloads still carry the `CSHR` magic + version.
+> - **Plain strings are not framed** — a single text result has nothing to
+>   misparse. Only diffs and pairing use the framed format.
+> - `toolFlags` returns the five predicates as one bitmask instead of five
+>   calls.
+> - A startup `Log.e` in `AppContainer` reports when the library is unavailable.
+> - `apps/android/rust-wt/src/lib.rs` had a stale doc path
+>   (`rust-wt-spike/build.sh`) that was corrected.
 
 ### Phase 3 — Cut over the callers, one at a time
 
@@ -735,10 +849,46 @@ cd apps/android && ./gradlew :app:testDebugUnitTest --tests "<TestClass>"
 cd apps/desktop && cargo test -p console-shared
 ```
 
+> **Status ✅ compiles, ◐ tests (`4a330603`, `6a5ddbb8`).** All six entries are
+> done. What actually happened to each Kotlin file:
+>
+> | # | Result |
+> | :--- | :--- |
+> | 1 Tool labels | `TOOL_LABELS`, `parseMcpToolName`, `getToolLabel`, the five `is*Tool` predicates and the arg extractors **deleted** from `ToolHelpers.kt`. `TOOL_ICONS`/`getToolIcon` and the argument *summaries* stay (Compose-specific). Callers (`ToolCallRow`, `RunActivity`) use `SharedNative.label` / `.kind`. |
+> | 2 Page title | Entity-decoding/extraction **deleted**; `PageTitles.kt` keeps the OkHttp fetch and `bareWebUrls`. |
+> | 3 Mend | `MarkdownMend.kt` and `MarkdownMendFixtureTest.kt` **deleted**; `CustomMarkdown.kt` calls `SharedNative.mendMarkdown`. The Rust `mend_test` mirrors the old fixtures. |
+> | 4 Icons | The 166 + 53 entry tables **deleted**; `FileTypeRegistry.kt` is two thin wrappers plus `getProviderIconKey`, which was never shared. |
+> | 5 Pairing | The parser **deleted**; `PairingUrl.kt` keeps the `PairingUrl` data class and the same four public functions (`parsePairingUrl`, `splitHostAndCode`, `pairingHost`, `pairingCode`) so no screen changed. |
+> | 6 Diff | `DiffUtils.kt` **deleted whole**. `DiffView`, `ToolCallRow`, `ChatDiffSheet` and `ChangesScreen` now use `SharedNative.Diff` / `.parseDiff` / `.callDiffs`. |
+>
+> **Fail-closed behaviour (not in the original plan).** With the library
+> unavailable: pairing is **refused** (never parsed leniently); diffs are empty;
+> labels fall back to the raw tool name; file icons fall back to `file`;
+> `contextWindow`/`modelName` fall back to a plain value. `SharedNativeTest`
+> pins this.
+>
+> **Tests changed.** Behaviour now lives in Rust, so the Kotlin tests were cut
+> down to the Android seam: `PairingUrlTest` (3 tests — fails closed, degrades,
+> agrees when loaded), `PageTitlesTest` (just `bareWebUrls`), `ToolHelpersTest`
+> (icons + summaries), `TokensPerSecondTest`, `LinkIconsTest` (two cases skip
+> when the library is absent via `assumeTrue`), and a new `SharedNativeTest`.
+> A JVM run **never loads the `.so`**, so any assertion on Rust output would
+> fail there — that is why two tests I first wrote failed and were rewritten.
+>
+> **Missed on the first pass:** `RunActivity.kt` still called the removed
+> `getToolLabel`; the compile caught it. `grep` for removed symbols now returns
+> nothing.
+
 ### Phase 4 — Delete the now-dead Rust re-export shims
 
 Once the desktop call sites import from `console-shared` directly, remove
 the `pub use` shims from `console-core` / `console-ui`.
+
+> **Status ⬜ — deliberately not done.** The shims (`console_core::utils::diff`,
+> `console_ui::markdown::mend`, `console_ui::utils::path`, …) are harmless and
+> keep every existing import working. Removing them is a pure cleanup that
+> touches many desktop files, some of which have uncommitted work in progress.
+> Do it once the desktop build is confirmed green.
 
 ### Phase 5 — The local port forward (optional, larger)
 
@@ -751,6 +901,9 @@ This one is **not** a pure function — it owns sockets and a tokio task. It
 needs the same JNI registry pattern `bridge.rs` already uses for WT streams
 (handle-based, polled, not callback-based). It is listed here but is a
 separate piece of work: it does not belong in Phase 1's "pure move".
+
+> **Status ⬜ — not started.** Along with the SSE reader, this is the next
+> candidate if more Kotlin/Rust duplication is worth removing.
 
 ---
 
@@ -775,6 +928,16 @@ The Rust side covers *more* than the Kotlin side — 139 methods to 84, and
 hand-written envelope-unwrapping and Moshi adapter wiring.
 
 ### 7.2 The blocker: TLS trust stores differ between the two Rust clients
+
+> **FIXED (`97685cbf`).** `WtTls::Native` now falls back to the bundled
+> Mozilla roots (`webpki-roots`, the same set `reqwest` uses) when the platform
+> store loads empty — which is always the case on Android. Where the platform
+> store loads (macOS, desktop Linux, Windows) it is used unchanged. Covered by
+> `wt_tls_roots_test` (2 tests); the 39 existing WebTransport tests still pass
+> and the Android `.so` builds. **Not run against a real HTTPS server on a
+> device.** Limitation: user- or MDM-installed CAs are invisible to the
+> fallback, so a server behind one still needs `WtTls::PinnedHashes`. The text
+> below is the original analysis, kept for the reasoning.
 
 This is the finding that decides the options, and it is a **bug in the
 existing Android build**, not just a hurdle for a future one.
@@ -988,41 +1151,67 @@ negligible size cost" — is an empirical claim, not an architectural one.
   parser is not migrated. A follow-up spike measured `diff_lines` at ~17 KB
   and compared the two diff implementations on 20,000 random edits (§3.1).
 
-**What the spike did not test:** the Kotlin side. The JNI *encoding* is
-specified in §5.2 but the Kotlin decoder and the `available` fallback are
-Phase 2 work. The spike proved the Rust half and the packaging; the Kotlin
-half is unproven.
+**What the spike did not test:** the Kotlin side. *(Now built — see Phase 2/3
+status — but still not exercised on a device.)*
+
+### 9.1 Implementation results
+
+| Check | Result |
+| :--- | :--- |
+| `cargo test -p console-shared`: `diff` 26, `file_kind` 9, `file_links` 5, `format` 3 | ✅ pass |
+| `cargo test`: `mend`, `path`, `throughput`, `tools` | ✅ pass (seen in earlier runs) |
+| `cargo test`: `icons`, `mentions`, `pairing`, `page_title` | ◐ fixed after failures; **not re-seen passing** |
+| `cargo check -p console-core -p console-ui --tests` | ⬜ **never completed** |
+| Android `.so` for `aarch64-linux-android` | ✅ builds, 16 `SharedNative` symbols export |
+| `./gradlew :app:compileDebugKotlin` | ✅ clean (after fixing `RunActivity.kt`) |
+| Android JVM tests (6 classes) | ◐ 21 ran, 2 failed (`TokensPerSecondTest`, my test's fault), 2 skipped; the fix was committed, not re-run |
+| `console-shared` vs the Kotlin implementations it replaced | ✅ measured: identical +/− counts on 20,000 random edits, identical line order on 85% (§3.1) |
+| On a device / emulator | ⬜ not done |
+
+**Why test runs looked hung.** macOS (`syspolicyd` / XProtect) scans every
+freshly built unsigned test binary the first time it runs, which cost 15–27 s
+*per test binary* here. `console-shared` has ten, so `cargo test` looked stuck
+while the code was fine. Running the binary directly showed the same delay
+*after* the tests had already printed `ok`. It is an environment cost, not a
+code problem; adding the target directory to Terminal's Developer Tools
+exemption removes most of it.
 
 ---
 
 ## 10. Definition of Done
 
-- `console-shared` exists, is a workspace member, and has no heavyweight
-  dependencies.
-- Every module in §4 exists there, with its tests, and the desktop imports
-  from it (no duplicate implementations remain in `console-core` /
-  `console-ui`).
-- `SharedNative` is the only surface Android code uses; the corresponding
+- [x] `console-shared` exists, is a workspace member, and has no heavyweight
+  dependencies (`serde_json` + `similar` only).
+- [~] Every module in §4 exists there, with its tests, and the desktop imports
+  from it. *(Modules and tests exist. `time`, `session_groups` and the Markdown
+  parser were intentionally **not** moved — see the status block. Desktop
+  compile unconfirmed.)*
+- [x] `SharedNative` is the only surface Android code uses; the corresponding
   Kotlin duplicates are deleted.
-- The `.so` still builds for `aarch64-linux-android` and `x86_64-linux-android`
-  via `apps/android/rust-wt/build.sh`.
-- The Android `.so` size grows by **less than 40 KB** over the current
-  2.6 MB baseline (§4.4). `pulldown-cmark` and `regex` are not dependencies of
-  `console-shared` at all (§3.2).
-- `console-shared/tests/diff_test.rs` exists and covers the §3.1 cases; the
+- [x] The `.so` builds for `aarch64-linux-android` (verified). `x86_64`
+  is built by `build.sh` but was not separately verified here.
+- [~] ~~The Android `.so` grows by less than 40 KB.~~ **Not met:** it grew
+  ~99 KB (§4.4). Accepted by the owner.
+- [x] `console-shared/tests/diff_test.rs` exists and covers the §3.1 cases; the
   Kotlin `computeLineDiff` / `parseUnifiedDiff` are deleted.
-- `cd apps/android && ./gradlew :app:assembleDebug` succeeds.
-- `cd apps/android && ./gradlew :app:testDebugUnitTest` passes.
-- `cd apps/desktop && cargo test -p console-shared -p console-core -p console-ui` passes.
-- CI's "Verify the APK carries WebTransport" step still passes — the new
-  surface ships in the same library.
+- [~] `cd apps/android && ./gradlew :app:assembleDebug` succeeds.
+  *(`compileDebugKotlin` is clean; a full `assembleDebug` was not run.)*
+- [~] `cd apps/android && ./gradlew :app:testDebugUnitTest` passes.
+  *(Six classes run; the two failures were fixed but not re-run. Full suite
+  not run.)*
+- [ ] `cd apps/desktop && cargo test -p console-shared -p console-core -p console-ui`
+  passes. **Open.**
+- [ ] CI's "Verify the APK carries WebTransport" step still passes — expected
+  (same library), **not yet seen on a push.**
+- [ ] Exercised on a device: pair, open a chat with edits, open the Changes tab.
+  **Open.**
 
 ---
 
 ## 11. Related Work (out of scope, but adjacent)
 
-- **The TLS trust-store defect** (§7.2) is a live bug in the current Android
-  build, independent of this plan. It deserves its own issue.
+- **The TLS trust-store defect** (§7.2) — **fixed in `97685cbf`** (see the
+  note at the top of §7.2); not yet exercised on a device.
 - **The terminal snapshot format is defined in three places**: the C++ bridge
   (`apps/android/app/src/main/cpp/console_terminal_jni.cpp:14`), the Kotlin
   decoder (`apps/android/app/src/main/kotlin/com/console/mobile/feature/terminal/native/TerminalFrame.kt:25`),
