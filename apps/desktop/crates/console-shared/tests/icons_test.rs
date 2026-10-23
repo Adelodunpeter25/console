@@ -46,7 +46,7 @@ fn desktop_only_and_android_only_entries_are_both_kept() {
 #[test]
 fn unknown_and_extensionless_files_fall_back_to_file() {
     assert_eq!(file_icon_key("data.unknownext"), "file");
-    assert_eq!(file_icon_key("LICENSEE_NOTES"), "file");
+    assert_eq!(file_icon_key("NOTES"), "file");
     assert_eq!(file_icon_key("trailingdot."), "file");
     assert_eq!(file_icon_key(""), "file");
 }
@@ -96,6 +96,8 @@ fn every_key_has_an_asset_on_both_clients() {
             .filter_map(|l| l.trim().strip_prefix("Some(\""))
             .filter_map(|r| r.split('"').next()),
     );
+    // `_ => ""` in the language arm is the unreachable default, not a key.
+    keys.retain(|key| !key.is_empty());
     keys.sort_unstable();
     keys.dedup();
     assert!(keys.len() > 60, "key extraction broke: {} keys", keys.len());
