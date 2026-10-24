@@ -8,7 +8,7 @@ use gpui::{
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::common::file_mention_chip::{
-    FILE_MENTION_ICON_SIZE, FILE_MENTION_RADIUS, file_mention_colors,
+    FILE_MENTION_RADIUS, file_mention_colors,
 };
 use crate::theme::Theme;
 
@@ -370,13 +370,14 @@ impl Element for InputElement {
 
         let mut mention_icons = Vec::new();
         let mut child_layout_ids = vec![text_layout_id];
+        let theme = Theme::current(cx);
 
         for mention in mentions_to_layout {
             let mut icon = gpui::div()
                 .absolute()
-                .child(crate::primitives::file_type_icon(
+                .child(crate::common::file_mention_chip::mention_icon(
                     &mention.path,
-                    FILE_MENTION_ICON_SIZE,
+                    theme,
                 ))
                 .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);

@@ -57,6 +57,21 @@ pub fn file_mention_chip(path: &str, label: impl Into<String>, theme: Theme) -> 
         )
 }
 
+/// The icon a mention chip paints: a file-type icon for files, one generic
+/// icon for skills.
+pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
+    if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
+        crate::primitives::app_icon(
+            crate::primitives::IconName::Sparkle,
+            FILE_MENTION_ICON_SIZE,
+            theme.accent,
+        )
+        .into_any_element()
+    } else {
+        crate::primitives::file_type_icon(path, FILE_MENTION_ICON_SIZE).into_any_element()
+    }
+}
+
 /// Non-breaking space prefix reserved before filename to house the file icon and padding.
 /// Because `\u{00A0}` is a Unicode glue character, it wraps with the filename to new rows
 /// without ever collapsing or protruding into negative coordinates.
@@ -218,10 +233,7 @@ impl Element for InlineFileMentionText {
         for m in prepared_mentions {
             let mut icon = div()
                 .absolute()
-                .child(crate::primitives::file_type_icon(
-                    &m.path,
-                    FILE_MENTION_ICON_SIZE,
-                ))
+                .child(mention_icon(&m.path, theme))
                 .into_any_element();
             let layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(layout_id);

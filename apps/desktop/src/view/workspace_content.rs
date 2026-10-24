@@ -1070,13 +1070,9 @@ impl ConsoleDesktopApp {
                                                         let attachments = (*this
                                                             .attachments_for_pane(&q_pane))
                                                         .clone();
-                                                        let context_files = this
-                                                            .composer_for_pane(&q_pane)
-                                                            .read(cx)
-                                                            .mentions()
-                                                            .iter()
-                                                            .map(|mention| mention.path.clone())
-                                                            .collect();
+                                                        let context_files = console_shared::composer::mentions::context_file_paths(
+    this.composer_for_pane(&q_pane).read(cx).mentions(),
+);
                                                         this.queue_prompt_for_pane(
                                                             q_pane.clone(),
                                                             prompt,
@@ -1094,13 +1090,9 @@ impl ConsoleDesktopApp {
                                                     let attachments = (*this
                                                         .attachments_for_pane(&submit_pane_id))
                                                     .clone();
-                                                    let context_files = this
-                                                        .composer_for_pane(&submit_pane_id)
-                                                        .read(cx)
-                                                        .mentions()
-                                                        .iter()
-                                                        .map(|mention| mention.path.clone())
-                                                        .collect();
+                                                    let context_files = console_shared::composer::mentions::context_file_paths(
+    this.composer_for_pane(&submit_pane_id).read(cx).mentions(),
+);
                                                     this.active_pane_id =
                                                         Some(submit_pane_id.clone());
                                                     this.selected_session_id = this
@@ -1181,13 +1173,9 @@ impl ConsoleDesktopApp {
                                                 let prompt =
                                                     this.composer_for_pane(&pane).read(cx).content().to_string();
                                                 let atts = (*this.attachments_for_pane(&pane)).clone();
-                                                let context_files = this
-                                                    .composer_for_pane(&pane)
-                                                    .read(cx)
-                                                    .mentions()
-                                                    .iter()
-                                                    .map(|mention| mention.path.clone())
-                                                    .collect();
+                                                let context_files = console_shared::composer::mentions::context_file_paths(
+    this.composer_for_pane(&pane).read(cx).mentions(),
+);
                                                 this.queue_prompt_for_pane(
                                                     pane,
                                                     prompt,

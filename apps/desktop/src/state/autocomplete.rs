@@ -341,6 +341,10 @@ impl ConsoleDesktopApp {
                     };
                     input.insert_file_mention(range, path, cx);
                 }
+                // Skills become chips; built-in commands stay plain text.
+                AutocompleteItem::Command(command) if !command.builtin => {
+                    input.insert_skill_mention(range, &command.name, cx);
+                }
                 _ => {
                     let insert = item.insert_text();
                     input.replace_range(range, &insert, cx);

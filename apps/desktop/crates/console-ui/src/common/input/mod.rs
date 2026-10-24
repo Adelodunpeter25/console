@@ -511,6 +511,25 @@ impl ComposerInput {
             .and_then(|n| n.to_str())
             .unwrap_or(path)
             .to_string();
+        self.insert_mention_chip(range, label, path.to_string(), cx);
+    }
+
+    /// Insert an accepted skill as an inline chip. The buffer keeps the
+    /// plain `/name` text, which is what the agent reads.
+    pub fn insert_skill_mention(&mut self, range: Range<usize>, name: &str, cx: &mut Context<Self>) {
+        let chip = ComposerMention::skill(0..0, name);
+        self.insert_mention_chip(range, chip.label, chip.path, cx);
+    }
+
+    /// Shared body of the chip inserts: reserves room for the icon, writes
+    /// the label, and records the mention so edits keep it in step.
+    fn insert_mention_chip(
+        &mut self,
+        range: Range<usize>,
+        label: String,
+        path: String,
+        cx: &mut Context<Self>,
+    ) {
         let start = range.start.min(self.content.len());
         // The pill background extends ~17px left of the label to house the
         // 11px file icon, which consumes ~4 spaces worth of width. A single
@@ -544,7 +563,7 @@ impl ComposerInput {
             .retain(|m| m.range.end <= start || m.range.start >= start + insert_text.len());
         self.mentions.push(ComposerMention {
             range: mention_range,
-            path: path.to_string(),
+            path,
             label,
         });
         self.reconcile_mentions();
