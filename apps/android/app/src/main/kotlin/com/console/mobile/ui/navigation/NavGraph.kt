@@ -40,8 +40,6 @@ import com.console.mobile.feature.onboarding.SetupStep
 import com.console.mobile.feature.ports.PortsScreen
 import com.console.mobile.feature.settings.AddProjectScreen
 import com.console.mobile.feature.settings.SettingsScreen
-import com.console.mobile.feature.subagents.SubagentDetailsScreen
-import com.console.mobile.feature.subagents.SubagentsScreen
 import com.console.mobile.feature.terminal.TerminalScreen
 import com.console.mobile.ui.components.common.new.ConfirmPromptHost
 import com.console.mobile.ui.theme.NewTheme
@@ -157,7 +155,6 @@ fun AppNavGraph() {
                                 com.console.mobile.data.store.MobileTab.Changes -> navController.navigate(RouteChanges) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Terminal -> navController.navigate(RouteTerminal) { launchSingleTop = true }
                                 com.console.mobile.data.store.MobileTab.Devices -> navController.navigate(RouteDevices) { launchSingleTop = true }
-                                com.console.mobile.data.store.MobileTab.Subagents -> navController.navigate(RouteSubagents) { launchSingleTop = true }
                                 else -> {}
                             }
                         },
@@ -265,21 +262,6 @@ fun AppNavGraph() {
                     onBack = { navController.popBackStack() },
                     onAdded = { navController.popBackStack() },
                 )
-            }
-            composable<RouteSubagents> {
-                SubagentsScreen(
-                    onBackToChat = {
-                        AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Chat)
-                        navController.navigate(RouteChat) { launchSingleTop = true }
-                    },
-                    onOpenDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
-                )
-            }
-            composable<RouteSubagentDetails> {
-                SubagentDetailsScreen(onBack = {
-                    AppContainer.appStateHolder.setActiveTab(com.console.mobile.data.store.MobileTab.Subagents)
-                    navController.popBackStack()
-                })
             }
             composable<RouteOnboarding> { OnboardingScreen(onConnected = {}) }
             composable<RouteSetup> {

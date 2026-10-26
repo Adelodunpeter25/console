@@ -4,14 +4,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class MobileTab { Home, Chat, Settings, Terminal, Files, Changes, Devices, Subagents, SubagentDetails }
+enum class MobileTab { Home, Chat, Settings, Terminal, Files, Changes, Devices }
 
 data class AppState(
     val activeTab: MobileTab = MobileTab.Home,
     val previousTab: MobileTab? = null,
     val selectedProjectId: String? = null,
     val selectedSessionId: String? = null,
-    val selectedSubagentId: String? = null,
     val backendUrl: String? = null,
     val pendingServersSection: Boolean = false,
     /** A file a link asked to open; the Files screen consumes it. */
@@ -42,7 +41,6 @@ class AppStateHolder(initial: AppState = AppState()) {
 
     fun setSelectedProjectId(id: String?) { _state.value = _state.value.copy(selectedProjectId = id) }
     fun setSelectedSessionId(id: String?) { _state.value = _state.value.copy(selectedSessionId = id) }
-    fun setSelectedSubagentId(id: String?) { _state.value = _state.value.copy(selectedSubagentId = id) }
     fun setBackendUrl(url: String?) { _state.value = _state.value.copy(backendUrl = url) }
     fun setPendingServersSection(pending: Boolean) { _state.value = _state.value.copy(pendingServersSection = pending) }
 
@@ -61,7 +59,6 @@ class AppStateHolder(initial: AppState = AppState()) {
             activeTab = if (cur.activeTab == MobileTab.Chat) MobileTab.Home else cur.activeTab,
             selectedProjectId = null,
             selectedSessionId = null,
-            selectedSubagentId = null,
         )
     }
 }

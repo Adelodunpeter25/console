@@ -4,24 +4,19 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,124 +30,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.console.mobile.data.api.ConsoleJson
+import com.console.mobile.feature.chat.markdown.CustomMarkdown
+import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.theme.ConsoleMonoFamily
+import com.console.mobile.ui.theme.NewTheme
+import console.v1.SubagentActivityItem
+import console.v1.SubagentInfo
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Copy
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
-import com.console.mobile.AppContainer
-import console.v1.SubagentActivityItem
-import console.v1.SubagentInfo
-import com.console.mobile.feature.chat.markdown.CustomMarkdown
-import com.console.mobile.ui.components.common.new.PageHeader
-import com.console.mobile.ui.theme.NewTheme
-import com.console.mobile.ui.theme.ConsoleMonoFamily
-import com.console.mobile.data.api.ConsoleJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import com.console.mobile.ui.components.common.new.Banner
-import com.console.mobile.ui.components.common.new.BaseSheet
-import com.console.mobile.ui.components.common.new.EmptyView
-import com.console.mobile.ui.components.common.new.Section
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.TintPill
 
 /**
- * Port of screens/subagents/subagents-screen.tsx + subagent-details-screen.tsx.
+ * The details of one subagent, opened from the floating subagent list above the
+ * chat composer. Uses the shared [BaseSheet] so it matches every other sheet.
  */
-@Composable
-fun SubagentsScreen(onBackToChat: () -> Unit, onOpenDetails: (String) -> Unit) {
-    val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
-    val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
-    val sessionId = appState.selectedSessionId
-
-    LaunchedEffect(sessionId) {
-        if (sessionId != null) AppContainer.chatRepository.loadSubagents(sessionId)
-    }
-    val subagents = sessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
-
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(title = "Subagents (${subagents.size})", onBack = onBackToChat)
-        if (subagents.isEmpty()) {
-            EmptyView(
-                title = "No subagents spawned",
-                description = "Subagents created by the assistant during this session will stream their activity and summaries here in real time.",
-                icon = TablerIcons.Outline.Robot,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
-                SectionCard(modifier = Modifier.padding(top = 8.dp)) {
-                    subagents.forEachIndexed { index, s ->
-                        SubagentRow(subagent = s, onClick = {
-                            AppContainer.appStateHolder.setSelectedSubagentId(s.subagent_id)
-                            onOpenDetails(s.subagent_id)
-                        })
-                        if (index < subagents.lastIndex) SectionDivider()
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** Colour a subagent's status is shown in: running = the accent, done = green, otherwise red. */
-private fun subagentTint(status: String): Color = when (status) {
-    "running" -> NewTheme.Accent
-    "completed" -> NewTheme.Success
-    else -> NewTheme.Danger
-}
-
-private fun subagentLabel(status: String): String = when (status) {
-    "running" -> "Running"
-    "completed" -> "Done"
-    "aborted" -> "Aborted"
-    else -> "Failed"
-}
-
-@Composable
-private fun SubagentRow(subagent: SubagentInfo, onClick: () -> Unit) {
-    val tint = subagentTint(subagent.status)
-    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(TablerIcons.Outline.Robot, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-            Text(subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } }, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 14.dp))
-            TintPill(subagentLabel(subagent.status), tint)
-            Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp).padding(start = 4.dp))
-        }
-        if (subagent.prompt.isNotBlank()) {
-            Text(subagent.prompt, color = NewTheme.TextSecondary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-        }
-        Text("${subagent.activities.size} tool action${if (subagent.activities.size == 1) "" else "s"}", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-    }
-}
-
-@Composable
-fun SubagentDetailsScreen(onBack: () -> Unit) {
-    val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
-    val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
-    val subagents = appState.selectedSessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
-    val subagent = subagents.firstOrNull { it.subagent_id == appState.selectedSubagentId }
-
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(title = subagent?.role ?: "Subagent Details", onBack = onBack)
-        if (subagent == null) {
-            EmptyView(title = "Subagent not found", description = "It may have been cleared when switching environments.", icon = TablerIcons.Outline.Robot, modifier = Modifier.fillMaxSize())
-            return@Column
-        }
-        SubagentDetailsBody(
-            subagent = subagent,
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
-        )
-    }
-}
-
-/** The details of one subagent in a bottom sheet, opened from the floating list above the composer. */
 @Composable
 fun SubagentDetailsSheet(subagent: SubagentInfo, onDismiss: () -> Unit) {
     BaseSheet(
@@ -163,9 +65,16 @@ fun SubagentDetailsSheet(subagent: SubagentInfo, onDismiss: () -> Unit) {
     }
 }
 
-/** The scrollable detail content shared by the full screen and the sheet. */
+/** Colour a subagent's status is shown in: running = the accent, done = green, otherwise red. */
+private fun subagentTint(status: String): Color = when (status) {
+    "running" -> NewTheme.Accent
+    "completed" -> NewTheme.Success
+    else -> NewTheme.Danger
+}
+
+/** The scrollable detail content: status, prompt, summary, errors and tool activity. */
 @Composable
-fun SubagentDetailsBody(subagent: SubagentInfo, modifier: Modifier = Modifier) {
+private fun SubagentDetailsBody(subagent: SubagentInfo, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var copied by remember(subagent.subagent_id) { mutableStateOf(false) }
     val tint = subagentTint(subagent.status)
