@@ -66,7 +66,7 @@ func encodeModelsResponse(c *fiber.Ctx, provider string, models []types.Model) e
 func registerProviderRoutes(app *fiber.App, favorites *services.FavoriteService) {
 	RegisterProviderCredentialRoutes(app)
 	app.Get("/api/providers", func(c *fiber.Ctx) error {
-		entries := providers.ListProviders()
+		entries := providers.ListProvidersWithContext(c.Context())
 		favs, err := favorites.List()
 		if err == nil {
 			for i, entry := range entries {

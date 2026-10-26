@@ -15,6 +15,29 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
+// ListProvidersWithContext returns catalog entries for implemented providers,
+// refreshing model snapshots from live discovery when logged in.
+func ListProvidersWithContext(ctx context.Context) []types.ProviderEntry {
+	entries := ListProviders()
+	for i := range entries {
+		switch entries[i].Name {
+		case "antigravity":
+			if antigravity.CredentialExists() {
+				entries[i].Models = antigravity.CachedModels(ctx)
+			}
+		case "codex":
+			if codex.CredentialExists() {
+				entries[i].Models = codex.CachedModels(ctx)
+			}
+		case "claude":
+			if claude.CredentialExists() {
+				entries[i].Models = claude.CachedModels(ctx)
+			}
+		}
+	}
+	return entries
+}
+
 // ListProviders returns catalog entries for implemented providers.
 func ListProviders() []types.ProviderEntry {
 	return []types.ProviderEntry{
