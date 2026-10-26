@@ -36,6 +36,7 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
+import com.console.mobile.feature.subagents.SubagentDetailsSheet
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.HeaderIconButton
@@ -72,7 +73,6 @@ import kotlinx.coroutines.launch
 fun ChatScreen(
     onBackToHome: () -> Unit,
     onOpenTab: (MobileTab) -> Unit,
-    onOpenSubagentDetails: (String) -> Unit,
     onAddProject: () -> Unit,
     onOpenPorts: () -> Unit,
 ) {
@@ -106,6 +106,7 @@ fun ChatScreen(
     var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
+    var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -398,9 +399,7 @@ fun ChatScreen(
                 if (subagentPanelOpen && subagents.isNotEmpty()) {
                     SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
                         subagentPanelOpen = false
-                        AppContainer.appStateHolder.setSelectedSubagentId(id)
-                        AppContainer.appStateHolder.setActiveTab(MobileTab.SubagentDetails)
-                        onOpenSubagentDetails(id)
+                        selectedSubagentId = id
                     })
                 }
                 ComposerPills(
@@ -439,6 +438,10 @@ fun ChatScreen(
 
     if (todoSheet) {
         TodoBottomSheet(items = todos, completed = todoDone, total = todoTotal, onDismiss = { todoSheet = false })
+    }
+    val sheetSubagent = subagents.firstOrNull { it.subagent_id == selectedSubagentId }
+    if (sheetSubagent != null) {
+        SubagentDetailsSheet(subagent = sheetSubagent, onDismiss = { selectedSubagentId = null })
     }
     if (shellSheet) {
         BackgroundShellSheet(

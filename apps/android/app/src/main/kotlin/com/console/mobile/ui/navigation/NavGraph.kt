@@ -161,7 +161,6 @@ fun AppNavGraph() {
                                 else -> {}
                             }
                         },
-                        onOpenSubagentDetails = { id -> navController.navigate(RouteSubagentDetails(id)) },
                         onAddProject = { navController.navigate(RouteAddProject) },
                         onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
                     )

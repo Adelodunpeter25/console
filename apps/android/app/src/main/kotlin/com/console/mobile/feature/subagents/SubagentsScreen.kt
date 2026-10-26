@@ -55,6 +55,7 @@ import com.console.mobile.data.api.ConsoleJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionCard
@@ -133,10 +134,8 @@ private fun SubagentRow(subagent: SubagentInfo, onClick: () -> Unit) {
 
 @Composable
 fun SubagentDetailsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
-    var copied by remember { mutableStateOf(false) }
     val subagents = appState.selectedSessionId?.let { chatSessions[it]?.subagents } ?: emptyList()
     val subagent = subagents.firstOrNull { it.subagent_id == appState.selectedSubagentId }
 
@@ -146,49 +145,71 @@ fun SubagentDetailsScreen(onBack: () -> Unit) {
             EmptyView(title = "Subagent not found", description = "It may have been cleared when switching environments.", icon = TablerIcons.Outline.Robot, modifier = Modifier.fillMaxSize())
             return@Column
         }
-        val tint = subagentTint(subagent.status)
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
-            // Status header.
-            SectionCard(modifier = Modifier.padding(top = 8.dp)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(tint))
-                    Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = NewTheme.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f).padding(start = 14.dp))
-                    Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
+        SubagentDetailsBody(
+            subagent = subagent,
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp),
+        )
+    }
+}
+
+/** The details of one subagent in a bottom sheet, opened from the floating list above the composer. */
+@Composable
+fun SubagentDetailsSheet(subagent: SubagentInfo, onDismiss: () -> Unit) {
+    BaseSheet(
+        onDismiss = onDismiss,
+        title = subagent.name.ifBlank { subagent.role.ifBlank { "Subagent" } },
+    ) {
+        SubagentDetailsBody(subagent = subagent)
+    }
+}
+
+/** The scrollable detail content shared by the full screen and the sheet. */
+@Composable
+fun SubagentDetailsBody(subagent: SubagentInfo, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var copied by remember(subagent.subagent_id) { mutableStateOf(false) }
+    val tint = subagentTint(subagent.status)
+    Column(modifier = modifier) {
+        // Status header.
+        SectionCard(modifier = Modifier.padding(top = 8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(tint))
+                Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = NewTheme.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f).padding(start = 14.dp))
+                Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
+            }
+        }
+        // Prompt.
+        Section("Prompt") {
+            Text(subagent.prompt, color = NewTheme.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.fillMaxWidth().padding(18.dp))
+        }
+        // Summary (markdown) + copy.
+        if (!subagent.summary.isNullOrBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 4.dp)) {
+                Text("Summary", color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                IconButton(onClick = {
+                    try {
+                        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        cm.setPrimaryClip(ClipData.newPlainText("console", subagent.summary))
+                        copied = true
+                    } catch (_: Exception) {}
+                }, modifier = Modifier.size(36.dp)) {
+                    if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = NewTheme.Success, modifier = Modifier.size(18.dp))
+                    else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
                 }
             }
-            // Prompt.
-            Section("Prompt") {
-                Text(subagent.prompt, color = NewTheme.TextPrimary, fontSize = 15.sp, lineHeight = 22.sp, modifier = Modifier.fillMaxWidth().padding(18.dp))
-            }
-            // Summary (markdown) + copy.
-            if (!subagent.summary.isNullOrBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 4.dp)) {
-                    Text("Summary", color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        try {
-                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            cm.setPrimaryClip(ClipData.newPlainText("console", subagent.summary))
-                            copied = true
-                        } catch (_: Exception) {}
-                    }, modifier = Modifier.size(36.dp)) {
-                        if (copied) Icon(TablerIcons.Outline.Check, contentDescription = "Copied", tint = NewTheme.Success, modifier = Modifier.size(18.dp))
-                        else Icon(TablerIcons.Outline.Copy, contentDescription = "Copy", tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
-                    }
-                }
-                SectionCard { Box(modifier = Modifier.fillMaxWidth().padding(18.dp)) { CustomMarkdown(content = subagent.summary) } }
-            }
-            // Error.
-            if (!subagent.error.isNullOrBlank()) {
-                Banner(subagent.error, modifier = Modifier.padding(top = 16.dp))
-            }
-            // Activity groups.
-            if (subagent.activities.isNotEmpty()) {
-                Section("Activity (${subagent.activities.size})") {
-                    val groups = groupActivities(subagent.activities)
-                    groups.forEachIndexed { index, g ->
-                        ActivityGroupRow(group = g)
-                        if (index < groups.lastIndex) SectionDivider()
-                    }
+            SectionCard { Box(modifier = Modifier.fillMaxWidth().padding(18.dp)) { CustomMarkdown(content = subagent.summary) } }
+        }
+        // Error.
+        if (!subagent.error.isNullOrBlank()) {
+            Banner(subagent.error, modifier = Modifier.padding(top = 16.dp))
+        }
+        // Activity groups.
+        if (subagent.activities.isNotEmpty()) {
+            Section("Activity (${subagent.activities.size})") {
+                val groups = groupActivities(subagent.activities)
+                groups.forEachIndexed { index, g ->
+                    ActivityGroupRow(group = g)
+                    if (index < groups.lastIndex) SectionDivider()
                 }
             }
         }
