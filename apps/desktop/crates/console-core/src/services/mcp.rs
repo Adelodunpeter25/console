@@ -1,5 +1,5 @@
 use crate::types::ApiResponse;
-use crate::types::mcp::{McpServerConfig, McpToolInfo};
+use crate::types::mcp::McpServerConfig;
 use crate::utils::HttpTransport;
 use anyhow::{Context, Result, anyhow};
 
@@ -19,6 +19,7 @@ impl McpService {
             .transport
             .client()
             .get(&url)
+            .headers(self.transport.build_headers().await)
             .send()
             .await
             .context("failed to list MCP servers")?;
@@ -48,6 +49,7 @@ impl McpService {
             .transport
             .client()
             .post(&url)
+            .headers(self.transport.build_headers().await)
             .json(server)
             .send()
             .await
@@ -81,6 +83,7 @@ impl McpService {
             .transport
             .client()
             .delete(&url)
+            .headers(self.transport.build_headers().await)
             .send()
             .await
             .context("failed to delete MCP server")?;
@@ -107,7 +110,11 @@ impl McpService {
             .transport
             .url(&format!("/api/mcp/servers/{}/connect", id))
             .await;
-        let mut req = self.transport.client().post(&url);
+        let mut req = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await);
         if let Some(redirect_uri) = redirect_uri {
             req = req.json(&serde_json::json!({ "redirectUri": redirect_uri }));
         }
@@ -149,6 +156,7 @@ impl McpService {
             .transport
             .client()
             .post(&url)
+            .headers(self.transport.build_headers().await)
             .json(&serde_json::json!({
                 "state": state,
                 "code": code,
@@ -186,6 +194,7 @@ impl McpService {
             .transport
             .client()
             .post(&url)
+            .headers(self.transport.build_headers().await)
             .send()
             .await
             .context("failed to disconnect MCP server")?;
@@ -195,27 +204,5 @@ impl McpService {
             anyhow::bail!("failed to disconnect MCP server: {} {}", status, body);
         }
         Ok(())
-    }
-
-    pub async fn list_tools(&self, id: &str) -> Result<Vec<McpToolInfo>> {
-        let url = self
-            .transport
-            .url(&format!("/api/mcp/servers/{}/tools", id))
-            .await;
-        let resp = self
-            .transport
-            .client()
-            .get(&url)
-            .send()
-            .await
-            .context("failed to list MCP tools")?;
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("failed to list MCP tools: {} {}", status, body);
-        }
-        resp.json()
-            .await
-            .context("failed to decode MCP tools response")
     }
 }
