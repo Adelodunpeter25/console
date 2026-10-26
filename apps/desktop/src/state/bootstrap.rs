@@ -196,6 +196,14 @@ impl ConsoleDesktopApp {
                                             }
                                         }
                                     }
+
+                                    // Eagerly pre-warm live models for all catalog providers
+                                    // so the Favorites picker tab has models immediately.
+                                    let provider_names: Vec<String> =
+                                        this.providers.iter().map(|p| p.name.clone()).collect();
+                                    for name in provider_names {
+                                        this.load_models_for_provider(&name, cx);
+                                    }
                                     if this.selected_model.is_none() {
                                         this.selected_model = first_model.clone();
                                     }
