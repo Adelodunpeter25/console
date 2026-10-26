@@ -57,9 +57,10 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                     }
                 }
                 if (content.isNotEmpty()) {
-                    val mentions = remember(content) { parseFileMentions(content) }
+                    val fileMentions = remember(content) { parseFileMentions(content) }
+                    val skillMentions = remember(content) { com.console.mobile.core.util.parseSkillMentions(content) }
                     val maxLines = if (expanded) Int.MAX_VALUE else 4
-                    if (mentions.isEmpty()) {
+                    if (fileMentions.isEmpty() && skillMentions.isEmpty()) {
                         Text(
                             content,
                             color = NewTheme.OnUserBubble,
@@ -74,7 +75,7 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
                             },
                         )
                     } else {
-                        val (annotated, inlineContent) = mentionAnnotatedString(content, mentions)
+                        val (annotated, inlineContent) = mentionAnnotatedString(content, fileMentions, skillMentions)
                         Text(
                             annotated,
                             inlineContent = inlineContent,

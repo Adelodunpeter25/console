@@ -71,10 +71,27 @@ fun ComposerAutocompletePopup(anchor: LayoutCoordinates, gap: Dp = 10.dp, conten
 
 @Composable
 fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp)) {
-        Text("/${command.name}", color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!command.builtin) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MentionAccent.copy(alpha = 0.10f))
+                    .border(1.dp, MentionAccent.copy(alpha = 0.28f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                com.console.mobile.ui.components.SkillIcon(sizeDp = 12)
+                Text("/${command.name}", color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
+            }
+        } else {
+            Text("/${command.name}", color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (command.description.isNotBlank()) {
-            Text(command.description, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
+            Text(command.description, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
         }
     }
 }

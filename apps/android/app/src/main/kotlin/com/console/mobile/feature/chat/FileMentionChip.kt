@@ -67,33 +67,45 @@ fun FileMentionChip(path: String, label: String = path.substringAfterLast('/')) 
 @Composable
 fun mentionAnnotatedString(
     content: String,
-    mentions: List<FileMention>,
+    fileMentions: List<FileMention>,
+    skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList(),
 ): Pair<AnnotatedString, Map<String, InlineTextContent>> {
-    val inlineContent = mentions.mapIndexed { index, mention ->
+    val items = mutableListOf<MentionItem>()
+    for (m in fileMentions) items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
+    for (s in skillMentions) items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+    items.sortBy { it.range.first }
+
+    val inlineContent = items.mapIndexed { index, item ->
         val key = "mention-icon-$index"
         key to InlineTextContent(
             Placeholder(width = 0.85.em, height = 0.85.em, placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter),
         ) {
-            FileIcon(filename = mention.label, sizeDp = 12, modifier = Modifier.size(12.dp))
+            if (item.kind == MentionKind.Skill) {
+                com.console.mobile.ui.components.SkillIcon(sizeDp = 12, modifier = Modifier.size(12.dp))
+            } else {
+                FileIcon(filename = item.displayText, sizeDp = 12, modifier = Modifier.size(12.dp))
+            }
         }
     }.toMap()
     val annotated = buildAnnotatedString {
         var cursor = 0
-        mentions.forEachIndexed { index, mention ->
-            val at = mention.range.first.coerceIn(0, content.length)
-            val end = (mention.range.last + 1).coerceIn(at, content.length)
-            append(content.substring(cursor, at))
-            appendInlineContent("mention-icon-$index", "[icon]")
-            withStyle(
-                SpanStyle(
-                    color = MentionAccent,
-                    background = MentionAccent.copy(alpha = 0.10f),
-                    fontSize = 14.sp,
-                )
-            ) {
-                append(mention.label)
+        items.forEachIndexed { index, item ->
+            val at = item.range.first.coerceIn(0, content.length)
+            val end = (item.range.last + 1).coerceIn(at, content.length)
+            if (at >= cursor) {
+                append(content.substring(cursor, at))
+                appendInlineContent("mention-icon-$index", "[icon]")
+                withStyle(
+                    SpanStyle(
+                        color = MentionAccent,
+                        background = MentionAccent.copy(alpha = 0.10f),
+                        fontSize = 14.sp,
+                    )
+                ) {
+                    append(item.displayText)
+                }
+                cursor = end
             }
-            cursor = end
         }
         append(content.substring(cursor))
     }
@@ -104,6 +116,8 @@ fun mentionAnnotatedString(
  * One collapsed mention in transformed composer text: original `@path`
  * range plus the transformed slot (icon space) and filename range.
  */
+enum class MentionKind { File, Skill }
+
 internal data class TransformedMention(
     val oStart: Int,
     val oEnd: Int,
@@ -111,8 +125,9 @@ internal data class TransformedMention(
     val tStart: Int,
     val tEnd: Int,
     val path: String,
+    val kind: MentionKind = MentionKind.File,
 ) {
-    val label: String get() = path.substringAfterLast('/')
+    val label: String get() = if (kind == MentionKind.Skill) path else path.substringAfterLast('/')
 }
 
 /** Transformed text plus per-mention segments, shared by the styling transformation and the icon overlay. */
@@ -131,18 +146,37 @@ internal data class MentionVisual(
  */
 private const val MENTION_ICON_SLOT = "    "
 
-internal fun buildMentionVisual(original: String, mentions: List<FileMention>): MentionVisual {
-    if (mentions.isEmpty() || original.isEmpty()) {
+internal data class MentionItem(
+    val range: IntRange,
+    val text: String,
+    val displayText: String,
+    val kind: MentionKind,
+)
+
+internal fun buildMentionVisual(
+    original: String,
+    fileMentions: List<FileMention>,
+    skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList(),
+): MentionVisual {
+    val items = mutableListOf<MentionItem>()
+    for (m in fileMentions) {
+        items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
+    }
+    for (s in skillMentions) {
+        items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+    }
+    items.sortBy { it.range.first }
+    if (items.isEmpty() || original.isEmpty()) {
         return MentionVisual(
             AnnotatedString(original),
             OffsetMapping.Identity,
             emptyList(),
         )
     }
-    val segs = ArrayList<TransformedMention>(mentions.size)
+    val segs = ArrayList<TransformedMention>(items.size)
     val out = StringBuilder()
     var cursor = 0
-    for (m in mentions) {
+    for (m in items) {
         val s = m.range.first.coerceIn(0, original.length)
         val e = (m.range.last + 1).coerceIn(s, original.length)
         if (s < cursor) continue
@@ -150,8 +184,8 @@ internal fun buildMentionVisual(original: String, mentions: List<FileMention>): 
         val tSlot = out.length
         out.append(MENTION_ICON_SLOT)
         val tStart = out.length
-        out.append(m.path.substringAfterLast('/'))
-        segs += TransformedMention(s, e, tSlot, tStart, out.length, m.path)
+        out.append(m.displayText)
+        segs += TransformedMention(s, e, tSlot, tStart, out.length, m.text, m.kind)
         cursor = e
     }
     out.append(original, cursor, original.length)
@@ -200,8 +234,8 @@ internal fun buildMentionVisual(original: String, mentions: List<FileMention>): 
     return MentionVisual(styled, mapping, segs)
 }
 
-fun mentionVisualTransformation(mentions: List<FileMention>) = VisualTransformation { text ->
-    val visual = buildMentionVisual(text.text, mentions)
+fun mentionVisualTransformation(mentions: List<FileMention>, skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList()) = VisualTransformation { text ->
+    val visual = buildMentionVisual(text.text, mentions, skillMentions)
     TransformedText(visual.text, visual.mapping)
 }
 

@@ -32,3 +32,28 @@ fun parseFileMentions(text: String): List<FileMention> {
 
 /** Distinct mention paths, for the run request's `contextFiles`. */
 fun mentionPaths(text: String): List<String> = parseFileMentions(text).map { it.path }.distinct()
+
+
+/**
+ * Slash skill mentions `/skill-name` in composer text. Starts with `/` at
+ * start of text or after whitespace, and extends across valid command chars.
+ */
+data class SkillMention(val range: IntRange, val name: String)
+
+fun parseSkillMentions(text: String): List<SkillMention> {
+    val out = mutableListOf<SkillMention>()
+    var i = 0
+    while (i < text.length) {
+        if (text[i] == '/' && (i == 0 || text[i - 1].isWhitespace())) {
+            var j = i + 1
+            while (j < text.length && !text[j].isWhitespace() && text[j] !in trailingPunctuation) j++
+            if (j > i + 1) {
+                out += SkillMention(i until j, text.substring(i + 1, j))
+            }
+            i = j
+        } else {
+            i++
+        }
+    }
+    return out
+}

@@ -103,6 +103,7 @@ fun Composer(
     // confirmed chips for atomic backspace — freshly typed `@query` text
     // (even when it parses as a mention) keeps char-by-char deletion.
     var confirmedPaths by remember(sessionId) { mutableStateOf(setOf<String>()) }
+    var confirmedSkills by remember(sessionId) { mutableStateOf(setOf<String>()) }
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
     // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
@@ -118,8 +119,19 @@ fun Composer(
             all
         }
     }
-    val mentionVisual = remember(fieldValue.text, confirmedMentions) {
-        buildMentionVisual(fieldValue.text, confirmedMentions)
+    val confirmedSkillMentions = remember(fieldValue.text, trigger, confirmedSkills) {
+        val all = com.console.mobile.core.util.parseSkillMentions(fieldValue.text)
+            .filter { it.name in confirmedSkills }
+        val t = trigger
+        if (t is ComposerTrigger.Slash) {
+            val cursor = fieldValue.selection.start
+            all.filterNot { it.range.first < cursor && it.range.last + 1 > t.start }
+        } else {
+            all
+        }
+    }
+    val mentionVisual = remember(fieldValue.text, confirmedMentions, confirmedSkillMentions) {
+        buildMentionVisual(fieldValue.text, confirmedMentions, confirmedSkillMentions)
     }
 
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
@@ -150,6 +162,13 @@ fun Composer(
     fun applyFileSuggestion(file: console.v1.FileSearchResult, replaceFrom: Int) {
         confirmedPaths = confirmedPaths + file.relative_path
         applySuggestion("@${file.relative_path} ", replaceFrom)
+    }
+
+    fun applySkillSuggestion(command: SlashCommandInfo, replaceFrom: Int) {
+        if (!command.builtin) {
+            confirmedSkills = confirmedSkills + command.name
+        }
+        applySuggestion("/${command.name} ", replaceFrom)
     }
 
     // Collapsed to a one-line pill until the field is focused. Things the composer
@@ -288,28 +307,33 @@ fun Composer(
                         old.text.removeRange(deletedAt, deletedAt + 1) == new.text
                     ) {
                         val mentions = parseFileMentions(old.text)
-                        // Direct hit: deletion ended inside a confirmed chip.
-                        var target = mentions
-                            .firstOrNull { deletedAt in it.range && it.path in confirmedPaths }
-                        var removeEnd = target?.let { it.range.last + 1 }
-                        // Separator hit: backspace took the whitespace right
-                        // after a confirmed chip (usually the space the
-                        // popup inserted) — take the chip with it so one
-                        // press removes the whole pill, not just the space.
-                        if (target == null && old.text[deletedAt].isWhitespace()) {
-                            target = mentions.firstOrNull {
-                                it.range.last + 1 == deletedAt && it.path in confirmedPaths
+                        val skills = com.console.mobile.core.util.parseSkillMentions(old.text)
+                        var targetStart: Int? = null
+                        var targetEnd: Int? = null
+
+                        val fileTarget = mentions.firstOrNull { deletedAt in it.range && it.path in confirmedPaths }
+                            ?: if (old.text[deletedAt].isWhitespace()) mentions.firstOrNull { it.range.last + 1 == deletedAt && it.path in confirmedPaths } else null
+                        if (fileTarget != null) {
+                            targetStart = fileTarget.range.first
+                            targetEnd = if (old.text[deletedAt].isWhitespace() && fileTarget.range.last + 1 == deletedAt) deletedAt + 1 else fileTarget.range.last + 1
+                        } else {
+                            val skillTarget = skills.firstOrNull { deletedAt in it.range && it.name in confirmedSkills }
+                                ?: if (old.text[deletedAt].isWhitespace()) skills.firstOrNull { it.range.last + 1 == deletedAt && it.name in confirmedSkills } else null
+                            if (skillTarget != null) {
+                                targetStart = skillTarget.range.first
+                                targetEnd = if (old.text[deletedAt].isWhitespace() && skillTarget.range.last + 1 == deletedAt) deletedAt + 1 else skillTarget.range.last + 1
                             }
-                            removeEnd = target?.let { deletedAt + 1 }
                         }
-                        if (target != null && removeEnd != null) {
-                            nextText = old.text.removeRange(target.range.first, removeEnd)
-                            nextSelection = TextRange(target.range.first)
+
+                        if (targetStart != null && targetEnd != null) {
+                            nextText = old.text.removeRange(targetStart, targetEnd)
+                            nextSelection = TextRange(targetStart)
                         }
                     }
                 }
                 // Prune confirmations whose text is gone.
                 confirmedPaths = confirmedPaths.filter { "@$it" in nextText }.toSet()
+                confirmedSkills = confirmedSkills.filter { "/$it" in nextText }.toSet()
                 fieldValue = if (nextSelection != null) {
                     TextFieldValue(text = nextText, selection = nextSelection)
                 } else {
@@ -338,7 +362,7 @@ fun Composer(
                         ComposerAutocompletePopup(anchor = anchor) {
                             items.take(20).forEach { cmd ->
                                 SlashCommandSuggestionRow(command = cmd) {
-                                    applySuggestion("/${cmd.name} ", t.start)
+                                    applySkillSuggestion(cmd, t.start)
                                 }
                             }
                         }
@@ -494,7 +518,11 @@ private fun ComposerInput(
                                 }
                                 .size(12.dp),
                         ) {
-                            FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
+                            if (seg.kind == MentionKind.Skill) {
+                                com.console.mobile.ui.components.SkillIcon(sizeDp = 12)
+                            } else {
+                                FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
+                            }
                         }
                     }
                 }

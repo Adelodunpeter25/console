@@ -14,6 +14,29 @@ import com.console.mobile.core.icons.getFileIconKey
 import com.console.mobile.core.icons.getLanguageIconKey
 import com.console.mobile.core.icons.getProviderIconKey
 
+
+/**
+ * Generic skill sparkle icon matching desktop's Sparkle glyph.
+ */
+@Composable
+fun SkillIcon(
+    sizeDp: Int = 12,
+    tint: androidx.compose.ui.graphics.Color = com.console.mobile.ui.theme.NewTheme.Accent,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    AsyncImage(
+        model = ImageRequest.Builder(context)
+            .data("file:///android_asset/icons/sparkle.svg")
+            .decoderFactory(SvgDecoder.Factory())
+            .build(),
+        contentDescription = null,
+        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint),
+        contentScale = ContentScale.Fit,
+        modifier = modifier.size(sizeDp.dp),
+    )
+}
+
 private fun assetUri(kind: String, key: String): String =
     "file:///android_asset/icons/$kind/$key.svg"
 
