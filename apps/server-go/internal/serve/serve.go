@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +27,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
@@ -232,10 +235,17 @@ func Run() error {
 		}
 	}
 
+	// Remote access: a permanent public HTTPS address through OpenTunnel,
+	// created on the first start and resumed on every later one. A tunnel that
+	// cannot be reached never stops the server; it keeps retrying.
+	stopTunnel := startRemoteAccess(addr)
+	defer stopTunnel()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	slog.Info("shutting down")
+	stopTunnel()
 	// WT first: closing sessions unblocks every stream handler (chat and
 	// watch pumps observe session death even mid-silence), then the HTTP
 	// listener drains, then everything the server owns stops.
@@ -246,6 +256,46 @@ func Run() error {
 	// scripts — not just the HTTP listener.
 	shutdownAll()
 	return nil
+}
+
+// remoteAccessDisabled reports whether the operator turned the tunnel off.
+func remoteAccessDisabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONSOLE_REMOTE"))) {
+	case "0", "off", "false", "no", "disabled":
+		return true
+	}
+	return false
+}
+
+// startRemoteAccess opens the OpenTunnel tunnel to this server and returns a
+// function that closes it. CONSOLE_REMOTE=off skips it; CONSOLE_TUNNEL_API
+// points it at another relay.
+func startRemoteAccess(listenAddr string) func() {
+	if remoteAccessDisabled() {
+		slog.Info("remote access is off (CONSOLE_REMOTE)")
+		return func() {}
+	}
+	// The tunnel forwards to this process, so aim it at the loopback port even
+	// when the server binds a wildcard address.
+	port := strings.TrimPrefix(listenAddr, ":")
+	if _, p, err := net.SplitHostPort(listenAddr); err == nil {
+		port = p
+	}
+	manager := &opentunnel.Manager{
+		API:    os.Getenv("CONSOLE_TUNNEL_API"),
+		Dir:    filepath.Join(utils.ConsoleStorageDir(), "tunnel"),
+		Target: net.JoinHostPort("127.0.0.1", port),
+		Logger: slog.Default(),
+		OnReady: func(url string) {
+			slog.Info("remote access ready", "url", url)
+		},
+	}
+	if err := manager.Start(context.Background()); err != nil {
+		slog.Warn("remote access is unavailable", "error", err)
+		return func() {}
+	}
+	slog.Info("remote access starting", "url", manager.URL())
+	return manager.Close
 }
 
 // wtAltSvcPort renders the H3 port for the Alt-Svc header ("443"), or ""

@@ -196,7 +196,9 @@ func StartDaemon(options StartOptions) error {
 		// bind or a tunnel means the two differ.
 		fmt.Printf("Server: %s\n", publicBaseURL(daemon.ConsoleDir()))
 		// The pairing URL is printed after the daemon is confirmed up, so
-		// the grant it carries is one the running server will honour.
+		// the grant it carries is one the running server will honour. The
+		// first start also creates the tunnel, so give it a moment.
+		waitForRemote(daemon.ConsoleDir(), 15*time.Second)
 		PrintPairing(daemon.ConsoleDir())
 		fmt.Println("Logs: ~/.console/logs/daemon.log")
 		fmt.Println("Run 'console logs' to view logs")
@@ -211,15 +213,21 @@ func StartDaemon(options StartOptions) error {
 		printWebTransport(wtCert, wtAddr(host, options.WTPort))
 	}
 	fmt.Println(firecrawlStatus)
-	PrintPairing(daemon.ConsoleDir())
-	fmt.Println("Press Ctrl+C to stop")
 
 	child := exec.Command(launch.cmd, launch.args...)
 	child.Env = env
 	child.Stdin = os.Stdin
 	child.Stdout = os.Stdout
 	child.Stderr = os.Stderr
-	_ = child.Run()
+	// Start the server first so its tunnel exists when the pairing details
+	// are printed; the grant is one the running server will honour.
+	if err := child.Start(); err != nil {
+		return fmt.Errorf("start server: %w", err)
+	}
+	waitForRemote(daemon.ConsoleDir(), 15*time.Second)
+	PrintPairing(daemon.ConsoleDir())
+	fmt.Println("Press Ctrl+C to stop")
+	_ = child.Wait()
 	os.Exit(0)
 	return nil
 }

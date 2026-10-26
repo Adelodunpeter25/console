@@ -14,13 +14,16 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 )
 
 // PairingInfo is everything the operator needs to connect a device.
@@ -37,6 +40,43 @@ type PairingInfo struct {
 	ServerName string
 	// ServerID identifies the server the code came from.
 	ServerID string
+	// Remote is the server's permanent public address through the tunnel, or
+	// empty when remote access is off or has not been created yet.
+	Remote string
+	// RemoteReady is false while the tunnel's certificate is still being issued.
+	RemoteReady bool
+}
+
+// tunnelDir is where the server keeps its tunnel identity.
+func tunnelDir(dir string) string { return filepath.Join(dir, "tunnel") }
+
+// remoteInfo reads the tunnel the server created for itself.
+func remoteInfo(dir string) (opentunnel.Info, bool) {
+	return opentunnel.ReadInfo(tunnelDir(dir))
+}
+
+// waitForRemote gives a server that is still starting a moment to create its
+// tunnel: the hostname exists as soon as the service answers, well before the
+// certificate is issued.
+func waitForRemote(dir string, timeout time.Duration) {
+	if remoteOff() {
+		return
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, ok := remoteInfo(dir); ok {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+func remoteOff() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONSOLE_REMOTE"))) {
+	case "0", "off", "false", "no", "disabled":
+		return true
+	}
+	return false
 }
 
 // Pairing mints a one-time pairing code and describes how to use it.
@@ -71,13 +111,20 @@ func Pairing(dir string) (PairingInfo, error) {
 	}
 
 	base := publicBaseURL(dir)
-	return PairingInfo{
+	info := PairingInfo{
 		Host:       hostPort(base),
 		Code:       code,
-		URL:        auth.PairingURL(base, identity.ID, code),
 		ServerName: identity.Name,
 		ServerID:   identity.ID,
-	}, nil
+	}
+	// A phone off the local network can only use the tunnel, so the pairing
+	// URL (and its QR) carry the remote address whenever there is one.
+	if remote, ok := remoteInfo(dir); ok && strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")) == "" {
+		info.Remote, info.RemoteReady = remote.URL, remote.Ready
+		base = remote.URL
+	}
+	info.URL = auth.PairingURL(base, identity.ID, code)
+	return info, nil
 }
 
 // PrintPairing writes the pairing details to stdout.
@@ -96,6 +143,13 @@ func PrintPairing(dir string) {
 	}
 	fmt.Printf("Pair this device by pasting the code into the Console app:\n\n")
 	fmt.Printf("  Host: %s\n", info.Host)
+	if info.Remote != "" {
+		note := ""
+		if !info.RemoteReady {
+			note = "  (getting its certificate; usable in a minute)"
+		}
+		fmt.Printf("  Remote url : %s%s\n", info.Remote, note)
+	}
 	fmt.Printf("  Code: %s\n\n", info.Code)
 	fmt.Printf("Or paste the whole URL:\n  %s\n\n", info.URL)
 	fmt.Println("Or scan this:")

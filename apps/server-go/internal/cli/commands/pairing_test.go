@@ -18,8 +18,8 @@ func TestHostPortKeepsANonDefaultScheme(t *testing.T) {
 		},
 		{
 			name: "https keeps its scheme",
-			base: "https://k7m2xq9pa4dn.hostc.app",
-			want: "https://k7m2xq9pa4dn.hostc.app",
+			base: "https://k7m2xq9pa4dn.opentunnel.xyz",
+			want: "https://k7m2xq9pa4dn.opentunnel.xyz",
 		},
 		{
 			name: "https with a port keeps both",
@@ -54,9 +54,9 @@ func TestHostPortKeepsANonDefaultScheme(t *testing.T) {
 // A server behind a tunnel, proxy or load balancer is not reachable at the
 // address it binds, so the operator states the address clients should use.
 func TestPublicBaseURLHonoursTheOverride(t *testing.T) {
-	t.Setenv("CONSOLE_PUBLIC_URL", "https://k7m2xq9pa4dn.hostc.app")
+	t.Setenv("CONSOLE_PUBLIC_URL", "https://k7m2xq9pa4dn.opentunnel.xyz")
 	got := publicBaseURL(t.TempDir())
-	if got != "https://k7m2xq9pa4dn.hostc.app" {
+	if got != "https://k7m2xq9pa4dn.opentunnel.xyz" {
 		t.Errorf("publicBaseURL = %q", got)
 	}
 }

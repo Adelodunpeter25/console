@@ -91,17 +91,17 @@ fn names_a_server_by_its_address() {
 #[test]
 fn a_split_line_keeps_an_https_scheme() {
     let (address, code) =
-        split_pairing_line("https://k7m2xq9pa4dn.hostc.app#vw9g-zu89-aphc");
-    assert_eq!(address, "https://k7m2xq9pa4dn.hostc.app");
+        split_pairing_line("https://k7m2xq9pa4dn.opentunnel.xyz#vw9g-zu89-aphc");
+    assert_eq!(address, "https://k7m2xq9pa4dn.opentunnel.xyz");
     assert_eq!(code, "vw9g-zu89-aphc");
 }
 
 #[test]
 fn a_split_line_keeps_an_https_scheme_from_a_full_url() {
     let (address, code) = split_pairing_line(
-        "https://k7m2xq9pa4dn.hostc.app/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc",
+        "https://k7m2xq9pa4dn.opentunnel.xyz/console/pair#v=1&server=481e2796&code=vw9g-zu89-aphc",
     );
-    assert_eq!(address, "https://k7m2xq9pa4dn.hostc.app");
+    assert_eq!(address, "https://k7m2xq9pa4dn.opentunnel.xyz");
     assert_eq!(code, "vw9g-zu89-aphc");
 }
 
