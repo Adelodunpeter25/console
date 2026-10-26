@@ -358,6 +358,10 @@ private fun EnvironmentEditorForm(
                 name,
                 { name = it; if (status != "testing" && status != "saving") status = "idle" },
                 "My server",
+                // The card clips its content to a rounded corner, so the only
+                // field has to stand off the bottom edge or its own rounded
+                // corners get cut off.
+                last = true,
             )
         }
         ServerCard(
