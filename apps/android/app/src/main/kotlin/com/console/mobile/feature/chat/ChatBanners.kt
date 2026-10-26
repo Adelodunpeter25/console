@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +45,7 @@ import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
 import com.console.mobile.data.model.applyFrame
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
@@ -70,8 +72,9 @@ fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
 
 /**
  * The counts floating above the composer: one compact pill each for tasks,
- * subagents and shells. A pill opens the sheet with the full list; the icon
- * takes the accent while that kind of work is still running.
+ * subagents and shells. Tasks and shells open their sheet; subagents toggle
+ * the floating panel above the pill. The icon takes the accent while that
+ * kind of work is still running.
  */
 @Composable
 fun ComposerPills(
@@ -178,30 +181,91 @@ fun TodoBottomSheet(items: List<TodoItem>, completed: Int, total: Int, onDismiss
     }
 }
 
+/**
+ * The floating list that opens above the subagent pill: one row per subagent,
+ * with the role, what it was asked to do and how long it has taken. The panel
+ * sits above the composer rather than covering the transcript in a sheet.
+ */
 @Composable
-fun SubagentSheet(subagents: List<SubagentInfo>, selectedId: String?, onSelect: (String?) -> Unit, onDismiss: () -> Unit, onOpenDetails: (String) -> Unit) {
-    var selected by remember(selectedId) { mutableStateOf(selectedId) }
-    BaseSheet(onDismiss = onDismiss, title = "Subagents (${subagents.size})") {
-        SectionCard {
-            subagents.forEachIndexed { index, s ->
-                val dot = when (s.status) {
-                    "running" -> NewTheme.Gauge
-                    "completed" -> NewTheme.Success
-                    else -> NewTheme.Danger
-                }
-                OptionRow(
-                    title = s.name.ifBlank { s.role.ifBlank { "Subagent" } },
-                    subtitle = "${s.role} · ${s.status}",
-                    selected = s.subagent_id == selected,
-                    leading = { Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(dot)) },
-                ) {
-                    selected = s.subagent_id
-                    onSelect(s.subagent_id)
-                    onOpenDetails(s.subagent_id)
-                }
-                if (index < subagents.lastIndex) SectionDivider(startInset = 42.dp)
+fun SubagentFloatingPanel(
+    subagents: List<SubagentInfo>,
+    onOpenDetails: (String) -> Unit,
+) {
+    // Running rows count up while the panel is open; a completed row keeps the
+    // duration it finished with.
+    val anyRunning = subagents.any { it.status == "running" }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(anyRunning) {
+        while (anyRunning) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp)
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(NewTheme.Card),
+    ) {
+        Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+            subagents.forEachIndexed { index, subagent ->
+                SubagentPanelRow(subagent = subagent, now = now, onClick = { onOpenDetails(subagent.subagent_id) })
+                if (index < subagents.lastIndex) SectionDivider(startInset = 40.dp)
             }
         }
+    }
+}
+
+@Composable
+private fun SubagentPanelRow(subagent: SubagentInfo, now: Long, onClick: () -> Unit) {
+    val tint = when (subagent.status) {
+        "running" -> NewTheme.Accent
+        "completed" -> NewTheme.Success
+        else -> NewTheme.Danger
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            TablerIcons.Outline.GridDots,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } },
+            color = NewTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp).widthIn(max = 96.dp),
+        )
+        Text(
+            subagent.prompt,
+            color = NewTheme.TextMuted, fontSize = 13.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 10.dp),
+        )
+        val duration = subagentDuration(subagent, now)
+        if (duration.isNotEmpty()) {
+            Text(
+                duration, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily,
+                modifier = Modifier.padding(start = 10.dp),
+            )
+        }
+    }
+}
+
+/** Elapsed time for a subagent, in the compact form the list uses: "3m 01s", "1h 03m". */
+private fun subagentDuration(subagent: SubagentInfo, now: Long): String {
+    if (subagent.created_at <= 0) return ""
+    val end = if (subagent.status == "running") now else subagent.updated_at.takeIf { it > 0 } ?: now
+    val seconds = ((end - subagent.created_at) / 1000).coerceAtLeast(0)
+    return when {
+        seconds >= 3600 -> "${seconds / 3600}h ${"%02d".format((seconds % 3600) / 60)}m"
+        seconds >= 60 -> "${seconds / 60}m ${"%02d".format(seconds % 60)}s"
+        else -> "${seconds}s"
     }
 }
 

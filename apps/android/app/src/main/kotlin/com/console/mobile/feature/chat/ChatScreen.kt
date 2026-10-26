@@ -105,8 +105,7 @@ fun ChatScreen(
     var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
     var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
-    var subagentSheet by remember { mutableStateOf(false) }
-    var subagentSelected by remember { mutableStateOf<String?>(null) }
+    var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var shellSheet by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -324,19 +323,6 @@ fun ChatScreen(
                 )
             }
         }
-        if (showScrollBottom) {
-            FloatingActionButton(
-                onClick = {
-                    following = true
-                    scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
-                },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp),
-                containerColor = NewTheme.Raised,
-                contentColor = NewTheme.TextPrimary,
-            ) {
-                Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
-            }
-        }
 
         PageHeader(
             title = chatTitle,
@@ -390,6 +376,33 @@ fun ChatScreen(
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Column {
+                // Above the pills so it can never sit on them; it only shows
+                // while the reader is scrolled away from the latest message.
+                if (showScrollBottom) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        FloatingActionButton(
+                            onClick = {
+                                following = true
+                                scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                            },
+                            containerColor = NewTheme.Raised,
+                            contentColor = NewTheme.TextPrimary,
+                        ) {
+                            Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
+                        }
+                    }
+                }
+                if (subagentPanelOpen && subagents.isNotEmpty()) {
+                    SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
+                        subagentPanelOpen = false
+                        AppContainer.appStateHolder.setSelectedSubagentId(id)
+                        AppContainer.appStateHolder.setActiveTab(MobileTab.SubagentDetails)
+                        onOpenSubagentDetails(id)
+                    })
+                }
                 ComposerPills(
                     completedTasks = todoDone,
                     totalTasks = todoTotal,
@@ -397,7 +410,7 @@ fun ChatScreen(
                     subagents = subagents,
                     shellCount = liveShells.size,
                     onTasks = { todoSheet = true },
-                    onSubagents = { subagentSheet = true },
+                    onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
                 )
                 if (hasPending) {
@@ -411,6 +424,7 @@ fun ChatScreen(
                         projectLocked = hasMessages,
                         onAddProject = onAddProject,
                         onSend = {
+                            subagentPanelOpen = false
                             keyboardController?.hide()
                             AppContainer.chatRepository.sendMessage(sessionId)
                             following = true
@@ -425,14 +439,6 @@ fun ChatScreen(
 
     if (todoSheet) {
         TodoBottomSheet(items = todos, completed = todoDone, total = todoTotal, onDismiss = { todoSheet = false })
-    }
-    if (subagentSheet) {
-        SubagentSheet(subagents = subagents, selectedId = subagentSelected, onSelect = { subagentSelected = it }, onDismiss = { subagentSheet = false }, onOpenDetails = { id ->
-            subagentSheet = false
-            AppContainer.appStateHolder.setSelectedSubagentId(id)
-            AppContainer.appStateHolder.setActiveTab(MobileTab.SubagentDetails)
-            onOpenSubagentDetails(id)
-        })
     }
     if (shellSheet) {
         BackgroundShellSheet(
