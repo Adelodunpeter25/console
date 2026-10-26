@@ -176,9 +176,7 @@ fun ChatScreen(
     val todos = chat.todoItems
     val (todoDone, todoTotal) = todoCounts(todos)
     val hasActiveTodos = todos.any { it.status != "completed" && it.status != "done" && it.status != "complete" }
-    val nextTodo = nextPendingTodo(todos)
     val subagents = chat.subagents
-    val hasSubagents = subagents.isNotEmpty()
     val liveShells = runningBackgroundShells(chat.backgroundWork)
     val hasLiveShells = liveShells.isNotEmpty()
 
@@ -391,30 +389,20 @@ fun ChatScreen(
         )
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            if (hasPending) {
-                Column {
-                    if (hasActiveTodos) {
-                        TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
-                    }
-                    if (hasSubagents) {
-                        SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
-                    }
-                    if (hasLiveShells) {
-                        BackgroundShellBanner(works = liveShells, onPress = { shellSheet = true })
-                    }
+            Column {
+                ComposerPills(
+                    completedTasks = todoDone,
+                    totalTasks = todoTotal,
+                    showTasks = hasActiveTodos,
+                    subagents = subagents,
+                    shellCount = liveShells.size,
+                    onTasks = { todoSheet = true },
+                    onSubagents = { subagentSheet = true },
+                    onShells = { shellSheet = true },
+                )
+                if (hasPending) {
                     InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
-                }
-            } else {
-                Column {
-                    if (hasActiveTodos) {
-                        TodoBanner(completed = todoDone, total = todoTotal, nextTask = nextTodo?.content, onPress = { todoSheet = true })
-                    }
-                    if (hasSubagents) {
-                        SubagentBanner(subagents = subagents, onPress = { subagentSheet = true })
-                    }
-                    if (hasLiveShells) {
-                        BackgroundShellBanner(works = liveShells, onPress = { shellSheet = true })
-                    }
+                } else {
                     Composer(
                         sessionId = sessionId,
                         value = chat.input,

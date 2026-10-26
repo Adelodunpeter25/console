@@ -3,6 +3,8 @@ package com.console.mobile.feature.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +47,8 @@ import kotlinx.coroutines.CancellationException
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.GridDots
+import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
@@ -64,62 +68,77 @@ fun todoCounts(items: List<TodoItem>): Pair<Int, Int> {
     return done to items.size
 }
 
-fun nextPendingTodo(items: List<TodoItem>): TodoItem? =
-    items.firstOrNull { it.status == "in_progress" }
-        ?: items.firstOrNull { it.status != "completed" && it.status != "done" && it.status != "complete" }
-
-/** Port of todo-banner.tsx + subagent-banner.tsx. Collapsed strip above composer / interaction panel. */
+/**
+ * The counts floating above the composer: one compact pill each for tasks,
+ * subagents and shells. A pill opens the sheet with the full list; the icon
+ * takes the accent while that kind of work is still running.
+ */
 @Composable
-fun TodoBanner(completed: Int, total: Int, nextTask: String?, onPress: () -> Unit) {
-    BannerShell(label = "TASKS", count = "$completed/$total", detail = nextTask?.let { "• $it" }, onPress = onPress)
-}
-
-@Composable
-fun SubagentBanner(subagents: List<SubagentInfo>, onPress: () -> Unit) {
-    val latest = subagents.lastOrNull()
-    val statusLabel = when (latest?.status) {
-        "running" -> if ((latest.max_turns) > 0) "Running (Turn ${maxOf(1, latest.current_turn)}/${latest.max_turns})" else "Running"
-        "completed" -> "Done"
-        "aborted" -> "Aborted"
-        null -> ""
-        else -> "Failed"
-    }
-    val detail = latest?.let { "• ${it.role} ($statusLabel)" }
-    BannerShell(label = "SUBAGENTS", count = "${subagents.size}", detail = detail, onPress = onPress, running = subagents.any { it.status == "running" })
-}
-
-@Composable
-private fun BannerShell(label: String, count: String, detail: String?, onPress: () -> Unit, running: Boolean = false) {
-    // A raised card strip above the composer. The icon takes the accent while work is running.
+fun ComposerPills(
+    completedTasks: Int,
+    totalTasks: Int,
+    showTasks: Boolean,
+    subagents: List<SubagentInfo>,
+    shellCount: Int,
+    onTasks: () -> Unit,
+    onSubagents: () -> Unit,
+    onShells: () -> Unit,
+) {
+    if (!showTasks && subagents.isEmpty() && shellCount == 0) return
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 10.dp)
-            .clip(RoundedCornerShape(NewTheme.FieldRadius))
-            .background(NewTheme.Card)
-            .clickable(onClick = onPress)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(horizontal = 10.dp).padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (showTasks) {
+            ContextPill(
+                icon = TablerIcons.Outline.ListCheck,
+                text = "$completedTasks/$totalTasks tasks",
+                running = false,
+                onClick = onTasks,
+            )
+        }
+        if (subagents.isNotEmpty()) {
+            ContextPill(
+                icon = TablerIcons.Outline.GridDots,
+                text = "${subagents.size} ${if (subagents.size == 1) "subagent" else "subagents"}",
+                running = subagents.any { it.status == "running" },
+                onClick = onSubagents,
+            )
+        }
+        if (shellCount > 0) {
+            ContextPill(
+                icon = TablerIcons.Outline.Terminal2,
+                text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
+                running = true,
+                onClick = onShells,
+            )
+        }
+    }
+}
+
+/** A small floating pill: an icon and a count, the way context above the composer is summarised. */
+@Composable
+private fun ContextPill(icon: ImageVector, text: String, running: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(NewTheme.Raised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            when (label) {
-                "SUBAGENTS" -> TablerIcons.Outline.Robot
-                "SHELLS" -> TablerIcons.Outline.Terminal2
-                else -> TablerIcons.Outline.Check
-            },
+            icon,
             contentDescription = null,
-            tint = if (running) NewTheme.Accent else NewTheme.TextSecondary,
-            modifier = Modifier.size(18.dp),
+            tint = if (running) NewTheme.Accent else NewTheme.TextMuted,
+            modifier = Modifier.size(15.dp),
         )
-        Text(label, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 10.dp))
         Text(
-            count, color = NewTheme.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(999.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 2.dp),
+            text, color = NewTheme.TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            maxLines = 1, modifier = Modifier.padding(start = 7.dp),
         )
-        if (detail != null) {
-            Text(detail, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 10.dp))
-        } else {
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
-        }
-        Icon(TablerIcons.Outline.ChevronUp, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -184,18 +203,6 @@ fun SubagentSheet(subagents: List<SubagentInfo>, selectedId: String?, onSelect: 
             }
         }
     }
-}
-
-@Composable
-fun BackgroundShellBanner(works: List<BackgroundWork>, onPress: () -> Unit) {
-    val command = shellCommand(works.lastOrNull())
-    BannerShell(
-        label = "SHELLS",
-        count = "${works.size}",
-        detail = "• ${command.ifBlank { "Background shell running" }}",
-        onPress = onPress,
-        running = true,
-    )
 }
 
 private fun shellCommand(work: BackgroundWork?): String =
