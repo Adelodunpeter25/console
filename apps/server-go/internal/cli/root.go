@@ -7,6 +7,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -71,6 +72,7 @@ func Execute() {
 	// print a pairing URL as a convenience, but this is the command an
 	// operator reaches for when they need another one on purpose.
 	pairDev := false
+	pairWaitRemote := 0
 	pairCmd := &cobra.Command{
 		Use:   "pair",
 		Short: "Print a pairing URL to connect a new device to this server",
@@ -86,10 +88,16 @@ func Execute() {
 			} else if os.Getenv("CONSOLE_ENV") == "" {
 				_ = os.Setenv("CONSOLE_ENV", "production")
 			}
+			// A server that is still starting creates its tunnel a moment
+			// after launch; wait for it so the address is in the output.
+			if pairWaitRemote > 0 {
+				commands.WaitForRemote(daemon.ConsoleDir(), time.Duration(pairWaitRemote)*time.Second)
+			}
 			commands.PrintPairing(daemon.ConsoleDir())
 			return nil
 		},
 	}
+	pairCmd.Flags().IntVar(&pairWaitRemote, "wait-remote", 0, "Wait up to this many seconds for the server to create its remote tunnel before printing")
 	pairCmd.Flags().BoolVar(&pairDev, "dev", false, "Use dev storage (~/.console-dev) instead of production (~/.console)")
 	root.AddCommand(pairCmd)
 

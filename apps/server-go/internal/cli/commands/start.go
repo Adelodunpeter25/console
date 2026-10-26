@@ -198,7 +198,7 @@ func StartDaemon(options StartOptions) error {
 		// The pairing URL is printed after the daemon is confirmed up, so
 		// the grant it carries is one the running server will honour. The
 		// first start also creates the tunnel, so give it a moment.
-		waitForRemote(daemon.ConsoleDir(), 15*time.Second)
+		WaitForRemote(daemon.ConsoleDir(), 15*time.Second)
 		PrintPairing(daemon.ConsoleDir())
 		fmt.Println("Logs: ~/.console/logs/daemon.log")
 		fmt.Println("Run 'console logs' to view logs")
@@ -224,7 +224,7 @@ func StartDaemon(options StartOptions) error {
 	if err := child.Start(); err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
-	waitForRemote(daemon.ConsoleDir(), 15*time.Second)
+	WaitForRemote(daemon.ConsoleDir(), 15*time.Second)
 	PrintPairing(daemon.ConsoleDir())
 	fmt.Println("Press Ctrl+C to stop")
 	_ = child.Wait()

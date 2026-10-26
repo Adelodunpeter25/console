@@ -25,10 +25,19 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 PORT ?=
 WT ?= 0
 WT_PORT ?= 14443
+# The server creates its remote tunnel (the permanent public address) a moment
+# after it starts, and on the very first run the pairing block printed above
+# cannot have it yet. This runs in the background, waits for the tunnel, then
+# prints the pairing block again so it carries the `Remote url` line. It exits
+# on its own, and is skipped when CONSOLE_REMOTE turns the tunnel off.
+REMOTE_PAIR = case "$$(echo $$CONSOLE_REMOTE | tr A-Z a-z)" in 0|off|false|no|disabled) ;; *) \
+	( CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev --wait-remote 60 \
+	| sed 's/^/[remote] /' & ) ;; esac
 dev-server:
 ifeq ($(WT),1)
 	@CONSOLE_ENV=dev go -C apps/server-go run ./cmd/console cert-fingerprint --dev > /dev/null
 	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
+	@$(REMOTE_PAIR)
 	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
 	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
 	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
@@ -37,6 +46,7 @@ ifeq ($(WT),1)
 	go -C apps/server-go run ./cmd/server
 else
 	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
+	@$(REMOTE_PAIR)
 	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
 endif

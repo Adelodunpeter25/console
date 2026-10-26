@@ -55,10 +55,10 @@ func remoteInfo(dir string) (opentunnel.Info, bool) {
 	return opentunnel.ReadInfo(tunnelDir(dir))
 }
 
-// waitForRemote gives a server that is still starting a moment to create its
+// WaitForRemote gives a server that is still starting a moment to create its
 // tunnel: the hostname exists as soon as the service answers, well before the
 // certificate is issued.
-func waitForRemote(dir string, timeout time.Duration) {
+func WaitForRemote(dir string, timeout time.Duration) {
 	if remoteOff() {
 		return
 	}
