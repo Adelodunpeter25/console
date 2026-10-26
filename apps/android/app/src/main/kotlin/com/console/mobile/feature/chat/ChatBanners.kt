@@ -183,8 +183,9 @@ fun TodoBottomSheet(items: List<TodoItem>, completed: Int, total: Int, onDismiss
 
 /**
  * The floating list that opens above the subagent pill: one row per subagent,
- * with the role, what it was asked to do and how long it has taken. The panel
- * sits above the composer rather than covering the transcript in a sheet.
+ * with its name and how long it has taken. The panel hugs its rows rather than
+ * stretching across the screen, and sits above the composer instead of
+ * covering the transcript in a sheet.
  */
 @Composable
 fun SubagentFloatingPanel(
@@ -203,9 +204,9 @@ fun SubagentFloatingPanel(
     }
     Column(
         modifier = Modifier
-            .fillMaxWidth()
             .padding(horizontal = 10.dp)
             .padding(bottom = 8.dp)
+            .widthIn(max = 280.dp)
             .clip(RoundedCornerShape(20.dp))
             .background(NewTheme.Card),
     ) {
@@ -226,7 +227,7 @@ private fun SubagentPanelRow(subagent: SubagentInfo, now: Long, onClick: () -> U
         else -> NewTheme.Danger
     }
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -236,22 +237,16 @@ private fun SubagentPanelRow(subagent: SubagentInfo, now: Long, onClick: () -> U
             modifier = Modifier.size(16.dp),
         )
         Text(
-            subagent.role.ifBlank { subagent.name.ifBlank { "Subagent" } },
-            color = NewTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            subagent.name.ifBlank { subagent.role.ifBlank { "Subagent" } },
+            color = NewTheme.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 10.dp).widthIn(max = 96.dp),
-        )
-        Text(
-            subagent.prompt,
-            color = NewTheme.TextMuted, fontSize = 13.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 10.dp),
+            modifier = Modifier.padding(start = 10.dp).widthIn(max = 170.dp),
         )
         val duration = subagentDuration(subagent, now)
         if (duration.isNotEmpty()) {
             Text(
                 duration, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily,
-                modifier = Modifier.padding(start = 10.dp),
+                modifier = Modifier.padding(start = 12.dp),
             )
         }
     }
