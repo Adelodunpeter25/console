@@ -26,6 +26,15 @@ class ProviderRepository(
             try {
                 val list = withContext(Dispatchers.IO) { api.getProviders() }
                 providerState.setProviders(list)
+                // Pre-warm live models for all providers so favorites are ready immediately
+                list.forEach { entry ->
+                    launch(Dispatchers.IO) {
+                        try {
+                            val models = api.getProviderModels(entry.name)
+                            providerState.setModels(entry.name, models)
+                        } catch (_: Exception) {}
+                    }
+                }
             } catch (e: Exception) {
                 providerState.setLoadingProviders(false)
                 providerState.setError(e.message ?: "Failed to load providers")
