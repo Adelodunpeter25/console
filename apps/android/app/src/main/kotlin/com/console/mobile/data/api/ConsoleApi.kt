@@ -102,8 +102,11 @@ interface ConsoleApi {
     suspend fun getAuthStatus(): console.v1.AuthStatusResponse
     suspend fun getLoginUrl(payload: OAuthLoginUrlDto): console.v1.OAuthLoginUrlResponse
     suspend fun handleCallback(payload: OAuthCallbackDto)
-    /** PATCH /api/auth/accounts/:provider/:id — activate one stored login. */
-    suspend fun patchAccount(provider: String, id: String, active: Boolean = true): console.v1.AccountMutationResponse
+    /**
+     * PATCH /api/auth/accounts/:provider/:id — activate (active == true) or
+     * rename (label). The server rejects a PATCH with neither set.
+     */
+    suspend fun patchAccount(provider: String, id: String, active: Boolean? = null, label: String? = null): console.v1.AccountMutationResponse
     /** DELETE /api/auth/accounts/:provider/:id — remove one stored login. */
     suspend fun deleteAccount(provider: String, id: String): console.v1.AccountMutationResponse
     // github git credential (personal access token)

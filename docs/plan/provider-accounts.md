@@ -584,8 +584,10 @@ file or one crate at a time; never the full suite.
 2. **OpenCode multi-key.** Migrate `provider-keys.json` into the store as
   accounts with label; `ApiKeyProviderRow` gains a list. Same routes, no OAuth
   deltas.
-3. **Label editing.** API supports `label`; UI edit ships when a real device
-  workflow needs it.
+3. **Label editing.** Shipped for Android (rename in the account sheet,
+   `PATCH .../accounts/:provider/:id {label}`). Desktop rename still
+   deferred; both clients display `label ?? email local part ?? id` instead
+   of the raw email.
 4. **Session-level account pick.** Over rides run pinning; needs run-service
   plumbing like `thinking_level` has (`types/session.go`).
 5. **Background token refresher.** v1 refreshes on use

@@ -231,15 +231,21 @@ class AuthRepository(
     }
 
     /**
-     * Activate one stored account (decision 2: explicit switching only).
-     * The mutation response already carries the provider's post-mutation
-     * status (accounts list, loggedIn/email), so the state map is patched
-     * from it without a second status round-trip.
+     * Apply one account mutation and merge the response's post-mutation
+     * status (accounts list, loggedIn/email) into the state map, so every
+     * mutation updates the sheet without a second status round-trip.
+     * Decision 2/4: activation is explicit; removing the active account
+     * promotes the next-oldest server-side.
      */
-    suspend fun useAccount(provider: String, id: String) {
+    private suspend fun applyAccountMutation(
+        provider: String,
+        id: String,
+        busyText: String,
+        patch: suspend () -> console.v1.AccountMutationResponse,
+    ) {
         authState.patch { it.copy(accountBusy = provider to id, error = null) }
         try {
-            val mutated = withContext(Dispatchers.IO) { api.patchAccount(provider, id) }
+            val mutated = withContext(Dispatchers.IO) { patch() }
             authState.patch { st ->
                 st.copy(
                     accountBusy = null,
@@ -249,8 +255,15 @@ class AuthRepository(
                 )
             }
         } catch (e: Exception) {
-            authState.patch { it.copy(accountBusy = null, error = e.message ?: "Failed to switch account") }
+            authState.patch { it.copy(accountBusy = null, error = e.message ?: busyText) }
             throw e
+        }
+    }
+
+    /** Activate one stored account (decision 2: explicit switching only). */
+    suspend fun useAccount(provider: String, id: String) {
+        applyAccountMutation(provider, id, "Failed to switch account") {
+            api.patchAccount(provider, id, active = true)
         }
     }
 
@@ -260,20 +273,19 @@ class AuthRepository(
      * loggedIn to false entirely.
      */
     suspend fun removeAccount(provider: String, id: String) {
-        authState.patch { it.copy(accountBusy = provider to id, error = null) }
-        try {
-            val mutated = withContext(Dispatchers.IO) { api.deleteAccount(provider, id) }
-            authState.patch { st ->
-                st.copy(
-                    accountBusy = null,
-                    error = null,
-                    status = (st.status ?: emptyMap()) +
-                        (mutated.provider to (mutated.status ?: ProviderAuthStatus(logged_in = false))),
-                )
-            }
-        } catch (e: Exception) {
-            authState.patch { it.copy(accountBusy = null, error = e.message ?: "Failed to remove account") }
-            throw e
+        applyAccountMutation(provider, id, "Failed to remove account") {
+            api.deleteAccount(provider, id)
+        }
+    }
+
+    /**
+     * Give an account a display name (the `label` field). The label is what
+     * every account row shows instead of the raw email, so the name goes
+     * with the account wherever it renders.
+     */
+    suspend fun renameAccount(provider: String, id: String, label: String) {
+        applyAccountMutation(provider, id, "Failed to rename account") {
+            api.patchAccount(provider, id, label = label.trim())
         }
     }
 

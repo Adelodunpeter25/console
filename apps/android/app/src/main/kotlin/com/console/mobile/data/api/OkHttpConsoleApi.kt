@@ -542,10 +542,14 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrap(raw, JsonElement.serializer(), "handle auth callback")
     }
 
-    override suspend fun patchAccount(provider: String, id: String, active: Boolean): console.v1.AccountMutationResponse {
+    override suspend fun patchAccount(provider: String, id: String, active: Boolean?, label: String?): console.v1.AccountMutationResponse {
+        val body = buildJsonObject {
+            if (active != null) put("active", active)
+            if (label != null) put("label", label)
+        }.toString()
         val raw = http.patch(
             "/api/auth/accounts/${enc(provider)}/${enc(id)}",
-            buildJsonObject { put("active", active) }.toString(),
+            body,
         )
         return http.unwrapOrRawAdapter(raw, accountMutationAdapter, "patch account")
     }

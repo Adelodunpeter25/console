@@ -36,6 +36,24 @@ pub struct ProvidersPage {
     pub api_keys: Vec<crate::settings::ApiKeyProviderSection>,
 }
 
+/// What an account row shows instead of the raw email: its label when the
+/// user named it, else the local part of the email — readable, and the full
+/// address never renders unless the user typed it as a name themselves.
+fn account_display(account: &ProviderAccount) -> String {
+    let label = account.label.clone().filter(|l| !l.is_empty());
+    if let Some(label) = label {
+        return label;
+    }
+    if let Some(email) = account.email.clone().filter(|e| !e.is_empty()) {
+        if let Some(local) = email.split('@').next() {
+            if !local.is_empty() {
+                return local.to_string();
+            }
+        }
+    }
+    account.id.clone()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn account_row(
     theme: &Theme,
@@ -48,14 +66,7 @@ fn account_row(
     on_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
 ) -> gpui::AnyElement {
     let account_id = account.id.clone();
-    // The row's identity is the user's email; a login without one (a token
-    // with no account email) shows its server label.
-    let display = account
-        .email
-        .clone()
-        .filter(|e| !e.is_empty())
-        .or_else(|| account.label.clone().filter(|l| !l.is_empty()))
-        .unwrap_or_else(|| account_id.clone());
+    let display = account_display(account);
     let is_env = account.env.unwrap_or(false);
 
     let mut row = div()
@@ -196,10 +207,13 @@ impl RenderOnce for ProvidersPage {
 
                             let is_logged_in =
                                 prov_status.as_ref().map_or(false, |s| s.logged_in);
-                            let user_email = prov_status
+                            // "Connected as …" shows the account's display
+                            // name (label or email local part), never the raw
+                            // email.
+                            let active_name = prov_status
                                 .as_ref()
-                                .and_then(|s| s.email.clone())
-                                .map(|e| e.to_string());
+                                .and_then(|s| s.accounts.iter().find(|a| a.active.unwrap_or(false)))
+                                .map(account_display);
                             let accounts = prov_status
                                 .as_ref()
                                 .map(|s| s.accounts.clone())
@@ -229,8 +243,8 @@ impl RenderOnce for ProvidersPage {
                             let status_text = if is_logging_in {
                                 "Authenticating...".to_string()
                             } else if is_logged_in {
-                                if let Some(email) = user_email {
-                                    format!("Connected as {email}")
+                                if let Some(name) = active_name {
+                                    format!("Connected as {name}")
                                 } else {
                                     "Connected".to_string()
                                 }
