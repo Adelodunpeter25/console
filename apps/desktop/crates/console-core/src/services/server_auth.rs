@@ -135,8 +135,10 @@ impl ServerAuthService {
 /// Normalize a host into a base URL.
 ///
 /// The host field takes "192.168.1.10:3000", the same shape the phone
-/// uses. A scheme is assumed when the text has none, and http is the
-/// default because that is what a local server speaks.
+/// uses. A scheme is assumed when the text has none, and which one follows
+/// the shared `default_scheme` rule: a local address is http, a public DNS
+/// name (the tunnel a QR names) is https, because asking it over http is
+/// answered with a not-found page rather than an error a user can act on.
 fn normalize_server_url(host: &str) -> String {
     let trimmed = host.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -145,7 +147,7 @@ fn normalize_server_url(host: &str) -> String {
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         return trimmed.to_string();
     }
-    format!("http://{trimmed}")
+    format!("{}://{trimmed}", console_shared::pairing::default_scheme(trimmed))
 }
 
 /// Unwrap the `{success, data}` envelope and hand back `data` as raw JSON.

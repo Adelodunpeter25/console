@@ -26,6 +26,67 @@ pub struct PairingUrl {
     pub code: String,
 }
 
+/// The scheme a scheme-less address speaks.
+///
+/// "myserver.opentunnel.xyz" is a public endpoint that only answers https —
+/// asking it over http gets a not-found page, not an error a user can act
+/// on, which is how a scanned tunnel URL ended up "not found" until the
+/// scheme was typed in by hand. A scheme-less address is assumed http only
+/// when it is plausibly local: it carries an explicit port (the LAN shape,
+/// "192.168.1.10:3000"), is an IP or localhost, or is a bare machine name.
+pub fn default_scheme(address: &str) -> &'static str {
+    let authority = address.split('/').next().unwrap_or(address).trim_end_matches('/');
+    let (_, port) = split_authority(authority);
+    if port.is_some() {
+        return "http";
+    }
+    let host = host_of_authority(authority);
+    if host.parse::<std::net::IpAddr>().is_ok()
+        || host.eq_ignore_ascii_case("localhost")
+        || host.to_ascii_lowercase().ends_with(".localhost")
+    {
+        return "http";
+    }
+    // A DNS name without a port is a public endpoint; everything else is a
+    // bare machine name on the LAN ("dell-xps"), which speaks http.
+    if host.contains('.') {
+        "https"
+    } else {
+        "http"
+    }
+}
+
+/// Split an authority into its host and an optional explicit port.
+///
+/// IPv6 literals are bracketed ("[::1]:3000") and carry colons of their own,
+/// so the port's colon is only honoured outside the brackets.
+fn split_authority(authority: &str) -> (&str, Option<&str>) {
+    if authority.contains('@') {
+        // userinfo@host:port — the host part is what the scheme decision
+        // reads.
+        if let Some((_, rest)) = authority.split_once('@') {
+            return split_authority(rest);
+        }
+    }
+    if let Some(rest) = authority.strip_prefix('[') {
+        let (host, tail) = rest.split_once(']').unwrap_or((rest, ""));
+        return (host, tail.strip_prefix(':'));
+    }
+    match authority.split_once(':') {
+        Some((host, port))
+            if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) =>
+        {
+            (host, Some(port))
+        }
+        _ => (authority, None),
+    }
+}
+
+/// The host half of an authority, without any port or userinfo.
+fn host_of_authority(authority: &str) -> &str {
+    split_authority(authority).0
+}
+
 /// Parse a pairing URL into its parts.
 ///
 /// Rejects anything it cannot read exactly, rather than repairing it.
@@ -47,15 +108,15 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
         .ok_or_else(|| "That is not a pairing URL — it has no pairing code.".to_string())?;
 
     // The address, with or without a scheme. A scheme is only assumed when
-    // the text has none at all, so "192.168.1.10:3000" and
-    // "http://192.168.1.10:3000" both work.
+    // the text has none at all, and `default_scheme` picks it: a local
+    // address stays http, a public DNS name is reached over https.
     // The scheme is compared case-insensitively (a URL copied from a browser or
     // a chat app can be `HTTPS://`), and normalised to lowercase so the base
     // URL the client talks to has one spelling. `split_pairing_line` already
     // behaved this way; the two parsers disagreed on the same paste.
     let (scheme, authority) = match base.split_once("://") {
         Some((scheme, rest)) => (scheme.to_ascii_lowercase(), rest.to_string()),
-        None => ("http".to_string(), base.to_string()),
+        None => (default_scheme(base).to_string(), base.to_string()),
     };
     if scheme != "http" && scheme != "https" {
         return Err("A pairing URL must start with http:// or https://.".to_string());
@@ -150,22 +211,28 @@ pub fn split_pairing_line(text: &str) -> (String, String) {
     (address, code)
 }
 
-/// The host and port of an address, for use as a display name.
-///
-/// A server that has not named itself is still worth calling something:
+/// The host of an address as a host field accepts it, for display naming.
 ///
 /// "http://192.168.1.10:3000/some/path" -> "192.168.1.10:3000"
+///
+/// http is dropped because a host field without a scheme is spoken to in
+/// http. https has to stay: stripping it would send the address back over
+/// http, and a public endpoint — the tunnel a QR names — answers that with
+/// a not-found page. This is the same rule `split_pairing_line` applies.
 pub fn host_port(address: &str) -> String {
     let trimmed = address.trim();
-    let authority = match trimmed.split_once("://") {
-        Some((_, rest)) => rest,
-        None => trimmed,
+    let Some((scheme, rest)) = trimmed.split_once("://") else {
+        return trimmed.to_string();
     };
-    let authority = authority.split('/').next().unwrap_or_default().trim();
+    let authority = rest.split('/').next().unwrap_or_default().trim();
     if authority.is_empty() {
         return trimmed.to_string();
     }
-    authority.to_string()
+    if scheme.eq_ignore_ascii_case("http") {
+        authority.to_string()
+    } else {
+        format!("{scheme}://{authority}")
+    }
 }
 
 /// Percent-decode a fragment value.
