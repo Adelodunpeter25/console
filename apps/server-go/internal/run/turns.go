@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"log/slog"
 	"strings"
 
@@ -19,7 +18,9 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -279,6 +280,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if _, computerInvoked := cua.SplitInvocation(dto.Text); computerInvoked {
 		s.computerUse.mark(sessionID)
 	}
+	// /console activates the console kernel for the session.
+	if _, consoleInvoked := console.SplitInvocation(dto.Text); consoleInvoked {
+		s.consoleUse.mark(sessionID)
+	}
 	// /visualize activates the visual tool the same way. The command text is
 	// left untouched; the grammar and examples travel in setup.
 	if _, visualizeInvoked := visualize.SplitInvocation(dto.Text); visualizeInvoked {
@@ -439,6 +444,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if s.visualize.isActive(sessionID) {
 		setup = strings.TrimSpace(setup + "\n\n" + visualize.SkillText())
 	}
+	if s.consoleUse.isActive(sessionID) {
+		setup = strings.TrimSpace(setup + "\n\n" + console.SkillText())
+	}
 	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
 		Provider: provider,
@@ -504,7 +512,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// once it's been activated, so the API surface is available on every turn.
 	// Phase 1 only includes ports; scripts and session control come in later phases.
 	if s.consoleUse.isActive(sessionID) {
-		loader := console.NewLoader(s.consoleManager, sessionID)
+		loader := console.NewLoader(s.consoleManager, sessionID, projectID)
 		if _, err := loader.Load(registry); err != nil {
 			user.Content += "\n\nConsole is unavailable: " + err.Error()
 		}

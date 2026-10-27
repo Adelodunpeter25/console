@@ -207,7 +207,11 @@ func (s *Service) bashJobManager() *services.BashJobManager {
 func (s *Service) SetPorts(p *services.PortRegistry) {
 	s.mu.Lock()
 	s.ports = p
+	manager := s.consoleManager
 	s.mu.Unlock()
+	if manager != nil {
+		manager.SetPorts(p)
+	}
 }
 
 func (s *Service) portRegistry() *services.PortRegistry {

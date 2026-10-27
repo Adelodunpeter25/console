@@ -27,9 +27,13 @@ to you as well.
 
 `console.ports.list()` — list all forwarded ports
 
-`console.ports.forward({port})` — forward a local port. Returns `{success}`.
+`console.ports.forward({port})` — forward a local port. Returns the forwarded port object.
 
-`console.ports.unforward({port})` — remove a port forward. Returns `{success}`.
+`console.ports.unforward({port})` — remove a port forward. Returns `{success: true}`.
+
+Port operations are scoped to the current session's project. The `/console`
+message activates this API for the session; the command text is not rewritten or
+saved separately.
 
 ### Discovery (coming in Phase 3)
 

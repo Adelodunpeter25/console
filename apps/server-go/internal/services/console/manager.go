@@ -7,14 +7,16 @@ package console
 import (
 	"sync"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
 // Manager hands out per-session console kernels.
 type Manager struct {
-	mu       sync.Mutex
-	js       *jskernel.Cache[*Runtime]
-	stopped  bool
+	mu      sync.Mutex
+	js      *jskernel.Cache[*Runtime]
+	stopped bool
+	ports   *services.PortRegistry
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -25,10 +27,24 @@ func NewManager() *Manager {
 	return &Manager{js: jskernel.NewCache[*Runtime](maxConsoleRuntimes)}
 }
 
+// SetPorts attaches the shared port registry used by console.ports.
+func (m *Manager) SetPorts(registry *services.PortRegistry) {
+	m.mu.Lock()
+	m.ports = registry
+	m.mu.Unlock()
+}
+
+func (m *Manager) portRegistry() *services.PortRegistry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ports
+}
+
 // sessionRuntime returns the session's console kernel, creating it on first use.
-func (m *Manager) sessionRuntime(sessionID string) (*Runtime, error) {
+func (m *Manager) sessionRuntime(sessionID, projectID string) (*Runtime, error) {
 	return m.js.Get(sessionID, func() (*Runtime, error) {
-		runtime, err := NewRuntime()
+		ports := m.portRegistry()
+		runtime, err := NewRuntime(ports, projectID)
 		if err != nil {
 			return nil, err
 		}
