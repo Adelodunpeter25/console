@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -35,42 +35,12 @@ func NewPortsTool(projectID string, provider PortsProvider) Tool {
 
 			switch input.Action {
 			case "list":
-				ports := provider.List("localhost", projectID)
-				listening := provider.DetectListening()
-
-				forwardedMap := make(map[int]bool)
-				for _, p := range ports {
-					forwardedMap[p.Port] = true
-				}
-				var unforwardedListening []int
-				for _, lp := range listening {
-					if !forwardedMap[lp] {
-						unforwardedListening = append(unforwardedListening, lp)
-					}
-				}
-
-				if len(ports) == 0 {
-					if len(unforwardedListening) > 0 {
-						listeningStrs := make([]string, len(unforwardedListening))
-						for i, p := range unforwardedListening {
-							listeningStrs[i] = fmt.Sprintf("- %d", p)
-						}
-						return textResult(fmt.Sprintf("No active port forwards found.\n\nDetected local listening ports (available to forward):\n%s", strings.Join(listeningStrs, "\n"))), nil
-					}
-					return textResult("No active port forwards found."), nil
-				}
-
-				data, err := json.MarshalIndent(ports, "", "  ")
+				result, err := services.FormatPortsSnapshot(
+					provider.List("localhost", projectID),
+					provider.DetectListening(),
+				)
 				if err != nil {
 					return nil, NewToolError("Failed to format ports: %v", err)
-				}
-				result := string(data)
-				if len(unforwardedListening) > 0 {
-					listeningStrs := make([]string, len(unforwardedListening))
-					for i, p := range unforwardedListening {
-						listeningStrs[i] = fmt.Sprintf("- %d", p)
-					}
-					result = fmt.Sprintf("%s\n\nDetected local listening ports (available to forward):\n%s", result, strings.Join(listeningStrs, "\n"))
 				}
 				return textResult(result), nil
 

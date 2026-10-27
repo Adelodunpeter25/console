@@ -500,6 +500,15 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			user.Content += "\n\nComputer use is unavailable: " + err.Error()
 		}
 	}
+	// Console kernel restores the same way: sessions get the console tool
+	// once it's been activated, so the API surface is available on every turn.
+	// Phase 1 only includes ports; scripts and session control come in later phases.
+	if s.consoleUse.isActive(sessionID) {
+		loader := console.NewLoader(s.consoleManager, sessionID)
+		if _, err := loader.Load(registry); err != nil {
+			user.Content += "\n\nConsole is unavailable: " + err.Error()
+		}
+	}
 	// Visualize restores the same way, appended after MCP/CUA so the cached
 	// tool prefix stays stable. The tool is stateless, so it cannot fail to
 	// load.

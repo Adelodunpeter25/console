@@ -21,9 +21,20 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
+
+// Error is a model-visible runtime failure: bad code, an interrupted
+// evaluation, or a refused method call. The runtime stays independent of the
+// tool framework; callers that speak its error type convert this at the
+// boundary.
+type Error struct{ Msg string }
+
+func (e *Error) Error() string { return e.Msg }
+
+// Errorf builds a model-visible runtime failure.
+func Errorf(format string, args ...any) *Error {
+	return &Error{Msg: fmt.Sprintf(format, args...)}
+}
 
 // Part is one content part a method returns to script code.
 type Part struct {
@@ -302,19 +313,19 @@ type evalOutcome struct {
 }
 
 // Eval runs code and converts the outcome to harness content parts. The
-// returned error is nil on success; a *tools.ToolError carries a model-visible
-// failure (bad code, method refusal), anything else aborts the turn.
+// returned error is nil on success; a *Error carries a model-visible failure
+// (bad code, method refusal), anything else aborts the turn.
 func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) (any, error) {
 	if strings.TrimSpace(code) == "" {
-		return nil, tools.NewToolError("no code to run")
+		return nil, Errorf("no code to run")
 	}
 	if len(code) > r.opts.MaxCodeBytes {
-		return nil, tools.NewToolError("code is %d bytes, over the %d limit", len(code), r.opts.MaxCodeBytes)
+		return nil, Errorf("code is %d bytes, over the %d limit", len(code), r.opts.MaxCodeBytes)
 	}
 	if ctx.Err() != nil {
 		// Already cancelled before starting: nothing ran, so the outcome is
 		// known (not unknown) — the action was refused, not interrupted.
-		return nil, tools.NewToolError("execution cancelled before it started")
+		return nil, Errorf("execution cancelled before it started")
 	}
 	if timeout <= 0 {
 		timeout = r.opts.Timeout
@@ -360,7 +371,7 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	if out.panicked != nil {
 		if _, ok := out.panicked.(*goja.InterruptedError); ok {
 			r.rt.ClearInterrupt()
-			return nil, tools.NewToolError("%s", r.opts.InterruptMessage)
+			return nil, Errorf("%s", r.opts.InterruptMessage)
 		}
 		// Anything else is a genuine Go bug, not a stop: re-panic rather than
 		// misreporting it as an interrupted action.
@@ -369,13 +380,13 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	completion, runErr := out.completion, out.runErr
 	if isInterrupt(runErr) {
 		r.rt.ClearInterrupt()
-		return nil, tools.NewToolError("%s", r.opts.InterruptMessage)
+		return nil, Errorf("%s", r.opts.InterruptMessage)
 	}
 	if runErr != nil {
-		return nil, tools.NewToolError("JavaScript error: %s", jsErrorText(runErr))
+		return nil, Errorf("JavaScript error: %s", jsErrorText(runErr))
 	}
 	if isPromise, err := r.isPromise(goja.Undefined(), completion); err == nil && isPromise.ToBoolean() {
-		return nil, tools.NewToolError("%s", r.opts.AsyncMessage)
+		return nil, Errorf("%s", r.opts.AsyncMessage)
 	}
 	return r.renderCompletion(completion)
 }
@@ -469,7 +480,7 @@ func (r *Runtime) collectImages(completion goja.Value) ([]map[string]any, []stri
 			break
 		}
 		if _, err := base64.StdEncoding.DecodeString(shape.data); err != nil {
-			return nil, nil, tools.NewToolError("image data is not valid base64")
+			return nil, nil, Errorf("image data is not valid base64")
 		}
 		mimeType := shape.mimeType
 		if mimeType == "" {

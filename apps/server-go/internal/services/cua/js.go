@@ -17,9 +17,11 @@ package cua
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
@@ -83,7 +85,18 @@ func (r *JSRuntime) SetCancel(fn func() bool) {
 
 // Eval runs code and converts the outcome to harness content parts.
 func (r *JSRuntime) Eval(ctx context.Context, code string, timeout time.Duration) (any, error) {
-	return r.kernel.Eval(ctx, code, timeout)
+	out, err := r.kernel.Eval(ctx, code, timeout)
+	if err != nil {
+		// The kernel reports model-visible failures through its own error
+		// type so it can stay independent of the tool framework. Convert at
+		// this boundary, where the tool contract lives.
+		var kernelErr *jskernel.Error
+		if errors.As(err, &kernelErr) {
+			return nil, tools.NewToolError("%s", kernelErr.Msg)
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
 // callDriver is every cua.* method: fix up the arguments, call the driver, and

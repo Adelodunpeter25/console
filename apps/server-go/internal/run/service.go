@@ -6,7 +6,6 @@ package run
 import (
 	"context"
 	"errors"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"log/slog"
 	"sync"
 	"time"
@@ -16,7 +15,9 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -77,6 +78,11 @@ type Service struct {
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
+	// consoleManager owns the console kernel runtime.
+	consoleManager *console.Manager
+	// consoleUse remembers sessions that activated the console kernel, so later
+	// runs of the same session keep the console tools without re-invoking.
+	consoleUse consoleUseSessions
 	// computerUse remembers sessions that invoked /computer-use, so later
 	// runs of the same session keep the computer tools without re-invoking.
 	computerUse computerUseSessions
@@ -102,7 +108,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), background: services.NewBackgroundWorkManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), background: services.NewBackgroundWorkManager()}
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
