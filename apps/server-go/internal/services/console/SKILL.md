@@ -1,10 +1,9 @@
-# Console control
+# Console actions
 
-You have access to the console API through the `console` tool. This tool runs
-JavaScript with a preinstalled `console` object that gives you control over the
-desktop app: manage ports, run project scripts, list projects and models, and
-create, inspect, or delete sessions. Variables persist between calls until
-`console_reset` clears them.
+You have access to the `console` API through the `console` tool. Use it to
+perform project actions: inspect or forward ports, run project scripts, discover
+models and projects, and create or inspect sessions. Variables persist between
+calls until `console_reset` clears them.
 
 ## Calling
 
@@ -32,9 +31,8 @@ to you as well.
 
 `console.ports.unforward({port})` — remove a port forward. Returns `{success: true}`.
 
-Port operations are scoped to the current session's project. The `/console`
-message activates this API for the session; the command text is not rewritten or
-saved separately.
+Port operations are scoped to the current session's project. Use these methods
+when a project action requires inspecting or changing a local port forward.
 
 ### Discovery
 
@@ -46,13 +44,13 @@ saved separately.
 
 ### Session control
 
-`console.sessions.list({project_id?, cwd?})` — list active sessions, optionally filtered
+`console.sessions.list({project_id?, cwd?})` — list persisted, non-deleted sessions, optionally filtered
 
 `console.sessions.read(session_id)` — read a session header and transcript
 
 `console.sessions.create({prompt?, project_id?, cwd?, model?, provider?, approval_mode?, worktree?})` — create a persistent session and, when `prompt` is provided, start it; `worktree` may include `branch` and `base_branch`
 
-`console.sessions.delete(session_id)` — soft-delete a session; active sessions must be stopped first
+`console.sessions.delete(session_id)` — soft-delete a session; running sessions must be stopped first
 
 ### Scripts
 
@@ -64,5 +62,4 @@ saved separately.
 
 `console.scripts.stop(run_id)` — stop a running script
 
-There is intentionally no `console.spawn()`: persistent delegated work uses
-`console.sessions.create()`.
+
