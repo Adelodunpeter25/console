@@ -686,6 +686,33 @@ impl Render for SettingsWindow {
                     auth_status: app.auth_status.clone(),
                     logging_in: app.auth_logging_in.clone(),
                     on_login,
+                    account_busy: app.account_busy.clone(),
+                    recent_login_account: app.recent_login_account.clone(),
+                    on_account_use: {
+                        let app_handle = self.app.clone();
+                        Rc::new(move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
+                            if let Some(app) = app_handle.upgrade() {
+                                app.update(cx, |app_state, cx| {
+                                    app_state.use_account(provider, id, cx);
+                                });
+                            }
+                        })
+                    },
+                    on_account_remove: {
+                        let app_handle = self.app.clone();
+                        // Removing is destructive but v1 keeps it a one-click
+                        // action: the server response refreshes the row and a
+                        // deliberate second click on a missing id answers
+                        // "Unknown account." instead of removing the wrong one.
+                        Rc::new(move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
+                            if let Some(app) = app_handle.upgrade() {
+                                app.update(cx, |app_state, cx| {
+                                    app_state.remove_account(provider, id, cx);
+                                });
+                            }
+                        })
+                    },
+                    account_error: app.account_error.clone(),
                     api_keys,
                     github: Some(console_ui::settings::GitHubSection {
                         status: app.github_status.clone(),

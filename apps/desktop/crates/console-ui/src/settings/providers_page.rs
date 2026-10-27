@@ -1,6 +1,7 @@
 use crate::settings::GitHubSection;
 use crate::theme::Theme;
-use console_core::types::{AuthStatusResponse, ProviderCatalogEntry, auth_status_for};
+use console_core::types::{AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for};
+use gpui::prelude::FluentBuilder;
 use gpui::{
     App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
@@ -14,6 +15,18 @@ pub struct ProvidersPage {
     pub auth_status: Option<AuthStatusResponse>,
     pub logging_in: HashSet<String>,
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    /// (provider, account id) a Use or Remove click is mutating right now, so
+    /// that row's buttons read in-flight instead of firing duplicates.
+    pub account_busy: Option<(String, String)>,
+    /// The account the most recent OAuth callback landed in, as
+    /// (provider, id). Highlighted so a re-login that lands in a NEW account
+    /// is visible immediately. Cleared when the next login starts.
+    pub recent_login_account: Option<(String, String)>,
+    pub on_account_use: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    pub on_account_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    /// (provider, server-authored failure text) for the last account
+    /// mutation failure, shown verbatim on that provider's card.
+    pub account_error: Option<(String, String)>,
     /// GitHub git-credential state. Rendered below the LLM providers as a
     /// sibling section — GitHub is not a chat provider and authenticates by
     /// token, not OAuth.
@@ -23,12 +36,124 @@ pub struct ProvidersPage {
     pub api_keys: Vec<crate::settings::ApiKeyProviderSection>,
 }
 
+#[allow(clippy::too_many_arguments)]
+fn account_row(
+    theme: &Theme,
+    provider: &str,
+    account: &ProviderAccount,
+    is_active: bool,
+    highlighted: bool,
+    busy: bool,
+    on_use: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    on_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+) -> gpui::AnyElement {
+    let account_id = account.id.clone();
+    // The row's identity is the user's email; a login without one (a token
+    // with no account email) shows its server label.
+    let display = account
+        .email
+        .clone()
+        .filter(|e| !e.is_empty())
+        .or_else(|| account.label.clone().filter(|l| !l.is_empty()))
+        .unwrap_or_else(|| account_id.clone());
+    let is_env = account.env.unwrap_or(false);
+
+    let mut row = div()
+        .id(ElementId::from(format!("account-{provider}-{account_id}")))
+        .flex()
+        .items_center()
+        .justify_between()
+        .px(px(8.0))
+        .py(px(5.0))
+        .rounded(px(6.0))
+        .bg(if highlighted {
+            theme.overlay_strong
+        } else {
+            theme.inset
+        })
+        .gap(px(8.0))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(12.0))
+                        .text_color(theme.text)
+                        .child(display.clone()),
+                )
+                // The synthetic stand-in for an environment-token login (plan
+                // §4.4): it always owns the provider while present, so a Use
+                // button would lie.
+                .children(is_env.then(|| {
+                    div()
+                        .text_size(px(10.0))
+                        .text_color(theme.text_tertiary)
+                        .child("Environment token")
+                }))
+                .children(is_active.then(|| {
+                    div()
+                        .text_size(px(10.0))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(theme.accent)
+                        .px(px(6.0))
+                        .py(px(1.0))
+                        .rounded(px(4.0))
+                        .bg(theme.overlay_strong)
+                        .child("ACTIVE")
+                })),
+        );
+
+    if !is_env {
+        row = row.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.0))
+                .children((!is_active).then(|| {
+                    let use_id = account_id.clone();
+                    let on_use = on_use.clone();
+                    let provider = provider.to_string();
+                    div()
+                        .id(ElementId::from(format!("use-{provider}-{use_id}")))
+                        .text_size(px(11.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(if busy { theme.text_ghost } else { theme.text_secondary })
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(theme.accent))
+                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            cx.stop_propagation();
+                            (on_use)(provider.clone(), use_id.clone(), window, cx);
+                        })
+                        .child(if busy { "Using..." } else { "Use" })
+                }))
+                .child({
+                    let remove_id = account_id.clone();
+                    let on_remove = on_remove.clone();
+                    let provider = provider.to_string();
+                    div()
+                        .id(ElementId::from(format!("remove-{provider}-{remove_id}")))
+                        .text_size(px(11.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(theme.text_secondary)
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(theme.danger))
+                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            cx.stop_propagation();
+                            (on_remove)(provider.clone(), remove_id.clone(), window, cx);
+                        })
+                        .child(if busy { "Removing..." } else { "Remove" })
+                }),
+        );
+    }
+    row.into_any_element()
+}
+
 impl RenderOnce for ProvidersPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_login = self.on_login.clone();
-        let auth_status = self.auth_status.clone();
-        let logging_in = self.logging_in.clone();
 
         div()
             .flex()
@@ -62,13 +187,44 @@ impl RenderOnce for ProvidersPage {
                         .filter(|p| p.auth_method != "none" && p.auth_method != "api-key")
                         .map(|provider| {
                             let provider_id = provider.name.clone();
-                            let is_logging_in = logging_in.contains(&provider_id);
-                            let prov_status = auth_status
+                            let is_logging_in = self.logging_in.contains(&provider_id);
+                            let prov_status = self
+                                .auth_status
                                 .as_ref()
-                                .and_then(|st| auth_status_for(st, &provider_id));
+                                .and_then(|st| auth_status_for(st, &provider_id))
+                                .cloned();
 
-                            let is_logged_in = prov_status.map_or(false, |s| s.logged_in);
-                            let user_email = prov_status.and_then(|s| s.email.clone());
+                            let is_logged_in =
+                                prov_status.as_ref().map_or(false, |s| s.logged_in);
+                            let user_email = prov_status
+                                .as_ref()
+                                .and_then(|s| s.email.clone())
+                                .map(|e| e.to_string());
+                            let accounts = prov_status
+                                .as_ref()
+                                .map(|s| s.accounts.clone())
+                                .unwrap_or_default();
+                            let any_active = accounts.iter().any(|a| a.active.unwrap_or(false));
+                            // Switched-provider id matching: the catalog may
+                            // say "openai"/"anthropic" for codex/claude while
+                            // status and callbacks use the canonical ids, but
+                            // both pages key on the same strings the server
+                            // sends, so plain equality is right here.
+                            let recent = self
+                                .recent_login_account
+                                .as_ref()
+                                .filter(|(p, _)| p == &provider_id)
+                                .map(|(_, id)| id.clone());
+                            let row_busy = self
+                                .account_busy
+                                .as_ref()
+                                .filter(|(p, _)| p == &provider_id)
+                                .map(|(_, id)| id.clone());
+                            let account_error = self
+                                .account_error
+                                .as_ref()
+                                .filter(|(p, _)| p == &provider_id)
+                                .map(|(_, text)| text.clone());
 
                             let status_text = if is_logging_in {
                                 "Authenticating...".to_string()
@@ -82,9 +238,7 @@ impl RenderOnce for ProvidersPage {
                                 "Not connected".to_string()
                             };
 
-                            let status_color = if is_logging_in {
-                                theme.accent
-                            } else if is_logged_in {
+                            let status_color = if is_logging_in || is_logged_in {
                                 theme.accent
                             } else {
                                 theme.text_ghost
@@ -92,6 +246,10 @@ impl RenderOnce for ProvidersPage {
 
                             let pid = provider_id.clone();
                             let on_login_click = on_login.clone();
+                            let add_pid = provider_id.clone();
+                            let on_add_click = on_login.clone();
+                            let on_use = self.on_account_use.clone();
+                            let on_remove = self.on_account_remove.clone();
 
                             div()
                                 .id(ElementId::from(format!("provider-row-{pid}")))
@@ -103,6 +261,14 @@ impl RenderOnce for ProvidersPage {
                                 .flex()
                                 .flex_col()
                                 .gap(px(10.0))
+                                .when_some(account_error, |card, error| {
+                                    card.child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(theme.danger)
+                                            .child(error),
+                                    )
+                                })
                                 .child(
                                     div()
                                         .flex()
@@ -146,38 +312,129 @@ impl RenderOnce for ProvidersPage {
                                         )
                                         .child(
                                             div()
-                                                .id(ElementId::from(format!("btn-login-{pid}")))
-                                                .px(px(10.0))
-                                                .py(px(5.0))
-                                                .rounded(px(6.0))
-                                                .border_1()
-                                                .border_color(theme.border_strong)
-                                                .bg(theme.raised)
-                                                .cursor_pointer()
-                                                .hover(|s| s.bg(theme.overlay))
-                                                .active(|s| s.bg(theme.overlay_strong))
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_event, window, cx| {
-                                                        cx.stop_propagation();
-                                                        (on_login_click)(pid.clone(), window, cx);
-                                                    },
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(10.0))
+                                                // "+ Add account" uses the same
+                                                // login flow: the callback
+                                                // registers under the
+                                                // provider's identity and
+                                                // never steals active (§0).
+                                                .child(
+                                                    div()
+                                                        .id(ElementId::from(format!(
+                                                            "btn-add-{add_pid}"
+                                                        )))
+                                                        .text_size(px(12.0))
+                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                        .text_color(theme.text_ghost)
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.text_color(theme.text))
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            move |_event, window, cx| {
+                                                                cx.stop_propagation();
+                                                                (on_add_click)(
+                                                                    add_pid.clone(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        )
+                                                        .child(if is_logging_in {
+                                                            "Authenticating..."
+                                                        } else {
+                                                            "+ Add account"
+                                                        }),
                                                 )
                                                 .child(
                                                     div()
-                                                        .text_size(px(12.0))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(theme.text)
-                                                        .child(if is_logging_in {
-                                                            "Authenticating..."
-                                                        } else if is_logged_in {
-                                                            "Re-login"
-                                                        } else {
-                                                            "Login"
-                                                        }),
+                                                        .id(ElementId::from(format!(
+                                                            "btn-login-{pid}"
+                                                        )))
+                                                        .px(px(10.0))
+                                                        .py(px(5.0))
+                                                        .rounded(px(6.0))
+                                                        .border_1()
+                                                        .border_color(theme.border_strong)
+                                                        .bg(theme.raised)
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.bg(theme.overlay))
+                                                        .active(|s| s.bg(theme.overlay_strong))
+                                                        .on_mouse_down(
+                                                            MouseButton::Left,
+                                                            move |_event, window, cx| {
+                                                                cx.stop_propagation();
+                                                                (on_login_click)(
+                                                                    pid.clone(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .text_size(px(12.0))
+                                                                .font_weight(
+                                                                    gpui::FontWeight::MEDIUM,
+                                                                )
+                                                                .text_color(theme.text)
+                                                                .child(if is_logging_in {
+                                                                    "Authenticating..."
+                                                                } else if is_logged_in {
+                                                                    "Re-login"
+                                                                } else {
+                                                                    "Login"
+                                                                }),
+                                                        ),
                                                 ),
                                         ),
                                 )
+                                // Account list: every stored login for this
+                                // provider, oldest first. A provider with
+                                // rows but no ACTIVE account is disabled
+                                // (zero-active rule, plan §0): no credential
+                                // file, no fallback — so the card says so
+                                // instead of pretending an old login works.
+                                .when(!accounts.is_empty(), |card| {
+                                    card.child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(4.0))
+                                            .when(!any_active, |list| {
+                                                list.child(
+                                                    div()
+                                                        .text_size(px(11.5))
+                                                        .text_color(theme.text_secondary)
+                                                        .child(
+                                                            "No account selected — choose one.",
+                                                        ),
+                                                )
+                                            })
+                                            .children(accounts.iter().map(|account| {
+                                                let is_active = account.active.unwrap_or(false);
+                                                let busy = row_busy
+                                                    .as_ref()
+                                                    .map(|id| id == &account.id)
+                                                    .unwrap_or(false);
+                                                let highlighted = recent
+                                                    .as_ref()
+                                                    .map(|id| id == &account.id)
+                                                    .unwrap_or(false);
+                                                account_row(
+                                                    &theme,
+                                                    &provider_id,
+                                                    account,
+                                                    is_active,
+                                                    highlighted,
+                                                    busy,
+                                                    on_use.clone(),
+                                                    on_remove.clone(),
+                                                )
+                                            })),
+                                    )
+                                })
                         }),
                 ),
             )

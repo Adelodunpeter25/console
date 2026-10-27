@@ -353,6 +353,16 @@ pub struct ConsoleDesktopApp {
     pub agent_browser_tab: Option<String>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
+    /// One account mutation (Use/Remove) in flight, as (provider, account id),
+    /// so its row can disable its buttons rather than firing duplicates.
+    pub account_busy: Option<(String, String)>,
+    /// Server-authored failure text for account mutations, shown verbatim on
+    /// the affected provider row. (provider, text)
+    pub account_error: Option<(String, String)>,
+    /// The account the most recent OAuth callback landed in, as
+    /// (provider, account id). The provider row highlights it briefly so a
+    /// second login that lands in a NEW account is visible immediately.
+    pub recent_login_account: Option<(String, String)>,
     /// GitHub git-credential state. Separate from `auth_status` because
     /// GitHub authenticates by pasted token rather than OAuth — see
     /// state/github.rs.

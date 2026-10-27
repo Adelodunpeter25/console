@@ -46,6 +46,9 @@ impl ConsoleDesktopApp {
         }
 
         self.auth_logging_in.insert(provider_name.clone());
+        // A new login is starting: the previous callback's highlight no
+        // longer describes anything the user is looking at.
+        self.recent_login_account = None;
         cx.notify();
 
         let oauth_id = match provider_name.as_str() {
@@ -186,8 +189,27 @@ impl ConsoleDesktopApp {
             }).await.ok().flatten();
 
             if let Some((code, state)) = callback_res {
-                if let Err(e) = client.auth.handle_callback(provider, &code, Some(&state)).await {
-                    log::error!("Failed to handle OAuth callback on server: {e}");
+                match client.auth.handle_callback(provider, &code, Some(&state)).await {
+                    Ok(resp) => {
+                        // Remember which account the login landed in so the
+                        // providers page highlights it. `account_id` is
+                        // optional on the wire; with it missing, a full
+                        // status refresh shows the (possibly new) active
+                        // account anyway.
+                        if let Some(id) = resp.account_id {
+                            let _ = cx.update(|cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, _cx| {
+                                        this.recent_login_account =
+                                            Some((provider_name.clone(), id));
+                                    });
+                                }
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to handle OAuth callback on server: {e}");
+                    }
                 }
             }
 
@@ -195,11 +217,98 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.auth_logging_in.remove(&provider_name);
+                        // recent_login_account deliberately stays: it highlights
+                        // the account the callback just landed in, and is
+                        // cleared only when the NEXT login starts.
                         this.refresh_auth_status(cx);
                         cx.notify();
                     });
                 }
             });
         }).detach();
+    }
+
+    /// Activates one stored account (decision 2: explicit switching). The
+    /// mutation response already carries the provider's post-mutation
+    /// status, so the update applies it without a second status read.
+    pub fn use_account(&mut self, provider: String, account_id: String, cx: &mut Context<Self>) {
+        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+            return;
+        }
+        self.account_busy = Some((provider.clone(), account_id.clone()));
+        self.account_error = None;
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let res = client.auth.patch_account(&provider, &account_id, true).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, _cx| match res {
+                        Ok(mutated) => {
+                            if let Some(status) = this.auth_status.as_mut() {
+                                console_core::types::merge_provider_status(
+                                    status,
+                                    &mutated.provider,
+                                    mutated.status.unwrap_or_default(),
+                                );
+                            }
+                            this.account_busy = None;
+                        }
+                        Err(err) => {
+                            this.account_busy = None;
+                            this.account_error =
+                                Some((provider.clone(), format!("{err:#}")));
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Removes one stored account (decision 4: deleting the active one
+    /// promotes the next-oldest account server-side). Removing a provider's
+    /// last account also clears its legacy file, so the row's status may
+    /// drop to "Not connected" from the same response.
+    pub fn remove_account(&mut self, provider: String, account_id: String, cx: &mut Context<Self>) {
+        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+            return;
+        }
+        self.account_busy = Some((provider.clone(), account_id.clone()));
+        self.account_error = None;
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let res = client.auth.delete_account(&provider, &account_id).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, _cx| match res {
+                        Ok(mutated) => {
+                            if let Some(status) = this.auth_status.as_mut() {
+                                console_core::types::merge_provider_status(
+                                    status,
+                                    &mutated.provider,
+                                    mutated.status.unwrap_or_default(),
+                                );
+                            }
+                            if this.recent_login_account.as_ref().is_some_and(|(p, id)| {
+                                *p == provider && id == &account_id
+                            }) {
+                                this.recent_login_account = None;
+                            }
+                            this.account_busy = None;
+                        }
+                        Err(err) => {
+                            this.account_busy = None;
+                            this.account_error =
+                                Some((provider.clone(), format!("{err:#}")));
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
     }
 }

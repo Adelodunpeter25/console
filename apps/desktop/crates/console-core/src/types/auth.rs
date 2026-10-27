@@ -8,9 +8,10 @@
 use serde::{Deserialize, Serialize};
 
 pub use console_proto::{
-    AuthStatusResponse, GitHubAuthStatus, GitHubLogoutResponse, OAuthCallbackResponse,
-    OAuthLoginUrlResponse, ProjectIdResponse, ProviderAuthStatus, ProviderCredentialStatus,
-    ProviderCredentialStatuses, SetProviderCredentialResponse,
+    AccountMutationResponse, AuthStatusResponse, GitHubAuthStatus, GitHubLogoutResponse,
+    OAuthCallbackResponse, OAuthLoginUrlResponse, ProjectIdResponse, ProviderAccount,
+    ProviderAuthStatus, ProviderCredentialStatus, ProviderCredentialStatuses,
+    SetProviderCredentialResponse,
 };
 
 /// OAuth-capable providers with credential state.
@@ -53,4 +54,18 @@ pub fn auth_status_for<'a>(
         "claude" | "anthropic" => status.claude.as_ref(),
         _ => None,
     }
+}
+
+/// Applies one provider's flat `ProviderAuthStatus` — typically the body of
+/// an `AccountMutationResponse` — into a full status payload, so a Use/Remove
+/// click updates the provider row from the response's data without a second
+/// `GET /api/auth/status` round-trip.
+pub fn merge_provider_status(status: &mut AuthStatusResponse, provider: &str, patch: ProviderAuthStatus) {
+    let slot = match provider {
+        "antigravity" => &mut status.antigravity,
+        "codex" | "openai" => &mut status.codex,
+        "claude" | "anthropic" => &mut status.claude,
+        _ => return,
+    };
+    *slot = Some(patch);
 }

@@ -75,12 +75,16 @@ impl AuthService {
 
     /// `POST /api/auth/login/callback` — exchange an authorization code the
     /// client captured on its loopback listener for server-stored tokens.
+    ///
+    /// The response carries `account_id`/`account_active` (§5.4 of the
+    /// accounts plan) so the caller knows which account the login landed in
+    /// and whether it is now the provider's active one.
     pub async fn handle_callback(
         &self,
         provider: OAuthProviderId,
         code: &str,
         state: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<OAuthCallbackResponse> {
         let url = self.transport.url("/api/auth/login/callback").await;
         let resp = self
             .transport
@@ -96,16 +100,95 @@ impl AuthService {
             .await
             .context("Failed to send OAuth callback")?;
 
-        let body: ApiResponse<serde_json::Value> = self
+        let body: ApiResponse<OAuthCallbackResponse> = self
             .transport
             .decode_json(resp)
             .await
             .context("Failed to parse OAuth callback response")?;
         if body.success {
-            Ok(())
+            Ok(body
+                .data
+                .ok_or_else(|| anyhow!("OAuth callback response missing data"))?)
         } else {
             Err(anyhow!(
                 body.error.unwrap_or_else(|| "OAuth callback failed".into())
+            ))
+        }
+    }
+
+    /// `PATCH /api/auth/accounts/:provider/:id` — activate/deactivate one
+    /// stored login. Returns the provider's post-mutation status so the
+    /// caller updates its account list from this response alone.
+    pub async fn patch_account(
+        &self,
+        provider: &str,
+        account_id: &str,
+        active: bool,
+    ) -> Result<AccountMutationResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/auth/accounts/{provider}/{account_id}"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .patch(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&serde_json::json!({ "active": active }))
+            .send()
+            .await
+            .context("Failed to update account")?;
+
+        let body: ApiResponse<AccountMutationResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse account mutation response")?;
+        if body.success {
+            Ok(body
+                .data
+                .ok_or_else(|| anyhow!("Account mutation response missing data"))?)
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to update account".into())
+            ))
+        }
+    }
+
+    /// `DELETE /api/auth/accounts/:provider/:id` — remove one stored login.
+    /// Removing a provider's last account also clears its legacy credential
+    /// file, so this logs the provider out entirely when it is the only one.
+    /// Returns the provider's post-mutation status.
+    pub async fn delete_account(
+        &self,
+        provider: &str,
+        account_id: &str,
+    ) -> Result<AccountMutationResponse> {
+        let url = self
+            .transport
+            .url(&format!("/api/auth/accounts/{provider}/{account_id}"))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to remove account")?;
+
+        let body: ApiResponse<AccountMutationResponse> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse account deletion response")?;
+        if body.success {
+            Ok(body
+                .data
+                .ok_or_else(|| anyhow!("Account deletion response missing data"))?)
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to remove account".into())
             ))
         }
     }
