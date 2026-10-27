@@ -7,6 +7,7 @@ package console
 import (
 	"sync"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
@@ -15,6 +16,12 @@ type Manager struct {
 	mu       sync.Mutex
 	js       *jskernel.Cache[*Runtime]
 	stopped  bool
+	ports    *services.PortRegistry
+	scripts  *services.ProjectScriptsService
+	sessions *services.SessionService
+	projects *services.ProjectService
+	active   func(string) bool
+	start    func(string, string, string, string, string) error
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -25,10 +32,53 @@ func NewManager() *Manager {
 	return &Manager{js: jskernel.NewCache[*Runtime](maxConsoleRuntimes)}
 }
 
+// SetPorts attaches the shared port registry used by console.ports.
+func (m *Manager) SetPorts(registry *services.PortRegistry) {
+	m.mu.Lock()
+	m.ports = registry
+	m.mu.Unlock()
+}
+
+func (m *Manager) portRegistry() *services.PortRegistry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ports
+}
+
+// SetScripts attaches the project script service used by console.scripts.
+func (m *Manager) SetScripts(scripts *services.ProjectScriptsService) {
+	m.mu.Lock()
+	m.scripts = scripts
+	m.mu.Unlock()
+}
+
+func (m *Manager) scriptService() *services.ProjectScriptsService {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.scripts
+}
+
+// SetSessions attaches session and project services plus run hooks used by the
+// console session control surface.
+func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string) error) {
+	m.mu.Lock()
+	m.sessions, m.projects, m.active, m.start = sessions, projects, active, start
+	m.mu.Unlock()
+}
+
+func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string, string, string, string, string) error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.sessions, m.projects, m.active, m.start
+}
+
 // sessionRuntime returns the session's console kernel, creating it on first use.
-func (m *Manager) sessionRuntime(sessionID string) (*Runtime, error) {
+func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, error) {
 	return m.js.Get(sessionID, func() (*Runtime, error) {
-		runtime, err := NewRuntime()
+		ports := m.portRegistry()
+		scripts := m.scriptService()
+		sessions, projects, active, start := m.sessionConfig()
+		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}

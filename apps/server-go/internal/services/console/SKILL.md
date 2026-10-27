@@ -1,9 +1,9 @@
-# Console control
+# Console actions
 
-You have access to the console API through the `console` tool. This tool runs
-JavaScript with a preinstalled `console` object that gives you control over the
-desktop app: manage ports, run project scripts, spawn sessions, and inspect and
-steer them. Variables persist between calls until `console_reset` clears them.
+You have access to the `console` API through the `console` tool. Use it to
+perform project actions: inspect or forward ports, run project scripts, discover
+models and projects, and create or inspect sessions. Variables persist between
+calls until `console_reset` clears them.
 
 ## Calling
 
@@ -27,42 +27,39 @@ to you as well.
 
 `console.ports.list()` — list all forwarded ports
 
-`console.ports.forward({port})` — forward a local port. Returns `{success}`.
+`console.ports.forward({port})` — forward a local port. Returns the forwarded port object.
 
-`console.ports.unforward({port})` — remove a port forward. Returns `{success}`.
+`console.ports.unforward({port})` — remove a port forward. Returns `{success: true}`.
 
-### Discovery (coming in Phase 3)
+Port operations are scoped to the current session's project. Use these methods
+when a project action requires inspecting or changing a local port forward.
 
-`console.models()` — list available models, providers, and supported thinking levels
+### Discovery
 
-`console.approvalModes()` — list valid approval modes and their ordering
+`console.models()` — list available providers and models, including thinking levels
 
-`console.sessions.list({status?, project_id?})` — list sessions, filterable by status and project
+`console.projects.list()` — list registered projects
 
-### Session control (coming in Phase 3)
+`console.projects.add({directory, name?})` — register a project directory
 
-`console.sessions.read(session_id)` — read a session's transcript, status, and result
+### Session control
 
-`console.sessions.fork(session_id, message_id)` — fork a session at a specific message
+`console.sessions.list({project_id?, cwd?})` — list persisted, non-deleted sessions, optionally filtered
 
-`console.sessions.delete(session_id)` — soft-delete a session (never self; gated when it owns a worktree)
+`console.sessions.read(session_id)` — read a session header and transcript
 
-`console.sessions.set_model(session_id, model, provider)` — change a session's model
+`console.sessions.create({prompt?, project_id?, cwd?, model?, provider?, approval_mode?, worktree?})` — create a persistent session and, when `prompt` is provided, start it; `worktree` may include `branch` and `base_branch`
 
-`console.sessions.set_approval(session_id, mode)` — change a session's approval mode (clamped to the owning run's ceiling)
+`console.sessions.delete(session_id)` — soft-delete a session; running sessions must be stopped first
 
-`console.sessions.abort(session_id)` — abort a running session
-
-### Scripts (coming in Phase 2)
+### Scripts
 
 `console.scripts.list()` — list available project scripts
 
-`console.scripts.run(id, {wait_ms?})` — run a project script
+`console.scripts.run(id, {wait_ms?})` — run a project script. `wait_ms` is capped at 10 seconds.
 
-`console.scripts.status(run_id)` — check a script run's status
+`console.scripts.status(run_id?)` — inspect one run or list runs for this checkout
 
 `console.scripts.stop(run_id)` — stop a running script
 
-### Spawn (coming in Phase 4)
 
-`console.spawn({prompt, title, model?, provider?, thinking_level?, approval_mode?, worktree?})` — spawn a new session as a task. Returns `{session_id}` and reports the approval mode clamp if the requested mode exceeds the parent's ceiling.

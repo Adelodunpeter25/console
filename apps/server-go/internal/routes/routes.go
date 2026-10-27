@@ -119,6 +119,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	runSvc.SetBashJobs(bashJobs)
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
+	runSvc.SetConsoleServices(projects)
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()

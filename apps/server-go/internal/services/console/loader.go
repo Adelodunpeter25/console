@@ -13,13 +13,15 @@ import (
 type Loader struct {
 	manager   *Manager
 	sessionID string
+	projectID string
+	cwd       string
 	mu        sync.Mutex
 	loaded    bool
 }
 
 // NewLoader returns a loader bound to manager and one session.
-func NewLoader(manager *Manager, sessionID string) *Loader {
-	return &Loader{manager: manager, sessionID: sessionID}
+func NewLoader(manager *Manager, sessionID, projectID, cwd string) *Loader {
+	return &Loader{manager: manager, sessionID: sessionID, projectID: projectID, cwd: cwd}
 }
 
 // Loaded reports whether the tools have been brought into some run.
@@ -32,7 +34,7 @@ func (l *Loader) Loaded() bool {
 // Load appends the console tools to registry and marks the group loaded.
 func (l *Loader) Load(registry *tools.Registry) (int, error) {
 	registry.Add(
-		NewConsoleTool(l.manager, l.sessionID),
+		NewConsoleTool(l.manager, l.sessionID, l.projectID, l.cwd),
 		NewConsoleResetTool(l.manager, l.sessionID),
 	)
 	l.mu.Lock()

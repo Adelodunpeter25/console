@@ -27,18 +27,20 @@ type consoleTool struct {
 	tools.Tool
 	manager   *Manager
 	sessionID string
+	projectID string
+	cwd       string
 }
 
 // NewConsoleTool builds the `console` tool bound to one chat session, so
 // its variables never leak into another session's kernel.
-func NewConsoleTool(manager *Manager, sessionID string) tools.Tool {
+func NewConsoleTool(manager *Manager, sessionID, projectID, cwd string) tools.Tool {
 	inner := tools.NewTool("console",
 		"Run JavaScript against the console API (console.ports.list(), console.ports.forward({...}), ...). One call can manage ports, run scripts, and control sessions. Variables persist until console_reset. The console-control instructions in this conversation document the methods.",
 		tools.TierExec,
 		func(ctx context.Context, in consoleInput) (any, error) {
 			return nil, tools.NewToolError("console requires call context")
 		})
-	return &consoleTool{Tool: inner, manager: manager, sessionID: sessionID}
+	return &consoleTool{Tool: inner, manager: manager, sessionID: sessionID, projectID: projectID, cwd: cwd}
 }
 
 func (t *consoleTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
@@ -47,7 +49,7 @@ func (t *consoleTool) Execute(ctx context.Context, arguments json.RawMessage) (a
 		return nil, tools.NewToolError("Invalid arguments for console: %v", err)
 	}
 	timeout := time.Duration(in.TimeoutMs) * time.Millisecond
-	runtime, err := t.manager.sessionRuntime(t.sessionID)
+	runtime, err := t.manager.sessionRuntime(t.sessionID, t.projectID, t.cwd)
 	if err != nil {
 		return nil, tools.NewToolError("console kernel unavailable: %v", err)
 	}
