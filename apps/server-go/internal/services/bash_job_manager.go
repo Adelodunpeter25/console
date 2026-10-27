@@ -434,6 +434,11 @@ func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, er
 		m.ports.RemoveOwner(PortOwner{Kind: "job", ID: rec.JobID})
 	}
 	m.scheduleRetention(rec)
+	// The agent's bashJob kill reaches this path directly (unlike the UI
+	// cancel route and session abort, which go through killRecord), so publish
+	// the terminal state here too. Without it the work record stays "running"
+	// and clients keep showing the shell chip after the process is gone.
+	m.notifyBackgroundWork(rec)
 	return rec.snapshot(), nil
 }
 
