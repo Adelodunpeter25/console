@@ -109,6 +109,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val slashCommandAdapter by lazy { wireMoshi.adapter(SlashCommandInfo::class.java) }
     private val authStatusAdapter by lazy { wireMoshi.adapter(AuthStatusResponse::class.java) }
     private val loginUrlAdapter by lazy { wireMoshi.adapter(OAuthLoginUrlResponse::class.java) }
+    private val accountMutationAdapter by lazy { wireMoshi.adapter(console.v1.AccountMutationResponse::class.java) }
     private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
     private val providerCredentialsAdapter by lazy { wireMoshi.adapter(console.v1.ProviderCredentialStatuses::class.java) }
     private val setProviderCredentialAdapter by lazy { wireMoshi.adapter(console.v1.SetProviderCredentialResponse::class.java) }
@@ -539,6 +540,19 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun handleCallback(payload: OAuthCallbackDto) {
         val raw = http.post("/api/auth/login/callback", http.encodeBody(OAuthCallbackDto.serializer(), payload))
         http.unwrap(raw, JsonElement.serializer(), "handle auth callback")
+    }
+
+    override suspend fun patchAccount(provider: String, id: String, active: Boolean): console.v1.AccountMutationResponse {
+        val raw = http.patch(
+            "/api/auth/accounts/${enc(provider)}/${enc(id)}",
+            buildJsonObject { put("active", active) }.toString(),
+        )
+        return http.unwrapOrRawAdapter(raw, accountMutationAdapter, "patch account")
+    }
+
+    override suspend fun deleteAccount(provider: String, id: String): console.v1.AccountMutationResponse {
+        val raw = http.delete("/api/auth/accounts/${enc(provider)}/${enc(id)}")
+        return http.unwrapOrRawAdapter(raw, accountMutationAdapter, "delete account")
     }
 
     override suspend fun connectGitHub(payload: GitHubTokenDto): console.v1.GitHubAuthStatus {

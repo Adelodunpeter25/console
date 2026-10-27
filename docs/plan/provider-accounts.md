@@ -558,7 +558,7 @@ file or one crate at a time; never the full suite.
   run; deleted account fails the next turn with the §7 message.
   Run: `cd apps/server-go && go test ./tests/agent/ -run TestRunAccountPin -v`.
 
-### Phase 5 — desktop UI (⬜)
+### Phase 5 — desktop UI (✅)
 
 - `console-core` regen; `providers_page.rs` account list + Use/Remove/Add; bind
   to `AccountMutationResponse` updates.
@@ -566,7 +566,7 @@ file or one crate at a time; never the full suite.
   then the manual flow on `make dev-server` + client (docs carry no UI tests;
   add `tests/api` coverage already exists server-side).
 
-### Phase 6 — Android UI (⬜)
+### Phase 6 — Android UI (✅)
 
 - `AuthRepository`/`AuthState` account mapping; `ProvidersSettings.kt` rows.
 - Verify: `cd apps/android && ./gradlew :app:assembleDebug` then

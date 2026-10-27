@@ -231,6 +231,53 @@ class AuthRepository(
     }
 
     /**
+     * Activate one stored account (decision 2: explicit switching only).
+     * The mutation response already carries the provider's post-mutation
+     * status (accounts list, loggedIn/email), so the state map is patched
+     * from it without a second status round-trip.
+     */
+    suspend fun useAccount(provider: String, id: String) {
+        authState.patch { it.copy(accountBusy = provider to id, error = null) }
+        try {
+            val mutated = withContext(Dispatchers.IO) { api.patchAccount(provider, id) }
+            authState.patch { st ->
+                st.copy(
+                    accountBusy = null,
+                    error = null,
+                    status = (st.status ?: emptyMap()) +
+                        (mutated.provider to (mutated.status ?: ProviderAuthStatus(logged_in = false))),
+                )
+            }
+        } catch (e: Exception) {
+            authState.patch { it.copy(accountBusy = null, error = e.message ?: "Failed to switch account") }
+            throw e
+        }
+    }
+
+    /**
+     * Remove one stored account. Deleting a provider's last account also
+     * clears its legacy credential file, so the response may drop the row's
+     * loggedIn to false entirely.
+     */
+    suspend fun removeAccount(provider: String, id: String) {
+        authState.patch { it.copy(accountBusy = provider to id, error = null) }
+        try {
+            val mutated = withContext(Dispatchers.IO) { api.deleteAccount(provider, id) }
+            authState.patch { st ->
+                st.copy(
+                    accountBusy = null,
+                    error = null,
+                    status = (st.status ?: emptyMap()) +
+                        (mutated.provider to (mutated.status ?: ProviderAuthStatus(logged_in = false))),
+                )
+            }
+        } catch (e: Exception) {
+            authState.patch { it.copy(accountBusy = null, error = e.message ?: "Failed to remove account") }
+            throw e
+        }
+    }
+
+    /**
      * Validate and store a GitHub personal access token so the server's git
      * (agent runs and terminals) can reach private repositories. The server
      * answers with the username only; the token is never kept here. Throws the

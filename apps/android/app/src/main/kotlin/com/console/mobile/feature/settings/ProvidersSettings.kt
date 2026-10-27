@@ -2,6 +2,7 @@ package com.console.mobile.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -141,6 +142,80 @@ fun ProvidersSettings(onBack: () -> Unit) {
                                 surface = NewTheme.Raised,
                                 compact = true,
                             )
+                        }
+                        // Account list: every stored login for this provider,
+                        // oldest first. Zero active = the provider is disabled
+                        // (no credential file, no fallback), so the rows say so
+                        // instead of pretending the last active still works.
+                        val accounts = status?.accounts.orEmpty()
+                        if (accounts.isNotEmpty()) {
+                            val anyActive = accounts.any { it.active == true }
+                            if (!anyActive) {
+                                Text(
+                                    "No account selected — choose one.",
+                                    color = NewTheme.TextMuted,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(start = 58.dp, top = 2.dp, bottom = 6.dp),
+                                )
+                            }
+                            accounts.forEach { acc ->
+                                val accId = acc.id
+                                val active = acc.active == true
+                                // The synthetic stand-in for an environment
+                                // token: it always owns the provider, so a Use
+                                // button would lie.
+                                val isEnv = acc.env == true
+                                val accBusy = authState.accountBusy == (p.name to accId)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            acc.email?.ifEmpty { null } ?: acc.label?.ifEmpty { null } ?: accId,
+                                            color = NewTheme.TextPrimary,
+                                            fontSize = 14.sp,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (isEnv) {
+                                            Text("Environment token", color = NewTheme.TextMuted, fontSize = 11.sp)
+                                        }
+                                    }
+                                    if (active) {
+                                        Text("ACTIVE", color = NewTheme.Success, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp))
+                                    }
+                                    if (!isEnv) {
+                                        if (!active) {
+                                            Text(
+                                                if (accBusy) "Wait" else "Use",
+                                                color = if (accBusy) NewTheme.TextMuted else NewTheme.TextSecondary,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier
+                                                    .clickable(enabled = !accBusy && authState.accountBusy == null) {
+                                                        scope.launch {
+                                                            try { AppContainer.authRepository.useAccount(p.name, accId) }
+                                                            catch (e: Exception) { /* status text shows the failure */ }
+                                                        }
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                        Text(
+                                            if (accBusy) "Wait" else "Remove",
+                                            color = if (accBusy) NewTheme.TextMuted else NewTheme.Danger,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier
+                                                .clickable(enabled = !accBusy && authState.accountBusy == null) {
+                                                    scope.launch {
+                                                        try { AppContainer.authRepository.removeAccount(p.name, accId) }
+                                                        catch (e: Exception) { /* status text shows the failure */ }
+                                                    }
+                                                }
+                                                .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                                        )
+                                    }
+                                }
+                            }
                         }
                         if (i < providers.lastIndex) SectionDivider(startInset = 58.dp)
                     }

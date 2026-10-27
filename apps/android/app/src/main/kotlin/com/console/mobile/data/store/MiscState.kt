@@ -31,6 +31,8 @@ data class AuthState(
     val providerCredentials: Map<String, ProviderCredentialStatus> = emptyMap(),
     /** Provider ids with a key write or removal in flight. */
     val credentialsBusy: Set<String> = emptySet(),
+    /** The (provider, id) account Use/Remove action in flight, if any. */
+    val accountBusy: Pair<String, String>? = null,
 )
 
 class AuthStateHolder(initial: AuthState = AuthState()) {
