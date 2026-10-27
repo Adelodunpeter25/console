@@ -39,7 +39,27 @@ func checkAuthFixture(t *testing.T, name string, msg proto.Message) {
 }
 
 func TestAuthStatusFixture(t *testing.T) {
+	envActive := true
+	env := true
 	checkAuthFixture(t, "status.json", routes.AuthStatusToProtoForTest(auth.AuthStatus{
+		Antigravity: auth.ProviderAuthStatus{LoggedIn: true, Email: "adelodunjoseph892@gmail.com", Accounts: []auth.AccountStatus{
+			{ID: "acc_0a1b2c3d4e5f6071", Email: "adelodunjoseph892@gmail.com", CreatedAt: 1760000000000},
+		}},
+		Codex: auth.ProviderAuthStatus{LoggedIn: true, Email: "adelodunpeter24@gmail.com", Accounts: []auth.AccountStatus{
+			{ID: "acc_1feed2ee3aa44bb5", Email: "adelodunpeter24@gmail.com", Active: true, CreatedAt: 1760000000000},
+			{ID: "acc_9988aabbccddeeff", Email: "second@example.com", CreatedAt: 1760000099000},
+		}},
+		Claude: auth.ProviderAuthStatus{LoggedIn: true, Email: "peter@sinettechnologies.com", Accounts: []auth.AccountStatus{
+			{ID: "env", Active: envActive, Env: env},
+			{ID: "acc_5566778899aabbcc", Email: "peter@sinettechnologies.com", CreatedAt: 1760000123456},
+		}},
+	}))
+}
+
+// Accounts are additive: a payload without them (old server, old fixture)
+// must decode to the same two-field status clients already read.
+func TestAuthStatusNoAccountsFixture(t *testing.T) {
+	checkAuthFixture(t, "status_no_accounts.json", routes.AuthStatusToProtoForTest(auth.AuthStatus{
 		Antigravity: auth.ProviderAuthStatus{LoggedIn: true, Email: "adelodunjoseph892@gmail.com"},
 		Codex:       auth.ProviderAuthStatus{LoggedIn: true, Email: "adelodunpeter24@gmail.com"},
 		Claude:      auth.ProviderAuthStatus{LoggedIn: true, Email: "peter@sinettechnologies.com"},
@@ -62,8 +82,12 @@ func TestAuthLoginUrlFixture(t *testing.T) {
 }
 
 func TestAuthCallbackFixture(t *testing.T) {
+	// A second login that did not steal active (decision 3) must still
+	// report accountActive: false — that is the field the client uses to
+	// highlight the new row as needing an explicit "Use".
 	checkAuthFixture(t, "callback.json", &consolev1.OAuthCallbackResponse{
 		Provider: "codex", UserEmail: proto.String("user@example.com"),
+		AccountId: proto.String("acc_1feed2ee3aa44bb5"), AccountActive: proto.Bool(false),
 	})
 }
 

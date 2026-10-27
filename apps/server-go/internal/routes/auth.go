@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
@@ -134,7 +135,81 @@ func RegisterAuthRoutes(app *fiber.App, authSvc *auth.AuthService) {
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	})
 
+	h.Patch("/accounts/:provider/:id", func(c *fiber.Ctx) error {
+		provider, id := c.Params("provider"), c.Params("id")
+		if !accountProviderSupported(provider) {
+			return accountProviderUnsupported(c, provider)
+		}
+		var req struct {
+			Active *bool   `json:"active"`
+			Label  *string `json:"label"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
+		}
+		if req.Active == nil && req.Label == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Nothing to change: send 'active' or 'label'."})
+		}
+		status, err := authSvc.PatchAccount(provider, id, req.Active, req.Label)
+		return accountMutationResponse(c, provider, status, err)
+	})
+
+	h.Delete("/accounts/:provider/:id", func(c *fiber.Ctx) error {
+		provider, id := c.Params("provider"), c.Params("id")
+		if !accountProviderSupported(provider) {
+			return accountProviderUnsupported(c, provider)
+		}
+		status, err := authSvc.DeleteAccount(provider, id)
+		return accountMutationResponse(c, provider, status, err)
+	})
+
 	registerGitHubAuthRoutes(h, authSvc)
+}
+
+// accountProviderSupported reports whether provider participates in
+// account management.
+func accountProviderSupported(provider string) bool {
+	switch provider {
+	case "codex", "claude", "antigravity":
+		return true
+	default:
+		return false
+	}
+}
+
+// accountProviderUnsupported answers for providers without accounts:
+// devin is reserved (501, same wording as the login routes), anything else
+// is a bad request.
+func accountProviderUnsupported(c *fiber.Ctx, provider string) error {
+	if provider == "devin" {
+		return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{"success": false, "error": "Account management for '" + provider + "' is not supported by the Go server yet."})
+	}
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
+}
+
+// accountMutationResponse renders the post-mutation status, mapping the
+// shared error sentinels to their HTTP codes. err==nil is the success path.
+func accountMutationResponse(c *fiber.Ctx, provider string, status auth.ProviderAuthStatus, err error) error {
+	if err != nil {
+		switch {
+		case errors.Is(err, accounts.ErrNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Unknown account."})
+		case errors.Is(err, auth.ErrEnvAccount):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"success": false, "error": err.Error()})
+		case errors.Is(err, auth.ErrUnknownProvider):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid OAuth provider."})
+		default:
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+		}
+	}
+	raw, err := protoMarshal.Marshal(&consolev1.AccountMutationResponse{
+		Provider: provider,
+		Status:   providerAuthToProto(status),
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": "encode failed"})
+	}
+	return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 }
 
 // registerGitHubAuthRoutes wires the GitHub git-credential endpoints. These
@@ -228,6 +303,25 @@ func providerAuthToProto(s auth.ProviderAuthStatus) *consolev1.ProviderAuthStatu
 	if s.Email != "" {
 		out.Email = &s.Email
 	}
+	for _, a := range s.Accounts {
+		out.Accounts = append(out.Accounts, accountStatusToProto(a))
+	}
+	return out
+}
+
+// accountStatusToProto mirrors the proto contract: email/label empty →
+// absent; active/env explicit presence so a false still reaches the client.
+func accountStatusToProto(a auth.AccountStatus) *consolev1.ProviderAccount {
+	out := &consolev1.ProviderAccount{Id: a.ID}
+	if a.Email != "" {
+		out.Email = &a.Email
+	}
+	if a.Label != "" {
+		out.Label = &a.Label
+	}
+	out.Active = protoBool(a.Active)
+	out.Env = protoBool(a.Env)
+	out.CreatedAt = a.CreatedAt
 	return out
 }
 
@@ -257,8 +351,16 @@ func callbackResultToProto(r auth.CallbackResult) *consolev1.OAuthCallbackRespon
 	if r.UserEmail != "" {
 		out.UserEmail = &r.UserEmail
 	}
+	if r.AccountID != "" {
+		out.AccountId = &r.AccountID
+	}
+	// AccountActive is explicit presence, so a false (login of a second
+	// account that did not activate) still reaches the client.
+	out.AccountActive = protoBool(r.AccountActive)
 	return out
 }
+
+func protoBool(v bool) *bool { return &v }
 
 // AuthStatusToProtoForTest exposes the status converter to the api test
 // package, which lives outside internal/routes.

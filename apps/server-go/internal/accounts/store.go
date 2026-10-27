@@ -27,8 +27,8 @@ const accountColumns = "id, provider, identity, email, label, active, created_at
 func List(provider string) ([]Account, error) {
 	mu.RLock()
 	defer mu.RUnlock()
-	if gdb == nil {
-		return nil, ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return nil, err
 	}
 	rows, err := gdb.Query(
 		`SELECT `+accountColumns+` FROM provider_accounts WHERE provider = ? ORDER BY created_at, id`,
@@ -45,8 +45,8 @@ func List(provider string) ([]Account, error) {
 func All() (map[string][]Account, error) {
 	mu.RLock()
 	defer mu.RUnlock()
-	if gdb == nil {
-		return nil, ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return nil, err
 	}
 	rows, err := gdb.Query(`SELECT ` + accountColumns + ` FROM provider_accounts ORDER BY created_at, id`)
 	if err != nil {
@@ -69,8 +69,8 @@ func All() (map[string][]Account, error) {
 func Enabled(provider string) (Account, bool, error) {
 	mu.RLock()
 	defer mu.RUnlock()
-	if gdb == nil {
-		return Account{}, false, ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return Account{}, false, err
 	}
 	var a Account
 	var active int
@@ -106,8 +106,8 @@ func EnabledID(provider string) (string, error) {
 func HasAny(provider string) (bool, error) {
 	mu.RLock()
 	defer mu.RUnlock()
-	if gdb == nil {
-		return false, ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return false, err
 	}
 	var n int
 	if err := gdb.QueryRow(
@@ -124,8 +124,8 @@ func HasAny(provider string) (bool, error) {
 func Activate(provider, id string) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if gdb == nil {
-		return ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return err
 	}
 	now := nowMS()
 	return runTx(func(tx *sql.Tx) error {
@@ -162,8 +162,8 @@ func Select(provider, id string, active bool) error {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if gdb == nil {
-		return ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return err
 	}
 	now := nowMS()
 	return runTx(func(tx *sql.Tx) error {
@@ -186,6 +186,27 @@ func Select(provider, id string, active bool) error {
 	})
 }
 
+// SetLabel updates one account's operator label. Unknown ids return
+// ErrNotFound.
+func SetLabel(provider, id, label string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if err := checkDB(); err != nil {
+		return err
+	}
+	res, err := gdb.Exec(
+		`UPDATE provider_accounts SET label = ?, updated_at = ? WHERE provider = ? AND id = ?`,
+		label, nowMS(), provider, id,
+	)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Delete removes one account. Idempotent: deleting an id the store does
 // not hold succeeds without effect, mirroring the GitHub logout route.
 // Deleting the active account promotes the next one (oldest first); with
@@ -194,8 +215,8 @@ func Select(provider, id string, active bool) error {
 func Delete(provider, id string) error {
 	mu.Lock()
 	defer mu.Unlock()
-	if gdb == nil {
-		return ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return err
 	}
 	var wasActive bool
 	err := runTx(func(tx *sql.Tx) error {
@@ -246,8 +267,8 @@ func Register(provider, identity, email, label string) (Account, bool, error) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if gdb == nil {
-		return Account{}, false, ErrNotConfigured
+	if err := checkDB(); err != nil {
+		return Account{}, false, err
 	}
 	now := nowMS()
 	var stored Account

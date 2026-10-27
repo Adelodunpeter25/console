@@ -100,8 +100,13 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	scriptsSvc := services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports)
 	RegisterScriptRoutes(app, scriptsSvc)
 	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB), services.NewProjectBootstrapService())
-	RegisterUsageRoutes(app, usage.NewService())
-	RegisterAuthRoutes(app, auth.NewAuthService())
+	// One shared usage instance: auth-driven account mutations invalidate
+	// the same cache the usage routes read from.
+	usageSvc := usage.NewService()
+	RegisterUsageRoutes(app, usageSvc)
+	authSvc := auth.NewAuthService()
+	authSvc.Usage = usageSvc
+	RegisterAuthRoutes(app, authSvc)
 	RegisterDeviceRoutes(app, authManager)
 	// The old freely-mintable token endpoint is intentionally removed. Device
 	// tokens can only be issued through a consumed pairing grant.

@@ -32,6 +32,39 @@ message ProviderAuthStatus {
   optional string project_id = 3;
   // Project id configured via the settings/project-id endpoint.
   optional string configured_project_id = 4;
+  // Every stored login for this provider, oldest first. loggedIn/email
+  // above describe the *active* account exactly as they described the sole
+  // credential before accounts existed, so old payloads and old fixtures
+  // (no accounts field) keep decoding unchanged.
+  repeated ProviderAccount accounts = 5;
+}
+
+// One stored login. Secret material never crosses the boundary (see the
+// file-wide note): id is the stable handle every mutation takes.
+//
+// `active` and `env` are explicit-presence bools rather than plain ones —
+// protojson omits an implicit false, and "this account is not in use" must
+// be part of the payload, not something a reader has to infer from absence
+// (every other login in the list carries the field). env marks the
+// synthetic account that stands in for an environment-token login: it
+// cannot be removed or deselected while the variable is set.
+message ProviderAccount {
+  string id = 1;
+  optional string email = 2;
+  optional string label = 3;
+  optional bool active = 4;
+  // Unix millis, protojson-encoded as a string.
+  int64 created_at = 5;
+  optional bool env = 6;
+}
+
+// Response of PATCH/DELETE /api/auth/accounts/:provider/:id. The provider's
+// post-mutation status is included so a client updates its account list
+// and provider row from one response instead of issuing a second
+// /api/auth/status read.
+message AccountMutationResponse {
+  string provider = 1;
+  ProviderAuthStatus status = 2;
 }
 
 message GitHubAuthStatus {
@@ -65,9 +98,16 @@ message OAuthLoginUrlResponse {
 }
 
 // Response of POST /api/auth/login/callback.
+//
+// account_id/account_active tell a client which account the login landed
+// in and whether that account is now the active one — a second account
+// never activates automatically (the existing one keeps serving runs), and
+// the client should highlight the new row as needing an explicit "Use".
 message OAuthCallbackResponse {
   string provider = 1;
   optional string user_email = 2;
+  optional string account_id = 3;
+  optional bool account_active = 4;
 }
 
 // Response of GET /api/auth/project-id/:provider.

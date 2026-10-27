@@ -56,6 +56,20 @@ var (
 	storageDir string
 )
 
+// checkDB validates the configured handle is live. A closed one (e.g. a
+// test DB that was closed while later tests still run) degrades to
+// ErrNotConfigured, so callers fall back to legacy behavior exactly as
+// they would with an unconfigured store.
+func checkDB() error {
+	if gdb == nil {
+		return ErrNotConfigured
+	}
+	if err := gdb.Ping(); err != nil {
+		return ErrNotConfigured
+	}
+	return nil
+}
+
 // Configure wires the store to the global database and runs the legacy
 // credential migration. Idempotent; safe to call once at boot from
 // routes.New. The storage dir comes from the db so dev installs and

@@ -50,8 +50,13 @@ type ProviderAuthStatus struct {
 	ProjectId *string `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3,oneof" json:"project_id,omitempty"`
 	// Project id configured via the settings/project-id endpoint.
 	ConfiguredProjectId *string `protobuf:"bytes,4,opt,name=configured_project_id,json=configuredProjectId,proto3,oneof" json:"configured_project_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Every stored login for this provider, oldest first. loggedIn/email
+	// above describe the *active* account exactly as they described the sole
+	// credential before accounts existed, so old payloads and old fixtures
+	// (no accounts field) keep decoding unchanged.
+	Accounts      []*ProviderAccount `protobuf:"bytes,5,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProviderAuthStatus) Reset() {
@@ -112,6 +117,163 @@ func (x *ProviderAuthStatus) GetConfiguredProjectId() string {
 	return ""
 }
 
+func (x *ProviderAuthStatus) GetAccounts() []*ProviderAccount {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+// One stored login. Secret material never crosses the boundary (see the
+// file-wide note): id is the stable handle every mutation takes.
+//
+// `active` and `env` are explicit-presence bools rather than plain ones —
+// protojson omits an implicit false, and "this account is not in use" must
+// be part of the payload, not something a reader has to infer from absence
+// (every other login in the list carries the field). env marks the
+// synthetic account that stands in for an environment-token login: it
+// cannot be removed or deselected while the variable is set.
+type ProviderAccount struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Id     string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email  *string                `protobuf:"bytes,2,opt,name=email,proto3,oneof" json:"email,omitempty"`
+	Label  *string                `protobuf:"bytes,3,opt,name=label,proto3,oneof" json:"label,omitempty"`
+	Active *bool                  `protobuf:"varint,4,opt,name=active,proto3,oneof" json:"active,omitempty"`
+	// Unix millis, protojson-encoded as a string.
+	CreatedAt     int64 `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Env           *bool `protobuf:"varint,6,opt,name=env,proto3,oneof" json:"env,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProviderAccount) Reset() {
+	*x = ProviderAccount{}
+	mi := &file_console_v1_auth_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProviderAccount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProviderAccount) ProtoMessage() {}
+
+func (x *ProviderAccount) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProviderAccount.ProtoReflect.Descriptor instead.
+func (*ProviderAccount) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ProviderAccount) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ProviderAccount) GetEmail() string {
+	if x != nil && x.Email != nil {
+		return *x.Email
+	}
+	return ""
+}
+
+func (x *ProviderAccount) GetLabel() string {
+	if x != nil && x.Label != nil {
+		return *x.Label
+	}
+	return ""
+}
+
+func (x *ProviderAccount) GetActive() bool {
+	if x != nil && x.Active != nil {
+		return *x.Active
+	}
+	return false
+}
+
+func (x *ProviderAccount) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *ProviderAccount) GetEnv() bool {
+	if x != nil && x.Env != nil {
+		return *x.Env
+	}
+	return false
+}
+
+// Response of PATCH/DELETE /api/auth/accounts/:provider/:id. The provider's
+// post-mutation status is included so a client updates its account list
+// and provider row from one response instead of issuing a second
+// /api/auth/status read.
+type AccountMutationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Status        *ProviderAuthStatus    `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountMutationResponse) Reset() {
+	*x = AccountMutationResponse{}
+	mi := &file_console_v1_auth_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountMutationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountMutationResponse) ProtoMessage() {}
+
+func (x *AccountMutationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_auth_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountMutationResponse.ProtoReflect.Descriptor instead.
+func (*AccountMutationResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AccountMutationResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *AccountMutationResponse) GetStatus() *ProviderAuthStatus {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
 type GitHubAuthStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// `optional` (explicit presence) rather than a bare bool. protojson omits
@@ -128,7 +290,7 @@ type GitHubAuthStatus struct {
 
 func (x *GitHubAuthStatus) Reset() {
 	*x = GitHubAuthStatus{}
-	mi := &file_console_v1_auth_proto_msgTypes[1]
+	mi := &file_console_v1_auth_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -140,7 +302,7 @@ func (x *GitHubAuthStatus) String() string {
 func (*GitHubAuthStatus) ProtoMessage() {}
 
 func (x *GitHubAuthStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[1]
+	mi := &file_console_v1_auth_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -153,7 +315,7 @@ func (x *GitHubAuthStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHubAuthStatus.ProtoReflect.Descriptor instead.
 func (*GitHubAuthStatus) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{1}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GitHubAuthStatus) GetConnected() bool {
@@ -192,7 +354,7 @@ type AuthStatusResponse struct {
 
 func (x *AuthStatusResponse) Reset() {
 	*x = AuthStatusResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[2]
+	mi := &file_console_v1_auth_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -204,7 +366,7 @@ func (x *AuthStatusResponse) String() string {
 func (*AuthStatusResponse) ProtoMessage() {}
 
 func (x *AuthStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[2]
+	mi := &file_console_v1_auth_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -217,7 +379,7 @@ func (x *AuthStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthStatusResponse.ProtoReflect.Descriptor instead.
 func (*AuthStatusResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{2}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AuthStatusResponse) GetAntigravity() *ProviderAuthStatus {
@@ -269,7 +431,7 @@ type OAuthLoginUrlResponse struct {
 
 func (x *OAuthLoginUrlResponse) Reset() {
 	*x = OAuthLoginUrlResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[3]
+	mi := &file_console_v1_auth_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -281,7 +443,7 @@ func (x *OAuthLoginUrlResponse) String() string {
 func (*OAuthLoginUrlResponse) ProtoMessage() {}
 
 func (x *OAuthLoginUrlResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[3]
+	mi := &file_console_v1_auth_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -294,7 +456,7 @@ func (x *OAuthLoginUrlResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OAuthLoginUrlResponse.ProtoReflect.Descriptor instead.
 func (*OAuthLoginUrlResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{3}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OAuthLoginUrlResponse) GetProvider() string {
@@ -326,17 +488,24 @@ func (x *OAuthLoginUrlResponse) GetRedirectUri() string {
 }
 
 // Response of POST /api/auth/login/callback.
+//
+// account_id/account_active tell a client which account the login landed
+// in and whether that account is now the active one — a second account
+// never activates automatically (the existing one keeps serving runs), and
+// the client should highlight the new row as needing an explicit "Use".
 type OAuthCallbackResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	UserEmail     *string                `protobuf:"bytes,2,opt,name=user_email,json=userEmail,proto3,oneof" json:"user_email,omitempty"`
+	AccountId     *string                `protobuf:"bytes,3,opt,name=account_id,json=accountId,proto3,oneof" json:"account_id,omitempty"`
+	AccountActive *bool                  `protobuf:"varint,4,opt,name=account_active,json=accountActive,proto3,oneof" json:"account_active,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OAuthCallbackResponse) Reset() {
 	*x = OAuthCallbackResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[4]
+	mi := &file_console_v1_auth_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +517,7 @@ func (x *OAuthCallbackResponse) String() string {
 func (*OAuthCallbackResponse) ProtoMessage() {}
 
 func (x *OAuthCallbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[4]
+	mi := &file_console_v1_auth_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +530,7 @@ func (x *OAuthCallbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OAuthCallbackResponse.ProtoReflect.Descriptor instead.
 func (*OAuthCallbackResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{4}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *OAuthCallbackResponse) GetProvider() string {
@@ -376,6 +545,20 @@ func (x *OAuthCallbackResponse) GetUserEmail() string {
 		return *x.UserEmail
 	}
 	return ""
+}
+
+func (x *OAuthCallbackResponse) GetAccountId() string {
+	if x != nil && x.AccountId != nil {
+		return *x.AccountId
+	}
+	return ""
+}
+
+func (x *OAuthCallbackResponse) GetAccountActive() bool {
+	if x != nil && x.AccountActive != nil {
+		return *x.AccountActive
+	}
+	return false
 }
 
 // Response of GET /api/auth/project-id/:provider.
@@ -395,7 +578,7 @@ type ProjectIDResponse struct {
 
 func (x *ProjectIDResponse) Reset() {
 	*x = ProjectIDResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[5]
+	mi := &file_console_v1_auth_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -407,7 +590,7 @@ func (x *ProjectIDResponse) String() string {
 func (*ProjectIDResponse) ProtoMessage() {}
 
 func (x *ProjectIDResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[5]
+	mi := &file_console_v1_auth_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -420,7 +603,7 @@ func (x *ProjectIDResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectIDResponse.ProtoReflect.Descriptor instead.
 func (*ProjectIDResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{5}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ProjectIDResponse) GetProjectId() string {
@@ -442,7 +625,7 @@ type SetProjectIDResponse struct {
 
 func (x *SetProjectIDResponse) Reset() {
 	*x = SetProjectIDResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[6]
+	mi := &file_console_v1_auth_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +637,7 @@ func (x *SetProjectIDResponse) String() string {
 func (*SetProjectIDResponse) ProtoMessage() {}
 
 func (x *SetProjectIDResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[6]
+	mi := &file_console_v1_auth_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -467,7 +650,7 @@ func (x *SetProjectIDResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProjectIDResponse.ProtoReflect.Descriptor instead.
 func (*SetProjectIDResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SetProjectIDResponse) GetProvider() string {
@@ -493,7 +676,7 @@ type GitHubLogoutResponse struct {
 
 func (x *GitHubLogoutResponse) Reset() {
 	*x = GitHubLogoutResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[7]
+	mi := &file_console_v1_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -505,7 +688,7 @@ func (x *GitHubLogoutResponse) String() string {
 func (*GitHubLogoutResponse) ProtoMessage() {}
 
 func (x *GitHubLogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[7]
+	mi := &file_console_v1_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -518,7 +701,7 @@ func (x *GitHubLogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHubLogoutResponse.ProtoReflect.Descriptor instead.
 func (*GitHubLogoutResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *GitHubLogoutResponse) GetDisconnected() bool {
@@ -541,7 +724,7 @@ type GitHubValidateResponse struct {
 
 func (x *GitHubValidateResponse) Reset() {
 	*x = GitHubValidateResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[8]
+	mi := &file_console_v1_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +736,7 @@ func (x *GitHubValidateResponse) String() string {
 func (*GitHubValidateResponse) ProtoMessage() {}
 
 func (x *GitHubValidateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[8]
+	mi := &file_console_v1_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +749,7 @@ func (x *GitHubValidateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GitHubValidateResponse.ProtoReflect.Descriptor instead.
 func (*GitHubValidateResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *GitHubValidateResponse) GetConnected() bool {
@@ -613,7 +796,7 @@ type ProviderCredentialStatus struct {
 
 func (x *ProviderCredentialStatus) Reset() {
 	*x = ProviderCredentialStatus{}
-	mi := &file_console_v1_auth_proto_msgTypes[9]
+	mi := &file_console_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +808,7 @@ func (x *ProviderCredentialStatus) String() string {
 func (*ProviderCredentialStatus) ProtoMessage() {}
 
 func (x *ProviderCredentialStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[9]
+	mi := &file_console_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,7 +821,7 @@ func (x *ProviderCredentialStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderCredentialStatus.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialStatus) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ProviderCredentialStatus) GetConfigured() bool {
@@ -672,7 +855,7 @@ type ProviderCredentialStatuses struct {
 
 func (x *ProviderCredentialStatuses) Reset() {
 	*x = ProviderCredentialStatuses{}
-	mi := &file_console_v1_auth_proto_msgTypes[10]
+	mi := &file_console_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -684,7 +867,7 @@ func (x *ProviderCredentialStatuses) String() string {
 func (*ProviderCredentialStatuses) ProtoMessage() {}
 
 func (x *ProviderCredentialStatuses) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[10]
+	mi := &file_console_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -697,7 +880,7 @@ func (x *ProviderCredentialStatuses) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProviderCredentialStatuses.ProtoReflect.Descriptor instead.
 func (*ProviderCredentialStatuses) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{10}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ProviderCredentialStatuses) GetProviders() map[string]*ProviderCredentialStatus {
@@ -721,7 +904,7 @@ type SetProviderCredentialResponse struct {
 
 func (x *SetProviderCredentialResponse) Reset() {
 	*x = SetProviderCredentialResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[11]
+	mi := &file_console_v1_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -733,7 +916,7 @@ func (x *SetProviderCredentialResponse) String() string {
 func (*SetProviderCredentialResponse) ProtoMessage() {}
 
 func (x *SetProviderCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[11]
+	mi := &file_console_v1_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -746,7 +929,7 @@ func (x *SetProviderCredentialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetProviderCredentialResponse.ProtoReflect.Descriptor instead.
 func (*SetProviderCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{11}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SetProviderCredentialResponse) GetProvider() string {
@@ -793,7 +976,7 @@ type PairDeviceRequest struct {
 
 func (x *PairDeviceRequest) Reset() {
 	*x = PairDeviceRequest{}
-	mi := &file_console_v1_auth_proto_msgTypes[12]
+	mi := &file_console_v1_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -805,7 +988,7 @@ func (x *PairDeviceRequest) String() string {
 func (*PairDeviceRequest) ProtoMessage() {}
 
 func (x *PairDeviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[12]
+	mi := &file_console_v1_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -818,7 +1001,7 @@ func (x *PairDeviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairDeviceRequest.ProtoReflect.Descriptor instead.
 func (*PairDeviceRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{12}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PairDeviceRequest) GetGrant() string {
@@ -860,7 +1043,7 @@ type PairingGrantRequest struct {
 
 func (x *PairingGrantRequest) Reset() {
 	*x = PairingGrantRequest{}
-	mi := &file_console_v1_auth_proto_msgTypes[13]
+	mi := &file_console_v1_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +1055,7 @@ func (x *PairingGrantRequest) String() string {
 func (*PairingGrantRequest) ProtoMessage() {}
 
 func (x *PairingGrantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[13]
+	mi := &file_console_v1_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +1068,7 @@ func (x *PairingGrantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingGrantRequest.ProtoReflect.Descriptor instead.
 func (*PairingGrantRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{13}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PairingGrantRequest) GetDeviceName() string {
@@ -921,7 +1104,7 @@ type PairedDevice struct {
 
 func (x *PairedDevice) Reset() {
 	*x = PairedDevice{}
-	mi := &file_console_v1_auth_proto_msgTypes[14]
+	mi := &file_console_v1_auth_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -933,7 +1116,7 @@ func (x *PairedDevice) String() string {
 func (*PairedDevice) ProtoMessage() {}
 
 func (x *PairedDevice) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[14]
+	mi := &file_console_v1_auth_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,7 +1129,7 @@ func (x *PairedDevice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairedDevice.ProtoReflect.Descriptor instead.
 func (*PairedDevice) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{14}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PairedDevice) GetId() string {
@@ -991,7 +1174,7 @@ type ServerIdentity struct {
 
 func (x *ServerIdentity) Reset() {
 	*x = ServerIdentity{}
-	mi := &file_console_v1_auth_proto_msgTypes[15]
+	mi := &file_console_v1_auth_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1003,7 +1186,7 @@ func (x *ServerIdentity) String() string {
 func (*ServerIdentity) ProtoMessage() {}
 
 func (x *ServerIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[15]
+	mi := &file_console_v1_auth_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1016,7 +1199,7 @@ func (x *ServerIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerIdentity.ProtoReflect.Descriptor instead.
 func (*ServerIdentity) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{15}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ServerIdentity) GetId() string {
@@ -1066,7 +1249,7 @@ type PairDeviceResponse struct {
 
 func (x *PairDeviceResponse) Reset() {
 	*x = PairDeviceResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[16]
+	mi := &file_console_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1078,7 +1261,7 @@ func (x *PairDeviceResponse) String() string {
 func (*PairDeviceResponse) ProtoMessage() {}
 
 func (x *PairDeviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[16]
+	mi := &file_console_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1091,7 +1274,7 @@ func (x *PairDeviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairDeviceResponse.ProtoReflect.Descriptor instead.
 func (*PairDeviceResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{16}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *PairDeviceResponse) GetDevice() *PairedDevice {
@@ -1144,7 +1327,7 @@ type PairingGrantResponse struct {
 
 func (x *PairingGrantResponse) Reset() {
 	*x = PairingGrantResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[17]
+	mi := &file_console_v1_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1156,7 +1339,7 @@ func (x *PairingGrantResponse) String() string {
 func (*PairingGrantResponse) ProtoMessage() {}
 
 func (x *PairingGrantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[17]
+	mi := &file_console_v1_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1169,7 +1352,7 @@ func (x *PairingGrantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PairingGrantResponse.ProtoReflect.Descriptor instead.
 func (*PairingGrantResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PairingGrantResponse) GetGrant() string {
@@ -1220,7 +1403,7 @@ type ServerDevice struct {
 
 func (x *ServerDevice) Reset() {
 	*x = ServerDevice{}
-	mi := &file_console_v1_auth_proto_msgTypes[18]
+	mi := &file_console_v1_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1232,7 +1415,7 @@ func (x *ServerDevice) String() string {
 func (*ServerDevice) ProtoMessage() {}
 
 func (x *ServerDevice) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[18]
+	mi := &file_console_v1_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1245,7 +1428,7 @@ func (x *ServerDevice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerDevice.ProtoReflect.Descriptor instead.
 func (*ServerDevice) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{18}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ServerDevice) GetId() string {
@@ -1300,7 +1483,7 @@ type ServerDevicesResponse struct {
 
 func (x *ServerDevicesResponse) Reset() {
 	*x = ServerDevicesResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[19]
+	mi := &file_console_v1_auth_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1312,7 +1495,7 @@ func (x *ServerDevicesResponse) String() string {
 func (*ServerDevicesResponse) ProtoMessage() {}
 
 func (x *ServerDevicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[19]
+	mi := &file_console_v1_auth_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1325,7 +1508,7 @@ func (x *ServerDevicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerDevicesResponse.ProtoReflect.Descriptor instead.
 func (*ServerDevicesResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{19}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ServerDevicesResponse) GetDevices() []*ServerDevice {
@@ -1351,7 +1534,7 @@ type RenameDeviceRequest struct {
 
 func (x *RenameDeviceRequest) Reset() {
 	*x = RenameDeviceRequest{}
-	mi := &file_console_v1_auth_proto_msgTypes[20]
+	mi := &file_console_v1_auth_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1363,7 +1546,7 @@ func (x *RenameDeviceRequest) String() string {
 func (*RenameDeviceRequest) ProtoMessage() {}
 
 func (x *RenameDeviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[20]
+	mi := &file_console_v1_auth_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1376,7 +1559,7 @@ func (x *RenameDeviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameDeviceRequest.ProtoReflect.Descriptor instead.
 func (*RenameDeviceRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RenameDeviceRequest) GetName() string {
@@ -1396,7 +1579,7 @@ type RenameDeviceResponse struct {
 
 func (x *RenameDeviceResponse) Reset() {
 	*x = RenameDeviceResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[21]
+	mi := &file_console_v1_auth_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1591,7 @@ func (x *RenameDeviceResponse) String() string {
 func (*RenameDeviceResponse) ProtoMessage() {}
 
 func (x *RenameDeviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[21]
+	mi := &file_console_v1_auth_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,7 +1604,7 @@ func (x *RenameDeviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenameDeviceResponse.ProtoReflect.Descriptor instead.
 func (*RenameDeviceResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{21}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RenameDeviceResponse) GetDevice() *ServerDevice {
@@ -1445,7 +1628,7 @@ type RevokeOthersResponse struct {
 
 func (x *RevokeOthersResponse) Reset() {
 	*x = RevokeOthersResponse{}
-	mi := &file_console_v1_auth_proto_msgTypes[22]
+	mi := &file_console_v1_auth_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1457,7 +1640,7 @@ func (x *RevokeOthersResponse) String() string {
 func (*RevokeOthersResponse) ProtoMessage() {}
 
 func (x *RevokeOthersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_auth_proto_msgTypes[22]
+	mi := &file_console_v1_auth_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1470,7 +1653,7 @@ func (x *RevokeOthersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeOthersResponse.ProtoReflect.Descriptor instead.
 func (*RevokeOthersResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_auth_proto_rawDescGZIP(), []int{22}
+	return file_console_v1_auth_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RevokeOthersResponse) GetRevokedCount() int64 {
@@ -1485,16 +1668,32 @@ var File_console_v1_auth_proto protoreflect.FileDescriptor
 const file_console_v1_auth_proto_rawDesc = "" +
 	"\n" +
 	"\x15console/v1/auth.proto\x12\n" +
-	"console.v1\"\xdc\x01\n" +
+	"console.v1\"\x95\x02\n" +
 	"\x12ProviderAuthStatus\x12\x1b\n" +
 	"\tlogged_in\x18\x01 \x01(\bR\bloggedIn\x12\x19\n" +
 	"\x05email\x18\x02 \x01(\tH\x00R\x05email\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"project_id\x18\x03 \x01(\tH\x01R\tprojectId\x88\x01\x01\x127\n" +
-	"\x15configured_project_id\x18\x04 \x01(\tH\x02R\x13configuredProjectId\x88\x01\x01B\b\n" +
+	"\x15configured_project_id\x18\x04 \x01(\tH\x02R\x13configuredProjectId\x88\x01\x01\x127\n" +
+	"\baccounts\x18\x05 \x03(\v2\x1b.console.v1.ProviderAccountR\baccountsB\b\n" +
 	"\x06_emailB\r\n" +
 	"\v_project_idB\x18\n" +
-	"\x16_configured_project_id\"\x89\x01\n" +
+	"\x16_configured_project_id\"\xd1\x01\n" +
+	"\x0fProviderAccount\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\x05email\x18\x02 \x01(\tH\x00R\x05email\x88\x01\x01\x12\x19\n" +
+	"\x05label\x18\x03 \x01(\tH\x01R\x05label\x88\x01\x01\x12\x1b\n" +
+	"\x06active\x18\x04 \x01(\bH\x02R\x06active\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\x03R\tcreatedAt\x12\x15\n" +
+	"\x03env\x18\x06 \x01(\bH\x03R\x03env\x88\x01\x01B\b\n" +
+	"\x06_emailB\b\n" +
+	"\x06_labelB\t\n" +
+	"\a_activeB\x06\n" +
+	"\x04_env\"m\n" +
+	"\x17AccountMutationResponse\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x126\n" +
+	"\x06status\x18\x02 \x01(\v2\x1e.console.v1.ProviderAuthStatusR\x06status\"\x89\x01\n" +
 	"\x10GitHubAuthStatus\x12!\n" +
 	"\tconnected\x18\x01 \x01(\bH\x00R\tconnected\x88\x01\x01\x12\x1f\n" +
 	"\busername\x18\x02 \x01(\tH\x01R\busername\x88\x01\x01\x12\x16\n" +
@@ -1512,12 +1711,17 @@ const file_console_v1_auth_proto_rawDesc = "" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x19\n" +
 	"\bauth_url\x18\x02 \x01(\tR\aauthUrl\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12!\n" +
-	"\fredirect_uri\x18\x04 \x01(\tR\vredirectUri\"f\n" +
+	"\fredirect_uri\x18\x04 \x01(\tR\vredirectUri\"\xd8\x01\n" +
 	"\x15OAuthCallbackResponse\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\"\n" +
 	"\n" +
-	"user_email\x18\x02 \x01(\tH\x00R\tuserEmail\x88\x01\x01B\r\n" +
-	"\v_user_email\"F\n" +
+	"user_email\x18\x02 \x01(\tH\x00R\tuserEmail\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"account_id\x18\x03 \x01(\tH\x01R\taccountId\x88\x01\x01\x12*\n" +
+	"\x0eaccount_active\x18\x04 \x01(\bH\x02R\raccountActive\x88\x01\x01B\r\n" +
+	"\v_user_emailB\r\n" +
+	"\v_account_idB\x11\n" +
+	"\x0f_account_active\"F\n" +
 	"\x11ProjectIDResponse\x12\"\n" +
 	"\n" +
 	"project_id\x18\x01 \x01(\tH\x00R\tprojectId\x88\x01\x01B\r\n" +
@@ -1623,51 +1827,55 @@ func file_console_v1_auth_proto_rawDescGZIP() []byte {
 	return file_console_v1_auth_proto_rawDescData
 }
 
-var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_console_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_console_v1_auth_proto_goTypes = []any{
 	(*ProviderAuthStatus)(nil),            // 0: console.v1.ProviderAuthStatus
-	(*GitHubAuthStatus)(nil),              // 1: console.v1.GitHubAuthStatus
-	(*AuthStatusResponse)(nil),            // 2: console.v1.AuthStatusResponse
-	(*OAuthLoginUrlResponse)(nil),         // 3: console.v1.OAuthLoginUrlResponse
-	(*OAuthCallbackResponse)(nil),         // 4: console.v1.OAuthCallbackResponse
-	(*ProjectIDResponse)(nil),             // 5: console.v1.ProjectIDResponse
-	(*SetProjectIDResponse)(nil),          // 6: console.v1.SetProjectIDResponse
-	(*GitHubLogoutResponse)(nil),          // 7: console.v1.GitHubLogoutResponse
-	(*GitHubValidateResponse)(nil),        // 8: console.v1.GitHubValidateResponse
-	(*ProviderCredentialStatus)(nil),      // 9: console.v1.ProviderCredentialStatus
-	(*ProviderCredentialStatuses)(nil),    // 10: console.v1.ProviderCredentialStatuses
-	(*SetProviderCredentialResponse)(nil), // 11: console.v1.SetProviderCredentialResponse
-	(*PairDeviceRequest)(nil),             // 12: console.v1.PairDeviceRequest
-	(*PairingGrantRequest)(nil),           // 13: console.v1.PairingGrantRequest
-	(*PairedDevice)(nil),                  // 14: console.v1.PairedDevice
-	(*ServerIdentity)(nil),                // 15: console.v1.ServerIdentity
-	(*PairDeviceResponse)(nil),            // 16: console.v1.PairDeviceResponse
-	(*PairingGrantResponse)(nil),          // 17: console.v1.PairingGrantResponse
-	(*ServerDevice)(nil),                  // 18: console.v1.ServerDevice
-	(*ServerDevicesResponse)(nil),         // 19: console.v1.ServerDevicesResponse
-	(*RenameDeviceRequest)(nil),           // 20: console.v1.RenameDeviceRequest
-	(*RenameDeviceResponse)(nil),          // 21: console.v1.RenameDeviceResponse
-	(*RevokeOthersResponse)(nil),          // 22: console.v1.RevokeOthersResponse
-	nil,                                   // 23: console.v1.ProviderCredentialStatuses.ProvidersEntry
+	(*ProviderAccount)(nil),               // 1: console.v1.ProviderAccount
+	(*AccountMutationResponse)(nil),       // 2: console.v1.AccountMutationResponse
+	(*GitHubAuthStatus)(nil),              // 3: console.v1.GitHubAuthStatus
+	(*AuthStatusResponse)(nil),            // 4: console.v1.AuthStatusResponse
+	(*OAuthLoginUrlResponse)(nil),         // 5: console.v1.OAuthLoginUrlResponse
+	(*OAuthCallbackResponse)(nil),         // 6: console.v1.OAuthCallbackResponse
+	(*ProjectIDResponse)(nil),             // 7: console.v1.ProjectIDResponse
+	(*SetProjectIDResponse)(nil),          // 8: console.v1.SetProjectIDResponse
+	(*GitHubLogoutResponse)(nil),          // 9: console.v1.GitHubLogoutResponse
+	(*GitHubValidateResponse)(nil),        // 10: console.v1.GitHubValidateResponse
+	(*ProviderCredentialStatus)(nil),      // 11: console.v1.ProviderCredentialStatus
+	(*ProviderCredentialStatuses)(nil),    // 12: console.v1.ProviderCredentialStatuses
+	(*SetProviderCredentialResponse)(nil), // 13: console.v1.SetProviderCredentialResponse
+	(*PairDeviceRequest)(nil),             // 14: console.v1.PairDeviceRequest
+	(*PairingGrantRequest)(nil),           // 15: console.v1.PairingGrantRequest
+	(*PairedDevice)(nil),                  // 16: console.v1.PairedDevice
+	(*ServerIdentity)(nil),                // 17: console.v1.ServerIdentity
+	(*PairDeviceResponse)(nil),            // 18: console.v1.PairDeviceResponse
+	(*PairingGrantResponse)(nil),          // 19: console.v1.PairingGrantResponse
+	(*ServerDevice)(nil),                  // 20: console.v1.ServerDevice
+	(*ServerDevicesResponse)(nil),         // 21: console.v1.ServerDevicesResponse
+	(*RenameDeviceRequest)(nil),           // 22: console.v1.RenameDeviceRequest
+	(*RenameDeviceResponse)(nil),          // 23: console.v1.RenameDeviceResponse
+	(*RevokeOthersResponse)(nil),          // 24: console.v1.RevokeOthersResponse
+	nil,                                   // 25: console.v1.ProviderCredentialStatuses.ProvidersEntry
 }
 var file_console_v1_auth_proto_depIdxs = []int32{
-	0,  // 0: console.v1.AuthStatusResponse.antigravity:type_name -> console.v1.ProviderAuthStatus
-	0,  // 1: console.v1.AuthStatusResponse.codex:type_name -> console.v1.ProviderAuthStatus
-	0,  // 2: console.v1.AuthStatusResponse.devin:type_name -> console.v1.ProviderAuthStatus
-	0,  // 3: console.v1.AuthStatusResponse.claude:type_name -> console.v1.ProviderAuthStatus
-	1,  // 4: console.v1.AuthStatusResponse.github:type_name -> console.v1.GitHubAuthStatus
-	23, // 5: console.v1.ProviderCredentialStatuses.providers:type_name -> console.v1.ProviderCredentialStatuses.ProvidersEntry
-	14, // 6: console.v1.PairDeviceResponse.device:type_name -> console.v1.PairedDevice
-	15, // 7: console.v1.PairDeviceResponse.server:type_name -> console.v1.ServerIdentity
-	15, // 8: console.v1.PairingGrantResponse.server:type_name -> console.v1.ServerIdentity
-	18, // 9: console.v1.ServerDevicesResponse.devices:type_name -> console.v1.ServerDevice
-	18, // 10: console.v1.RenameDeviceResponse.device:type_name -> console.v1.ServerDevice
-	9,  // 11: console.v1.ProviderCredentialStatuses.ProvidersEntry.value:type_name -> console.v1.ProviderCredentialStatus
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	1,  // 0: console.v1.ProviderAuthStatus.accounts:type_name -> console.v1.ProviderAccount
+	0,  // 1: console.v1.AccountMutationResponse.status:type_name -> console.v1.ProviderAuthStatus
+	0,  // 2: console.v1.AuthStatusResponse.antigravity:type_name -> console.v1.ProviderAuthStatus
+	0,  // 3: console.v1.AuthStatusResponse.codex:type_name -> console.v1.ProviderAuthStatus
+	0,  // 4: console.v1.AuthStatusResponse.devin:type_name -> console.v1.ProviderAuthStatus
+	0,  // 5: console.v1.AuthStatusResponse.claude:type_name -> console.v1.ProviderAuthStatus
+	3,  // 6: console.v1.AuthStatusResponse.github:type_name -> console.v1.GitHubAuthStatus
+	25, // 7: console.v1.ProviderCredentialStatuses.providers:type_name -> console.v1.ProviderCredentialStatuses.ProvidersEntry
+	16, // 8: console.v1.PairDeviceResponse.device:type_name -> console.v1.PairedDevice
+	17, // 9: console.v1.PairDeviceResponse.server:type_name -> console.v1.ServerIdentity
+	17, // 10: console.v1.PairingGrantResponse.server:type_name -> console.v1.ServerIdentity
+	20, // 11: console.v1.ServerDevicesResponse.devices:type_name -> console.v1.ServerDevice
+	20, // 12: console.v1.RenameDeviceResponse.device:type_name -> console.v1.ServerDevice
+	11, // 13: console.v1.ProviderCredentialStatuses.ProvidersEntry.value:type_name -> console.v1.ProviderCredentialStatus
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_auth_proto_init() }
@@ -1677,20 +1885,21 @@ func file_console_v1_auth_proto_init() {
 	}
 	file_console_v1_auth_proto_msgTypes[0].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[1].OneofWrappers = []any{}
-	file_console_v1_auth_proto_msgTypes[4].OneofWrappers = []any{}
-	file_console_v1_auth_proto_msgTypes[5].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[3].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[6].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[7].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[8].OneofWrappers = []any{}
-	file_console_v1_auth_proto_msgTypes[9].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[10].OneofWrappers = []any{}
 	file_console_v1_auth_proto_msgTypes[11].OneofWrappers = []any{}
-	file_console_v1_auth_proto_msgTypes[18].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[13].OneofWrappers = []any{}
+	file_console_v1_auth_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_auth_proto_rawDesc), len(file_console_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

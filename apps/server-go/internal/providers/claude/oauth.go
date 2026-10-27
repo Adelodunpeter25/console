@@ -49,6 +49,19 @@ func envToken() string {
 	return os.Getenv("ANTHROPIC_OAUTH_TOKEN")
 }
 
+// EnvToken exposes env-token presence for the status API (the synthetic
+// env account is only reported while the variable owns the provider).
+func EnvToken() string { return envToken() }
+
+// ClearLegacyCredentialFile removes the pre-accounts single-credential
+// file, dropping a stale login that nothing else references.
+func ClearLegacyCredentialFile() error {
+	if err := os.Remove(CredentialPath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // CredentialPath returns the CLAUDE_CREDENTIALS_PATH override if set,
 // otherwise ~/.console/claude-creds.json.
 func CredentialPath() string {

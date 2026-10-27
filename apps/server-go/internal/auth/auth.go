@@ -11,20 +11,31 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/antigravity"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/claude"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/codex"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 )
 
 // pendingTTL is the 10-minute OAuth state expiry.
 const pendingTTL = 10 * time.Minute
+
+// ErrUnknownProvider rejects a provider id outside codex|claude|antigravity.
+var ErrUnknownProvider = errors.New("Invalid OAuth provider.")
+
+// ErrEnvAccount rejects mutations of the synthetic env account. It is
+// locked while the environment variable owns the provider; nothing this
+// API does can change which credential runs would use.
+var ErrEnvAccount = errors.New("The environment-token account cannot be removed or deselected while the env variable is set.")
 
 type pendingLogin struct {
 	verifier    string
@@ -32,11 +43,27 @@ type pendingLogin struct {
 	expiresAt   time.Time
 }
 
-// ProviderAuthStatus is the per-provider login state. Shared by every
-// provider key in AuthStatus — they all report the same two fields.
+// AccountStatus is one stored login as reported in the status API. Secret
+// material stays on the server (see ProviderAccount in the proto for the
+// wire contract).
+type AccountStatus struct {
+	ID        string `json:"id"`
+	Email     string `json:"email,omitempty"`
+	Label     string `json:"label,omitempty"`
+	Active    bool   `json:"active"`
+	Env       bool   `json:"env,omitempty"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+// ProviderAuthStatus is the per-provider login state. loggedIn/email
+// describe the ACTIVE credential exactly as they described the sole
+// credential before accounts; Accounts carries every stored login (nil
+// when the account store is unavailable, so a degraded boot still reports
+// old-style status).
 type ProviderAuthStatus struct {
-	LoggedIn bool   `json:"loggedIn"`
-	Email    string `json:"email,omitempty"`
+	LoggedIn bool            `json:"loggedIn"`
+	Email    string          `json:"email,omitempty"`
+	Accounts []AccountStatus `json:"accounts,omitempty"`
 }
 
 // GitHubAuthStatus reports GitHub git-credential state. Unlike the LLM
@@ -75,11 +102,18 @@ type LoginURL struct {
 type CallbackResult struct {
 	Provider  string `json:"provider"`
 	UserEmail string `json:"userEmail,omitempty"`
+	// AccountID is the (existing or newly registered) account the login
+	// landed in; AccountActive tells whether it now serves runs. A second
+	// account never activates automatically — the client highlights the
+	// new row as needing an explicit "Use".
+	AccountID     string `json:"accountId,omitempty"`
+	AccountActive bool   `json:"accountActive"`
 }
 
 // AuthService holds OAuth login state. The zero value is usable except
 // for Exchange/ExchangeClaude, which default to the provider exchangers
-// when nil (overridable in tests).
+// when nil (overridable in tests). Usage, when set, has its per-provider
+// cache invalidated on account mutations.
 type AuthService struct {
 	mu      sync.Mutex
 	pending map[string]pendingLogin
@@ -89,6 +123,8 @@ type AuthService struct {
 	ExchangeClaude func(code, state, verifier, redirectURI string) (claude.OAuthCredential, error)
 	// ValidatePAT verifies a pasted GitHub token (overridable in tests).
 	ValidatePAT func(ctx context.Context, client *http.Client, token string) (string, []string, error)
+	// Usage is the aggregated usage cache; nil skips its invalidation.
+	Usage *usage.Service
 }
 
 func NewAuthService() *AuthService {
@@ -109,26 +145,84 @@ func (s *AuthService) exchangeClaude(code, state, verifier, redirectURI string) 
 	return claude.ExchangeCode(nil, code, state, verifier, redirectURI)
 }
 
-// GetStatus reports login state from credential files/env tokens.
+// GetStatus reports login state from credential files/env tokens, plus
+// every provider's stored account list.
 func (s *AuthService) GetStatus() AuthStatus {
-	status := AuthStatus{}
-	if cred, err := codex.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Codex = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
-	} else if codex.CredentialExists() {
-		status.Codex = ProviderAuthStatus{LoggedIn: true}
+	status := AuthStatus{
+		Antigravity: s.providerStatus("antigravity"),
+		Codex:       s.providerStatus("codex"),
+		Claude:      s.providerStatus("claude"),
+		GitHub:      GitHubStatus(),
 	}
-	if cred, err := claude.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Claude = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
-	} else if claude.CredentialExists() {
-		status.Claude = ProviderAuthStatus{LoggedIn: true}
-	}
-	if cred, err := antigravity.LoadCredential(); err == nil && cred.AccessToken != "" {
-		status.Antigravity = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
-	} else if antigravity.CredentialExists() {
-		status.Antigravity = ProviderAuthStatus{LoggedIn: true}
-	}
-	status.GitHub = GitHubStatus()
 	return status
+}
+
+// providerStatus builds one provider's login state: the active credential
+// (env token, active account file, or legacy file — all resolved inside
+// LoadCredential) and the account list.
+func (s *AuthService) providerStatus(provider string) ProviderAuthStatus {
+	out := ProviderAuthStatus{}
+	switch provider {
+	case "codex":
+		if cred, err := codex.LoadCredential(); err == nil && cred.AccessToken != "" {
+			out = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
+		} else if codex.CredentialExists() {
+			out = ProviderAuthStatus{LoggedIn: true}
+		}
+	case "claude":
+		if cred, err := claude.LoadCredential(); err == nil && cred.AccessToken != "" {
+			out = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
+		} else if claude.CredentialExists() {
+			out = ProviderAuthStatus{LoggedIn: true}
+		}
+	case "antigravity":
+		if cred, err := antigravity.LoadCredential(); err == nil && cred.AccessToken != "" {
+			out = ProviderAuthStatus{LoggedIn: true, Email: cred.Email}
+		} else if antigravity.CredentialExists() {
+			out = ProviderAuthStatus{LoggedIn: true}
+		}
+	}
+	all, err := accounts.All()
+	if err != nil {
+		// Account store unavailable (unconfigured tooling, degraded boot):
+		// report old-style status rather than failing the whole read.
+		return out
+	}
+	out.Accounts = s.accountList(provider, all[provider])
+	return out
+}
+
+// accountList merges the synthetic env account with the stored accounts.
+// While an env token owns the provider it keeps precedence at load time,
+// so file accounts are reported inactive regardless of their store flag —
+// "harmless and present, but not what runs use" (plan §4.4).
+func (s *AuthService) accountList(provider string, rows []accounts.Account) []AccountStatus {
+	envOwned := envOwned(provider)
+	out := []AccountStatus{}
+	if envOwned {
+		out = append(out, AccountStatus{ID: "env", Active: true, Env: true})
+	}
+	for _, r := range rows {
+		a := AccountStatus{ID: r.ID, Email: r.Email, Label: r.Label, CreatedAt: r.CreatedAt}
+		if !envOwned {
+			a.Active = r.Active
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+// envOwned reports whether an environment token currently owns the
+// provider's credential resolution.
+func envOwned(provider string) bool {
+	switch provider {
+	case "claude":
+		return claude.EnvToken() != ""
+	case "codex":
+		return codex.EnvToken() != ""
+	default:
+		return false
+	}
 }
 
 // GitHubStatus reports the cached GitHub credential. Deliberately local-only:
@@ -240,7 +334,9 @@ func (s *AuthService) HandleCallback(code, state string) (CallbackResult, error)
 	return s.HandleCallbackFor("codex", code, state)
 }
 
-// HandleCallbackFor exchanges the authorization code for a provider.
+// HandleCallbackFor exchanges the authorization code for a provider,
+// registering (or updating in place) the account it belongs to and saving
+// the credential into that account's file (plan §5.4).
 func (s *AuthService) HandleCallbackFor(provider, code, state string) (CallbackResult, error) {
 	if state == "" {
 		return CallbackResult{}, fmt.Errorf("OAuth callback is missing state.")
@@ -253,35 +349,102 @@ func (s *AuthService) HandleCallbackFor(provider, code, state string) (CallbackR
 	if !ok {
 		return CallbackResult{}, fmt.Errorf("OAuth state is invalid or expired.")
 	}
-	if provider == "antigravity" {
+	switch provider {
+	case "antigravity":
 		configuredProjectID := antigravity.GetConfiguredProjectID()
 		credential, err := antigravity.CompleteAuthFlowWithCode(nil, code, configuredProjectID)
 		if err != nil {
 			return CallbackResult{}, err
 		}
-		if err := antigravity.SaveCredential(credential); err != nil {
+		// Identity: email (the project id is per-account but not a stable
+		// cross-restart key). No email → a fresh, unmerged account.
+		target, err := loginAccount(provider, credential.Email, credential.Email)
+		if err != nil {
 			return CallbackResult{}, err
 		}
-		return CallbackResult{Provider: "antigravity", UserEmail: credential.Email}, nil
-	}
-	if provider == "claude" {
+		save := func(cred antigravity.OAuthCredential) error {
+			return saveLogin(cred, target, antigravity.SaveCredentialFor, antigravity.SaveCredential)
+		}
+		if err := save(credential); err != nil {
+			return CallbackResult{}, err
+		}
+		return renderLogin(provider, credential.Email, target), nil
+	case "claude":
 		credential, err := s.exchangeClaude(code, state, pending.verifier, pending.redirectURI)
 		if err != nil {
 			return CallbackResult{}, err
 		}
-		if err := claude.SaveCredential(credential); err != nil {
+		// Identity: the bootstrap email.
+		target, err := loginAccount(provider, credential.Email, credential.Email)
+		if err != nil {
 			return CallbackResult{}, err
 		}
-		return CallbackResult{Provider: "claude", UserEmail: credential.Email}, nil
+		if err := saveLogin(credential, target, claude.SaveCredentialFor, claude.SaveCredential); err != nil {
+			return CallbackResult{}, err
+		}
+		return renderLogin(provider, credential.Email, target), nil
 	}
 	credential, err := s.exchange(code, pending.verifier, pending.redirectURI)
 	if err != nil {
 		return CallbackResult{}, err
 	}
-	if err := codex.SaveCredential(credential); err != nil {
+	// Identity: the ChatGPT account id, falling back to email.
+	identity := credential.AccountID
+	if identity == "" {
+		identity = credential.Email
+	}
+	target, err := loginAccount(provider, identity, credential.Email)
+	if err != nil {
 		return CallbackResult{}, err
 	}
-	return CallbackResult{Provider: "codex", UserEmail: credential.Email}, nil
+	if err := saveLogin(credential, target, codex.SaveCredentialFor, codex.SaveCredential); err != nil {
+		return CallbackResult{}, err
+	}
+	return renderLogin(provider, credential.Email, target), nil
+}
+
+// loginTarget is where a fresh credential must be saved.
+type loginTarget struct {
+	// Account is the registered account (SaveCredentialFor target).
+	Account accounts.Account
+	// Legacy means the account store is unavailable: the credential is
+	// saved to the legacy single-credential path, exactly the pre-accounts
+	// behavior, so a degraded boot — or standalone tooling/tests — can
+	// still log in.
+	Legacy bool
+}
+
+// loginAccount registers (or dedups) the account for a fresh credential
+// and returns where to save it, falling back to the legacy path when the
+// account store is unavailable.
+func loginAccount(provider, identity, email string) (loginTarget, error) {
+	account, _, err := accounts.Register(provider, identity, email, "")
+	if err == nil {
+		return loginTarget{Account: account}, nil
+	}
+	if errors.Is(err, accounts.ErrNotConfigured) {
+		return loginTarget{Legacy: true}, nil
+	}
+	return loginTarget{}, err
+}
+
+// saveLogin routes the credential write to the destination loginAccount chose.
+func saveLogin[T any](cred T, target loginTarget, saveFor func(string, T) error, saveLegacy func(T) error) error {
+	if target.Legacy {
+		return saveLegacy(cred)
+	}
+	return saveFor(target.Account.ID, cred)
+}
+
+// renderLogin renders the callback response for a saved credential. The
+// legacy path keeps the old shape: no account id at all.
+func renderLogin(provider, email string, target loginTarget) CallbackResult {
+	out := CallbackResult{Provider: provider, UserEmail: email}
+	if !target.Legacy {
+		out.AccountID = target.Account.ID
+		out.AccountActive = target.Account.Active
+	}
+	return out
 }
 
 // GetProjectID returns the configured project ID for a provider.
@@ -298,6 +461,95 @@ func (s *AuthService) SetProjectID(provider, projectID string) error {
 		return fmt.Errorf("Invalid provider.")
 	}
 	return antigravity.SetConfiguredProjectID(projectID)
+}
+
+// validateProvider accepts only the OAuth providers with account support.
+func validateProvider(provider string) error {
+	switch provider {
+	case "codex", "claude", "antigravity":
+		return nil
+	default:
+		return ErrUnknownProvider
+	}
+}
+
+// PatchAccount activates or deselects one account and/or renames it, and
+// invalidates the provider's model and usage caches (model availability
+// can differ per account plan). Returns the provider's post-mutation
+// status so the client updates from one response.
+func (s *AuthService) PatchAccount(provider, id string, active *bool, label *string) (ProviderAuthStatus, error) {
+	if err := validateProvider(provider); err != nil {
+		return ProviderAuthStatus{}, err
+	}
+	if id == "env" {
+		// The synthetic env account exists only while the variable is set.
+		if !envOwned(provider) {
+			return ProviderAuthStatus{}, accounts.ErrNotFound
+		}
+		return ProviderAuthStatus{}, ErrEnvAccount
+	}
+	if active != nil {
+		if err := accounts.Select(provider, id, *active); err != nil {
+			return ProviderAuthStatus{}, err
+		}
+	}
+	if label != nil {
+		if err := accounts.SetLabel(provider, id, *label); err != nil {
+			return ProviderAuthStatus{}, err
+		}
+	}
+	s.invalidateProviderCaches(provider)
+	return s.providerStatus(provider), nil
+}
+
+// DeleteAccount removes one stored login. Idempotent; deleting the active
+// account promotes the next one, and the store's last remaining login for
+// a provider also drops that provider's legacy credential file so a final
+// delete cannot resurrect a stale login. Returns the post-mutation status.
+func (s *AuthService) DeleteAccount(provider, id string) (ProviderAuthStatus, error) {
+	if err := validateProvider(provider); err != nil {
+		return ProviderAuthStatus{}, err
+	}
+	if id == "env" {
+		if !envOwned(provider) {
+			return ProviderAuthStatus{}, accounts.ErrNotFound
+		}
+		return ProviderAuthStatus{}, ErrEnvAccount
+	}
+	if err := accounts.Delete(provider, id); err != nil {
+		return ProviderAuthStatus{}, err
+	}
+	// With the store empty for this provider, the legacy file is the only
+	// thing left referencing a login; keeping it would bring a deleted
+	// account back to life as "the provider's credential".
+	if any, err := accounts.HasAny(provider); err == nil && !any {
+		switch provider {
+		case "claude":
+			_ = claude.ClearLegacyCredentialFile()
+		case "codex":
+			_ = codex.ClearLegacyCredentialFile()
+		case "antigravity":
+			_ = antigravity.ClearLegacyCredentialFile()
+		}
+	}
+	s.invalidateProviderCaches(provider)
+	return s.providerStatus(provider), nil
+}
+
+// invalidateProviderCaches drops everything downstream that assumed a
+// single account: model discovery and the provider's usage report.
+func (s *AuthService) invalidateProviderCaches(provider string) {
+	switch provider {
+	case "claude":
+		claude.InvalidateModelCache()
+	case "codex":
+		codex.InvalidateModelCache()
+	case "antigravity":
+		antigravity.InvalidateModelCache()
+	}
+	if s.Usage != nil {
+		s.Usage.Invalidate(provider)
+	}
 }
 
 // sweepLocked drops expired states. Caller must hold s.mu.

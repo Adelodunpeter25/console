@@ -42,6 +42,15 @@ func CredentialPath() string {
 	return shared.CredentialPath("ANTIGRAVITY_CREDENTIALS_PATH", "antigravity-creds.json")
 }
 
+// ClearLegacyCredentialFile removes the pre-accounts single-credential
+// file, dropping a stale login that nothing else references.
+func ClearLegacyCredentialFile() error {
+	if err := os.Remove(CredentialPath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // activeCredentialPath resolves where the credential runs use lives: the
 // active account's file when the store holds accounts, the legacy
 // single-credential file otherwise. An unconfigured store (tests, tools)
