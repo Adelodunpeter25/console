@@ -310,7 +310,9 @@ impl ConsoleDesktopApp {
                             this.account_busy = None;
                             this.account_error =
                                 Some((provider.clone(), format!("{err:#}")));
-                            this.rename_form = None;
+                            // The rename dialog stays open: it shows the
+                            // error next to the name that failed, so the
+                            // user fixes rather than retypes.
                         }
                     });
                 }

@@ -7,7 +7,6 @@
 
 use super::ProbeState;
 use crate::input::ComposerInput;
-use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -47,7 +46,6 @@ impl RenderOnce for ServerModal {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_close = self.on_close.clone();
-        let close_click = on_close.clone();
         let on_probe = self.on_probe.clone();
         let on_save = self.on_save.clone();
 
@@ -153,153 +151,106 @@ impl RenderOnce for ServerModal {
                 )
             });
 
-        // The backdrop closes the modal; the card stops the click so
-        // clicking inside it does not dismiss.
-        let backdrop_close = on_close.clone();
-        let card = div()
-            .w(px(520.0))
-            .max_h_full()
-            .p(px(16.0))
-            .rounded(px(10.0))
-            .border_1()
-            .border_color(theme.border_strong)
-            .bg(theme.surface)
-            .shadow_lg()
+        // The action row: probe status on the left, Cancel/Test/Save on the
+        // right. The shell draws the title bar and backdrop; only the body
+        // and footer are this modal's own.
+        let footer = div()
             .flex()
-            .flex_col()
-            .gap(px(12.0))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
-            })
+            .items_center()
+            .justify_between()
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .justify_between()
+                    .gap(px(6.0))
+                    .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(probe_color))
                     .child(
                         div()
-                            .text_size(px(14.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child(if self.is_edit {
-                                "Edit Server"
-                            } else {
-                                "Add Server"
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("btn-close-server-modal")
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_close)(window, cx);
-                            })
-                            .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
+                            .text_size(px(11.5))
+                            .text_color(probe_color)
+                            .child(probe_text),
                     ),
             )
-            .child(body)
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .justify_between()
+                    .gap(px(8.0))
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.0))
-                            .child(div().w(px(7.0)).h(px(7.0)).rounded_full().bg(probe_color))
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(theme.border_strong)
+                            .bg(theme.raised)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                cx.stop_propagation();
+                                (on_probe)(window, cx);
+                            })
                             .child(
                                 div()
                                     .text_size(px(11.5))
-                                    .text_color(probe_color)
-                                    .child(probe_text),
+                                    .text_color(theme.text)
+                                    .child("Test connection"),
                             ),
                     )
                     .child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .on_mouse_down(MouseButton::Left, {
+                                let close_click = on_close.clone();
+                                move |_event, window, cx| {
+                                    cx.stop_propagation();
+                                    (close_click)(window, cx);
+                                }
+                            })
                             .child(
                                 div()
-                                    .px(px(8.0))
-                                    .py(px(4.0))
-                                    .rounded(px(5.0))
-                                    .border_1()
-                                    .border_color(theme.border_strong)
-                                    .bg(theme.raised)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(theme.overlay))
-                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                        cx.stop_propagation();
-                                        (on_probe)(window, cx);
-                                    })
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(theme.text)
-                                            .child("Test connection"),
-                                    ),
-                            )
+                                    .text_size(px(11.5))
+                                    .text_color(theme.text_secondary)
+                                    .child("Cancel"),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .px(px(10.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .bg(theme.accent)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.9))
+                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                                cx.stop_propagation();
+                                (on_save)(window, cx);
+                            })
                             .child(
                                 div()
-                                    .px(px(8.0))
-                                    .py(px(4.0))
-                                    .rounded(px(5.0))
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(theme.overlay))
-                                    .on_mouse_down(MouseButton::Left, {
-                                        let close_click = close_click.clone();
-                                        move |_event, window, cx| {
-                                            cx.stop_propagation();
-                                            (close_click)(window, cx);
-                                        }
-                                    })
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(theme.text_secondary)
-                                            .child("Cancel"),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .px(px(10.0))
-                                    .py(px(4.0))
-                                    .rounded(px(5.0))
-                                    .bg(theme.accent)
-                                    .cursor_pointer()
-                                    .hover(|s| s.opacity(0.9))
-                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                        cx.stop_propagation();
-                                        (on_save)(window, cx);
-                                    })
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(theme.on_inverse)
-                                            .child(if self.is_edit { "Save" } else { "Add" }),
-                                    ),
+                                    .text_size(px(11.5))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.on_inverse)
+                                    .child(if self.is_edit { "Save" } else { "Add" }),
                             ),
                     ),
             );
 
-        div()
-            .id("server-modal")
-            .absolute()
-            .inset_0()
-            .bg(gpui::hsla(0.0, 0.0, 0.0, 0.6))
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(24.0))
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                (backdrop_close)(window, cx);
-            })
-            .child(card)
+        super::Modal {
+            title: if self.is_edit {
+                "Edit Server".to_string()
+            } else {
+                "Add Server".to_string()
+            },
+            width: 520.0,
+            content: body.into_any_element(),
+            footer: footer.into_any_element(),
+            on_close,
+        }
     }
 }
 
@@ -327,11 +278,9 @@ impl RenderOnce for PairDeviceModal {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_close = self.on_close.clone();
-        let close_click = on_close.clone();
         let on_refresh = self.on_refresh.clone();
         let on_revoke = self.on_revoke.clone();
         let on_unpair = self.on_unpair.clone();
-        let backdrop_close = on_close.clone();
 
         let qr = self.grant.as_ref().and_then(|grant| {
             (!grant.qr_png.is_empty()).then(|| {
@@ -476,53 +425,14 @@ impl RenderOnce for PairDeviceModal {
             );
         }
 
-        let mut card = div()
-            .w(px(360.0))
-            .max_h_full()
-            .p(px(16.0))
-            .rounded(px(10.0))
-            .border_1()
-            .border_color(theme.border_strong)
-            .bg(theme.surface)
-            .shadow_lg()
-            .flex()
-            .flex_col()
-            .gap(px(12.0))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
-            })
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(14.0))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(theme.text)
-                            .child("Pair a Phone"),
-                    )
-                    .child(
-                        div()
-                            .id("btn-close-pair-modal")
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                cx.stop_propagation();
-                                (on_close)(window, cx);
-                            })
-                            .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
-                    ),
-            )
-            .child(body);
-
+        // "Unpair this device" belongs to this modal's own state, so it sits
+        // above the action row; the shell's footer slot holds both.
+        let mut footer_wrapper = div().flex().flex_col().gap(px(12.0));
         if self.this_device.is_some() {
             let on_unpair_click = on_unpair.clone();
-            card = card.child(
+            footer_wrapper = footer_wrapper.child(
                 div()
                     .id("btn-unpair-device")
-                    // A column stretches its children across the card;
-                    // this button is a small action, not a bar.
                     .self_start()
                     .px(px(8.0))
                     .py(px(4.0))
@@ -545,7 +455,7 @@ impl RenderOnce for PairDeviceModal {
             );
         }
 
-        card = card.child(
+        footer_wrapper = footer_wrapper.child(
             div()
                 .flex()
                 .items_center()
@@ -581,7 +491,7 @@ impl RenderOnce for PairDeviceModal {
                         .cursor_pointer()
                         .hover(|s| s.opacity(0.9))
                         .on_mouse_down(MouseButton::Left, {
-                            let close_click = close_click.clone();
+                            let close_click = on_close.clone();
                             move |_event, window, cx| {
                                 cx.stop_propagation();
                                 (close_click)(window, cx);
@@ -597,18 +507,12 @@ impl RenderOnce for PairDeviceModal {
                 ),
         );
 
-        div()
-            .id("pair-device-modal")
-            .absolute()
-            .inset_0()
-            .bg(gpui::hsla(0.0, 0.0, 0.0, 0.6))
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(24.0))
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                (backdrop_close)(window, cx);
-            })
-            .child(card)
+        super::Modal {
+            title: "Pair a Phone".to_string(),
+            width: 360.0,
+            content: body.into_any_element(),
+            footer: footer_wrapper.into_any_element(),
+            on_close,
+        }
     }
 }

@@ -67,7 +67,7 @@ impl ConsoleDesktopApp {
                     let modal_open = this
                         .settings_view
                         .as_ref()
-                        .map(|view| view.read(cx).modal_open())
+                        .map(|view| view.read(cx).modal_open(cx))
                         .unwrap_or(false);
                     if !modal_open {
                         this.close_settings(window, cx);

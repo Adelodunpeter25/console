@@ -25,19 +25,11 @@ pub struct ProvidersPage {
     pub recent_login_account: Option<(String, String)>,
     pub on_account_use: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     pub on_account_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
-    /// The account whose inline rename form is open, as (provider, account
-    /// id), or None when no form is showing. One at a time, like the api-key
-    /// forms.
-    pub rename_form: Option<(String, String)>,
-    /// Present only while a rename form is open; the caller seeded its
-    /// content with the account's current display name.
-    pub rename_input: Option<Entity<ComposerInput>>,
-    /// (provider, account id, current display name): opens the inline form.
+    /// (provider, account id, current display name): opens the rename
+    /// dialog. The dialog itself renders above the whole window (built by
+    /// the settings window), like the server modals.
     pub on_account_rename:
         Rc<dyn Fn(String, String, String, &mut Window, &mut App) + 'static>,
-    /// Reads the form's input and issues the PATCH; also closes the form.
-    pub on_rename_submit: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    pub on_rename_cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     /// (provider, server-authored failure text) for the last account
     /// mutation failure, shown verbatim on that provider's card.
     pub account_error: Option<(String, String)>,
@@ -492,122 +484,6 @@ impl RenderOnce for ProvidersPage {
                                             })),
                                     )
                                 })
-                                // The inline rename form for this provider's
-                                // open rename target (api-key-form style:
-                                // seeded input, Save applies, Cancel drops).
-                                .when_some(
-                                    self.rename_form
-                                        .as_ref()
-                                        .filter(|(p, _)| p == &provider_id)
-                                        .map(|(_, id)| id.clone()),
-                                    |card, rename_id| {
-                                        let rename_busy = row_busy
-                                            .as_ref()
-                                            .map(|busy_id| busy_id == &rename_id)
-                                            .unwrap_or(false);
-                                        card.child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(6.0))
-                                                .child(
-                                                    div()
-                                                        .border_1()
-                                                        .border_color(theme.border)
-                                                        .bg(theme.canvas)
-                                                        .rounded(px(6.0))
-                                                        .px(px(8.0))
-                                                        .py(px(6.0))
-                                                        .children(
-                                                            self.rename_input
-                                                                .clone(),
-                                                        ),
-                                                )
-                                                .child(
-                                                    div()
-                                                        .flex()
-                                                        .items_center()
-                                                        .gap(px(6.0))
-                                                        .child({
-                                                            let submit = self
-                                                                .on_rename_submit
-                                                                .clone();
-                                                            div()
-                                                                .id(ElementId::from(format!(
-                                                                    "btn-rename-save-{provider_id}-{rename_id}"
-                                                                )))
-                                                                .px(px(10.0))
-                                                                .py(px(5.0))
-                                                                .rounded(px(6.0))
-                                                                .when(
-                                                                    !rename_busy,
-                                                                    |b| {
-                                                                        b.bg(theme.accent)
-                                                                            .cursor_pointer()
-                                                                            .hover(|s| {
-                                                                                s.opacity(0.9)
-                                                                            })
-                                                                    },
-                                                                )
-                                                                .on_mouse_down(
-                                                                    MouseButton::Left,
-                                                                    move |_event, window, cx| {
-                                                                        if rename_busy {
-                                                                            return;
-                                                                        }
-                                                                        cx.stop_propagation();
-                                                                        (submit)(window, cx);
-                                                                    },
-                                                                )
-                                                                .child(
-                                                                    div()
-                                                                        .text_size(px(12.0))
-                                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                                        .text_color(theme.on_inverse)
-                                                                        .child(if rename_busy {
-                                                                            "Renaming..."
-                                                                        } else {
-                                                                            "Save"
-                                                                        }),
-                                                                )
-                                                        })
-                                                        .child({
-                                                            let cancel = self
-                                                                .on_rename_cancel
-                                                                .clone();
-                                                            div()
-                                                                .id(ElementId::from(format!(
-                                                                    "btn-rename-cancel-{provider_id}-{rename_id}"
-                                                                )))
-                                                                .px(px(10.0))
-                                                                .py(px(5.0))
-                                                                .rounded(px(6.0))
-                                                                .border_1()
-                                                                .border_color(theme.border_strong)
-                                                                .bg(theme.raised)
-                                                                .cursor_pointer()
-                                                                .hover(|s| {
-                                                                    s.bg(theme.overlay)
-                                                                })
-                                                                .on_mouse_down(
-                                                                    MouseButton::Left,
-                                                                    move |_event, window, cx| {
-                                                                        cx.stop_propagation();
-                                                                        (cancel)(window, cx);
-                                                                    },
-                                                                )
-                                                                .child(
-                                                                    div()
-                                                                        .text_size(px(12.0))
-                                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                                        .text_color(theme.text)
-                                                                        .child("Cancel"),
-                                                                )
-                                                        }),
-                                                ),
-                                        )
-                                    },
-                                )
                         }),
                 ),
             )
@@ -624,5 +500,122 @@ impl RenderOnce for ProvidersPage {
                 None => div().into_any_element(),
             })
             .into_any_element()
+    }
+}
+
+/// The rename-account dialog, rendered in the shared settings modal shell.
+/// The input arrives pre-seeded with the account's display name; Save hands
+/// it to the caller (which issues the PATCH). A failed PATCH keeps the
+/// dialog open with the server's error text visible, so the name the user
+/// typed is still there to fix and resubmit.
+#[derive(IntoElement)]
+pub struct RenameAccountModal {
+    pub input: Option<Entity<ComposerInput>>,
+    /// True while the rename PATCH is in flight: Save reads "Renaming...".
+    pub busy: bool,
+    /// Server-authored failure text for the last rename attempt, verbatim.
+    pub error: Option<String>,
+    pub on_close: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
+
+impl RenderOnce for RenameAccountModal {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = Theme::current(cx);
+        let on_close = self.on_close.clone();
+        let busy = self.busy;
+
+        let content = div()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_size(px(11.5))
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(theme.text_secondary)
+                    .child("Account name"),
+            )
+            .when_some(self.input.clone(), |el, input| {
+                el.child(
+                    div()
+                        .p(px(6.0))
+                        .rounded(px(6.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.canvas)
+                        .child(input),
+                )
+            })
+            .when_some(self.error.clone(), |el, error| {
+                el.child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.danger)
+                        .child(error),
+                )
+            });
+
+        let footer = div()
+            .flex()
+            .items_center()
+            .justify_end()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .px(px(10.0))
+                    .py(px(4.0))
+                    .rounded(px(5.0))
+                    .border_1()
+                    .border_color(theme.border_strong)
+                    .bg(theme.raised)
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.overlay))
+                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                        cx.stop_propagation();
+                        (on_close)(window, cx);
+                    })
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(theme.text_secondary)
+                            .child("Cancel"),
+                    ),
+            )
+            .child({
+                let on_save = self.on_save.clone();
+                div()
+                    .id("btn-rename-save")
+                    .px(px(10.0))
+                    .py(px(4.0))
+                    .rounded(px(5.0))
+                    .when(!busy, |el| {
+                        el.bg(theme.accent)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.9))
+                    })
+                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                        if busy {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        (on_save)(window, cx);
+                    })
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(theme.on_inverse)
+                            .child(if busy { "Renaming..." } else { "Save" }),
+                    )
+            });
+
+        super::Modal {
+            title: "Rename Account".to_string(),
+            width: 360.0,
+            content: content.into_any_element(),
+            footer: footer.into_any_element(),
+            on_close: self.on_close.clone(),
+        }
     }
 }

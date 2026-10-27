@@ -303,8 +303,15 @@ impl SettingsWindow {
     ///
     /// The window root uses this to tell "close the modal" from "close the
     /// settings": one Escape must only close one thing.
-    pub fn modal_open(&self) -> bool {
-        self.is_adding_env || self.pair_modal_open || self.mcp.is_modal_open
+    pub fn modal_open(&self, cx: &App) -> bool {
+        if self.is_adding_env || self.pair_modal_open || self.mcp.is_modal_open {
+            return true;
+        }
+        // The rename dialog's state lives on the app.
+        self.app
+            .upgrade()
+            .map(|app| app.read(cx).rename_form.is_some())
+            .unwrap_or(false)
     }
 
     /// Close any modal open on top of the settings.
@@ -312,6 +319,14 @@ impl SettingsWindow {
         self.is_adding_env = false;
         self.pair_modal_open = false;
         self.editing_env_id = None;
+        // The rename dialog belongs to the app state.
+        if let Some(app) = self.app.upgrade() {
+            app.update(cx, |app_state, cx| {
+                if app_state.rename_form.take().is_some() {
+                    cx.notify();
+                }
+            });
+        }
         cx.notify();
     }
 
@@ -505,6 +520,17 @@ impl Render for SettingsWindow {
                         this.is_adding_env = false;
                         this.editing_env_id = None;
                         this.pair_modal_open = false;
+                    }
+                    // The rename dialog belongs to the providers tab the
+                    // same way.
+                    if tab != SettingsTab::Providers {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                if app_state.rename_form.take().is_some() {
+                                    cx.notify();
+                                }
+                            });
+                        }
                     }
                     cx.notify();
                 });
@@ -742,48 +768,13 @@ impl Render for SettingsWindow {
                                         input.set_content(current, cx)
                                     });
                                     app.update(cx, |app_state, cx| {
+                                        app_state.account_error = None;
                                         app_state.rename_form = Some((provider, id));
                                         cx.notify();
                                     });
                                 }
                             },
                         )
-                    },
-                    rename_form: app.rename_form.clone(),
-                    rename_input: Some(self.rename_input.clone()),
-                    on_rename_submit: {
-                        let app_handle = self.app.clone();
-                        let input = self.rename_input.clone();
-                        Rc::new(move |_w: &mut Window, cx: &mut App| {
-                            if let Some(app) = app_handle.upgrade() {
-                                let name = input.read(cx).content().trim().to_string();
-                                if name.is_empty() {
-                                    return;
-                                }
-                                app.update(cx, |app_state, cx| {
-                                    if let Some((provider, id)) = app_state.rename_form.clone()
-                                    {
-                                        app_state.rename_account(provider, id, name, cx);
-                                    } else {
-                                        // Nothing to apply (form closed under
-                                        // us); just put the field away.
-                                        app_state.rename_form = None;
-                                    }
-                                });
-                                input.update(cx, |input, cx| input.set_content("", cx));
-                            }
-                        })
-                    },
-                    on_rename_cancel: {
-                        let app_handle = self.app.clone();
-                        Rc::new(move |_w: &mut Window, cx: &mut App| {
-                            if let Some(app) = app_handle.upgrade() {
-                                app.update(cx, |app_state, cx| {
-                                    app_state.rename_form = None;
-                                    cx.notify();
-                                });
-                            }
-                        })
                     },
                     account_error: app.account_error.clone(),
                     api_keys,
@@ -1145,6 +1136,73 @@ impl Render for SettingsWindow {
         let show_mcp_modal = active_tab == SettingsTab::Mcp && self.mcp.is_modal_open;
         let mcp_modal = self.mcp.render_mcp_modal(window, cx);
 
+        // The account rename dialog: same shared shell. Its state lives on
+        // the app, and it must be snapshotted here because the MCP tab's
+        // `&mut cx` calls above conflict with holding the app's read guard
+        // across the build. Busy and error piggyback on the account-mutation
+        // state that rename_account writes.
+        let (rename_target, rename_busy_src, rename_error_src) = self
+            .app
+            .upgrade()
+            .map(|app| {
+                let app = app.read(cx);
+                (
+                    app.rename_form.clone(),
+                    app.account_busy.clone(),
+                    app.account_error.clone(),
+                )
+            })
+            .unwrap_or_default();
+        let show_rename_modal = rename_target.is_some();
+        let rename_busy =
+            show_rename_modal && rename_busy_src.as_ref() == rename_target.as_ref();
+        let rename_error = match rename_target.as_ref() {
+            Some((rp, ri)) => rename_error_src
+                .iter()
+                .filter(|(p, i)| p == rp && i == ri)
+                .map(|(_, text)| text.clone())
+                .next(),
+            None => None,
+        };
+        let rename_modal = console_ui::settings::RenameAccountModal {
+            input: Some(self.rename_input.clone()),
+            busy: rename_busy,
+            error: rename_error,
+            on_close: {
+                let app_handle = self.app.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.rename_form = None;
+                            cx.notify();
+                        });
+                    }
+                })
+            },
+            on_save: {
+                let app_handle = self.app.clone();
+                let input = self.rename_input.clone();
+                Rc::new(move |_w: &mut Window, cx: &mut App| {
+                    if let Some(app) = app_handle.upgrade() {
+                        let name = input.read(cx).content().trim().to_string();
+                        if name.is_empty() {
+                            return;
+                        }
+                        app.update(cx, |app_state, cx| {
+                            if let Some((provider, id)) = app_state.rename_form.clone() {
+                                app_state.rename_account(provider, id, name, cx);
+                            } else {
+                                // Nothing to apply (the dialog closed under
+                                // us); just put the field away.
+                                app_state.rename_form = None;
+                            }
+                        });
+                        input.update(cx, |input, cx| input.set_content("", cx));
+                    }
+                })
+            },
+        };
+
         let on_modal_close: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();
             Rc::new(move |_w: &mut Window, cx: &mut App| {
@@ -1224,6 +1282,24 @@ impl Render for SettingsWindow {
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 if event.keystroke.key == "escape" {
+                    // The rename dialog's state lives on the app, not on
+                    // this window, so it is checked first the same way.
+                    if this
+                        .app
+                        .upgrade()
+                        .map(|app| app.read(cx).rename_form.is_some())
+                        .unwrap_or(false)
+                    {
+                        if let Some(app) = this.app.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.rename_form = None;
+                                cx.notify();
+                            });
+                        }
+                        cx.stop_propagation();
+                        cx.notify();
+                        return;
+                    }
                     // A modal on top of the settings closes first, and the
                     // event stops there: one Escape must not close the modal
                     // *and* the settings behind it.
@@ -1246,6 +1322,7 @@ impl Render for SettingsWindow {
             .when(show_server_modal, |el| el.child(server_modal))
             .when(show_pair_modal, |el| el.child(pair_modal))
             .when(show_mcp_modal, |el| el.child(mcp_modal))
+            .when(show_rename_modal, |el| el.child(rename_modal))
             .into_any_element()
     }
 }
