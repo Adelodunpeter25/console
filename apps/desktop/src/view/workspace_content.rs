@@ -4,7 +4,7 @@ use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, changes_summary_pill,
-    error_banner, notice_banner, queued_prompts_stack, shell_banner, todo_card,
+    composer_pills, error_banner, notice_banner, queued_prompts_stack, todo_card,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -576,6 +576,25 @@ impl ConsoleDesktopApp {
         let error_selection = self.error_selection.clone();
         let agent_notice = self.agent_notice_for_pane(&pane_id);
         let todo_items = self.todo_items_for_pane(&pane_id);
+        let todo_total = todo_items.len();
+        let todo_completed = todo_items
+            .iter()
+            .filter(|item| {
+                matches!(
+                    item.status.to_ascii_lowercase().as_str(),
+                    "done" | "completed" | "complete"
+                )
+            })
+            .count();
+        let has_active_todos = todo_total > 0 && todo_completed < todo_total;
+        let todos_collapsed = self.is_todos_collapsed_for_pane(&pane_id);
+        let subagents = pane_session_id
+            .as_deref()
+            .and_then(|sid| self.session_subagents.get(sid))
+            .cloned()
+            .unwrap_or_default();
+        let subagent_count = subagents.len();
+        let subagents_running = subagents.iter().any(|sub| sub.status == "running");
         let running_shells = pane_session_id
             .as_deref()
             .map(|sid| self.running_shells_for_session(sid))
@@ -600,6 +619,42 @@ impl ConsoleDesktopApp {
                     });
                 handler
             });
+
+        let tasks_entity = entity.clone();
+        let tasks_pane_id = pane_id.clone();
+        let on_tasks: Rc<dyn Fn(&mut Window, &mut App) + 'static> = Rc::new(move |_window, cx| {
+            if let Some(app) = tasks_entity.upgrade() {
+                let pane_id = tasks_pane_id.clone();
+                app.update(cx, |this, cx| {
+                    this.toggle_todos_collapsed_for_pane(&pane_id);
+                    cx.notify();
+                });
+            }
+        });
+        let subagents_entity = entity.clone();
+        let on_subagents: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+            Rc::new(move |_window, cx| {
+                if let Some(app) = subagents_entity.upgrade() {
+                    app.update(cx, |this, cx| this.view_subagent_in_panel("", cx));
+                }
+            });
+        let shells_entity = entity.clone();
+        let on_shells: Rc<dyn Fn(&mut Window, &mut App) + 'static> = Rc::new(move |_window, cx| {
+            if let Some(app) = shells_entity.upgrade() {
+                app.update(cx, |this, cx| this.view_shells_in_panel(None, cx));
+            }
+        });
+        let pills_key = format!("composer-pills-{pane_id}");
+        let composer_pills_row = composer_pills(
+            &pills_key,
+            has_active_todos.then_some((todo_completed, todo_total)),
+            (subagent_count > 0).then_some((subagent_count, subagents_running)),
+            running_shells.len(),
+            has_active_todos.then_some(on_tasks),
+            (subagent_count > 0).then_some(on_subagents),
+            (!running_shells.is_empty()).then_some(on_shells),
+            theme,
+        );
 
         div()
             .flex_1()
@@ -681,51 +736,25 @@ impl ConsoleDesktopApp {
                 theme,
             ))
         })
-        .when(!running_shells.is_empty(), |el| {
+        .when_some(composer_pills_row, |el, pills| el.child(pills))
+        .when(has_active_todos && !todos_collapsed, |el| {
             let entity = entity.clone();
-            let command = running_shells
-                .last()
-                .map(|w| w.shell_command())
-                .unwrap_or_default();
-            el.child(shell_banner(
-                running_shells.len(),
-                command,
-                Rc::new(move |_window, cx| {
+            let toggle_pane_id = pane_id.clone();
+            el.child(todo_card(
+                todo_items.clone(),
+                false,
+                Some(Rc::new(move |_window, cx| {
                     if let Some(app) = entity.upgrade() {
-                        app.update(cx, |this, cx| this.view_shells_in_panel(None, cx));
+                        let pane_id = toggle_pane_id.clone();
+                        app.update(cx, |this, cx| {
+                            this.toggle_todos_collapsed_for_pane(&pane_id);
+                            cx.notify();
+                        });
                     }
-                }),
+                })),
                 theme,
             ))
         })
-        .when(
-            !todo_items.is_empty()
-                && todo_items.iter().any(|i| {
-                    !matches!(
-                        i.status.to_ascii_lowercase().as_str(),
-                        "done" | "completed" | "complete"
-                    )
-                }),
-            |el| {
-                let entity = entity.clone();
-                let toggle_pane_id = pane_id.clone();
-                let collapsed = self.is_todos_collapsed_for_pane(&pane_id);
-                el.child(todo_card(
-                    todo_items.clone(),
-                    collapsed,
-                    Some(Rc::new(move |_window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            let pane_id = toggle_pane_id.clone();
-                            app.update(cx, |this, cx| {
-                                this.toggle_todos_collapsed_for_pane(&pane_id);
-                                cx.notify();
-                            });
-                        }
-                    })),
-                    theme,
-                ))
-            },
-        )
         .when_some(self.pending_question_for_pane(&pane_id), |el, question| {
             let entity_for_answer = entity.clone();
             let question_input = self.question_input_for_pane(&pane_id);

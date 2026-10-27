@@ -1,6 +1,7 @@
 pub mod approval_selector;
 pub mod attachment;
 pub mod autocomplete;
+pub mod composer_pills;
 pub mod composer_view;
 pub mod copy_button;
 pub mod error_banner;
@@ -16,7 +17,6 @@ pub mod palette;
 pub mod project_browse_palette;
 pub mod queued_prompt_card;
 pub mod quick_open_palette;
-pub mod shell_banner;
 pub mod stripe;
 pub mod thinking_stepper;
 pub mod todo_card;
@@ -32,6 +32,7 @@ pub use autocomplete::{
     AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings,
 };
+pub use composer_pills::composer_pills;
 pub use composer_view::ComposerView;
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
@@ -58,7 +59,6 @@ pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
 pub use quick_open_palette::QuickOpenPalette;
-pub use shell_banner::shell_banner;
 pub use stripe::centered_stripe;
 pub use thinking_stepper::ThinkingStepper;
 pub use todo_card::todo_card;
