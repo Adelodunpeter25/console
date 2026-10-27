@@ -75,6 +75,26 @@ class ChatRepository(
                     withContext(Dispatchers.Main.immediate) {
                         chats.setAll(cached)
                     }
+                    // A draft can be stale: the app may have been killed after
+                    // the prompt was sent but before the cached copy was
+                    // updated, so the restored "draft" is really a duplicated
+                    // sent prompt. Server history wins once fetched — a
+                    // session with persisted messages and a run newer than
+                    // the draft loses the local input entirely.
+                    for ((id, state) in cached) {
+                        try {
+                            val detail = withContext(Dispatchers.IO) { api.getSession(id, 1, null) }
+                            val messageCount = detail.header.message_count ?: 0
+                            val running = detail.header.status == "working"
+                            val serverNewer = detail.header.updated_at > (state.draftUpdatedAt ?: 0L)
+                            if (messageCount > 0 && (running || serverNewer)) {
+                                chats.update(id) { it.copy(input = "", draftUpdatedAt = null) }
+                                p.removeSession(id)
+                            }
+                        } catch (_: Exception) {
+                            // Offline or server gone: keep the draft as-is.
+                        }
+                    }
                 }
                 chats.sessions.collect { current ->
                     p.scheduleSave(current)
@@ -342,6 +362,11 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
+        // Drop the persisted draft now: the saves that follow are suppressed
+        // while the run streams, so waiting here would leave the just-sent
+        // prompt on disk — restored into the composer if the app dies
+        // mid-run and the chat is reopened.
+        persistence?.removeSession(sessionId)
         sessions.setStatus(sessionId, SessionStatus.Working)
 
         val body = RunPromptDto(
@@ -395,6 +420,9 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
+        // The staged prompt lives server-side from here on; the local draft
+        // copy must not survive an app kill.
+        persistence?.removeSession(sessionId)
 
         val body = RunPromptDto(
             prompt = prompt,
