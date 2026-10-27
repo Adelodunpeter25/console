@@ -17,13 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,17 +39,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
-import io.github.lyxnx.compose.ui.tablericons.outline.Circle
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.Login
-import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
 import com.console.mobile.ui.components.ProviderIcon
 import kotlinx.coroutines.launch
+import com.console.mobile.ui.components.common.new.BaseSheet
+import com.console.mobile.ui.components.common.new.OptionRow
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
@@ -80,7 +76,6 @@ internal fun accountDisplayName(acc: ProviderAccount): String =
  * Remove) and an Add Account row; sign-in itself goes through the OAuth Custom
  * Tab (getLoginUrl → submitCallback).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProvidersSettings(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -169,72 +164,57 @@ fun ProvidersSettings(onBack: () -> Unit) {
 
     // Account sheet for the tapped provider: every stored login as a row
     // (named by its label / email name, never the raw email), plus one
-    // Add Account row that drives the existing OAuth login flow.
+    // Add Account row that drives the existing OAuth login flow. Rendered
+    // with the shared BaseSheet/OptionRow design system.
     sheetProvider?.let { providerId ->
         val status = authState.status?.get(providerId)
         val accounts = status?.accounts.orEmpty()
         val provider = providerState.providers.firstOrNull { it.name == providerId }
-        ModalBottomSheet(
-            onDismissRequest = { sheetProvider = null },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        BaseSheet(
+            onDismiss = { sheetProvider = null },
+            title = provider?.display_name?.ifBlank { null } ?: providerId,
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-                Text(
-                    provider?.display_name?.ifBlank { null } ?: providerId,
-                    color = NewTheme.TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    "Signed-in accounts for this provider.",
-                    color = NewTheme.TextMuted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                if (accounts.isEmpty()) {
-                    Text("No accounts yet — sign in below.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
-                }
-                accounts.forEach { acc ->
-                    AccountSheetRow(
-                        providerId = providerId,
-                        account = acc,
-                        onRename = { renameTarget = providerId to acc.id },
-                    )
-                }
-                // Add account always row-1-ably available: same OAuth flow the
-                // Login button used, landing in a NEW account that never
-                // steals the active one (server decision).
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = loggingIn == null) {
-                            val current = providerId
-                            loggingIn = current
-                            scope.launch {
-                                try {
-                                    // LocalContext.current inside the sheet is
-                                    // still the hosting Activity, which Custom
-                                    // Tabs requires.
-                                    OAuthLoginLauncher.login(context, AppContainer.authRepository, current)
-                                } catch (e: Exception) {
-                                    confirmAlert("Login Failed", e.message ?: "Login failed.")
-                                } finally {
-                                    loggingIn = null
-                                }
-                            }
-                        }
-                        .padding(top = 16.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(TablerIcons.Outline.Login, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(20.dp))
-                    Text(
-                        if (loggingIn == providerId) "Signing in…" else "Add account",
-                        color = NewTheme.TextPrimary,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
-                }
+            Text(
+                "Signed-in accounts for this provider.",
+                color = NewTheme.TextMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+            )
+            if (accounts.isEmpty()) {
+                Text("No accounts yet — sign in below.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
             }
+            accounts.forEach { acc ->
+                AccountSheetRow(
+                    providerId = providerId,
+                    account = acc,
+                    onRename = { renameTarget = providerId to acc.id },
+                )
+            }
+            // Add account always row-1-ably available: same OAuth flow the
+            // Login button used, landing in a NEW account that never steals
+            // the active one (server decision).
+            OptionRow(
+                title = if (loggingIn == providerId) "Signing in…" else "Add account",
+                leading = {
+                    Icon(TablerIcons.Outline.Login, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(20.dp))
+                },
+                onClick = {
+                    val current = providerId
+                    loggingIn = current
+                    scope.launch {
+                        try {
+                            // LocalContext.current inside the sheet is
+                            // still the hosting Activity, which Custom
+                            // Tabs requires.
+                            OAuthLoginLauncher.login(context, AppContainer.authRepository, current)
+                        } catch (e: Exception) {
+                            confirmAlert("Login Failed", e.message ?: "Login failed.")
+                        } finally {
+                            loggingIn = null
+                        }
+                    }
+                },
+            )
         }
     }
 
@@ -287,7 +267,8 @@ private fun actuallySignedIn(accounts: List<ProviderAccount>, loggedIn: Boolean)
 
 /**
  * One account row inside the sheet: display name (label / email name), the
- * ACTIVE badge, and Use / Rename / Remove for file accounts. The synthetic
+ * selected-style check for the active account, trailing Rename/Use/Remove for
+ * file accounts, and row-tap = Use on an inactive one. The synthetic
  * environment account renders read-only — it always owns the provider while
  * the env token is set, so a Use button would lie.
  */
@@ -303,67 +284,64 @@ private fun AccountSheetRow(
     val active = account.active == true
     val isEnv = account.env == true
     val busy = authState.accountBusy == (providerId to accId)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                accountDisplayName(account),
-                color = NewTheme.TextPrimary,
-                fontSize = 15.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-            if (isEnv) {
-                Text("Environment token (set on this server)", color = NewTheme.TextMuted, fontSize = 11.sp)
+
+    OptionRow(
+        title = accountDisplayName(account),
+        subtitle = if (isEnv) "Environment token (set on this server)" else null,
+        selected = active,
+        trailing = if (busy) {
+            {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             }
-        }
-        if (busy) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-        }
-        if (active) {
-            Text("ACTIVE", color = NewTheme.Success, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp))
-        }
-        if (!isEnv && !busy) {
-            Icon(
-                TablerIcons.Outline.Edit,
-                contentDescription = "Rename",
-                tint = NewTheme.TextSecondary,
-                modifier = Modifier
-                    .clickable(onClick = onRename)
-                    .padding(horizontal = 6.dp)
-                    .size(16.dp),
-            )
-            if (!active) {
+        } else if (!isEnv) {
+            {
+                Icon(
+                    TablerIcons.Outline.Edit,
+                    contentDescription = "Rename",
+                    tint = NewTheme.TextSecondary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable(onClick = onRename),
+                )
+                if (!active) {
+                    Text(
+                        "Use",
+                        color = NewTheme.TextSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .clickable {
+                                scope.launch {
+                                    try { AppContainer.authRepository.useAccount(providerId, accId) }
+                                    catch (_: Exception) { /* authState.error shows it */ }
+                                }
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
                 Text(
-                    "Use",
-                    color = NewTheme.TextSecondary,
+                    "Remove",
+                    color = NewTheme.Danger,
                     fontSize = 13.sp,
                     modifier = Modifier
-                        .clickable(enabled = authState.accountBusy == null) {
+                        .clickable {
                             scope.launch {
-                                try { AppContainer.authRepository.useAccount(providerId, accId) }
+                                try { AppContainer.authRepository.removeAccount(providerId, accId) }
                                 catch (_: Exception) { /* authState.error shows it */ }
                             }
                         }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
                 )
             }
-            Text(
-                "Remove",
-                color = NewTheme.Danger,
-                fontSize = 13.sp,
-                modifier = Modifier
-                    .clickable(enabled = authState.accountBusy == null) {
-                        scope.launch {
-                            try { AppContainer.authRepository.removeAccount(providerId, accId) }
-                            catch (_: Exception) { /* authState.error shows it */ }
-                        }
-                    }
-                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-            )
-        }
-    }
+        } else null,
+        onClick = {
+            // Tapping the row itself switches: the same action the Use label
+            // offers, and a no-op for the already-active or env account.
+            if (!isEnv && !active && authState.accountBusy == null) {
+                scope.launch {
+                    try { AppContainer.authRepository.useAccount(providerId, accId) }
+                    catch (_: Exception) { /* authState.error shows it */ }
+                }
+            }
+        },
+    )
 }
