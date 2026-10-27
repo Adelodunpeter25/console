@@ -296,23 +296,34 @@ private fun AddEnvironmentForm(
                 failure = null
                 scope.launch {
                     try {
+                        // The server is saved by this one click, before it
+                        // is connected to: a failed pairing must not lose
+                        // the entry the user typed. The sheet stays open
+                        // until the connection actually succeeds.
+                        val saved = withContext(Dispatchers.IO) {
+                            AppContainer.environmentsRepository.saveEnvironment(
+                                urlHostPort(normalized),
+                                normalized,
+                            )
+                        }
                         // A code means the server wants this phone to pair:
-                        // exchange it for a credential, and only then add
-                        // the environment.
-                        var serverName = ""
+                        // exchange it for a credential, and only then make
+                        // the saved server the active one.
                         if (code.isNotBlank()) {
                             val paired = AppContainer.authRepository.pairWithCode(normalized, code, deviceName())
-                            serverName = paired.server?.name?.takeIf { it.isNotBlank() }.orEmpty()
+                            val serverName = paired.server?.name?.takeIf { it.isNotBlank() }.orEmpty()
+                            if (serverName.isNotBlank()) {
+                                withContext(Dispatchers.IO) {
+                                    AppContainer.environmentsRepository.updateEnvironment(saved.id, name = serverName)
+                                }
+                            }
                         }
-                        // The server names itself; without a pairing code
-                        // there is nobody to ask, so the host stands in.
-                        val label = serverName.ifBlank { urlHostPort(normalized) }
                         withContext(Dispatchers.IO) {
-                            AppContainer.environmentsRepository.activateUrl(label, normalized)
+                            AppContainer.environmentsRepository.activateEnvironment(saved.id)
                         }
                         onDone()
                     } catch (e: Exception) {
-                        failure = e.message ?: "Could not add the server."
+                        failure = e.message ?: "Could not connect. The server is saved — try again when it is reachable."
                     } finally {
                         busy = false
                     }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +13,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 type authManager interface {
@@ -133,9 +137,26 @@ func serverIdentityProto(info auth.ServerIdentity) *consolev1.ServerIdentity {
 	}
 }
 
+// qrBaseURL picks the address a minted QR should name.
+//
+// The caller reports the address it is talking to, but that is often the
+// LAN address, useless to a phone on another network. The tunnel reaches
+// the server from anywhere, so it is preferred whenever one exists and its
+// certificate is issued — the same preference `console pair` applies. A
+// CONSOLE_PUBLIC_URL override means the operator has already stated the
+// address clients use, so the caller's answer stands.
+func qrBaseURL(requested string) string {
+	if strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")) != "" {
+		return requested
+	}
+	if remote, ok := opentunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready {
+		return remote.URL
+	}
+	return requested
+}
+
 // RegisterDeviceRoutes wires the authenticated device-management routes.
-func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
-	h := app.Group("/api/auth")
+func RegisterDeviceRoutes(app *fiber.App, manager authManager) {	h := app.Group("/api/auth")
 
 	h.Post("/pairing-grants", func(c *fiber.Ctx) error {
 		var req consolev1.PairingGrantRequest
@@ -150,7 +171,7 @@ func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
 		info := manager.ServerInfo()
 		// The QR carries the address the *other* device should use, which
 		// only the caller knows, and the code, which only the server knows.
-		payload := auth.PairingPayload(req.GetBaseUrl(), info.ID, grant)
+		payload := auth.PairingPayload(qrBaseURL(req.GetBaseUrl()), info.ID, grant)
 		raw, err := protoMarshal.Marshal(&consolev1.PairingGrantResponse{
 			Grant:     grant,
 			ExpiresAt: exp,

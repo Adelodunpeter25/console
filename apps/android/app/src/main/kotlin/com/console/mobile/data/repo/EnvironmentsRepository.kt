@@ -90,6 +90,30 @@ class EnvironmentsRepository(
         return addEnvironment(name, url)
     }
 
+    /**
+     * Keep a server in the list without pointing the app at it.
+     *
+     * The add sheet saves the server before it connects: a failed pairing
+     * must not lose the entry the user typed, and the sheet itself stays
+     * open until the connection actually works. An existing environment
+     * for the same address is reused rather than duplicated, and neither
+     * the active environment nor any server state is touched.
+     */
+    fun saveEnvironment(name: String, rawUrl: String): Environment {
+        val url = rawUrl.trim().trimEnd('/')
+        val current = environmentsState.state.value
+        current.environments.firstOrNull { it.url.trimEnd('/') == url }?.let { return it }
+        val env = Environment(
+            id = "env_" + UUID.randomUUID().toString().take(6),
+            name = name.trim(),
+            url = url,
+        )
+        val next = current.environments + env
+        environmentsState.set(current.copy(environments = next))
+        preferencesStore.saveEnvironments(next, current.activeId)
+        return env
+    }
+
     fun activateEnvironment(id: String) {
         val current = environmentsState.state.value
         val target = current.environments.firstOrNull { it.id == id } ?: return
