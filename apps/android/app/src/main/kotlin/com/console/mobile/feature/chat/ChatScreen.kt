@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,6 +61,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -108,7 +110,34 @@ fun ChatScreen(
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
-    val listState = rememberLazyListState()
+
+    // Resume where this session's transcript was left off. Only trust the
+    // remembered position when the messages are still loaded; otherwise a new
+    // load should start at the bottom as usual.
+    val restoredScroll = remember(sessionId) {
+        ChatScrollMemory.get(sessionId)?.takeIf { chat.messages.isNotEmpty() }
+    }
+    val listState = key(sessionId) {
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = restoredScroll?.index ?: 0,
+            initialFirstVisibleItemScrollOffset = restoredScroll?.offset ?: 0,
+        )
+    }
+
+    // Record the position as it moves. Saving only on dispose would race the
+    // next screen: during a navigation transition both are composed, so the
+    // incoming chat could read a stale entry.
+    LaunchedEffect(sessionId, listState) {
+        snapshotFlow {
+            Triple(
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+                !listState.canScrollForward,
+            )
+        }.collect { (index, offset, atBottom) ->
+            ChatScrollMemory.save(sessionId, index, offset, atBottom)
+        }
+    }
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
@@ -210,7 +239,7 @@ fun ChatScreen(
     }
 
     val displaySize = displayMessages.size
-    var following by remember(sessionId) { mutableStateOf(true) }
+    var following by remember(sessionId) { mutableStateOf(restoredScroll?.atBottom ?: true) }
     LaunchedEffect(listState) {
         launch {
             listState.interactionSource.interactions.collect {
@@ -221,7 +250,10 @@ fun ChatScreen(
                 }
             }
         }
-        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+        // The initial `false` is not a scroll ending — dropping it keeps a
+        // restored mid-transcript position from being treated as "at bottom"
+        // before the list has even been measured.
+        snapshotFlow { listState.isScrollInProgress }.drop(1).collect { scrolling ->
             if (!scrolling) following = !listState.canScrollForward
         }
     }
@@ -239,7 +271,7 @@ fun ChatScreen(
         }
     }
 
-    var settledInitialPage by remember(sessionId) { mutableStateOf(false) }
+    var settledInitialPage by remember(sessionId) { mutableStateOf(restoredScroll != null) }
     LaunchedEffect(sessionId, displaySize) {
         if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
         settledInitialPage = true
