@@ -67,7 +67,7 @@ class ChatPersistence(
     private var saveJob: Job? = null
     private var lastObservedSessions: Map<String, ChatSessionState> = emptyMap()
 
-    /** Remove one session's persisted entry (draft) from the cache blob. */
+    /** Remove one session's draft from the cache blob. */
     fun removeSession(sessionId: String) {
         lastObservedSessions = lastObservedSessions - sessionId
         val json = prefs.getString(PERSIST_KEY, null) ?: return
@@ -108,12 +108,7 @@ class ChatPersistence(
         }
     }
 
-    /**
-     * Persist a pre-validated draft map at restore time. `scheduleSave` can't
-     * be used here: its next fire renders from live state, and dropping the
-     * stale entry from disk prevents a restart loop where it's re-injected on
-     * every launch.
-     */
+    /** Persist a pre-validated draft map so the trimmed set survives restart. */
     fun saveValidated(sessions: Map<String, ChatSessionState>) {
         lastObservedSessions = sessions
         saveNow(sessions)

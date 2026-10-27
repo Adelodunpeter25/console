@@ -72,36 +72,26 @@ class ChatRepository(
             scope.launch(Dispatchers.IO) {
                 val cached = p.load()
                 if (cached.isNotEmpty()) {
-                    // A cached draft can be stale: the app may have been killed
-                    // after the prompt was sent but before the cached copy was
-                    // updated, so the "draft" is really a duplicate of a sent
-                    // prompt. It must be validated BEFORE it reaches the
-                    // composer — injecting first and correcting later left a
-                    // window where the old prompt was visible and sendable.
-                    // One headers fetch validates every draft at once.
+                    // A cached draft can be a duplicate of a sent prompt when the
+                    // app died before the cache caught up; validate against the
+                    // server BEFORE injecting, so the old text never reaches the
+                    // composer. One headers fetch covers every draft.
                     var validated = cached
                     try {
                         val headers = withContext(Dispatchers.IO) { api.getSessions() }.associateBy { it.id }
                         validated = cached.filter { (id, state) ->
-                            val header = headers[id]
-                            when {
-                                // Server session gone: keep the local draft row.
-                                header == null -> true
-                                // A session with persisted messages and any
-                                // server activity newer than the draft can't
-                                // trust the cached input (run completes bump
-                                // updated_at even when nothing was sent).
+                            when (val header = headers[id]) {
+                                null -> true
+                                // Sent prompts persist messages, so a session
+                                // whose server activity outdates the draft
+                                // loses the cached input.
                                 (header.message_count ?: 0) > 0 -> state.draftUpdatedAt == null ||
                                     header.updated_at <= state.draftUpdatedAt
-                                // Idle 0-message session: a sent prompt persists
-                                // message rows, so an untouched idle session
-                                // keeps its draft; a working one may be about
-                                // to.
                                 else -> header.status != "working"
                             }
                         }.toMap()
                     } catch (_: Exception) {
-                        // Offline: keep drafts as-is, best effort.
+                        // Offline: keep drafts as-is.
                     }
                     if (validated.size != cached.size) {
                         p.saveValidated(validated)
@@ -378,10 +368,8 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
-        // Drop the persisted draft now: the saves that follow are suppressed
-        // while the run streams, so waiting here would leave the just-sent
-        // prompt on disk — restored into the composer if the app dies
-        // mid-run and the chat is reopened.
+        // The prompt no longer lives in the composer; drop the cached draft
+        // before the suppressed save window.
         persistence?.removeSession(sessionId)
         sessions.setStatus(sessionId, SessionStatus.Working)
 
@@ -436,8 +424,7 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
-        // The staged prompt lives server-side from here on; the local draft
-        // copy must not survive an app kill.
+        // The staged prompt lives server-side now; drop the local draft copy.
         persistence?.removeSession(sessionId)
 
         val body = RunPromptDto(
