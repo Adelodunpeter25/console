@@ -126,8 +126,16 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 		headers := make([]*consolev1.SessionHeader, 0, len(list))
-		for _, header := range list {
-			headers = append(headers, sessionHeaderToProto(header))
+		// Settle stale working state on read, mirroring the detail endpoint:
+		// without it an abort that skipped the terminal status write (or a
+		// crash mid-run) left the home list showing "working" forever.
+		for i, header := range list {
+			if (header.Status == "working" || header.Status == "needs_attention") && !runs.IsActive(header.ID) {
+				if err := sessions.UpdateStatusOnly(header.ID, "done"); err == nil {
+					list[i].Status = "done"
+				}
+			}
+			headers = append(headers, sessionHeaderToProto(list[i]))
 		}
 		data, err := marshalProtoList(headers)
 		if err != nil {

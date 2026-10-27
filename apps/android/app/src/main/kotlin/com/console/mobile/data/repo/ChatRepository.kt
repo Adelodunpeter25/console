@@ -72,8 +72,34 @@ class ChatRepository(
             scope.launch(Dispatchers.IO) {
                 val cached = p.load()
                 if (cached.isNotEmpty()) {
-                    withContext(Dispatchers.Main.immediate) {
-                        chats.setAll(cached)
+                    // A cached draft can be a duplicate of a sent prompt when the
+                    // app died before the cache caught up; validate against the
+                    // server BEFORE injecting, so the old text never reaches the
+                    // composer. One headers fetch covers every draft.
+                    var validated = cached
+                    try {
+                        val headers = withContext(Dispatchers.IO) { api.getSessions() }.associateBy { it.id }
+                        validated = cached.filter { (id, state) ->
+                            when (val header = headers[id]) {
+                                null -> true
+                                // Sent prompts persist messages, so a session
+                                // whose server activity outdates the draft
+                                // loses the cached input.
+                                (header.message_count ?: 0) > 0 -> state.draftUpdatedAt == null ||
+                                    header.updated_at <= state.draftUpdatedAt
+                                else -> header.status != "working"
+                            }
+                        }.toMap()
+                    } catch (_: Exception) {
+                        // Offline: keep drafts as-is.
+                    }
+                    if (validated.size != cached.size) {
+                        p.saveValidated(validated)
+                    }
+                    if (validated.isNotEmpty()) {
+                        withContext(Dispatchers.Main.immediate) {
+                            chats.setAll(validated)
+                        }
                     }
                 }
                 chats.sessions.collect { current ->
@@ -342,6 +368,9 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
+        // The prompt no longer lives in the composer; drop the cached draft
+        // before the suppressed save window.
+        persistence?.removeSession(sessionId)
         sessions.setStatus(sessionId, SessionStatus.Working)
 
         val body = RunPromptDto(
@@ -395,6 +424,8 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
+        // The staged prompt lives server-side now; drop the local draft copy.
+        persistence?.removeSession(sessionId)
 
         val body = RunPromptDto(
             prompt = prompt,

@@ -67,6 +67,26 @@ class ChatPersistence(
     private var saveJob: Job? = null
     private var lastObservedSessions: Map<String, ChatSessionState> = emptyMap()
 
+    /** Remove one session's draft from the cache blob. */
+    fun removeSession(sessionId: String) {
+        lastObservedSessions = lastObservedSessions - sessionId
+        val json = prefs.getString(PERSIST_KEY, null) ?: return
+        val payload = try {
+            ConsoleJson.decodeFromString(PersistedChatPayload.serializer(), json)
+        } catch (_: Exception) {
+            return
+        }
+        if (sessionId !in payload.sessions) return
+        val trimmed = payload.copy(sessions = payload.sessions - sessionId)
+        try {
+            prefs.edit().putString(
+                PERSIST_KEY,
+                ConsoleJson.encodeToString(PersistedChatPayload.serializer(), trimmed),
+            ).apply()
+        } catch (_: Exception) {
+        }
+    }
+
     fun setSuppress(value: Boolean) {
         suppress = value
         if (!value && savePendingWhileSuppressed) {
@@ -88,8 +108,13 @@ class ChatPersistence(
         }
     }
 
-    fun saveNow(sessions: Map<String, ChatSessionState>) {
-        try {
+    /** Persist a pre-validated draft map so the trimmed set survives restart. */
+    fun saveValidated(sessions: Map<String, ChatSessionState>) {
+        lastObservedSessions = sessions
+        saveNow(sessions)
+    }
+
+    fun saveNow(sessions: Map<String, ChatSessionState>) {        try {
             val capped = buildPersistedPayload(sessions)
             val json = ConsoleJson.encodeToString(PersistedChatPayload.serializer(), capped)
             prefs.edit().putString(PERSIST_KEY, json).apply()
