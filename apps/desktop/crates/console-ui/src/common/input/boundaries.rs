@@ -52,8 +52,8 @@ pub fn word_range_at(content: &str, offset: usize) -> Range<usize> {
 }
 
 pub fn offset_from_utf16(content: &str, offset: usize) -> usize {
-    let mut utf8_offset = 0;
-    let mut utf16_count = 0;
+    let mut utf8_offset: usize = 0;
+    let mut utf16_count: usize = 0;
     for character in content.chars() {
         if utf16_count >= offset {
             break;
@@ -65,14 +65,14 @@ pub fn offset_from_utf16(content: &str, offset: usize) -> usize {
 }
 
 pub fn offset_to_utf16(content: &str, offset: usize) -> usize {
-    let mut utf16_offset = 0;
-    let mut utf8_count = 0;
+    let mut utf16_offset: usize = 0;
+    let mut utf8_count: usize = 0;
     for character in content.chars() {
         if utf8_count >= offset {
             break;
         }
-        utf8_count += character.len_utf8();
-        utf16_offset += character.len_utf16();
+        utf8_count = utf8_count.saturating_add(character.len_utf8());
+        utf16_offset = utf16_offset.saturating_add(character.len_utf16());
     }
     utf16_offset
 }
@@ -91,7 +91,9 @@ pub fn range_from_utf16(content: &str, range: &Range<usize>) -> Range<usize> {
 /// adding to `base` overshoots once anything multi-byte precedes it.
 pub fn range_from_relative_utf16(content: &str, base: usize, range: &Range<usize>) -> Range<usize> {
     let base_utf16 = offset_to_utf16(content, base);
-    range_from_utf16(content, &(base_utf16 + range.start..base_utf16 + range.end))
+    let start = base_utf16.saturating_add(range.start);
+    let end = base_utf16.saturating_add(range.end);
+    range_from_utf16(content, &(start..end))
 }
 
 /// Bytes shared at the start of both strings, backed off to a character
