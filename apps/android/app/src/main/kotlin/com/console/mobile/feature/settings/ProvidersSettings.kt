@@ -41,7 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
-import io.github.lyxnx.compose.ui.tablericons.outline.Login
+import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import com.console.mobile.AppContainer
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.theme.NewTheme
@@ -49,8 +49,10 @@ import com.console.mobile.ui.components.ProviderIcon
 import kotlinx.coroutines.launch
 import com.console.mobile.ui.components.common.new.BaseSheet
 import com.console.mobile.ui.components.common.new.OptionRow
+import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.Note
 import com.console.mobile.ui.components.common.new.Section
+import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.SectionSkeleton
@@ -174,47 +176,47 @@ fun ProvidersSettings(onBack: () -> Unit) {
             onDismiss = { sheetProvider = null },
             title = provider?.display_name?.ifBlank { null } ?: providerId,
         ) {
-            Text(
-                "Signed-in accounts for this provider.",
-                color = NewTheme.TextMuted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
-            )
-            if (accounts.isEmpty()) {
-                Text("No accounts yet — sign in below.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
-            }
-            accounts.forEach { acc ->
-                AccountSheetRow(
-                    providerId = providerId,
-                    account = acc,
-                    onRename = { renameTarget = providerId to acc.id },
+            // Same shape as the environment switcher sheet: the rows live in
+            // one rounded card, and the last row inside it is the "Add
+            // account" action with a Plus.
+            SectionCard {
+                if (accounts.isEmpty()) {
+                    Text("No accounts yet — sign in below.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
+                } else {
+                    accounts.forEachIndexed { i, acc ->
+                        AccountSheetRow(
+                            providerId = providerId,
+                            account = acc,
+                            onRename = { renameTarget = providerId to acc.id },
+                        )
+                        if (i < accounts.lastIndex) SectionDivider(startInset = 18.dp)
+                    }
+                    SectionDivider()
+                }
+                // Add account always row-1-ably available: same OAuth flow the
+                // Login button used, landing in a NEW account that never
+                // steals the active one (server decision).
+                ActionRow(
+                    icon = TablerIcons.Outline.Plus,
+                    title = if (loggingIn == providerId) "Signing in…" else "Add account",
+                    onClick = {
+                        val current = providerId
+                        loggingIn = current
+                        scope.launch {
+                            try {
+                                // LocalContext.current inside the sheet is
+                                // still the hosting Activity, which Custom
+                                // Tabs requires.
+                                OAuthLoginLauncher.login(context, AppContainer.authRepository, current)
+                            } catch (e: Exception) {
+                                confirmAlert("Login Failed", e.message ?: "Login failed.")
+                            } finally {
+                                loggingIn = null
+                            }
+                        }
+                    },
                 )
             }
-            // Add account always row-1-ably available: same OAuth flow the
-            // Login button used, landing in a NEW account that never steals
-            // the active one (server decision).
-            OptionRow(
-                title = if (loggingIn == providerId) "Signing in…" else "Add account",
-                leading = {
-                    Icon(TablerIcons.Outline.Login, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(20.dp))
-                },
-                onClick = {
-                    val current = providerId
-                    loggingIn = current
-                    scope.launch {
-                        try {
-                            // LocalContext.current inside the sheet is
-                            // still the hosting Activity, which Custom
-                            // Tabs requires.
-                            OAuthLoginLauncher.login(context, AppContainer.authRepository, current)
-                        } catch (e: Exception) {
-                            confirmAlert("Login Failed", e.message ?: "Login failed.")
-                        } finally {
-                            loggingIn = null
-                        }
-                    }
-                },
-            )
         }
     }
 

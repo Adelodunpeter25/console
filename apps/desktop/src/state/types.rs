@@ -357,6 +357,10 @@ pub struct ConsoleDesktopApp {
     /// One account mutation (Use/Remove) in flight, as (provider, account id),
     /// so its row can disable its buttons rather than firing duplicates.
     pub account_busy: Option<(String, String)>,
+    /// The account whose inline rename form is open, as (provider, account
+    /// id). Only one form at a time; the input's entity lives in the settings
+    /// window like the other settings inputs.
+    pub rename_form: Option<(String, String)>,
     /// Server-authored failure text for account mutations, shown verbatim on
     /// the affected provider row. (provider, text)
     pub account_error: Option<(String, String)>,

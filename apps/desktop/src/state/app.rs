@@ -696,6 +696,7 @@ impl ConsoleDesktopApp {
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
             account_busy: None,
+            rename_form: None,
             account_error: None,
             recent_login_account: None,
             github_status: None,

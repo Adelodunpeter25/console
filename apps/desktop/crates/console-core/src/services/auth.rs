@@ -116,25 +116,34 @@ impl AuthService {
         }
     }
 
-    /// `PATCH /api/auth/accounts/:provider/:id` — activate/deactivate one
-    /// stored login. Returns the provider's post-mutation status so the
+    /// `PATCH /api/auth/accounts/:provider/:id` — activate one stored login
+    /// and/or give it a display label (the server rejects a body with
+    /// neither field). Returns the provider's post-mutation status so the
     /// caller updates its account list from this response alone.
     pub async fn patch_account(
         &self,
         provider: &str,
         account_id: &str,
-        active: bool,
+        active: Option<bool>,
+        label: Option<&str>,
     ) -> Result<AccountMutationResponse> {
         let url = self
             .transport
             .url(&format!("/api/auth/accounts/{provider}/{account_id}"))
             .await;
+        let mut body = serde_json::Map::new();
+        if let Some(active) = active {
+            body.insert("active".into(), active.into());
+        }
+        if let Some(label) = label {
+            body.insert("label".into(), label.into());
+        }
         let resp = self
             .transport
             .client()
             .patch(&url)
             .headers(self.transport.build_headers().await)
-            .json(&serde_json::json!({ "active": active }))
+            .json(&body)
             .send()
             .await
             .context("Failed to update account")?;

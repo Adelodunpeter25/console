@@ -35,6 +35,7 @@ pub struct SettingsWindow {
     pub(crate) model_error: Option<String>,
     pub(crate) mcp: crate::settings::mcp::McpTabState,
     github_token_input: Entity<ComposerInput>,
+    rename_input: Entity<ComposerInput>,
     /// One key field per key-taking provider, created lazily: the catalog
     /// arrives from the server, so the set is not known when the window is
     /// built. A field per provider rather than one shared, because a key typed
@@ -205,6 +206,20 @@ impl SettingsWindow {
             },
         ));
 
+        // Account rename field. Created up front for the same reason as the
+        // others: a stable entity keeps focus and half-typed names across
+        // renders. Seeded with the account's display name when the form opens.
+        let rename_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Account name"));
+        subscriptions.push(cx.subscribe(
+            &rename_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
+
         Self {
             app,
             active_tab: initial_tab,
@@ -213,6 +228,7 @@ impl SettingsWindow {
             editing_env_id: None,
             new_env_name_input,
             github_token_input,
+            rename_input,
             api_key_inputs: std::collections::HashMap::new(),
             new_env_url_input,
             new_env_code_input,
@@ -708,6 +724,63 @@ impl Render for SettingsWindow {
                             if let Some(app) = app_handle.upgrade() {
                                 app.update(cx, |app_state, cx| {
                                     app_state.remove_account(provider, id, cx);
+                                });
+                            }
+                        })
+                    },
+                    on_account_rename: {
+                        let app_handle = self.app.clone();
+                        let input = self.rename_input.clone();
+                        Rc::new(
+                            move |provider: String,
+                                  id: String,
+                                  current: String,
+                                  _w: &mut Window,
+                                  cx: &mut App| {
+                                if let Some(app) = app_handle.upgrade() {
+                                    input.update(cx, |input, cx| {
+                                        input.set_content(current, cx)
+                                    });
+                                    app.update(cx, |app_state, cx| {
+                                        app_state.rename_form = Some((provider, id));
+                                        cx.notify();
+                                    });
+                                }
+                            },
+                        )
+                    },
+                    rename_form: app.rename_form.clone(),
+                    rename_input: Some(self.rename_input.clone()),
+                    on_rename_submit: {
+                        let app_handle = self.app.clone();
+                        let input = self.rename_input.clone();
+                        Rc::new(move |_w: &mut Window, cx: &mut App| {
+                            if let Some(app) = app_handle.upgrade() {
+                                let name = input.read(cx).content().trim().to_string();
+                                if name.is_empty() {
+                                    return;
+                                }
+                                app.update(cx, |app_state, cx| {
+                                    if let Some((provider, id)) = app_state.rename_form.clone()
+                                    {
+                                        app_state.rename_account(provider, id, name, cx);
+                                    } else {
+                                        // Nothing to apply (form closed under
+                                        // us); just put the field away.
+                                        app_state.rename_form = None;
+                                    }
+                                });
+                                input.update(cx, |input, cx| input.set_content("", cx));
+                            }
+                        })
+                    },
+                    on_rename_cancel: {
+                        let app_handle = self.app.clone();
+                        Rc::new(move |_w: &mut Window, cx: &mut App| {
+                            if let Some(app) = app_handle.upgrade() {
+                                app.update(cx, |app_state, cx| {
+                                    app_state.rename_form = None;
+                                    cx.notify();
                                 });
                             }
                         })

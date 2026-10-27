@@ -1,9 +1,10 @@
+use crate::input::ComposerInput;
 use crate::settings::GitHubSection;
 use crate::theme::Theme;
 use console_core::types::{AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for};
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::collections::HashSet;
@@ -24,6 +25,19 @@ pub struct ProvidersPage {
     pub recent_login_account: Option<(String, String)>,
     pub on_account_use: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     pub on_account_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    /// The account whose inline rename form is open, as (provider, account
+    /// id), or None when no form is showing. One at a time, like the api-key
+    /// forms.
+    pub rename_form: Option<(String, String)>,
+    /// Present only while a rename form is open; the caller seeded its
+    /// content with the account's current display name.
+    pub rename_input: Option<Entity<ComposerInput>>,
+    /// (provider, account id, current display name): opens the inline form.
+    pub on_account_rename:
+        Rc<dyn Fn(String, String, String, &mut Window, &mut App) + 'static>,
+    /// Reads the form's input and issues the PATCH; also closes the form.
+    pub on_rename_submit: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_rename_cancel: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     /// (provider, server-authored failure text) for the last account
     /// mutation failure, shown verbatim on that provider's card.
     pub account_error: Option<(String, String)>,
@@ -64,6 +78,7 @@ fn account_row(
     busy: bool,
     on_use: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_remove: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    on_rename: Rc<dyn Fn(String, String, String, &mut Window, &mut App) + 'static>,
 ) -> gpui::AnyElement {
     let account_id = account.id.clone();
     let display = account_display(account);
@@ -139,6 +154,32 @@ fn account_row(
                         })
                         .child(if busy { "Using..." } else { "Use" })
                 }))
+                .child({
+                    // Rename works on the active account too: labels are
+                    // display-only, so they never interfere with pinning.
+                    let rename_id = account_id.clone();
+                    let rename_display = display.clone();
+                    let on_rename = on_rename.clone();
+                    let provider = provider.to_string();
+                    div()
+                        .id(ElementId::from(format!("rename-{provider}-{rename_id}")))
+                        .text_size(px(11.0))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(theme.text_secondary)
+                        .cursor_pointer()
+                        .hover(|s| s.text_color(theme.text))
+                        .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                            cx.stop_propagation();
+                            (on_rename)(
+                                provider.clone(),
+                                rename_id.clone(),
+                                rename_display.clone(),
+                                window,
+                                cx,
+                            );
+                        })
+                        .child("Rename")
+                })
                 .child({
                     let remove_id = account_id.clone();
                     let on_remove = on_remove.clone();
@@ -264,6 +305,7 @@ impl RenderOnce for ProvidersPage {
                             let on_add_click = on_login.clone();
                             let on_use = self.on_account_use.clone();
                             let on_remove = self.on_account_remove.clone();
+                            let on_rename = self.on_account_rename.clone();
 
                             div()
                                 .id(ElementId::from(format!("provider-row-{pid}")))
@@ -445,10 +487,127 @@ impl RenderOnce for ProvidersPage {
                                                     busy,
                                                     on_use.clone(),
                                                     on_remove.clone(),
+                                                    on_rename.clone(),
                                                 )
                                             })),
                                     )
                                 })
+                                // The inline rename form for this provider's
+                                // open rename target (api-key-form style:
+                                // seeded input, Save applies, Cancel drops).
+                                .when_some(
+                                    self.rename_form
+                                        .as_ref()
+                                        .filter(|(p, _)| p == &provider_id)
+                                        .map(|(_, id)| id.clone()),
+                                    |card, rename_id| {
+                                        let rename_busy = row_busy
+                                            .as_ref()
+                                            .map(|busy_id| busy_id == &rename_id)
+                                            .unwrap_or(false);
+                                        card.child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(6.0))
+                                                .child(
+                                                    div()
+                                                        .border_1()
+                                                        .border_color(theme.border)
+                                                        .bg(theme.canvas)
+                                                        .rounded(px(6.0))
+                                                        .px(px(8.0))
+                                                        .py(px(6.0))
+                                                        .children(
+                                                            self.rename_input
+                                                                .clone(),
+                                                        ),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(6.0))
+                                                        .child({
+                                                            let submit = self
+                                                                .on_rename_submit
+                                                                .clone();
+                                                            div()
+                                                                .id(ElementId::from(format!(
+                                                                    "btn-rename-save-{provider_id}-{rename_id}"
+                                                                )))
+                                                                .px(px(10.0))
+                                                                .py(px(5.0))
+                                                                .rounded(px(6.0))
+                                                                .when(
+                                                                    !rename_busy,
+                                                                    |b| {
+                                                                        b.bg(theme.accent)
+                                                                            .cursor_pointer()
+                                                                            .hover(|s| {
+                                                                                s.opacity(0.9)
+                                                                            })
+                                                                    },
+                                                                )
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    move |_event, window, cx| {
+                                                                        if rename_busy {
+                                                                            return;
+                                                                        }
+                                                                        cx.stop_propagation();
+                                                                        (submit)(window, cx);
+                                                                    },
+                                                                )
+                                                                .child(
+                                                                    div()
+                                                                        .text_size(px(12.0))
+                                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                                        .text_color(theme.on_inverse)
+                                                                        .child(if rename_busy {
+                                                                            "Renaming..."
+                                                                        } else {
+                                                                            "Save"
+                                                                        }),
+                                                                )
+                                                        })
+                                                        .child({
+                                                            let cancel = self
+                                                                .on_rename_cancel
+                                                                .clone();
+                                                            div()
+                                                                .id(ElementId::from(format!(
+                                                                    "btn-rename-cancel-{provider_id}-{rename_id}"
+                                                                )))
+                                                                .px(px(10.0))
+                                                                .py(px(5.0))
+                                                                .rounded(px(6.0))
+                                                                .border_1()
+                                                                .border_color(theme.border_strong)
+                                                                .bg(theme.raised)
+                                                                .cursor_pointer()
+                                                                .hover(|s| {
+                                                                    s.bg(theme.overlay)
+                                                                })
+                                                                .on_mouse_down(
+                                                                    MouseButton::Left,
+                                                                    move |_event, window, cx| {
+                                                                        cx.stop_propagation();
+                                                                        (cancel)(window, cx);
+                                                                    },
+                                                                )
+                                                                .child(
+                                                                    div()
+                                                                        .text_size(px(12.0))
+                                                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                                                        .text_color(theme.text)
+                                                                        .child("Cancel"),
+                                                                )
+                                                        }),
+                                                ),
+                                        )
+                                    },
+                                )
                         }),
                 ),
             )

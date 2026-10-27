@@ -241,7 +241,7 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            let res = client.auth.patch_account(&provider, &account_id, true).await;
+            let res = client.auth.patch_account(&provider, &account_id, Some(true), None).await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, _cx| match res {
@@ -259,6 +259,58 @@ impl ConsoleDesktopApp {
                             this.account_busy = None;
                             this.account_error =
                                 Some((provider.clone(), format!("{err:#}")));
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Gives an account a display label. Same flow as `use_account`: the
+    /// mutation response carries the provider's post-mutation status and the
+    /// caller updates its account list from it alone. While the request is in
+    /// flight the rename form's Save button reads busy; the settings window
+    /// closes the form when submissions start.
+    pub fn rename_account(
+        &mut self,
+        provider: String,
+        account_id: String,
+        label: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+            return;
+        }
+        self.account_busy = Some((provider.clone(), account_id.clone()));
+        self.account_error = None;
+        cx.notify();
+
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let res = client
+                .auth
+                .patch_account(&provider, &account_id, None, Some(&label))
+                .await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, _cx| match res {
+                        Ok(mutated) => {
+                            if let Some(status) = this.auth_status.as_mut() {
+                                console_core::types::merge_provider_status(
+                                    status,
+                                    &mutated.provider,
+                                    mutated.status.unwrap_or_default(),
+                                );
+                            }
+                            this.account_busy = None;
+                            this.rename_form = None;
+                        }
+                        Err(err) => {
+                            this.account_busy = None;
+                            this.account_error =
+                                Some((provider.clone(), format!("{err:#}")));
+                            this.rename_form = None;
                         }
                     });
                 }
