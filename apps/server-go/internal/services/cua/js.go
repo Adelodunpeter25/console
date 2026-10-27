@@ -8,22 +8,19 @@
 // per-turn schema cost stays flat no matter how many methods the driver
 // grows; API knowledge is read once, not re-sent as definitions.
 //
-// goja is pure Go, so this builds everywhere the server builds, including a
-// future Linux server, with no new native dependency.
+// Evaluation, print collection, completion rendering, timeouts and interrupts
+// live in internal/services/jskernel, shared with the console control-plane
+// kernel. This file owns only what is computer-use specific: resolving
+// element ids, waiting for a launched window, and adapting driver results to
+// the kernel's result shape.
 package cua
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/dop251/goja"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
 // JSCaller is what the runtime drives: one tool call by name. Satisfied by
@@ -33,108 +30,67 @@ type JSCaller interface {
 	ListTools() ([]ToolDef, error)
 }
 
-// maxJSText caps the text pulled out of one evaluation, matching the result
-// caps elsewhere so a 42K snapshot tree cannot blow up the context by itself.
-// maxJSImages caps inline images for the same reason the MCP adapter caps
-// them: screenshots are megabytes each.
-const (
-	maxJSCodeBytes = 200_000
-	jsCallTimeout  = 5 * time.Minute
-	// maxJSImages caps inline images for the same reason the MCP adapter caps
-	// them: screenshots are megabytes each.
-	maxJSImages = 4
-)
-
 // JSRuntime is one persistent JavaScript interpreter with a preinstalled
 // `cua` object: one session's kernel, where variables and bindings survive
 // between evaluations until reset. Exported so tests and the CLI can drive it
 // without a chat session; the agent path goes through Manager, which owns
-// one per session. goja runtimes are not safe for concurrent use, so every
-// entry takes mu — including the interrupt path, which goja documents as
-// safe to call from another goroutine.
+// one per session.
 type JSRuntime struct {
-	mu     sync.Mutex
-	rt     *goja.Runtime
+	kernel *jskernel.Runtime
 	caller JSCaller
-	output []string
-	// evalCtx is the context of the evaluation currently running on the
-	// Eval goroutine; cua methods read it without locking because only that
-	// goroutine touches it.
-	evalCtx context.Context
-	// cancel is polled while a driver call is in flight, so a Stop
-	// interrupts admitted work. Set by Manager, which wires its own stop
-	// flag; nil means no external stop source.
-	cancel    func() bool
-	isPromise func(goja.Value, ...goja.Value) (goja.Value, error)
+	cancel func() bool
 }
 
-// newJSRuntime builds a runtime and installs print plus the cua object from
+// NewJSRuntime builds a runtime and installs print plus the cua object from
 // the live inventory, so new driver methods appear with no Console release.
 func NewJSRuntime(caller JSCaller) (*JSRuntime, error) {
-	r := &JSRuntime{rt: goja.New(), caller: caller}
-	r.rt.Set("print", r.print)
+	r := &JSRuntime{caller: caller}
 	defs, err := caller.ListTools()
 	if err != nil {
 		return nil, err
 	}
-	cua := r.rt.NewObject()
+	methods := make([]jskernel.Method, 0, len(defs))
 	for _, def := range defs {
 		name := def.Name
 		if name == "" {
 			continue
 		}
-		if err := cua.Set(name, func(call goja.FunctionCall) goja.Value {
-			return r.callTool(name, call)
-		}); err != nil {
-			return nil, fmt.Errorf("install cua.%s: %w", name, err)
-		}
+		methods = append(methods, jskernel.Method{
+			Name: name,
+			Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+				return r.callDriver(ctx, name, args)
+			},
+		})
 	}
-	if err := r.rt.Set("cua", cua); err != nil {
-		return nil, err
-	}
-	// Promise completion would be a silent no-op (no microtask pump runs
-	// between evaluations), so detect it and fail loudly instead of letting
-	// the model believe an action happened.
-	helper, err := r.rt.RunString(`(function(v) { return v instanceof Promise; })`)
+	kernel, err := jskernel.New(jskernel.Options{
+		Root:             "cua",
+		InterruptMessage: "computer stopped; action completion is unknown. Inspect fresh state before retrying.",
+		AsyncMessage:     "async code is not supported: call cua methods directly, they already wait for the result",
+	}, methods)
 	if err != nil {
 		return nil, err
 	}
-	isPromise, ok := goja.AssertFunction(helper)
-	if !ok {
-		return nil, fmt.Errorf("could not install the promise detector")
-	}
-	r.isPromise = isPromise
+	r.kernel = kernel
 	return r, nil
 }
 
-// print collects text output. The completion value is reported separately, so
-// print is for narration and intermediate values, mirroring a REPL.
-func (r *JSRuntime) print(call goja.FunctionCall) goja.Value {
-	parts := make([]string, 0, len(call.Arguments))
-	for _, arg := range call.Arguments {
-		parts = append(parts, arg.String())
-	}
-	r.output = append(r.output, strings.Join(parts, " "))
-	return goja.Undefined()
+// SetCancel installs the stop hook polled while a driver call is in flight, so
+// a Manager Stop interrupts admitted work.
+func (r *JSRuntime) SetCancel(fn func() bool) {
+	r.cancel = fn
+	r.kernel.SetCancel(fn)
 }
 
-// callTool is every cua.* method: one object argument in, one result object
-// out. Driver failures throw as JavaScript errors so the model sees the
-// driver's own message and can react, rather than getting a harness abort.
-func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
-	args := map[string]any{}
-	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) && !goja.IsNull(call.Arguments[0]) {
-		exported := call.Arguments[0].Export()
-		m, ok := exported.(map[string]any)
-		if !ok {
-			r.throwError("cua." + name + " takes a single object argument")
-		}
-		args = pruneNulls(m)
-	}
-	ctx := r.evalCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
+// Eval runs code and converts the outcome to harness content parts.
+func (r *JSRuntime) Eval(ctx context.Context, code string, timeout time.Duration) (any, error) {
+	return r.kernel.Eval(ctx, code, timeout)
+}
+
+// callDriver is every cua.* method: fix up the arguments, call the driver, and
+// translate the result. Driver failures throw as JavaScript errors so the model
+// sees the driver's own message and can react, rather than getting a harness
+// abort.
+func (r *JSRuntime) callDriver(ctx context.Context, name string, args map[string]any) (*jskernel.Result, error) {
 	// element_id is ours, not the driver's: resolve it to a fresh token now
 	// (the wire inputs deny unknown fields, so it must never be forwarded).
 	var resolved *resolvedElement
@@ -142,7 +98,7 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 		var err error
 		resolved, err = r.resolveElementArg(ctx, name, args)
 		if err != nil {
-			r.throwError(err.Error())
+			return nil, err
 		}
 	}
 	// wait_timeout_ms tunes only the launch wait below; strip it for the same
@@ -156,316 +112,35 @@ func (r *JSRuntime) callTool(name string, call goja.FunctionCall) goja.Value {
 	}
 	result, err := r.caller.Call(ctx, name, args, r.cancel)
 	if err != nil {
-		r.throwError("cua." + name + " failed: " + err.Error())
+		return nil, fmt.Errorf("cua.%s failed: %w", name, err)
 	}
+	out := kernelResult(result)
 	if resolved != nil && resolved.note != "" && !result.IsError {
 		// Confirm what was actually touched: the id requested, the row it
 		// landed on, and the role and label the tree displayed. Only for
 		// successful acts — a failed call has nothing to confirm — and only
 		// for the element_id path, which is the only one that resolved
 		// anything.
-		result.Content = append(result.Content, ContentPart{Type: "text", Text: resolved.note})
+		out.Content = append(out.Content, jskernel.Part{Type: "text", Text: resolved.note})
 	}
 	if name == "launch_app" {
 		if note := r.waitLaunchWindow(ctx, args, result, waitTimeoutMs); note != "" {
-			result.Content = append(result.Content, ContentPart{Type: "text", Text: note})
+			out.Content = append(out.Content, jskernel.Part{Type: "text", Text: note})
 		}
 	}
-	return r.resultObject(result)
+	return out, nil
 }
 
-// throwError raises a JavaScript Error from native code. Panicking with a
-// plain Go string would NOT become a catchable exception: the vm only
-// converts goja.Values, and anything else propagates as a Go panic that Eval
-// could mistake for an interrupt.
-func (r *JSRuntime) throwError(message string) {
-	ctor, ok := goja.AssertFunction(r.rt.Get("Error"))
-	if !ok {
-		panic(r.rt.ToValue(message))
+// kernelResult adapts a driver result to the kernel's content-part shape.
+func kernelResult(result *ToolResult) *jskernel.Result {
+	if result == nil {
+		return &jskernel.Result{}
 	}
-	errObj, err := ctor(goja.Undefined(), r.rt.ToValue(message))
-	if err != nil {
-		panic(r.rt.ToValue(message))
-	}
-	panic(errObj)
-}
-
-// pruneNulls drops null-valued keys. goja exports explicit undefined fields
-// as nil, and the driver fails closed on mistyped arguments, so passing them
-// through would turn an omitted option into a rejection.
-func pruneNulls(args map[string]any) map[string]any {
-	out := make(map[string]any, len(args))
-	for key, value := range args {
-		if value == nil {
-			continue
-		}
-		out[key] = value
-	}
-	return out
-}
-
-// resultObject renders a driver result for script code: text and image parts
-// plus the typed structured view the next call's arguments come from.
-// structuredContent is always an object, never null: the refusal path used
-// to omit it, which threw TypeErrors in scripts accessing it, so an empty
-// result carries {} and the shape never changes between paths.
-func (r *JSRuntime) resultObject(result *ToolResult) goja.Value {
-	content := make([]any, 0, len(result.Content))
+	out := &jskernel.Result{StructuredContent: result.StructuredContent, IsError: result.IsError}
 	for _, part := range result.Content {
-		switch part.Type {
-		case "text":
-			content = append(content, map[string]any{"type": "text", "text": part.Text})
-		case "image":
-			content = append(content, map[string]any{
-				"type": "image", "data": base64.StdEncoding.EncodeToString(part.Data), "mimeType": part.MIMEType,
-			})
-		}
+		out.Content = append(out.Content, jskernel.Part{
+			Type: part.Type, Text: part.Text, Data: part.Data, MIMEType: part.MIMEType,
+		})
 	}
-	var structured any = map[string]any{}
-	if len(result.StructuredContent) > 0 {
-		var decoded any
-		if json.Unmarshal(result.StructuredContent, &decoded) == nil && decoded != nil {
-			structured = decoded
-		}
-	}
-	return r.rt.ToValue(map[string]any{
-		"content":           content,
-		"structuredContent": structured,
-		"isError":           result.IsError,
-	})
-}
-
-// evalOutcome carries one evaluation's result across the worker boundary.
-// The worker always sends exactly one, so Eval never leaks a goroutine and
-// never confuses one evaluation's outcome with another's.
-type evalOutcome struct {
-	completion goja.Value
-	runErr     error
-	panicked   any
-}
-
-// Eval runs code and converts the outcome to harness content parts. The
-// returned error is nil on success; a *tools.ToolError carries a model-visible
-// failure (bad code, driver refusal), anything else aborts the turn.
-func (r *JSRuntime) Eval(ctx context.Context, code string, timeout time.Duration) (any, error) {
-	if strings.TrimSpace(code) == "" {
-		return nil, tools.NewToolError("no code to run")
-	}
-	if len(code) > maxJSCodeBytes {
-		return nil, tools.NewToolError("code is %d bytes, over the %d limit", len(code), maxJSCodeBytes)
-	}
-	if ctx.Err() != nil {
-		// Already cancelled before starting: nothing ran, so the outcome is
-		// known (not unknown) — the action was refused, not interrupted.
-		return nil, tools.NewToolError("%s", (&CancelledError{}).Error())
-	}
-	if timeout <= 0 {
-		timeout = jsCallTimeout
-	}
-	callCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.output = nil
-	r.evalCtx = callCtx
-	defer func() { r.evalCtx = nil }()
-
-	// The script runs on a worker so an abort can interrupt it without any
-	// cross-evaluation signalling: the outcome travels back on a per-eval
-	// channel, so a late event from one evaluation can never be mistaken for
-	// another's. (A watcher goroutine plus a shared interrupt flag was tried
-	// here and raced: close(done) followed by cancel() leaves both channels
-	// closed, and Go picks randomly — half the late wakeups interrupted the
-	// wrong evaluation.)
-	r.rt.ClearInterrupt()
-	resCh := make(chan evalOutcome, 1)
-	go func() {
-		var out evalOutcome
-		defer func() {
-			if p := recover(); p != nil {
-				out.panicked = p
-			}
-			resCh <- out
-		}()
-		out.completion, out.runErr = r.rt.RunString(code)
-	}()
-
-	var out evalOutcome
-	select {
-	case out = <-resCh:
-		// Finished before any abort.
-	case <-callCtx.Done():
-		// Abort while running: interrupt, then drain. The worker always
-		// sends exactly one outcome, so this cannot hang.
-		r.rt.Interrupt("computer stopped")
-		out = <-resCh
-	}
-
-	if out.panicked != nil {
-		if _, ok := out.panicked.(*goja.InterruptedError); ok {
-			r.rt.ClearInterrupt()
-			// An interrupted action may already have taken effect on screen,
-			// so its outcome is unknown: never let the model assume it did
-			// not happen. This is the same wording Stop uses everywhere
-			// else. goja makes interrupts uncatchable, so script code cannot
-			// swallow a stop.
-			return nil, tools.NewToolError("computer stopped; action completion is unknown. Inspect fresh state before retrying.")
-		}
-		// Anything else is a genuine Go bug, not a stop: re-panic rather
-		// than misreporting it as an interrupted action.
-		panic(out.panicked)
-	}
-	completion, runErr := out.completion, out.runErr
-	if isInterrupt(runErr) {
-		r.rt.ClearInterrupt()
-		return nil, tools.NewToolError("computer stopped; action completion is unknown. Inspect fresh state before retrying.")
-	}
-	if runErr != nil {
-		return nil, tools.NewToolError("JavaScript error: %s", jsErrorText(runErr))
-	}
-	if isPromise, err := r.isPromise(goja.Undefined(), completion); err == nil && isPromise.ToBoolean() {
-		return nil, tools.NewToolError("async code is not supported: call cua methods directly, they already wait for the result")
-	}
-	parts, err := r.renderCompletion(completion)
-	if err != nil {
-		return nil, err
-	}
-	return parts, nil
-}
-
-// isInterrupt reports whether a RunString error is an interrupt that arrived
-// as an error return rather than a panic. Only the exact type counts: script
-// throws never produce it, so there is no message sniffing to misfire.
-func isInterrupt(err error) bool {
-	if err == nil {
-		return false
-	}
-	_, ok := err.(*goja.InterruptedError)
-	return ok
-}
-
-// jsErrorText renders a script failure with its message, truncated so a long
-// stack cannot flood the context.
-func jsErrorText(err error) string {
-	text := err.Error()
-	if exception, ok := err.(*goja.Exception); ok {
-		if stack := exception.Stack(); len(stack) > 0 {
-			frame := stack[0]
-			text += fmt.Sprintf("\n  at %s (%s)", frame.FuncName(), frame.Position())
-		}
-	}
-	if len(text) > 2000 {
-		text = text[:2000] + "… [truncated]"
-	}
-	return text
-}
-
-// renderCompletion converts print output plus the completion value to harness
-// parts. Image-shaped objects anywhere in the completion become native image
-// parts; everything else becomes text.
-func (r *JSRuntime) renderCompletion(completion goja.Value) ([]map[string]any, error) {
-	var texts []string
-	texts = append(texts, r.output...)
-	images, notes, err := collectImages(completion)
-	if err != nil {
-		return nil, err
-	}
-	texts = append(texts, notes...)
-	if completion != nil && !goja.IsUndefined(completion) {
-		if rendered := stringifyCompletion(completion); rendered != "" {
-			texts = append(texts, rendered)
-		}
-	}
-	joined := strings.Join(texts, "\n")
-	if strings.TrimSpace(joined) == "" && len(images) == 0 {
-		joined = "(no output)"
-	}
-	if len(joined) > maxResultText {
-		joined = joined[:maxResultText] + "\n… [truncated]"
-	}
-	out := []map[string]any{{"type": "text", "text": joined}}
-	return append(out, images...), nil
-}
-
-// stringifyCompletion renders the completion value as JSON, which is how the
-// model reads structured observations back.
-func stringifyCompletion(completion goja.Value) string {
-	exported := completion.Export()
-	if exported == nil {
-		return ""
-	}
-	raw, err := json.Marshal(exported)
-	if err != nil {
-		return ""
-	}
-	text := string(raw)
-	if text == "null" || text == "{}" || text == "[]" {
-		return ""
-	}
-	return text
-}
-
-// collectImages walks the completion value for image-shaped objects and
-// converts them to harness parts. Data must be valid base64: a hand-built
-// image object with garbage data fails loudly rather than reaching the
-// provider as a corrupt block.
-func collectImages(completion goja.Value) ([]map[string]any, []string, error) {
-	if completion == nil || goja.IsUndefined(completion) {
-		return nil, nil, nil
-	}
-	exported := completion.Export()
-	found := findImageShapes(exported)
-	var out []map[string]any
-	var notes []string
-	for i, shape := range found {
-		if i >= maxJSImages {
-			notes = append(notes, fmt.Sprintf("[%d more image(s) omitted]", len(found)-maxJSImages))
-			break
-		}
-		if _, err := base64.StdEncoding.DecodeString(shape.data); err != nil {
-			return nil, nil, tools.NewToolError("image data is not valid base64")
-		}
-		mimeType := shape.mimeType
-		if mimeType == "" {
-			mimeType = "image/png"
-		}
-		out = append(out, map[string]any{"type": "image", "data": shape.data, "mimeType": mimeType})
-	}
-	return out, notes, nil
-}
-
-type imageShape struct {
-	data     string
-	mimeType string
-}
-
-// findImageShapes collects every {type:'image', data} object in the value,
-// descending into arrays and objects. Only exact type matches count: a text
-// field that happens to mention images is left alone.
-func findImageShapes(value any) []imageShape {
-	var out []imageShape
-	var walk func(node any)
-	walk = func(node any) {
-		switch v := node.(type) {
-		case map[string]any:
-			if kind, _ := v["type"].(string); kind == "image" {
-				if data, _ := v["data"].(string); data != "" {
-					mimeType, _ := v["mimeType"].(string)
-					out = append(out, imageShape{data: data, mimeType: mimeType})
-					return
-				}
-			}
-			for _, item := range v {
-				walk(item)
-			}
-		case []any:
-			for _, item := range v {
-				walk(item)
-			}
-		}
-	}
-	walk(value)
 	return out
 }

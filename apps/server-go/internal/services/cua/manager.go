@@ -8,12 +8,13 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 )
 
 // Manager hands out the shared driver and lazily materialises its tools.
 type Manager struct {
 	mu      sync.Mutex
-	jsMu    sync.Mutex
 	driver  *Driver
 	initErr error
 	loading bool
@@ -24,12 +25,11 @@ type Manager struct {
 	// stoppedFlag records that a Stop is in force. A Stop both refuses new
 	// work and cancels whatever the driver already admitted.
 	stoppedFlag bool
-	// jsRuntimes is one persistent JavaScript kernel per chat session, in
-	// creation order for eviction. Sessions are unbounded over a server
-	// lifetime, so the map is capped: evicting a runtime only loses that
-	// session's variables, which the model rebuilds by re-observing.
-	jsRuntimes map[string]*JSRuntime
-	jsOrder    []string
+	// js is one persistent JavaScript kernel per chat session. Sessions are
+	// unbounded over a server lifetime, so the cache is capped: evicting a
+	// runtime only loses that session's variables, which the model rebuilds
+	// by re-observing.
+	js *jskernel.Cache[*JSRuntime]
 }
 
 // maxJSRuntimes caps live session kernels. Computer use is rare next to
@@ -38,7 +38,7 @@ const maxJSRuntimes = 16
 
 // NewManager returns a manager that opens the driver on first use.
 func NewManager() *Manager {
-	return &Manager{ready: make(chan struct{})}
+	return &Manager{ready: make(chan struct{}), js: jskernel.NewCache[*JSRuntime](maxJSRuntimes)}
 }
 
 // Driver returns the shared runtime, opening it on first call. A failed open
@@ -99,66 +99,30 @@ func driverTools(driver *Driver) ([]string, error) {
 // first use. Creation opens the driver, so an unavailable library fails here
 // rather than at some later, more confusing point.
 func (m *Manager) sessionRuntime(sessionID string) (*JSRuntime, error) {
-	m.jsMu.Lock()
-	defer m.jsMu.Unlock()
-	if runtime, ok := m.jsRuntimes[sessionID]; ok {
-		m.touchRuntime(sessionID)
-		return runtime, nil
-	}
-	driver, err := m.Driver()
-	if err != nil {
-		return nil, err
-	}
-	runtime, err := NewJSRuntime(driver)
-	if err != nil {
-		return nil, err
-	}
-	runtime.cancel = m.Stopped
-	if m.jsRuntimes == nil {
-		m.jsRuntimes = map[string]*JSRuntime{}
-	}
-	m.jsRuntimes[sessionID] = runtime
-	m.jsOrder = append(m.jsOrder, sessionID)
-	for len(m.jsOrder) > maxJSRuntimes {
-		oldest := m.jsOrder[0]
-		m.jsOrder = m.jsOrder[1:]
-		// A session holding the runtime elsewhere keeps working; only the
-		// map entry goes, so the next call starts that session fresh.
-		delete(m.jsRuntimes, oldest)
-	}
-	return runtime, nil
-}
-
-// touchRuntime moves a session to the back of the eviction order.
-func (m *Manager) touchRuntime(sessionID string) {
-	for i, id := range m.jsOrder {
-		if id == sessionID {
-			m.jsOrder = append(append(m.jsOrder[:i:i], m.jsOrder[i+1:]...), sessionID)
-			return
+	return m.js.Get(sessionID, func() (*JSRuntime, error) {
+		driver, err := m.Driver()
+		if err != nil {
+			return nil, err
 		}
-	}
+		runtime, err := NewJSRuntime(driver)
+		if err != nil {
+			return nil, err
+		}
+		runtime.SetCancel(m.Stopped)
+		return runtime, nil
+	})
 }
 
 // dropRuntime forgets a session's kernel: variables and bindings are gone,
 // and the next call starts fresh. Safe to call for unknown sessions.
 func (m *Manager) dropRuntime(sessionID string) {
-	m.jsMu.Lock()
-	defer m.jsMu.Unlock()
-	delete(m.jsRuntimes, sessionID)
-	for i, id := range m.jsOrder {
-		if id == sessionID {
-			m.jsOrder = append(m.jsOrder[:i:i], m.jsOrder[i+1:]...)
-			return
-		}
-	}
+	m.js.Drop(sessionID)
 }
 
 // SessionRuntimeCount reports how many session kernels are live, for tests
 // and status surfaces.
 func (m *Manager) SessionRuntimeCount() int {
-	m.jsMu.Lock()
-	defer m.jsMu.Unlock()
-	return len(m.jsRuntimes)
+	return m.js.Len()
 }
 
 // Available reports whether the driver loaded, without attempting to open it.
@@ -285,7 +249,3 @@ func (e *ErrNoDriver) Error() string {
 }
 
 func (e *ErrNoDriver) Unwrap() error { return e.Cause }
-
-// maxResultText caps text pulled out of one result, so a large observation
-// cannot blow up the context by itself.
-const maxResultText = 100_000
