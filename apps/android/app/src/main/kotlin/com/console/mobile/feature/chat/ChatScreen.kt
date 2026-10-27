@@ -2,28 +2,20 @@ package com.console.mobile.feature.chat
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -35,34 +27,23 @@ import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
-import com.console.mobile.core.util.ScrollMemory
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.feature.subagents.SubagentDetailsSheet
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
 import com.console.mobile.ui.components.common.new.EmptyView
-import com.console.mobile.ui.components.common.new.HeaderIconButton
-import com.console.mobile.ui.components.common.new.OverflowMenu
-import com.console.mobile.ui.components.common.new.OverflowMenuItem
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.common.new.ScrollThumb
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
-import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
-import io.github.lyxnx.compose.ui.tablericons.outline.DotsVertical
-import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
-import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
-import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -106,39 +87,10 @@ fun ChatScreen(
 
     val chat: ChatSessionState = chatSessions[sessionId] ?: createChatSessionState()
     var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
-    var overflowMenu by remember { mutableStateOf(false) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
-
-    // Resume where this session's transcript was left off. Only trust the
-    // remembered position when the messages are still loaded; otherwise a new
-    // load should start at the bottom as usual.
-    val restoredScroll = remember(sessionId) {
-        ScrollMemory.get(sessionId)?.takeIf { chat.messages.isNotEmpty() }
-    }
-    val listState = key(sessionId) {
-        rememberLazyListState(
-            initialFirstVisibleItemIndex = restoredScroll?.index ?: 0,
-            initialFirstVisibleItemScrollOffset = restoredScroll?.offset ?: 0,
-        )
-    }
-
-    // Record the position as it moves. Saving only on dispose would race the
-    // next screen: during a navigation transition both are composed, so the
-    // incoming chat could read a stale entry.
-    LaunchedEffect(sessionId, listState) {
-        snapshotFlow {
-            Triple(
-                listState.firstVisibleItemIndex,
-                listState.firstVisibleItemScrollOffset,
-                !listState.canScrollForward,
-            )
-        }.collect { (index, offset, atEnd) ->
-            ScrollMemory.save(sessionId, index, offset, atEnd)
-        }
-    }
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
@@ -240,187 +192,81 @@ fun ChatScreen(
     }
 
     val displaySize = displayMessages.size
-    var following by remember(sessionId) { mutableStateOf(restoredScroll?.atEnd ?: true) }
-    LaunchedEffect(listState) {
-        launch {
-            listState.interactionSource.interactions.collect {
-                if (it is DragInteraction.Start) {
-                    following = false
-                    keyboardController?.hide()
-                    focusManager.clearFocus()
-                }
-            }
-        }
-        // The initial `false` is not a scroll ending — dropping it keeps a
-        // restored mid-transcript position from being treated as "at bottom"
-        // before the list has even been measured.
-        snapshotFlow { listState.isScrollInProgress }.drop(1).collect { scrolling ->
-            if (!scrolling) following = !listState.canScrollForward
-        }
-    }
-    val showScrollBottom by remember { derivedStateOf { !following && listState.canScrollForward } }
-
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            Triple(info.totalItemsCount, last?.index, last?.size)
-        }.collect {
-            if (following && !listState.isScrollInProgress) {
-                try { listState.scrollToBottom() } catch (_: Exception) {}
-            }
-        }
-    }
-
-    var settledInitialPage by remember(sessionId) { mutableStateOf(restoredScroll != null) }
-    LaunchedEffect(sessionId, displaySize) {
-        if (settledInitialPage || displaySize <= 0) return@LaunchedEffect
-        settledInitialPage = true
-        following = true
-        try { listState.scrollToBottom() } catch (_: Exception) {}
-    }
-
-    // --- Older-message pagination -------------------------------------------
-    val atTop = listState.firstVisibleItemIndex <= 0
-    var anchor by remember(sessionId) { mutableStateOf<ListAnchor?>(null) }
-    var autoLoadBlocked by remember(sessionId) { mutableStateOf(false) }
-
-    LaunchedEffect(atTop, chat.hasMoreMessages, chat.loadingOlder) {
-        if (!atTop) {
-            autoLoadBlocked = false
-            return@LaunchedEffect
-        }
-        if (autoLoadBlocked || !chat.hasMoreMessages || chat.loadingOlder || displaySize <= 0) return@LaunchedEffect
-        anchor = ListAnchor(
-            index = listState.firstVisibleItemIndex,
-            offset = listState.firstVisibleItemScrollOffset,
-            sizeBefore = displaySize,
-        )
-        if (listState.canScrollForward) following = false
-        if (!AppContainer.sessionRepository.loadOlder(sessionId)) autoLoadBlocked = true
-    }
-
-    LaunchedEffect(displaySize) {
-        val a = anchor ?: return@LaunchedEffect
-        val delta = displaySize - a.sizeBefore
-        if (delta > 0) {
-            try { listState.scrollToItem(a.index + delta, a.offset) } catch (_: Exception) {}
-        }
-        anchor = null
-    }
+    val transcriptScroll = rememberChatTranscriptScroll(
+        sessionId = sessionId,
+        messagesLoaded = chat.messages.isNotEmpty(),
+        displaySize = displaySize,
+        hasMoreMessages = chat.hasMoreMessages,
+        loadingOlder = chat.loadingOlder,
+        loadOlder = { AppContainer.sessionRepository.loadOlder(sessionId) },
+        onDragStarted = {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        },
+    )
 
     Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when {
             loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
             !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight, bottom = 80.dp))
             else -> {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(top = PageHeaderHeight + 8.dp, bottom = 120.dp),
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                ) {
-                    itemsIndexed(displayMessages, key = { _, m -> m.id ?: "${m.createdAt}-$sessionId" }) { index, msg ->
-                        MessageBubbleItem(
-                            item = msg,
-                            fileChanges = assistantTurnChanges[index].orEmpty(),
-                            onOpenChange = { inspectingChange = it },
-                            onFork = { messageId ->
-                                scope.launch {
-                                    try {
-                                        val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
-                                        AppContainer.appStateHolder.setSelectedSessionId(forked.id)
-                                    } catch (_: Exception) {
-                                    }
-                                }
-                            },
-                        )
-                        val runIdx = userRunMap[index]
-                        if (runIdx != null && runIdx < runs.size) {
-                            RunActivity(activity = runs[runIdx], running = chat.running && index == latestUserIndex, cwd = cwd)
-                            RunVisuals(runs[runIdx])
+                ChatTranscript(
+                    sessionId = sessionId,
+                    messages = displayMessages,
+                    listState = transcriptScroll.listState,
+                    runs = runs,
+                    userRunMap = userRunMap,
+                    assistantTurnChanges = assistantTurnChanges,
+                    latestUserIndex = latestUserIndex,
+                    running = chat.running,
+                    isStreaming = isStreaming,
+                    streamingText = chat.streamingText,
+                    streamingThinking = chat.streamingThinking,
+                    cwd = cwd,
+                    onOpenChange = { inspectingChange = it },
+                    onFork = { messageId ->
+                        scope.launch {
+                            try {
+                                val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
+                                AppContainer.appStateHolder.setSelectedSessionId(forked.id)
+                            } catch (_: Exception) {
+                            }
                         }
-                    }
-                    if (isStreaming && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty())) {
-                        item(key = "streaming") {
-                            AssistantBubble(textContent = chat.streamingText.ifBlank { null }, thinkingContent = chat.streamingThinking.ifBlank { null }, isStreaming = true, createdAt = null)
-                        }
-                    } else if (latestUserIndex == -1 && runs.isNotEmpty() && chat.running) {
-                        item(key = "unattached-run") {
-                            RunActivity(activity = runs.last(), running = true, cwd = cwd)
-                            RunVisuals(runs.last())
-                        }
-                    }
-                }
+                    },
+                )
                 ScrollThumb(
-                    state = listState,
+                    state = transcriptScroll.listState,
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = PageHeaderHeight, bottom = 80.dp),
                 )
             }
         }
 
-        PageHeader(
+        ChatHeader(
             title = chatTitle,
-            blurred = true,
-            modifier = Modifier.align(Alignment.TopCenter),
             onBack = {
                 AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
                 onBackToHome()
             },
-            actions = {
-                HeaderIconButton(TablerIcons.Outline.Folder, "Open file explorer", onClick = { jumpToProjectTab(MobileTab.Files) })
-                Box(modifier = Modifier.padding(start = 4.dp)) {
-                    HeaderIconButton(TablerIcons.Outline.DotsVertical, "More options", onClick = { overflowMenu = true })
-                    OverflowMenu(expanded = overflowMenu, onDismissRequest = { overflowMenu = false }) {
-                        OverflowMenuItem(
-                            label = "Open diff",
-                            icon = TablerIcons.Outline.BrandGit,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Changes)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open ports",
-                            icon = TablerIcons.Outline.PlugConnected,
-                            onClick = {
-                                overflowMenu = false
-                                onOpenPorts()
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open devices",
-                            icon = TablerIcons.Outline.DeviceMobile,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Devices)
-                            },
-                        )
-                        OverflowMenuItem(
-                            label = "Open terminal",
-                            icon = TablerIcons.Outline.Terminal2,
-                            onClick = {
-                                overflowMenu = false
-                                jumpToProjectTab(MobileTab.Terminal)
-                            },
-                        )
-                    }
-                }
-            },
+            onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
+            onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
+            onOpenPorts = onOpenPorts,
+            onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
+            onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
+            modifier = Modifier.align(Alignment.TopCenter),
         )
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Column {
                 // Above the pills so it can never sit on them; it only shows
                 // while the reader is scrolled away from the latest message.
-                if (showScrollBottom) {
+                if (transcriptScroll.showScrollToBottom) {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         FloatingActionButton(
                             onClick = {
-                                following = true
-                                scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                                transcriptScroll.scrollToBottom(scope)
                             },
                             containerColor = NewTheme.Raised,
                             contentColor = NewTheme.TextPrimary,
@@ -459,8 +305,7 @@ fun ChatScreen(
                             subagentPanelOpen = false
                             keyboardController?.hide()
                             AppContainer.chatRepository.sendMessage(sessionId)
-                            following = true
-                            scope.launch { try { listState.scrollToBottom() } catch (_: Exception) {} }
+                            transcriptScroll.scrollToBottom(scope)
                         },
                         onStop = { AppContainer.chatRepository.abort(sessionId) },
                     )
