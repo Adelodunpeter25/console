@@ -8,7 +8,7 @@ import (
 )
 
 func TestRuntimeScriptMethodsAreInstalled(t *testing.T) {
-	r, err := NewRuntime(nil, nil, "project", "")
+	r, err := NewRuntime(nil, nil, nil, nil, nil, nil, "project", "")
 	if err != nil {
 		t.Fatal(err)
 	}

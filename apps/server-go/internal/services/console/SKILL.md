@@ -2,8 +2,9 @@
 
 You have access to the console API through the `console` tool. This tool runs
 JavaScript with a preinstalled `console` object that gives you control over the
-desktop app: manage ports, run project scripts, spawn sessions, and inspect and
-steer them. Variables persist between calls until `console_reset` clears them.
+desktop app: manage ports, run project scripts, list projects and models, and
+create, inspect, or delete sessions. Variables persist between calls until
+`console_reset` clears them.
 
 ## Calling
 
@@ -35,27 +36,23 @@ Port operations are scoped to the current session's project. The `/console`
 message activates this API for the session; the command text is not rewritten or
 saved separately.
 
-### Discovery (coming in Phase 3)
+### Discovery
 
-`console.models()` — list available models, providers, and supported thinking levels
+`console.models()` — list available providers and models, including thinking levels
 
-`console.approvalModes()` — list valid approval modes and their ordering
+`console.projects.list()` — list registered projects
 
-`console.sessions.list({status?, project_id?})` — list sessions, filterable by status and project
+`console.projects.add({directory, name?})` — register a project directory
 
-### Session control (coming in Phase 3)
+### Session control
 
-`console.sessions.read(session_id)` — read a session's transcript, status, and result
+`console.sessions.list({project_id?, cwd?})` — list active sessions, optionally filtered
 
-`console.sessions.fork(session_id, message_id)` — fork a session at a specific message
+`console.sessions.read(session_id)` — read a session header and transcript
 
-`console.sessions.delete(session_id)` — soft-delete a session (never self; gated when it owns a worktree)
+`console.sessions.create({prompt?, project_id?, cwd?, model?, provider?, approval_mode?, worktree?})` — create a persistent session and, when `prompt` is provided, start it; `worktree` may include `branch` and `base_branch`
 
-`console.sessions.set_model(session_id, model, provider)` — change a session's model
-
-`console.sessions.set_approval(session_id, mode)` — change a session's approval mode (clamped to the owning run's ceiling)
-
-`console.sessions.abort(session_id)` — abort a running session
+`console.sessions.delete(session_id)` — soft-delete a session; active sessions must be stopped first
 
 ### Scripts
 
@@ -67,6 +64,5 @@ saved separately.
 
 `console.scripts.stop(run_id)` — stop a running script
 
-### Spawn (coming in Phase 4)
-
-`console.spawn({prompt, title, model?, provider?, thinking_level?, approval_mode?, worktree?})` — spawn a new session as a task. Returns `{session_id}` and reports the approval mode clamp if the requested mode exceeds the parent's ceiling.
+There is intentionally no `console.spawn()`: persistent delegated work uses
+`console.sessions.create()`.

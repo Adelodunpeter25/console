@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // Runtime is one session's console kernel.
@@ -17,13 +22,17 @@ type Runtime struct {
 	kernel    *jskernel.Runtime
 	ports     *services.PortRegistry
 	scripts   *services.ProjectScriptsService
+	sessions  *services.SessionService
+	projects  *services.ProjectService
+	active    func(string) bool
+	start     func(string, string, string, string, string) error
 	projectID string
 	cwd       string
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string) error, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -45,6 +54,27 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		}},
 		{Name: "scripts.stop", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.scriptsStop(ctx, args)
+		}},
+		{Name: "models", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.models(ctx, args)
+		}},
+		{Name: "projects.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.projectsList(ctx, args)
+		}},
+		{Name: "projects.add", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.projectsAdd(ctx, args)
+		}},
+		{Name: "sessions.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsList(ctx, args)
+		}},
+		{Name: "sessions.read", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsRead(ctx, args)
+		}},
+		{Name: "sessions.create", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsCreate(ctx, args)
+		}},
+		{Name: "sessions.delete", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsDelete(ctx, args)
 		}},
 	}
 	kernel, err := jskernel.New(jskernel.Options{
@@ -185,6 +215,144 @@ func (r *Runtime) scriptsStop(_ context.Context, args map[string]any) (*jskernel
 		return nil, fmt.Errorf("run %q is not running", runID)
 	}
 	return &jskernel.Result{StructuredContent: json.RawMessage(`{"success":true}`)}, nil
+}
+
+func (r *Runtime) models(ctx context.Context, _ map[string]any) (*jskernel.Result, error) {
+	return marshalResult(providers.ListProvidersWithContext(ctx))
+}
+
+func (r *Runtime) projectsList(_ context.Context, _ map[string]any) (*jskernel.Result, error) {
+	if r.projects == nil {
+		return nil, fmt.Errorf("project service is unavailable")
+	}
+	projects, err := r.projects.List()
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(projects)
+}
+
+func (r *Runtime) projectsAdd(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.projects == nil {
+		return nil, fmt.Errorf("project service is unavailable")
+	}
+	dir, err := stringArg(args, "directory")
+	if err != nil {
+		return nil, err
+	}
+	dir, err = filepath.Abs(dir)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("directory does not exist: %s", dir)
+	}
+	name, _ := args["name"].(string)
+	if name == "" {
+		name = filepath.Base(filepath.Clean(dir))
+	}
+	project, err := r.projects.Create(services.CreateProjectOptions{Name: name, Dir: dir})
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(project)
+}
+
+func (r *Runtime) sessionsList(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.sessions == nil {
+		return nil, fmt.Errorf("session service is unavailable")
+	}
+	filter := session.ListFilter{}
+	if value, ok := args["project_id"].(string); ok {
+		filter.ProjectID = value
+	}
+	if value, ok := args["cwd"].(string); ok {
+		filter.Cwd = value
+	}
+	sessions, err := r.sessions.ListFiltered(filter)
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(sessions)
+}
+
+func (r *Runtime) sessionsRead(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.sessions == nil {
+		return nil, fmt.Errorf("session service is unavailable")
+	}
+	id, err := stringArg(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := r.sessions.Load(id, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	if loaded == nil {
+		return nil, fmt.Errorf("session %q not found", id)
+	}
+	return marshalResult(loaded)
+}
+
+func (r *Runtime) sessionsCreate(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.sessions == nil {
+		return nil, fmt.Errorf("session service is unavailable")
+	}
+	prompt, _ := args["prompt"].(string)
+	model, _ := args["model"].(string)
+	provider, _ := args["provider"].(string)
+	approval, _ := args["approval_mode"].(string)
+	projectID, _ := args["project_id"].(string)
+	cwd, _ := args["cwd"].(string)
+	if cwd == "" && projectID != "" && r.projects != nil {
+		project, err := r.projects.Get(projectID)
+		if err != nil {
+			return nil, err
+		}
+		cwd = project.Path
+	}
+	var projectPtr *string
+	if projectID != "" {
+		projectPtr = &projectID
+	}
+	var worktree *types.CreateWorktreeSpec
+	if raw, ok := args["worktree"].(map[string]any); ok {
+		worktree = &types.CreateWorktreeSpec{}
+		worktree.Branch, _ = raw["branch"].(string)
+		worktree.BaseBranch, _ = raw["base_branch"].(string)
+	}
+	header, err := r.sessions.Create(types.CreateSessionOptions{Title: prompt, Cwd: cwd, ProjectID: projectPtr, ModelID: model, Provider: provider, ApprovalMode: approval, Worktree: worktree})
+	if err != nil {
+		return nil, err
+	}
+	if prompt != "" && r.start != nil {
+		if err := r.start(header.ID, prompt, model, provider, approval); err != nil {
+			return nil, err
+		}
+	}
+	return marshalResult(map[string]any{"session": header, "prompt": prompt})
+}
+
+func (r *Runtime) sessionsDelete(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.sessions == nil {
+		return nil, fmt.Errorf("session service is unavailable")
+	}
+	id, err := stringArg(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	if r.active != nil && r.active(id) {
+		return nil, fmt.Errorf("cannot delete active session %q; abort it first", id)
+	}
+	deleted, err := r.sessions.SoftDelete(id)
+	if err != nil {
+		return nil, err
+	}
+	if !deleted {
+		return nil, fmt.Errorf("session %q not found", id)
+	}
+	return &jskernel.Result{StructuredContent: json.RawMessage(`{"deleted":true}`)}, nil
 }
 
 func marshalResult(value any) (*jskernel.Result, error) {

@@ -225,6 +225,22 @@ func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
 	}
 }
 
+// SetConsoleServices attaches the project and session facades used by the
+// console kernel's discovery and session-control methods.
+func (s *Service) SetConsoleServices(projects *services.ProjectService) {
+	s.mu.Lock()
+	manager, sessions := s.consoleManager, s.sessions
+	s.mu.Unlock()
+	if manager != nil {
+		manager.SetSessions(sessions, projects, s.IsActive, s.startConsoleSession)
+	}
+}
+
+func (s *Service) startConsoleSession(sessionID, text, modelID, provider, approval string) error {
+	_, err := s.StartRun(sessionID, Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval})
+	return err
+}
+
 func (s *Service) portRegistry() *services.PortRegistry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
