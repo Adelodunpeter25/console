@@ -108,8 +108,18 @@ class ChatPersistence(
         }
     }
 
-    fun saveNow(sessions: Map<String, ChatSessionState>) {
-        try {
+    /**
+     * Persist a pre-validated draft map at restore time. `scheduleSave` can't
+     * be used here: its next fire renders from live state, and dropping the
+     * stale entry from disk prevents a restart loop where it's re-injected on
+     * every launch.
+     */
+    fun saveValidated(sessions: Map<String, ChatSessionState>) {
+        lastObservedSessions = sessions
+        saveNow(sessions)
+    }
+
+    fun saveNow(sessions: Map<String, ChatSessionState>) {        try {
             val capped = buildPersistedPayload(sessions)
             val json = ConsoleJson.encodeToString(PersistedChatPayload.serializer(), capped)
             prefs.edit().putString(PERSIST_KEY, json).apply()

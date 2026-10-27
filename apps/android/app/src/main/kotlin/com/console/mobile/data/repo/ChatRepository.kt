@@ -72,27 +72,43 @@ class ChatRepository(
             scope.launch(Dispatchers.IO) {
                 val cached = p.load()
                 if (cached.isNotEmpty()) {
-                    withContext(Dispatchers.Main.immediate) {
-                        chats.setAll(cached)
-                    }
-                    // A draft can be stale: the app may have been killed after
-                    // the prompt was sent but before the cached copy was
-                    // updated, so the restored "draft" is really a duplicated
-                    // sent prompt. Server history wins once fetched — a
-                    // session with persisted messages and a run newer than
-                    // the draft loses the local input entirely.
-                    for ((id, state) in cached) {
-                        try {
-                            val detail = withContext(Dispatchers.IO) { api.getSession(id, 1, null) }
-                            val messageCount = detail.header.message_count ?: 0
-                            val running = detail.header.status == "working"
-                            val serverNewer = detail.header.updated_at > (state.draftUpdatedAt ?: 0L)
-                            if (messageCount > 0 && (running || serverNewer)) {
-                                chats.update(id) { it.copy(input = "", draftUpdatedAt = null) }
-                                p.removeSession(id)
+                    // A cached draft can be stale: the app may have been killed
+                    // after the prompt was sent but before the cached copy was
+                    // updated, so the "draft" is really a duplicate of a sent
+                    // prompt. It must be validated BEFORE it reaches the
+                    // composer — injecting first and correcting later left a
+                    // window where the old prompt was visible and sendable.
+                    // One headers fetch validates every draft at once.
+                    var validated = cached
+                    try {
+                        val headers = withContext(Dispatchers.IO) { api.getSessions() }.associateBy { it.id }
+                        validated = cached.filter { (id, state) ->
+                            val header = headers[id]
+                            when {
+                                // Server session gone: keep the local draft row.
+                                header == null -> true
+                                // A session with persisted messages and any
+                                // server activity newer than the draft can't
+                                // trust the cached input (run completes bump
+                                // updated_at even when nothing was sent).
+                                (header.message_count ?: 0) > 0 -> state.draftUpdatedAt == null ||
+                                    header.updated_at <= state.draftUpdatedAt
+                                // Idle 0-message session: a sent prompt persists
+                                // message rows, so an untouched idle session
+                                // keeps its draft; a working one may be about
+                                // to.
+                                else -> header.status != "working"
                             }
-                        } catch (_: Exception) {
-                            // Offline or server gone: keep the draft as-is.
+                        }.toMap()
+                    } catch (_: Exception) {
+                        // Offline: keep drafts as-is, best effort.
+                    }
+                    if (validated.size != cached.size) {
+                        p.saveValidated(validated)
+                    }
+                    if (validated.isNotEmpty()) {
+                        withContext(Dispatchers.Main.immediate) {
+                            chats.setAll(validated)
                         }
                     }
                 }
