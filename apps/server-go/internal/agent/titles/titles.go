@@ -60,12 +60,15 @@ func SanitizeTitle(value string) string {
 
 // Generate asks the provider for a ~six-word title. Returns "" when the
 // model yields nothing usable (caller falls back to truncation).
-func Generate(ctx context.Context, provider loop.Provider, model, prompt string) string {
+// accountID, when set, pins the title generation to one account (decision
+// 7): a run under one account must not mint titles under another.
+func Generate(ctx context.Context, provider loop.Provider, model, prompt, accountID string) string {
 	events := stream.New[loop.Event]()
 	req := loop.TurnRequest{
 		Model:        model,
 		SystemPrompt: "Create a concise session title from the user's request. Output one single-line sentence of about six words. No quotes, markdown, explanation, or punctuation.",
 		Messages:     []any{loop.UserMessage{Role: loop.RoleUser, Content: prompt}},
+		AccountID:    accountID,
 	}
 	if err := provider.RunTurn(ctx, req, events); err != nil {
 		return ""

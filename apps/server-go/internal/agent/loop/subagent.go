@@ -52,6 +52,10 @@ type SubagentContext struct {
 	BackgroundWork *services.BackgroundWorkManager
 	SessionID      string
 	ParentRunID    string
+	// AccountID pins the subagent to the parent run's account credential
+	// (decision 7): the nested agent's turns load that account's file
+	// directly instead of re-resolving the provider's active account.
+	AccountID string
 }
 
 // SubagentStartInfo opens a subagent run.
@@ -213,6 +217,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	agent.SystemPrompt = fmt.Sprintf("You are a specialized subagent (%s). Execute the task thoroughly and summarize your findings cleanly.\n%s", role, c.SystemPrompt)
 	agent.Setup = c.Setup
 	agent.Model = c.Model
+	agent.AccountID = c.AccountID
 
 	if c.Usage != nil {
 		defer func() { c.Usage.AddSubagent(agent.Usage.Snapshot()) }()

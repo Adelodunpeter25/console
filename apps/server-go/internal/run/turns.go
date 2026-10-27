@@ -58,13 +58,16 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 
 	current, currentCtx := first, ctx
 	currentProvider, currentProviderID := firstProvider, firstProviderID
+	// Per-run account pins: the provider's active account is resolved once
+	// per run and stays pinned even if the user switches (decision 7).
+	pins := &accountPins{}
 	// Mark working once per run, not per turn: a drained staged prompt keeps
 	// the same run (and therefore the same status) across its turns.
 	s.setStatus(sessionID, "working")
 	hub.Broadcast(loop.Event{Kind: loop.EventSessionStart})
 	var runErr error
 	for {
-		turnErr := s.runOneTurn(currentCtx, sessionID, runID, current, hub, &currentProvider, &currentProviderID)
+		turnErr := s.runOneTurn(currentCtx, sessionID, runID, current, hub, &currentProvider, &currentProviderID, pins)
 		runErr = turnErr
 		if turnErr != nil && !errors.Is(turnErr, context.Canceled) {
 			slog.Warn("run turn error", "session", sessionID, "error", turnErr)
@@ -244,7 +247,7 @@ func withoutTool(list []tools.Tool, name string) []tools.Tool {
 // runOneTurn builds the agent for one prompt and pumps its events to the
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
-func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string) error {
+func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string, pins *accountPins) error {
 	loaded, err := s.sessions.Load(sessionID, 0, 0)
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
@@ -411,7 +414,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		case "browser":
 			toolList = append(toolList, tools.NewBrowserTool(s.decisions.BrowserHandlerFor(sessionID, hub)))
 		case "read_file":
-			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID)))
+			toolList = append(toolList, tools.NewReadFileTool(s.ReadFileToolOptions(model, providerID, modelID, pins)))
 		default:
 			toolList = append(toolList, t)
 		}
@@ -458,6 +461,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		BackgroundWork: s.BackgroundWorkManager(),
 		SessionID:      sessionID,
 		ParentRunID:    runID,
+		// The subagent authenticates as the parent run's pinned account
+		// (decision 7): nested turns must not re-resolve the active one.
+		AccountID: pins.forProvider(providerID),
 		// A subagent inherits the parent run's mode: it holds the same tools,
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
@@ -524,7 +530,10 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// stay valid.
 	agent.ConversationID = fmt.Sprintf("%s:%s:%s", sessionID, providerID, modelID)
 	agent.ThinkingLevel = effectiveThinking
-	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions())
+	// The run's pinned account: every provider turn (this turn, explicit
+	// compaction summaries, title generation) authenticates as it.
+	agent.AccountID = pins.forProvider(providerID)
+	agent.Compaction = s.compactionHooks(sessionID, model, prompt.SystemPrompt, registry.Definitions(), pins)
 
 	if dto.Synthetic {
 		hub.Broadcast(loop.Event{Kind: loop.EventBackgroundContinue, Text: wakeMessage(dto.woken), Message: dto.woken})
@@ -537,7 +546,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// First user turn on a placeholder title: generate one in the
 	// background. Only applied if still generic.
 	if titles.IsGenericTitle(header.Title) && len(history) == 0 {
-		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub)
+		go s.generateTitle(sessionID, dto.Text, providerID, modelID, hub, pins)
 	}
 
 	events, err := agent.RunWithHistory(ctx, sessionID, history, user, registry.Definitions())

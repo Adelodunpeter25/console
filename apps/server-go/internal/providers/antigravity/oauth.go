@@ -209,9 +209,11 @@ type tokenResponse struct {
 	ExpiresIn   int64  `json:"expires_in"`
 }
 
-func doRefresh(client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
+// doRefresh posts the refresh grant and returns the updated credential
+// without saving it (the caller picks the file).
+func doRefresh(client *http.Client, cred ParsedCredential) (OAuthCredential, error) {
 	if cred.RefreshToken == "" {
-		return ParsedCredential{}, fmt.Errorf("OAuth token expired and no refresh_token available. Please login again.")
+		return OAuthCredential{}, fmt.Errorf("OAuth token expired and no refresh_token available. Please login again.")
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 15 * time.Second}
@@ -224,43 +226,32 @@ func doRefresh(client *http.Client, cred ParsedCredential) (ParsedCredential, er
 	}
 	req, err := http.NewRequest("POST", OAuthTokenURL, strings.NewReader(body.Encode()))
 	if err != nil {
-		return ParsedCredential{}, err
+		return OAuthCredential{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(req)
 	if err != nil {
-		return ParsedCredential{}, err
+		return OAuthCredential{}, err
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ParsedCredential{}, shared.TokenError("Antigravity", resp.StatusCode, string(raw))
+		return OAuthCredential{}, shared.TokenError("Antigravity", resp.StatusCode, string(raw))
 	}
 	var data tokenResponse
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return ParsedCredential{}, fmt.Errorf("decode Antigravity token response: %w", err)
+		return OAuthCredential{}, fmt.Errorf("decode Antigravity token response: %w", err)
 	}
 	expiresAtMs := time.Now().UnixMilli() + data.ExpiresIn*1000
-	updated := OAuthCredential{
+	return OAuthCredential{
 		Token: data.AccessToken, RefreshToken: cred.RefreshToken,
 		ProjectID: cred.ProjectID, Email: cred.Email, ExpiresAt: expiresAtMs,
-	}
-	if err := saveActiveCredential(updated); err != nil {
-		return ParsedCredential{}, err
-	}
-	return ParsedCredential{
-		AccessToken: data.AccessToken, ProjectID: cred.ProjectID,
-		RefreshToken: cred.RefreshToken, ExpiresAtMs: expiresAtMs, Email: cred.Email,
 	}, nil
 }
 
-// RefreshIfNeeded refreshes an expiring credential (60s skew), deduping
-// concurrent refreshes for the same credential (keyed by refresh token).
-func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
-	if cred.ExpiresAtMs == 0 || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
-		return cred, nil
-	}
-	key := cred.RefreshToken
+// refreshCredential dedupes a refresh (keyed by refresh token) and writes
+// the result through save.
+func refreshCredential(key string, client *http.Client, cred ParsedCredential, save func(OAuthCredential) error) (ParsedCredential, error) {
 	inflightMu.Lock()
 	if ch, ok := inflight[key]; ok {
 		inflightMu.Unlock()
@@ -274,7 +265,17 @@ func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredenti
 	inflight[key] = ch
 	inflightMu.Unlock()
 
-	out, err := doRefresh(client, cred)
+	updated, err := doRefresh(client, cred)
+	var out ParsedCredential
+	if err == nil {
+		if err = save(updated); err == nil {
+			out = ParsedCredential{
+				AccessToken: updated.Token, ProjectID: updated.ProjectID,
+				RefreshToken: updated.RefreshToken, ExpiresAtMs: updated.ExpiresAt,
+				Email: updated.Email,
+			}
+		}
+	}
 
 	inflightMu.Lock()
 	inflightOut[key], inflightErr[key] = out, err
@@ -282,4 +283,24 @@ func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredenti
 	inflightMu.Unlock()
 	close(ch)
 	return out, err
+}
+
+// RefreshIfNeeded refreshes an expiring credential (60s skew), deduping
+// concurrent refreshes for the same credential (keyed by refresh token).
+func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
+	if cred.ExpiresAtMs == 0 || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
+		return cred, nil
+	}
+	return refreshCredential(cred.RefreshToken, client, cred, saveActiveCredential)
+}
+
+// RefreshFor refreshes a PINNED account's credential, writing the rotated
+// pair back to that account's own file (claude's RefreshFor documents why).
+func RefreshFor(accountID string, client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
+	if accountID == "" {
+		return RefreshIfNeeded(client, cred)
+	}
+	return refreshCredential(cred.RefreshToken, client, cred, func(c OAuthCredential) error {
+		return SaveCredentialFor(accountID, c)
+	})
 }

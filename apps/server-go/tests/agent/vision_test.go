@@ -31,7 +31,7 @@ func TestVisionDescribe(t *testing.T) {
 		{Kind: loop.EventThinking, Text: "ignore me"},
 		{Kind: loop.EventText, Text: "  A blue square.\n"},
 	}}
-	got := vision.Describe(context.Background(), p, "vision-model", "image/png", []byte("raw"), "/a/b.png")
+	got := vision.Describe(context.Background(), p, "vision-model", "image/png", []byte("raw"), "/a/b.png", "")
 	if got != "A blue square." {
 		t.Fatalf("describe: %q", got)
 	}

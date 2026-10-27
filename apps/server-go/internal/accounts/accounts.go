@@ -100,6 +100,18 @@ func credentialPathLocked(provider, id string) string {
 	return filepath.Join(dir, "accounts", provider, id+".json")
 }
 
+// PinnedError renders the load failure of an account pinned to a run.
+// Deleting an account removes its credential file, so a missing file means
+// the pin was removed mid-run: the failure must say so and forbid the
+// silent fallback to another account that decision 7 rules out. Any other
+// error (unreadable, malformed) is returned unchanged.
+func PinnedError(provider, id string, err error) error {
+	if _, statErr := os.Stat(CredentialPath(provider, id)); os.IsNotExist(statErr) {
+		return fmt.Errorf("account %s was removed; select another account for provider %s", id, provider)
+	}
+	return err
+}
+
 // newID mints "acc_" + 16 hex chars — stable, stored, never derived.
 func newID() string {
 	b := make([]byte, 8)

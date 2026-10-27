@@ -25,13 +25,13 @@ import (
 // title first, truncation fallback on failure/empty. Applied + broadcast
 // only while the stored title is still generic. Uses a fresh provider
 // instance so generation never interferes with the running turn.
-func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, hub *Hub) {
+func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, hub *Hub, pins *accountPins) {
 	// Titles use the configured smol role model, falling back to the run
 	// model.
 	titleModel := roles.ResolveRoleModel(roles.Smol, s.resolveModel(context.Background(), providerID, modelID), s.roleRef(roles.Smol))
 	title := ""
 	if provider, err := s.Lookup(titleModel.Provider); err == nil {
-		title = titles.Generate(context.Background(), provider, titleModel.ID, prompt)
+		title = titles.Generate(context.Background(), provider, titleModel.ID, prompt, pins.forProvider(titleModel.Provider))
 	}
 	if title == "" {
 		title = titles.FallbackTitle(prompt)
@@ -113,11 +113,12 @@ func (s *Service) visionLabel(model types.Model) string {
 
 // ReadFileToolOptions builds read_file's per-run options: direct image parts
 // when the model and provider can carry them, otherwise a vision-role
-// describer, otherwise the placeholder.
-func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID string) tools.ReadFileOptions {
+// describer, otherwise the placeholder. pins pins the describer's calls to
+// the run's account (decision 7); nil keeps the ordinary loader.
+func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID string, pins *accountPins) tools.ReadFileOptions {
 	return tools.ReadFileOptions{
 		CanSeeImages: model.SupportsImages && DeliversToolResultImages(providerID),
-		Describer:    s.imageDescriber(model, providerID),
+		Describer:    s.imageDescriber(model, providerID, pins),
 		RunModel:     modelID,
 		VisionModel:  s.visionLabel(model),
 	}
@@ -127,7 +128,7 @@ func (s *Service) ReadFileToolOptions(model types.Model, providerID, modelID str
 // see. Capability is not delivery: a model that sees user-message images still
 // gets tool-result images redacted by a non-delivering adapter, so it needs a
 // describer too.
-func (s *Service) imageDescriber(model types.Model, providerID string) tools.ImageDescriber {
+func (s *Service) imageDescriber(model types.Model, providerID string, pins *accountPins) tools.ImageDescriber {
 	if model.SupportsImages && DeliversToolResultImages(providerID) {
 		return nil
 	}
@@ -137,13 +138,15 @@ func (s *Service) imageDescriber(model types.Model, providerID string) tools.Ima
 	if _, ok := s.resolveVision(model); !ok {
 		return nil
 	}
-	return &visionDescriber{s: s, fallback: model}
+	return &visionDescriber{s: s, fallback: model, pins: pins}
 }
 
 // visionDescriber runs the configured vision model once per image.
 type visionDescriber struct {
 	s        *Service
 	fallback types.Model
+	// pins, when set, pins the describer's calls to the run's account.
+	pins *accountPins
 }
 
 func (d *visionDescriber) Describe(ctx context.Context, mime string, data []byte, hint string) (string, bool) {
@@ -157,7 +160,7 @@ func (d *visionDescriber) Describe(ctx context.Context, mime string, data []byte
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	desc := vision.Describe(ctx, provider, vm.ID, mime, data, hint)
+	desc := vision.Describe(ctx, provider, vm.ID, mime, data, hint, d.pins.forProvider(vm.Provider))
 	if strings.TrimSpace(desc) == "" {
 		return "", false
 	}
@@ -172,7 +175,7 @@ func (s *Service) roleRef(role string) string {
 // compactionHooks builds the per-turn context management hooks: payload
 // threshold checks with structural summaries, smol-model narratives when
 // configured, and emergency recovery on context overflow.
-func (s *Service) compactionHooks(sessionID string, model types.Model, systemPrompt string, defs []tools.Definition) *loop.CompactionHooks {
+func (s *Service) compactionHooks(sessionID string, model types.Model, systemPrompt string, defs []tools.Definition, pins *accountPins) *loop.CompactionHooks {
 	options := compaction.Options{}
 	emergencyChars := compaction.EmergencyChars
 	return &loop.CompactionHooks{
@@ -183,7 +186,7 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 			// Compaction rewrites the prefix anyway; rebuild setup next run.
 			s.prompts.forget(sessionID)
 			result := compaction.CompactHistory(history, options)
-			if summary, ok := s.summarizeCompaction(ctx, model, history); ok {
+			if summary, ok := s.summarizeCompaction(ctx, model, history, pins); ok {
 				result = compaction.CompactHistoryWithSummary(history, options, summary)
 			}
 			return result.CompactedMessages
@@ -198,8 +201,9 @@ func (s *Service) compactionHooks(sessionID string, model types.Model, systemPro
 }
 
 // summarizeCompaction produces an smol-model narrative summary when a smol
-// role is configured; false keeps the structural summary.
-func (s *Service) summarizeCompaction(ctx context.Context, model types.Model, history []any) (string, bool) {
+// role is configured; false keeps the structural summary. The summarizer
+// runs under the run's pinned account.
+func (s *Service) summarizeCompaction(ctx context.Context, model types.Model, history []any, pins *accountPins) (string, bool) {
 	ref := s.roleRef(roles.Smol)
 	if strings.TrimSpace(ref) == "" {
 		return "", false
@@ -209,7 +213,7 @@ func (s *Service) summarizeCompaction(ctx context.Context, model types.Model, hi
 	if err != nil {
 		return "", false
 	}
-	summary, err := compaction.SummarizeWithProvider(ctx, provider, smol.ID, history, "")
+	summary, err := compaction.SummarizeWithProvider(ctx, provider, smol.ID, history, "", pins.forProvider(smol.Provider))
 	if err != nil || strings.TrimSpace(summary) == "" {
 		return "", false
 	}

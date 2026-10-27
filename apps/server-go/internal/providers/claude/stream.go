@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
@@ -43,9 +44,20 @@ func (p *Provider) httpClient() *http.Client {
 	return &http.Client{Timeout: 0}
 }
 
-func (p *Provider) loadCredential() (ParsedCredential, error) {
+func (p *Provider) loadCredential(accountID string) (ParsedCredential, error) {
 	if p.CredentialLoader != nil {
 		return p.CredentialLoader()
+	}
+	// A pinned account loads its own file and refreshes into it (decision
+	// 7): switching the active account mid-run must not change what this
+	// run authenticates as, and a deleted pin fails loudly instead of
+	// falling back to another account.
+	if accountID != "" {
+		cred, err := LoadCredentialFor(accountID)
+		if err != nil {
+			return ParsedCredential{}, accounts.PinnedError("claude", accountID, err)
+		}
+		return RefreshFor(accountID, nil, cred)
 	}
 	cred, err := LoadCredential()
 	if err != nil {
@@ -338,7 +350,7 @@ func (p *Provider) doRequest(ctx context.Context, url, accessToken, sessionID st
 
 // RunTurn implements loop.Provider: one streaming assistant turn.
 func (p *Provider) RunTurn(ctx context.Context, req loop.TurnRequest, events *stream.Stream[loop.Event]) error {
-	cred, err := p.loadCredential()
+	cred, err := p.loadCredential(req.AccountID)
 	if err != nil {
 		events.Fail(err)
 		return err

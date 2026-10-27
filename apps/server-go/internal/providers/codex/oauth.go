@@ -203,17 +203,19 @@ func ExchangeCode(client *http.Client, code, verifier, redirectURI string) (OAut
 	}, nil
 }
 
-func refreshToken(client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
+// refreshToken exchanges the refresh token for a rotated pair, returning
+// the updated credential without saving it (the caller picks the file).
+func refreshToken(client *http.Client, cred ParsedCredential) (OAuthCredential, error) {
 	data, err := postToken(client, url.Values{
 		"grant_type":    {"refresh_token"},
 		"client_id":     {ClientID},
 		"refresh_token": {cred.RefreshToken},
 	})
 	if err != nil {
-		return ParsedCredential{}, err
+		return OAuthCredential{}, err
 	}
 	if data.AccessToken == "" || data.RefreshToken == "" || data.ExpiresIn == nil {
-		return ParsedCredential{}, fmt.Errorf("Codex token refresh response is missing required fields.")
+		return OAuthCredential{}, fmt.Errorf("Codex token refresh response is missing required fields.")
 	}
 	accountID, email, _ := TokenProfile(data.AccessToken, "")
 	if accountID == "" {
@@ -222,19 +224,13 @@ func refreshToken(client *http.Client, cred ParsedCredential) (ParsedCredential,
 	if email == "" {
 		email = cred.Email
 	}
-	updated := OAuthCredential{
+	return OAuthCredential{
 		AccessToken:  data.AccessToken,
 		RefreshToken: data.RefreshToken,
 		ExpiresAt:    time.Now().UnixMilli() + *data.ExpiresIn*1000,
 		AccountID:    accountID,
 		Email:        email,
-	}
-	// Write back to wherever LoadCredential resolved the credential from
-	// (claude's refreshToken documents why).
-	if err := saveActiveCredential(updated); err != nil {
-		return ParsedCredential{}, err
-	}
-	return ParseCredential(updated)
+	}, nil
 }
 
 // ParseCredential validates a stored credential.
@@ -349,7 +345,29 @@ func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredenti
 	if cred.RefreshToken == "" || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
 		return cred, nil
 	}
-	return shared.SingleFlight("codex/"+cred.RefreshToken, func() (ParsedCredential, error) {
-		return refreshToken(client, cred)
+	return refreshCredential("codex/"+cred.RefreshToken, client, cred, saveActiveCredential)
+}
+
+// RefreshFor refreshes a PINNED account's credential, writing the rotated
+// pair back to that account's own file (claude's RefreshFor documents why).
+func RefreshFor(accountID string, client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
+	if accountID == "" {
+		return RefreshIfNeeded(client, cred)
+	}
+	return refreshCredential("codex/"+cred.RefreshToken, client, cred, func(c OAuthCredential) error {
+		return SaveCredentialFor(accountID, c)
+	})
+}
+
+func refreshCredential(key string, client *http.Client, cred ParsedCredential, save func(OAuthCredential) error) (ParsedCredential, error) {
+	return shared.SingleFlight(key, func() (ParsedCredential, error) {
+		updated, err := refreshToken(client, cred)
+		if err != nil {
+			return ParsedCredential{}, err
+		}
+		if err := save(updated); err != nil {
+			return ParsedCredential{}, err
+		}
+		return ParseCredential(updated)
 	})
 }

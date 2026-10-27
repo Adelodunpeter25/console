@@ -511,7 +511,7 @@ second active: the partial unique index failing loudly is the test).
 Each phase is independently shippable. Commands follow `AGENTS.md`: one test
 file or one crate at a time; never the full suite.
 
-### Phase 1 — account store (⬜)
+### Phase 1 — account store (✅)
 
 - `internal/db/schema.go`: table + partial unique index (§4.2).
 - `internal/accounts/`: `Account`, `Configure`/`Migrate`, `List`/`All`,
@@ -522,7 +522,7 @@ file or one crate at a time; never the full suite.
   migration with/without legacy files, dev vs storage dir `CredentialPath`.
   Run: `cd apps/server-go && go test ./tests/providers/ -run TestAccounts -v`.
 
-### Phase 2 — account-aware providers (⬜)
+### Phase 2 — account-aware providers (✅)
 
 - `providers/shared`: `SaveCredentialFile` atomic rename; refresh
   single-flight.
@@ -532,7 +532,7 @@ file or one crate at a time; never the full suite.
   single-flight race test. Run per provider, e.g.
   `cd apps/server-go && go test ./tests/providers/ -run TestClaudeAccounts -v`.
 
-### Phase 3 — API + proto (⬜)
+### Phase 3 — API + proto (✅)
 
 - `proto/console/v1/auth.proto`: §5.1 additions; `make proto`; regen `internal/gen`.
 - `internal/auth`: `GetStatus` reads `accounts.All()`; callback uses
@@ -548,7 +548,7 @@ file or one crate at a time; never the full suite.
   `status_no_accounts.json`; Android `AuthAccountsFixtureTest.kt`;
   run `cd apps/android && ./gradlew :app:testDebugUnitTest --tests "AuthAccountsFixtureTest"`.
 
-### Phase 4 — run pinning (⬜)
+### Phase 4 — run pinning (✅)
 
 - `TurnRequest.AccountID`, `Agent.AccountID`, copy in the internal build
   (`loop.go:380`); `run` resolves `EnabledID` once per run and threads it into

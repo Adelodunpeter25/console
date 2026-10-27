@@ -20,8 +20,9 @@ const systemPrompt = "You describe images for a text-only coding agent. " +
 
 // Describe performs one non-streaming, tool-free call to a vision model and
 // returns its prose description. Returns "" on any failure so the caller can
-// fall back to a placeholder.
-func Describe(ctx context.Context, provider loop.Provider, model, mime string, data []byte, hint string) string {
+// fall back to a placeholder. accountID, when set, pins the call to one
+// account (decision 7).
+func Describe(ctx context.Context, provider loop.Provider, model, mime string, data []byte, hint, accountID string) string {
 	events := stream.New[loop.Event]()
 	req := loop.TurnRequest{
 		Model:        model,
@@ -31,6 +32,7 @@ func Describe(ctx context.Context, provider loop.Provider, model, mime string, d
 			Content:     userPrompt(hint),
 			Attachments: []loop.ImageAttachment{{Data: base64.StdEncoding.EncodeToString(data), MimeType: mime}},
 		}},
+		AccountID: accountID,
 		// Tools deliberately nil: the describer must not read another image
 		// and recurse.
 	}

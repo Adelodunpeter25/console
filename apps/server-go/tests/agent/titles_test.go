@@ -82,10 +82,10 @@ func (p *titleProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *st
 }
 
 func TestGenerateTitle(t *testing.T) {
-	if got := titles.Generate(context.Background(), &titleProvider{text: `"Short login fix."`}, "m", "fix login"); got != "Short login fix" {
+	if got := titles.Generate(context.Background(), &titleProvider{text: `"Short login fix."`}, "m", "fix login", ""); got != "Short login fix" {
 		t.Fatalf("generated: %q", got)
 	}
-	if got := titles.Generate(context.Background(), &titleProvider{}, "m", "fix login"); got != "" {
+	if got := titles.Generate(context.Background(), &titleProvider{}, "m", "fix login", ""); got != "" {
 		t.Fatalf("empty must yield blank: %q", got)
 	}
 }

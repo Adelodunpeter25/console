@@ -166,15 +166,17 @@ func PackSummaryInput(history []any, maxChars int) []any {
 }
 
 // SummarizeWithProvider streams a narrative summary from a provider.
-// Empty output is an error (caller falls back to structural).
-func SummarizeWithProvider(ctx context.Context, provider loop.Provider, modelID string, history []any, systemPrompt string) (string, error) {
+// Empty output is an error (caller falls back to structural). accountID,
+// when set, pins the summarizer to one account (decision 7).
+func SummarizeWithProvider(ctx context.Context, provider loop.Provider, modelID string, history []any, systemPrompt, accountID string) (string, error) {
 	if systemPrompt == "" {
 		systemPrompt = defaultSummarySystemPrompt
 	}
 	events := stream.New[loop.Event]()
 	req := loop.TurnRequest{
 		Model: modelID, SystemPrompt: systemPrompt,
-		Messages: PackSummaryInput(history, SummaryInputMaxChars),
+		Messages:  PackSummaryInput(history, SummaryInputMaxChars),
+		AccountID: accountID,
 	}
 	if err := provider.RunTurn(ctx, req, events); err != nil {
 		return "", err

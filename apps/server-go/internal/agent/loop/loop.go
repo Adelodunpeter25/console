@@ -38,6 +38,12 @@ type TurnRequest struct {
 	// Provider options (all optional, zero value = provider default).
 	// BaseURL overrides the provider's default endpoint (e.g. tests).
 	BaseURL string
+	// AccountID pins the run to one provider account's credential (decision
+	// 7 of docs/plan/provider-accounts.md): resolved once per run, it stays
+	// stable across the run's turns even if the user switches accounts
+	// meanwhile. Empty means the provider's ordinary credential resolution
+	// (active account file, env token, or legacy file).
+	AccountID string
 	// CacheRetention controls prompt-cache behavior ("short"|"long"|"none").
 	CacheRetention CacheRetention
 	// ToolDefs, when set, supplies the provider tool list at the start of
@@ -192,6 +198,9 @@ type Agent struct {
 	CacheRetention CacheRetention
 	ConversationID string
 	ThinkingLevel  string
+	// AccountID, when set, pins every turn to one account's credential
+	// (see TurnRequest.AccountID). Empty keeps provider defaults.
+	AccountID string
 	// Compaction optionally rewrites history before each turn.
 	Compaction *CompactionHooks
 	// Usage accumulates token usage across every turn of the agent's runs
@@ -386,6 +395,7 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			CacheRetention: a.CacheRetention,
 			ConversationID: a.ConversationID,
 			ThinkingLevel:  a.ThinkingLevel,
+			AccountID:      a.AccountID,
 		}, turnStream)
 	}()
 
