@@ -73,6 +73,29 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_auth_devices_active ON auth_devices(revoked_at, last_seen_at);
 
+		-- Provider accounts: metadata for every stored OAuth login per
+		-- provider plus the single active pointer that decides which
+		-- credential runs use. Secrets stay in 0600 files under
+		-- accounts/<provider>/<id>.json; this table holds display metadata
+		-- and the active flag only.
+		CREATE TABLE IF NOT EXISTS provider_accounts (
+			id         TEXT PRIMARY KEY,
+			provider   TEXT NOT NULL,
+			identity   TEXT NOT NULL DEFAULT '',
+			email      TEXT NOT NULL DEFAULT '',
+			label      TEXT NOT NULL DEFAULT '',
+			active     INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_provider_accounts_provider
+			ON provider_accounts(provider, created_at);
+		-- The invariant is enforced by the DB, not by hope: at most one
+		-- active account per provider. Zero active is legal (provider
+		-- disabled until one is selected).
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_one_active
+			ON provider_accounts(provider) WHERE active = 1;
+
 		CREATE TABLE IF NOT EXISTS auth_pairing_grants (
 			id TEXT PRIMARY KEY,
 			grant_hash TEXT NOT NULL UNIQUE,

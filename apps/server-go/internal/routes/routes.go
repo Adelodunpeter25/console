@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/memory"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
@@ -119,6 +120,13 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	registerMCPRoutes(app, mcpManager)
 	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
 	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
+	// The provider account store backs multi-account support. Configure
+	// also migrates the legacy single-credential files; a failure here must
+	// not block boot — providers keep working off their legacy files
+	// (docs/plan/provider-accounts.md §8).
+	if err := accounts.Configure(cfg.DB); err != nil {
+		slog.Warn("provider account store unavailable", "error", err)
+	}
 	fffManager := fff.NewManager()
 	if fffManager.Enabled() {
 		slog.Info("fff file-search index enabled")
