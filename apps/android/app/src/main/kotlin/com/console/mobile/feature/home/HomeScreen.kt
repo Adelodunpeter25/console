@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +59,7 @@ import com.console.mobile.core.chat.draftPreview
 import com.console.mobile.core.chat.formatProjectTitle
 import com.console.mobile.core.chat.isDraftSession
 import com.console.mobile.core.chat.sessionBranch
+import com.console.mobile.core.util.ScrollMemory
 import com.console.mobile.core.util.folderName
 import com.console.mobile.core.util.formatRelativeTime
 import console.v1.SessionHeader
@@ -71,6 +73,7 @@ import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.console.mobile.ui.components.common.new.ActionButton
@@ -218,13 +221,29 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    val listState = rememberLazyListState()
+                    val restored = remember { ScrollMemory.get(HomeSessionsScrollKey) }
+                    val listState = rememberLazyListState(
+                        initialFirstVisibleItemIndex = restored?.index ?: 0,
+                        initialFirstVisibleItemScrollOffset = restored?.offset ?: 0,
+                    )
+                    // Home is rebuilt whenever the chat screen is closed, so
+                    // keep its place continuously rather than on dispose.
+                    LaunchedEffect(listState) {
+                        snapshotFlow {
+                            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                        }.collect { (index, offset) ->
+                            ScrollMemory.save(HomeSessionsScrollKey, index, offset)
+                        }
+                    }
                     // A new query is a different list of rows, so the old offset
                     // lands somewhere arbitrary (or out of bounds once results
-                    // shrink). Jump to the top so the first match is visible as
-                    // the user types. Instant rather than animated — the content
-                    // is swapped out, so a scroll animation would be a lie.
-                    LaunchedEffect(searchQuery) { listState.scrollToItem(0) }
+                    // shrink). Jump to the top as the user types — but not on
+                    // entry, where the remembered position is being restored.
+                    LaunchedEffect(listState) {
+                        snapshotFlow { searchQuery }
+                            .drop(1)
+                            .collect { listState.scrollToItem(0) }
+                    }
                     LazyColumn(
                         state = listState,
                         contentPadding = PaddingValues(top = PageHeaderHeight, bottom = 96.dp),
@@ -434,6 +453,9 @@ private fun SessionRow(
 
 /** Height of a row's first line: the title and the status pill are both centred in it. */
 private val FirstLineHeight = 28.dp
+
+/** One scroll position for the session list; it is the only scrolling list on Home. */
+private const val HomeSessionsScrollKey = "home:sessions"
 
 private fun shortRelative(ts: Long): String {
     if (ts <= 0) return ""

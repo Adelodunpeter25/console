@@ -35,6 +35,7 @@ import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
+import com.console.mobile.core.util.ScrollMemory
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.feature.subagents.SubagentDetailsSheet
@@ -115,7 +116,7 @@ fun ChatScreen(
     // remembered position when the messages are still loaded; otherwise a new
     // load should start at the bottom as usual.
     val restoredScroll = remember(sessionId) {
-        ChatScrollMemory.get(sessionId)?.takeIf { chat.messages.isNotEmpty() }
+        ScrollMemory.get(sessionId)?.takeIf { chat.messages.isNotEmpty() }
     }
     val listState = key(sessionId) {
         rememberLazyListState(
@@ -134,8 +135,8 @@ fun ChatScreen(
                 listState.firstVisibleItemScrollOffset,
                 !listState.canScrollForward,
             )
-        }.collect { (index, offset, atBottom) ->
-            ChatScrollMemory.save(sessionId, index, offset, atBottom)
+        }.collect { (index, offset, atEnd) ->
+            ScrollMemory.save(sessionId, index, offset, atEnd)
         }
     }
 
@@ -239,7 +240,7 @@ fun ChatScreen(
     }
 
     val displaySize = displayMessages.size
-    var following by remember(sessionId) { mutableStateOf(restoredScroll?.atBottom ?: true) }
+    var following by remember(sessionId) { mutableStateOf(restoredScroll?.atEnd ?: true) }
     LaunchedEffect(listState) {
         launch {
             listState.interactionSource.interactions.collect {
