@@ -324,6 +324,12 @@ func (s *Service) Abort(sessionID string) bool {
 	if !s.cancelActive(sessionID) {
 		return false
 	}
+	// Stop is terminal, and the settled run goroutine can be slow to reach
+	// its terminal branch (or never get there if a provider stream wedges —
+	// the watchdog then closes the hub without a status write). Write the
+	// status here so session lists stop showing "working" for an aborted
+	// run; a verdict of needs_attention was never right for a user stop.
+	s.setStatus(sessionID, "done")
 	s.decisions.RejectAllForSession(sessionID, "Run aborted")
 	if jobs := s.bashJobManager(); jobs != nil {
 		jobs.KillOwnedBy(sessionID)
