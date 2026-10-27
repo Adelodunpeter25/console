@@ -4,13 +4,13 @@
 
 use std::rc::Rc;
 
-use console_core::QueuedPrompt;
+use console_core::{ImageAttachment, QueuedPrompt};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement, Styled,
-    Window, div, prelude::FluentBuilder, px,
+    Window, div, img, prelude::FluentBuilder, px,
 };
 
-use crate::common::centered_stripe;
+use crate::common::{attachment_image, centered_stripe};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -46,7 +46,19 @@ pub fn queued_prompt_row(
     on_steer: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     theme: Theme,
 ) -> impl IntoElement {
-    let has_attachments = !prompt.attachments.is_empty();
+    // The first attachment renders as a thumbnail so a queued image reads like
+    // the screenshot it is; extra images collapse into a +N badge. When the
+    // first image can't be decoded (unsupported MIME or empty payload), fall
+    // back to the paperclip indicator.
+    let first_image = prompt.attachments.first().and_then(|attachment| {
+        attachment_image(&ImageAttachment {
+            data: attachment.data.clone(),
+            mime_type: attachment.mime_type.clone(),
+        })
+    });
+    let extra_attachments = prompt.attachments.len().saturating_sub(1);
+    let show_attachment_icon = !prompt.attachments.is_empty() && first_image.is_none();
+
     let display_text = format_prompt_preview(&prompt.prompt);
     let edit_id = format!("queued-edit-{}", prompt.id);
     let delete_id = format!("queued-delete-{}", prompt.id);
@@ -71,7 +83,7 @@ pub fn queued_prompt_row(
         .items_center()
         .justify_between()
         .gap(px(10.0))
-        // Left: Prompt text + optional attachment indicator
+        // Left: attachment thumbnail (if any) + prompt text
         .child(
             div()
                 .flex_1()
@@ -79,6 +91,33 @@ pub fn queued_prompt_row(
                 .flex()
                 .items_center()
                 .gap(px(8.0))
+                .when_some(first_image, |el, image| {
+                    el.child(
+                        div()
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .child(
+                                div()
+                                    .flex_shrink_0()
+                                    .size(px(22.0))
+                                    .rounded(px(5.0))
+                                    .overflow_hidden()
+                                    .bg(gpui::rgb(0x000000))
+                                    .child(img(image).size_full()),
+                            )
+                            .when(extra_attachments > 0, |el| {
+                                el.child(
+                                    div()
+                                        .flex_shrink_0()
+                                        .text_size(px(11.0))
+                                        .text_color(theme.text_tertiary)
+                                        .child(format!("+{extra_attachments}")),
+                                )
+                            }),
+                    )
+                })
                 .child(
                     div()
                         .flex_1()
@@ -89,7 +128,7 @@ pub fn queued_prompt_row(
                         .truncate()
                         .child(display_text),
                 )
-                .when(has_attachments, |el| {
+                .when(show_attachment_icon, |el| {
                     el.child(div().flex_shrink_0().child(app_icon(
                         IconName::Paperclip,
                         11.0,
