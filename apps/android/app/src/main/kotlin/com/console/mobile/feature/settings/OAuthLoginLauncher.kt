@@ -1,6 +1,7 @@
 package com.console.mobile.feature.settings
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -86,7 +87,18 @@ object OAuthLoginLauncher {
                         // without this; the tab lands in a new task instead.
                         tab.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    tab.launchUrl(context, Uri.parse(result.auth_url))
+                    // A device with no browser at all (some emulators and
+                    // bare ROMs) cannot open the tab: launchUrl resolves to
+                    // ACTION_VIEW and Android throws here. Name the cause —
+                    // the raw message reads like an internal bug.
+                    try {
+                        tab.launchUrl(context, Uri.parse(result.auth_url))
+                    } catch (e: ActivityNotFoundException) {
+                        throw IllegalStateException(
+                            "No browser is installed on this device. Install a browser and try again.",
+                            e,
+                        )
+                    }
                 }
                 val callback = awaitCallback(server, result.state)
                 authRepo.submitCallback(provider, callback.code, callback.state)
