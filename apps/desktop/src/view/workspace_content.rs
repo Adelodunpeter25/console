@@ -666,6 +666,7 @@ impl ConsoleDesktopApp {
             .overflow_hidden()
         .child(
             div()
+                .relative()
                 .flex_1()
                 .w_full()
                 .overflow_hidden()
@@ -673,7 +674,11 @@ impl ConsoleDesktopApp {
                 // image preview modal with its data URI. The handler is wired
                 // once during app initialization, not mutated from this
                 // render path.
-                .child(pane_transcript),
+                .child(pane_transcript)
+                // Status pills float over the transcript's bottom edge rather
+                // than occupying a band of their own; the transcript keeps a
+                // matching bottom inset so the last row can scroll clear.
+                .when_some(composer_pills_row, |el, pills| el.child(pills)),
         )
         .when_some(error_message, |el, error| {
             let entity = entity.clone();
@@ -736,7 +741,6 @@ impl ConsoleDesktopApp {
                 theme,
             ))
         })
-        .when_some(composer_pills_row, |el, pills| el.child(pills))
         .when(has_active_todos && !todos_collapsed, |el| {
             let entity = entity.clone();
             let toggle_pane_id = pane_id.clone();

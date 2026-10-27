@@ -1,7 +1,9 @@
-//! The row of status pills just above the composer: active tasks, running
-//! subagents, and background shells. Each pill is a compact left-aligned
-//! summary that opens the surface holding the full list, mirroring the mobile
-//! chat composer. Multiple kinds sit side by side, never stacked.
+//! The floating row of status pills just above the composer: active tasks,
+//! running subagents, and background shells. The row is an overlay on the
+//! transcript's bottom edge, so chat scrolls behind it the way it does on
+//! mobile instead of the pills claiming their own band. Each pill is a
+//! compact left-aligned summary that opens the surface holding the full list;
+//! multiple kinds sit side by side, never stacked.
 
 use std::rc::Rc;
 
@@ -78,10 +80,12 @@ pub fn composer_pills(
 
     Some(
         div()
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(8.0))
             .w_full()
             .px(px(20.0))
-            .pt(px(6.0))
-            .pb(px(2.0))
             .flex()
             .justify_center()
             .child(row),

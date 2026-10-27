@@ -1291,6 +1291,11 @@ impl Render for TranscriptView {
                         list(self.list_state.clone(), move |index, _window, cx| {
                             transcript_row(entity.clone(), index, cx)
                         })
+                        // Room at the tail for the floating composer pills:
+                        // list padding is part of the scroll content, so the
+                        // final row can scroll clear of the overlay instead of
+                        // sitting underneath it.
+                        .pb(px(44.0))
                         .size_full(),
                     )
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
