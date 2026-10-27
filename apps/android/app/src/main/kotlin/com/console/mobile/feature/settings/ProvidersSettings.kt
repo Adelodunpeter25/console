@@ -21,7 +21,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronRight
@@ -86,6 +91,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
     var sheetProvider by remember { mutableStateOf<String?>(null) }
     var renameTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var loggingIn by remember { mutableStateOf<String?>(null) }
+    var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -94,8 +100,34 @@ fun ProvidersSettings(onBack: () -> Unit) {
         AppContainer.authRepository.loadProviderCredentials()
     }
 
+    // Reload on resume: returning from the OAuth Custom Tab after a successful
+    // sign-in is a lifecycle resume, and this is what makes the provider row
+    // reflect the new connection immediately instead of after re-entering.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                AppContainer.authRepository.loadStatus()
+                AppContainer.authRepository.loadProviderCredentials()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         PageHeader(title = "Account", onBack = onBack)
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                AppContainer.providerRepository.loadProviders()
+                AppContainer.authRepository.loadStatus()
+                AppContainer.authRepository.loadProviderCredentials()
+                refreshing = false
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 40.dp)) {
             Text("Sign in to AI providers to use their models in chat.", color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp).padding(top = 8.dp))
             if (providerState.loadingProviders && providerState.providers.isEmpty()) {
@@ -162,8 +194,8 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 Text(err, color = NewTheme.Danger, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))
             }
         }
+        }
     }
-
     // Account sheet for the tapped provider: every stored login as a row
     // (named by its label / email name, never the raw email), plus one
     // Add Account row that drives the existing OAuth login flow. Rendered
