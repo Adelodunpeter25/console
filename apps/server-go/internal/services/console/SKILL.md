@@ -57,13 +57,13 @@ saved separately.
 
 `console.sessions.abort(session_id)` — abort a running session
 
-### Scripts (coming in Phase 2)
+### Scripts
 
 `console.scripts.list()` — list available project scripts
 
-`console.scripts.run(id, {wait_ms?})` — run a project script
+`console.scripts.run(id, {wait_ms?})` — run a project script. `wait_ms` is capped at 10 seconds.
 
-`console.scripts.status(run_id)` — check a script run's status
+`console.scripts.status(run_id?)` — inspect one run or list runs for this checkout
 
 `console.scripts.stop(run_id)` — stop a running script
 

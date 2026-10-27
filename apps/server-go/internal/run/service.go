@@ -214,23 +214,21 @@ func (s *Service) SetPorts(p *services.PortRegistry) {
 	}
 }
 
+// SetProjectScripts attaches the script service to the console kernel.
+func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
+	s.mu.Lock()
+	s.scripts = scripts
+	manager := s.consoleManager
+	s.mu.Unlock()
+	if manager != nil {
+		manager.SetScripts(scripts)
+	}
+}
+
 func (s *Service) portRegistry() *services.PortRegistry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.ports
-}
-
-// SetProjectScripts attaches the scripts service backing the per-run project_scripts tool.
-func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
-	s.mu.Lock()
-	s.scripts = scripts
-	s.mu.Unlock()
-}
-
-func (s *Service) projectScriptsService() *services.ProjectScriptsService {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.scripts
 }
 
 // SetMCP attaches the MCP manager backing the per-run loadTools tool.

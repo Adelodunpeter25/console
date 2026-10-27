@@ -410,12 +410,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 				pid = *header.ProjectID
 			}
 			toolList = append(toolList, tools.NewPortsTool(pid, s.portRegistry()))
-		case "project_scripts":
-			var pid string
-			if header.ProjectID != nil {
-				pid = *header.ProjectID
-			}
-			toolList = append(toolList, tools.NewProjectScriptsTool(pid, sessionScopedScripts{svc: s.projectScriptsService(), cwd: header.Cwd}))
 		case "browser":
 			toolList = append(toolList, tools.NewBrowserTool(s.decisions.BrowserHandlerFor(sessionID, hub)))
 		case "read_file":
@@ -512,7 +506,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// once it's been activated, so the API surface is available on every turn.
 	// Phase 1 only includes ports; scripts and session control come in later phases.
 	if s.consoleUse.isActive(sessionID) {
-		loader := console.NewLoader(s.consoleManager, sessionID, projectID)
+		loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd)
 		if _, err := loader.Load(registry); err != nil {
 			user.Content += "\n\nConsole is unavailable: " + err.Error()
 		}

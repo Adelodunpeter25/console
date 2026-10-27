@@ -17,6 +17,7 @@ type Manager struct {
 	js      *jskernel.Cache[*Runtime]
 	stopped bool
 	ports   *services.PortRegistry
+	scripts *services.ProjectScriptsService
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -40,11 +41,25 @@ func (m *Manager) portRegistry() *services.PortRegistry {
 	return m.ports
 }
 
+// SetScripts attaches the project script service used by console.scripts.
+func (m *Manager) SetScripts(scripts *services.ProjectScriptsService) {
+	m.mu.Lock()
+	m.scripts = scripts
+	m.mu.Unlock()
+}
+
+func (m *Manager) scriptService() *services.ProjectScriptsService {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.scripts
+}
+
 // sessionRuntime returns the session's console kernel, creating it on first use.
-func (m *Manager) sessionRuntime(sessionID, projectID string) (*Runtime, error) {
+func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, error) {
 	return m.js.Get(sessionID, func() (*Runtime, error) {
 		ports := m.portRegistry()
-		runtime, err := NewRuntime(ports, projectID)
+		scripts := m.scriptService()
+		runtime, err := NewRuntime(ports, scripts, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}
