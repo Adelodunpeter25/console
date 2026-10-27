@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::chat::change_chips::{TurnChange, TurnChanges};
+use crate::chat::change_chips::{ChangesSummary, TurnChange, TurnChanges};
 use crate::chat::{
     ActivityEvent, AssistantMessageBubble, ToolCallEntry, ToolCalls, ToolCallsAction,
     ToolCallsState, UserMessageBubble, WorkingIndicator,
@@ -90,6 +90,9 @@ pub struct TranscriptView {
     /// started each turn, built once per fetch. A turn's chip row under its
     /// final assistant message is a lookup here, never a scan or a copy.
     turn_changes: HashMap<String, Rc<TurnChanges>>,
+    /// The raw session change list the grouped map was built from, kept for
+    /// the whole-session totals in the pinned summary pill.
+    session_changes: Rc<Vec<SessionFileChange>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
@@ -138,6 +141,7 @@ impl TranscriptView {
             on_open_url_raw: None,
             link_handler: None,
             turn_changes: HashMap::new(),
+            session_changes: Rc::new(Vec::new()),
             on_open_change: None,
             on_fork: None,
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
@@ -225,9 +229,13 @@ impl TranscriptView {
         cx: &mut Context<Self>,
     ) {
         let before: Vec<usize> = self.rows_with_turn_changes();
-        self.turn_changes = group_turn_changes(&changes);
+        self.session_changes = changes;
+        self.turn_changes = group_turn_changes(&self.session_changes);
         let after: Vec<usize> = self.rows_with_turn_changes();
         if before.is_empty() && after.is_empty() {
+            // No chip row to re-measure, but the pinned summary pill still
+            // needs a repaint when its totals change.
+            cx.notify();
             return;
         }
         let mut affected: Vec<usize> = before;
@@ -238,6 +246,13 @@ impl TranscriptView {
             self.list_state.splice(index..index + 1, 1);
         }
         cx.notify();
+    }
+
+    /// Whole-session change totals for the pinned summary pill above the
+    /// composer. `None` when the session has not touched any file.
+    pub fn changes_summary(&self) -> Option<ChangesSummary> {
+        let summary = ChangesSummary::from_changes(&self.session_changes);
+        (!summary.is_empty()).then_some(summary)
     }
 
     fn rows_with_turn_changes(&self) -> Vec<usize> {

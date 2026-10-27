@@ -1,9 +1,10 @@
+use console_core::types::ChangesScope;
 use console_core::{ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
-    QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, error_banner, notice_banner,
-    queued_prompts_stack, shell_banner, todo_card,
+    QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, changes_summary_pill,
+    error_banner, notice_banner, queued_prompts_stack, shell_banner, todo_card,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -580,6 +581,25 @@ impl ConsoleDesktopApp {
             .map(|sid| self.running_shells_for_session(sid))
             .unwrap_or_default();
         let selected_sid = pane_session_id.clone();
+        let changes_summary = pane_transcript.read(cx).changes_summary();
+        let on_open_changes: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>> =
+            pane_session_id.as_ref().map(|session_id| {
+                let entity = entity.clone();
+                let session_id = session_id.clone();
+                let handler: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_window, cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.open_changes_review_tab(
+                                    session_id.clone(),
+                                    ChangesScope::AllTurns,
+                                    cx,
+                                );
+                            });
+                        }
+                    });
+                handler
+            });
 
         div()
             .flex_1()
@@ -616,6 +636,13 @@ impl ConsoleDesktopApp {
         })
         .when_some(agent_notice, |el, notice| {
             el.child(notice_banner(notice, theme))
+        })
+        .when_some(changes_summary, |el, summary| {
+            let key = format!("session-changes-{pane_id}");
+            el.child(centered_stripe(
+                changes_summary_pill(&key, summary, on_open_changes.clone(), theme),
+                6.0,
+            ))
         })
         .when(!queued_prompts.is_empty(), |el| {
             let theme = Theme::current(cx);

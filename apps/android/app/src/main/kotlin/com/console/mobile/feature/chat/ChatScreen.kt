@@ -27,6 +27,7 @@ import com.console.mobile.core.chat.createChatSessionState
 import com.console.mobile.core.chat.projectForSession
 import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
+import com.console.mobile.core.util.changeSummary
 import com.console.mobile.data.model.SessionStatus
 import com.console.mobile.data.store.MobileTab
 import com.console.mobile.feature.subagents.SubagentDetailsSheet
@@ -69,6 +70,7 @@ fun ChatScreen(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionChangesMap by AppContainer.sessionStateHolder.sessionChanges.collectAsStateWithLifecycle()
     val sessionChanges = sessionId?.let { sessionChangesMap[it] }.orEmpty()
+    val changeTotals = remember(sessionChanges) { changeSummary(sessionChanges) }
 
     var inspectingChange by remember { mutableStateOf<SessionFileChange?>(null) }
 
@@ -287,9 +289,11 @@ fun ChatScreen(
                     showTasks = hasActiveTodos,
                     subagents = subagents,
                     shellCount = liveShells.size,
+                    changes = changeTotals,
                     onTasks = { todoSheet = true },
                     onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
+                    onChanges = { jumpToProjectTab(MobileTab.Changes) },
                 )
                 if (hasPending) {
                     InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)

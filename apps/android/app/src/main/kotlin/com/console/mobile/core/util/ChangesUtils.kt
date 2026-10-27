@@ -48,6 +48,18 @@ data class ChangeTotals(val files: Int, val additions: Int, val deletions: Int)
 fun sumTotals(changes: List<SessionFileChange>): ChangeTotals =
     ChangeTotals(changes.size, changes.sumOf { it.additions }, changes.sumOf { it.deletions })
 
+/**
+ * Totals for the pinned summary above the composer: one file per unique path
+ * (a file edited over several turns is still one file), with the churn summed
+ * across every row.
+ */
+fun changeSummary(changes: List<SessionFileChange>): ChangeTotals =
+    ChangeTotals(
+        files = changes.distinctBy { it.path }.size,
+        additions = changes.sumOf { it.additions },
+        deletions = changes.sumOf { it.deletions },
+    )
+
 fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: String?): List<ChangesRow> {
     val groups = linkedMapOf<String, MutableList<SessionFileChange>>()
     for (c in files) {

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.AppContainer
+import com.console.mobile.core.util.ChangeTotals
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
 import com.console.mobile.data.model.applyFrame
@@ -49,6 +50,7 @@ import kotlinx.coroutines.delay
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowLeft
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
+import io.github.lyxnx.compose.ui.tablericons.outline.FileDiff
 import io.github.lyxnx.compose.ui.tablericons.outline.GridDots
 import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
@@ -83,17 +85,22 @@ fun ComposerPills(
     showTasks: Boolean,
     subagents: List<SubagentInfo>,
     shellCount: Int,
+    changes: ChangeTotals,
     onTasks: () -> Unit,
     onSubagents: () -> Unit,
     onShells: () -> Unit,
+    onChanges: () -> Unit,
 ) {
-    if (!showTasks && subagents.isEmpty() && shellCount == 0) return
+    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0) return
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
             .padding(horizontal = 10.dp).padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (changes.files > 0) {
+            ChangesPill(changes = changes, onClick = onChanges)
+        }
         if (showTasks) {
             ContextPill(
                 icon = TablerIcons.Outline.ListCheck,
@@ -116,6 +123,56 @@ fun ComposerPills(
                 text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
                 running = true,
                 onClick = onShells,
+            )
+        }
+    }
+}
+
+/** Session change totals: "2 files changed +8 -4". Tapping opens the Changes tab. */
+@Composable
+private fun ChangesPill(changes: ChangeTotals, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(NewTheme.Raised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            TablerIcons.Outline.FileDiff,
+            contentDescription = null,
+            tint = NewTheme.TextMuted,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = "${changes.files} ${if (changes.files == 1) "file" else "files"} changed",
+            color = NewTheme.TextSecondary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 7.dp),
+        )
+        if (changes.additions > 0) {
+            Text(
+                text = "+${changes.additions}",
+                color = NewTheme.Success,
+                fontSize = 13.sp,
+                fontFamily = ConsoleMonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 7.dp),
+            )
+        }
+        if (changes.deletions > 0) {
+            Text(
+                text = "-${changes.deletions}",
+                color = NewTheme.Danger,
+                fontSize = 13.sp,
+                fontFamily = ConsoleMonoFamily,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 5.dp),
             )
         }
     }
