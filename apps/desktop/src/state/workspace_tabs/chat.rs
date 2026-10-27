@@ -81,6 +81,7 @@ impl ConsoleDesktopApp {
         let approval_menu = ContextMenuHandle::new(cx);
         let project_menu = ContextMenuHandle::new(cx);
         let branch_menu = ContextMenuHandle::new(cx);
+        let tasks_menu = ContextMenuHandle::new(cx);
         let usage_pane_id = pane_id.to_string();
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
@@ -225,6 +226,7 @@ impl ConsoleDesktopApp {
                 model_menu,
                 approval_menu,
                 usage_menu,
+                tasks_menu,
                 selected_project_id: self.selected_project_id.clone(),
                 branches: self.branches.clone(),
                 branch_loaded: self.branch_loaded,
@@ -415,6 +417,14 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .map(|state| state.usage_menu.clone())
             .unwrap_or_else(|| self.usage_menu.clone())
+    }
+
+    /// The menu anchoring this pane's task popover to its tasks pill.
+    pub(crate) fn pane_tasks_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.tasks_menu.clone())
+            .unwrap_or_else(|| self.tasks_menu.clone())
     }
 
     pub(crate) fn set_pane_model(&mut self, pane_id: &str, model: Option<SelectedModel>) {
@@ -657,19 +667,6 @@ impl ConsoleDesktopApp {
         self.active_session_for_pane(pane_id)
             .and_then(|sid| self.todo_items.get(&sid).cloned())
             .unwrap_or_default()
-    }
-
-    pub(crate) fn is_todos_collapsed_for_pane(&self, pane_id: &str) -> bool {
-        self.active_session_for_pane(pane_id)
-            .and_then(|sid| self.todos_collapsed.get(&sid).copied())
-            .unwrap_or(true)
-    }
-
-    pub(crate) fn toggle_todos_collapsed_for_pane(&mut self, pane_id: &str) {
-        if let Some(sid) = self.active_session_for_pane(pane_id) {
-            let current = self.todos_collapsed.get(&sid).copied().unwrap_or(true);
-            self.todos_collapsed.insert(sid, !current);
-        }
     }
 
     pub(crate) fn set_todo_items_for_session(&mut self, session_id: &str, items: Vec<TodoItem>) {

@@ -109,6 +109,8 @@ pub struct ConsoleDesktopApp {
     pub model_menu: ContextMenuHandle,
     pub approval_menu: ContextMenuHandle,
     pub usage_menu: ContextMenuHandle,
+    /// Anchors the floating task list to this pane's tasks pill.
+    pub tasks_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
     pub projects: Rc<Vec<ProjectInfo>>,
@@ -154,7 +156,6 @@ pub struct ConsoleDesktopApp {
     pub pending_questions: std::collections::HashMap<String, AskQuestionRequest>,
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,
-    pub todos_collapsed: std::collections::HashMap<String, bool>,
     /// Staged next-turn prompt per session, persisted on the server and
     /// broadcast as `queueUpdated` via SSE.
     pub queued_prompts: std::collections::HashMap<String, Vec<QueuedPrompt>>,

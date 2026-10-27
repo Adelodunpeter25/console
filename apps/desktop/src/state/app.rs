@@ -382,6 +382,8 @@ impl ConsoleDesktopApp {
             }
         });
 
+        let tasks_menu = ContextMenuHandle::new(cx);
+
         let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
         // All persisted drafts (except new_chat) are already confirmed for sidebar display.
         let sidebar_draft_ids: std::collections::HashSet<String> = drafts
@@ -588,6 +590,7 @@ impl ConsoleDesktopApp {
             model_menu,
             approval_menu,
             usage_menu,
+            tasks_menu,
             projects: Rc::new(Vec::new()),
             selected_project_id: initial_selected_project_id,
             branches: Rc::new(Vec::new()),
@@ -610,7 +613,6 @@ impl ConsoleDesktopApp {
             pending_questions: std::collections::HashMap::new(),
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
-            todos_collapsed: std::collections::HashMap::new(),
             queued_prompts: std::collections::HashMap::new(),
             agent_notices: std::collections::HashMap::new(),
             error_message: None,
@@ -786,6 +788,7 @@ impl ConsoleDesktopApp {
                 model_menu: app.model_menu.clone(),
                 approval_menu: app.approval_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
+                tasks_menu: app.tasks_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,

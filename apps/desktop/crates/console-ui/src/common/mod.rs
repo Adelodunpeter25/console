@@ -19,7 +19,6 @@ pub mod queued_prompt_card;
 pub mod quick_open_palette;
 pub mod stripe;
 pub mod thinking_stepper;
-pub mod todo_card;
 pub mod usage_meter;
 pub mod usage_panel;
 pub mod workspace_footer;
@@ -32,7 +31,7 @@ pub use autocomplete::{
     AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings,
 };
-pub use composer_pills::composer_pills;
+pub use composer_pills::{TasksPill, composer_pills};
 pub use composer_view::ComposerView;
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
@@ -61,7 +60,6 @@ pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_promp
 pub use quick_open_palette::QuickOpenPalette;
 pub use stripe::centered_stripe;
 pub use thinking_stepper::ThinkingStepper;
-pub use todo_card::todo_card;
 pub use usage_meter::UsageMeter;
 pub use usage_panel::UsagePanel;
 pub use workspace_footer::WorkspaceFooter;

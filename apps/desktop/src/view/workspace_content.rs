@@ -3,8 +3,8 @@ use console_core::{ApprovalMode, ApproveToolPermissionDto, SelectedModel, Update
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
-    QuestionInteractionCard, Theme, WorkspaceFooter, centered_stripe, changes_summary_pill,
-    composer_pills, error_banner, notice_banner, queued_prompts_stack, todo_card,
+    QuestionInteractionCard, TasksPill, Theme, WorkspaceFooter, centered_stripe,
+    changes_summary_pill, composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -587,7 +587,6 @@ impl ConsoleDesktopApp {
             })
             .count();
         let has_active_todos = todo_total > 0 && todo_completed < todo_total;
-        let todos_collapsed = self.is_todos_collapsed_for_pane(&pane_id);
         let subagents = pane_session_id
             .as_deref()
             .and_then(|sid| self.session_subagents.get(sid))
@@ -620,17 +619,12 @@ impl ConsoleDesktopApp {
                 handler
             });
 
-        let tasks_entity = entity.clone();
-        let tasks_pane_id = pane_id.clone();
-        let on_tasks: Rc<dyn Fn(&mut Window, &mut App) + 'static> = Rc::new(move |_window, cx| {
-            if let Some(app) = tasks_entity.upgrade() {
-                let pane_id = tasks_pane_id.clone();
-                app.update(cx, |this, cx| {
-                    this.toggle_todos_collapsed_for_pane(&pane_id);
-                    cx.notify();
-                });
-            }
-        });
+        let tasks_menu = self.pane_tasks_menu(&pane_id);
+        if !has_active_todos && tasks_menu.is_open() {
+            // The pill disappears with the last unfinished task; drop its
+            // popover too so it cannot reopen stale on the next run.
+            tasks_menu.close(window, cx);
+        }
         let subagents_entity = entity.clone();
         let on_subagents: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
             Rc::new(move |_window, cx| {
@@ -645,12 +639,17 @@ impl ConsoleDesktopApp {
             }
         });
         let pills_key = format!("composer-pills-{pane_id}");
+        let tasks = has_active_todos.then(|| TasksPill {
+            completed: todo_completed,
+            total: todo_total,
+            menu: tasks_menu,
+            items: Rc::new(todo_items.clone()),
+        });
         let composer_pills_row = composer_pills(
             &pills_key,
-            has_active_todos.then_some((todo_completed, todo_total)),
+            tasks,
             (subagent_count > 0).then_some((subagent_count, subagents_running)),
             running_shells.len(),
-            has_active_todos.then_some(on_tasks),
             (subagent_count > 0).then_some(on_subagents),
             (!running_shells.is_empty()).then_some(on_shells),
             theme,
@@ -735,24 +734,6 @@ impl ConsoleDesktopApp {
                         let pid = pane_for_steer.clone();
                         app.update(cx, |this, cx| {
                             this.steer_queued_prompt_for_pane(pid, prompt_id, cx);
-                        });
-                    }
-                })),
-                theme,
-            ))
-        })
-        .when(has_active_todos && !todos_collapsed, |el| {
-            let entity = entity.clone();
-            let toggle_pane_id = pane_id.clone();
-            el.child(todo_card(
-                todo_items.clone(),
-                false,
-                Some(Rc::new(move |_window, cx| {
-                    if let Some(app) = entity.upgrade() {
-                        let pane_id = toggle_pane_id.clone();
-                        app.update(cx, |this, cx| {
-                            this.toggle_todos_collapsed_for_pane(&pane_id);
-                            cx.notify();
                         });
                     }
                 })),
