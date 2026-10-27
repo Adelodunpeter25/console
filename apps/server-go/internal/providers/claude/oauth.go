@@ -13,6 +13,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
@@ -38,10 +39,41 @@ type tokenResponse struct {
 	ExpiresIn    *int64 `json:"expires_in"`
 }
 
+// envToken returns the CLAUDE_OAUTH_TOKEN/ANTHROPIC_OAUTH_TOKEN override,
+// which keeps precedence over every stored credential (unchanged rule;
+// reported to clients as a synthetic locked account in the status API).
+func envToken() string {
+	if t := os.Getenv("CLAUDE_OAUTH_TOKEN"); t != "" {
+		return t
+	}
+	return os.Getenv("ANTHROPIC_OAUTH_TOKEN")
+}
+
 // CredentialPath returns the CLAUDE_CREDENTIALS_PATH override if set,
 // otherwise ~/.console/claude-creds.json.
 func CredentialPath() string {
 	return shared.CredentialPath("CLAUDE_CREDENTIALS_PATH", "claude-creds.json")
+}
+
+// activeCredentialPath resolves where the credential runs use lives: the
+// active account's file when the store holds accounts, the legacy
+// single-credential file otherwise. An unconfigured store (tests, tools)
+// is today's behavior exactly; a store with rows but no active account is
+// the documented "needs a selection" state and errors instead of
+// resurrecting the leftover legacy file.
+func activeCredentialPath() (string, error) {
+	id, err := accounts.EnabledID("claude")
+	if err != nil {
+		// Store not configured: the legacy file is the whole truth.
+		return CredentialPath(), nil
+	}
+	if id != "" {
+		return accounts.CredentialPath("claude", id), nil
+	}
+	if any, herr := accounts.HasAny("claude"); herr == nil && any {
+		return "", fmt.Errorf("No active Claude account. Please select one in settings.")
+	}
+	return CredentialPath(), nil
 }
 
 func GeneratePKCE() (verifier, challenge string, err error) {
@@ -182,7 +214,11 @@ func refreshToken(client *http.Client, cred ParsedCredential) (ParsedCredential,
 		ExpiresAt:    time.Now().UnixMilli() + *data.ExpiresIn*1000,
 		Email:        email,
 	}
-	if err := SaveCredential(updated); err != nil {
+	// Write back to wherever LoadCredential resolved the credential from —
+	// the active account's file with accounts, the legacy file otherwise.
+	// Saving to the legacy path only would strand a consumed refresh token
+	// in the account file and log the user out on the next rotation.
+	if err := saveActiveCredential(updated); err != nil {
 		return ParsedCredential{}, err
 	}
 	return ParseCredential(updated)
@@ -202,21 +238,38 @@ func ParseCredential(raw OAuthCredential) (ParsedCredential, error) {
 }
 
 // LoadCredential reads CLAUDE_OAUTH_TOKEN/ANTHROPIC_OAUTH_TOKEN or the
-// credential file. Env tokens never expire.
+// credential runs use: the active account's file with accounts, the
+// legacy file otherwise. Env tokens never expire.
 func LoadCredential() (ParsedCredential, error) {
-	envToken := os.Getenv("CLAUDE_OAUTH_TOKEN")
-	if envToken == "" {
-		envToken = os.Getenv("ANTHROPIC_OAUTH_TOKEN")
-	}
-	if envToken != "" {
+	if envToken() != "" {
 		return ParsedCredential{
-			AccessToken:  envToken,
+			AccessToken:  envToken(),
 			RefreshToken: "",
 			ExpiresAtMs:  1<<62 - 1,
 			Email:        "",
 		}, nil
 	}
-	raw, err := os.ReadFile(CredentialPath())
+	path, err := activeCredentialPath()
+	if err != nil {
+		return ParsedCredential{}, err
+	}
+	return readCredentialFile(path)
+}
+
+// LoadCredentialFor reads one specific account's credential. A pinned id
+// never substitutes the env token: env is its own account and silently
+// substituting it for a named account is the fallback the run design
+// rules out.
+func LoadCredentialFor(accountID string) (ParsedCredential, error) {
+	if accountID == "" {
+		return LoadCredential()
+	}
+	return readCredentialFile(accounts.CredentialPath("claude", accountID))
+}
+
+// readCredentialFile parses one credential file.
+func readCredentialFile(path string) (ParsedCredential, error) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return ParsedCredential{}, err
 	}
@@ -228,23 +281,57 @@ func LoadCredential() (ParsedCredential, error) {
 	return ParseCredential(cred)
 }
 
-// SaveCredential writes the credential file (0600 dir 0700).
+// saveActiveCredential writes the refreshed credential back to wherever
+// LoadCredential resolved it from.
+func saveActiveCredential(cred OAuthCredential) error {
+	path, err := activeCredentialPath()
+	if err != nil {
+		return err
+	}
+	return shared.SaveCredentialFile(path, cred)
+}
+
+// SaveCredential writes the legacy single-credential file (the login
+// destination until account callbacks register; 0600 dir 0700).
 func SaveCredential(cred OAuthCredential) error {
 	return shared.SaveCredentialFile(CredentialPath(), cred)
 }
 
-// CredentialExists reports whether a login exists (env token or file).
+// SaveCredentialFor writes one account's credential file; empty id means
+// the legacy single-credential file.
+func SaveCredentialFor(accountID string, cred OAuthCredential) error {
+	if accountID == "" {
+		return SaveCredential(cred)
+	}
+	return shared.SaveCredentialFile(accounts.CredentialPath("claude", accountID), cred)
+}
+
+// CredentialExists reports whether a login exists (env token or any
+// stored credential).
 func CredentialExists() bool {
-	if os.Getenv("CLAUDE_OAUTH_TOKEN") != "" || os.Getenv("ANTHROPIC_OAUTH_TOKEN") != "" {
+	if envToken() != "" {
 		return true
+	}
+	// Store-backed accounts count even before their files are written.
+	if id, err := accounts.EnabledID("claude"); err == nil && id != "" {
+		return true
+	} else if err == nil {
+		if any, herr := accounts.HasAny("claude"); herr == nil && any {
+			return true
+		}
 	}
 	return shared.CredentialFileExists(CredentialPath())
 }
 
 // RefreshIfNeeded refreshes an expiring credential (5-minute skew).
+// Concurrent refreshes of the same credential are deduped: the file the
+// result is written to is shared, and Anthropic rotates the refresh token
+// on every refresh, so two live refreshes would strand one of them.
 func RefreshIfNeeded(client *http.Client, cred ParsedCredential) (ParsedCredential, error) {
 	if cred.RefreshToken == "" || time.Now().UnixMilli()+RefreshSkewMs < cred.ExpiresAtMs {
 		return cred, nil
 	}
-	return refreshToken(client, cred)
+	return shared.SingleFlight("claude/"+cred.RefreshToken, func() (ParsedCredential, error) {
+		return refreshToken(client, cred)
+	})
 }

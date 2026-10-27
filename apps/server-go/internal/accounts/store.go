@@ -98,6 +98,26 @@ func EnabledID(provider string) (string, error) {
 	return a.ID, nil
 }
 
+// HasAny reports whether the store holds account rows for a provider at
+// all. Credential loaders use it to tell "no accounts yet — fall back to
+// the legacy single-credential file" apart from "accounts exist but none
+// is active — the provider is disabled and must not resurrect a leftover
+// legacy file" (plan decision 2).
+func HasAny(provider string) (bool, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if gdb == nil {
+		return false, ErrNotConfigured
+	}
+	var n int
+	if err := gdb.QueryRow(
+		`SELECT COUNT(*) FROM provider_accounts WHERE provider = ?`, provider,
+	).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // Activate selects one account and deselects every other account of the
 // provider, in a single transaction. Selecting the already-active account
 // is a no-op upgrade, not an error. Unknown ids return ErrNotFound.

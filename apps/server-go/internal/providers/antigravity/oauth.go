@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/accounts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/shared"
 )
 
@@ -39,6 +40,26 @@ type ParsedCredential struct {
 // otherwise ~/.console/antigravity-creds.json.
 func CredentialPath() string {
 	return shared.CredentialPath("ANTIGRAVITY_CREDENTIALS_PATH", "antigravity-creds.json")
+}
+
+// activeCredentialPath resolves where the credential runs use lives: the
+// active account's file when the store holds accounts, the legacy
+// single-credential file otherwise. An unconfigured store (tests, tools)
+// is today's behavior exactly; a store with rows but no active account is
+// the documented "needs a selection" state and errors instead of
+// resurrecting the leftover legacy file.
+func activeCredentialPath() (string, error) {
+	id, err := accounts.EnabledID("antigravity")
+	if err != nil {
+		return CredentialPath(), nil
+	}
+	if id != "" {
+		return accounts.CredentialPath("antigravity", id), nil
+	}
+	if any, herr := accounts.HasAny("antigravity"); herr == nil && any {
+		return "", fmt.Errorf("No active Antigravity account. Please select one in settings.")
+	}
+	return CredentialPath(), nil
 }
 
 func numberField(m map[string]any, keys ...string) (float64, bool) {
@@ -92,26 +113,72 @@ func ParseCredential(raw map[string]any) (ParsedCredential, error) {
 	}, nil
 }
 
-// LoadCredential reads and parses the credential file.
+// LoadCredential reads and parses the credential runs use: the active
+// account's file with accounts, the legacy file otherwise.
 func LoadCredential() (ParsedCredential, error) {
-	raw, err := os.ReadFile(CredentialPath())
+	path, err := activeCredentialPath()
+	if err != nil {
+		return ParsedCredential{}, err
+	}
+	return readCredentialFile(path)
+}
+
+// LoadCredentialFor reads one specific account's credential.
+func LoadCredentialFor(accountID string) (ParsedCredential, error) {
+	if accountID == "" {
+		return LoadCredential()
+	}
+	return readCredentialFile(accounts.CredentialPath("antigravity", accountID))
+}
+
+// readCredentialFile parses one credential file.
+func readCredentialFile(path string) (ParsedCredential, error) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return ParsedCredential{}, err
 	}
 	var m map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &m); err != nil {
-		return ParsedCredential{}, fmt.Errorf("Invalid JSON in OAuth credential file: %s", CredentialPath())
+		return ParsedCredential{}, fmt.Errorf("Invalid JSON in OAuth credential file: %s", path)
 	}
 	return ParseCredential(m)
 }
 
-// SaveCredential writes the credential file (0600 dir 0700).
+// saveActiveCredential writes the refreshed credential back to wherever
+// LoadCredential resolved it from (claude's oauth documents why).
+func saveActiveCredential(cred OAuthCredential) error {
+	path, err := activeCredentialPath()
+	if err != nil {
+		return err
+	}
+	return shared.SaveCredentialFile(path, cred)
+}
+
+// SaveCredential writes the legacy single-credential file (the login
+// destination until account callbacks register; 0600 dir 0700).
 func SaveCredential(cred OAuthCredential) error {
 	return shared.SaveCredentialFile(CredentialPath(), cred)
 }
 
-// CredentialExists reports whether a login exists.
+// SaveCredentialFor writes one account's credential file; empty id means
+// the legacy single-credential file.
+func SaveCredentialFor(accountID string, cred OAuthCredential) error {
+	if accountID == "" {
+		return SaveCredential(cred)
+	}
+	return shared.SaveCredentialFile(accounts.CredentialPath("antigravity", accountID), cred)
+}
+
+// CredentialExists reports whether any stored credential exists.
 func CredentialExists() bool {
+	// Store-backed accounts count even before their files are written.
+	if id, err := accounts.EnabledID("antigravity"); err == nil && id != "" {
+		return true
+	} else if err == nil {
+		if any, herr := accounts.HasAny("antigravity"); herr == nil && any {
+			return true
+		}
+	}
 	return shared.CredentialFileExists(CredentialPath())
 }
 
@@ -169,7 +236,7 @@ func doRefresh(client *http.Client, cred ParsedCredential) (ParsedCredential, er
 		Token: data.AccessToken, RefreshToken: cred.RefreshToken,
 		ProjectID: cred.ProjectID, Email: cred.Email, ExpiresAt: expiresAtMs,
 	}
-	if err := SaveCredential(updated); err != nil {
+	if err := saveActiveCredential(updated); err != nil {
 		return ParsedCredential{}, err
 	}
 	return ParsedCredential{

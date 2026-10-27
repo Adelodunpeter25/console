@@ -100,16 +100,48 @@ func CredentialPath(envKey, fileName string) string {
 	return filepath.Join(home, ".console", fileName)
 }
 
-// SaveCredentialFile writes JSON credentials (dir 0700, file 0600).
+// SaveCredentialFile writes JSON credentials (dir 0700, file 0600),
+// atomically: the payload lands on a temp file in the target directory and
+// is renamed into place. With multiple accounts per provider a token
+// refresh can now overwrite one file while another is read; a truncated
+// or partially-written credential file mid-rename window would be
+// misparsed as a crash, so the rename keeps every reader seeing either
+// the old or the complete new file.
 func SaveCredentialFile(path string, cred any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cred, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	data = append(data, '\n')
+	tmp, err := os.CreateTemp(dir, ".cred-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	cleanup := func() { tmp.Close(); os.Remove(name) }
+	if _, err := tmp.Write(data); err != nil {
+		cleanup()
+		return err
+	}
+	// os.CreateTemp is already 0600; chmod only guards against a non-zero
+	// process umask turning up in the final file.
+	if err := tmp.Chmod(0o600); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return err
+	}
+	if err := os.Rename(name, path); err != nil {
+		os.Remove(name)
+		return err
+	}
+	return nil
 }
 
 // CredentialFileExists reports whether the credential file exists.
