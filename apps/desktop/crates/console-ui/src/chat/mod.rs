@@ -9,7 +9,7 @@ pub mod transcript_view;
 pub mod visual;
 pub mod working_indicator;
 
-pub use change_chips::{ChangesSummary, changes_summary_pill};
+pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
 pub use interaction_card::{PermissionInteractionCard, QuestionInteractionCard};
 pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};

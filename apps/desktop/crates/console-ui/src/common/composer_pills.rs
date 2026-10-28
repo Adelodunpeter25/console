@@ -1,9 +1,9 @@
-//! The floating row of status pills just above the composer: active tasks,
-//! running subagents, and background shells. The row is an overlay on the
-//! transcript's bottom edge, so chat scrolls behind it the way it does on
-//! mobile instead of the pills claiming their own band. Each pill is a
-//! compact left-aligned summary that opens the surface holding the full list;
-//! multiple kinds sit side by side, never stacked.
+//! The floating row of status pills just above the composer: changed files,
+//! active tasks, running subagents, and background shells. The row is an
+//! overlay on the transcript's bottom edge, so chat scrolls behind it the way
+//! it does on mobile instead of the pills claiming their own band. Each pill
+//! is a compact left-aligned summary that opens the surface holding the full
+//! list; multiple kinds sit side by side, never stacked.
 
 use std::rc::Rc;
 
@@ -13,6 +13,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
 
+use crate::chat::change_chips::ChangesSummary;
 use crate::primitives::menu::{ContextMenuHandle, MenuAlign, popover};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -30,7 +31,9 @@ pub struct TasksPill {
 
 /// The pills row, or `None` when the session has nothing to summarise.
 ///
-/// `subagents` is `(count, any running)`; `shells` is the live count.
+/// `subagents` is `(count, any running)`; `shells` is the live count; `changes`
+/// is the session's change totals plus the handler that opens the changes view.
+#[allow(clippy::type_complexity)]
 pub fn composer_pills(
     key: &str,
     tasks: Option<TasksPill>,
@@ -38,9 +41,10 @@ pub fn composer_pills(
     shells: usize,
     on_subagents: Option<ClickHandler>,
     on_shells: Option<ClickHandler>,
+    changes: Option<(ChangesSummary, ClickHandler)>,
     theme: Theme,
 ) -> Option<Div> {
-    if tasks.is_none() && subagents.is_none() && shells == 0 {
+    if tasks.is_none() && subagents.is_none() && shells == 0 && changes.is_none() {
         return None;
     }
 
@@ -51,6 +55,15 @@ pub fn composer_pills(
         .flex_row()
         .items_center()
         .gap(px(8.0));
+
+    if let Some((summary, on_changes)) = changes {
+        row = row.child(changes_pill(
+            format!("{key}-changes"),
+            summary,
+            Some(on_changes),
+            theme,
+        ));
+    }
 
     if let Some(tasks) = tasks {
         let trigger = pill(
@@ -105,6 +118,61 @@ pub fn composer_pills(
             .justify_center()
             .child(row),
     )
+}
+
+/// The changed-files pill: icon, "N files changed", and the colored `+N -N`
+/// totals. Clicking opens the changes review for the session.
+fn changes_pill(
+    id: String,
+    summary: ChangesSummary,
+    on_click: Option<ClickHandler>,
+    theme: Theme,
+) -> Stateful<Div> {
+    div()
+        .id(ElementId::Name(id.into()))
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(10.0))
+        .py(px(5.0))
+        .rounded_full()
+        .bg(theme.raised)
+        .cursor_pointer()
+        .hover(|style| style.bg(theme.overlay_strong))
+        .when_some(on_click, |element, handler| {
+            element.on_click(move |_, window, cx| (handler)(window, cx))
+        })
+        .child(app_icon(IconName::FileDiff, 13.0, theme.text_tertiary))
+        .child(
+            div()
+                .text_size(px(12.0))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(theme.text_secondary)
+                .child(format!(
+                    "{} file{} changed",
+                    summary.files,
+                    if summary.files == 1 { "" } else { "s" }
+                )),
+        )
+        .when(summary.additions > 0, |element| {
+            element.child(
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.success)
+                    .child(format!("+{}", summary.additions)),
+            )
+        })
+        .when(summary.deletions > 0, |element| {
+            element.child(
+                div()
+                    .text_size(px(12.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.danger)
+                    .child(format!("-{}", summary.deletions)),
+            )
+        })
 }
 
 fn pill(

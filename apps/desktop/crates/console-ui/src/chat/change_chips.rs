@@ -131,62 +131,6 @@ pub fn turn_change_chips(
     )
 }
 
-/// The pinned session summary above the composer: `N files changed +A -D`.
-/// Clicking opens the session's full changes list.
-pub fn changes_summary_pill(
-    key: &str,
-    summary: ChangesSummary,
-    on_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-    theme: Theme,
-) -> Stateful<gpui::Div> {
-    div()
-        .id(ElementId::Name(
-            format!("session-changes-pill-{key}").into(),
-        ))
-        .flex()
-        .items_center()
-        .gap(px(6.0))
-        .px(px(11.0))
-        .py(px(5.0))
-        .rounded_full()
-        .bg(theme.raised)
-        .when_some(on_click, |element, on_click| {
-            element
-                .cursor_pointer()
-                .hover(|style| style.bg(theme.overlay_strong))
-                .on_click(move |_, window, cx| (on_click)(window, cx))
-        })
-        .child(
-            div()
-                .text_size(px(12.0))
-                .font_weight(gpui::FontWeight::MEDIUM)
-                .text_color(theme.text_secondary)
-                .child(format!(
-                    "{} file{} changed",
-                    summary.files,
-                    if summary.files == 1 { "" } else { "s" }
-                )),
-        )
-        .when(summary.additions > 0, |element| {
-            element.child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.success)
-                    .child(format!("+{}", summary.additions)),
-            )
-        })
-        .when(summary.deletions > 0, |element| {
-            element.child(
-                div()
-                    .text_size(px(12.0))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(theme.danger)
-                    .child(format!("-{}", summary.deletions)),
-            )
-        })
-}
-
 /// One changed-file chip: file-type icon, name, `+N -N`. A deleted file's
 /// name is struck through. Clicking opens that file's diff for the turn.
 fn file_change_chip(

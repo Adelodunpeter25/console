@@ -4,7 +4,7 @@ use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, TasksPill, Theme, WorkspaceFooter, centered_stripe,
-    changes_summary_pill, composer_pills, error_banner, notice_banner, queued_prompts_stack,
+    composer_pills, error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -652,6 +652,7 @@ impl ConsoleDesktopApp {
             running_shells.len(),
             (subagent_count > 0).then_some(on_subagents),
             (!running_shells.is_empty()).then_some(on_shells),
+            changes_summary.zip(on_open_changes),
             theme,
         );
 
@@ -695,13 +696,6 @@ impl ConsoleDesktopApp {
         })
         .when_some(agent_notice, |el, notice| {
             el.child(notice_banner(notice, theme))
-        })
-        .when_some(changes_summary, |el, summary| {
-            let key = format!("session-changes-{pane_id}");
-            el.child(centered_stripe(
-                changes_summary_pill(&key, summary, on_open_changes.clone(), theme),
-                6.0,
-            ))
         })
         .when(!queued_prompts.is_empty(), |el| {
             let theme = Theme::current(cx);
