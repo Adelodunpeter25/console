@@ -101,6 +101,10 @@ func toolCallToProto(c tools.ToolCall) *consolev1.ToolCall {
 	if c.ThoughtSignature != "" {
 		out.ThoughtSignature = &c.ThoughtSignature
 	}
+	label := tools.ToolLabel(c.Name)
+	flags := tools.ToolKindFlags(c.Name)
+	icon := tools.ToolIconKey(c.Name)
+	out.Label, out.KindFlags, out.Icon = &label, &flags, &icon
 	return out
 }
 

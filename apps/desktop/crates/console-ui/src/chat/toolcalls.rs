@@ -24,12 +24,9 @@ use crate::markdown::render as markdown_render;
 use crate::markdown::render::{
     LinkHandler, MarkdownView, Palette, TranscriptSelection, plain_text,
 };
-use crate::primitives::{IconName, activity_icon, app_icon, file_type_icon, icon, motion};
+use crate::primitives::{IconName, activity_icon_for_call, app_icon, file_type_icon, icon, motion};
 use crate::theme::Theme;
 use crate::utils::time::{format_working_elapsed, normalize_unix_timestamp};
-use console_shared::tools::{
-    is_edit_file, is_file_target_tool, is_read_file, is_subagent, is_write_file,
-};
 use crate::viewer::diff_viewer::{EditorDiff, build_editor_diff_from_parsed, file_diff_block};
 // `format_elapsed` was unified into `format_working_elapsed` (C); kept
 // re-exported so older imports keep resolving.
@@ -189,8 +186,8 @@ impl ToolCalls {
         groups
     }
 
-    fn call_label(name: &str) -> String {
-        console_shared::tools::tool_label(name)
+    fn call_label(call: &ToolCall) -> String {
+        call.display_label()
     }
 
     fn argument_summary(&self, call: &ToolCall) -> Option<String> {
@@ -382,8 +379,8 @@ impl ToolCalls {
         let summary = self.argument_summary(&entry.call);
         let (status_icon, status_color) = Self::status_icon(&entry, &theme);
         let call_id_for_action = call_id.clone();
-        let is_edit = is_edit_file(&entry.call.name);
-        let is_write = is_write_file(&entry.call.name);
+        let is_edit = entry.call.is_edit();
+        let is_write = entry.call.is_write();
         let file_path = argument_path(&entry.call)
             .map(str::to_owned)
             .or_else(|| extract_write_args(&entry.call.arguments).map(|(path, _)| path));
@@ -449,13 +446,13 @@ impl ToolCalls {
                         }
                     })
                     .child(
-                        if is_file_target_tool(&entry.call.name) && file_path.is_some() {
+                        if entry.call.is_file_target() && file_path.is_some() {
                             // File-targeting calls show the file's real type icon
                             // (multicolor, like mobile) instead of the generic
                             // monochrome tool glyph.
                             file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
                         } else {
-                            icon(activity_icon(&entry.call.name), 13.0, theme.text_tertiary)
+                            icon(activity_icon_for_call(&entry.call), 13.0, theme.text_tertiary)
                                 .into_any_element()
                         },
                     )
@@ -465,7 +462,7 @@ impl ToolCalls {
                             .text_size(px(12.0))
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
-                            .child(Self::call_label(&entry.call.name)),
+                            .child(Self::call_label(&entry.call)),
                     )
                     .when_some(summary, |element, summary| {
                         element.child(
@@ -583,14 +580,14 @@ impl ToolCalls {
                     })
                     .when_some(entry.result, |element, result| {
                         let raw = Self::formatted_result(&result);
-                        if is_read_file(&entry.call.name) {
+                        if entry.call.is_read() {
                             element.child(self.read_file_section(
                                 &call_id,
                                 raw,
                                 file_path.as_deref(),
                                 theme,
                             ))
-                        } else if is_subagent(&entry.call.name) {
+                        } else if entry.call.is_subagent() {
                             element.child(self.subagent_result_section(&call_id, raw, theme))
                         } else {
                             element.child(self.section(&call_id, "Result", raw, theme))
@@ -613,7 +610,7 @@ impl ToolCalls {
         let open = self.state.borrow().expanded_calls.contains(&group_key);
         let failed = Self::group_failed(&group);
         let complete = Self::group_complete(&group);
-        let label = Self::call_label(&group.name);
+        let label = Self::call_label(&group.entries[0].call);
         let action_id = group_key.clone();
         let header_action = on_action.clone();
         let status = if failed {
@@ -655,7 +652,7 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(icon(activity_icon(&group.name), 13.0, theme.text_tertiary))
+                    .child(icon(activity_icon_for_call(&group.entries[0].call), 13.0, theme.text_tertiary))
                     .child(
                         div()
                             .flex_none()

@@ -15,6 +15,12 @@ option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/
 message ToolCallPreview {
   string id = 1;
   string name = 2;
+  // Server-classified presentation fields (see ToolCall): clients render
+  // these instead of re-parsing the tool name. Absent in old stored
+  // sessions, where clients fall back to their native tables.
+  optional string label = 3;
+  optional uint32 kind_flags = 4;
+  optional string icon = 5;
 }
 
 message ModelStreamPart {

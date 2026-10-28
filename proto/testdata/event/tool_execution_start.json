@@ -1,1 +1,1 @@
-{"calls":[{"id":"c1","name":"sh","arguments":"eyJjbWQiOiJscyJ9","thoughtSignature":"sig"},{"id":"c2","name":"read"}],"type":"toolExecutionStart"}
+{"calls":[{"id":"c1","name":"sh","arguments":"eyJjbWQiOiJscyJ9","thoughtSignature":"sig","label":"Run Command","kindFlags":0,"icon":"terminal"},{"id":"c2","name":"read","label":"Read File","kindFlags":12,"icon":"file"}],"type":"toolExecutionStart"}

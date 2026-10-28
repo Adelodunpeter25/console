@@ -63,27 +63,26 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
     var open by remember(call.id) { mutableStateOf(false) }
     val summary = toolCallSummary(call, cwd)
     val detail = result?.let { resultText(it).take(2000) }
-    val kind = remember(call.name) { SharedNative.kind(call.name) }
     // Recomputed per call, not per frame: diffing a large write on every
     // recomposition would stall the transcript while a run streams. The diff
     // itself is the desktop's (Myers, 3-line context), shared over JNI.
     val diffs = remember(call.id, call.arguments) {
-        if (kind.edit || kind.write) SharedNative.callDiffs(call.name, call.arguments?.toString() ?: "{}") else emptyList()
+        if (call.isEdit || call.isWrite) SharedNative.callDiffs(call.name, call.arguments?.toString() ?: "{}") else emptyList()
     }
     val added = diffs.sumOf { it.diff.added }
     val removed = diffs.sumOf { it.diff.removed }
     val filePath = remember(call.id, call.arguments) { argumentPath(call) ?: diffs.firstOrNull()?.path }
     Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(NewTheme.FieldRadius)).background(NewTheme.Card)) {
         Row(modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (kind.fileTarget && filePath != null) {
+            if (call.isFileTarget && filePath != null) {
                 // File rows carry the real file-type icon, like desktop.
                 FileIcon(filename = filePath, sizeDp = 16)
                 Spacer(Modifier.width(8.dp))
             } else {
-                Icon(getToolIcon(call.name), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
+                Icon(getToolIcon(call), contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(SharedNative.label(call.name), color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(call.displayLabel, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (!summary.isNullOrEmpty()) {
                 Text(summary, color = NewTheme.TextMuted, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
             } else {
@@ -117,9 +116,9 @@ fun ToolCallRow(call: ToolCall, result: ToolResult?, cwd: String?) {
                     ToolArguments(call.arguments)
                 }
                 if (!detail.isNullOrEmpty()) {
-                    if (kind.read) {
+                    if (call.isRead) {
                         ReadFileResult(detail, filePath)
-                    } else if (kind.subagent) {
+                    } else if (call.isSubagent) {
                         Text("Result", color = NewTheme.TextMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                         CustomMarkdown(content = detail, modifier = Modifier.padding(horizontal = 12.dp))
                     } else {

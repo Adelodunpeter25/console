@@ -691,14 +691,18 @@ impl ConsoleDesktopApp {
                                 t.append_assistant_thinking(thinking, cx);
                             }
                             Some(console_core::ModelStreamPartKind::ToolCall(preview)) => {
-                                // The wire preview carries id+name only; args
-                                // arrive with the toolExecutionStart frame.
+                                // The wire preview carries id+name plus the
+                                // server-classified fields; args arrive with
+                                // the toolExecutionStart frame.
                                 t.upsert_assistant_tool_call(
                                     console_core::ToolCall {
                                         id: preview.id.clone(),
                                         name: preview.name.clone(),
                                         arguments: serde_json::Value::Null,
                                         thought_signature: None,
+                                        label: preview.label.clone(),
+                                        kind_flags: preview.kind_flags,
+                                        icon: preview.icon.clone(),
                                     },
                                     cx,
                                 );

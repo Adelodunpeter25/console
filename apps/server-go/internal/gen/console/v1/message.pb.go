@@ -483,8 +483,17 @@ type ToolCall struct {
 	Name             string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Arguments        []byte                 `protobuf:"bytes,3,opt,name=arguments,proto3" json:"arguments,omitempty"`
 	ThoughtSignature *string                `protobuf:"bytes,4,opt,name=thought_signature,json=thoughtSignature,proto3,oneof" json:"thought_signature,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Server-classified presentation fields, derived at the loop/wire
+	// boundary so clients never parse tool names: the display label
+	// ("Edit File", "create issue (github)"), kind flags (bit 1 edit, 2
+	// write, 4 read, 8 file-target, 16 subagent), and the icon key from the
+	// server's activity-icon table. Absent in old stored sessions; clients
+	// fall back to their native tables there.
+	Label         *string `protobuf:"bytes,5,opt,name=label,proto3,oneof" json:"label,omitempty"`
+	KindFlags     *uint32 `protobuf:"varint,6,opt,name=kind_flags,json=kindFlags,proto3,oneof" json:"kind_flags,omitempty"`
+	Icon          *string `protobuf:"bytes,7,opt,name=icon,proto3,oneof" json:"icon,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ToolCall) Reset() {
@@ -541,6 +550,27 @@ func (x *ToolCall) GetArguments() []byte {
 func (x *ToolCall) GetThoughtSignature() string {
 	if x != nil && x.ThoughtSignature != nil {
 		return *x.ThoughtSignature
+	}
+	return ""
+}
+
+func (x *ToolCall) GetLabel() string {
+	if x != nil && x.Label != nil {
+		return *x.Label
+	}
+	return ""
+}
+
+func (x *ToolCall) GetKindFlags() uint32 {
+	if x != nil && x.KindFlags != nil {
+		return *x.KindFlags
+	}
+	return 0
+}
+
+func (x *ToolCall) GetIcon() string {
+	if x != nil && x.Icon != nil {
+		return *x.Icon
 	}
 	return ""
 }
@@ -1129,13 +1159,20 @@ const file_console_v1_message_proto_rawDesc = "" +
 	"\x11thought_signature\x18\x02 \x01(\tH\x00R\x10thoughtSignature\x88\x01\x01B\x14\n" +
 	"\x12_thought_signature\"\"\n" +
 	"\fThinkingPart\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\x94\x01\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\x8e\x02\n" +
 	"\bToolCall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
 	"\targuments\x18\x03 \x01(\fR\targuments\x120\n" +
-	"\x11thought_signature\x18\x04 \x01(\tH\x00R\x10thoughtSignature\x88\x01\x01B\x14\n" +
-	"\x12_thought_signature\"<\n" +
+	"\x11thought_signature\x18\x04 \x01(\tH\x00R\x10thoughtSignature\x88\x01\x01\x12\x19\n" +
+	"\x05label\x18\x05 \x01(\tH\x01R\x05label\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"kind_flags\x18\x06 \x01(\rH\x02R\tkindFlags\x88\x01\x01\x12\x17\n" +
+	"\x04icon\x18\a \x01(\tH\x03R\x04icon\x88\x01\x01B\x14\n" +
+	"\x12_thought_signatureB\b\n" +
+	"\x06_labelB\r\n" +
+	"\v_kind_flagsB\a\n" +
+	"\x05_icon\"<\n" +
 	"\tImagePart\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\tR\x04data\x12\x1b\n" +
 	"\tmime_type\x18\x02 \x01(\tR\bmimeType\"\xe6\x01\n" +

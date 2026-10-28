@@ -71,6 +71,15 @@ message ToolCall {
   string name = 2;
   bytes arguments = 3;
   optional string thought_signature = 4;
+  // Server-classified presentation fields, derived at the loop/wire
+  // boundary so clients never parse tool names: the display label
+  // ("Edit File", "create issue (github)"), kind flags (bit 1 edit, 2
+  // write, 4 read, 8 file-target, 16 subagent), and the icon key from the
+  // server's activity-icon table. Absent in old stored sessions; clients
+  // fall back to their native tables there.
+  optional string label = 5;
+  optional uint32 kind_flags = 6;
+  optional string icon = 7;
 }
 
 message ImagePart {

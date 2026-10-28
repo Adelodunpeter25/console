@@ -1,5 +1,6 @@
 package com.console.mobile.data.model
 
+import com.console.mobile.SharedNative
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -44,7 +45,25 @@ data class ToolCall(
     val name: String,
     val arguments: kotlinx.serialization.json.JsonElement? = null,
     val thoughtSignature: String? = null,
-)
+    // Server-classified presentation fields (proto console.v1.ToolCall):
+    // label, kind flags and icon key are derived at the wire boundary so
+    // clients render instead of parsing names. Absent in old stored
+    // sessions, where SharedNative's native tables fill in.
+    val label: String? = null,
+    val kindFlags: Int? = null,
+    val icon: String? = null,
+) {
+    private fun flag(bit: Int) = kindFlags?.let { it and bit != 0 } ?: false
+
+    val isEdit: Boolean get() = flag(1) || (kindFlags == null && SharedNative.kind(name).edit)
+    val isWrite: Boolean get() = flag(2) || (kindFlags == null && SharedNative.kind(name).write)
+    val isRead: Boolean get() = flag(4) || (kindFlags == null && SharedNative.kind(name).read)
+    val isFileTarget: Boolean get() = flag(8) || (kindFlags == null && SharedNative.kind(name).fileTarget)
+    val isSubagent: Boolean get() = flag(16) || (kindFlags == null && SharedNative.kind(name).subagent)
+
+    /** Display label: the server's when present, else the native table. */
+    val displayLabel: String get() = label ?: SharedNative.label(name)
+}
 
 // ToolCallPreview moved to the shared protobuf schema
 // (console.v1.ToolCallPreview): the stream preview carries id+name only;

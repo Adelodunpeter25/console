@@ -677,11 +677,15 @@ func (t *turnTranslator) translate(event loop.Event) {
 		if event.Call == nil {
 			return
 		}
+		label := tools.ToolLabel(event.Call.Name)
+		flags := tools.ToolKindFlags(event.Call.Name)
+		icon := tools.ToolIconKey(event.Call.Name)
 		t.hub.Broadcast(loop.Event{
 			Kind: loop.EventModelStreamPart,
 			Part: &consolev1.ModelStreamPart{
 				Part: &consolev1.ModelStreamPart_ToolCall{ToolCall: &consolev1.ToolCallPreview{
 					Id: event.Call.ID, Name: event.Call.Name,
+					Label: &label, KindFlags: &flags, Icon: &icon,
 				}},
 			},
 		})

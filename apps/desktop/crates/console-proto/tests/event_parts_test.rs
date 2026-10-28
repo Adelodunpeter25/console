@@ -45,6 +45,10 @@ fn decodes_golden_tool_call_part() {
         Some(PartKind::ToolCall(preview)) => {
             assert_eq!(preview.id, "c1");
             assert_eq!(preview.name, "sh");
+            // Server-classified presentation fields.
+            assert_eq!(preview.label.as_deref(), Some("Run Command"));
+            assert_eq!(preview.kind_flags, Some(0));
+            assert_eq!(preview.icon.as_deref(), Some("terminal"));
         }
         other => panic!("unexpected part: {other:?}"),
     }

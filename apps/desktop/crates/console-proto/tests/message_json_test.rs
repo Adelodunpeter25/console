@@ -42,6 +42,10 @@ fn decodes_golden_assistant_fixture() {
                     let args: serde_json::Value =
                         serde_json::from_slice(&c.arguments).expect("args json");
                     assert_eq!(args["path"], "/a");
+                    // Server-classified presentation fields.
+                    assert_eq!(c.label.as_deref(), Some("Read File"));
+                    assert_eq!(c.kind_flags, Some(12));
+                    assert_eq!(c.icon.as_deref(), Some("file"));
                 }
                 _ => panic!("wrong part"),
             }

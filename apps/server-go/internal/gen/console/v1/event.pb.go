@@ -30,9 +30,15 @@ const (
 // (part.text.text). Deltas carry exactly one arm, matching what the server
 // has always emitted.
 type ToolCallPreview struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Server-classified presentation fields (see ToolCall): clients render
+	// these instead of re-parsing the tool name. Absent in old stored
+	// sessions, where clients fall back to their native tables.
+	Label         *string `protobuf:"bytes,3,opt,name=label,proto3,oneof" json:"label,omitempty"`
+	KindFlags     *uint32 `protobuf:"varint,4,opt,name=kind_flags,json=kindFlags,proto3,oneof" json:"kind_flags,omitempty"`
+	Icon          *string `protobuf:"bytes,5,opt,name=icon,proto3,oneof" json:"icon,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -77,6 +83,27 @@ func (x *ToolCallPreview) GetId() string {
 func (x *ToolCallPreview) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *ToolCallPreview) GetLabel() string {
+	if x != nil && x.Label != nil {
+		return *x.Label
+	}
+	return ""
+}
+
+func (x *ToolCallPreview) GetKindFlags() uint32 {
+	if x != nil && x.KindFlags != nil {
+		return *x.KindFlags
+	}
+	return 0
+}
+
+func (x *ToolCallPreview) GetIcon() string {
+	if x != nil && x.Icon != nil {
+		return *x.Icon
 	}
 	return ""
 }
@@ -623,10 +650,17 @@ var File_console_v1_event_proto protoreflect.FileDescriptor
 const file_console_v1_event_proto_rawDesc = "" +
 	"\n" +
 	"\x16console/v1/event.proto\x12\n" +
-	"console.v1\"5\n" +
+	"console.v1\"\xaf\x01\n" +
 	"\x0fToolCallPreview\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\x89\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\x05label\x18\x03 \x01(\tH\x00R\x05label\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"kind_flags\x18\x04 \x01(\rH\x01R\tkindFlags\x88\x01\x01\x12\x17\n" +
+	"\x04icon\x18\x05 \x01(\tH\x02R\x04icon\x88\x01\x01B\b\n" +
+	"\x06_labelB\r\n" +
+	"\v_kind_flagsB\a\n" +
+	"\x05_icon\"\x89\x01\n" +
 	"\x0fModelStreamPart\x12\x14\n" +
 	"\x04text\x18\x01 \x01(\tH\x00R\x04text\x12\x1c\n" +
 	"\bthinking\x18\x02 \x01(\tH\x00R\bthinking\x12:\n" +
@@ -723,6 +757,7 @@ func file_console_v1_event_proto_init() {
 	if File_console_v1_event_proto != nil {
 		return
 	}
+	file_console_v1_event_proto_msgTypes[0].OneofWrappers = []any{}
 	file_console_v1_event_proto_msgTypes[1].OneofWrappers = []any{
 		(*ModelStreamPart_Text)(nil),
 		(*ModelStreamPart_Thinking)(nil),

@@ -166,12 +166,7 @@ fn content_part_from_proto(part: &ProtoContentPart) -> Option<AssistantContentPa
             text: t.text.clone(),
         }),
         ProtoPartEvent::ToolCall(c) => Some(AssistantContentPart::ToolCall {
-            call: ToolCall {
-                id: c.id.clone(),
-                name: c.name.clone(),
-                arguments: decode_json_bytes(&c.arguments),
-                thought_signature: c.thought_signature.clone(),
-            },
+            call: ToolCall::from_proto(c),
         }),
         ProtoPartEvent::Image(i) => Some(AssistantContentPart::Image {
             data: i.data.clone(),
@@ -255,7 +250,24 @@ pub struct ToolCall {
     pub arguments: serde_json::Value,
     #[serde(default)]
     pub thought_signature: Option<String>,
+    /// Server-classified presentation fields (see
+    /// proto/console/v1/message.proto). Absent in old stored sessions,
+    /// where callers fall back to the native console-shared tables.
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub kind_flags: Option<u32>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
+
+// Kind flag bits matching the server's tools.ToolKindFlags
+// (apps/server-go/internal/agent/tools/classify.go).
+pub const KIND_EDIT: u32 = 1;
+pub const KIND_WRITE: u32 = 2;
+pub const KIND_READ: u32 = 4;
+pub const KIND_FILE_TARGET: u32 = 8;
+pub const KIND_SUBAGENT: u32 = 16;
 
 impl ToolCall {
     /// Decode from the canonical wire shape (arguments arrive as raw JSON
@@ -266,7 +278,46 @@ impl ToolCall {
             name: msg.name.clone(),
             arguments: decode_json_bytes(&msg.arguments),
             thought_signature: msg.thought_signature.clone(),
+            label: msg.label.clone(),
+            kind_flags: msg.kind_flags,
+            icon: msg.icon.clone(),
         }
+    }
+
+    fn kind_flag(&self, flag: u32) -> bool {
+        self.kind_flags.map_or(false, |f| f & flag != 0)
+    }
+
+    pub fn is_edit(&self) -> bool {
+        self.kind_flag(KIND_EDIT) || (self.kind_flags.is_none() && console_shared::tools::is_edit_file(&self.name))
+    }
+
+    pub fn is_write(&self) -> bool {
+        self.kind_flag(KIND_WRITE)
+            || (self.kind_flags.is_none() && console_shared::tools::is_write_file(&self.name))
+    }
+
+    pub fn is_read(&self) -> bool {
+        self.kind_flag(KIND_READ)
+            || (self.kind_flags.is_none() && console_shared::tools::is_read_file(&self.name))
+    }
+
+    pub fn is_file_target(&self) -> bool {
+        self.kind_flag(KIND_FILE_TARGET)
+            || (self.kind_flags.is_none() && console_shared::tools::is_file_target_tool(&self.name))
+    }
+
+    pub fn is_subagent(&self) -> bool {
+        self.kind_flag(KIND_SUBAGENT)
+            || (self.kind_flags.is_none() && console_shared::tools::is_subagent(&self.name))
+    }
+
+    /// Display label: the server's when present, else the shared table
+    /// (old stored sessions).
+    pub fn display_label(&self) -> String {
+        self.label
+            .clone()
+            .unwrap_or_else(|| console_shared::tools::tool_label(&self.name))
     }
 }
 

@@ -43,6 +43,12 @@ fn decodes_golden_start_frame() {
     // Arguments cross as raw JSON bytes (base64 on the wire).
     assert_eq!(frame.calls[0].arguments, br#"{"cmd":"ls"}"#);
     assert_eq!(frame.calls[0].thought_signature.as_deref(), Some("sig"));
+    // Server-classified presentation fields.
+    assert_eq!(frame.calls[0].label.as_deref(), Some("Run Command"));
+    assert_eq!(frame.calls[0].kind_flags, Some(0));
+    assert_eq!(frame.calls[0].icon.as_deref(), Some("terminal"));
+    assert_eq!(frame.calls[1].label.as_deref(), Some("Read File"));
+    assert_eq!(frame.calls[1].kind_flags, Some(12));
     assert!(frame.calls[1].arguments.is_empty());
     assert_eq!(frame.calls[1].thought_signature, None);
 }

@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Book
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
+import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import io.github.lyxnx.compose.ui.tablericons.outline.ChartBar
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePencil
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePlus
@@ -54,6 +55,31 @@ fun getToolIcon(name: String): ImageVector {
     // `mcp__<server>__<tool>` names can never be map keys.
     if (name == "loadTools" || name.startsWith("mcp__")) return TablerIcons.Outline.PlugConnected
     return TablerIcons.Outline.Tool
+}
+
+/** Server icon keys (console.v1 ToolCall.icon) → glyphs. */
+private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
+    "sparkle" to TablerIcons.Outline.Sparkles,
+    "terminal" to TablerIcons.Outline.Terminal,
+    "terminal2" to TablerIcons.Outline.Terminal2,
+    "pencil" to TablerIcons.Outline.FilePencil,
+    "file" to TablerIcons.Outline.FileText,
+    "folder" to TablerIcons.Outline.FolderOpen,
+    "search" to TablerIcons.Outline.Search,
+    "globe" to TablerIcons.Outline.Globe,
+    "chart" to TablerIcons.Outline.ChartBar,
+    "list" to TablerIcons.Outline.ListCheck,
+    "memory" to TablerIcons.Outline.Brain,
+    "package" to TablerIcons.Outline.PlugConnected,
+)
+
+/**
+ * Icon for a tool call: the server-classified key when the call carries one
+ * (console.v1 ToolCall.icon), else the legacy name table.
+ */
+fun getToolIcon(call: ToolCall): ImageVector {
+    call.icon?.let { SERVER_KEY_ICONS[it]?.let { v -> return v } }
+    return getToolIcon(call.name)
 }
 
 fun formatUnknown(v: Any?): String = when (v) {

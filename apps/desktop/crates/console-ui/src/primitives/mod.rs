@@ -110,6 +110,34 @@ pub fn status_color(theme: &Theme, status: &str) -> Hsla {
     }
 }
 
+/// Map a server icon key (tools.ToolIconKey, classify.go) to a glyph.
+/// Falls back to the legacy name table for old sessions whose tool calls
+/// carry no server-classified icon.
+pub fn activity_icon_for_call(call: &console_core::ToolCall) -> &'static str {
+    if let Some(key) = &call.icon {
+        return icon_from_key(key);
+    }
+    activity_icon(&call.name)
+}
+
+fn icon_from_key(key: &str) -> &'static str {
+    let icon = match key {
+        "sparkle" => IconName::Sparkle,
+        "terminal" => IconName::Terminal,
+        "pencil" => IconName::Pencil,
+        "file" => IconName::File,
+        "folder" => IconName::Folder,
+        "search" => IconName::Search,
+        "globe" => IconName::Globe,
+        "chart" => IconName::ChartColumn,
+        "list" => IconName::List,
+        "memory" => IconName::MemoryStick,
+        "package" => IconName::Package,
+        _ => IconName::Wrench,
+    };
+    icon.path()
+}
+
 pub fn activity_icon(tool_name: &str) -> &'static str {
     // Dynamic `mcp__<server>__<tool>` names can never be match arms; they
     // share the loader's package glyph.

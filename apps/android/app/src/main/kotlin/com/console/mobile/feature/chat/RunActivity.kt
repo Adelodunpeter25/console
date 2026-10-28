@@ -42,7 +42,6 @@ import com.console.mobile.core.chat.RunActivityState
 import com.console.mobile.core.chat.RunStatus
 import com.console.mobile.core.util.formatDurationMs
 import com.console.mobile.core.util.getToolIcon
-import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import com.console.mobile.ui.theme.NewTheme
@@ -131,7 +130,7 @@ fun RunActivity(activity: RunActivityState, running: Boolean, cwd: String? = nul
                             }
                         } else {
                             ToolGroupRow(
-                                toolName = g.calls.first().name,
+                                toolName = g.calls.first().displayLabel,
                                 calls = g.calls,
                                 results = g.results,
                                 cwd = cwd,
@@ -179,7 +178,8 @@ fun ToolGroupRow(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                SharedNative.label(toolName),
+                // The group's parameter is already the resolved display label.
+                toolName,
                 color = NewTheme.TextSecondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
