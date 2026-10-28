@@ -9,16 +9,57 @@ impl ConsoleDesktopApp {
     /// pane project-path fallback, then open it as a workspace tab. Phase 1
     /// opens the file only; `:line:col` suffixes are stripped by the resolver.
     pub fn open_file_link(&mut self, link: String, pane_id: &str, cx: &mut Context<Self>) {
+        use console_shared::markdown::file_links as links;
         let cwd = self.transcript_for_pane(pane_id).read(cx).session_cwd();
         let project_path = self
             .selected_project_for_pane(pane_id)
             .map(|project| project.path.clone());
-        let resolved = console_ui::markdown::file_links::resolve_file_link(
-            &link,
-            cwd.as_deref(),
-            project_path.as_deref(),
-        );
-        self.open_file_tab_in_pane(pane_id, resolved, cx);
+        let resolved =
+            links::resolve_file_link(&link, cwd.as_deref(), project_path.as_deref());
+
+        // A bare name (`file_tree.rs`) only resolves when the file sits in the
+        // cwd itself. Open the direct guess when it exists; otherwise search
+        // the project for the name instead of opening a path that is not there.
+        let direct_exists = std::path::Path::new(&resolved).is_file();
+        if !links::is_bare_file_name(&link) || direct_exists {
+            self.open_file_tab_in_pane(pane_id, resolved, cx);
+            return;
+        }
+        let name = links::strip_line_suffix(link.trim()).to_owned();
+        let root = project_path.clone().or_else(|| cwd.clone());
+        let client = self.client.clone();
+        let pane_id = pane_id.to_owned();
+        cx.spawn(async move |entity, cx| {
+            let found = client
+                .assist
+                .search_files(None, &name, root.as_deref(), false)
+                .await
+                .map(|response| response.items)
+                .unwrap_or_default();
+            // The search is fuzzy; keep only files actually named `name`.
+            let candidates: Vec<String> = found
+                .into_iter()
+                .filter(|item| !item.is_dir)
+                .map(|item| item.absolute_path)
+                .filter(|path| {
+                    std::path::Path::new(path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .is_some_and(|n| n.eq_ignore_ascii_case(&name))
+                })
+                .collect();
+            let chosen = links::closest_match(cwd.as_deref(), &candidates)
+                .map(str::to_owned)
+                .unwrap_or(resolved);
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.open_file_tab_in_pane(&pane_id, chosen, cx);
+                    });
+                }
+            });
+        })
+        .detach();
     }
 
     pub fn open_file_tab(&mut self, path: String, cx: &mut Context<Self>) {
@@ -72,6 +113,9 @@ impl ConsoleDesktopApp {
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
 
+        // Reopening is an explicit retry: forget an earlier failure.
+        self.open_file_errors.remove(&path);
+
         // Fetch file content or image preview
         self.fetch_file_tab_content(path, cx);
 
@@ -80,6 +124,9 @@ impl ConsoleDesktopApp {
 
     /// Fetch tab content depending on file kind (text/markdown vs raster image/SVG vs blocked).
     pub fn fetch_file_tab_content(&mut self, path: String, cx: &mut Context<Self>) {
+        if self.open_file_errors.contains_key(&path) {
+            return;
+        }
         let kind = console_core::file_kind_for_path(&path);
         match kind {
             console_core::FileKind::Markdown | console_core::FileKind::Text => {
@@ -105,6 +152,15 @@ impl ConsoleDesktopApp {
                         }
                         Err(err) => {
                             log::warn!("Failed to read file for tab {}: {}", file_path, err);
+                            let message = err.to_string();
+                            cx.update(|cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_file_errors.insert(file_path, message);
+                                        cx.notify();
+                                    });
+                                }
+                            });
                         }
                     },
                 )
@@ -490,6 +546,7 @@ impl ConsoleDesktopApp {
     /// Drop cached contents + viewer state for one closed file path.
     pub(crate) fn evict_file_caches_for_path(&mut self, path: &str) {
         self.open_file_contents.remove(path);
+        self.open_file_errors.remove(path);
         self.open_image_contents.remove(path);
         self.svg_preview_mode.remove(path);
         self.open_diff_contents.remove(path);

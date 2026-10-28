@@ -144,3 +144,40 @@ fn percent_decode(s: &str) -> String {
     }
     out
 }
+
+/// True for a link that is just a file name: no directory, not absolute, not
+/// `~`-relative, not a `file://` URL. Joining one onto the session cwd only
+/// finds the file when it happens to sit in that exact folder, so callers
+/// look these up in the project instead.
+pub fn is_bare_file_name(link: &str) -> bool {
+    let name = strip_line_suffix(link.trim());
+    !name.is_empty()
+        && !name.contains(['/', '\\'])
+        && !name.starts_with('~')
+        && !link.trim().starts_with("file://")
+}
+
+/// Of several files that share a name, the one a person most likely meant:
+/// the one living closest to `cwd`. Closeness is the number of leading path
+/// components shared with `cwd`; ties go to the shallower path, then to
+/// alphabetical order so the choice is stable between runs.
+pub fn closest_match<'a>(cwd: Option<&str>, candidates: &'a [String]) -> Option<&'a str> {
+    let cwd_parts: Vec<&str> = cwd
+        .unwrap_or("")
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    candidates
+        .iter()
+        .map(|candidate| {
+            let parts: Vec<&str> = candidate.split('/').filter(|p| !p.is_empty()).collect();
+            let shared = parts
+                .iter()
+                .zip(&cwd_parts)
+                .take_while(|(a, b)| a == b)
+                .count();
+            (shared, parts.len(), candidate.as_str())
+        })
+        .min_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(b.2)))
+        .map(|(_, _, candidate)| candidate)
+}

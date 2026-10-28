@@ -108,6 +108,32 @@ impl ConsoleDesktopApp {
             let theme = Theme::current(cx);
             let kind = console_core::file_kind_for_path(path);
 
+            // A text/markdown file that could not be read shows why, with a
+            // retry, instead of the loading placeholder it would otherwise sit
+            // on forever.
+            if matches!(
+                kind,
+                console_core::FileKind::Markdown | console_core::FileKind::Text
+            ) && !self.open_file_contents.contains_key(path)
+            {
+                if let Some(message) = self.open_file_errors.get(path).cloned() {
+                    let retry_path = path.clone();
+                    let entity = cx.entity().downgrade();
+                    return console_ui::BlockedFilePanel::new("Couldn't open file", message)
+                        .icon(console_ui::IconName::TriangleAlert)
+                        .on_retry(move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_file_errors.remove(&retry_path);
+                                    this.fetch_file_tab_content(retry_path.clone(), cx);
+                                    cx.notify();
+                                });
+                            }
+                        })
+                        .into_any_element();
+                }
+            }
+
             match kind {
                 console_core::FileKind::RasterImage => {
                     if !self.open_image_contents.contains_key(path) {

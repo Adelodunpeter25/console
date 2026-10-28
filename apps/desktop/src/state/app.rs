@@ -667,6 +667,7 @@ impl ConsoleDesktopApp {
             subagent_markdown_views: Rc::new(RefCell::new(std::collections::HashMap::new())),
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
+            open_file_errors: std::collections::HashMap::new(),
             open_image_contents: std::collections::HashMap::new(),
             svg_preview_mode: std::collections::HashMap::new(),
             open_diff_contents: std::collections::HashMap::new(),

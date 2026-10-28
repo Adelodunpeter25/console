@@ -265,6 +265,10 @@ pub struct ConsoleDesktopApp {
     >,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
+    /// Why a file tab could not load, by path. A path in here is not asked
+    /// for again until the tab is reopened, so a missing file shows its error
+    /// instead of re-requesting every frame.
+    pub open_file_errors: std::collections::HashMap<String, String>,
     pub open_image_contents: std::collections::HashMap<String, ImageFileState>,
     pub svg_preview_mode: std::collections::HashMap<String, console_ui::SvgViewMode>,
     pub open_diff_contents: std::collections::HashMap<String, (console_core::DiffResult, String)>,
