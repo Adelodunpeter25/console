@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -57,6 +58,9 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		}},
 		{Name: "models", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.models(ctx, args)
+		}},
+		{Name: "approvalModes", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.approvalModes(ctx, args)
 		}},
 		{Name: "projects.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.projectsList(ctx, args)
@@ -219,6 +223,34 @@ func (r *Runtime) scriptsStop(_ context.Context, args map[string]any) (*jskernel
 
 func (r *Runtime) models(ctx context.Context, _ map[string]any) (*jskernel.Result, error) {
 	return marshalResult(providers.ListProvidersWithContext(ctx))
+}
+
+// approvalMode is one valid approval mode, ordered from most restrictive to
+// least. Rank is the clamp scale session control uses: a run may move a
+// session down the scale, never up.
+type approvalMode struct {
+	Mode        string `json:"mode"`
+	Rank        int    `json:"rank"`
+	Description string `json:"description"`
+}
+
+// approvalModes lists the modes session control accepts, so the model never
+// has to guess a valid value or the order a permission ceiling uses.
+func (r *Runtime) approvalModes(context.Context, map[string]any) (*jskernel.Result, error) {
+	return marshalResult(map[string]any{
+		"ordering": []string{
+			string(permissions.PlanMode),
+			string(permissions.AlwaysAsk),
+			string(permissions.AcceptEdits),
+			string(permissions.FullAccess),
+		},
+		"modes": []approvalMode{
+			{Mode: string(permissions.PlanMode), Rank: 0, Description: "Read-only: writes and command execution are refused."},
+			{Mode: string(permissions.AlwaysAsk), Rank: 1, Description: "Reads run freely; writes and commands ask for approval."},
+			{Mode: string(permissions.AcceptEdits), Rank: 2, Description: "File edits run freely; commands ask for approval."},
+			{Mode: string(permissions.FullAccess), Rank: 3, Description: "Everything runs without approval."},
+		},
+	})
 }
 
 func (r *Runtime) projectsList(_ context.Context, _ map[string]any) (*jskernel.Result, error) {

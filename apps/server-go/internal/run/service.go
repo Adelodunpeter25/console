@@ -80,8 +80,9 @@ type Service struct {
 	cuaManager *cua.Manager
 	// consoleManager owns the console kernel runtime.
 	consoleManager *console.Manager
-	// consoleUse remembers sessions that activated the console kernel, so later
-	// runs of the same session keep the console tools without re-invoking.
+	// consoleUse remembers sessions that invoked /console, so later runs of
+	// the same session keep the API documentation in setup without
+	// re-invoking. The console tools themselves load every turn.
 	consoleUse consoleUseSessions
 	// computerUse remembers sessions that invoked /computer-use, so later
 	// runs of the same session keep the computer tools without re-invoking.
@@ -239,12 +240,6 @@ func (s *Service) SetConsoleServices(projects *services.ProjectService) {
 func (s *Service) startConsoleSession(sessionID, text, modelID, provider, approval string) error {
 	_, err := s.StartRun(sessionID, Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval})
 	return err
-}
-
-func (s *Service) portRegistry() *services.PortRegistry {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.ports
 }
 
 // SetMCP attaches the MCP manager backing the per-run loadTools tool.

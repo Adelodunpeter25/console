@@ -38,6 +38,8 @@ when a project action requires inspecting or changing a local port forward.
 
 `console.models()` — list available providers and models, including thinking levels
 
+`console.approvalModes()` — list valid approval modes with descriptions and the restriction order (`plan-mode` < `always-ask` < `accept-edits` < `full-access`). A session may be moved down this scale, never up past the invoking run.
+
 `console.projects.list()` — list registered projects
 
 `console.projects.add({directory, name?})` — register a project directory

@@ -1,6 +1,6 @@
-// Per-session memory of console kernel activation. Once activated, the
-// console tool is available on every run of that session. In memory only,
-// like tool groups: a server restart forgets them.
+// Per-session memory of console documentation activation. Once /console is
+// invoked, the API reference is added to setup on every run of that session.
+// In memory only, like tool groups: a server restart forgets them.
 package run
 
 import "sync"

@@ -563,5 +563,5 @@ func globToRegex(glob string) string {
 
 // DefaultTools is the default toolset.
 func DefaultTools() []Tool {
-	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent, Ports, ProjectScripts, Browser}
+	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent, Browser}
 }

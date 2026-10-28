@@ -280,7 +280,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if _, computerInvoked := cua.SplitInvocation(dto.Text); computerInvoked {
 		s.computerUse.mark(sessionID)
 	}
-	// /console activates the console kernel for the session.
+	// /console adds the console API documentation to the session. The tools
+	// themselves are always present; the skill is loaded on demand so its
+	// method reference does not ride every turn.
 	if _, consoleInvoked := console.SplitInvocation(dto.Text); consoleInvoked {
 		s.consoleUse.mark(sessionID)
 	}
@@ -404,12 +406,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
-		case "ports":
-			var pid string
-			if header.ProjectID != nil {
-				pid = *header.ProjectID
-			}
-			toolList = append(toolList, tools.NewPortsTool(pid, s.portRegistry()))
 		case "browser":
 			toolList = append(toolList, tools.NewBrowserTool(s.decisions.BrowserHandlerFor(sessionID, hub)))
 		case "read_file":
@@ -502,14 +498,12 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			user.Content += "\n\nComputer use is unavailable: " + err.Error()
 		}
 	}
-	// Console kernel restores the same way: sessions get the console tool
-	// once it's been activated, so the API surface is available on every turn.
-	// Phase 1 only includes ports; scripts and session control come in later phases.
-	if s.consoleUse.isActive(sessionID) {
-		loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd)
-		if _, err := loader.Load(registry); err != nil {
-			user.Content += "\n\nConsole is unavailable: " + err.Error()
-		}
+	// The console kernel is the control plane for ports, project scripts and
+	// sessions, so it is appended every turn after MCP/CUA to keep the cached
+	// tool prefix stable.
+	loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd)
+	if _, err := loader.Load(registry); err != nil {
+		user.Content += "\n\nConsole is unavailable: " + err.Error()
 	}
 	// Visualize restores the same way, appended after MCP/CUA so the cached
 	// tool prefix stays stable. The tool is stateless, so it cannot fail to
