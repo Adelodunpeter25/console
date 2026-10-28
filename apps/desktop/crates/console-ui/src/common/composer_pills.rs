@@ -139,7 +139,6 @@ fn changes_pill(
         .rounded_full()
         .bg(theme.raised)
         .cursor_pointer()
-        .hover(|style| style.bg(theme.overlay_strong))
         .when_some(on_click, |element, handler| {
             element.on_click(move |_, window, cx| (handler)(window, cx))
         })
