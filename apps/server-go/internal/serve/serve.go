@@ -27,6 +27,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/cfrelay"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
@@ -267,7 +269,7 @@ func remoteAccessDisabled() bool {
 	return false
 }
 
-// startRemoteAccess opens the OpenTunnel tunnel to this server and returns a
+// startRemoteAccess opens the OpenTunnel tunnel (or the relay, with CONSOLE_RELAY=1) to this server and returns a
 // function that closes it. CONSOLE_REMOTE=off skips it; CONSOLE_TUNNEL_API
 // points it at another relay.
 func startRemoteAccess(listenAddr string) func() {
@@ -281,13 +283,43 @@ func startRemoteAccess(listenAddr string) func() {
 	if _, p, err := net.SplitHostPort(listenAddr); err == nil {
 		port = p
 	}
+	target := net.JoinHostPort("127.0.0.1", port)
+	dir := filepath.Join(utils.ConsoleStorageDir(), "tunnel")
+	if tunnel.RelayEnabled() {
+		return startRelay(dir, target)
+	}
 	manager := &opentunnel.Manager{
 		API:    os.Getenv("CONSOLE_TUNNEL_API"),
-		Dir:    filepath.Join(utils.ConsoleStorageDir(), "tunnel"),
-		Target: net.JoinHostPort("127.0.0.1", port),
+		Dir:    dir,
+		Target: target,
 		Logger: slog.Default(),
 		OnReady: func(url string) {
 			slog.Info("remote access ready", "url", url)
+		},
+	}
+	if err := manager.Start(context.Background()); err != nil {
+		slog.Warn("remote access is unavailable", "error", err)
+		return func() {}
+	}
+	slog.Info("remote access starting", "url", manager.URL())
+	return manager.Close
+}
+
+// startRelay opens the relay Worker tunnel (CONSOLE_RELAY=1). CONSOLE_RELAY_API
+// points it at another relay, and CONSOLE_RELAY_NAME asks for a name on the
+// first run, such as "peter-dev".
+func startRelay(dir, target string) func() {
+	manager := &cfrelay.Manager{
+		API:    os.Getenv("CONSOLE_RELAY_API"),
+		Name:   os.Getenv("CONSOLE_RELAY_NAME"),
+		Dir:    dir,
+		Target: target,
+		Logger: slog.Default(),
+		OnReady: func(url string) {
+			slog.Info("remote access ready", "url", url)
+		},
+		OnFailure: func(err error) {
+			slog.Warn("remote access stopped", "error", err)
 		},
 	}
 	if err := manager.Start(context.Background()); err != nil {

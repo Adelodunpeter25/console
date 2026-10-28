@@ -13,7 +13,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
@@ -149,7 +149,7 @@ func qrBaseURL(requested string) string {
 	if strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")) != "" {
 		return requested
 	}
-	if remote, ok := opentunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready {
+	if remote, ok := tunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready {
 		return remote.URL
 	}
 	return requested

@@ -23,7 +23,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/auth"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/cli/daemon"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
 )
 
 // PairingInfo is everything the operator needs to connect a device.
@@ -51,8 +51,8 @@ type PairingInfo struct {
 func tunnelDir(dir string) string { return filepath.Join(dir, "tunnel") }
 
 // remoteInfo reads the tunnel the server created for itself.
-func remoteInfo(dir string) (opentunnel.Info, bool) {
-	return opentunnel.ReadInfo(tunnelDir(dir))
+func remoteInfo(dir string) (tunnel.Info, bool) {
+	return tunnel.ReadInfo(tunnelDir(dir))
 }
 
 // WaitForRemote gives a server that is still starting a moment to create its
