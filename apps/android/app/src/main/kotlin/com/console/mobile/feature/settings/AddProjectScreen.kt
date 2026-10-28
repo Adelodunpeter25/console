@@ -57,6 +57,7 @@ import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionDivider
 import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
+import com.console.mobile.ui.components.common.new.PageHeaderHeight
 
 /**
  * Full-screen folder picker for adding a project. Starts at the server's home
@@ -93,33 +94,17 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
 
     LaunchedEffect(Unit) { browse(null) }
 
-    Column(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-        PageHeader(
-            title = "Add Project",
-            subtitle = currentPath,
-            onBack = onBack,
-            actions = {
-                IconButton(
-                    onClick = {
-                        val next = !showHidden
-                        showHidden = next
-                        browse(currentPath, next)
-                    },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        imageVector = if (showHidden) TablerIcons.Outline.Eye else TablerIcons.Outline.EyeOff,
-                        contentDescription = if (showHidden) "Hide hidden files" else "Show hidden files",
-                        tint = if (showHidden) NewTheme.TextPrimary else NewTheme.TextMuted,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            },
-        )
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        // Content scrolls under the blurred header; the footer and header are
+        // overlaid on top, so this fills the whole screen and pads its top by
+        // the header height instead of the header sitting in a column above.
+        Box(modifier = Modifier.fillMaxSize()) {
             when {
-                loading -> LoadingState("Browsing…", Modifier.fillMaxSize())
-                error != null -> Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                loading -> LoadingState("Browsing…", Modifier.fillMaxSize().padding(top = PageHeaderHeight))
+                error != null -> Box(
+                    modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight).padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(TablerIcons.Outline.AlertTriangle, contentDescription = null, tint = NewTheme.Danger, modifier = Modifier.size(32.dp))
                         Text("Couldn't list that folder", color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp))
@@ -127,7 +112,10 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                         ActionButton(text = "Retry", onClick = { browse(currentPath) }, modifier = Modifier.padding(top = 16.dp))
                     }
                 }
-                else -> Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp)) {
+                else -> Column(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp).padding(top = PageHeaderHeight, bottom = 16.dp),
+                ) {
                     // "Up one level" must stay reachable when there is nothing
                     // else to tap: in a folder with no subfolders it is the only
                     // way back out, since the header back button leaves the screen.
@@ -155,7 +143,11 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
             }
         }
         // Footer: current folder + use-it button. No typing anywhere.
-        Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = NewTheme.CardRadius, topEnd = NewTheme.CardRadius)).background(NewTheme.Card).padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 24.dp)) {
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = NewTheme.CardRadius, topEnd = NewTheme.CardRadius))
+                .background(NewTheme.Card).padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 24.dp),
+        ) {
             Text("Selected folder", color = NewTheme.Accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Text(currentPath ?: "…", color = NewTheme.TextPrimary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
             ActionButton(
@@ -179,6 +171,30 @@ fun AddProjectScreen(onBack: () -> Unit, onAdded: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        PageHeader(
+            title = "Add Project",
+            subtitle = currentPath,
+            onBack = onBack,
+            blurred = true,
+            actions = {
+                IconButton(
+                    onClick = {
+                        val next = !showHidden
+                        showHidden = next
+                        browse(currentPath, next)
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = if (showHidden) TablerIcons.Outline.Eye else TablerIcons.Outline.EyeOff,
+                        contentDescription = if (showHidden) "Hide hidden files" else "Show hidden files",
+                        tint = if (showHidden) NewTheme.TextPrimary else NewTheme.TextMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 }
 
