@@ -57,7 +57,28 @@ impl FileTreeView {
         }
     }
 
-    fn render_node(
+    fn merge_git_status(
+    statuses: &mut HashMap<String, (String, bool)>,
+    path: String,
+    status: String,
+    staged: bool,
+) {
+    let rank = |value: &str| match value {
+        "D" | "U" => 3,
+        "M" | "R" | "C" => 2,
+        "A" | "?" => 1,
+        _ => 0,
+    };
+
+    match statuses.get(&path) {
+        Some((existing, _)) if rank(existing) > rank(&status) => {}
+        _ => {
+            statuses.insert(path, (status, staged));
+        }
+    }
+}
+
+fn render_node(
         node: &FileTreeNode,
         depth: usize,
         expanded_folders: &HashSet<String>,
@@ -79,7 +100,7 @@ impl FileTreeView {
 
         if matches_filter || node.is_dir {
             let git_status = git_status_by_path.get(&node.path);
-            let status_color = git_status.map(|(status, _)| match status.as_str() {
+                let status_color = git_status.map(|(status, _)| match status.as_str() {
                 "A" | "?" => theme.success,
                 "D" => theme.danger,
                 "M" => theme.warning,
@@ -129,10 +150,18 @@ impl FileTreeView {
                     .child(div().mr(px(6.0)).flex_none().flex().items_center().child(
                         if node.is_dir {
                             if is_expanded {
-                                app_icon(IconName::FolderOpen, 14.0, theme.text_secondary)
+                                app_icon(
+                                    IconName::FolderOpen,
+                                    14.0,
+                                    status_color.unwrap_or(theme.text_secondary),
+                                )
                                     .into_any_element()
                             } else {
-                                app_icon(IconName::Folder, 14.0, theme.text_secondary)
+                                app_icon(
+                                    IconName::Folder,
+                                    14.0,
+                                    status_color.unwrap_or(theme.text_secondary),
+                                )
                                     .into_any_element()
                             }
                         } else {
@@ -147,7 +176,7 @@ impl FileTreeView {
                             .text_color(if is_selected {
                                 theme.text
                             } else {
-                                theme.text_secondary
+                                status_color.unwrap_or(theme.text_secondary)
                             })
                             .child(node.name.clone()),
                     )
@@ -265,7 +294,25 @@ impl RenderOnce for FileTreeView {
         let theme = Theme::current(cx);
         let mut git_status_by_path = HashMap::new();
         for change in self.git_changes.iter() {
-            git_status_by_path.insert(change.path.clone(), (change.status.clone(), change.staged));
+            Self::merge_git_status(
+                &mut git_status_by_path,
+                change.path.clone(),
+                change.status.clone(),
+                change.staged,
+            );
+            let mut parent = std::path::PathBuf::from(&change.path);
+            while parent.pop() {
+                let path = parent.to_string_lossy().to_string();
+                if path.is_empty() || path == "." {
+                    break;
+                }
+                Self::merge_git_status(
+                    &mut git_status_by_path,
+                    path,
+                    change.status.clone(),
+                    change.staged,
+                );
+            }
         }
         let mut children = Vec::new();
 
