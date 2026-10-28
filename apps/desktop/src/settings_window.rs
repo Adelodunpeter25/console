@@ -41,6 +41,10 @@ pub struct SettingsWindow {
     /// built. A field per provider rather than one shared, because a key typed
     /// for one row must never be submittable against another.
     api_key_inputs: std::collections::HashMap<String, Entity<ComposerInput>>,
+    /// True while the rename dialog is open. Mirrored from the app state
+    /// (where the form lives) by the observe above, because `modal_open`
+    /// must not read the app entity from inside app-keyed event callbacks.
+    rename_form_open: bool,
     _subscriptions: Vec<gpui::Subscription>,
 }
 
@@ -54,7 +58,16 @@ impl SettingsWindow {
     ) -> Self {
         let subscription = app
             .upgrade()
-            .map(|app_entity| cx.observe(&app_entity, |_this, _app, cx| cx.notify()));
+            .map(|app_entity| {
+                cx.observe(&app_entity, |this, app, cx| {
+                    // Snapshot the rename-dialog open state: `modal_open`
+                    // runs inside event callbacks keyed to the app entity,
+                    // where reading the app entity through the map would
+                    // panic with "already being updated".
+                    this.rename_form_open = app.read(cx).rename_form.is_some();
+                    cx.notify();
+                })
+            });
 
         let new_env_name_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
@@ -230,6 +243,7 @@ impl SettingsWindow {
             github_token_input,
             rename_input,
             api_key_inputs: std::collections::HashMap::new(),
+            rename_form_open: false,
             new_env_url_input,
             new_env_code_input,
             new_env_probe: ProbeState::Unknown,
@@ -303,15 +317,14 @@ impl SettingsWindow {
     ///
     /// The window root uses this to tell "close the modal" from "close the
     /// settings": one Escape must only close one thing.
-    pub fn modal_open(&self, cx: &App) -> bool {
+    pub fn modal_open(&self) -> bool {
         if self.is_adding_env || self.pair_modal_open || self.mcp.is_modal_open {
             return true;
         }
-        // The rename dialog's state lives on the app.
-        self.app
-            .upgrade()
-            .map(|app| app.read(cx).rename_form.is_some())
-            .unwrap_or(false)
+        // The rename dialog's state lives on the app, but its open flag is
+        // mirrored here by the observe callback: reading the app entity here
+        // can panic while a listener keyed to the app entity is running.
+        self.rename_form_open
     }
 
     /// Close any modal open on top of the settings.

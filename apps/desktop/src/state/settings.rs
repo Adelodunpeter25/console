@@ -158,9 +158,17 @@ impl ConsoleDesktopApp {
         }
         self.settings_open = false;
         // A modal that was open on top of the settings goes with them: it
-        // belongs to a view that is no longer on screen.
+        // belongs to a view that is no longer on screen. Deferred: GPUI holds
+        // the settings view borrowed while it dispatches a click raised inside
+        // it (e.g. the "Add Project" button), and a re-entrant `view.update`
+        // here panics on the double borrow.
         if let Some(view) = &self.settings_view {
-            view.update(cx, |view, cx| view.close_modals(cx));
+            let weak_view = view.downgrade();
+            cx.defer(move |cx| {
+                if let Some(view) = weak_view.upgrade() {
+                    view.update(cx, |view, cx| view.close_modals(cx));
+                }
+            });
         }
         // The composer had the focus before the settings took the window, so
         // it gets it back: the user lands where they left off.
