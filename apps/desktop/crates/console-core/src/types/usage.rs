@@ -2,54 +2,13 @@
 //! schema (proto/console/v1/usage.proto): trimmed to what the UIs render,
 //! with unit/status as plain strings (see the proto comments).
 //!
-//! The fraction resolvers lived on the hand-written struct as inherent
-//! methods; generated types are foreign so they move to UsageLimitExt,
-//! re-exported alongside the types.
+//! The old client-side fraction resolvers (UsageLimitExt) are gone: the
+//! server derives status, used_percent and reset_label in ToProtoReport,
+//! so clients are dumb renderers of those fields.
 
 use serde::{Deserialize, Serialize};
 
 pub use console_proto::{UsageAmount, UsageLimit, UsageReport, UsageScope, UsageWindow};
-
-pub trait UsageLimitExt {
-    fn resolved_used_fraction(&self) -> f64;
-    fn resolved_remaining_fraction(&self) -> f64;
-}
-
-impl UsageLimitExt for UsageLimit {
-    fn resolved_used_fraction(&self) -> f64 {
-        let Some(amount) = self.amount.as_ref() else {
-            return 0.0;
-        };
-        if let Some(frac) = amount.used_fraction {
-            return frac.clamp(0.0, 1.0);
-        }
-        if let (Some(used), Some(limit)) = (amount.used, amount.limit) {
-            if limit > 0.0 {
-                return (used / limit).clamp(0.0, 1.0);
-            }
-        }
-        if amount.unit == "percent" {
-            if let Some(used) = amount.used {
-                return (used / 100.0).clamp(0.0, 1.0);
-            }
-        }
-        if let Some(rem_frac) = amount.remaining_fraction {
-            return (1.0 - rem_frac).clamp(0.0, 1.0);
-        }
-        0.0
-    }
-
-    fn resolved_remaining_fraction(&self) -> f64 {
-        if let Some(rem) = self
-            .amount
-            .as_ref()
-            .and_then(|amount| amount.remaining_fraction)
-        {
-            return rem.clamp(0.0, 1.0);
-        }
-        1.0 - self.resolved_used_fraction()
-    }
-}
 
 /// Estimated context-window occupancy for one session, served by
 /// `GET /api/sessions/:id/context` and pushed as `contextUpdate` frames.

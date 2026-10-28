@@ -24,6 +24,9 @@ message UsageWindow {
   string id = 1;
   string label = 2;
   optional int64 resets_at = 3;
+  // Derived server-side in ToProtoReport when unset: "resets in 3h 20m",
+  // or "resets momentarily" once past. Clients render this verbatim and
+  // must not re-derive it from resets_at.
   optional string reset_label = 4;
 }
 
@@ -33,6 +36,10 @@ message UsageAmount {
   optional double remaining = 3;
   optional double used_fraction = 4;
   optional double remaining_fraction = 5;
+  // Derived server-side in ToProtoReport: used_fraction clamped to 0..100 so
+  // clients render a bar without re-deriving it. Null only when the amount
+  // carries no usage data at all.
+  optional double used_percent = 7;
   // Known values: percent, tokens, requests, usd, minutes, bytes.
   // Readers must tolerate anything else.
   string unit = 6;
@@ -50,7 +57,9 @@ message UsageLimit {
   UsageScope scope = 3;
   UsageWindow window = 4;
   UsageAmount amount = 5;
-  // Known values: ok, warning, exhausted. Readers must tolerate anything else.
+  // Known values: ok, warning, exhausted, unknown. Always derived
+  // server-side in ToProtoReport (never left empty); readers must
+  // tolerate anything else.
   optional string status = 6;
 }
 

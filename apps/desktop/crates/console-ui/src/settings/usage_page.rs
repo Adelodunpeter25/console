@@ -1,8 +1,8 @@
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use console_core::types::{
-    AuthStatusResponse, ProviderCatalogEntry, ProviderCredentialStatus, UsageLimit, UsageLimitExt,
-    UsageReport, auth_status_for,
+    AuthStatusResponse, ProviderCatalogEntry, ProviderCredentialStatus, UsageLimit, UsageReport,
+    auth_status_for,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -25,34 +25,9 @@ pub struct UsagePage {
     pub on_login: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
-fn format_resets_at(epoch_ms: i64) -> String {
-    let now = chrono::Utc::now().timestamp_millis();
-    let diff_secs = (epoch_ms - now) / 1000;
-    if diff_secs <= 0 {
-        "Resets momentarily".to_string()
-    } else if diff_secs < 60 {
-        format!("Resets in {diff_secs}s")
-    } else if diff_secs < 3600 {
-        let mins = diff_secs / 60;
-        format!("Resets in {mins}m")
-    } else if diff_secs < 86400 {
-        let hours = diff_secs / 3600;
-        let mins = (diff_secs % 3600) / 60;
-        if mins > 0 {
-            format!("Resets in {hours}h {mins}m")
-        } else {
-            format!("Resets in {hours}h")
-        }
-    } else {
-        let days = diff_secs / 86400;
-        let hours = (diff_secs % 86400) / 3600;
-        if hours > 0 {
-            format!("Resets in {days}d {hours}h")
-        } else {
-            format!("Resets in {days}d")
-        }
-    }
-}
+// The server precomputes reset labels ("resets in 3h 20m") in
+// ToProtoReport; this local fallback only covers hand-made reports in
+// tests/previews that carry a raw resets_at.
 
 impl RenderOnce for UsagePage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
@@ -164,10 +139,11 @@ impl RenderOnce for UsagePage {
                             .map(|r| r.limits.clone())
                             .unwrap_or_default();
 
-                        // Sort most pressured first (lowest remaining fraction)
+                        // Sort most pressured first (lowest remaining fraction).
+                        // The server derives used_percent; remaining is its complement.
                         sorted_limits.sort_by(|a, b| {
-                            let a_rem = a.resolved_remaining_fraction();
-                            let b_rem = b.resolved_remaining_fraction();
+                            let a_rem = a.amount.as_ref().and_then(|amt| amt.used_percent).map_or(100.0, |p| 100.0 - p);
+                            let b_rem = b.amount.as_ref().and_then(|amt| amt.used_percent).map_or(100.0, |p| 100.0 - p);
                             a_rem.partial_cmp(&b_rem).unwrap_or(std::cmp::Ordering::Equal)
                         });
 
@@ -298,29 +274,31 @@ impl RenderOnce for UsagePage {
                                             .flex_col()
                                             .gap(px(10.0))
                                             .children(sorted_limits.into_iter().map(|limit| {
-                                                let used_frac = limit.resolved_used_fraction();
-                                                let used_percent = (used_frac * 100.0).clamp(0.0, 100.0);
+                                                // The server derives both; render verbatim.
+                                                let used_percent = limit
+                                                    .amount
+                                                    .as_ref()
+                                                    .and_then(|amt| amt.used_percent)
+                                                    .unwrap_or(0.0);
+                                                let used_frac = used_percent / 100.0;
                                                 let remaining_percent = (100.0 - used_percent).clamp(0.0, 100.0);
 
                                                 let status_color = match limit.status.as_deref() {
                                                     Some("exhausted") => theme.danger,
                                                     Some("warning") => theme.warning,
                                                     Some("ok") => theme.success,
-                                                    _ if used_percent >= 90.0 => theme.danger,
-                                                    _ if used_percent >= 50.0 => theme.warning,
                                                     _ => theme.success,
                                                 };
 
+                                                // Server-computed countdown ("resets in 3h 20m").
                                                 let reset_str = limit.window.as_ref().and_then(|w| {
-                                                    if let Some(ts) = w.resets_at {
-                                                        Some(format_resets_at(ts))
-                                                    } else if let Some(ref l) = w.reset_label {
-                                                        Some(l.clone())
-                                                    } else if !w.label.is_empty() {
-                                                        Some(w.label.clone())
-                                                    } else {
-                                                        None
-                                                    }
+                                                    w.reset_label.clone().or_else(|| {
+                                                        if w.label.is_empty() {
+                                                            None
+                                                        } else {
+                                                            Some(w.label.clone())
+                                                        }
+                                                    })
                                                 });
 
                                                 let tier_label = limit

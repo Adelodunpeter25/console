@@ -6,6 +6,8 @@ package usage
 
 import (
 	"encoding/json"
+	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -15,10 +17,19 @@ import (
 // ToProtoReport converts a fetched report to the canonical wire type,
 // dropping debug-only fields (notes, metadata, raw, resetCredits,
 // window duration, unread scope fields). Nil in, nil out.
+//
+// It is also the single place presentation math is derived so every client
+// renders identically (clients are dumb renderers of these fields):
+//   - Limit.Status: always set — ok/warning/exhausted from the used
+//     fraction, "unknown" when no usage data. Never empty.
+//   - Amount.UsedPercent: used_fraction clamped to 0..100.
+//   - Window.ResetLabel: preformatted "resets in …" countdown when the
+//     fetcher did not supply one.
 func ToProtoReport(r *Report) *consolev1.UsageReport {
 	if r == nil {
 		return nil
 	}
+	nowMs := time.Now().UnixMilli()
 	out := &consolev1.UsageReport{Provider: r.Provider, FetchedAt: r.FetchedAt}
 	for _, l := range r.Limits {
 		scope := &consolev1.UsageScope{Provider: l.Scope.Provider}
@@ -34,8 +45,12 @@ func ToProtoReport(r *Report) *consolev1.UsageReport {
 			if l.Window.ResetsAt != nil {
 				window.ResetsAt = l.Window.ResetsAt
 			}
-			if l.Window.ResetLabel != "" {
-				window.ResetLabel = &l.Window.ResetLabel
+			label := l.Window.ResetLabel
+			if label == "" && l.Window.ResetsAt != nil {
+				label = ResetCountdownLabel(*l.Window.ResetsAt, nowMs)
+			}
+			if label != "" {
+				window.ResetLabel = &label
 			}
 		}
 		amount := &consolev1.UsageAmount{Unit: l.Amount.Unit}
@@ -54,16 +69,47 @@ func ToProtoReport(r *Report) *consolev1.UsageReport {
 		if l.Amount.RemainingFraction != nil {
 			amount.RemainingFraction = l.Amount.RemainingFraction
 		}
-		var status *string
-		if l.Status != "" {
-			status = &l.Status
+		if usedPercent, ok := l.Amount.UsedPercent(); ok {
+			amount.UsedPercent = &usedPercent
+		}
+		status := l.Status
+		if status == "" {
+			status = StatusForFraction(l.Amount.UsedFraction, nil, nil)
 		}
 		out.Limits = append(out.Limits, &consolev1.UsageLimit{
 			Id: l.ID, Label: l.Label, Scope: scope,
-			Window: window, Amount: amount, Status: status,
+			Window: window, Amount: amount, Status: &status,
 		})
 	}
 	return out
+}
+
+// ResetCountdownLabel renders "resets in 3h 20m" (or "resets momentarily"
+// once past) from an epoch-ms reset time. Desktop's usage page and Android's
+// UsageHelpers previously duplicated this; the label is computed once here
+// and clients render it verbatim.
+func ResetCountdownLabel(resetsAtMs, nowMs int64) string {
+	diffSecs := (resetsAtMs - nowMs) / 1000
+	switch {
+	case diffSecs <= 0:
+		return "resets momentarily"
+	case diffSecs < 60:
+		return fmt.Sprintf("resets in %ds", diffSecs)
+	case diffSecs < 3600:
+		return fmt.Sprintf("resets in %dm", diffSecs/60)
+	case diffSecs < 86400:
+		hours, mins := diffSecs/3600, (diffSecs%3600)/60
+		if mins > 0 {
+			return fmt.Sprintf("resets in %dh %dm", hours, mins)
+		}
+		return fmt.Sprintf("resets in %dh", hours)
+	default:
+		days, hours := diffSecs/86400, (diffSecs%86400)/3600
+		if hours > 0 {
+			return fmt.Sprintf("resets in %dd %dh", days, hours)
+		}
+		return fmt.Sprintf("resets in %dd", days)
+	}
 }
 
 // EncodeReportValue encodes one GetAllUsage map entry (or single-report

@@ -1,27 +1,10 @@
 package com.console.mobile.core.util
 
 import console.v1.UsageLimit
-import com.console.mobile.data.model.resolveUsedFraction
 
-fun formatResetsAt(resetsAt: Long?, nowMs: Long = System.currentTimeMillis()): String? {
-    if (resetsAt == null || resetsAt == 0L) return null
-    val diff = resetsAt - nowMs
-    if (diff <= 0) return "resetting…"
-    val hours = diff / (1000 * 60 * 60)
-    val mins = (diff % (1000 * 60 * 60)) / (1000 * 60)
-    if (hours >= 24) {
-        val days = hours / 24
-        return "resets in ${days}d ${hours % 24}h"
-    }
-    if (hours > 0) return "resets in ${hours}h ${mins}m"
-    return "resets in ${mins}m"
-}
-
-fun formatWindowLabel(limit: UsageLimit, nowMs: Long = System.currentTimeMillis()): String {
-    val windowLabel = limit.window?.label ?: limit.window?.id ?: "Quota"
-    val resets = formatResetsAt(limit.window?.resets_at, nowMs)
-    return if (resets != null) "$windowLabel · $resets" else windowLabel
-}
+// The server derives status, used_percent and reset_label for every limit
+// (see ToProtoReport in the Go server); these helpers are dumb renderers of
+// those fields and must not re-derive them from raw fractions.
 
 fun usageStatusColor(status: String?): String = when (status) {
     "exhausted" -> "#f87171"
@@ -30,35 +13,18 @@ fun usageStatusColor(status: String?): String = when (status) {
     else -> "#71717a"
 }
 
-fun statusForLimit(limit: UsageLimit): String? {
-    if (!limit.status.isNullOrEmpty() && limit.status != "unknown") return limit.status
-    val used = limit.amount?.used_fraction
-        ?: limit.amount?.used?.let { it / 100.0 }
-        ?: resolveUsedFraction(limit)
-        ?: return limit.status
-    return when {
-        used >= 1 -> "exhausted"
-        used >= 0.5 -> "warning"
-        else -> "ok"
-    }
-}
+fun statusForLimit(limit: UsageLimit): String? = limit.status?.takeIf { it.isNotBlank() }
 
 fun colorForLimit(limit: UsageLimit): String = usageStatusColor(statusForLimit(limit))
 
-fun getUsedPercent(limit: UsageLimit): Int? {
-    limit.amount?.used_fraction?.let { return Math.round(it * 100).toInt() }
-    limit.amount?.used?.let { return Math.round(it).toInt() }
-    return null
-}
+/** Bar percentage 0..100, computed by the server. */
+fun getBarPercent(limit: UsageLimit): Double =
+    limit.amount?.used_percent?.coerceIn(0.0, 100.0) ?: 0.0
 
-fun getBarPercent(limit: UsageLimit): Double {
-    limit.amount?.used_fraction?.let { return it.coerceIn(0.0, 1.0) * 100 }
-    limit.amount?.remaining_fraction?.let { return (1 - it).coerceIn(0.0, 1.0) * 100 }
-    return 0.0
-}
+fun getUsedPercent(limit: UsageLimit): Int? =
+    limit.amount?.used_percent?.let { Math.round(it).toInt() }
 
-// ---- Usage sheet formatting: a port of desktop's usage_panel.rs, so both clients
-// read the same numbers the same way. Locale.US throughout: the default locale
+// ---- Usage sheet formatting. Locale.US throughout: the default locale
 // would print "1,5K" for a user whose decimal separator is a comma.
 
 /** Severity of a meter, mapped to a colour by the UI. */
@@ -79,9 +45,8 @@ fun formatTokens(value: Long): String {
 fun formatContextUsage(usedTokens: Long, contextWindow: Long): String =
     "${formatTokens(usedTokens)}/${formatTokens(contextWindow)}"
 
-/** Percent used for a limit, 0..100. Same fallback order as desktop's resolve_used_percent. */
-fun usedPercent(limit: UsageLimit): Double =
-    ((com.console.mobile.data.model.resolveUsedFraction(limit) ?: 0.0) * 100.0).coerceIn(0.0, 100.0)
+/** Percent used for a limit, 0..100, computed by the server. */
+fun usedPercent(limit: UsageLimit): Double = getBarPercent(limit)
 
 fun formatUsageAmount(value: Double, unit: String): String = when (unit) {
     "minutes" -> {
@@ -111,10 +76,10 @@ fun formatUsageValue(limit: UsageLimit, percent: Double): String {
     }
 }
 
-/** Limit severity: exhausted/95%+ is danger, warning/80%+ is a warning. */
+/** Limit severity: driven by the server's status, with the bar percent as backup. */
 fun limitTone(limit: UsageLimit, percent: Double): UsageTone = when {
-    percent >= 95.0 || limit.status == "exhausted" -> UsageTone.Danger
-    percent >= 80.0 || limit.status == "warning" -> UsageTone.Warning
+    limit.status == "exhausted" || percent >= 95.0 -> UsageTone.Danger
+    limit.status == "warning" || percent >= 80.0 -> UsageTone.Warning
     else -> UsageTone.Normal
 }
 
@@ -142,6 +107,6 @@ fun ringTone(percent: Double): UsageTone = when {
     else -> UsageTone.Normal
 }
 
-/** Reset text for a row: the server's own label when it sent one, else a countdown. */
-fun usageResetLabel(limit: UsageLimit, nowMs: Long = System.currentTimeMillis()): String? =
-    limit.window?.reset_label?.takeIf { it.isNotBlank() } ?: formatResetsAt(limit.window?.resets_at, nowMs)
+/** Reset text for a row: the server-computed countdown, verbatim. */
+fun usageResetLabel(limit: UsageLimit): String? =
+    limit.window?.reset_label?.takeIf { it.isNotBlank() }

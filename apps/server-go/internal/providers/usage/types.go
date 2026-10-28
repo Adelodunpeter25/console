@@ -1,6 +1,8 @@
 // Usage report types: the JSON shapes returned by /api/usage.
 package usage
 
+import "math"
+
 type Window struct {
 	ID         string `json:"id"`
 	Label      string `json:"label"`
@@ -17,6 +19,28 @@ type Amount struct {
 	RemainingFraction *float64 `json:"remainingFraction,omitempty"`
 	Unit              string   `json:"unit"`
 }
+
+// UsedPercent resolves the bar percentage (0..100) from the same fallback
+// chain the clients used to run: used_fraction, used/limit, percent-unit
+// used, 1-remaining_fraction. Ok=false when the amount carries no usage
+// data.
+func (a Amount) UsedPercent() (float64, bool) {
+	if a.UsedFraction != nil {
+		return clampPercent(*a.UsedFraction * 100), true
+	}
+	if a.Used != nil && a.Limit != nil && *a.Limit > 0 {
+		return clampPercent(*a.Used / *a.Limit * 100), true
+	}
+	if a.Unit == "percent" && a.Used != nil {
+		return clampPercent(*a.Used), true
+	}
+	if a.RemainingFraction != nil {
+		return clampPercent((1 - *a.RemainingFraction) * 100), true
+	}
+	return 0, false
+}
+
+func clampPercent(v float64) float64 { return math.Min(math.Max(v, 0), 100) }
 
 type Scope struct {
 	Provider  string `json:"provider"`

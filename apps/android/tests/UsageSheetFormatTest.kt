@@ -21,10 +21,14 @@ import org.junit.Test
 class UsageSheetFormatTest {
     private fun limit(
         used: Double? = null, cap: Double? = null, unit: String = "requests",
-        usedFraction: Double? = null, status: String? = null, resetLabel: String? = null,
+        usedFraction: Double? = null, usedPercent: Double? = null,
+        status: String? = null, resetLabel: String? = null,
     ) = UsageLimit(
         id = "l", label = "Weekly", status = status,
-        amount = UsageAmount(used = used, limit = cap, used_fraction = usedFraction, unit = unit),
+        amount = UsageAmount(
+            used = used, limit = cap, used_fraction = usedFraction,
+            used_percent = usedPercent, unit = unit,
+        ),
         window = UsageWindow(reset_label = resetLabel),
     )
 
@@ -71,12 +75,12 @@ class UsageSheetFormatTest {
     }
 
     @Test
-    fun usedPercentFallbackOrder() {
-        assertEquals(25.0, usedPercent(limit(usedFraction = 0.25)), 0.001)
-        assertEquals(50.0, usedPercent(limit(used = 5.0, cap = 10.0)), 0.001)
-        assertEquals(60.0, usedPercent(limit(used = 60.0, unit = "percent")), 0.001)
+    fun usedPercentReadsTheServerValue() {
+        // The server computes used_percent (clamped 0..100); clients render it verbatim.
+        assertEquals(25.0, usedPercent(limit(usedPercent = 25.0)), 0.001)
+        assertEquals(100.0, usedPercent(limit(usedPercent = 100.0)), 0.001)
+        // No usage data → the bar reads 0.
         assertEquals(0.0, usedPercent(UsageLimit(id = "l", label = "x")), 0.0)
-        assertEquals(100.0, usedPercent(limit(usedFraction = 3.0)), 0.001) // clamped
     }
 
     @Test

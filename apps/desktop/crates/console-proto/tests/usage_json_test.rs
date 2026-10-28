@@ -29,6 +29,7 @@ fn decodes_golden_report_fixture() {
     let amount = limit.amount.as_ref().expect("amount present");
     assert_eq!(amount.used, Some(12.5));
     assert_eq!(amount.unit, "percent");
+    assert_eq!(amount.used_percent, Some(12.5));
     assert_eq!(limit.status.as_deref(), Some("ok"));
 }
 

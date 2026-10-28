@@ -38,11 +38,14 @@ const (
 //     so the Go handler encodes each entry individually and both clients keep
 //     decoding Option/nullable reports.
 type UsageWindow struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
-	ResetsAt      *int64                 `protobuf:"varint,3,opt,name=resets_at,json=resetsAt,proto3,oneof" json:"resets_at,omitempty"`
-	ResetLabel    *string                `protobuf:"bytes,4,opt,name=reset_label,json=resetLabel,proto3,oneof" json:"reset_label,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label    string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	ResetsAt *int64                 `protobuf:"varint,3,opt,name=resets_at,json=resetsAt,proto3,oneof" json:"resets_at,omitempty"`
+	// Derived server-side in ToProtoReport when unset: "resets in 3h 20m",
+	// or "resets momentarily" once past. Clients render this verbatim and
+	// must not re-derive it from resets_at.
+	ResetLabel    *string `protobuf:"bytes,4,opt,name=reset_label,json=resetLabel,proto3,oneof" json:"reset_label,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -112,6 +115,10 @@ type UsageAmount struct {
 	Remaining         *float64               `protobuf:"fixed64,3,opt,name=remaining,proto3,oneof" json:"remaining,omitempty"`
 	UsedFraction      *float64               `protobuf:"fixed64,4,opt,name=used_fraction,json=usedFraction,proto3,oneof" json:"used_fraction,omitempty"`
 	RemainingFraction *float64               `protobuf:"fixed64,5,opt,name=remaining_fraction,json=remainingFraction,proto3,oneof" json:"remaining_fraction,omitempty"`
+	// Derived server-side in ToProtoReport: used_fraction clamped to 0..100 so
+	// clients render a bar without re-deriving it. Null only when the amount
+	// carries no usage data at all.
+	UsedPercent *float64 `protobuf:"fixed64,7,opt,name=used_percent,json=usedPercent,proto3,oneof" json:"used_percent,omitempty"`
 	// Known values: percent, tokens, requests, usd, minutes, bytes.
 	// Readers must tolerate anything else.
 	Unit          string `protobuf:"bytes,6,opt,name=unit,proto3" json:"unit,omitempty"`
@@ -180,6 +187,13 @@ func (x *UsageAmount) GetUsedFraction() float64 {
 func (x *UsageAmount) GetRemainingFraction() float64 {
 	if x != nil && x.RemainingFraction != nil {
 		return *x.RemainingFraction
+	}
+	return 0
+}
+
+func (x *UsageAmount) GetUsedPercent() float64 {
+	if x != nil && x.UsedPercent != nil {
+		return *x.UsedPercent
 	}
 	return 0
 }
@@ -258,7 +272,9 @@ type UsageLimit struct {
 	Scope  *UsageScope            `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
 	Window *UsageWindow           `protobuf:"bytes,4,opt,name=window,proto3" json:"window,omitempty"`
 	Amount *UsageAmount           `protobuf:"bytes,5,opt,name=amount,proto3" json:"amount,omitempty"`
-	// Known values: ok, warning, exhausted. Readers must tolerate anything else.
+	// Known values: ok, warning, exhausted, unknown. Always derived
+	// server-side in ToProtoReport (never left empty); readers must
+	// tolerate anything else.
 	Status        *string `protobuf:"bytes,6,opt,name=status,proto3,oneof" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -410,20 +426,22 @@ const file_console_v1_usage_proto_rawDesc = "" +
 	"resetLabel\x88\x01\x01B\f\n" +
 	"\n" +
 	"_resets_atB\x0e\n" +
-	"\f_reset_label\"\xa0\x02\n" +
+	"\f_reset_label\"\xd9\x02\n" +
 	"\vUsageAmount\x12\x17\n" +
 	"\x04used\x18\x01 \x01(\x01H\x00R\x04used\x88\x01\x01\x12\x19\n" +
 	"\x05limit\x18\x02 \x01(\x01H\x01R\x05limit\x88\x01\x01\x12!\n" +
 	"\tremaining\x18\x03 \x01(\x01H\x02R\tremaining\x88\x01\x01\x12(\n" +
 	"\rused_fraction\x18\x04 \x01(\x01H\x03R\fusedFraction\x88\x01\x01\x122\n" +
-	"\x12remaining_fraction\x18\x05 \x01(\x01H\x04R\x11remainingFraction\x88\x01\x01\x12\x12\n" +
+	"\x12remaining_fraction\x18\x05 \x01(\x01H\x04R\x11remainingFraction\x88\x01\x01\x12&\n" +
+	"\fused_percent\x18\a \x01(\x01H\x05R\vusedPercent\x88\x01\x01\x12\x12\n" +
 	"\x04unit\x18\x06 \x01(\tR\x04unitB\a\n" +
 	"\x05_usedB\b\n" +
 	"\x06_limitB\f\n" +
 	"\n" +
 	"_remainingB\x10\n" +
 	"\x0e_used_fractionB\x15\n" +
-	"\x13_remaining_fraction\"w\n" +
+	"\x13_remaining_fractionB\x0f\n" +
+	"\r_used_percent\"w\n" +
 	"\n" +
 	"UsageScope\x12\x1a\n" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x17\n" +
