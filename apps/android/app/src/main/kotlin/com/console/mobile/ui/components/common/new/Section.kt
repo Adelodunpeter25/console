@@ -94,16 +94,13 @@ fun ActionRow(
 
 /** A row that opens another screen: icon, title, a one-line summary and a chevron. */
 @Composable
-fun NavRow(icon: ImageVector, title: String, summary: String, onClick: () -> Unit) {
+fun NavRow(icon: ImageVector, title: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = NewTheme.TextPrimary, modifier = Modifier.size(24.dp))
-        Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
-            Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp)
-            Text(summary, color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 1.dp))
-        }
+        Text(title, color = NewTheme.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f).padding(start = 16.dp))
         Icon(TablerIcons.Outline.ChevronRight, contentDescription = null, tint = NewTheme.TextMuted, modifier = Modifier.size(20.dp))
     }
 }

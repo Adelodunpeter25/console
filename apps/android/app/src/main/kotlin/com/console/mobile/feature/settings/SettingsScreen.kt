@@ -101,28 +101,6 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Unit) {
-    val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
-    val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
-    val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
-    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
-
-    // The landing row reports how many roles are configured, so the roles have
-    // to be in state before the list renders.
-    LaunchedEffect(Unit) { AppContainer.providerRepository.loadSettings() }
-
-    val signedIn = authState.status?.values?.any { it.logged_in } == true
-    val roles = providerState.modelRoles.count { it.value.isNotBlank() }
-    val n = projectState.projects.size
-    val d = projectState.deletedSessions.size
-    // Live only after the page has loaded once this session — the fetch runs
-    // on screen open, not on landing, so one settings visit costs no request.
-    val integrationsState by AppContainer.integrationsStateHolder.state.collectAsStateWithLifecycle()
-    val missingIntegrations = integrationsState.integrations.count { it.installed != true }
-    val integrationsSummary = when {
-        integrationsState.integrations.isEmpty() -> "Helper binaries"
-        missingIntegrations == 0 -> "All installed"
-        else -> "$missingIntegrations missing"
-    }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -132,18 +110,18 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
                 .padding(top = PageHeaderHeight, bottom = 32.dp),
         ) {
             Section("Connections") {
-                NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers", summary = if (!appState.backendUrl.isNullOrBlank()) "Connected" else "Not connected") { onOpen(SettingsSection.Servers) }
-                NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers", summary = if (signedIn) "Signed in" else "No providers connected") { onOpen(SettingsSection.Providers) }
-                NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage", summary = "Quota & limits") { onOpen(SettingsSection.Usage) }
+                NavRow(icon = TablerIcons.Outline.Wifi, title = "Servers") { onOpen(SettingsSection.Servers) }
+                NavRow(icon = TablerIcons.Outline.UserCircle, title = "Providers") { onOpen(SettingsSection.Providers) }
+                NavRow(icon = TablerIcons.Outline.TrendingUp, title = "Usage") { onOpen(SettingsSection.Usage) }
             }
             Section("AI & tools") {
-                NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models", summary = if (roles == 0) "Chat model only" else "$roles role${if (roles == 1) "" else "s"} configured") { onOpen(SettingsSection.Models) }
-                NavRow(icon = TablerIcons.Outline.Package, title = "Integrations", summary = integrationsSummary) { onOpen(SettingsSection.Integrations) }
-                NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers", summary = "External tools & services") { onOpen(SettingsSection.Mcp) }
+                NavRow(icon = TablerIcons.Outline.BrandGithubCopilot, title = "Models") { onOpen(SettingsSection.Models) }
+                NavRow(icon = TablerIcons.Outline.Package, title = "Integrations") { onOpen(SettingsSection.Integrations) }
+                NavRow(icon = TablerIcons.Outline.PlugConnected, title = "MCP Servers") { onOpen(SettingsSection.Mcp) }
             }
             Section("Projects & chats") {
-                NavRow(icon = TablerIcons.Outline.Folder, title = "Projects", summary = "$n project folder${if (n == 1) "" else "s"}") { onOpen(SettingsSection.Projects) }
-                NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats", summary = "$d deleted chat${if (d == 1) "" else "s"}") { onOpen(SettingsSection.DeletedChats) }
+                NavRow(icon = TablerIcons.Outline.Folder, title = "Projects") { onOpen(SettingsSection.Projects) }
+                NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats") { onOpen(SettingsSection.DeletedChats) }
             }
         }
         PageHeader(
