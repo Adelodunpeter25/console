@@ -108,7 +108,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 AppContainer.authRepository.loadStatus()
-                AppContainer.authRepository.loadProviderCredentials()
+                scope.launch { AppContainer.authRepository.loadProviderCredentials() }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -123,8 +123,10 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 refreshing = true
                 AppContainer.providerRepository.loadProviders()
                 AppContainer.authRepository.loadStatus()
-                AppContainer.authRepository.loadProviderCredentials()
-                refreshing = false
+                scope.launch {
+                    AppContainer.authRepository.loadProviderCredentials()
+                    refreshing = false
+                }
             },
             modifier = Modifier.fillMaxSize(),
         ) {

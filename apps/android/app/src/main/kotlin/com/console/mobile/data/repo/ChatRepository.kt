@@ -80,8 +80,9 @@ class ChatRepository(
                     try {
                         val headers = withContext(Dispatchers.IO) { api.getSessions() }.associateBy { it.id }
                         validated = cached.filter { (id, state) ->
-                            when (val header = headers[id]) {
-                                null -> true
+                            val header = headers[id]
+                            when {
+                                header == null -> true
                                 // Sent prompts persist messages, so a session
                                 // whose server activity outdates the draft
                                 // loses the cached input.
