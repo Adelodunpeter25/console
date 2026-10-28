@@ -3,9 +3,10 @@
 use console_ui::{AuxiliaryTab, InspectorTab, PrimaryTab};
 
 #[test]
-fn files_tab_needs_only_fs_watch() {
+fn files_tab_needs_fs_and_git_watch() {
+    // Git too: the tree's status badges come from the git stream.
     let w = InspectorTab::Primary(PrimaryTab::AllFiles).watches();
-    assert!(w.fs && !w.git);
+    assert!(w.fs && w.git);
 }
 
 #[test]

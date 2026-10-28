@@ -1525,6 +1525,7 @@ impl Render for ConsoleDesktopApp {
                                 on_refresh_inspector,
                                 on_begin_right_sidebar_resize,
                             )
+                            .with_git_badges(self.inspector_git_badges.clone())
                             .with_bottom_split(Some(bottom_split))
                             .with_device_view(device_element)
                             .with_shell_view(shell_view)

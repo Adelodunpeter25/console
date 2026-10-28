@@ -590,7 +590,7 @@ impl ConsoleDesktopApp {
             self.inspector_fs_watch = None;
             self.inspector_git_watch = None;
             self.inspector_tree = Rc::new(Vec::new());
-            self.inspector_working_changes = Rc::new(Vec::new());
+            self.set_inspector_working_changes(Vec::new());
             self.inspector_session_changes = Rc::new(Vec::new());
             self.inspector_selected_path = None;
             cx.notify();
@@ -714,7 +714,7 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             if this.right_sidebar_visible {
-                                this.inspector_working_changes = Rc::new(status.files);
+                                this.set_inspector_working_changes(status.files);
                                 cx.notify();
                             }
                         });
@@ -793,10 +793,17 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// The one place working changes are written: the Files tree's badges are
+    /// derived here, once per update, instead of on every repaint.
+    fn set_inspector_working_changes(&mut self, files: Vec<console_core::types::GitFileEntry>) {
+        self.inspector_git_badges = Rc::new(console_ui::aggregate_git_badges(&files));
+        self.inspector_working_changes = Rc::new(files);
+    }
+
     pub fn fetch_inspector_git_changes(&mut self, cx: &mut Context<Self>) {
         let (_, cwd) = self.active_inspector_target();
         let Some(cwd) = cwd else {
-            self.inspector_working_changes = Rc::new(Vec::new());
+            self.set_inspector_working_changes(Vec::new());
             cx.notify();
             return;
         };
@@ -808,7 +815,7 @@ impl ConsoleDesktopApp {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.inspector_working_changes = Rc::new(status.files);
+                                this.set_inspector_working_changes(status.files);
                                 cx.notify();
                             });
                         }

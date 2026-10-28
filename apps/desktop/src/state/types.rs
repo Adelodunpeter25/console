@@ -217,6 +217,9 @@ pub struct ConsoleDesktopApp {
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,
     pub inspector_working_changes: Rc<Vec<console_core::types::GitFileEntry>>,
+    /// Derived from `inspector_working_changes`; only set through
+    /// `set_inspector_working_changes` so the two cannot disagree.
+    pub inspector_git_badges: Rc<std::collections::HashMap<String, console_ui::GitBadge>>,
     /// One live fs-watch SSE stream per inspector target: the cwd it watches
     /// plus its task. Dropping the task cancels the stream, so replacing this
     /// on target change is what prevents duplicate stream accumulation.

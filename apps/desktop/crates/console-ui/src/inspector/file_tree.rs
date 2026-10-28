@@ -5,6 +5,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use console_core::types::{FsTreeEntry, GitFileEntry};
+use gpui::Hsla;
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
     Styled, Window, div, prelude::FluentBuilder, px,
@@ -15,14 +16,101 @@ use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 
+/// A file's Git state, reduced to what the tree paints. Variants are ordered
+/// by how loudly a folder should report them: a folder holding a deleted file
+/// and a new one shows the deletion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum GitBadge {
+    Untracked,
+    Added,
+    Renamed,
+    Modified,
+    Deleted,
+    Conflict,
+}
+
+impl GitBadge {
+    /// Maps the server's status code (`M`/`A`/`D`/`R`/`U`/`?`); anything else
+    /// gets no badge rather than a guess.
+    pub fn from_code(code: &str) -> Option<Self> {
+        Some(match code {
+            "?" => Self::Untracked,
+            "A" => Self::Added,
+            "R" | "C" => Self::Renamed,
+            "M" => Self::Modified,
+            "D" => Self::Deleted,
+            "U" => Self::Conflict,
+            _ => return None,
+        })
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Untracked => "U",
+            Self::Added => "A",
+            Self::Renamed => "R",
+            Self::Modified => "M",
+            Self::Deleted => "D",
+            Self::Conflict => "!",
+        }
+    }
+
+    pub fn color(self, theme: &Theme) -> Hsla {
+        match self {
+            Self::Untracked | Self::Added => theme.success,
+            Self::Renamed => theme.text_tertiary,
+            Self::Modified => theme.warning,
+            Self::Deleted | Self::Conflict => theme.danger,
+        }
+    }
+}
+
+/// Git badge per absolute path, with every changed file's ancestors carrying
+/// the strongest badge beneath them (VS Code's folder tinting).
+///
+/// Built once per status update, not per frame. The walk up from a file stops
+/// at the first ancestor already showing an equal or stronger badge: that
+/// ancestor's own ancestors were raised to at least that level when it was
+/// set, so the rest of the chain cannot change. A thousand files in one
+/// folder therefore cost one walk, not a thousand.
+pub fn aggregate_git_badges(changes: &[GitFileEntry]) -> HashMap<String, GitBadge> {
+    let mut badges: HashMap<String, GitBadge> = HashMap::with_capacity(changes.len() * 2);
+    for change in changes {
+        let Some(badge) = GitBadge::from_code(&change.status) else {
+            continue;
+        };
+        raise(&mut badges, &change.path, badge);
+        for ancestor in Path::new(&change.path).ancestors().skip(1) {
+            if ancestor.file_name().is_none() {
+                break;
+            }
+            let Some(path) = ancestor.to_str() else {
+                break;
+            };
+            if badges.get(path).is_some_and(|existing| *existing >= badge) {
+                break;
+            }
+            raise(&mut badges, path, badge);
+        }
+    }
+    badges
+}
+
+fn raise(badges: &mut HashMap<String, GitBadge>, path: &str, badge: GitBadge) {
+    match badges.get_mut(path) {
+        Some(existing) => *existing = (*existing).max(badge),
+        None => {
+            badges.insert(path.to_owned(), badge);
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct FileTreeNode {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
     pub children: Vec<FileTreeNode>,
-    pub git_status: Option<String>,
-    pub git_staged: bool,
 }
 
 #[derive(IntoElement)]
@@ -32,7 +120,7 @@ pub struct FileTreeView {
     selected_path: Option<String>,
     search_query: String,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    git_changes: Rc<Vec<GitFileEntry>>,
+    git_badges: Rc<HashMap<String, GitBadge>>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
@@ -43,7 +131,7 @@ impl FileTreeView {
         selected_path: Option<String>,
         search_query: String,
         on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-        git_changes: Rc<Vec<GitFileEntry>>,
+        git_badges: Rc<HashMap<String, GitBadge>>,
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
@@ -52,33 +140,12 @@ impl FileTreeView {
             selected_path,
             search_query,
             on_toggle_folder,
-            git_changes,
+            git_badges,
             on_select_file,
         }
     }
 
-    fn merge_git_status(
-    statuses: &mut HashMap<String, (String, bool)>,
-    path: String,
-    status: String,
-    staged: bool,
-) {
-    let rank = |value: &str| match value {
-        "D" | "U" => 3,
-        "M" | "R" | "C" => 2,
-        "A" | "?" => 1,
-        _ => 0,
-    };
-
-    match statuses.get(&path) {
-        Some((existing, _)) if rank(existing) > rank(&status) => {}
-        _ => {
-            statuses.insert(path, (status, staged));
-        }
-    }
-}
-
-fn render_node(
+    fn render_node(
         node: &FileTreeNode,
         depth: usize,
         expanded_folders: &HashSet<String>,
@@ -87,7 +154,7 @@ fn render_node(
         on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         theme: &Theme,
         search_query: &str,
-        git_status_by_path: &HashMap<String, (String, bool)>,
+        git_badges: &HashMap<String, GitBadge>,
     ) -> Vec<gpui::AnyElement> {
         let mut elements = Vec::new();
         let query_lower = search_query.to_lowercase();
@@ -99,14 +166,8 @@ fn render_node(
         let is_selected = selected_path.as_deref() == Some(&node.path);
 
         if matches_filter || node.is_dir {
-            let git_status = git_status_by_path.get(&node.path);
-                let status_color = git_status.map(|(status, _)| match status.as_str() {
-                "A" | "?" => theme.success,
-                "D" => theme.danger,
-                "M" => theme.warning,
-                _ => theme.text_tertiary,
-            });
-            let status_label = git_status.map(|(status, _)| status.clone());
+            let badge = git_badges.get(&node.path).copied();
+            let status_color = badge.map(|badge| badge.color(theme));
             let on_toggle = on_toggle_folder.clone();
             let on_select = on_select_file.clone();
             let node_path = path.clone();
@@ -155,14 +216,14 @@ fn render_node(
                                     14.0,
                                     status_color.unwrap_or(theme.text_secondary),
                                 )
-                                    .into_any_element()
+                                .into_any_element()
                             } else {
                                 app_icon(
                                     IconName::Folder,
                                     14.0,
                                     status_color.unwrap_or(theme.text_secondary),
                                 )
-                                    .into_any_element()
+                                .into_any_element()
                             }
                         } else {
                             file_icon(file_icon_for_name(&node.name), 14.0).into_any_element()
@@ -180,15 +241,15 @@ fn render_node(
                             })
                             .child(node.name.clone()),
                     )
-                    .when_some(status_label, |el, label| {
+                    .when_some(badge, |el, badge| {
                         el.child(
                             div()
                                 .w(px(14.0))
                                 .flex_none()
                                 .text_size(px(11.0))
                                 .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(status_color.unwrap_or(theme.text_tertiary))
-                                .child(label),
+                                .text_color(badge.color(theme))
+                                .child(badge.label()),
                         )
                     });
 
@@ -206,7 +267,7 @@ fn render_node(
                     on_select_file,
                     theme,
                     search_query,
-                    git_status_by_path,
+                    git_badges,
                 );
                 elements.append(&mut child_els);
             }
@@ -278,8 +339,6 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
             path: entry.path,
             is_dir: entry.is_dir,
             children,
-            git_status: None,
-            git_staged: false,
         }
     }
 
@@ -292,28 +351,6 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
 impl RenderOnce for FileTreeView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
-        let mut git_status_by_path = HashMap::new();
-        for change in self.git_changes.iter() {
-            Self::merge_git_status(
-                &mut git_status_by_path,
-                change.path.clone(),
-                change.status.clone(),
-                change.staged,
-            );
-            let mut parent = std::path::PathBuf::from(&change.path);
-            while parent.pop() {
-                let path = parent.to_string_lossy().to_string();
-                if path.is_empty() || path == "." {
-                    break;
-                }
-                Self::merge_git_status(
-                    &mut git_status_by_path,
-                    path,
-                    change.status.clone(),
-                    change.staged,
-                );
-            }
-        }
         let mut children = Vec::new();
 
         for node in self.tree.as_ref() {
@@ -326,7 +363,7 @@ impl RenderOnce for FileTreeView {
                 &self.on_select_file,
                 &theme,
                 &self.search_query,
-                &git_status_by_path,
+                &self.git_badges,
             );
             children.append(&mut els);
         }

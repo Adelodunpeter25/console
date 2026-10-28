@@ -648,6 +648,7 @@ impl ConsoleDesktopApp {
             inspector_search_query: String::new(),
             inspector_tree: Rc::new(Vec::new()),
             inspector_working_changes: Rc::new(Vec::new()),
+            inspector_git_badges: Rc::new(std::collections::HashMap::new()),
             inspector_fs_watch: None,
             inspector_git_watch: None,
             port_stream: None,

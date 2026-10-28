@@ -122,5 +122,9 @@ name = "browser_driver_script_test"
 path = "tests/browser/driver_script_test.rs"
 
 [[test]]
+name = "git_badges_test"
+path = "tests/inspector/git_badges_test.rs"
+
+[[test]]
 name = "watch_streams_test"
 path = "tests/inspector/watch_streams_test.rs"

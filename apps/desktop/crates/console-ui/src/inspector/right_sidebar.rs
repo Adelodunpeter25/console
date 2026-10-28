@@ -13,7 +13,7 @@ use gpui::{
 
 use crate::inspector::bottom_split::RightSidebarBottomSplit;
 use crate::inspector::changes_list::ChangesListView;
-use crate::inspector::file_tree::{FileTreeNode, FileTreeView};
+use crate::inspector::file_tree::{FileTreeNode, FileTreeView, GitBadge};
 use crate::inspector::shell_list::ShellListView;
 use crate::inspector::subagent_list::SubagentListView;
 use crate::markdown::render::MarkdownView;
@@ -61,7 +61,8 @@ pub enum InspectorTab {
 pub struct InspectorWatches {
     /// fs watch: drives the Files tab's tree.
     pub fs: bool,
-    /// git status watch: drives the Changes tab's working changes.
+    /// git status watch: drives the Changes tab's working changes and the
+    /// Files tab's status badges.
     pub git: bool,
 }
 
@@ -71,7 +72,9 @@ impl InspectorTab {
     pub fn watches(self) -> InspectorWatches {
         InspectorWatches {
             fs: self == Self::Primary(PrimaryTab::AllFiles),
-            git: self == Self::Primary(PrimaryTab::Changes),
+            // The Files tree paints Git badges from the same stream, so it
+            // needs it too; otherwise they freeze at the last snapshot.
+            git: matches!(self, Self::Primary(_)),
         }
     }
 }
@@ -89,6 +92,7 @@ pub struct RightSidebar {
     search_query: String,
     tree: Rc<Vec<FileTreeNode>>,
     working_changes: Rc<Vec<GitFileEntry>>,
+    git_badges: Rc<HashMap<String, GitBadge>>,
     session_changes: Rc<Vec<SessionFileChange>>,
     changes_scope: ChangesScope,
     changes_scope_menu: ContextMenuHandle,
@@ -150,6 +154,7 @@ impl RightSidebar {
             search_query,
             tree,
             working_changes,
+            git_badges: Rc::new(HashMap::new()),
             session_changes,
             changes_scope,
             changes_scope_menu,
@@ -175,6 +180,13 @@ impl RightSidebar {
             on_refresh,
             on_begin_resize,
         }
+    }
+
+    /// Precomputed per-path Git badges for the Files tree. Built by the owner
+    /// once per status update so the tree never aggregates while painting.
+    pub fn with_git_badges(mut self, git_badges: Rc<HashMap<String, GitBadge>>) -> Self {
+        self.git_badges = git_badges;
+        self
     }
 
     pub fn with_bottom_split(mut self, bottom_split: Option<RightSidebarBottomSplit>) -> Self {
@@ -430,7 +442,7 @@ impl RenderOnce for RightSidebar {
                             self.selected_path,
                             self.search_query,
                             self.on_toggle_folder,
-                            self.working_changes.clone(),
+                            self.git_badges,
                             self.on_select_file,
                         )
                         .into_any_element(),
