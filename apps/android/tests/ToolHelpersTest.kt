@@ -12,27 +12,25 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Icons and summaries for the loader + namespaced MCP tools.
- *
- * Labels and `mcp__<server>__<tool>` parsing moved to `console-shared`
- * (`tools_test.rs`), which both clients now use; what stays here is the
- * Compose-specific half.
+ * Icons come from the server's classification (console.v1 ToolCall.icon);
+ * this covers the glyph mapping and the Compose-specific summaries.
  */
 class ToolHelpersTest {
     @Test
-    fun loadToolsHasLabelIconAndGroupSummary() {
-        assertEquals(TablerIcons.Outline.PlugConnected, getToolIcon("loadTools"))
+    fun serverIconKeyDrivesTheGlyph() {
+        assertEquals(
+            TablerIcons.Outline.PlugConnected,
+            getToolIcon(ToolCall(id = "c1", name = "loadTools", icon = "package")),
+        )
+        assertEquals(
+            TablerIcons.Outline.Tool,
+            getToolIcon(ToolCall(id = "c2", name = "frobnicate")),
+        )
+    }
+
+    @Test
+    fun loadToolsKeepsItsGroupSummary() {
         val call = ToolCall(id = "c1", name = "loadTools", arguments = buildJsonObject { put("group", "mcp:github") })
         assertEquals("mcp:github", toolCallSummary(call))
-    }
-
-    @Test
-    fun mcpToolsShareThePlugGlyph() {
-        assertEquals(TablerIcons.Outline.PlugConnected, getToolIcon("mcp__github__create_pr"))
-    }
-
-    @Test
-    fun unknownToolsKeepExistingFallbacks() {
-        assertEquals(TablerIcons.Outline.Tool, getToolIcon("frobnicate"))
     }
 }

@@ -171,7 +171,7 @@ fun ToolGroupRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                getToolIcon(toolName),
+                getToolIcon(calls.first()),
                 contentDescription = null,
                 tint = NewTheme.TextSecondary,
                 modifier = Modifier.size(16.dp),

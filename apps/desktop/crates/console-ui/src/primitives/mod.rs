@@ -110,14 +110,11 @@ pub fn status_color(theme: &Theme, status: &str) -> Hsla {
     }
 }
 
-/// Map a server icon key (tools.ToolIconKey, classify.go) to a glyph.
-/// Falls back to the legacy name table for old sessions whose tool calls
-/// carry no server-classified icon.
+/// Map a tool call to its glyph via the server-classified icon key
+/// (tools.ToolIconKey, classify.go). Old sessions predating
+/// classification (no icon key) fall back to the generic wrench.
 pub fn activity_icon_for_call(call: &console_core::ToolCall) -> &'static str {
-    if let Some(key) = &call.icon {
-        return icon_from_key(key);
-    }
-    activity_icon(&call.name)
+    icon_from_key(call.icon.as_deref().unwrap_or(""))
 }
 
 fn icon_from_key(key: &str) -> &'static str {
@@ -133,29 +130,6 @@ fn icon_from_key(key: &str) -> &'static str {
         "list" => IconName::List,
         "memory" => IconName::MemoryStick,
         "package" => IconName::Package,
-        _ => IconName::Wrench,
-    };
-    icon.path()
-}
-
-pub fn activity_icon(tool_name: &str) -> &'static str {
-    // Dynamic `mcp__<server>__<tool>` names can never be match arms; they
-    // share the loader's package glyph.
-    if tool_name.starts_with("mcp__") {
-        return IconName::Package.path();
-    }
-    let icon = match tool_name {
-        "reasoning" | "think" => IconName::Sparkle,
-        "bash" | "shell" | "command" | "bashJob" | "bash_job" => IconName::Terminal,
-        "edit_file" | "editFile" | "write_file" | "writeFile" | "str_replace" => IconName::Pencil,
-        "read_file" | "readFile" => IconName::File,
-        "list_files" | "list_dir" | "listDir" | "ls" => IconName::Folder,
-        "search_files" | "grep" | "glob" | "find" | "findFile" | "find_file" => IconName::Search,
-        "web_search" | "webSearch" | "browser" => IconName::Globe,
-        "visualize" => IconName::ChartColumn,
-        "plan" => IconName::List,
-        "memory" => IconName::MemoryStick,
-        "loadTools" => IconName::Package,
         _ => IconName::Wrench,
     };
     icon.path()

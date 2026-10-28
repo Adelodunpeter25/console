@@ -29,7 +29,6 @@ class SharedNativeTest {
     fun everyFunctionIsInertWithoutTheLibrary() {
         assertNull(SharedNative.pageTitle("<title>x</title>"))
         assertNull(SharedNative.mendMarkdown("**hi"))
-        assertEquals("bash", SharedNative.label("bash"))
         assertEquals("file", SharedNative.fileIcon("a.rs"))
         assertNull(SharedNative.languageIcon("rust"))
         assertNull(SharedNative.contextWindow(200_000))
@@ -39,7 +38,6 @@ class SharedNativeTest {
         assertEquals(SharedNative.Diff.EMPTY, SharedNative.diff("a", "b"))
         assertEquals(SharedNative.Diff.EMPTY, SharedNative.parseDiff("@@ -1 +1 @@\n-a\n+b\n"))
         assertTrue(SharedNative.callDiffs("editFile", "{}").isEmpty())
-        assertEquals(SharedNative.ToolKind(false, false, false, false, false), SharedNative.kind("editFile"))
     }
 
     @Test

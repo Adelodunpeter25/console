@@ -47,8 +47,6 @@ object SharedNative {
     private external fun abiVersion(): Int
     private external fun extractHtmlTitle(html: String): String?
     private external fun closeHanging(text: String): String?
-    private external fun toolLabel(name: String): String?
-    private external fun toolFlags(name: String): Int
     private external fun fileIconKey(path: String): String?
     private external fun languageIconKey(tag: String): String?
     private external fun formatContextWindow(tokens: Int): String?
@@ -74,29 +72,8 @@ object SharedNative {
 
     // ── Tools ─────────────────────────────────────────────────────────────
 
-    /** Display label for a tool call name; the raw name when unavailable. */
-    fun label(toolName: String): String =
-        (if (available) toolLabel(toolName) else null) ?: toolName
-
-    /** What a tool call touches. All false when the library is unavailable. */
-    data class ToolKind(
-        val edit: Boolean,
-        val write: Boolean,
-        val read: Boolean,
-        val fileTarget: Boolean,
-        val subagent: Boolean,
-    )
-
-    fun kind(toolName: String): ToolKind {
-        val flags = if (available) toolFlags(toolName) else 0
-        return ToolKind(
-            edit = flags and 1 != 0,
-            write = flags and 2 != 0,
-            read = flags and 4 != 0,
-            fileTarget = flags and 8 != 0,
-            subagent = flags and 16 != 0,
-        )
-    }
+    // Tool-call labels and kind classification moved server-side
+    // (console.v1 ToolCall.label/kindFlags); nothing JNI-shared here.
 
     // ── Icons ─────────────────────────────────────────────────────────────
 

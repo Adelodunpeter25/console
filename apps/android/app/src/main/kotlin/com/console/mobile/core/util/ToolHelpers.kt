@@ -2,26 +2,18 @@ package com.console.mobile.core.util
 
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Book
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Sparkles
 import io.github.lyxnx.compose.ui.tablericons.outline.ChartBar
 import io.github.lyxnx.compose.ui.tablericons.outline.FilePencil
-import io.github.lyxnx.compose.ui.tablericons.outline.FilePlus
 import io.github.lyxnx.compose.ui.tablericons.outline.FileText
-import io.github.lyxnx.compose.ui.tablericons.outline.Files
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderSearch
 import io.github.lyxnx.compose.ui.tablericons.outline.Globe
-import io.github.lyxnx.compose.ui.tablericons.outline.HelpCircle
 import io.github.lyxnx.compose.ui.tablericons.outline.ListCheck
-import io.github.lyxnx.compose.ui.tablericons.outline.Messages
 import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
-import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
-import io.github.lyxnx.compose.ui.tablericons.outline.Users
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import kotlinx.serialization.json.JsonArray
@@ -29,39 +21,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
-// Mirrors the desktop's `activity_icon` alias handling in
-// apps/desktop/crates/console-ui/src/primitives/mod.rs.
-val TOOL_ICONS: Map<String, ImageVector> = mapOf(
-    "read_file" to TablerIcons.Outline.FileText, "readFile" to TablerIcons.Outline.FileText,
-    "write_file" to TablerIcons.Outline.FilePlus, "writeFile" to TablerIcons.Outline.FilePlus,
-    "batchWrite" to TablerIcons.Outline.Files, "batch_write" to TablerIcons.Outline.Files,
-    "editFile" to TablerIcons.Outline.FilePencil, "edit_file" to TablerIcons.Outline.FilePencil, "str_replace" to TablerIcons.Outline.FilePencil,
-    "bash" to TablerIcons.Outline.Terminal, "shell" to TablerIcons.Outline.Terminal, "command" to TablerIcons.Outline.Terminal,
-    "bashJob" to TablerIcons.Outline.Terminal2, "bash_job" to TablerIcons.Outline.Terminal2,
-    "grep" to TablerIcons.Outline.Search, "search_files" to TablerIcons.Outline.Search,
-    "glob" to TablerIcons.Outline.FolderSearch, "list_files" to TablerIcons.Outline.FolderOpen,
-    "list_dir" to TablerIcons.Outline.FolderOpen, "listDir" to TablerIcons.Outline.FolderOpen, "ls" to TablerIcons.Outline.FolderOpen,
-    "webFetch" to TablerIcons.Outline.Globe, "fetch" to TablerIcons.Outline.Globe,
-    "webSearch" to TablerIcons.Outline.Globe, "web_search" to TablerIcons.Outline.Globe, "browser" to TablerIcons.Outline.Globe,
-    "visualize" to TablerIcons.Outline.ChartBar,
-    "subagent" to TablerIcons.Outline.Users,
-    "ask" to TablerIcons.Outline.HelpCircle, "askMany" to TablerIcons.Outline.Messages, "todo" to TablerIcons.Outline.ListCheck,
-    "memory" to TablerIcons.Outline.Brain, "readSkill" to TablerIcons.Outline.Book,
-)
+// Tool names are classified server-side (console.v1 ToolCall.icon); this
+// maps the server's icon keys to glyphs.
 
-fun getToolIcon(name: String): ImageVector {
-    TOOL_ICONS[name]?.let { return it }
-    // The loader and every namespaced MCP tool share the plug glyph — dynamic
-    // `mcp__<server>__<tool>` names can never be map keys.
-    if (name == "loadTools" || name.startsWith("mcp__")) return TablerIcons.Outline.PlugConnected
-    return TablerIcons.Outline.Tool
-}
-
-/** Server icon keys (console.v1 ToolCall.icon) → glyphs. */
+/** Server icon keys (tools.ToolIconKey, classify.go) → glyphs. */
 private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
     "sparkle" to TablerIcons.Outline.Sparkles,
     "terminal" to TablerIcons.Outline.Terminal,
-    "terminal2" to TablerIcons.Outline.Terminal2,
     "pencil" to TablerIcons.Outline.FilePencil,
     "file" to TablerIcons.Outline.FileText,
     "folder" to TablerIcons.Outline.FolderOpen,
@@ -74,13 +40,11 @@ private val SERVER_KEY_ICONS: Map<String, ImageVector> = mapOf(
 )
 
 /**
- * Icon for a tool call: the server-classified key when the call carries one
- * (console.v1 ToolCall.icon), else the legacy name table.
+ * Icon for a tool call via the server-classified key. Old sessions
+ * predating classification (no key) get the generic tool glyph.
  */
-fun getToolIcon(call: ToolCall): ImageVector {
-    call.icon?.let { SERVER_KEY_ICONS[it]?.let { v -> return v } }
-    return getToolIcon(call.name)
-}
+fun getToolIcon(call: ToolCall): ImageVector =
+    SERVER_KEY_ICONS[call.icon] ?: TablerIcons.Outline.Tool
 
 fun formatUnknown(v: Any?): String = when (v) {
     null -> "null"

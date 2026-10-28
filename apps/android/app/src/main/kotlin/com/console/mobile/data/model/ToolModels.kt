@@ -1,6 +1,5 @@
 package com.console.mobile.data.model
 
-import com.console.mobile.SharedNative
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -47,22 +46,22 @@ data class ToolCall(
     val thoughtSignature: String? = null,
     // Server-classified presentation fields (proto console.v1.ToolCall):
     // label, kind flags and icon key are derived at the wire boundary so
-    // clients render instead of parsing names. Absent in old stored
-    // sessions, where SharedNative's native tables fill in.
+    // clients render instead of parsing names. Old sessions predating
+    // classification show raw names and generic icons.
     val label: String? = null,
     val kindFlags: Int? = null,
     val icon: String? = null,
 ) {
     private fun flag(bit: Int) = kindFlags?.let { it and bit != 0 } ?: false
 
-    val isEdit: Boolean get() = flag(1) || (kindFlags == null && SharedNative.kind(name).edit)
-    val isWrite: Boolean get() = flag(2) || (kindFlags == null && SharedNative.kind(name).write)
-    val isRead: Boolean get() = flag(4) || (kindFlags == null && SharedNative.kind(name).read)
-    val isFileTarget: Boolean get() = flag(8) || (kindFlags == null && SharedNative.kind(name).fileTarget)
-    val isSubagent: Boolean get() = flag(16) || (kindFlags == null && SharedNative.kind(name).subagent)
+    val isEdit: Boolean get() = flag(1)
+    val isWrite: Boolean get() = flag(2)
+    val isRead: Boolean get() = flag(4)
+    val isFileTarget: Boolean get() = flag(8)
+    val isSubagent: Boolean get() = flag(16)
 
-    /** Display label: the server's when present, else the native table. */
-    val displayLabel: String get() = label ?: SharedNative.label(name)
+    /** Display label: the server-derived field, else the raw name. */
+    val displayLabel: String get() = label ?: name
 }
 
 // ToolCallPreview moved to the shared protobuf schema

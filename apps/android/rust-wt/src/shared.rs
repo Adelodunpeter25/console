@@ -22,7 +22,7 @@
 //! `null` the caller handles rather than an `abort()` that kills the app.
 
 use console_shared::diff::{self, DiffLineKind, DiffResult};
-use console_shared::{composer, format, icons, markdown, page_title, pairing, throughput, tools};
+use console_shared::{composer, format, icons, markdown, page_title, pairing, throughput};
 use jni::objects::{JClass, JString};
 use jni::sys::{jbyteArray, jdouble, jint, jstring};
 use jni::JNIEnv;
@@ -138,41 +138,6 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_closeHanging(
     crate::guard(std::ptr::null_mut(), || {
         let repaired = read(&mut env, &value).and_then(|v| markdown::mend::close_hanging(&v));
         text(&mut env, repaired)
-    })
-}
-
-/// `SharedNative.toolLabel(name)`.
-#[no_mangle]
-pub extern "system" fn Java_com_console_mobile_SharedNative_toolLabel(
-    mut env: JNIEnv,
-    _class: JClass,
-    name: JString,
-) -> jstring {
-    crate::init_logging();
-    crate::guard(std::ptr::null_mut(), || {
-        let label = read(&mut env, &name).map(|n| tools::tool_label(&n));
-        text(&mut env, label)
-    })
-}
-
-/// `SharedNative.toolFlags(name)` — bit 0 edit, 1 write, 2 read, 3
-/// file-target, 4 subagent. One call instead of five predicates.
-#[no_mangle]
-pub extern "system" fn Java_com_console_mobile_SharedNative_toolFlags(
-    mut env: JNIEnv,
-    _class: JClass,
-    name: JString,
-) -> jint {
-    crate::init_logging();
-    crate::guard(0, || {
-        let Some(name) = read(&mut env, &name) else {
-            return 0;
-        };
-        (tools::is_edit_file(&name) as jint)
-            | ((tools::is_write_file(&name) as jint) << 1)
-            | ((tools::is_read_file(&name) as jint) << 2)
-            | ((tools::is_file_target_tool(&name) as jint) << 3)
-            | ((tools::is_subagent(&name) as jint) << 4)
     })
 }
 

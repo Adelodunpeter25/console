@@ -289,35 +289,29 @@ impl ToolCall {
     }
 
     pub fn is_edit(&self) -> bool {
-        self.kind_flag(KIND_EDIT) || (self.kind_flags.is_none() && console_shared::tools::is_edit_file(&self.name))
+        self.kind_flag(KIND_EDIT)
     }
 
     pub fn is_write(&self) -> bool {
         self.kind_flag(KIND_WRITE)
-            || (self.kind_flags.is_none() && console_shared::tools::is_write_file(&self.name))
     }
 
     pub fn is_read(&self) -> bool {
         self.kind_flag(KIND_READ)
-            || (self.kind_flags.is_none() && console_shared::tools::is_read_file(&self.name))
     }
 
     pub fn is_file_target(&self) -> bool {
         self.kind_flag(KIND_FILE_TARGET)
-            || (self.kind_flags.is_none() && console_shared::tools::is_file_target_tool(&self.name))
     }
 
     pub fn is_subagent(&self) -> bool {
         self.kind_flag(KIND_SUBAGENT)
-            || (self.kind_flags.is_none() && console_shared::tools::is_subagent(&self.name))
     }
 
-    /// Display label: the server's when present, else the shared table
-    /// (old stored sessions).
+    /// Display label: the server-derived field. Old sessions predating
+    /// classification fall back to the raw name.
     pub fn display_label(&self) -> String {
-        self.label
-            .clone()
-            .unwrap_or_else(|| console_shared::tools::tool_label(&self.name))
+        self.label.clone().unwrap_or_else(|| self.name.clone())
     }
 }
 
