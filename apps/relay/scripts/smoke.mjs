@@ -3,7 +3,7 @@
 import http from "node:http";
 import WebSocket, { WebSocketServer } from "ws";
 
-const base = process.argv[2];
+const base = process.argv[2]?.replace(/\/$/, "");
 if (!base) throw new Error("usage: smoke.mjs <relay-url>");
 
 const local = http.createServer((req, res) => {
@@ -19,7 +19,8 @@ wss.on("connection", (s) => s.on("message", (m, bin) => s.send(m, { binary: bin 
 await new Promise((r) => local.listen(0, r));
 const port = local.address().port;
 
-const reg = await (await fetch(`${base}/register`, { method: "POST" })).json();
+const reg = await (await fetch(`${base}/register`, { method: "POST", body: "{}" })).json();
+reg.id = reg.name;
 console.log("registered", reg.url);
 
 const T = { REQ: 1, DATA: 2, END: 3, RES: 4, WS_OPEN: 5, WS_TEXT: 6, WS_BIN: 7, CLOSE: 8, RESET: 9 };
@@ -61,11 +62,12 @@ tunnel.on("message", (data) => {
 });
 
 let fails = 0;
+let named = null;
 const check = (name, ok, extra = "") => { console.log(ok ? "PASS" : "FAIL", name, extra); if (!ok) fails++; };
 
 let r = await fetch(`${reg.url}/api/hello?x=1`);
 let j = await r.json();
-check("GET path+query", r.status === 200 && j.url === "/api/hello?x=1" && j.prefix === `/s/${reg.id}`, JSON.stringify(j));
+check("GET path+query", r.status === 200 && j.url === "/api/hello?x=1" && j.prefix === `/${reg.name}`, JSON.stringify(j));
 
 const big = "x".repeat(900_000);
 r = await fetch(`${reg.url}/echo`, { method: "POST", body: big });
@@ -79,12 +81,25 @@ ws.send("hello");
 check("websocket echo", (await echoed) === "hello");
 ws.close();
 
-r = await fetch(`${base}/s/${"a".repeat(16)}/x`);
+r = await fetch(`${base}/no-such-tunnel/x`);
 check("unknown tunnel -> 404", r.status === 404);
 
 const bad = new WebSocket(`${base.replace(/^http/, "ws")}/connect/${reg.id}`, { headers: { authorization: "Bearer nope" } });
 const code = await new Promise((res) => { bad.on("unexpected-response", (_q, s) => res(s.statusCode)); bad.on("open", () => res(101)); bad.on("error", () => {}); });
 check("bad token rejected", code === 403, String(code));
+
+const mine = `smoke-${Math.random().toString(36).slice(2, 8)}`;
+r = await fetch(`${base}/register`, { method: "POST", body: JSON.stringify({ name: mine }) });
+j = await r.json();
+check("custom name", r.status === 200 && j.url === `${base}/${mine}`, JSON.stringify(j));
+r = await fetch(`${base}/register`, { method: "POST", body: JSON.stringify({ name: mine }) });
+check("duplicate name -> 409", r.status === 409);
+r = await fetch(`${base}/register`, { method: "POST", body: JSON.stringify({ name: "Bad Name!" }) });
+check("invalid name -> 400", r.status === 400);
+r = await fetch(`${base}/register`, { method: "POST", body: JSON.stringify({ name: "connect" }) });
+check("reserved name -> 400", r.status === 400);
+r = await fetch(`${reg.url}`, { redirect: "manual" });
+check("no trailing slash redirects", r.status === 308);
 
 tunnel.close();
 await new Promise((r) => setTimeout(r, 1500));

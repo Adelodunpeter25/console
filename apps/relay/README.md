@@ -1,12 +1,12 @@
 # console relay
 
 Cloudflare Worker + Durable Object that gives a console server a public URL on workers.dev
-without opening ports: `https://console-relay.<account>.workers.dev/s/<id>/...`
+without opening ports: `https://relay.<account>.workers.dev/<name>/...`
 
 ## Flow
-1. `POST /register` -> `{id, token, url}` (store these; the token is shown once, only its hash is kept).
+1. `POST /register` with optional `{"name":"peter-dev"}` -> `{name, token, url}` (no name = generated like `quiet-otter-42`; taken = 409) (store these; the token is shown once, only its hash is kept).
 2. The server opens an outbound WebSocket to `/connect/<id>` with `Authorization: Bearer <token>`.
-3. Visitors hit `/s/<id>/<path>`; the Worker forwards them to that id's Durable Object, which
+3. Visitors hit `/<name>/<path>`; the Worker forwards them to that id's Durable Object, which
    sends them down the server's socket. The server replays them against its local port and answers.
    A new server connection replaces an older one. No connection -> 502.
 
@@ -24,13 +24,13 @@ The server must send `ping` text frames to keep idle sockets alive (answered wit
 | 8 | CLOSE   | json `{code, reason}`, either direction |
 | 9 | RESET   | utf-8 error; aborts the stream |
 
-Forwarded requests carry `x-forwarded-prefix: /s/<id>` so the server can build correct URLs.
+Forwarded requests carry `x-forwarded-prefix: /<name>` so the server can build correct URLs.
 The payloads are opaque to the relay, so an end-to-end encryption layer can be added later.
 
 ## Develop / deploy
     npm install
     npm run typecheck
     cf deploy
-    node scripts/smoke.mjs https://console-relay.<account>.workers.dev   # end-to-end check
+    node scripts/smoke.mjs https://relay.<account>.workers.dev   # end-to-end check
 
 Note: `/register` is open to anyone; add a shared secret or rate limit before sharing the URL widely.

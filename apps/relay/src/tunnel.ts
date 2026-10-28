@@ -24,15 +24,16 @@ export class Tunnel extends DurableObject {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/init") {
+			if (await this.ctx.storage.get("tokenHash")) return new Response("taken", { status: 409 });
 			await this.ctx.storage.put("tokenHash", await request.text());
 			return new Response("ok");
 		}
 		if (!(await this.ctx.storage.get("tokenHash"))) return new Response("unknown tunnel", { status: 404 });
 
-		const parts = url.pathname.split("/"); // ["", route, id, ...rest]
+		const parts = url.pathname.split("/"); // ["", "connect", name] or ["", name, ...rest]
 		if (parts[1] === "connect") return this.acceptServer(request);
 
-		const prefix = `/s/${parts[2]}`;
+		const prefix = `/${parts[1]}`;
 		const path = (url.pathname.slice(prefix.length) || "/") + url.search;
 		return request.headers.get("upgrade")?.toLowerCase() === "websocket"
 			? this.proxyWebSocket(request, path, prefix)

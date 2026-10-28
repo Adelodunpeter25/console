@@ -3,11 +3,11 @@ import * as entrypoint from "./src/index.ts" with { type: "cf-worker" };
 
 export default defineConfig({
 	worker: {
-		name: "console-relay",
+		name: "relay",
 		compatibilityDate: "2026-10-23",
 		entrypoint,
 		env: {
-			TUNNEL: bindings.durableObject({ worker: "console-relay", exportName: "Tunnel" }),
+			TUNNEL: bindings.durableObject({ worker: "relay", exportName: "Tunnel" }),
 		},
 		exports: {
 			Tunnel: exports.durableObject({ storage: "sqlite" }),
