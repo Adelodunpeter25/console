@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
 
-use console_core::types::FsTreeEntry;
+use console_core::types::{FsTreeEntry, GitFileEntry};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
     Styled, Window, div, prelude::FluentBuilder, px,
@@ -21,6 +21,8 @@ pub struct FileTreeNode {
     pub path: String,
     pub is_dir: bool,
     pub children: Vec<FileTreeNode>,
+    pub git_status: Option<String>,
+    pub git_staged: bool,
 }
 
 #[derive(IntoElement)]
@@ -30,6 +32,7 @@ pub struct FileTreeView {
     selected_path: Option<String>,
     search_query: String,
     on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    git_changes: Rc<Vec<GitFileEntry>>,
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
 }
 
@@ -40,6 +43,7 @@ impl FileTreeView {
         selected_path: Option<String>,
         search_query: String,
         on_toggle_folder: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+        git_changes: Rc<Vec<GitFileEntry>>,
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
@@ -48,6 +52,7 @@ impl FileTreeView {
             selected_path,
             search_query,
             on_toggle_folder,
+            git_changes,
             on_select_file,
         }
     }
@@ -61,6 +66,7 @@ impl FileTreeView {
         on_select_file: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         theme: &Theme,
         search_query: &str,
+        git_status_by_path: &HashMap<String, (String, bool)>,
     ) -> Vec<gpui::AnyElement> {
         let mut elements = Vec::new();
         let query_lower = search_query.to_lowercase();
@@ -72,6 +78,14 @@ impl FileTreeView {
         let is_selected = selected_path.as_deref() == Some(&node.path);
 
         if matches_filter || node.is_dir {
+            let git_status = git_status_by_path.get(&node.path);
+            let status_color = git_status.map(|(status, _)| match status.as_str() {
+                "A" | "?" => theme.success,
+                "D" => theme.danger,
+                "M" => theme.warning,
+                _ => theme.text_tertiary,
+            });
+            let status_label = git_status.map(|(status, _)| status.clone());
             let on_toggle = on_toggle_folder.clone();
             let on_select = on_select_file.clone();
             let node_path = path.clone();
@@ -136,7 +150,18 @@ impl FileTreeView {
                                 theme.text_secondary
                             })
                             .child(node.name.clone()),
-                    );
+                    )
+                    .when_some(status_label, |el, label| {
+                        el.child(
+                            div()
+                                .w(px(14.0))
+                                .flex_none()
+                                .text_size(px(11.0))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(status_color.unwrap_or(theme.text_tertiary))
+                                .child(label),
+                        )
+                    });
 
             elements.push(row.into_any_element());
         }
@@ -152,6 +177,7 @@ impl FileTreeView {
                     on_select_file,
                     theme,
                     search_query,
+                    git_status_by_path,
                 );
                 elements.append(&mut child_els);
             }
@@ -223,6 +249,8 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
             path: entry.path,
             is_dir: entry.is_dir,
             children,
+            git_status: None,
+            git_staged: false,
         }
     }
 
@@ -235,6 +263,10 @@ pub fn build_tree_from_entries(entries: &[FsTreeEntry]) -> Vec<FileTreeNode> {
 impl RenderOnce for FileTreeView {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
+        let mut git_status_by_path = HashMap::new();
+        for change in self.git_changes.iter() {
+            git_status_by_path.insert(change.path.clone(), (change.status.clone(), change.staged));
+        }
         let mut children = Vec::new();
 
         for node in self.tree.as_ref() {
@@ -247,6 +279,7 @@ impl RenderOnce for FileTreeView {
                 &self.on_select_file,
                 &theme,
                 &self.search_query,
+                &git_status_by_path,
             );
             children.append(&mut els);
         }

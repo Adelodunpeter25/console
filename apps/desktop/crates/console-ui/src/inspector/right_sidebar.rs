@@ -430,6 +430,7 @@ impl RenderOnce for RightSidebar {
                             self.selected_path,
                             self.search_query,
                             self.on_toggle_folder,
+                            self.working_changes.clone(),
                             self.on_select_file,
                         )
                         .into_any_element(),
