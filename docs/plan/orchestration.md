@@ -30,7 +30,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 - Plan-mode hard deny of `TierWrite` / `TierExec` in `permissions.Resolve` (§8.2); this is what makes the `plan-mode` ceiling mean something
 - Depth cap 2, per-spawn token budget, concurrency cap and usage rollup for spawned sessions (§7)
-- `console.pr.*` plus the GitHub REST service (Phase 7)
+- `console.pr.*` plus the GitHub service (Phase 7). Now designed in full, with the desktop and Android UI, in [`pull-requests.md`](pull-requests.md); that plan supersedes the Phase 7 sketch below
 
 ---
 
