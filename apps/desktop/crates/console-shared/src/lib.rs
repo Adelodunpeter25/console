@@ -15,3 +15,4 @@ pub mod page_title;
 pub mod pairing;
 pub mod path;
 pub mod throughput;
+pub mod tool;

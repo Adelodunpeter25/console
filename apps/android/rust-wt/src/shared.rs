@@ -23,6 +23,7 @@
 
 use console_shared::diff::{self, DiffLineKind, DiffResult};
 use console_shared::{composer, format, icons, markdown, page_title, pairing, throughput};
+use console_shared::tool;
 use jni::objects::{JClass, JString};
 use jni::sys::{jbyteArray, jdouble, jint, jstring};
 use jni::JNIEnv;
@@ -33,7 +34,7 @@ const VERSION: u16 = 1;
 
 /// Bumped whenever a symbol is added, removed, or changes shape. Kotlin's
 /// `SharedNative.EXPECTED_ABI` must match.
-const ABI_VERSION: jint = 1;
+const ABI_VERSION: jint = 2;
 
 // ── Encoding ──────────────────────────────────────────────────────────────
 
@@ -310,6 +311,34 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_parseUnifiedDiff(
         };
         let mut out = Frame::new();
         out.diff(&diff::parse_unified_diff(&raw));
+        frame(&mut env, out)
+    })
+}
+
+/// `SharedNative.toolSummary(toolName, argumentsJson, cwd)`.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_nativeToolSummary(
+    mut env: JNIEnv, _class: JClass, name: JString, arguments_json: JString, cwd: JString,
+) -> jstring {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let (Some(name), Some(json), Some(cwd)) = (read(&mut env, &name), read(&mut env, &arguments_json), read(&mut env, &cwd)) else { return std::ptr::null_mut(); };
+        let arguments: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+        text(&mut env, tool::argument_summary(&name, &arguments, (!cwd.is_empty()).then_some(cwd.as_str())))
+    })
+}
+
+/// `SharedNative.parseReadFileOutput(raw)` — framed `[str lineNumbers][str body]`.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_nativeParseReadFileOutput(
+    mut env: JNIEnv, _class: JClass, raw: JString,
+) -> jbyteArray {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let Some(raw) = read(&mut env, &raw) else { return std::ptr::null_mut(); };
+        let (numbers, body) = tool::parse_read_file_output(&raw);
+        let mut out = Frame::new();
+        out.str(&numbers).str(&body);
         frame(&mut env, out)
     })
 }

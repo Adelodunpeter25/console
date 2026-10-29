@@ -13,6 +13,9 @@ use console_core::{
     ActivityEvent, FileDiff, ToolCall, ToolCallEntry, ToolResult, extract_write_args,
     file_call_diffs,
 };
+use console_shared::tool::argument_path as shared_argument_path;
+use console_shared::tool::argument_summary as shared_argument_summary;
+use console_shared::tool::parse_read_file_output as shared_parse_read_file_output;
 use gpui::{
     AnyElement, App, ElementId, FontWeight, IntoElement, ParentElement, RenderOnce, Styled, Window,
     div, prelude::*, px, transparent_black,
@@ -191,82 +194,7 @@ impl ToolCalls {
     }
 
     fn argument_summary(&self, call: &ToolCall) -> Option<String> {
-        let object = call.arguments.as_object()?;
-        let cwd = self.cwd.as_deref();
-        if let Some(path) = argument_path(call) {
-            return Some(truncate(&to_relative_path(path, cwd), 72));
-        }
-        if call.name == "bashJob" || call.name == "bash_job" {
-            let action = object
-                .get("action")
-                .and_then(|v| v.as_str())
-                .unwrap_or("status");
-            if let Some(job_id) = object.get("jobId").and_then(|v| v.as_str()) {
-                return Some(truncate(&format!("{action} {job_id}"), 72));
-            }
-            return Some(truncate(action, 72));
-        }
-        if call.name == "loadTools" {
-            // The loader takes `{group: "mcp:<server-id>"}` — surface it
-            // verbatim so the row says which group was loaded.
-            if let Some(group) = object.get("group").and_then(|v| v.as_str()) {
-                return Some(truncate(group, 72));
-            }
-            return None;
-        }
-        if call.name == "memory" {
-            let op = object
-                .get("op")
-                .and_then(|v| v.as_str())
-                .unwrap_or("memory");
-            if let Some(query) = object.get("query").and_then(|v| v.as_str()) {
-                return Some(truncate(&format!("{op} \"{query}\""), 72));
-            }
-            if let Some(content) = object.get("content").and_then(|v| v.as_str()) {
-                return Some(truncate(&format!("{op} \"{}\"", single_line(content)), 72));
-            }
-            if let Some(tags) = object.get("tags").and_then(|v| v.as_array()) {
-                let tags_str = tags
-                    .iter()
-                    .filter_map(|t| t.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                return Some(truncate(&format!("{op} [{tags_str}]"), 72));
-            }
-            if let Some(id) = object.get("id").and_then(|v| v.as_str()) {
-                return Some(truncate(&format!("{op} {id}"), 72));
-            }
-            return Some(truncate(op, 72));
-        }
-        for key in ["command", "pattern", "query", "url", "directory"] {
-            if let Some(value) = object.get(key).and_then(|value| value.as_str()) {
-                let value = if key == "directory" {
-                    to_relative_path(value, cwd)
-                } else {
-                    value.to_owned()
-                };
-                // Multi-line values (heredoc scripts, multi-line queries) must
-                // collapse to one line: a literal `\n` renders as a hard line
-                // break that no CSS-style truncate() can suppress.
-                return Some(truncate(&single_line(&value), 72));
-            }
-        }
-        if let Some(paths) = object.get("paths").and_then(|value| value.as_array()) {
-            return Some(format!("{} files", paths.len()));
-        }
-        // A `batchWrite` has no single `path`, so without this its header shows
-        // the bare call label and none of the files it touched. The per-file
-        // diffs below each carry their own name, but the header still needs to
-        // say how many there are.
-        if let Some(files) = object.get("files").and_then(|value| value.as_array())
-            && !files.is_empty()
-        {
-            return Some(format!("{} files", files.len()));
-        }
-        if let Some(operations) = object.get("operations").and_then(|value| value.as_array()) {
-            return Some(format!("{} operations", operations.len()));
-        }
-        None
+        shared_argument_summary(&call.name, &call.arguments, self.cwd.as_deref())
     }
 
     fn formatted_result(result: &ToolResult) -> String {
@@ -381,7 +309,7 @@ impl ToolCalls {
         let call_id_for_action = call_id.clone();
         let is_edit = entry.call.is_edit();
         let is_write = entry.call.is_write();
-        let file_path = argument_path(&entry.call)
+        let file_path = shared_argument_path(&entry.call.arguments)
             .map(str::to_owned)
             .or_else(|| extract_write_args(&entry.call.arguments).map(|(path, _)| path));
         // Both editFile and writeFile describe a file transition. `editFile`
@@ -445,17 +373,19 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(
-                        if entry.call.is_file_target() && file_path.is_some() {
-                            // File-targeting calls show the file's real type icon
-                            // (multicolor, like mobile) instead of the generic
-                            // monochrome tool glyph.
-                            file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
-                        } else {
-                            icon(activity_icon_for_call(&entry.call), 13.0, theme.text_tertiary)
-                                .into_any_element()
-                        },
-                    )
+                    .child(if entry.call.is_file_target() && file_path.is_some() {
+                        // File-targeting calls show the file's real type icon
+                        // (multicolor, like mobile) instead of the generic
+                        // monochrome tool glyph.
+                        file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
+                    } else {
+                        icon(
+                            activity_icon_for_call(&entry.call),
+                            13.0,
+                            theme.text_tertiary,
+                        )
+                        .into_any_element()
+                    })
                     .child(
                         div()
                             .flex_none()
@@ -652,7 +582,11 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(icon(activity_icon_for_call(&group.entries[0].call), 13.0, theme.text_tertiary))
+                    .child(icon(
+                        activity_icon_for_call(&group.entries[0].call),
+                        13.0,
+                        theme.text_tertiary,
+                    ))
                     .child(
                         div()
                             .flex_none()
@@ -955,7 +889,7 @@ impl ToolCalls {
             self.selection.clone(),
             None,
         );
-        let (line_numbers, code_body) = parse_read_file_output(&raw);
+        let (line_numbers, code_body) = shared_parse_read_file_output(&raw);
 
         div()
             .flex()
@@ -1116,115 +1050,6 @@ impl ToolCalls {
                     )),
             )
     }
-}
-
-/// Parse a line-number prefix like `\s*123:\s?`, returning `(line_number_str, code_str)`.
-fn parse_line_number_and_code(line: &str) -> Option<(&str, &str)> {
-    let trimmed_start_len = line.trim_start().len();
-    let leading_spaces = line.len() - trimmed_start_len;
-    let bytes = line.as_bytes();
-    let digits_start = leading_spaces;
-    let mut index = digits_start;
-    while index < line.len() && bytes[index].is_ascii_digit() {
-        index += 1;
-    }
-    if index == digits_start || bytes.get(index) != Some(&b':') {
-        return None;
-    }
-    let num_str = &line[digits_start..index];
-    index += 1; // skip ':'
-    if bytes.get(index) == Some(&b' ') {
-        index += 1;
-    }
-    let code = &line[index..];
-    Some((num_str, code))
-}
-
-/// Parse readFile output into `(line_numbers_gutter, code_body)`:
-/// Drops the leading `File:` metadata header, extracts line numbers for the gutter,
-/// and produces the clean code body for syntax highlighting.
-fn parse_read_file_output(raw: &str) -> (String, String) {
-    let lines: Vec<&str> = raw.lines().collect();
-    let header_end = lines
-        .iter()
-        .skip(1)
-        .position(|line| line.is_empty())
-        .filter(|&end| end > 0 && end <= 6)
-        .filter(|_| {
-            lines
-                .first()
-                .is_some_and(|first| first.starts_with("File:"))
-        })
-        .map(|end| end + 1);
-    let code_lines: &[&str] = match header_end {
-        Some(end) => &lines[end..],
-        None => &lines[..],
-    };
-
-    let numbered_count = code_lines
-        .iter()
-        .filter(|line| parse_line_number_and_code(line).is_some())
-        .count();
-
-    if numbered_count * 2 > code_lines.len() {
-        let mut numbers = Vec::with_capacity(code_lines.len());
-        let mut body = Vec::with_capacity(code_lines.len());
-        for line in code_lines {
-            if let Some((num, code)) = parse_line_number_and_code(line) {
-                numbers.push(num);
-                body.push(code);
-            } else {
-                numbers.push("");
-                body.push(*line);
-            }
-        }
-        (numbers.join("\n"), body.join("\n"))
-    } else {
-        let numbers: Vec<String> = (1..=code_lines.len()).map(|n| n.to_string()).collect();
-        (numbers.join("\n"), code_lines.join("\n"))
-    }
-}
-
-/// The target path of a file-oriented tool call, when its arguments carry one.
-fn argument_path(call: &ToolCall) -> Option<&str> {
-    let object = call.arguments.as_object()?;
-    ["path", "filePath", "targetFile", "absolutePath"]
-        .into_iter()
-        .find_map(|key| object.get(key).and_then(|value| value.as_str()))
-}
-
-/// Format `path` relative to the session working directory, so
-/// `/Users/me/repo/apps/server/index.ts` renders as `apps/server/index.ts`.
-/// Paths outside the directory are left untouched.
-fn to_relative_path(path: &str, cwd: Option<&str>) -> String {
-    let normalized_path = path.replace('\\', "/");
-    let Some(cwd) = cwd.map(|cwd| cwd.replace('\\', "/")) else {
-        return normalized_path;
-    };
-    let cwd = cwd.trim_end_matches('/');
-    if !cwd.is_empty()
-        && let Some(rest) = normalized_path.strip_prefix(cwd)
-    {
-        return rest.trim_start_matches('/').to_owned();
-    }
-    normalized_path
-}
-
-fn truncate(value: &str, max_chars: usize) -> String {
-    let mut chars = value.chars();
-    let truncated: String = chars.by_ref().take(max_chars).collect();
-    if chars.next().is_some() {
-        format!("{truncated}…")
-    } else {
-        truncated
-    }
-}
-
-/// Collapse every whitespace run (newlines, tabs, spaces) to single spaces so
-/// a summary always fits on one line. Newlines in particular render as hard
-/// breaks inside a text element, defeating `.truncate()`.
-fn single_line(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub fn elapsed_seconds(started_at: Option<i64>, ended_at: Option<i64>) -> u64 {

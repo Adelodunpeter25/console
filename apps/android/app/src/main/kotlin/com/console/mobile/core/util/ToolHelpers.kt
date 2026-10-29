@@ -14,6 +14,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PlugConnected
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
+import com.console.mobile.SharedNative
 import com.console.mobile.data.model.ToolCall
 import com.console.mobile.data.model.ToolResult
 import kotlinx.serialization.json.JsonArray
@@ -73,6 +74,7 @@ fun toRelativePath(filePath: String?, cwd: String?): String {
  * target path first, then bashJob / memory specifics, then the first of
  * command/pattern/query/url/directory, then arg-array counts. */
 fun toolCallSummary(call: ToolCall, cwd: String? = null): String? {
+    SharedNative.toolSummary(call.name, call.arguments?.toString() ?: "{}", cwd)?.let { return it }
     val args = call.arguments as? JsonObject ?: return null
     fun s(key: String): String? = (args[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 

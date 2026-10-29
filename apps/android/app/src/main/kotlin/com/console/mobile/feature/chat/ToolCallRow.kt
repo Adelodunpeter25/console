@@ -148,7 +148,7 @@ private fun ToolArguments(arguments: kotlinx.serialization.json.JsonElement?) {
 /** readFile output as syntax-highlighted code with the tool's line numbers. */
 @Composable
 private fun ReadFileResult(raw: String, filePath: String?) {
-    val (numbers, body) = remember(raw) { parseReadFileOutput(raw) }
+    val (numbers, body) = remember(raw) { SharedNative.parseReadFileOutput(raw) ?: parseReadFileOutput(raw) }
     val language = remember(filePath) { languageForPath(filePath) }
     // The gutter is drawn here rather than by the viewer because a truncated
     // read carries the tool's own line numbers (which do not start at 1), and

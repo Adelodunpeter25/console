@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  */
 object SharedNative {
     /** Must match `ABI_VERSION` in `rust-wt/src/shared.rs`. */
-    const val EXPECTED_ABI = 1
+    const val EXPECTED_ABI = 2
 
     /** Framed payloads start with `"CSHR"` and this version. */
     private const val MAGIC = 0x4353_4852
@@ -58,6 +58,8 @@ object SharedNative {
     private external fun diffLines(old: String, new: String, context: Int): ByteArray?
     private external fun parseUnifiedDiff(raw: String): ByteArray?
     private external fun fileCallDiffs(name: String, argumentsJson: String): ByteArray?
+    private external fun nativeToolSummary(name: String, argumentsJson: String, cwd: String): String?
+    private external fun nativeParseReadFileOutput(raw: String): ByteArray?
 
     // ── Text ──────────────────────────────────────────────────────────────
 
@@ -74,6 +76,17 @@ object SharedNative {
 
     // Tool-call labels and kind classification moved server-side
     // (console.v1 ToolCall.label/kindFlags); nothing JNI-shared here.
+
+    /** Shared one-line summary for a tool call, or null when it has no summary. */
+    fun toolSummary(name: String, argumentsJson: String, cwd: String?): String? =
+        if (available) nativeToolSummary(name, argumentsJson, cwd.orEmpty()) else null
+
+    /** Shared read-file parser, returning `(line numbers, code body)`. */
+    fun parseReadFileOutput(raw: String): Pair<String, String>? {
+        val reader = (if (available) nativeParseReadFileOutput(raw) else null)?.let(::Reader)?.takeIf { it.valid }
+            ?: return null
+        return reader.str() to reader.str()
+    }
 
     // ── Icons ─────────────────────────────────────────────────────────────
 
