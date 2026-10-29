@@ -305,7 +305,7 @@ impl ConsoleDesktopApp {
                     input.insert_paste_mention(
                         0..0,
                         &result.path,
-                        format!("pasted {} lines", thousands(result.lines)),
+                        format!("pasted {} lines", console_ui::input::thousands(result.lines)),
                         cx,
                     );
                 });
@@ -329,15 +329,3 @@ impl ConsoleDesktopApp {
     }
 }
 
-/// Thousands-grouped line count for the chip label: `5214` → `5,214`.
-fn thousands(n: usize) -> String {
-    let raw = n.to_string();
-    let mut out = String::with_capacity(raw.len() + raw.len() / 3);
-    let (first, rest) = raw.split_at(raw.len() % 3 .max(1));
-    out.push_str(first);
-    for chunk in rest.as_bytes().chunks(3) {
-        out.push(',');
-        out.push_str(std::str::from_utf8(chunk).unwrap_or(""));
-    }
-    out
-}

@@ -179,6 +179,22 @@ pub fn is_large_paste(text: &str) -> bool {
     lines > LARGE_PASTE_MAX_LINES
 }
 
+/// Thousands-grouped number for chip labels: `5214` → `5,214`, `273` → `273`.
+/// The first group is 1–3 digits — exactly `len % 3` when that is nonzero,
+/// otherwise a full three.
+pub fn thousands(n: usize) -> String {
+    let raw = n.to_string();
+    let mut out = String::with_capacity(raw.len() + raw.len() / 3);
+    let first = if raw.len() % 3 == 0 { 3 } else { raw.len() % 3 };
+    let (head, rest) = raw.split_at(first);
+    out.push_str(head);
+    for chunk in rest.as_bytes().chunks(3) {
+        out.push(',');
+        out.push_str(std::str::from_utf8(chunk).unwrap_or(""));
+    }
+    out
+}
+
 /// Respect any image or file representation in the clipboard, regardless of
 /// entry order. Finder puts paths first (and a text fallback second), while
 /// screenshots put an image first — but browsers and other apps often lead

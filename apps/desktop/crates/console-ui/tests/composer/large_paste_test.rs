@@ -32,3 +32,15 @@ fn trailing_newline_is_no_extra_line() {
     // A trailing newline closes the last line, not a new one.
     assert!(!is_large_paste(&"a\n".repeat(25)));
 }
+
+#[test]
+fn thousands_grouping() {
+    use console_ui::input::thousands;
+    assert_eq!(thousands(0), "0");
+    assert_eq!(thousands(7), "7");
+    assert_eq!(thousands(273), "273");
+    assert_eq!(thousands(1273), "1,273");
+    assert_eq!(thousands(5214), "5,214");
+    assert_eq!(thousands(123456), "123,456");
+    assert_eq!(thousands(1_234_567), "1,234,567");
+}
