@@ -22,7 +22,6 @@ pub mod visual;
 pub mod workspace;
 
 pub use agent::*;
-pub use visual::*;
 pub use assist::*;
 pub use auth::*;
 pub use chat::*;
@@ -41,4 +40,5 @@ pub use session::*;
 pub use settings::*;
 pub use terminal::*;
 pub use usage::*;
+pub use visual::*;
 pub use workspace::*;

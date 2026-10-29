@@ -37,12 +37,7 @@ impl PlayerConfig {
     /// The player page opens the socket from a webview, which cannot attach an
     /// Authorization header, so the backend accepts the device token in the
     /// query string for this upgrade only.
-    pub fn for_device(
-        base: &str,
-        id: &str,
-        platform: &str,
-        auth_token: Option<&str>,
-    ) -> Self {
+    pub fn for_device(base: &str, id: &str, platform: &str, auth_token: Option<&str>) -> Self {
         let base = base.trim_end_matches('/');
         let ws_base = if let Some(rest) = base.strip_prefix("https://") {
             format!("wss://{rest}")

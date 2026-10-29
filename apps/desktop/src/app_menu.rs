@@ -19,9 +19,7 @@ pub fn init(cx: &mut App) {
             if let Some(handle) = cx.active_window() {
                 handle
                     .update(cx, |_, window, cx| {
-                        crate::window::confirm_then(window, cx, "Quit Console?", |_, cx| {
-                            cx.quit()
-                        });
+                        crate::window::confirm_then(window, cx, "Quit Console?", |_, cx| cx.quit());
                     })
                     .ok();
                 return;

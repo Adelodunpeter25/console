@@ -17,7 +17,10 @@ fn tag_and_attribute_case_does_not_matter() {
 #[test]
 fn collapses_whitespace_and_decodes_entities() {
     let html = "<title>\n  Tom &amp; Jerry\n  &#8211; &#x41;&quot;s  </title>";
-    assert_eq!(extract_html_title(html).as_deref(), Some("Tom & Jerry – A\"s"));
+    assert_eq!(
+        extract_html_title(html).as_deref(),
+        Some("Tom & Jerry – A\"s")
+    );
 }
 
 #[test]

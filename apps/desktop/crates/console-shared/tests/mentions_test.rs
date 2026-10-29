@@ -51,7 +51,8 @@ fn reconcile_rejects_ranges_off_a_char_boundary() {
 
 #[test]
 fn mentions_are_rebuilt_from_context_files_on_token_boundaries() {
-    let mentions = mentions_from_context_files("see b.rs and c.rs", &["/x/b.rs".into(), "/y/c.rs".into()]);
+    let mentions =
+        mentions_from_context_files("see b.rs and c.rs", &["/x/b.rs".into(), "/y/c.rs".into()]);
     assert_eq!(mentions.len(), 2);
     assert_eq!(mentions[0].range, 4..8);
     assert_eq!(mentions[1].range, 13..17);

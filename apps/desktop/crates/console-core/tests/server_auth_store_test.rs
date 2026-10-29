@@ -38,7 +38,10 @@ fn a_credential_is_returned_for_its_own_server() {
     let stored = server_auth_store::load_for(&dir, "https://a.example").unwrap();
     assert_eq!(stored.token, "ct1_a");
     assert_eq!(stored.device_id, "d1");
-    assert_eq!(server_auth_store::token_for(&dir, "https://a.example").as_deref(), Some("ct1_a"));
+    assert_eq!(
+        server_auth_store::token_for(&dir, "https://a.example").as_deref(),
+        Some("ct1_a")
+    );
 }
 
 #[test]

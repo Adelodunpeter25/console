@@ -92,7 +92,10 @@ pub struct ListItem {
 #[derive(Clone, Debug, PartialEq)]
 enum InlinePiece {
     Run(InlineRun),
-    Image { url: String, alt: String },
+    Image {
+        url: String,
+        alt: String,
+    },
     /// `$$…$$`: a formula that owns its line.
     DisplayMath(String),
 }

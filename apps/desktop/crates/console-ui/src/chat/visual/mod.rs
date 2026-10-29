@@ -76,7 +76,12 @@ impl RenderOnce for VisualCard {
 fn fallback(message: &str, theme: Theme, sel: &Selectable) -> AnyElement {
     div()
         .text_size(px(12.5))
-        .child(sel.text(message.to_string(), FontWeight::NORMAL, theme.text_tertiary, true))
+        .child(sel.text(
+            message.to_string(),
+            FontWeight::NORMAL,
+            theme.text_tertiary,
+            true,
+        ))
         .into_any_element()
 }
 
@@ -85,18 +90,20 @@ fn card_body(spec: &VisualSpec, theme: Theme, sel: &Selectable) -> AnyElement {
     if spec.title.is_some() || spec.subtitle.is_some() {
         let mut head = div().flex().flex_col().gap(px(2.0));
         if let Some(t) = &spec.title {
-            head = head.child(
-                div()
-                    .text_size(px(14.0))
-                    .child(sel.text(t.clone(), FontWeight::SEMIBOLD, theme.text, true)),
-            );
+            head = head.child(div().text_size(px(14.0)).child(sel.text(
+                t.clone(),
+                FontWeight::SEMIBOLD,
+                theme.text,
+                true,
+            )));
         }
         if let Some(s) = &spec.subtitle {
-            head = head.child(
-                div()
-                    .text_size(px(12.0))
-                    .child(sel.text(s.clone(), FontWeight::NORMAL, theme.text_secondary, true)),
-            );
+            head = head.child(div().text_size(px(12.0)).child(sel.text(
+                s.clone(),
+                FontWeight::NORMAL,
+                theme.text_secondary,
+                true,
+            )));
         }
         col = col.child(head);
     }
@@ -117,7 +124,9 @@ fn card_body(spec: &VisualSpec, theme: Theme, sel: &Selectable) -> AnyElement {
                 else {
                     break;
                 };
-                row = row.child(metric::metric(label, value, delta, trend, caption, theme, sel));
+                row = row.child(metric::metric(
+                    label, value, delta, trend, caption, theme, sel,
+                ));
                 i += 1;
             }
             col = col.child(row);

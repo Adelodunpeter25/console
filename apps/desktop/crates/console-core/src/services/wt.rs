@@ -46,10 +46,9 @@ impl WtService {
         origin: Option<&str>,
         tls: WtTls,
     ) -> Result<Self> {
-        let token = transport
-            .auth_token()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("Server authentication is required before WebTransport"))?;
+        let token = transport.auth_token().await.ok_or_else(|| {
+            anyhow::anyhow!("Server authentication is required before WebTransport")
+        })?;
         let base_url = match origin {
             Some(origin) => origin.to_string(),
             None => upgrade_to_https(&transport.base_url().await),
@@ -80,7 +79,9 @@ impl WtService {
         request_type: &str,
         payload: Vec<u8>,
     ) -> Result<(WtStreamWriter, WtStreamReader)> {
-        self.session.open_stream_with_request(kind, id, request_type, payload).await
+        self.session
+            .open_stream_with_request(kind, id, request_type, payload)
+            .await
     }
 
     /// Close the connection. Streams unwind on the same cause.

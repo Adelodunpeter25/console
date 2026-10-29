@@ -224,10 +224,7 @@ impl UserMessageBubble {
         self
     }
 
-    pub fn on_toggle_expand(
-        mut self,
-        handler: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_toggle_expand(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_toggle_expand = Some(Rc::new(handler));
         self
     }
@@ -246,7 +243,7 @@ impl RenderOnce for UserMessageBubble {
             message_text_with_mentions(&self.content, &self.context_files);
         let has_content = !message_text.is_empty();
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
-// mirroring mobile's 4-line fold.
+        // mirroring mobile's 4-line fold.
         let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
         let folded = foldable && !self.expanded;
         let expanded = self.expanded;
@@ -339,11 +336,8 @@ impl RenderOnce for UserMessageBubble {
                                     card.child(
                                         div()
                                             .id(ElementId::Name(
-                                                format!(
-                                                    "toggle-user-fold-{}",
-                                                    self.selection_row
-                                                )
-                                                .into(),
+                                                format!("toggle-user-fold-{}", self.selection_row)
+                                                    .into(),
                                             ))
                                             .pt(px(4.0))
                                             .text_size(px(12.0))
@@ -353,7 +347,11 @@ impl RenderOnce for UserMessageBubble {
                                                 (on_toggle)(window, cx);
                                                 cx.stop_propagation();
                                             })
-                                            .child(if expanded { "Show less" } else { "Show more" }),
+                                            .child(if expanded {
+                                                "Show less"
+                                            } else {
+                                                "Show more"
+                                            }),
                                     )
                                 }),
                         )

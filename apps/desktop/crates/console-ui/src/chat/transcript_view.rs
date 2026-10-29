@@ -1429,15 +1429,15 @@ fn transcript_row(
                                 });
                             }
                         });
-                        element
-                            .child(activity)
-                            .children(visuals.into_iter().map(|(call_id, visual)| {
+                        element.child(activity).children(visuals.into_iter().map(
+                            |(call_id, visual)| {
                                 crate::chat::visual::VisualCard::new(
                                     call_id,
                                     visual,
                                     visual_selection.clone(),
                                 )
-                            }))
+                            },
+                        ))
                     },
                 )
                 .into_any_element()

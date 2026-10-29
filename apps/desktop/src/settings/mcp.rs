@@ -142,7 +142,10 @@ impl McpTabState {
                 args_input.update(cx, |input, cx| input.clear(cx));
                 env_input.update(cx, |input, cx| input.clear(cx));
                 token_input.update(cx, |input, cx| {
-                    input.set_placeholder("Bearer token (stored server-side, never shown again)", cx);
+                    input.set_placeholder(
+                        "Bearer token (stored server-side, never shown again)",
+                        cx,
+                    );
                     input.clear(cx);
                 });
                 entity.update(cx, |this, cx| {
@@ -383,11 +386,6 @@ impl McpTabState {
     ) -> gpui::AnyElement {
         let _ = window;
         let modal = self.modal_callbacks(cx);
-
-
-
-
-
 
         let on_delete: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> = {
             let entity = cx.entity().clone();

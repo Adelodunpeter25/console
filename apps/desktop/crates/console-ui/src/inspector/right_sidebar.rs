@@ -366,10 +366,9 @@ impl RenderOnce for RightSidebar {
                             "tab-subagents",
                             InspectorTab::Auxiliary(AuxiliaryTab::Subagents),
                         ),
-                        AuxiliaryTab::Shells => (
-                            "tab-shells",
-                            InspectorTab::Auxiliary(AuxiliaryTab::Shells),
-                        ),
+                        AuxiliaryTab::Shells => {
+                            ("tab-shells", InspectorTab::Auxiliary(AuxiliaryTab::Shells))
+                        }
                         AuxiliaryTab::Devices => (
                             "tab-devices",
                             InspectorTab::Auxiliary(AuxiliaryTab::Devices),

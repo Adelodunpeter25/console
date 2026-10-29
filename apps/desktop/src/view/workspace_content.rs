@@ -3,8 +3,8 @@ use console_core::{ApprovalMode, ApproveToolPermissionDto, SelectedModel, Update
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
-    QuestionInteractionCard, TasksPill, Theme, WorkspaceFooter, centered_stripe,
-    composer_pills, error_banner, notice_banner, queued_prompts_stack,
+    QuestionInteractionCard, TasksPill, Theme, WorkspaceFooter, centered_stripe, composer_pills,
+    error_banner, notice_banner, queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,

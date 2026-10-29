@@ -90,8 +90,8 @@ fn names_a_server_by_its_address() {
 // ported or local address is still http.
 #[test]
 fn a_schemeless_public_address_is_https() {
-    let parsed = parse_pairing_url("k7m2xq9pa4dn.opentunnel.xyz#vw9g-zu89-aphc")
-        .expect("valid pairing URL");
+    let parsed =
+        parse_pairing_url("k7m2xq9pa4dn.opentunnel.xyz#vw9g-zu89-aphc").expect("valid pairing URL");
     assert_eq!(parsed.base_url, "https://k7m2xq9pa4dn.opentunnel.xyz");
     // A bare machine name on the LAN is still spoken to in http.
     let parsed = parse_pairing_url("dell-xps:3000#abc").expect("valid pairing URL");
@@ -103,7 +103,10 @@ fn a_schemeless_public_address_is_https() {
 // that with a not-found page.
 #[test]
 fn an_https_address_keeps_its_scheme_when_displayed() {
-    assert_eq!(host_port("https://k7m2xq9pa4dn.opentunnel.xyz"), "https://k7m2xq9pa4dn.opentunnel.xyz");
+    assert_eq!(
+        host_port("https://k7m2xq9pa4dn.opentunnel.xyz"),
+        "https://k7m2xq9pa4dn.opentunnel.xyz"
+    );
     // http stays the shorthanded default form.
     assert_eq!(host_port("http://server.example"), "server.example");
 }
@@ -113,8 +116,7 @@ fn an_https_address_keeps_its_scheme_when_displayed() {
 // scheme is spoken to in the wrong protocol.
 #[test]
 fn a_split_line_keeps_an_https_scheme() {
-    let (address, code) =
-        split_pairing_line("https://k7m2xq9pa4dn.opentunnel.xyz#vw9g-zu89-aphc");
+    let (address, code) = split_pairing_line("https://k7m2xq9pa4dn.opentunnel.xyz#vw9g-zu89-aphc");
     assert_eq!(address, "https://k7m2xq9pa4dn.opentunnel.xyz");
     assert_eq!(code, "vw9g-zu89-aphc");
 }

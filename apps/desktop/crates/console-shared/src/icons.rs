@@ -197,10 +197,7 @@ fn named_icon(name: &str) -> Option<&'static str> {
         Some("cmake")
     } else if name == "makefile" || name.starts_with("makefile.") || name == "justfile" {
         Some("makefile")
-    } else if matches!(
-        name,
-        "cargo.toml" | "cargo.lock" | "rust-toolchain.toml"
-    ) {
+    } else if matches!(name, "cargo.toml" | "cargo.lock" | "rust-toolchain.toml") {
         Some("rust")
     } else if matches!(name, "go.mod" | "go.sum" | "go.work") {
         Some("go")

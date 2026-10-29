@@ -396,9 +396,10 @@ impl RunService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to list background work".into())))
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list background work".into())
+            ))
         }
     }
 
@@ -429,9 +430,11 @@ impl RunService {
             .context("Failed to parse cancel response")?;
         match (body.success, body.data) {
             (true, Some(work)) => Ok(work),
-            _ => Err(anyhow!(body
-                .error
-                .unwrap_or_else(|| "Failed to cancel background work".into()))),
+            _ => {
+                Err(anyhow!(body.error.unwrap_or_else(|| {
+                    "Failed to cancel background work".into()
+                })))
+            }
         }
     }
 
@@ -442,9 +445,8 @@ impl RunService {
         &self,
         session_id: &str,
         work_id: &str,
-    ) -> Result<
-        Pin<Box<dyn futures_util::Stream<Item = Result<BackgroundWorkOutputFrame>> + Send>>,
-    > {
+    ) -> Result<Pin<Box<dyn futures_util::Stream<Item = Result<BackgroundWorkOutputFrame>> + Send>>>
+    {
         let url = self
             .transport
             .url(&format!(

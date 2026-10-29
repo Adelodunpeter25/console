@@ -663,7 +663,9 @@ impl DeviceViewer {
             // GPUI focus moved elsewhere (e.g. the composer) while the native
             // surface still holds the keyboard: hand it back.
             self.reclaim_native_keyboard(cx);
-        } else if !natively_focused && window_focus_changed && window_focus.is_some()
+        } else if !natively_focused
+            && window_focus_changed
+            && window_focus.is_some()
             && !viewer_focused
             && self.was_natively_focused
         {

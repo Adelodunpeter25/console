@@ -99,7 +99,10 @@ fn two_thousand_points_are_bucketed() {
     let out = min_max_buckets(&pts, 300);
     assert!(out.len() <= 600);
     assert_eq!(out.iter().map(|p| p.y).fold(f64::INFINITY, f64::min), 0.0);
-    assert_eq!(out.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max), 16.0);
+    assert_eq!(
+        out.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max),
+        16.0
+    );
     assert_eq!(min_max_buckets(&pts, 1500).len(), 2000);
 }
 
@@ -115,6 +118,9 @@ fn formats_and_describes() {
         panic!()
     };
     let d = describe_chart(chart);
-    assert!(d.starts_with("Line chart, Signups by week. 1 series, 3 points."), "{d}");
+    assert!(
+        d.starts_with("Line chart, Signups by week. 1 series, 3 points."),
+        "{d}"
+    );
     assert!(d.contains("Last 164"), "{d}");
 }

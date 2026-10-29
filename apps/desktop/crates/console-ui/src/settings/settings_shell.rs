@@ -124,109 +124,107 @@ impl RenderOnce for SettingsShell {
                                     ),
                             )
                             // Navigation Groups
-                            .child(
-                                div().flex().flex_col().gap(px(12.0)).children(
-                                    SETTINGS_GROUPS.iter().map(|group| {
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .gap(px(2.0))
-                                            .child(
-                                                div()
-                                                    .px(px(8.0))
-                                                    .pt(px(4.0))
-                                                    .pb(px(2.0))
-                                                    .text_size(px(10.5))
-                                                    .font_weight(FontWeight::SEMIBOLD)
-                                                    .text_color(theme.text_ghost)
-                                                    .child(group.title),
-                                            )
-                                            .children(group.tabs.iter().map(
-                                                |(tab, icon_name, label)| {
-                                                    let is_active = self.active_tab == *tab;
-                                                    let on_tab_click = on_select.clone();
-                                                    let tab_id = format!("settings-tab-{:?}", tab);
-                                                    let tab_val = *tab;
+                            .child(div().flex().flex_col().gap(px(12.0)).children(
+                                SETTINGS_GROUPS.iter().map(|group| {
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(2.0))
+                                        .child(
+                                            div()
+                                                .px(px(8.0))
+                                                .pt(px(4.0))
+                                                .pb(px(2.0))
+                                                .text_size(px(10.5))
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(theme.text_ghost)
+                                                .child(group.title),
+                                        )
+                                        .children(group.tabs.iter().map(
+                                            |(tab, icon_name, label)| {
+                                                let is_active = self.active_tab == *tab;
+                                                let on_tab_click = on_select.clone();
+                                                let tab_id = format!("settings-tab-{:?}", tab);
+                                                let tab_val = *tab;
 
-                                                    div()
-                                                        .id(ElementId::from(tab_id))
-                                                        .px(px(8.0))
-                                                        .py(px(6.0))
-                                                        .rounded(px(6.0))
-                                                        .cursor_pointer()
-                                                        .bg(if is_active {
-                                                            theme.surface
+                                                div()
+                                                    .id(ElementId::from(tab_id))
+                                                    .px(px(8.0))
+                                                    .py(px(6.0))
+                                                    .rounded(px(6.0))
+                                                    .cursor_pointer()
+                                                    .bg(if is_active {
+                                                        theme.surface
+                                                    } else {
+                                                        gpui::transparent_black()
+                                                    })
+                                                    .hover(|s| {
+                                                        if !is_active {
+                                                            s.bg(theme.overlay)
                                                         } else {
-                                                            gpui::transparent_black()
-                                                        })
-                                                        .hover(|s| {
-                                                            if !is_active {
-                                                                s.bg(theme.overlay)
-                                                            } else {
-                                                                s
-                                                            }
-                                                        })
-                                                        .active(|s| {
-                                                            if !is_active {
-                                                                s.bg(theme.overlay_strong)
-                                                            } else {
-                                                                s
-                                                            }
-                                                        })
-                                                        .on_mouse_down(
-                                                            MouseButton::Left,
-                                                            move |_event, window, cx| {
-                                                                cx.stop_propagation();
-                                                                (on_tab_click)(tab_val, window, cx);
-                                                            },
-                                                        )
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_between()
-                                                        .child(
-                                                            div()
-                                                                .flex()
-                                                                .items_center()
-                                                                .gap(px(8.0))
-                                                                .child(app_icon(
-                                                                    *icon_name,
-                                                                    13.5,
-                                                                    if is_active {
-                                                                        theme.accent
+                                                            s
+                                                        }
+                                                    })
+                                                    .active(|s| {
+                                                        if !is_active {
+                                                            s.bg(theme.overlay_strong)
+                                                        } else {
+                                                            s
+                                                        }
+                                                    })
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        move |_event, window, cx| {
+                                                            cx.stop_propagation();
+                                                            (on_tab_click)(tab_val, window, cx);
+                                                        },
+                                                    )
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_between()
+                                                    .child(
+                                                        div()
+                                                            .flex()
+                                                            .items_center()
+                                                            .gap(px(8.0))
+                                                            .child(app_icon(
+                                                                *icon_name,
+                                                                13.5,
+                                                                if is_active {
+                                                                    theme.accent
+                                                                } else {
+                                                                    theme.text_secondary
+                                                                },
+                                                            ))
+                                                            .child(
+                                                                div()
+                                                                    .text_size(px(12.5))
+                                                                    .font_weight(if is_active {
+                                                                        FontWeight::MEDIUM
+                                                                    } else {
+                                                                        FontWeight::NORMAL
+                                                                    })
+                                                                    .text_color(if is_active {
+                                                                        theme.text
                                                                     } else {
                                                                         theme.text_secondary
-                                                                    },
-                                                                ))
-                                                                .child(
-                                                                    div()
-                                                                        .text_size(px(12.5))
-                                                                        .font_weight(if is_active {
-                                                                            FontWeight::MEDIUM
-                                                                        } else {
-                                                                            FontWeight::NORMAL
-                                                                        })
-                                                                        .text_color(if is_active {
-                                                                            theme.text
-                                                                        } else {
-                                                                            theme.text_secondary
-                                                                        })
-                                                                        .child(*label),
-                                                                ),
+                                                                    })
+                                                                    .child(*label),
+                                                            ),
+                                                    )
+                                                    .when(is_active, |el| {
+                                                        el.child(
+                                                            div()
+                                                                .w(px(2.5))
+                                                                .h(px(12.0))
+                                                                .rounded(px(1.5))
+                                                                .bg(theme.accent),
                                                         )
-                                                        .when(is_active, |el| {
-                                                            el.child(
-                                                                div()
-                                                                    .w(px(2.5))
-                                                                    .h(px(12.0))
-                                                                    .rounded(px(1.5))
-                                                                    .bg(theme.accent),
-                                                            )
-                                                        })
-                                                },
-                                            ))
-                                    }),
-                                ),
-                            ),
+                                                    })
+                                            },
+                                        ))
+                                }),
+                            )),
                     ),
             )
             // Right content container with readable max-width and comfortable padding

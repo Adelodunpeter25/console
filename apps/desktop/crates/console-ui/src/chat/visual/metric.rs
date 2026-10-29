@@ -19,16 +19,18 @@ pub(super) fn metric(
         .flex()
         .flex_col()
         .gap(px(2.0))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .child(sel.text(label.to_string(), FontWeight::NORMAL, theme.text_secondary, true)),
-        )
-        .child(
-            div()
-                .text_size(px(22.0))
-                .child(sel.text(value.to_string(), FontWeight::SEMIBOLD, theme.text, false)),
-        );
+        .child(div().text_size(px(12.0)).child(sel.text(
+            label.to_string(),
+            FontWeight::NORMAL,
+            theme.text_secondary,
+            true,
+        )))
+        .child(div().text_size(px(22.0)).child(sel.text(
+            value.to_string(),
+            FontWeight::SEMIBOLD,
+            theme.text,
+            false,
+        )));
     if let Some(delta) = delta {
         // Arrow glyph plus color so the trend is never color-only.
         let (arrow, tint) = match trend.as_deref() {
@@ -37,18 +39,20 @@ pub(super) fn metric(
             Some("flat") => ("▬ ", theme.text_secondary),
             _ => ("", theme.text_secondary),
         };
-        col = col.child(
-            div()
-                .text_size(px(12.0))
-                .child(sel.text(format!("{arrow}{delta}"), FontWeight::MEDIUM, tint, false)),
-        );
+        col = col.child(div().text_size(px(12.0)).child(sel.text(
+            format!("{arrow}{delta}"),
+            FontWeight::MEDIUM,
+            tint,
+            false,
+        )));
     }
     if let Some(caption) = caption {
-        col = col.child(
-            div()
-                .text_size(px(11.0))
-                .child(sel.text(caption.clone(), FontWeight::NORMAL, theme.text_tertiary, false)),
-        );
+        col = col.child(div().text_size(px(11.0)).child(sel.text(
+            caption.clone(),
+            FontWeight::NORMAL,
+            theme.text_tertiary,
+            false,
+        )));
     }
     col.into_any_element()
 }

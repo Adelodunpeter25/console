@@ -359,10 +359,7 @@ fn test_settings_tabs_are_dropped_from_a_restored_workspace() {
     let leaves = root.leaves();
     assert_eq!(leaves.len(), 1);
     assert_eq!(leaves[0].tabs.len(), 1);
-    assert!(matches!(
-        leaves[0].tabs[0],
-        WorkspaceTabConfig::Chat { .. }
-    ));
+    assert!(matches!(leaves[0].tabs[0], WorkspaceTabConfig::Chat { .. }));
     // The chat is the active tab again, not the settings that were.
     assert_eq!(leaves[0].active_tab_id.as_deref(), Some("chat:session-123"));
 }

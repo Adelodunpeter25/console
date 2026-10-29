@@ -74,12 +74,7 @@ impl BackgroundWork {
             .get("command")
             .map(|c| first(c))
             .filter(|c| !c.is_empty())
-            .or_else(|| {
-                self.summary
-                    .as_deref()
-                    .map(first)
-                    .filter(|c| !c.is_empty())
-            })
+            .or_else(|| self.summary.as_deref().map(first).filter(|c| !c.is_empty()))
             .unwrap_or_else(|| format!("Shell {}", self.id.chars().take(6).collect::<String>()))
     }
 }

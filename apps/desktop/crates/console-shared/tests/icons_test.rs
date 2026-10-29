@@ -89,7 +89,12 @@ fn every_key_has_an_asset_on_both_clients() {
         .lines()
         .filter(|l| l.contains("=>"))
         .filter_map(|l| l.rsplit("=>").next())
-        .filter_map(|r| r.trim().trim_end_matches(',').strip_prefix('"')?.strip_suffix('"'))
+        .filter_map(|r| {
+            r.trim()
+                .trim_end_matches(',')
+                .strip_prefix('"')?
+                .strip_suffix('"')
+        })
         .collect();
     keys.extend(
         src.lines()

@@ -35,7 +35,11 @@ pub struct PairingUrl {
 /// when it is plausibly local: it carries an explicit port (the LAN shape,
 /// "192.168.1.10:3000"), is an IP or localhost, or is a bare machine name.
 pub fn default_scheme(address: &str) -> &'static str {
-    let authority = address.split('/').next().unwrap_or(address).trim_end_matches('/');
+    let authority = address
+        .split('/')
+        .next()
+        .unwrap_or(address)
+        .trim_end_matches('/');
     let (_, port) = split_authority(authority);
     if port.is_some() {
         return "http";
@@ -49,11 +53,7 @@ pub fn default_scheme(address: &str) -> &'static str {
     }
     // A DNS name without a port is a public endpoint; everything else is a
     // bare machine name on the LAN ("dell-xps"), which speaks http.
-    if host.contains('.') {
-        "https"
-    } else {
-        "http"
-    }
+    if host.contains('.') { "https" } else { "http" }
 }
 
 /// Split an authority into its host and an optional explicit port.
@@ -73,9 +73,7 @@ fn split_authority(authority: &str) -> (&str, Option<&str>) {
         return (host, tail.strip_prefix(':'));
     }
     match authority.split_once(':') {
-        Some((host, port))
-            if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) =>
-        {
+        Some((host, port)) if !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()) => {
             (host, Some(port))
         }
         _ => (authority, None),

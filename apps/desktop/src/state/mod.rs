@@ -6,9 +6,9 @@
 //! so each domain stays reviewable without losing shared state.
 
 mod attachments;
-mod background_shells;
 mod auth;
 mod autocomplete;
+mod background_shells;
 mod bootstrap;
 mod browser_actions;
 mod deleted_sessions;
@@ -19,12 +19,12 @@ mod errors;
 mod execution;
 mod floating_composer;
 mod github;
-mod onboarding;
-mod provider_credentials;
 mod global_actions;
 mod integrations;
 mod layout;
 mod macos_notifications;
+mod onboarding;
+mod provider_credentials;
 pub(crate) use macos_notifications::clear_all as clear_all_notifications;
 mod notifications;
 mod pagination;

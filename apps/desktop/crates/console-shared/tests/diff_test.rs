@@ -273,7 +273,10 @@ fn short_and_long_hunk_headers_both_set_the_counters() {
     assert_eq!(short.lines[0].old_no, Some(7));
     assert_eq!(short.lines[1].new_no, Some(9));
     let long = parse_unified_diff("@@ -7,3 +9,4 @@ fn ctx\n a\n");
-    assert_eq!((long.lines[0].old_no, long.lines[0].new_no), (Some(7), Some(9)));
+    assert_eq!(
+        (long.lines[0].old_no, long.lines[0].new_no),
+        (Some(7), Some(9))
+    );
     // A zero-length old range: `-0,0`.
     let new_file = parse_unified_diff("@@ -0,0 +1,2 @@\n+a\n+b\n");
     assert_eq!(new_file.lines[0].new_no, Some(1));

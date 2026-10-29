@@ -89,11 +89,7 @@ impl ConsoleDesktopApp {
     /// The server cannot know the address the phone should use — it may be
     /// behind a proxy or a tunnel — so this app says which address it is
     /// reaching the server at, and the server builds the QR code from that.
-    pub fn create_pairing_grant(
-        &mut self,
-        device_name: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn create_pairing_grant(&mut self, device_name: String, cx: &mut Context<Self>) {
         if device_name.trim().is_empty() {
             self.server_auth_error = Some("Name the device you are pairing.".to_string());
             cx.notify();

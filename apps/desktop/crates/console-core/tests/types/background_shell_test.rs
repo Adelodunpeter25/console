@@ -2,7 +2,12 @@
 //! label, and the output status line.
 use console_core::types::{AgentSessionEvent, BackgroundWorkOutput};
 
-fn work(kind: &str, status: &str, meta: &str, summary: &str) -> console_core::types::BackgroundWork {
+fn work(
+    kind: &str,
+    status: &str,
+    meta: &str,
+    summary: &str,
+) -> console_core::types::BackgroundWork {
     let json = format!(
         r#"{{"type":"backgroundWorkStarted","work":{{
             "id":"work_abcdef123","sessionId":"s1","kind":"{kind}","status":"{status}",
@@ -23,7 +28,12 @@ fn only_running_shells_count() {
 
 #[test]
 fn shell_command_prefers_command_then_summary_then_id() {
-    let with_cmd = work("shell", "running", r#"{"command":"cargo check\nsecond"}"#, "sum");
+    let with_cmd = work(
+        "shell",
+        "running",
+        r#"{"command":"cargo check\nsecond"}"#,
+        "sum",
+    );
     assert_eq!(with_cmd.shell_command(), "cargo check");
     let with_summary = work("shell", "running", "{}", "Running tests");
     assert_eq!(with_summary.shell_command(), "Running tests");
@@ -57,10 +67,16 @@ fn stream_frames_accumulate_into_output() {
     let frame = |json: &str| -> BackgroundWorkOutputFrame { serde_json::from_str(json).unwrap() };
 
     let mut out = BackgroundWorkOutput::default();
-    out.apply_frame(frame(r#"{"stdout":"one\n","nextCursor":4,"status":"running"}"#));
+    out.apply_frame(frame(
+        r#"{"stdout":"one\n","nextCursor":4,"status":"running"}"#,
+    ));
     // stderr absent: keeps what it had; stdout appends.
-    out.apply_frame(frame(r#"{"stdout":"two\n","stderr":"warn","nextCursor":8,"status":"running"}"#));
-    out.apply_frame(frame(r#"{"stdout":"","nextCursor":8,"status":"exited","exitCode":0}"#));
+    out.apply_frame(frame(
+        r#"{"stdout":"two\n","stderr":"warn","nextCursor":8,"status":"running"}"#,
+    ));
+    out.apply_frame(frame(
+        r#"{"stdout":"","nextCursor":8,"status":"exited","exitCode":0}"#,
+    ));
 
     assert_eq!(out.stdout, "one\ntwo\n");
     assert_eq!(out.stderr, "warn");

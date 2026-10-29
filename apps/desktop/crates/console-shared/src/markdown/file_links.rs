@@ -33,7 +33,9 @@ const KNOWN_BARE_NAMES: &[&str] = &[
 /// True for an extensionless name from [`KNOWN_BARE_NAMES`].
 pub fn is_known_bare_name(name: &str) -> bool {
     let name = strip_line_suffix(name.trim());
-    KNOWN_BARE_NAMES.iter().any(|known| name.eq_ignore_ascii_case(known))
+    KNOWN_BARE_NAMES
+        .iter()
+        .any(|known| name.eq_ignore_ascii_case(known))
 }
 
 /// True when `link` should open as a workspace file instead of a browser URL.

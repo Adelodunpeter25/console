@@ -232,7 +232,11 @@ impl ConsoleDesktopApp {
     /// mutation response already carries the provider's post-mutation
     /// status, so the update applies it without a second status read.
     pub fn use_account(&mut self, provider: String, account_id: String, cx: &mut Context<Self>) {
-        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+        if self
+            .account_busy
+            .as_ref()
+            .is_some_and(|(p, i)| *p == provider && *i == account_id)
+        {
             return;
         }
         self.account_busy = Some((provider.clone(), account_id.clone()));
@@ -241,7 +245,10 @@ impl ConsoleDesktopApp {
 
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            let res = client.auth.patch_account(&provider, &account_id, Some(true), None).await;
+            let res = client
+                .auth
+                .patch_account(&provider, &account_id, Some(true), None)
+                .await;
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, _cx| match res {
@@ -257,8 +264,7 @@ impl ConsoleDesktopApp {
                         }
                         Err(err) => {
                             this.account_busy = None;
-                            this.account_error =
-                                Some((provider.clone(), format!("{err:#}")));
+                            this.account_error = Some((provider.clone(), format!("{err:#}")));
                         }
                     });
                 }
@@ -279,7 +285,11 @@ impl ConsoleDesktopApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
-        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+        if self
+            .account_busy
+            .as_ref()
+            .is_some_and(|(p, i)| *p == provider && *i == account_id)
+        {
             return;
         }
         self.account_busy = Some((provider.clone(), account_id.clone()));
@@ -308,8 +318,7 @@ impl ConsoleDesktopApp {
                         }
                         Err(err) => {
                             this.account_busy = None;
-                            this.account_error =
-                                Some((provider.clone(), format!("{err:#}")));
+                            this.account_error = Some((provider.clone(), format!("{err:#}")));
                             // The rename dialog stays open: it shows the
                             // error next to the name that failed, so the
                             // user fixes rather than retypes.
@@ -326,7 +335,11 @@ impl ConsoleDesktopApp {
     /// last account also clears its legacy file, so the row's status may
     /// drop to "Not connected" from the same response.
     pub fn remove_account(&mut self, provider: String, account_id: String, cx: &mut Context<Self>) {
-        if self.account_busy.as_ref().is_some_and(|(p, i)| *p == provider && *i == account_id) {
+        if self
+            .account_busy
+            .as_ref()
+            .is_some_and(|(p, i)| *p == provider && *i == account_id)
+        {
             return;
         }
         self.account_busy = Some((provider.clone(), account_id.clone()));
@@ -347,17 +360,18 @@ impl ConsoleDesktopApp {
                                     mutated.status.unwrap_or_default(),
                                 );
                             }
-                            if this.recent_login_account.as_ref().is_some_and(|(p, id)| {
-                                *p == provider && id == &account_id
-                            }) {
+                            if this
+                                .recent_login_account
+                                .as_ref()
+                                .is_some_and(|(p, id)| *p == provider && id == &account_id)
+                            {
                                 this.recent_login_account = None;
                             }
                             this.account_busy = None;
                         }
                         Err(err) => {
                             this.account_busy = None;
-                            this.account_error =
-                                Some((provider.clone(), format!("{err:#}")));
+                            this.account_error = Some((provider.clone(), format!("{err:#}")));
                         }
                     });
                 }

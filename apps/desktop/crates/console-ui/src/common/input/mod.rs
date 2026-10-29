@@ -516,7 +516,12 @@ impl ComposerInput {
 
     /// Insert an accepted skill as an inline chip. The buffer keeps the
     /// plain `/name` text, which is what the agent reads.
-    pub fn insert_skill_mention(&mut self, range: Range<usize>, name: &str, cx: &mut Context<Self>) {
+    pub fn insert_skill_mention(
+        &mut self,
+        range: Range<usize>,
+        name: &str,
+        cx: &mut Context<Self>,
+    ) {
         let chip = ComposerMention::skill(0..0, name);
         self.insert_mention_chip(range, chip.label, chip.path, cx);
     }

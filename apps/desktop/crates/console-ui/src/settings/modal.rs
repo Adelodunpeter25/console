@@ -6,7 +6,7 @@
 use crate::primitives::icons::{IconName, app_icon};
 use crate::theme::Theme;
 use gpui::{
-    App, AnyElement, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
+    AnyElement, App, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     Styled, Window, div, px,
 };
 use std::rc::Rc;
@@ -81,11 +81,7 @@ impl RenderOnce for Modal {
                                             (on_close)(window, cx);
                                         }
                                     })
-                                    .child(app_icon(
-                                        IconName::Close,
-                                        14.0,
-                                        theme.text_secondary,
-                                    )),
+                                    .child(app_icon(IconName::Close, 14.0, theme.text_secondary)),
                             ),
                     )
                     .child(self.content)

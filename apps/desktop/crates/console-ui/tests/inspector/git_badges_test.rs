@@ -34,7 +34,10 @@ fn every_ancestor_of_a_changed_file_carries_its_badge() {
     ] {
         assert_eq!(badges.get(path), Some(&GitBadge::Modified), "{path}");
     }
-    assert!(!badges.contains_key("/"), "the filesystem root is not a folder in the tree");
+    assert!(
+        !badges.contains_key("/"),
+        "the filesystem root is not a folder in the tree"
+    );
 }
 
 #[test]
@@ -60,7 +63,10 @@ fn result_does_not_depend_on_change_order() {
     ];
     let mut reversed = forward.to_vec();
     reversed.reverse();
-    assert_eq!(aggregate_git_badges(&forward), aggregate_git_badges(&reversed));
+    assert_eq!(
+        aggregate_git_badges(&forward),
+        aggregate_git_badges(&reversed)
+    );
 }
 
 #[test]

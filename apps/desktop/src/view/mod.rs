@@ -1414,10 +1414,8 @@ impl Render for ConsoleDesktopApp {
                                         Rc::new(text.lines().map(|l| l.to_string()).collect());
                                     let count = lines.len().max(1);
                                     let key = format!("shell:{}", state.work_id);
-                                    let prev_count = self
-                                        .viewer_list_states
-                                        .get(&key)
-                                        .map(|st| st.item_count());
+                                    let prev_count =
+                                        self.viewer_list_states.get(&key).map(|st| st.item_count());
                                     let list_state = self
                                         .viewer_list_states
                                         .entry(key.clone())
@@ -1468,7 +1466,9 @@ impl Render for ConsoleDesktopApp {
                                     if let (Some(app), Some(sid)) =
                                         (open_entity.upgrade(), open_sid.clone())
                                     {
-                                        app.update(cx, |this, cx| this.select_shell(sid, work_id, cx));
+                                        app.update(cx, |this, cx| {
+                                            this.select_shell(sid, work_id, cx)
+                                        });
                                     }
                                 });
                             let back_entity = entity.clone();
@@ -1485,7 +1485,9 @@ impl Render for ConsoleDesktopApp {
                                     if let (Some(app), Some(sid)) =
                                         (stop_entity.upgrade(), stop_sid.clone())
                                     {
-                                        app.update(cx, |this, cx| this.stop_shell(sid, work_id, cx));
+                                        app.update(cx, |this, cx| {
+                                            this.stop_shell(sid, work_id, cx)
+                                        });
                                     }
                                 });
                             console_ui::ShellListView::new(

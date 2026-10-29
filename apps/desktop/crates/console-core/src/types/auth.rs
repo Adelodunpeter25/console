@@ -60,7 +60,11 @@ pub fn auth_status_for<'a>(
 /// an `AccountMutationResponse` — into a full status payload, so a Use/Remove
 /// click updates the provider row from the response's data without a second
 /// `GET /api/auth/status` round-trip.
-pub fn merge_provider_status(status: &mut AuthStatusResponse, provider: &str, patch: ProviderAuthStatus) {
+pub fn merge_provider_status(
+    status: &mut AuthStatusResponse,
+    provider: &str,
+    patch: ProviderAuthStatus,
+) {
     let slot = match provider {
         "antigravity" => &mut status.antigravity,
         "codex" | "openai" => &mut status.codex,

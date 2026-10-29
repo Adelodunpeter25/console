@@ -182,7 +182,9 @@ pub fn min_max_buckets(points: &[VisualPoint], buckets: usize) -> Vec<VisualPoin
     let mut out = Vec::with_capacity(buckets * 2);
     for i in 0..buckets {
         let from = (i as f64 * per) as usize;
-        let to = (((i + 1) as f64 * per) as usize).min(points.len()).max(from + 1);
+        let to = (((i + 1) as f64 * per) as usize)
+            .min(points.len())
+            .max(from + 1);
         let (mut lo, mut hi) = (from, from);
         for j in from..to {
             if points[j].y < points[lo].y {
@@ -216,11 +218,20 @@ pub fn describe_chart(chart: &VisualChart) -> String {
         .as_ref()
         .map(|t| format!(", {t}"))
         .unwrap_or_default();
-    let per_series = chart.series.iter().map(|s| s.points.len()).max().unwrap_or(0);
+    let per_series = chart
+        .series
+        .iter()
+        .map(|s| s.points.len())
+        .max()
+        .unwrap_or(0);
     let mut out = format!(
         "{kind} chart{title}. {} {}, {} {}.",
         chart.series.len(),
-        if chart.series.len() == 1 { "series" } else { "series" },
+        if chart.series.len() == 1 {
+            "series"
+        } else {
+            "series"
+        },
         per_series,
         if per_series == 1 { "point" } else { "points" },
     );
@@ -246,6 +257,7 @@ pub fn looks_numeric(cell: &str) -> bool {
         .trim_start_matches(['+', '-', '$', '€', '£'])
         .trim_end_matches(['%', 'k', 'K', 'M', 'B']);
     !t.is_empty()
-        && t.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',')
+        && t.chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == ',')
         && t.chars().any(|c| c.is_ascii_digit())
 }

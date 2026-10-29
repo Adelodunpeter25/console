@@ -10,9 +10,9 @@ use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::Mutex;
+use wtransport::tls::build_native_cert_store;
 use wtransport::tls::client::build_default_tls_config;
 use wtransport::tls::rustls::RootCertStore;
-use wtransport::tls::build_native_cert_store;
 use wtransport::{ClientConfig, Endpoint, endpoint::ConnectOptions, endpoint::endpoint_side};
 
 /// Stream kinds: numeric values must match `console.v1.WtStreamKind`.

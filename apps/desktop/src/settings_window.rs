@@ -56,18 +56,16 @@ impl SettingsWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let subscription = app
-            .upgrade()
-            .map(|app_entity| {
-                cx.observe(&app_entity, |this, app, cx| {
-                    // Snapshot the rename-dialog open state: `modal_open`
-                    // runs inside event callbacks keyed to the app entity,
-                    // where reading the app entity through the map would
-                    // panic with "already being updated".
-                    this.rename_form_open = app.read(cx).rename_form.is_some();
-                    cx.notify();
-                })
-            });
+        let subscription = app.upgrade().map(|app_entity| {
+            cx.observe(&app_entity, |this, app, cx| {
+                // Snapshot the rename-dialog open state: `modal_open`
+                // runs inside event callbacks keyed to the app entity,
+                // where reading the app entity through the map would
+                // panic with "already being updated".
+                this.rename_form_open = app.read(cx).rename_form.is_some();
+                cx.notify();
+            })
+        });
 
         let new_env_name_input = cx.new(|cx| {
             let mut input = ComposerInput::new(window, cx);
@@ -222,8 +220,7 @@ impl SettingsWindow {
         // Account rename field. Created up front for the same reason as the
         // others: a stable entity keeps focus and half-typed names across
         // renders. Seeded with the account's display name when the form opens.
-        let rename_input =
-            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Account name"));
+        let rename_input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("Account name"));
         subscriptions.push(cx.subscribe(
             &rename_input,
             |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
@@ -358,7 +355,15 @@ impl SettingsWindow {
     ) -> Vec<console_ui::settings::ApiKeyProviderSection> {
         // Snapshot what the rows need out of the app entity first, so the read
         // guard is dropped before this method creates entities via `cx`.
-        let rows: Vec<(String, String, String, Option<console_core::types::ProviderCredentialStatus>, bool, bool, Option<String>)> = {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            Option<console_core::types::ProviderCredentialStatus>,
+            bool,
+            bool,
+            Option<String>,
+        )> = {
             let app = app_entity.read(cx);
             app.providers
                 .iter()
@@ -378,9 +383,7 @@ impl SettingsWindow {
         };
 
         let mut sections = Vec::with_capacity(rows.len());
-        for (provider_id, display_name, description, status, busy, form_open, error) in
-            rows
-        {
+        for (provider_id, display_name, description, status, busy, form_open, error) in rows {
             let input = self
                 .api_key_inputs
                 .entry(provider_id.clone())
@@ -415,11 +418,7 @@ impl SettingsWindow {
                         // client-side.
                         input.update(cx, |input, cx| input.set_content("", cx));
                         app.update(cx, |app_state, cx| {
-                            app_state.set_provider_credential(
-                                provider_id.clone(),
-                                key,
-                                cx,
-                            );
+                            app_state.set_provider_credential(provider_id.clone(), key, cx);
                             app_state.set_provider_credential_form_open(
                                 provider_id.clone(),
                                 false,
@@ -564,9 +563,7 @@ impl Render for SettingsWindow {
                 });
                 let ent = entity.clone();
                 cx.spawn(async move |cx| {
-                    let ok =
-                        console_core::utils::probe_backend(&url, Duration::from_secs(3))
-                            .await;
+                    let ok = console_core::utils::probe_backend(&url, Duration::from_secs(3)).await;
                     let _ = cx.update(|cx| {
                         ent.update(cx, |this, cx| {
                             this.new_env_probe = if ok.is_ok() {
@@ -610,12 +607,7 @@ impl Render for SettingsWindow {
                     };
                     if let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
-                            app_state.pair_with_code(
-                                host,
-                                code,
-                                "Desktop".to_string(),
-                                cx,
-                            );
+                            app_state.pair_with_code(host, code, "Desktop".to_string(), cx);
                         });
                     }
                     entity.update(cx, |this, cx| {
@@ -745,13 +737,15 @@ impl Render for SettingsWindow {
                     recent_login_account: app.recent_login_account.clone(),
                     on_account_use: {
                         let app_handle = self.app.clone();
-                        Rc::new(move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
-                            if let Some(app) = app_handle.upgrade() {
-                                app.update(cx, |app_state, cx| {
-                                    app_state.use_account(provider, id, cx);
-                                });
-                            }
-                        })
+                        Rc::new(
+                            move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
+                                if let Some(app) = app_handle.upgrade() {
+                                    app.update(cx, |app_state, cx| {
+                                        app_state.use_account(provider, id, cx);
+                                    });
+                                }
+                            },
+                        )
                     },
                     on_account_remove: {
                         let app_handle = self.app.clone();
@@ -759,13 +753,15 @@ impl Render for SettingsWindow {
                         // action: the server response refreshes the row and a
                         // deliberate second click on a missing id answers
                         // "Unknown account." instead of removing the wrong one.
-                        Rc::new(move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
-                            if let Some(app) = app_handle.upgrade() {
-                                app.update(cx, |app_state, cx| {
-                                    app_state.remove_account(provider, id, cx);
-                                });
-                            }
-                        })
+                        Rc::new(
+                            move |provider: String, id: String, _w: &mut Window, cx: &mut App| {
+                                if let Some(app) = app_handle.upgrade() {
+                                    app.update(cx, |app_state, cx| {
+                                        app_state.remove_account(provider, id, cx);
+                                    });
+                                }
+                            },
+                        )
                     },
                     on_account_rename: {
                         let app_handle = self.app.clone();
@@ -777,9 +773,7 @@ impl Render for SettingsWindow {
                                   _w: &mut Window,
                                   cx: &mut App| {
                                 if let Some(app) = app_handle.upgrade() {
-                                    input.update(cx, |input, cx| {
-                                        input.set_content(current, cx)
-                                    });
+                                    input.update(cx, |input, cx| input.set_content(current, cx));
                                     app.update(cx, |app_state, cx| {
                                         app_state.account_error = None;
                                         app_state.rename_form = Some((provider, id));
@@ -1167,8 +1161,7 @@ impl Render for SettingsWindow {
             })
             .unwrap_or_default();
         let show_rename_modal = rename_target.is_some();
-        let rename_busy =
-            show_rename_modal && rename_busy_src.as_ref() == rename_target.as_ref();
+        let rename_busy = show_rename_modal && rename_busy_src.as_ref() == rename_target.as_ref();
         let rename_error = match rename_target.as_ref() {
             Some((rp, ri)) => rename_error_src
                 .iter()

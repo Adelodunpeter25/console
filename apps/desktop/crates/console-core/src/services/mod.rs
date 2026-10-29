@@ -1,6 +1,5 @@
 pub mod assist;
 pub mod auth;
-pub mod server_auth;
 pub mod device;
 pub mod fs;
 pub mod git;
@@ -14,6 +13,7 @@ pub mod project;
 pub mod project_scripts;
 pub mod provider;
 pub mod run;
+pub mod server_auth;
 pub mod session;
 pub mod settings;
 pub mod terminal;
@@ -23,10 +23,6 @@ pub mod wt;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
-pub use server_auth::{
-    DeviceInfo, PairingData, PairingGrantData, PairingGrantRequest, PairingRequest, ServerAuthService,
-    ServerDevice, ServerDevicesResponse,
-};
 pub use device::DeviceService;
 pub use fs::{FsService, RawFileError};
 pub use git::GitService;
@@ -43,6 +39,10 @@ pub use project::{
 pub use project_scripts::ProjectScriptsService;
 pub use provider::ProviderService;
 pub use run::RunService;
+pub use server_auth::{
+    DeviceInfo, PairingData, PairingGrantData, PairingGrantRequest, PairingRequest,
+    ServerAuthService, ServerDevice, ServerDevicesResponse,
+};
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;

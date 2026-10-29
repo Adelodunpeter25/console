@@ -35,5 +35,8 @@ fn complete_markdown_needs_no_repair() {
 
 #[test]
 fn guards_a_streaming_setext_underline() {
-    assert_eq!(close_hanging("Title\n-").as_deref(), Some("Title\n-\u{200B}"));
+    assert_eq!(
+        close_hanging("Title\n-").as_deref(),
+        Some("Title\n-\u{200B}")
+    );
 }

@@ -2,8 +2,8 @@ use crate::input::ComposerInput;
 use crate::theme::Theme;
 use console_core::types::ProviderCredentialStatus;
 use gpui::{
-    App, Entity, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;
 
@@ -117,13 +117,7 @@ impl RenderOnce for ApiKeyProviderSection {
                             .flex()
                             .items_center()
                             .gap(px(10.0))
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded_full()
-                                    .bg(status_color),
-                            )
+                            .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(status_color))
                             .child(
                                 div()
                                     .flex()
@@ -144,63 +138,68 @@ impl RenderOnce for ApiKeyProviderSection {
                                     ),
                             ),
                     )
-                    .child(div().flex().items_center().gap(px(8.0))
-                        // An env-supplied key is not ours to remove.
-                        .child(if state.can_remove {
-                            div()
-                                .id(ElementId::from(format!("btn-apikey-remove-{pid}")))
-                                .px(px(10.0))
-                                .py(px(5.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(theme.border_strong)
-                                .bg(theme.raised)
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .active(|s| s.bg(theme.overlay_strong))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child("Remove"),
-                                )
-                                .on_mouse_down(MouseButton::Left, {
-                                    let on_remove = self.on_remove.clone();
-                                    move |_event, window, cx| {
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            // An env-supplied key is not ours to remove.
+                            .child(if state.can_remove {
+                                div()
+                                    .id(ElementId::from(format!("btn-apikey-remove-{pid}")))
+                                    .px(px(10.0))
+                                    .py(px(5.0))
+                                    .rounded(px(6.0))
+                                    .border_1()
+                                    .border_color(theme.border_strong)
+                                    .bg(theme.raised)
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .active(|s| s.bg(theme.overlay_strong))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
+                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                            .text_color(theme.text)
+                                            .child("Remove"),
+                                    )
+                                    .on_mouse_down(MouseButton::Left, {
+                                        let on_remove = self.on_remove.clone();
+                                        move |_event, window, cx| {
+                                            cx.stop_propagation();
+                                            (on_remove)(window, cx);
+                                        }
+                                    })
+                                    .into_any_element()
+                            } else {
+                                div().into_any_element()
+                            })
+                            .child({
+                                let on_toggle = self.on_toggle_form.clone();
+                                div()
+                                    .id(ElementId::from(format!("btn-apikey-{pid}")))
+                                    .px(px(10.0))
+                                    .py(px(5.0))
+                                    .rounded(px(6.0))
+                                    .border_1()
+                                    .border_color(theme.border_strong)
+                                    .bg(theme.raised)
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .active(|s| s.bg(theme.overlay_strong))
+                                    .child(
+                                        div()
+                                            .text_size(px(12.0))
+                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                            .text_color(theme.text)
+                                            .child(if configured { "Replace" } else { "Add key" }),
+                                    )
+                                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
                                         cx.stop_propagation();
-                                        (on_remove)(window, cx);
-                                    }
-                                })
-                                .into_any_element()
-                        } else {
-                            div().into_any_element()
-                        })
-                        .child({
-                            let on_toggle = self.on_toggle_form.clone();
-                            div()
-                                .id(ElementId::from(format!("btn-apikey-{pid}")))
-                                .px(px(10.0))
-                                .py(px(5.0))
-                                .rounded(px(6.0))
-                                .border_1()
-                                .border_color(theme.border_strong)
-                                .bg(theme.raised)
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .active(|s| s.bg(theme.overlay_strong))
-                                .child(
-                                    div()
-                                        .text_size(px(12.0))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(theme.text)
-                                        .child(if configured { "Replace" } else { "Add key" }),
-                                )
-                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                    cx.stop_propagation();
-                                    (on_toggle)(window, cx);
-                                })
-                        })),
+                                        (on_toggle)(window, cx);
+                                    })
+                            }),
+                    ),
             );
 
         if !self.description.is_empty() {

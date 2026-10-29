@@ -1,11 +1,13 @@
 use crate::input::ComposerInput;
 use crate::settings::GitHubSection;
 use crate::theme::Theme;
-use console_core::types::{AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for};
+use console_core::types::{
+    AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for,
+};
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    RenderOnce, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -28,8 +30,7 @@ pub struct ProvidersPage {
     /// (provider, account id, current display name): opens the rename
     /// dialog. The dialog itself renders above the whole window (built by
     /// the settings window), like the server modals.
-    pub on_account_rename:
-        Rc<dyn Fn(String, String, String, &mut Window, &mut App) + 'static>,
+    pub on_account_rename: Rc<dyn Fn(String, String, String, &mut Window, &mut App) + 'static>,
     /// (provider, server-authored failure text) for the last account
     /// mutation failure, shown verbatim on that provider's card.
     pub account_error: Option<(String, String)>,
@@ -137,7 +138,11 @@ fn account_row(
                         .id(ElementId::from(format!("use-{provider}-{use_id}")))
                         .text_size(px(11.0))
                         .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(if busy { theme.text_ghost } else { theme.text_secondary })
+                        .text_color(if busy {
+                            theme.text_ghost
+                        } else {
+                            theme.text_secondary
+                        })
                         .cursor_pointer()
                         .hover(|s| s.text_color(theme.accent))
                         .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
@@ -238,8 +243,7 @@ impl RenderOnce for ProvidersPage {
                                 .and_then(|st| auth_status_for(st, &provider_id))
                                 .cloned();
 
-                            let is_logged_in =
-                                prov_status.as_ref().map_or(false, |s| s.logged_in);
+                            let is_logged_in = prov_status.as_ref().map_or(false, |s| s.logged_in);
                             // "Connected as …" shows the account's display
                             // name (label or email local part), never the raw
                             // email.
@@ -455,9 +459,7 @@ impl RenderOnce for ProvidersPage {
                                                     div()
                                                         .text_size(px(11.5))
                                                         .text_color(theme.text_secondary)
-                                                        .child(
-                                                            "No account selected — choose one.",
-                                                        ),
+                                                        .child("No account selected — choose one."),
                                                 )
                                             })
                                             .children(accounts.iter().map(|account| {
@@ -490,7 +492,13 @@ impl RenderOnce for ProvidersPage {
             // Pasted-key providers render as their own rows below the OAuth
             // ones. They are filtered out of the list above so they do not get
             // a Login button they cannot use.
-            .child(div().flex().flex_col().gap(px(10.0)).children(self.api_keys))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.0))
+                    .children(self.api_keys),
+            )
             // GitHub sits below the LLM providers as a sibling section, not
             // inside the provider list: it is a git credential, not a chat
             // provider, and its auth method (pasted token) has no equivalent

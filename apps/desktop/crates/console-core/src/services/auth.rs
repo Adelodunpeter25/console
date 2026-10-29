@@ -159,7 +159,8 @@ impl AuthService {
                 .ok_or_else(|| anyhow!("Account mutation response missing data"))?)
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to update account".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to update account".into())
             ))
         }
     }
@@ -197,7 +198,8 @@ impl AuthService {
                 .ok_or_else(|| anyhow!("Account deletion response missing data"))?)
         } else {
             Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to remove account".into())
+                body.error
+                    .unwrap_or_else(|| "Failed to remove account".into())
             ))
         }
     }
@@ -302,10 +304,9 @@ impl AuthService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to load provider credentials".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to load provider credentials".into()
+            })))
         }
     }
 

@@ -81,7 +81,10 @@ fn frame_envelope_round_trip() {
     // Protojson shape the server asserts in its golden fixture: seq as a
     // string, payload as base64.
     let body = String::from_utf8(raw[4..].to_vec()).expect("utf8 body");
-    assert!(body.contains(r#""seq":"42""#), "seq encodes as string: {body}");
+    assert!(
+        body.contains(r#""seq":"42""#),
+        "seq encodes as string: {body}"
+    );
     assert!(
         body.contains(r#""payload":"aGk=""#),
         "payload encodes as base64: {body}"
@@ -97,9 +100,11 @@ fn frame_decode_needs_more_bytes() {
     };
     let raw = encode_wt_frame(&frame).expect("encode frame");
     assert!(decode_wt_frame(&raw[..2]).expect("prefix").is_none());
-    assert!(decode_wt_frame(&raw[..raw.len() - 1])
-        .expect("truncated")
-        .is_none());
+    assert!(
+        decode_wt_frame(&raw[..raw.len() - 1])
+            .expect("truncated")
+            .is_none()
+    );
 }
 
 #[test]

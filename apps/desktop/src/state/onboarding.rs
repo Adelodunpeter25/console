@@ -125,7 +125,10 @@ impl ConsoleDesktopApp {
     /// Every step's action closes the panel first: engaging a step is the
     /// clearest possible signal that the user has read it, and leaving a panel
     /// floating over the palette it just opened would be worse than closing it.
-    pub fn onboarding_panel_view(&mut self, cx: &mut Context<Self>) -> Option<console_ui::OnboardingPanel> {
+    pub fn onboarding_panel_view(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<console_ui::OnboardingPanel> {
         let env_id = self.onboarding_env_id.clone()?;
         let server_name = self
             .environments

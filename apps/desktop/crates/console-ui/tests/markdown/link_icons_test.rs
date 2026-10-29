@@ -41,12 +41,19 @@ fn file_link_reserves_a_gap_and_a_file_icon() {
 fn web_link_gets_a_favicon() {
     let flat = flat(&[run("docs", Some("https://docs.rs/gpui"))]);
     assert_eq!(flat.icons.len(), 1);
-    assert_eq!(flat.icons[0].kind, IconKind::Favicon("https://docs.rs/gpui".into()));
+    assert_eq!(
+        flat.icons[0].kind,
+        IconKind::Favicon("https://docs.rs/gpui".into())
+    );
 }
 
 #[test]
 fn runs_tile_the_text_exactly() {
-    let flat = flat(&[run("a ", None), run("b/c.ts", Some("b/c.ts")), run(" z", None)]);
+    let flat = flat(&[
+        run("a ", None),
+        run("b/c.ts", Some("b/c.ts")),
+        run(" z", None),
+    ]);
     let total: usize = flat.runs.iter().map(|r| r.len).sum();
     assert_eq!(total, flat.text.len());
 }

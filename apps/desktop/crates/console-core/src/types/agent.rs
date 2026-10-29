@@ -145,11 +145,7 @@ impl AgentMessage {
                 tok_per_sec: a.tok_per_sec,
             }),
             ProtoMessageEvent::ToolResult(t) => Some(AgentMessage::ToolResult {
-                results: t
-                    .results
-                    .iter()
-                    .map(ToolResult::from_proto)
-                    .collect(),
+                results: t.results.iter().map(ToolResult::from_proto).collect(),
                 created_at: msg.created_at,
             }),
         }

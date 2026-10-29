@@ -52,7 +52,6 @@ fn main() {
     // place the real "panicked at file:line" survives.
     log_panics_to_file();
 
-
     let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

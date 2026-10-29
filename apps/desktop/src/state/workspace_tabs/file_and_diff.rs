@@ -14,8 +14,7 @@ impl ConsoleDesktopApp {
         let project_path = self
             .selected_project_for_pane(pane_id)
             .map(|project| project.path.clone());
-        let resolved =
-            links::resolve_file_link(&link, cwd.as_deref(), project_path.as_deref());
+        let resolved = links::resolve_file_link(&link, cwd.as_deref(), project_path.as_deref());
 
         // A bare name (`file_tree.rs`) only resolves when the file sits in the
         // cwd itself. Open the direct guess when it exists; otherwise search

@@ -30,8 +30,8 @@ use gpui::{
     relative, size,
 };
 
-use super::highlight::TokenClass;
 use super::file_links::{is_file_link, is_http_url, strip_line_suffix};
+use super::highlight::TokenClass;
 use super::math::{self, MathMode};
 use super::mend::PENDING_LINK_URL;
 use super::parser::{
@@ -41,11 +41,13 @@ use super::selection::{
     ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, line_range, word_range,
 };
 use super::veil::{RowVeil, apply_veil};
-use crate::primitives::tooltip::Tooltip;
 use crate::browser::{
     FaviconState, TitleState, favicon_state, page_title_generation, page_title_state,
 };
-use crate::primitives::{IconName, app_icon, file_icon, file_icon_for_language, file_icon_for_path};
+use crate::primitives::tooltip::Tooltip;
+use crate::primitives::{
+    IconName, app_icon, file_icon, file_icon_for_language, file_icon_for_path,
+};
 use crate::theme::Theme;
 
 /// Selection geometry: the laid-out text handle for one painted element.
@@ -298,7 +300,13 @@ pub fn flatten(
     base_weight: FontWeight,
     base_color: Hsla,
 ) -> FlatText {
-    flatten_sized(runs, palette, base_weight, base_color, Metrics::BODY.text_size)
+    flatten_sized(
+        runs,
+        palette,
+        base_weight,
+        base_color,
+        Metrics::BODY.text_size,
+    )
 }
 
 /// Flatten inline runs for shaping. Pure given the palette, base weight and
@@ -366,7 +374,12 @@ pub fn flatten_sized(
         let mut wants_title = false;
         // Owns the resolved title that `shown` borrows; assigned only when one is ready.
         let title: String;
-        if let Some(url) = run.style.link.as_deref().filter(|url| *url != PENDING_LINK_URL) {
+        if let Some(url) = run
+            .style
+            .link
+            .as_deref()
+            .filter(|url| *url != PENDING_LINK_URL)
+        {
             if is_http_url(url) && run.text == url {
                 match page_title_state(url) {
                     TitleState::Ready(found) => {
@@ -906,18 +919,21 @@ fn text_element_with_selection(
 /// shows the globe so the reserved gap is never empty.
 fn icon_element(slot: &IconSlot, window: &mut Window) -> AnyElement {
     match &slot.kind {
-        IconKind::Math { latex, size_bits, rgb } => {
-            match math::render(latex, MathMode::Inline, f32::from_bits(*size_bits), *rgb) {
-                Some(formula) => img(formula.image.clone())
-                    .w(px(formula.width))
-                    .h(px(formula.height))
-                    .flex_none()
-                    .into_any_element(),
-                None => div().into_any_element(),
-            }
+        IconKind::Math {
+            latex,
+            size_bits,
+            rgb,
+        } => match math::render(latex, MathMode::Inline, f32::from_bits(*size_bits), *rgb) {
+            Some(formula) => img(formula.image.clone())
+                .w(px(formula.width))
+                .h(px(formula.height))
+                .flex_none()
+                .into_any_element(),
+            None => div().into_any_element(),
+        },
+        IconKind::File(link) => {
+            file_icon(file_icon_for_path(strip_line_suffix(link)), ICON_SIZE).into_any_element()
         }
-        IconKind::File(link) => file_icon(file_icon_for_path(strip_line_suffix(link)), ICON_SIZE)
-            .into_any_element(),
         IconKind::Favicon(url) => match favicon_state(url) {
             FaviconState::Ready(image) => img(image)
                 .size(px(ICON_SIZE))
@@ -944,7 +960,9 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 return placed;
             }
             for slot in &icons {
-                let Some(rect) = range_rects(&layout, &slot.range, 0.0, 0.0).into_iter().next()
+                let Some(rect) = range_rects(&layout, &slot.range, 0.0, 0.0)
+                    .into_iter()
+                    .next()
                 else {
                     continue;
                 };
@@ -959,8 +977,17 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 // A formula is painted at its own size from the gap's left edge;
                 // an icon is a small square nudged in from it.
                 let (inset, width, height) = match &slot.kind {
-                    IconKind::Math { latex, size_bits, rgb } => {
-                        match math::render(latex, MathMode::Inline, f32::from_bits(*size_bits), *rgb) {
+                    IconKind::Math {
+                        latex,
+                        size_bits,
+                        rgb,
+                    } => {
+                        match math::render(
+                            latex,
+                            MathMode::Inline,
+                            f32::from_bits(*size_bits),
+                            *rgb,
+                        ) {
                             Some(formula) => (0.0, formula.width, formula.height),
                             None => continue,
                         }
@@ -2038,7 +2065,13 @@ fn table_row(
     for (index, cell) in cells.iter().enumerate() {
         let key = ctx.next_key();
         let flat = ctx.flat(key.index, || {
-            flatten_sized(cell, ctx.palette, weight, ctx.palette.text, ctx.metrics.text_size)
+            flatten_sized(
+                cell,
+                ctx.palette,
+                weight,
+                ctx.palette.text,
+                ctx.metrics.text_size,
+            )
         });
         let alignment = align.get(index).copied().unwrap_or_default();
         row = row.child(

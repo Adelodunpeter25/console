@@ -10,8 +10,13 @@ const WHITE: [u8; 3] = [255, 255, 255];
 
 #[test]
 fn typesets_a_formula_to_a_sized_image() {
-    let formula = render(r"\frac{-b \pm \sqrt{b^2-4ac}}{2a}", MathMode::Display, 20.0, WHITE)
-        .expect("a valid formula typesets");
+    let formula = render(
+        r"\frac{-b \pm \sqrt{b^2-4ac}}{2a}",
+        MathMode::Display,
+        20.0,
+        WHITE,
+    )
+    .expect("a valid formula typesets");
     assert!(formula.width > 0.0 && formula.height > 0.0);
 }
 
@@ -34,9 +39,15 @@ fn unparseable_latex_degrades_instead_of_panicking() {
 fn gap_never_undershoots_the_formula() {
     for width in [3.0_f32, 9.0, 14.0, 21.5, 60.0] {
         let gap = gap_for_width(width, 14.0);
-        let reserved: f32 = gap.chars().map(|c| if c == '\u{2003}' { 14.0 } else { 7.0 }).sum();
+        let reserved: f32 = gap
+            .chars()
+            .map(|c| if c == '\u{2003}' { 14.0 } else { 7.0 })
+            .sum();
         assert!(reserved >= width, "{width} reserved {reserved}");
-        assert!(reserved - width <= 7.0, "{width} reserved {reserved}: too much slack");
+        assert!(
+            reserved - width <= 7.0,
+            "{width} reserved {reserved}: too much slack"
+        );
     }
 }
 
@@ -56,7 +67,9 @@ fn display_math_is_its_own_block() {
     let tree = parse("before\n\n$$\n\\int_0^1 x\\,dx\n$$\n\nafter");
     let kinds: Vec<_> = tree.blocks.iter().map(|b| &b.block).collect();
     assert!(
-        kinds.iter().any(|b| matches!(b, Block::Math { latex } if latex.contains("\\int"))),
+        kinds
+            .iter()
+            .any(|b| matches!(b, Block::Math { latex } if latex.contains("\\int"))),
         "{kinds:?}"
     );
 }
@@ -76,7 +89,11 @@ fn a_typeset_inline_formula_reserves_a_gap_and_a_slot() {
         .find(|slot| matches!(slot.kind, IconKind::Math { .. }))
         .expect("a math slot");
     // The reserved text is spaces only: the formula source never leaks into the layout.
-    assert!(flat.text[slot.range.clone()].chars().all(|c| c == '\u{2003}' || c == '\u{2002}'));
+    assert!(
+        flat.text[slot.range.clone()]
+            .chars()
+            .all(|c| c == '\u{2003}' || c == '\u{2002}')
+    );
     assert!(!flat.text.contains("\\pi"));
 }
 
@@ -90,7 +107,14 @@ fn an_unparseable_inline_formula_falls_back_to_readable_text() {
         panic!("expected a paragraph");
     };
     let flat = flatten_sized(runs, &palette, FontWeight::NORMAL, palette.text, 12.5);
-    assert!(runs.iter().any(|run| run.style.math), "parsed as math: {runs:?}");
-    assert!(flat.icons.iter().all(|slot| !matches!(slot.kind, IconKind::Math { .. })));
+    assert!(
+        runs.iter().any(|run| run.style.math),
+        "parsed as math: {runs:?}"
+    );
+    assert!(
+        flat.icons
+            .iter()
+            .all(|slot| !matches!(slot.kind, IconKind::Math { .. }))
+    );
     assert!(flat.text.contains('→'), "{}", flat.text);
 }

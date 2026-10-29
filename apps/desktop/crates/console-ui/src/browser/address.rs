@@ -33,7 +33,10 @@ fn settled(key: &str) -> bool {
     let Ok(mut seen) = FIRST_SEEN.get_or_init(|| Mutex::new(HashMap::new())).lock() else {
         return false;
     };
-    seen.entry(key.to_owned()).or_insert_with(Instant::now).elapsed() >= SETTLE_DELAY
+    seen.entry(key.to_owned())
+        .or_insert_with(Instant::now)
+        .elapsed()
+        >= SETTLE_DELAY
 }
 
 static TITLE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
@@ -81,18 +84,27 @@ pub fn page_title_state(url: &str) -> TitleState {
             let title = console_core::fetch_page_title(&url, Duration::from_secs(5)).await;
             match title {
                 Some(title) => {
-                    if let Ok(mut cache) = TITLE_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+                    if let Ok(mut cache) = TITLE_CACHE
+                        .get_or_init(|| Mutex::new(HashMap::new()))
+                        .lock()
+                    {
                         cache.insert(url.clone(), title);
                     }
                     TITLE_GENERATION.fetch_add(1, Ordering::Relaxed);
                 }
                 None => {
-                    if let Ok(mut failed) = TITLE_FAILED.get_or_init(|| Mutex::new(HashSet::new())).lock() {
+                    if let Ok(mut failed) = TITLE_FAILED
+                        .get_or_init(|| Mutex::new(HashSet::new()))
+                        .lock()
+                    {
                         failed.insert(url.clone());
                     }
                 }
             }
-            if let Ok(mut f) = TITLE_IN_FLIGHT.get_or_init(|| Mutex::new(HashSet::new())).lock() {
+            if let Ok(mut f) = TITLE_IN_FLIGHT
+                .get_or_init(|| Mutex::new(HashSet::new()))
+                .lock()
+            {
                 f.remove(&url);
             }
         });

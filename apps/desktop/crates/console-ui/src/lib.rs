@@ -1,4 +1,3 @@
-pub mod onboarding;
 pub mod browser;
 pub mod chat;
 pub mod common;
@@ -6,6 +5,7 @@ pub mod devices;
 pub mod inspector;
 pub mod layout;
 pub mod markdown;
+pub mod onboarding;
 pub mod primitives;
 pub mod run;
 pub mod settings;
@@ -15,7 +15,6 @@ pub mod utils;
 pub mod viewer;
 pub mod workspace;
 
-pub use onboarding::{OnboardingPanel, SetupStatus};
 pub use browser::*;
 pub use chat::*;
 pub use common::*;
@@ -23,6 +22,7 @@ pub use devices::*;
 pub use inspector::*;
 pub use layout::*;
 pub use markdown::*;
+pub use onboarding::{OnboardingPanel, SetupStatus};
 pub use primitives::*;
 pub use run::*;
 pub use settings::*;

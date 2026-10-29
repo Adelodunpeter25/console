@@ -73,8 +73,8 @@ fn decodes_golden_toolresult_fixture() {
 
 #[test]
 fn decodes_golden_visual_toolresult_fixture() {
-    let msg: AgentMessage =
-        serde_json::from_str(fixture("toolresult_visual.json").trim()).expect("decode visual toolresult");
+    let msg: AgentMessage = serde_json::from_str(fixture("toolresult_visual.json").trim())
+        .expect("decode visual toolresult");
     match msg.message {
         Some(MessageEvent::ToolResult(t)) => {
             assert_eq!(t.results.len(), 1);

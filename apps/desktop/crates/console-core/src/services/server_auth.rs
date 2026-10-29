@@ -12,8 +12,8 @@ use anyhow::{Context, Result, anyhow};
 
 pub use console_proto::{
     PairDeviceRequest as PairingRequest, PairDeviceResponse as PairingData,
-    PairingGrantRequest, PairingGrantResponse as PairingGrantData,
-    PairedDevice as DeviceInfo, ServerDevice, ServerDevicesResponse,
+    PairedDevice as DeviceInfo, PairingGrantRequest, PairingGrantResponse as PairingGrantData,
+    ServerDevice, ServerDevicesResponse,
 };
 
 #[derive(Clone)]
@@ -37,7 +37,9 @@ impl ServerAuthService {
             .send()
             .await
             .context("Failed to pair with server")?;
-        let data = decode_data(response).await.context("Failed to pair with server")?;
+        let data = decode_data(response)
+            .await
+            .context("Failed to pair with server")?;
         serde_json::from_value(data).context("Failed to parse pairing response")
     }
 
@@ -66,7 +68,9 @@ impl ServerAuthService {
             .send()
             .await
             .context("Failed to pair with server")?;
-        let data = decode_data(response).await.context("Failed to pair with server")?;
+        let data = decode_data(response)
+            .await
+            .context("Failed to pair with server")?;
         let paired: PairingData =
             serde_json::from_value(data).context("Failed to parse pairing response")?;
         Ok((paired, base_url))
@@ -86,7 +90,9 @@ impl ServerAuthService {
             .send()
             .await
             .context("Failed to create pairing grant")?;
-        let data = decode_data(response).await.context("Failed to create pairing grant")?;
+        let data = decode_data(response)
+            .await
+            .context("Failed to create pairing grant")?;
         serde_json::from_value(data).context("Failed to parse pairing grant response")
     }
 
@@ -100,7 +106,9 @@ impl ServerAuthService {
             .send()
             .await
             .context("Failed to list devices")?;
-        let data = decode_data(response).await.context("Failed to list devices")?;
+        let data = decode_data(response)
+            .await
+            .context("Failed to list devices")?;
         let list: ServerDevicesResponse =
             serde_json::from_value(data).context("Failed to parse devices")?;
         Ok(list.devices)
@@ -147,16 +155,29 @@ fn normalize_server_url(host: &str) -> String {
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         return trimmed.to_string();
     }
-    format!("{}://{trimmed}", console_shared::pairing::default_scheme(trimmed))
+    format!(
+        "{}://{trimmed}",
+        console_shared::pairing::default_scheme(trimmed)
+    )
 }
 
 /// Unwrap the `{success, data}` envelope and hand back `data` as raw JSON.
 ///
 /// The server answers a failure with `{"success": false, "error": …}` and no
 /// `data`, so the error is surfaced verbatim rather than as a decode failure.
-async fn decode_data(response: reqwest::Response) -> Result<serde_json::Value> {    let body: serde_json::Value = serde_json::from_slice(&response.bytes().await.context("Failed to read response body")?)
-        .context("Failed to decode response body")?;
-    if !body.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+async fn decode_data(response: reqwest::Response) -> Result<serde_json::Value> {
+    let body: serde_json::Value = serde_json::from_slice(
+        &response
+            .bytes()
+            .await
+            .context("Failed to read response body")?,
+    )
+    .context("Failed to decode response body")?;
+    if !body
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         return Err(anyhow!(
             body.get("error")
                 .and_then(|v| v.as_str())

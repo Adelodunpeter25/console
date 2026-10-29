@@ -3,8 +3,8 @@
 
 use console_core::looks_numeric;
 use gpui::{
-    AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement, StatefulInteractiveElement,
-    Styled, div, px,
+    AnyElement, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    StatefulInteractiveElement, Styled, div, px,
 };
 
 use super::select::Selectable;
@@ -62,17 +62,22 @@ pub(super) fn table(
                 ),
         );
     for row in rows {
-        grid = grid.child(div().flex().children(row.iter().enumerate().map(|(c, v)| {
-            cell(v, numeric.get(c).copied().unwrap_or(false), false)
-        })));
+        grid = grid.child(
+            div().flex().children(
+                row.iter()
+                    .enumerate()
+                    .map(|(c, v)| cell(v, numeric.get(c).copied().unwrap_or(false), false)),
+            ),
+        );
     }
     let mut col = div().flex().flex_col().gap(px(6.0));
     if let Some(caption) = caption {
-        col = col.child(
-            div()
-                .text_size(px(12.0))
-                .child(sel.text(caption.clone(), FontWeight::MEDIUM, theme.text_secondary, true)),
-        );
+        col = col.child(div().text_size(px(12.0)).child(sel.text(
+            caption.clone(),
+            FontWeight::MEDIUM,
+            theme.text_secondary,
+            true,
+        )));
     }
     col.child(grid).into_any_element()
 }

@@ -78,10 +78,14 @@ impl RenderOnce for OnboardingPanel {
             },
         ];
 
-        let done_count = [self.status.has_project, self.status.has_provider, self.status.has_github]
-            .iter()
-            .filter(|d| **d)
-            .count();
+        let done_count = [
+            self.status.has_project,
+            self.status.has_provider,
+            self.status.has_github,
+        ]
+        .iter()
+        .filter(|d| **d)
+        .count();
 
         div()
             .id("onboarding-scroll")
@@ -161,44 +165,38 @@ impl RenderOnce for OnboardingPanel {
                     .child(div().h(px(28.0)))
                     // Steps
                     .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(10.0))
-                            .children(steps.into_iter().map(|step| step_card(step, self.loading, &theme))),
+                        div().flex().flex_col().gap(px(10.0)).children(
+                            steps
+                                .into_iter()
+                                .map(|step| step_card(step, self.loading, &theme)),
+                        ),
                     )
                     .child(div().h(px(28.0)))
                     // Footer
-                    .child(
+                    .child(div().flex().items_center().justify_end().child({
+                        let on_dismiss = self.on_dismiss.clone();
                         div()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .child({
-                                let on_dismiss = self.on_dismiss.clone();
+                            .id(ElementId::from("onboarding-dismiss"))
+                            .px(px(18.0))
+                            .py(px(9.0))
+                            .rounded(px(8.0))
+                            .bg(theme.raised)
+                            .border_1()
+                            .border_color(theme.border_strong)
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .child(
                                 div()
-                                    .id(ElementId::from("onboarding-dismiss"))
-                                    .px(px(18.0))
-                                    .py(px(9.0))
-                                    .rounded(px(8.0))
-                                    .bg(theme.raised)
-                                    .border_1()
-                                    .border_color(theme.border_strong)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(theme.overlay))
-                                    .child(
-                                        div()
-                                            .text_size(px(13.0))
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(theme.text)
-                                            .child("Skip setup"),
-                                    )
-                                    .on_mouse_down(MouseButton::Left, move |_e, w, cx| {
-                                        cx.stop_propagation();
-                                        (on_dismiss)(w, cx);
-                                    })
-                            }),
-                    ),
+                                    .text_size(px(13.0))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(theme.text)
+                                    .child("Skip setup"),
+                            )
+                            .on_mouse_down(MouseButton::Left, move |_e, w, cx| {
+                                cx.stop_propagation();
+                                (on_dismiss)(w, cx);
+                            })
+                    })),
             )
             .into_any_element()
     }
@@ -219,7 +217,11 @@ fn step_card(step: Step, loading: bool, theme: &Theme) -> impl IntoElement {
         .p(px(16.0))
         .rounded(px(10.0))
         .border_1()
-        .border_color(if step.done { theme.border } else { theme.border_strong })
+        .border_color(if step.done {
+            theme.border
+        } else {
+            theme.border_strong
+        })
         .bg(theme.surface)
         .child(
             div()
@@ -230,11 +232,23 @@ fn step_card(step: Step, loading: bool, theme: &Theme) -> impl IntoElement {
                 .items_center()
                 .justify_center()
                 .rounded(px(8.0))
-                .bg(if step.done { theme.raised } else { theme.overlay })
+                .bg(if step.done {
+                    theme.raised
+                } else {
+                    theme.overlay
+                })
                 .child(app_icon(
-                    if step.done { IconName::Check } else { step.icon },
+                    if step.done {
+                        IconName::Check
+                    } else {
+                        step.icon
+                    },
                     17.0,
-                    if step.done { theme.success } else { theme.text_secondary },
+                    if step.done {
+                        theme.success
+                    } else {
+                        theme.text_secondary
+                    },
                 )),
         )
         .child(
@@ -253,7 +267,11 @@ fn step_card(step: Step, loading: bool, theme: &Theme) -> impl IntoElement {
                         .text_size(px(14.5))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         // Done rows recede; pending rows are what the eye lands on.
-                        .text_color(if step.done { theme.text_tertiary } else { theme.text })
+                        .text_color(if step.done {
+                            theme.text_tertiary
+                        } else {
+                            theme.text
+                        })
                         .child(step.title),
                 )
                 .child(

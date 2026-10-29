@@ -5,8 +5,8 @@
 //! module only supplies the directory the desktop app already uses for its
 //! state and adapts the call sites to it.
 
-pub use console_core::utils::server_auth_store::StoredServerAuth;
 use console_core::utils::server_auth_store;
+pub use console_core::utils::server_auth_store::StoredServerAuth;
 use std::path::PathBuf;
 
 fn directory() -> PathBuf {
@@ -32,4 +32,3 @@ pub fn save(server_url: &str, auth: StoredServerAuth) -> std::io::Result<()> {
 pub fn clear(server_url: &str) -> std::io::Result<()> {
     server_auth_store::clear(&directory(), server_url)
 }
-

@@ -46,12 +46,7 @@ fn paint_text(
     width
 }
 
-fn stroke_path(
-    pts: &[(f32, f32)],
-    width: f32,
-    color: Hsla,
-    window: &mut Window,
-) {
+fn stroke_path(pts: &[(f32, f32)], width: f32, color: Hsla, window: &mut Window) {
     let Some(first) = pts.first() else { return };
     let mut b = PathBuilder::stroke(px(width));
     b.move_to(point(px(first.0), px(first.1)));
@@ -92,7 +87,12 @@ pub(super) fn paint_chart(
 
     // Measure y labels to size the left gutter.
     let y_labels: Vec<String> = y_axis.ticks.iter().map(|t| format_compact(*t)).collect();
-    let label_w = y_labels.iter().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 6.2;
+    let label_w = y_labels
+        .iter()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0) as f32
+        * 6.2;
     let (left, right, top, bottom) = (label_w + 10.0, 6.0, 6.0, 18.0);
     let pw = w - left - right;
     let ph = h - top - bottom;
@@ -124,7 +124,12 @@ pub(super) fn paint_chart(
     // Grid + y labels.
     for (i, t) in y_axis.ticks.iter().enumerate() {
         let y = py(*t);
-        stroke_path(&[(ox + left, y), (ox + left + pw, y)], 1.0, theme.border, window);
+        stroke_path(
+            &[(ox + left, y), (ox + left + pw, y)],
+            1.0,
+            theme.border,
+            window,
+        );
         let lw = y_labels[i].chars().count() as f32 * 6.2;
         paint_text(
             &y_labels[i],
@@ -137,7 +142,10 @@ pub(super) fn paint_chart(
 
     // X tick labels: numeric ticks for scatter, point labels (thinned) otherwise.
     let ticks: Vec<(f32, String)> = if let Some(ax) = &x_axis {
-        ax.ticks.iter().map(|t| (px_of(*t), format_compact(*t))).collect()
+        ax.ticks
+            .iter()
+            .map(|t| (px_of(*t), format_compact(*t)))
+            .collect()
     } else {
         let reference = chart
             .series
@@ -204,8 +212,8 @@ pub(super) fn paint_chart(
                 let per = pw / slots as f32;
                 let bw = (24f32).min(per * 0.7 / chart.series.len() as f32);
                 for p in &pts {
-                    let cx_ = px_of(p.x)
-                        + (si as f32 - (chart.series.len() as f32 - 1.0) / 2.0) * bw;
+                    let cx_ =
+                        px_of(p.x) + (si as f32 - (chart.series.len() as f32 - 1.0) / 2.0) * bw;
                     let y = py(p.y);
                     let (top_y, height) = (y.min(zero_y), (zero_y - y).abs().max(1.0));
                     window.paint_quad(gpui::fill(

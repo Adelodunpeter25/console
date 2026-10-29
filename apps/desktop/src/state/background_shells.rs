@@ -47,7 +47,12 @@ impl ConsoleDesktopApp {
     pub(crate) fn running_shells_for_session(&self, session_id: &str) -> Vec<BackgroundWork> {
         self.session_background_work
             .get(session_id)
-            .map(|list| list.iter().filter(|w| w.is_running_shell()).cloned().collect())
+            .map(|list| {
+                list.iter()
+                    .filter(|w| w.is_running_shell())
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -73,7 +78,12 @@ impl ConsoleDesktopApp {
     }
 
     /// Open the Shells tab on one shell and subscribe to its output.
-    pub(crate) fn select_shell(&mut self, session_id: String, work_id: String, cx: &mut Context<Self>) {
+    pub(crate) fn select_shell(
+        &mut self,
+        session_id: String,
+        work_id: String,
+        cx: &mut Context<Self>,
+    ) {
         self.shell_output = Some(ShellOutputState {
             work_id: work_id.clone(),
             output: None,
@@ -146,10 +156,19 @@ impl ConsoleDesktopApp {
     }
 
     /// Stop one detached shell and fold the server's cancelled record back in.
-    pub(crate) fn stop_shell(&mut self, session_id: String, work_id: String, cx: &mut Context<Self>) {
+    pub(crate) fn stop_shell(
+        &mut self,
+        session_id: String,
+        work_id: String,
+        cx: &mut Context<Self>,
+    ) {
         let client = self.client.clone();
         cx.spawn(async move |entity, cx| {
-            let Ok(work) = client.runs.cancel_background_work(&session_id, &work_id).await else {
+            let Ok(work) = client
+                .runs
+                .cancel_background_work(&session_id, &work_id)
+                .await
+            else {
                 return;
             };
             let _ = cx.update(|cx| {
