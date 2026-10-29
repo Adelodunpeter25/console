@@ -144,6 +144,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	services.SetFffManager(fffManager)
 	tools.SetFffManager(fffManager)
 	RegisterRunRoutes(app, runSvc)
+	RegisterPasteRoutes(app, runSvc)
 	registerMiscRoutes(app, cfg.Notifications)
 	deviceSvc := services.NewDeviceService()
 	registerDeviceRoutes(app, deviceSvc)

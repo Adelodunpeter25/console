@@ -117,6 +117,22 @@ func WorktreesDir() string {
 	return filepath.Join(home, folder, "worktrees")
 }
 
+// PastesDir is the root for large pasted-text attachments
+// (<storage>/pastes/<sessionID>/*.log|txt). Each paste is a 0600 file in a
+// 0700 per-session directory; the path is handed to the agent as a context
+// file and read with read_file/grep on demand. CONSOLE_PASTES_DIR wins
+// outright (tests, unusual deployments).
+func PastesDir() string {
+	if override := os.Getenv("CONSOLE_PASTES_DIR"); override != "" {
+		return override
+	}
+	return filepath.Join(ConsoleStorageDir(), "pastes")
+}
+
+func PastesSessionDir(sessionID string) string {
+	return filepath.Join(PastesDir(), sessionID)
+}
+
 func ProjectStorageDir(storageDir, projectID string) string {
 	return filepath.Join(storageDir, "projects", projectID)
 }

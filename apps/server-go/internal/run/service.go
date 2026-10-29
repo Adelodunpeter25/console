@@ -262,6 +262,16 @@ func (s *Service) notifier() *services.NotificationService {
 }
 
 // IsActive reports whether the session has an in-flight run.
+// SessionExists reports whether the session is live (present and not
+// soft-deleted). Used by routes that only need existence, not content.
+func (s *Service) SessionExists(sessionID string) bool {
+	if s == nil || s.sessions == nil {
+		return false
+	}
+	header, err := s.sessions.Header(sessionID)
+	return err == nil && header != nil
+}
+
 func (s *Service) IsActive(sessionID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
