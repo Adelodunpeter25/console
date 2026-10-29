@@ -163,27 +163,3 @@ fun argumentPath(call: ToolCall): String? {
     }
     return null
 }
-
-private val LINE_NUMBER_PREFIX = Regex("""^(\s*)(\d+): ?(.*)$""")
-
-/** Split read-file output into `(gutter numbers, code body)`. Drops a leading
- * `File:` metadata header, and reuses the tool's own line numbers when most
- * lines carry a `123: ` prefix (the server truncates long reads, so the printed
- * numbers are not always 1..n). */
-fun parseReadFileOutput(raw: String): Pair<List<String>, List<String>> {
-    val lines = raw.lines()
-    val headerEnd = if (lines.firstOrNull()?.startsWith("File:") == true) {
-        val firstBlank = (1 until lines.size).firstOrNull { lines[it].isEmpty() } ?: -1
-        if (firstBlank in 1..6) firstBlank + 1 else 0
-    } else {
-        0
-    }
-    val codeLines = lines.drop(headerEnd)
-    val parsed = codeLines.map { LINE_NUMBER_PREFIX.matchEntire(it) }
-    if (parsed.count { it != null } * 2 > codeLines.size) {
-        val numbers = parsed.map { m -> m?.groupValues?.get(2).orEmpty() }
-        val body = parsed.map { m -> m?.groupValues?.get(3) ?: "" }
-        return numbers to body
-    }
-    return codeLines.indices.map { (it + 1).toString() } to codeLines
-}

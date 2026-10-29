@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.SharedNative
 import com.console.mobile.core.util.argumentPath
 import com.console.mobile.core.util.getToolIcon
-import com.console.mobile.core.util.parseReadFileOutput
 import com.console.mobile.core.util.resultText
 import com.console.mobile.core.util.toolCallSummary
 import com.console.mobile.data.model.ToolCall
@@ -148,7 +147,10 @@ private fun ToolArguments(arguments: kotlinx.serialization.json.JsonElement?) {
 /** readFile output as syntax-highlighted code with the tool's line numbers. */
 @Composable
 private fun ReadFileResult(raw: String, filePath: String?) {
-    val (numbers, body) = remember(raw) { SharedNative.parseReadFileOutput(raw) ?: parseReadFileOutput(raw) }
+    val parsed = remember(raw) { SharedNative.parseReadFileOutput(raw) }
+        ?: return
+    val numbers = remember(parsed.first) { parsed.first.split("\n") }
+    val body = remember(parsed.second) { parsed.second.split("\n") }
     val language = remember(filePath) { languageForPath(filePath) }
     // The gutter is drawn here rather than by the viewer because a truncated
     // read carries the tool's own line numbers (which do not start at 1), and
