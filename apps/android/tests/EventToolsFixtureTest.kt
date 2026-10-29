@@ -38,12 +38,16 @@ class EventToolsFixtureTest {
         assertEquals(2, calls.size)
         val first = callAdapter.fromJson(calls[0].toString())!!
         assertEquals("c1", first.id)
-        assertEquals("sh", first.name)
+        assertEquals("bash", first.name)
+        assertEquals("Run Command", first.label)
+        assertEquals("terminal", first.icon)
         assertEquals("sig", first.thought_signature)
         // Render model recovers the JSON args from the bytes.
         assertEquals("ls", first.toUi().arguments?.jsonObject?.getValue("cmd")?.toString()?.trim('"'))
         val bare = callAdapter.fromJson(calls[1].toString())!!
         assertEquals("c2", bare.id)
+        assertEquals("Read File", bare.label)
+        assertEquals(12, bare.kind_flags) // read (4) + file-target (8)
         assertTrue(bare.arguments.utf8().isEmpty())
         assertNull(bare.thought_signature)
     }

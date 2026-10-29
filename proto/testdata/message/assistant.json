@@ -1,1 +1,1 @@
-{"assistant":{"id":"m1","content":[{"text":{"text":"Hi","thoughtSignature":"sig"}},{"thinking":{"text":"hmm"}},{"toolCall":{"id":"c1","name":"read","arguments":"eyJwYXRoIjoiL2EifQ==","label":"Read File","kindFlags":12,"icon":"file"}}],"stopReason":"stop"}}
+{"assistant":{"id":"m1","content":[{"text":{"text":"Hi","thoughtSignature":"sig"}},{"thinking":{"text":"hmm"}},{"toolCall":{"id":"c1","name":"read_file","arguments":"eyJwYXRoIjoiL2EifQ==","label":"Read File","kindFlags":12,"icon":"file"}}],"stopReason":"stop"}}

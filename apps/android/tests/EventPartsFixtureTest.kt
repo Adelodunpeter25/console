@@ -49,7 +49,11 @@ class EventPartsFixtureTest {
         assertTrue(part is ModelStreamPart.Part.ToolCall)
         val preview = (part as ModelStreamPart.Part.ToolCall).value
         assertEquals("c1", preview.id)
-        assertEquals("sh", preview.name)
+        assertEquals("bash", preview.name)
+        // Server-classified presentation fields ride on the preview.
+        assertEquals("Run Command", preview.label)
+        assertEquals(0, preview.kind_flags)
+        assertEquals("terminal", preview.icon)
     }
 
     @Test

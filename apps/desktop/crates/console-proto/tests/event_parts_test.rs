@@ -44,7 +44,7 @@ fn decodes_golden_tool_call_part() {
     match part.part {
         Some(PartKind::ToolCall(preview)) => {
             assert_eq!(preview.id, "c1");
-            assert_eq!(preview.name, "sh");
+            assert_eq!(preview.name, "bash");
             // Server-classified presentation fields.
             assert_eq!(preview.label.as_deref(), Some("Run Command"));
             assert_eq!(preview.kind_flags, Some(0));

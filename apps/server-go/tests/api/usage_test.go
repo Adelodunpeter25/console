@@ -48,7 +48,7 @@ func canonicalReport() *consolev1.UsageReport {
 				ResetsAt: i64ptr(1700003600000), ResetLabel: strptr("resets in 1h"),
 			},
 			Amount: &consolev1.UsageAmount{
-				Used: f64ptr(12.5), Limit: f64ptr(100), Unit: "percent",
+				Used: f64ptr(12.5), Limit: f64ptr(100), Unit: "percent", UsedPercent: f64ptr(12.5),
 			},
 			Status: strptr("ok"),
 		}},

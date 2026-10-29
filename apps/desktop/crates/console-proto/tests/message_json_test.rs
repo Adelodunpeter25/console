@@ -38,6 +38,7 @@ fn decodes_golden_assistant_fixture() {
             match &a.content[2].part {
                 Some(PartEvent::ToolCall(c)) => {
                     assert_eq!(c.id, "c1");
+                    assert_eq!(c.name, "read_file");
                     // Arguments cross as raw JSON bytes.
                     let args: serde_json::Value =
                         serde_json::from_slice(&c.arguments).expect("args json");

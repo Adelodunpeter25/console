@@ -75,7 +75,7 @@ class MessagesFixtureTest {
                         content = listOf(
                             console.v1.AssistantContentPart(
                                 part = console.v1.AssistantContentPart.Part.ToolCall(
-                                    WireToolCall(id = "c1", name = "read", arguments = okio.Buffer().writeUtf8("{\"path\":\"/a\"}").readByteString()),
+                                    WireToolCall(id = "c1", name = "read_file", arguments = okio.Buffer().writeUtf8("{\"path\":\"/a\"}").readByteString()),
                                 ),
                             ),
                         ),

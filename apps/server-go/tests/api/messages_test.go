@@ -38,7 +38,7 @@ func TestMessageProtoMatchesFixtures(t *testing.T) {
 			loop.TextPart{Type: "text", Text: "Hi", ThoughtSignature: "sig"},
 			loop.ThinkingPart{Type: "thinking", Text: "hmm"},
 			loop.ToolCallPart{Type: "toolCall", Call: tools.ToolCall{
-				ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"/a"}`),
+				ID: "c1", Name: "read_file", Arguments: json.RawMessage(`{"path":"/a"}`),
 			}},
 		},
 	}

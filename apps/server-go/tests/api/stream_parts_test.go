@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
 
@@ -58,7 +59,8 @@ func TestStreamPartProtoMatchesFixtures(t *testing.T) {
 
 	toolCall := &consolev1.ModelStreamPart{
 		Part: &consolev1.ModelStreamPart_ToolCall{ToolCall: &consolev1.ToolCallPreview{
-			Id: "c1", Name: "sh",
+			Id: "c1", Name: "bash",
+			Label: strptr(tools.ToolLabel("bash")), KindFlags: u32ptr(tools.ToolKindFlags("bash")), Icon: strptr(tools.ToolIconKey("bash")),
 		}},
 	}
 	if frameBytes(t, toolCall) != streamPartFixture(t, "stream_part_tool_call.json") {
@@ -74,3 +76,5 @@ func TestStreamPartProtoMatchesFixtures(t *testing.T) {
 		t.Fatalf("empty part must encode bare: %s", empty)
 	}
 }
+
+func u32ptr(v uint32) *uint32 { return &v }

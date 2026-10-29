@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
 
@@ -59,8 +60,8 @@ func TestToolFramesProtoMatchFixtures(t *testing.T) {
 	sig := "sig"
 	toolName := "sh"
 	calls := []*consolev1.ToolCall{
-		{Id: "c1", Name: "sh", Arguments: []byte(`{"cmd":"ls"}`), ThoughtSignature: &sig},
-		{Id: "c2", Name: "read"},
+		classified(&consolev1.ToolCall{Id: "c1", Name: "bash", Arguments: []byte(`{"cmd":"ls"}`), ThoughtSignature: &sig}),
+		classified(&consolev1.ToolCall{Id: "c2", Name: "read_file"}),
 	}
 	callPayload := make([]json.RawMessage, 0, len(calls))
 	for _, c := range calls {
@@ -99,4 +100,12 @@ func TestToolFramesProtoMatchFixtures(t *testing.T) {
 	if decoded.GetId() != "c1" || string(decoded.GetArguments()) != `{"cmd":"ls"}` {
 		t.Fatalf("decoded: %+v", &decoded)
 	}
+}
+
+// classified fills the server-derived presentation fields the same way
+// run.toolCallToProto does, so the fixture stays the wire contract.
+func classified(c *consolev1.ToolCall) *consolev1.ToolCall {
+	label, flags, icon := tools.ToolLabel(c.Name), tools.ToolKindFlags(c.Name), tools.ToolIconKey(c.Name)
+	c.Label, c.KindFlags, c.Icon = &label, &flags, &icon
+	return c
 }

@@ -1,1 +1,1 @@
-{"type":"modelStreamPart","part":{"toolCall":{"id":"c1","name":"sh","label":"Run Command","kindFlags":0,"icon":"terminal"}}}
+{"type":"modelStreamPart","part":{"toolCall":{"id":"c1","name":"bash","label":"Run Command","kindFlags":0,"icon":"terminal"}}}
