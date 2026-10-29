@@ -8,6 +8,38 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 ---
 
+## Status (as of 2026-10-29)
+
+| Phase | State | Notes |
+| :--- | :--- | :--- |
+| 1 — Kernel + ports | **Done** | `console` / `console_reset` tools, `ports.list/forward/unforward`; `ports` and `project_scripts` removed from `DefaultToolNames` |
+| 2 — Scripts | **Mostly done** | `scripts.list/run/status/stop` shipped. **Missing:** cursor pagination (output is still the last 256KB, no offset) |
+| 3 — Discovery + session control | **Done** | `models()`, `approvalModes()`, `sessions.list/read/delete`; deleting the active session is refused. Also shipped, not in the plan: `projects.list/add` |
+| 4 — `console.spawn` | **Partial** | `sessions.create` exists (prompt, model, provider, cwd, project, worktree). **Missing:** approval ceiling + clamp report, `thinking_level`, depth cap, token budget, concurrency cap, usage rollup, the `spawn` name |
+| 5 — `sessions.fork` | **Not started** | `session.Service.Fork` exists, not exposed to the kernel |
+| 6 — Security prerequisites | **Half done** | Path boundary shipped (`permissions/guard.go`: writes confined to session cwd, symlinks resolved, `batchWrite` covered). **Missing:** plan-mode hard deny (§8.2) |
+| 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
+
+**Not in the API yet:** `spawn`, `sessions.fork`, `sessions.abort`, `sessions.set_model`, `sessions.set_approval`, `console.pr.*`.
+
+**Known safety gap:** `sessions.create` passes `approval_mode` straight through, so an `always-ask` parent can create a `full-access` child. §4 calls the ceiling inviolable; this is the highest-priority item.
+
+**Tests** live beside the code in `internal/services/console/*_test.go`, not in `tests/tools/TestConsole*` as the phases below say. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
+
+### Next
+
+- Approval ceiling on spawn: `effective = min(parent, requested)`, clamp reported in the result (§4)
+- Plan-mode hard deny of `TierWrite` / `TierExec` in `permissions.Resolve` (§8.2)
+- `sessions.abort`, then `set_model` / `set_approval` (set_approval clamped to the calling run)
+- Rename/extend `sessions.create` into `console.spawn`: `thinking_level`, depth cap 2, per-spawn token budget, concurrency cap, usage rollup
+- `sessions.fork` over the existing `Fork`
+- Cursor pagination for script output
+- `console.pr.*` plus the GitHub REST service
+- Document each new method in the kernel `SKILL.md`
+- Confirm no test needs `TestConsole*` under `tests/tools/`, or move the kernel tests there and fix the commands in this doc
+
+---
+
 ## 0. Non-Goals
 
 - **Not a general "do anything" tool.** The kernel is an API surface over existing services, not a scripting escape hatch over the machine. Anything reachable must also be reachable through a typed Go path.
@@ -205,34 +237,34 @@ The boundary should be **path-based inside the kernel**, not tier-based, because
 
 ## 9. Phased Implementation
 
-### Phase 1 — Kernel skeleton + `ports` (smallest slice)
+### Phase 1 — Kernel skeleton + `ports` (smallest slice) — DONE
 - `internal/services/console/`: manager, per-session runtime, `console` + `console_reset` tools bound via the `computerTool` pattern.
 - Port methods wrapping `PortRegistry` unchanged. Remove `ports` from `DefaultToolNames`.
 - `console-control` skill carrying the API documentation.
 - **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleKernel -v` — kernel state persists across calls, `console_reset` clears it, variables do not leak between sessions.
 
-### Phase 2 — `project_scripts`
+### Phase 2 — `project_scripts` — MOSTLY DONE (cursor pagination missing)
 - Script methods over `ProjectScriptsService`, preserving worktree scoping and port-owner cleanup exactly.
 - Add the cursor pagination the service lacks (`capOutput` retains only the last 256KB with no offset), shared with `shell.read` from the attachments plan.
 - Remove `project_scripts` from `DefaultToolNames`.
 - **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleScripts -v` — behavior identical to the removed tool; cursor round-trips.
 
-### Phase 3 — Discovery + session control
+### Phase 3 — Discovery + session control — DONE
 - `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`.
 - Delete: soft by default, permanent gated, **never the currently-running session**, and confirm when the session owns a worktree.
 
-### Phase 4 — `console.spawn` (Level 2)
+### Phase 4 — `console.spawn` (Level 2) — PARTIAL (`sessions.create` only; no ceiling or caps)
 - Session creation through the existing `session.Service`, worktree-scoped.
 - Permission ceiling + clamp reporting (§4), depth cap, token budget, concurrency cap.
 - **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleSpawn -v` — clamp enforced in both directions; budget and depth caps hold; spawned session appears in `sessions.list`.
 
-### Phase 5 — `console.sessions.fork`
+### Phase 5 — `console.sessions.fork` — NOT STARTED
 - Wraps the existing `Fork(sourceID, messageID)`. High value: "branch this conversation at message 40 and try a different approach there."
 
-### Phase 6 — Security prerequisites landed
+### Phase 6 — Security prerequisites landed — HALF DONE (path boundary yes, plan-mode deny no)
 - Path boundary for the kernel (§8.3); `PlanMode` hard deny (§8.2). Independent of the kernel, valuable on their own.
 
-### Phase 7 — GitHub surface: `gh` pre-auth + `console.pr.*`
+### Phase 7 — GitHub surface: `gh` pre-auth + `console.pr.*` — HALF DONE (GH_TOKEN yes, `console.pr.*` no)
 Two layers over the same stored PAT, in shipping order:
 
 1. **GH_TOKEN injection (no kernel dependency, land first).** Every agent-spawned command inherits `GH_TOKEN=<stored PAT>` — agent `bash` (sync + background jobs), project scripts, PTY terminals — so the `gh` CLI models already reach for works on a headless box with no `gh auth login` browser flow. `gh` prefers `GH_TOKEN` over keyring/oauth state; an explicitly set `GH_TOKEN`/`GITHUB_TOKEN` always wins over the stored one. `GITHUB_TOKEN` is deliberately left unset (Actions-ephemeral convention); GHE stays out of scope, same as the git credential helper.
