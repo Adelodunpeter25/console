@@ -233,7 +233,7 @@ func (s *Service) SetConsoleServices(projects *services.ProjectService) {
 	manager, sessions := s.consoleManager, s.sessions
 	s.mu.Unlock()
 	if manager != nil {
-		manager.SetSessions(sessions, projects, s.IsActive, s.Abort, s.startConsoleSession, s.promptSession)
+		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
 	}
 }
 

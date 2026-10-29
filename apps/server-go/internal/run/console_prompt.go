@@ -32,7 +32,7 @@ func (s *Service) promptSession(sessionID, text, modelID, provider, approval, th
 	}
 
 	if s.hasStaged(sessionID) {
-		return false, fmt.Errorf("session %q already has a queued prompt; it would be replaced, so wait for it to run or clear it first", sessionID)
+		return false, fmt.Errorf("session %q already has a queued prompt; it would be replaced, so wait for it to run or clear it first with console.sessions.clear_queue({session_id})", sessionID)
 	}
 	if _, err := s.QueuePrompt(sessionID, dto); err != nil {
 		return false, mapPromptErr(sessionID, err)
@@ -67,3 +67,30 @@ func mapPromptErr(sessionID string, err error) error {
 	}
 	return err
 }
+
+// consoleQueued reports the prompt staged for a session, for the console kernel.
+func (s *Service) consoleQueued(sessionID string) (prompt, createdAt string, ok bool, err error) {
+	if dto, pending := s.pendingStaged(sessionID); pending {
+		return dto.Text, "", true, nil
+	}
+	stored, err := s.sessions.GetQueuedPrompt(sessionID)
+	if err != nil || stored == nil {
+		return "", "", false, err
+	}
+	return stored.Prompt, stored.CreatedAt, true, nil
+}
+
+// abortAndClear stops a session's run and discards any prompt staged behind it,
+// matching POST /api/sessions/:id/abort. Cancelling alone is not enough: a
+// cancelled run drains a staged prompt as its next turn, so the session would
+// start working again right after being stopped.
+func (s *Service) abortAndClear(sessionID string) bool {
+	if !s.Abort(sessionID) {
+		return false
+	}
+	_, _ = s.ClearQueuedPrompt(sessionID)
+	return true
+}
+
+// AbortAndClear is abortAndClear for callers outside the package.
+func (s *Service) AbortAndClear(sessionID string) bool { return s.abortAndClear(sessionID) }

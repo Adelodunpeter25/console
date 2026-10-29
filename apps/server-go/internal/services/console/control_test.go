@@ -340,3 +340,134 @@ func TestPromptValidatesThinkingAgainstTheSessionsModel(t *testing.T) {
 		t.Fatal("unsupported level must be refused")
 	}
 }
+
+func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "full-access", &aborted)
+	for name, code := range map[string]string{
+		"unknown key":      `console.sessions.list({bogus: 1})`,
+		"misspelled key":   `console.sessions.list({projectId: "p"})`,
+		"wrong type":       `console.sessions.list({project_id: 42})`,
+		"unknown on read":  `console.sessions.read({session_id: "x", nope: true})`,
+		"limit as string":  `console.sessions.read({session_id: "x", limit: "5"})`,
+		"limit fractional": `console.sessions.read({session_id: "x", limit: 2.5})`,
+	} {
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	err := evalErr(runtime, `console.sessions.list({projectId: "p"})`)
+	if err == nil || !strings.Contains(err.Error(), "project_id, cwd") {
+		t.Fatalf("err = %v, want the accepted argument names listed", err)
+	}
+	// Valid calls are unaffected (an empty list renders as "(no output)", so
+	// only the absence of an error is checked here).
+	for _, code := range []string{`console.sessions.list({cwd: "/tmp"})`, `console.sessions.list()`} {
+		if err := evalErr(runtime, code); err != nil {
+			t.Errorf("%s: %v", code, err)
+		}
+	}
+}
+
+func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
+	runtime, _ := newConsoleSessionRuntime(t, nil)
+	_ = runtime
+	// Every method must be listed so none escapes argument checking by omission.
+	for _, name := range []string{
+		"ports.list", "ports.forward", "ports.unforward", "scripts.list", "scripts.run",
+		"scripts.status", "scripts.output", "scripts.stop", "models", "approvalModes",
+		"projects.list", "projects.add", "sessions.list", "sessions.read", "sessions.create",
+		"sessions.delete", "sessions.abort", "sessions.set_model", "sessions.set_approval",
+		"sessions.prompt", "sessions.queue", "sessions.clear_queue", "sessions.fork",
+	} {
+		if _, ok := methodArgs[name]; !ok {
+			t.Errorf("%s is not in methodArgs", name)
+		}
+	}
+}
+
+func TestCreateWithPromptReportsRunning(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "full-access", &aborted)
+	runtime.start = func(string, string, string, string, string, string) error { return nil }
+	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", prompt:"go"})`).(map[string]any)
+	if out["started"] != true {
+		t.Fatalf("started = %v", out["started"])
+	}
+	if out["session"].(map[string]any)["status"] != "working" {
+		t.Fatalf("status = %v, want working for a session whose run just started", out["session"].(map[string]any)["status"])
+	}
+	// No prompt: nothing started, still idle.
+	idle := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
+	if idle["started"] != false || idle["session"].(map[string]any)["status"] != "idle" {
+		t.Fatalf("idle create = %#v", idle)
+	}
+}
+
+func TestQueueViewAndClear(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "full-access", &aborted)
+	staged := map[string]string{"s1": "run the tests"}
+	runtime.queue = QueueControl{
+		Get: func(id string) (string, string, bool, error) {
+			p, ok := staged[id]
+			return p, "2026-01-01T00:00:00Z", ok, nil
+		},
+		Clear: func(id string) (bool, error) {
+			_, ok := staged[id]
+			delete(staged, id)
+			return ok, nil
+		},
+	}
+	q := evalJSON(t, runtime, `console.sessions.queue({session_id:"s1"})`).(map[string]any)
+	if q["queued"] != true || q["prompt"] != "run the tests" {
+		t.Fatalf("queue = %#v", q)
+	}
+	c := evalJSON(t, runtime, `console.sessions.clear_queue({session_id:"s1"})`).(map[string]any)
+	if c["cleared"] != true {
+		t.Fatalf("clear = %#v", c)
+	}
+	after := evalJSON(t, runtime, `console.sessions.queue({session_id:"s1"})`).(map[string]any)
+	if after["queued"] != false {
+		t.Fatalf("queue after clear = %#v", after)
+	}
+	again := evalJSON(t, runtime, `console.sessions.clear_queue({session_id:"s1"})`).(map[string]any)
+	if again["cleared"] != false {
+		t.Fatalf("clearing an empty queue = %#v", again)
+	}
+	if err := evalErr(runtime, `console.sessions.queue({})`); err == nil {
+		t.Fatal("session_id is required")
+	}
+}
+
+func TestUnknownMethodNamesTheValidOnes(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "full-access", &aborted)
+	err := evalErr(runtime, `console.sessions.nope({})`)
+	if err == nil || !strings.Contains(err.Error(), "console.sessions.nope does not exist") || !strings.Contains(err.Error(), "prompt") {
+		t.Fatalf("err = %v, want the valid session methods listed", err)
+	}
+	err = evalErr(runtime, `console.nope()`)
+	if err == nil || !strings.Contains(err.Error(), "sessions") {
+		t.Fatalf("err = %v, want the valid namespaces listed", err)
+	}
+	// The guard must not disturb ordinary use of the objects.
+	for _, code := range []string{
+		`Object.keys(console.sessions).length`,
+		`typeof console.sessions.list`,
+		`JSON.stringify(console.approvalModes())`,
+	} {
+		if err := evalErr(runtime, code); err != nil {
+			t.Errorf("%s: %v", code, err)
+		}
+	}
+}
+
+func TestTimeoutMessageSaysWhatToCheck(t *testing.T) {
+	var aborted []string
+	runtime, _ := newControlRuntime(t, "full-access", &aborted)
+	_, err := runtime.Eval(context.Background(), `while(true){}`, 50*time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "console.sessions.list()") || !strings.Contains(err.Error(), "console.scripts.status()") {
+		t.Fatalf("err = %v, want the read methods to check named", err)
+	}
+}

@@ -28,6 +28,7 @@ type Runtime struct {
 	active    func(string) bool
 	abort     func(string) bool
 	prompt    PromptFunc
+	queue     QueueControl
 	ceiling   string
 	start     func(string, string, string, string, string, string) error
 	projectID string
@@ -36,8 +37,8 @@ type Runtime struct {
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, prompt: prompt, start: start, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -99,14 +100,35 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		{Name: "sessions.prompt", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsPrompt(ctx, args)
 		}},
+		{Name: "sessions.queue", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsQueue(ctx, args)
+		}},
+		{Name: "sessions.clear_queue", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsClearQueue(ctx, args)
+		}},
 		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsFork(ctx, args)
 		}},
 	}
+	// Every method refuses keys it does not take, so a typo such as
+	// {projectId: ...} fails with the accepted names instead of being ignored.
+	for i := range methods {
+		allowed, known := methodArgs[methods[i].Name]
+		if !known {
+			continue
+		}
+		call := methods[i].Call
+		methods[i].Call = func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			if err := onlyArgs(args, allowed...); err != nil {
+				return nil, err
+			}
+			return call(ctx, args)
+		}
+	}
 	kernel, err := jskernel.New(jskernel.Options{
 		Root:             "console",
 		PlainResults:     true,
-		InterruptMessage: "console stopped; action completion is unknown. Inspect fresh state before retrying.",
+		InterruptMessage: "console stopped (timed out or cancelled); any call that was already in flight may have taken effect, but variables from earlier calls are kept. Check what happened before retrying: console.sessions.list() or console.sessions.read({session_id}) for sessions, console.scripts.status() for scripts, console.ports.list() for ports.",
 		AsyncMessage:     "async code is not supported: call console methods directly, they already wait for the result",
 	}, methods)
 	if err != nil {
@@ -198,7 +220,11 @@ func (r *Runtime) scriptsRun(ctx context.Context, args map[string]any) (*jskerne
 	if err != nil {
 		return nil, err
 	}
-	if wait, ok := optionalInt(args, "wait_ms"); ok && wait > 0 {
+	wait, hasWait, err := optionalInt(args, "wait_ms")
+	if err != nil {
+		return nil, err
+	}
+	if hasWait && wait > 0 {
 		if wait > 10000 {
 			wait = 10000
 		}
@@ -318,12 +344,16 @@ func (r *Runtime) sessionsList(_ context.Context, args map[string]any) (*jskerne
 	if r.sessions == nil {
 		return nil, fmt.Errorf("session service is unavailable")
 	}
-	filter := session.ListFilter{}
-	if value, ok := args["project_id"].(string); ok {
-		filter.ProjectID = value
+	if err := onlyArgs(args, "project_id", "cwd"); err != nil {
+		return nil, err
 	}
-	if value, ok := args["cwd"].(string); ok {
-		filter.Cwd = value
+	filter := session.ListFilter{}
+	var err error
+	if filter.ProjectID, err = optionalString(args, "project_id"); err != nil {
+		return nil, err
+	}
+	if filter.Cwd, err = optionalString(args, "cwd"); err != nil {
+		return nil, err
 	}
 	sessions, err := r.sessions.ListFiltered(filter)
 	if err != nil {
@@ -342,8 +372,14 @@ func (r *Runtime) sessionsRead(_ context.Context, args map[string]any) (*jskerne
 	}
 	// limit returns only the most recent N messages; pass nextCursor back as
 	// `before` to page further into history. Omitted, the whole transcript.
-	limit, _ := optionalInt(args, "limit")
-	before, _ := optionalInt(args, "before")
+	limit, _, err := optionalInt(args, "limit")
+	if err != nil {
+		return nil, err
+	}
+	before, _, err := optionalInt(args, "before")
+	if err != nil {
+		return nil, err
+	}
 	if limit < 0 || before < 0 {
 		return nil, fmt.Errorf("limit and before must not be negative")
 	}
@@ -413,7 +449,14 @@ func (r *Runtime) sessionsCreate(ctx context.Context, args map[string]any) (*jsk
 			return nil, err
 		}
 	}
-	out := map[string]any{"session": header, "prompt": prompt, "approval_mode": approval}
+	// The header was read before the run started, so it still says idle. When a
+	// prompt was started the session is running; say so rather than leaving the
+	// caller to poll.
+	started := prompt != "" && r.start != nil
+	if started {
+		header.Status = "working"
+	}
+	out := map[string]any{"session": header, "prompt": prompt, "approval_mode": approval, "started": started}
 	if clampNote != "" {
 		out["clamped"] = clampNote
 	}
@@ -457,18 +500,38 @@ func stringArg(args map[string]any, name string) (string, error) {
 	return value, nil
 }
 
-func optionalInt(args map[string]any, name string) (int, bool) {
-	value, ok := args[name]
-	if !ok {
-		return 0, false
-	}
-	if n, ok := value.(int); ok {
+// intValue reads a whole number from a JavaScript argument. The engine hands
+// whole numbers over as int64 and fractional ones as float64, so every Go
+// integer type is accepted; a number with a fractional part is not an integer.
+func intValue(value any) (int, bool) {
+	switch n := value.(type) {
+	case int:
 		return n, true
-	}
-	if f, ok := value.(float64); ok && f == float64(int(f)) {
-		return int(f), true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case float64:
+		if n == float64(int64(n)) {
+			return int(n), true
+		}
 	}
 	return 0, false
+}
+
+// optionalInt returns the named integer argument. ok is false when the
+// argument is absent; a present value that is not a whole number is an error,
+// so a wrong type fails loudly instead of being ignored.
+func optionalInt(args map[string]any, name string) (n int, ok bool, err error) {
+	value, present := args[name]
+	if !present {
+		return 0, false, nil
+	}
+	n, isInt := intValue(value)
+	if !isInt {
+		return 0, false, fmt.Errorf("%s must be a whole number, got %v", name, value)
+	}
+	return n, true, nil
 }
 
 func portArg(args map[string]any) (int, error) {
@@ -476,16 +539,12 @@ func portArg(args map[string]any) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("port is required")
 	}
-	n, ok := value.(int)
+	n, ok := intValue(value)
 	if !ok {
-		if f, ok := value.(float64); ok && f == float64(int(f)) {
-			n = int(f)
-		} else {
-			return 0, fmt.Errorf("port must be an integer")
-		}
+		return 0, fmt.Errorf("port must be a whole number such as 3000, got %v", value)
 	}
-	if n <= 0 {
-		return 0, fmt.Errorf("port must be greater than zero")
+	if n <= 0 || n > 65535 {
+		return 0, fmt.Errorf("port must be between 1 and 65535, got %d", n)
 	}
 	return n, nil
 }
@@ -504,11 +563,45 @@ func (r *Runtime) scriptsOutput(_ context.Context, args map[string]any) (*jskern
 	if stream == "" {
 		stream = "stdout"
 	}
-	cursor, _ := optionalInt(args, "cursor")
-	limit, _ := optionalInt(args, "limit")
+	cursor, _, err := optionalInt(args, "cursor")
+	if err != nil {
+		return nil, err
+	}
+	limit, _, err := optionalInt(args, "limit")
+	if err != nil {
+		return nil, err
+	}
 	chunk, err := r.scripts.ReadOutput(r.projectID, runID, stream, int64(cursor), limit)
 	if err != nil {
 		return nil, err
 	}
 	return marshalResult(chunk)
+}
+
+// methodArgs lists the arguments each console method accepts. A method not
+// listed here is not argument-checked.
+var methodArgs = map[string][]string{
+	"ports.list":            {},
+	"ports.forward":         {"port"},
+	"ports.unforward":       {"port"},
+	"scripts.list":          {},
+	"scripts.run":           {"id", "wait_ms"},
+	"scripts.status":        {"run_id"},
+	"scripts.output":        {"run_id", "stream", "cursor", "limit"},
+	"scripts.stop":          {"run_id"},
+	"models":                {},
+	"approvalModes":         {},
+	"projects.list":         {},
+	"projects.add":          {"directory", "name"},
+	"sessions.list":         {"project_id", "cwd"},
+	"sessions.read":         {"session_id", "limit", "before"},
+	"sessions.create":       {"prompt", "project_id", "cwd", "model", "provider", "thinking_level", "approval_mode", "worktree"},
+	"sessions.delete":       {"session_id"},
+	"sessions.abort":        {"session_id"},
+	"sessions.set_model":    {"session_id", "model", "provider"},
+	"sessions.set_approval": {"session_id", "mode"},
+	"sessions.prompt":       {"session_id", "prompt", "model", "provider", "thinking_level", "approval_mode"},
+	"sessions.queue":        {"session_id"},
+	"sessions.clear_queue":  {"session_id"},
+	"sessions.fork":         {"session_id", "message_id"},
 }

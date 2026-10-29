@@ -161,6 +161,12 @@ func New(opts Options, methods []Method) (*Runtime, error) {
 	if err := r.rt.Set(opts.Root, root); err != nil {
 		return nil, err
 	}
+	// A call to a method that does not exist would otherwise surface as the
+	// engine's "Object has no member 'x'". Wrap the tree so a typo names the
+	// methods that do exist.
+	if err := r.guardUnknownMembers(root, opts.Root); err != nil {
+		return nil, err
+	}
 
 	// Promise completion would be a silent no-op (no microtask pump runs
 	// between evaluations), so detect it and fail loudly instead of letting

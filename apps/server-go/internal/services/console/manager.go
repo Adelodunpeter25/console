@@ -24,6 +24,7 @@ type Manager struct {
 	start    func(string, string, string, string, string, string) error
 	abort    func(string) bool
 	prompt   PromptFunc
+	queue    QueueControl
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -62,16 +63,16 @@ func (m *Manager) scriptService() *services.ProjectScriptsService {
 
 // SetSessions attaches session and project services plus run hooks used by the
 // console session control surface.
-func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error, prompt PromptFunc) {
+func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error, prompt PromptFunc, queue QueueControl) {
 	m.mu.Lock()
-	m.sessions, m.projects, m.active, m.abort, m.start, m.prompt = sessions, projects, active, abort, start, prompt
+	m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue = sessions, projects, active, abort, start, prompt, queue
 	m.mu.Unlock()
 }
 
-func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string) bool, func(string, string, string, string, string, string) error, PromptFunc) {
+func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string) bool, func(string, string, string, string, string, string) error, PromptFunc, QueueControl) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.sessions, m.projects, m.active, m.abort, m.start, m.prompt
+	return m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue
 }
 
 // sessionRuntime returns the session's console kernel, creating it on first use.
@@ -79,8 +80,8 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 	return m.js.Get(sessionID, func() (*Runtime, error) {
 		ports := m.portRegistry()
 		scripts := m.scriptService()
-		sessions, projects, active, abort, start, prompt := m.sessionConfig()
-		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, abort, prompt, projectID, cwd)
+		sessions, projects, active, abort, start, prompt, queue := m.sessionConfig()
+		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, abort, prompt, queue, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}

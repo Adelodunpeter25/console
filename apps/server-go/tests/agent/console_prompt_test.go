@@ -103,3 +103,43 @@ func TestPromptSessionUnknownSession(t *testing.T) {
 		t.Fatalf("err = %v, want not found", err)
 	}
 }
+
+// Stopping a session from the console must not let a queued prompt start the
+// session again: a cancelled run drains its staged prompt unless it is cleared.
+func TestAbortAndClearDiscardsTheQueuedPrompt(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var enteredOnce bool
+	svc.Lookup = func(string) (loop.Provider, error) {
+		return &blockingProvider{release: release, released: new(bool), entered: entered, enteredOnce: &enteredOnce}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "slow", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if queued, err := svc.PromptSession(header.ID, "follow-up", "", "", "always-ask", ""); err != nil || !queued {
+		t.Fatalf("queue: %v %v", queued, err)
+	}
+	if !svc.AbortAndClear(header.ID) {
+		t.Fatal("abort reported no active run")
+	}
+	helpers.WaitSettled(t, hub)
+	if qp, _ := svc.QueuedPrompt(header.ID); qp != nil {
+		t.Fatalf("queued prompt survived the abort: %+v", qp)
+	}
+	loaded, err := sessions.Load(header.ID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range loaded.Messages {
+		if msg, err := loop.MessageFromProtoBytes(raw); err == nil {
+			if u, ok := msg.(loop.UserMessage); ok && u.Content == "follow-up" {
+				t.Fatal("the queued prompt ran after the abort")
+			}
+		}
+	}
+}

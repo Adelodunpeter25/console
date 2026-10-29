@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
@@ -265,4 +266,85 @@ func (r *Runtime) sessionsPrompt(ctx context.Context, args map[string]any) (*jsk
 		out["clamped"] = note
 	}
 	return marshalResult(out)
+}
+
+// QueueControl reads and clears a session's staged prompt. It is a callback
+// pair because the run service owns the queue and imports this package.
+type QueueControl struct {
+	Get   func(sessionID string) (prompt string, createdAt string, ok bool, err error)
+	Clear func(sessionID string) (bool, error)
+}
+
+// sessionsQueue shows the prompt waiting to run on a session, if any.
+func (r *Runtime) sessionsQueue(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if err := onlyArgs(args, "session_id"); err != nil {
+		return nil, err
+	}
+	id, err := stringArg(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	if r.queue.Get == nil {
+		return nil, fmt.Errorf("queue control is unavailable")
+	}
+	prompt, createdAt, ok, err := r.queue.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return marshalResult(map[string]any{"session_id": id, "queued": false})
+	}
+	return marshalResult(map[string]any{"session_id": id, "queued": true, "prompt": prompt, "created_at": createdAt})
+}
+
+// sessionsClearQueue discards the waiting prompt, which is what a refused
+// sessions.prompt asks the caller to do.
+func (r *Runtime) sessionsClearQueue(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if err := onlyArgs(args, "session_id"); err != nil {
+		return nil, err
+	}
+	id, err := stringArg(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	if r.queue.Clear == nil {
+		return nil, fmt.Errorf("queue control is unavailable")
+	}
+	cleared, err := r.queue.Clear(id)
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(map[string]any{"session_id": id, "cleared": cleared})
+}
+
+// onlyArgs refuses arguments a method does not take. Silently ignoring an
+// unknown key hides typos (`{projectId: ...}` instead of `{project_id: ...}`).
+func onlyArgs(args map[string]any, allowed ...string) error {
+	for key := range args {
+		known := false
+		for _, name := range allowed {
+			if key == name {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return fmt.Errorf("unknown argument %q; this method takes: %s", key, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
+// optionalString reads a string argument. A value of any other type is an
+// error rather than being treated as absent.
+func optionalString(args map[string]any, name string) (string, error) {
+	value, present := args[name]
+	if !present {
+		return "", nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("%s must be a string, got %v", name, value)
+	}
+	return text, nil
 }
