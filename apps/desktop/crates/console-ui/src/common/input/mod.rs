@@ -473,16 +473,17 @@ impl ComposerInput {
     ///
     /// The preceding run is consumed from all the reserved spaces plus any
     /// real separator the user already had — removing the chip entirely, so
-    /// neighbors rejoin across the vacated gap. Only exactly-two trailing
-    /// spaces are folded in; anything longer is the user's own spacing.
+    /// neighbors rejoin across the vacated gap. Only the single trailing
+    /// space the insert added is folded in; anything beyond it is the user's
+    /// own spacing.
     fn remove_mention_atom(&mut self, mention: ComposerMention, cx: &mut Context<Self>) {
         let mut start = mention.range.start;
         while start > 0 && self.content.as_bytes()[start - 1] == b' ' {
             start -= 1;
         }
         let mut end = mention.range.end;
-        if self.content[end..].starts_with("  ") {
-            end += 2;
+        if self.content[end..].starts_with(' ') {
+            end += 1;
         }
         self.replace_range(start..end, "", cx);
     }
@@ -663,7 +664,7 @@ impl ComposerInput {
         } else {
             "      "
         };
-        let insert_text = format!("{prefix}{label}  ");
+        let insert_text = format!("{prefix}{label} ");
         let lead = prefix.len();
         let mention_len = label.len();
         self.replace_range(range, &insert_text, cx);
