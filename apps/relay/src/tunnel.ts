@@ -14,6 +14,24 @@ interface Pending {
 /** One instance per tunnel id: holds the console server's socket and proxies visitors over it. */
 export class Tunnel extends DurableObject {
 	private pending = new Map<number, Pending>();
+	private colo?: string;
+	private tokenHash?: string;
+
+	/** The Cloudflare data centre this object runs in. Looked up once. */
+	private async where(): Promise<string> {
+		if (this.colo) return this.colo;
+		try {
+			const t = await (await fetch("https://cloudflare.com/cdn-cgi/trace")).text();
+			this.colo = /^colo=(\w+)$/m.exec(t)?.[1] ?? "?";
+		} catch {
+			this.colo = "?";
+		}
+		return this.colo;
+	}
+
+	private async hash(): Promise<string | undefined> {
+		return (this.tokenHash ??= await this.ctx.storage.get<string>("tokenHash"));
+	}
 
 	constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
 		super(ctx, env);
@@ -24,11 +42,13 @@ export class Tunnel extends DurableObject {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/init") {
-			if (await this.ctx.storage.get("tokenHash")) return new Response("taken", { status: 409 });
-			await this.ctx.storage.put("tokenHash", await request.text());
-			return new Response("ok");
+			if (await this.hash()) return new Response("taken", { status: 409 });
+			const h = await request.text();
+			await this.ctx.storage.put("tokenHash", h);
+			this.tokenHash = h;
+			return new Response("ok", { headers: { "x-relay-do": await this.where() } });
 		}
-		if (!(await this.ctx.storage.get("tokenHash"))) return new Response("unknown tunnel", { status: 404 });
+		if (!(await this.hash())) return new Response("unknown tunnel", { status: 404 });
 
 		const parts = url.pathname.split("/"); // ["", "connect", name] or ["", name, ...rest]
 		if (parts[1] === "connect") return this.acceptServer(request);
@@ -46,7 +66,7 @@ export class Tunnel extends DurableObject {
 		if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
 		const token = request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
 		const hash = await sha256(token);
-		if (hash !== (await this.ctx.storage.get("tokenHash"))) return new Response("forbidden", { status: 403 });
+		if (hash !== (await this.hash())) return new Response("forbidden", { status: 403 });
 
 		for (const old of this.ctx.getWebSockets("server")) old.close(1012, "replaced");
 		const pair = new WebSocketPair();
@@ -149,7 +169,10 @@ export class Tunnel extends DurableObject {
 		this.send(T.END, sid);
 
 		try {
-			return await done;
+			const res = await done;
+			if (this.colo) res.headers.set("x-relay-do", this.colo);
+			else void this.where();
+			return res;
 		} catch (e) {
 			return new Response(`tunnel error: ${(e as Error).message}`, { status: 502 });
 		}
