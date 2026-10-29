@@ -492,7 +492,10 @@ impl ConsoleDesktopApp {
         // happened to be set to.
         let approval_mode = submit.approval_mode;
         let prompt = submit.prompt.clone();
-        let title = title_from_prompt(&prompt);
+        // The prompt is the *local tab label* until the server's autotitle
+        // lands. Sending it as the stored title would make the server keep
+        // it (non-generic) and never generate a real one.
+        let label = title_from_prompt(&prompt);
         // Attachments staged in the card move onto the new session; the card's
         // own copy is dropped so reopening starts clean.
         let staged_attachments = (*submit.attachments).clone();
@@ -549,7 +552,7 @@ impl ConsoleDesktopApp {
                     project_id: submit.project_id,
                     model_id: submit.model.as_ref().map(|m| m.model_id.clone()),
                     provider: submit.model.as_ref().map(|m| m.provider.clone()),
-                    title: Some(title.clone()),
+                    title: None,
                     approval_mode: Some(approval_mode.value().to_string()),
                     thinking_level: submit.thinking_level,
                     worktree,
@@ -568,7 +571,7 @@ impl ConsoleDesktopApp {
                             this.selected_session_id = Some(new_session.id.clone());
                         }
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                        this.open_chat_tab_in_pane(&pane_id, new_session.id.clone(), &title);
+                        this.open_chat_tab_in_pane(&pane_id, new_session.id.clone(), &label);
                         // The project folder's branch just changed, so the
                         // footer's branch list is stale until it reloads.
                         if let Some((_, cwd)) = checkout.clone() {

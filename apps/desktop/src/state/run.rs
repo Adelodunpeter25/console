@@ -534,7 +534,10 @@ impl ConsoleDesktopApp {
                         project_id: session_project_id,
                         model_id: model_id.clone(),
                         provider: provider.clone(),
-                        title: Some(prompt.chars().take(30).collect()),
+                        // No title: the server autotitles the first turn and
+                        // renames via SessionTitleUpdated. A prompt-derived
+                        // stored title would suppress generation forever.
+                        title: None,
                         approval_mode: approval_mode.clone(),
                         thinking_level,
                         worktree: None,
