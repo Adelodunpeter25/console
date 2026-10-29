@@ -236,7 +236,7 @@ impl ConsoleDesktopApp {
             .or_else(|| initial_root.first_leaf().map(|l| l.id.clone()))
             .or_else(|| Some("pane-main".into()));
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
-        let composer_input = cx.new(|cx| ComposerInput::new(window, cx));
+        let composer_input = cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
         let question_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .search_field()
@@ -528,6 +528,12 @@ impl ConsoleDesktopApp {
                 &composer_input,
                 |this, _input, event: &ComposerAttachmentPaste, cx| {
                     this.stage_clipboard_attachments("pane-main", event.0.clone(), cx);
+                },
+            ),
+            cx.subscribe(
+                &composer_input,
+                |this, _input, event: &console_ui::input::ComposerLargePaste, cx| {
+                    this.stage_large_paste("pane-main", event.text.clone(), cx);
                 },
             ),
             cx.subscribe(
