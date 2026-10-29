@@ -27,6 +27,11 @@ type managedRun struct {
 	// worktrees at once.
 	root        string
 	process     *exec.Cmd
+	// outTotal / errTotal count every byte ever written to each stream, so a
+	// reader cursor is an absolute offset that stays valid after the head of
+	// the buffer is trimmed.
+	outTotal int64
+	errTotal int64
 	mu          sync.Mutex
 	subscribers map[chan types.ScriptRunEvent]bool
 }
@@ -63,8 +68,10 @@ func (r *managedRun) appendOutput(stream, text string) {
 	r.mu.Lock()
 	if stream == "stdout" {
 		r.Stdout = capOutput(r.Stdout + text)
+		r.outTotal += int64(len(text))
 	} else {
 		r.Stderr = capOutput(r.Stderr + text)
+		r.errTotal += int64(len(text))
 	}
 	r.mu.Unlock()
 }
@@ -493,4 +500,63 @@ func (s *ProjectScriptsService) Unsubscribe(projectID, runID string, ch chan typ
 func (s *ProjectScriptsService) IsRunning(projectID, runID string) bool {
 	snap := s.GetRun(projectID, runID)
 	return snap != nil && snap.Status == "running"
+}
+
+// OutputChunk is one page of a run's output: Text covers [From, Next) of the
+// stream, Next is the cursor to pass back, and Truncated reports that bytes
+// before the requested cursor were already trimmed from the buffer.
+type OutputChunk struct {
+	Text      string `json:"text"`
+	From      int64  `json:"from"`
+	Next      int64  `json:"next"`
+	Truncated bool   `json:"truncated"`
+}
+
+// ReadOutput returns up to limit bytes of a run's stream ("stdout" or
+// "stderr") starting at the absolute offset cursor. Cursors count every byte
+// the run ever wrote, so they stay valid as the 256KB buffer trims its head;
+// a cursor that fell off the head resumes at the oldest retained byte and
+// sets Truncated.
+func (s *ProjectScriptsService) ReadOutput(projectID, runID, stream string, cursor int64, limit int) (*OutputChunk, error) {
+	s.mu.Lock()
+	run := s.runs[runID]
+	s.mu.Unlock()
+	if run == nil || run.ProjectID != projectID {
+		return nil, fmt.Errorf("run %q not found", runID)
+	}
+	if stream != "stdout" && stream != "stderr" {
+		return nil, fmt.Errorf("stream must be \"stdout\" or \"stderr\"")
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if limit <= 0 || limit > scriptMaxOutput {
+		limit = scriptMaxOutput
+	}
+	run.mu.Lock()
+	buf, total := run.Stdout, run.outTotal
+	if stream == "stderr" {
+		buf, total = run.Stderr, run.errTotal
+	}
+	run.mu.Unlock()
+
+	start := total - int64(len(buf)) // absolute offset of buf[0]
+	out := &OutputChunk{From: cursor}
+	if cursor < start {
+		out.Truncated = true
+		cursor = start
+		out.From = start
+	}
+	if cursor >= total {
+		out.Next = total
+		return out, nil
+	}
+	begin := int(cursor - start)
+	end := begin + limit
+	if end > len(buf) {
+		end = len(buf)
+	}
+	out.Text = buf[begin:end]
+	out.Next = cursor + int64(end-begin)
+	return out, nil
 }

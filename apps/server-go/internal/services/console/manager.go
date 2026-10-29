@@ -21,7 +21,8 @@ type Manager struct {
 	sessions *services.SessionService
 	projects *services.ProjectService
 	active   func(string) bool
-	start    func(string, string, string, string, string) error
+	start    func(string, string, string, string, string, string) error
+	abort    func(string) bool
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -60,16 +61,16 @@ func (m *Manager) scriptService() *services.ProjectScriptsService {
 
 // SetSessions attaches session and project services plus run hooks used by the
 // console session control surface.
-func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string) error) {
+func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error) {
 	m.mu.Lock()
-	m.sessions, m.projects, m.active, m.start = sessions, projects, active, start
+	m.sessions, m.projects, m.active, m.abort, m.start = sessions, projects, active, abort, start
 	m.mu.Unlock()
 }
 
-func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string, string, string, string, string) error) {
+func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string) bool, func(string, string, string, string, string, string) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.sessions, m.projects, m.active, m.start
+	return m.sessions, m.projects, m.active, m.abort, m.start
 }
 
 // sessionRuntime returns the session's console kernel, creating it on first use.
@@ -77,11 +78,12 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 	return m.js.Get(sessionID, func() (*Runtime, error) {
 		ports := m.portRegistry()
 		scripts := m.scriptService()
-		sessions, projects, active, start := m.sessionConfig()
-		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, projectID, cwd)
+		sessions, projects, active, abort, start := m.sessionConfig()
+		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, abort, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}
+		runtime.sessionID = sessionID
 		runtime.SetCancel(m.Stopped)
 		return runtime, nil
 	})

@@ -21,7 +21,7 @@ func newConsoleSessionRuntime(t *testing.T, active func(string) bool) (*Runtime,
 	t.Cleanup(database.Close)
 	sessions := services.NewSessionService(database)
 	projects := services.NewProjectService(database)
-	runtime, err := NewRuntime(nil, nil, sessions, projects, active, nil, "", "")
+	runtime, err := NewRuntime(nil, nil, sessions, projects, active, nil, nil, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

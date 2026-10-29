@@ -233,12 +233,12 @@ func (s *Service) SetConsoleServices(projects *services.ProjectService) {
 	manager, sessions := s.consoleManager, s.sessions
 	s.mu.Unlock()
 	if manager != nil {
-		manager.SetSessions(sessions, projects, s.IsActive, s.startConsoleSession)
+		manager.SetSessions(sessions, projects, s.IsActive, s.Abort, s.startConsoleSession)
 	}
 }
 
-func (s *Service) startConsoleSession(sessionID, text, modelID, provider, approval string) error {
-	_, err := s.StartRun(sessionID, Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval})
+func (s *Service) startConsoleSession(sessionID, text, modelID, provider, approval, thinking string) error {
+	_, err := s.StartRun(sessionID, Prompt{Text: text, ModelID: modelID, Provider: provider, ApprovalMode: approval, Thinking: thinking})
 	return err
 }
 

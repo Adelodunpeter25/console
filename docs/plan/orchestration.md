@@ -13,30 +13,24 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | Phase | State | Notes |
 | :--- | :--- | :--- |
 | 1 — Kernel + ports | **Done** | `console` / `console_reset` tools, `ports.list/forward/unforward`; `ports` and `project_scripts` removed from `DefaultToolNames` |
-| 2 — Scripts | **Mostly done** | `scripts.list/run/status/stop` shipped. **Missing:** cursor pagination (output is still the last 256KB, no offset) |
+| 2 — Scripts | **Done** | `scripts.list/run/status/stop` plus `scripts.output` with absolute-offset cursors that survive the 256KB buffer trimming |
 | 3 — Discovery + session control | **Done** | `models()`, `approvalModes()`, `sessions.list/read/delete`; deleting the active session is refused. Also shipped, not in the plan: `projects.list/add` |
-| 4 — `console.spawn` | **Partial** | `sessions.create` exists (prompt, model, provider, cwd, project, worktree). **Missing:** approval ceiling + clamp report, `thinking_level`, depth cap, token budget, concurrency cap, usage rollup, the `spawn` name |
-| 5 — `sessions.fork` | **Not started** | `session.Service.Fork` exists, not exposed to the kernel |
+| 4 — Spawn (`sessions.create`) | **Partial** | `sessions.create` takes prompt, model, provider, `thinking_level` (validated against the model), cwd, project, worktree, and `approval_mode`, which is **clamped to the calling run's mode** with the clamp reported. **Decision:** it stays `sessions.create`; the `console.spawn` rename is dropped. **Missing:** depth cap, token budget, concurrency cap, usage rollup |
+| 5 — `sessions.fork` | **Done** | Exposed to the kernel; the fork's inherited approval mode is clamped to the calling run |
 | 6 — Security prerequisites | **Half done** | Path boundary shipped (`permissions/guard.go`: writes confined to session cwd, symlinks resolved, `batchWrite` covered). **Missing:** plan-mode hard deny (§8.2) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
-**Not in the API yet:** `spawn`, `sessions.fork`, `sessions.abort`, `sessions.set_model`, `sessions.set_approval`, `console.pr.*`.
+**Not in the API yet:** `console.pr.*`. Shipped since the last update: `sessions.abort`, `set_model`, `set_approval`, `fork`, `scripts.output`.
 
-**Known safety gap:** `sessions.create` passes `approval_mode` straight through, so an `always-ask` parent can create a `full-access` child. §4 calls the ceiling inviolable; this is the highest-priority item.
+**Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`. A run cannot abort itself or change its own approval mode. **Still open:** plan mode itself is not hard-enforced (§8.2), so a `plan-mode` ceiling currently limits what a run can hand out but does not stop that run writing.
 
-**Tests** live beside the code in `internal/services/console/*_test.go`, not in `tests/tools/TestConsole*` as the phases below say. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
+**Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
 
 ### Next
 
-- Approval ceiling on spawn: `effective = min(parent, requested)`, clamp reported in the result (§4)
-- Plan-mode hard deny of `TierWrite` / `TierExec` in `permissions.Resolve` (§8.2)
-- `sessions.abort`, then `set_model` / `set_approval` (set_approval clamped to the calling run)
-- Rename/extend `sessions.create` into `console.spawn`: `thinking_level`, depth cap 2, per-spawn token budget, concurrency cap, usage rollup
-- `sessions.fork` over the existing `Fork`
-- Cursor pagination for script output
-- `console.pr.*` plus the GitHub REST service
-- Document each new method in the kernel `SKILL.md`
-- Confirm no test needs `TestConsole*` under `tests/tools/`, or move the kernel tests there and fix the commands in this doc
+- Plan-mode hard deny of `TierWrite` / `TierExec` in `permissions.Resolve` (§8.2); this is what makes the `plan-mode` ceiling mean something
+- Depth cap 2, per-spawn token budget, concurrency cap and usage rollup for spawned sessions (§7)
+- `console.pr.*` plus the GitHub REST service (Phase 7)
 
 ---
 
@@ -243,7 +237,7 @@ The boundary should be **path-based inside the kernel**, not tier-based, because
 - `console-control` skill carrying the API documentation.
 - **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleKernel -v` — kernel state persists across calls, `console_reset` clears it, variables do not leak between sessions.
 
-### Phase 2 — `project_scripts` — MOSTLY DONE (cursor pagination missing)
+### Phase 2 — `project_scripts` — DONE
 - Script methods over `ProjectScriptsService`, preserving worktree scoping and port-owner cleanup exactly.
 - Add the cursor pagination the service lacks (`capOutput` retains only the last 256KB with no offset), shared with `shell.read` from the attachments plan.
 - Remove `project_scripts` from `DefaultToolNames`.
@@ -253,12 +247,12 @@ The boundary should be **path-based inside the kernel**, not tier-based, because
 - `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`.
 - Delete: soft by default, permanent gated, **never the currently-running session**, and confirm when the session owns a worktree.
 
-### Phase 4 — `console.spawn` (Level 2) — PARTIAL (`sessions.create` only; no ceiling or caps)
+### Phase 4 — Spawn via `sessions.create` (Level 2) — PARTIAL (ceiling done; depth/budget/concurrency caps open)
 - Session creation through the existing `session.Service`, worktree-scoped.
 - Permission ceiling + clamp reporting (§4), depth cap, token budget, concurrency cap.
 - **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleSpawn -v` — clamp enforced in both directions; budget and depth caps hold; spawned session appears in `sessions.list`.
 
-### Phase 5 — `console.sessions.fork` — NOT STARTED
+### Phase 5 — `console.sessions.fork` — DONE
 - Wraps the existing `Fork(sourceID, messageID)`. High value: "branch this conversation at message 40 and try a different approach there."
 
 ### Phase 6 — Security prerequisites landed — HALF DONE (path boundary yes, plan-mode deny no)

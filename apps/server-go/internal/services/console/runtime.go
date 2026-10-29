@@ -26,14 +26,17 @@ type Runtime struct {
 	sessions  *services.SessionService
 	projects  *services.ProjectService
 	active    func(string) bool
-	start     func(string, string, string, string, string) error
+	abort     func(string) bool
+	ceiling   string
+	start     func(string, string, string, string, string, string) error
 	projectID string
 	cwd       string
+	sessionID string
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string) error, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, start: start, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -52,6 +55,9 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		}},
 		{Name: "scripts.status", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.scriptsStatus(ctx, args)
+		}},
+		{Name: "scripts.output", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.scriptsOutput(ctx, args)
 		}},
 		{Name: "scripts.stop", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.scriptsStop(ctx, args)
@@ -79,6 +85,18 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		}},
 		{Name: "sessions.delete", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsDelete(ctx, args)
+		}},
+		{Name: "sessions.abort", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsAbort(ctx, args)
+		}},
+		{Name: "sessions.set_model", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsSetModel(ctx, args)
+		}},
+		{Name: "sessions.set_approval", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsSetApproval(ctx, args)
+		}},
+		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsFork(ctx, args)
 		}},
 	}
 	kernel, err := jskernel.New(jskernel.Options{
@@ -327,7 +345,7 @@ func (r *Runtime) sessionsRead(_ context.Context, args map[string]any) (*jskerne
 	return marshalResult(loaded)
 }
 
-func (r *Runtime) sessionsCreate(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+func (r *Runtime) sessionsCreate(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 	if r.sessions == nil {
 		return nil, fmt.Errorf("session service is unavailable")
 	}
@@ -335,6 +353,7 @@ func (r *Runtime) sessionsCreate(_ context.Context, args map[string]any) (*jsker
 	model, _ := args["model"].(string)
 	provider, _ := args["provider"].(string)
 	approval, _ := args["approval_mode"].(string)
+	thinking, _ := args["thinking_level"].(string)
 	projectID, _ := args["project_id"].(string)
 	cwd, _ := args["cwd"].(string)
 	if cwd == "" && projectID != "" && r.projects != nil {
@@ -343,6 +362,25 @@ func (r *Runtime) sessionsCreate(_ context.Context, args map[string]any) (*jsker
 			return nil, err
 		}
 		cwd = project.Path
+	}
+	// A new session may never hold more authority than the run creating it.
+	// An omitted mode inherits the ceiling itself.
+	var clampNote string
+	if approval == "" {
+		approval = r.ceilingOrDefault()
+	} else {
+		effective, _, note, err := clampApproval(r.ceiling, approval)
+		if err != nil {
+			return nil, err
+		}
+		approval, clampNote = effective, note
+	}
+	var thinkingPtr *string
+	if thinking != "" {
+		if err := r.validateThinking(ctx, model, provider, thinking); err != nil {
+			return nil, err
+		}
+		thinkingPtr = &thinking
 	}
 	var projectPtr *string
 	if projectID != "" {
@@ -354,16 +392,20 @@ func (r *Runtime) sessionsCreate(_ context.Context, args map[string]any) (*jsker
 		worktree.Branch, _ = raw["branch"].(string)
 		worktree.BaseBranch, _ = raw["base_branch"].(string)
 	}
-	header, err := r.sessions.Create(types.CreateSessionOptions{Title: prompt, Cwd: cwd, ProjectID: projectPtr, ModelID: model, Provider: provider, ApprovalMode: approval, Worktree: worktree})
+	header, err := r.sessions.Create(types.CreateSessionOptions{Title: prompt, Cwd: cwd, ProjectID: projectPtr, ModelID: model, Provider: provider, ApprovalMode: approval, ThinkingLevel: thinkingPtr, Worktree: worktree})
 	if err != nil {
 		return nil, err
 	}
 	if prompt != "" && r.start != nil {
-		if err := r.start(header.ID, prompt, model, provider, approval); err != nil {
+		if err := r.start(header.ID, prompt, model, provider, approval, thinking); err != nil {
 			return nil, err
 		}
 	}
-	return marshalResult(map[string]any{"session": header, "prompt": prompt})
+	out := map[string]any{"session": header, "prompt": prompt, "approval_mode": approval}
+	if clampNote != "" {
+		out["clamped"] = clampNote
+	}
+	return marshalResult(out)
 }
 
 func (r *Runtime) sessionsDelete(_ context.Context, args map[string]any) (*jskernel.Result, error) {
@@ -434,4 +476,27 @@ func portArg(args map[string]any) (int, error) {
 		return 0, fmt.Errorf("port must be greater than zero")
 	}
 	return n, nil
+}
+
+// scriptsOutput pages through a run's output. Pass back `next` as `cursor` to
+// read only what was written since the last call.
+func (r *Runtime) scriptsOutput(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if r.scripts == nil {
+		return nil, fmt.Errorf("project scripts service is unavailable")
+	}
+	runID, err := stringArg(args, "run_id")
+	if err != nil {
+		return nil, err
+	}
+	stream, _ := args["stream"].(string)
+	if stream == "" {
+		stream = "stdout"
+	}
+	cursor, _ := optionalInt(args, "cursor")
+	limit, _ := optionalInt(args, "limit")
+	chunk, err := r.scripts.ReadOutput(r.projectID, runID, stream, int64(cursor), limit)
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(chunk)
 }

@@ -501,7 +501,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// The console kernel is the control plane for ports, project scripts and
 	// sessions, so it is appended every turn after MCP/CUA to keep the cached
 	// tool prefix stable.
-	loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd)
+	loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd, string(mode))
 	if _, err := loader.Load(registry); err != nil {
 		user.Content += "\n\nConsole is unavailable: " + err.Error()
 	}
