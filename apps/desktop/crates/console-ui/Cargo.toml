@@ -66,6 +66,10 @@ name = "prompt_history_attachments_test"
 path = "tests/composer/prompt_history_attachments_test.rs"
 
 [[test]]
+name = "large_paste_test"
+path = "tests/composer/large_paste_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 

@@ -145,6 +145,40 @@ pub enum ComposerEvent {
 #[derive(Clone)]
 pub struct ComposerAttachmentPaste(pub Vec<ClipboardEntry>);
 
+/// A clipboard text paste too large to inline. The composer inserts nothing
+/// when this fires; the owning app uploads the text and inserts a paste
+/// mention chip over `range` when the server responds. `range` is where the
+/// text would have gone (the current selection, or the caret when it is
+/// empty), so the chip lands where the user pasted.
+#[derive(Clone)]
+pub struct ComposerLargePaste {
+    pub text: String,
+    pub range: Range<usize>,
+}
+
+/// Paste sizes that collapse into a chip instead of filling the composer.
+/// A 5,000-line log is far over both; ordinary code snippets fit under both.
+pub(crate) const LARGE_PASTE_MAX_LINES: usize = 200;
+pub(crate) const LARGE_PASTE_MAX_BYTES: usize = 64 * 1024;
+
+/// True when `text` would fill the composer as an inline paste.
+///
+/// Line count matches a text editor: a trailing newline closes the last
+/// line rather than opening an empty one.
+pub fn is_large_paste(text: &str) -> bool {
+    if text.len() > LARGE_PASTE_MAX_BYTES {
+        return true;
+    }
+    let trailing_newline = std::str::from_utf8(text.as_bytes())
+        .map(|t| t.ends_with('\n'))
+        .unwrap_or(false);
+    let mut lines: usize = text.bytes().filter(|b| *b == b'\n').count() + 1;
+    if trailing_newline {
+        lines -= 1;
+    }
+    lines > LARGE_PASTE_MAX_LINES
+}
+
 /// Respect any image or file representation in the clipboard, regardless of
 /// entry order. Finder puts paths first (and a text fallback second), while
 /// screenshots put an image first — but browsers and other apps often lead
@@ -524,6 +558,24 @@ impl ComposerInput {
     ) {
         let chip = ComposerMention::skill(0..0, name);
         self.insert_mention_chip(range, chip.label, chip.path, cx);
+    }
+
+    /// Insert a paste chip for an async-uploaded paste: explicit label
+    /// (`pasted 5,000 lines`), server path as the mention target. The
+    /// label — not the path — is what lands in the message text, so the
+    /// bubble's mention matcher re-renders the pill unchanged. The chip
+    /// lands at the caret: the original paste range may be stale by the
+    /// time the upload returns, and replacing whatever the user selected
+    /// since would eat their edits.
+    pub fn insert_paste_mention(
+        &mut self,
+        _range: Range<usize>,
+        path: &str,
+        label: String,
+        cx: &mut Context<Self>,
+    ) {
+        let caret = self.cursor();
+        self.insert_mention_chip(caret..caret, label, path.to_string(), cx);
     }
 
     /// Shared body of the chip inserts: reserves room for the icon, writes
@@ -1264,6 +1316,10 @@ impl ComposerInput {
         // A paste is its own undo step, never part of the typing around it —
         // the native NSTextView boundary, stricter than Zed's time grouping.
         self.history.seal();
+        if self.mode == FieldMode::Composer && is_large_paste(&text) {
+            cx.emit(ComposerLargePaste { text, range: self.selected_range.clone() });
+            return;
+        }
         self.replace_text_in_range(None, &text, window, cx);
         self.history.seal();
     }
@@ -1529,6 +1585,7 @@ impl ComposerInput {
 
 impl EventEmitter<ComposerEvent> for ComposerInput {}
 impl EventEmitter<ComposerAttachmentPaste> for ComposerInput {}
+impl EventEmitter<ComposerLargePaste> for ComposerInput {}
 
 impl Render for ComposerInput {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {

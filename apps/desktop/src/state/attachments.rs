@@ -256,4 +256,88 @@ impl ConsoleDesktopApp {
         self.zoomed_image = Some(image);
         cx.notify();
     }
+
+    /// Stage a large pasted block: upload it as a session paste file and
+    /// replace it in the composer with one mention chip. Without a session
+    /// to upload to (no active chat), the paste falls back to today's
+    /// inline behavior — the collapse is a UX improvement, not a dependency.
+    /// `pane_id` is the paste event's pane, captured so async results land
+    /// where the paste happened even if focus moves during the upload.
+    pub fn stage_large_paste(
+        &mut self,
+        pane_id: &str,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self.active_session_for_pane(pane_id) else {
+            self.paste_text_inline(pane_id, text, cx);
+            return;
+        };
+        let client = self.client.clone();
+        let pane_id = pane_id.to_string();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            let uploaded = client.runs.create_paste(&session_id, &text).await;
+            cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.finish_large_paste(&pane_id, uploaded, text, cx);
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Resolve the upload: chip on success, inline paste + notice on
+    /// failure (fail soft — see docs/plan/composer-large-paste.md §1.5).
+    fn finish_large_paste(
+        &mut self,
+        pane_id: &str,
+        uploaded: anyhow::Result<console_core::PasteResult>,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        match uploaded {
+            Ok(result) => {
+                let input = self.composer_for_pane(&pane_id);
+                input.update(cx, |input, cx| {
+                    input.insert_paste_mention(
+                        0..0,
+                        &result.path,
+                        format!("pasted {} lines", thousands(result.lines)),
+                        cx,
+                    );
+                });
+                cx.notify();
+            }
+            Err(error) => {
+                self.set_error(&format!("Paste upload failed: {error}"), cx);
+                self.paste_text_inline(pane_id, text, cx);
+            }
+        }
+    }
+
+    /// Fallback insert of the raw paste text at the caret.
+    fn paste_text_inline(&mut self, pane_id: &str, text: String, cx: &mut Context<Self>) {
+        let input = self.composer_for_pane(pane_id);
+        input.update(cx, |input, cx| {
+            let caret = input.cursor()..input.cursor();
+            input.replace_range(caret, &text, cx);
+        });
+        cx.notify();
+    }
+}
+
+/// Thousands-grouped line count for the chip label: `5214` → `5,214`.
+fn thousands(n: usize) -> String {
+    let raw = n.to_string();
+    let mut out = String::with_capacity(raw.len() + raw.len() / 3);
+    let (first, rest) = raw.split_at(raw.len() % 3 .max(1));
+    out.push_str(first);
+    for chunk in rest.as_bytes().chunks(3) {
+        out.push(',');
+        out.push_str(std::str::from_utf8(chunk).unwrap_or(""));
+    }
+    out
 }

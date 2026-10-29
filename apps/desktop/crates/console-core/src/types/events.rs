@@ -28,6 +28,24 @@ pub struct AnswerQuestionDto {
     pub answer: serde_json::Value,
 }
 
+/// Body of `POST /api/sessions/:id/pastes`: one collapsed large paste.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePasteDto {
+    pub text: String,
+}
+
+/// Server-side response: the file stored for the paste. `path` becomes the
+/// mention the composer inserts; `name` is the chip tooltip.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PasteResult {
+    pub name: String,
+    pub path: String,
+    pub lines: usize,
+    pub bytes: usize,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApproveToolPermissionDto {

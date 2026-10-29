@@ -3,7 +3,7 @@ use console_core::{
     ApprovalMode, SelectedModel, ThinkingLevel, TodoItem, UpdateSessionDto, WorkspaceTabConfig,
 };
 use console_ui::chat::TranscriptView;
-use console_ui::input::{ComposerAttachmentPaste, ComposerEvent, ComposerInput};
+use console_ui::input::{ComposerAttachmentPaste, ComposerLargePaste, ComposerEvent, ComposerInput};
 use console_ui::model_picker::PickerTab;
 use console_ui::primitives::menu::ContextMenuHandle;
 use console_ui::workspace::ops as workspace_ops;
@@ -192,6 +192,13 @@ impl ConsoleDesktopApp {
             &composer_input,
             move |this, _input, event: &ComposerAttachmentPaste, cx| {
                 this.stage_clipboard_attachments(&paste_pane_id, event.0.clone(), cx);
+            },
+        ));
+        let large_paste_pane_id = pane_id.to_string();
+        self._subscriptions.push(cx.subscribe(
+            &composer_input,
+            move |this, _input, event: &ComposerLargePaste, cx| {
+                this.stage_large_paste(&large_paste_pane_id, event.text.clone(), cx);
             },
         ));
         self._subscriptions.push(cx.subscribe(

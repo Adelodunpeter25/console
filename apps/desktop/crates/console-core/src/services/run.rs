@@ -46,12 +46,43 @@ impl RunService {
         }
     }
 
+    /// Upload a large pasted block; the server stores it as a session paste
+    /// file and returns the path the composer inserts as a mention.
+    pub async fn create_paste(&self, session_id: &str, text: &str) -> Result<PasteResult> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/pastes", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&CreatePasteDto { text: text.to_string() })
+            .send()
+            .await
+            .context("Failed to upload pasted text")?;
+
+        let body: ApiResponse<PasteResult> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse paste response")?;
+        if body.success {
+            body.data.ok_or_else(|| anyhow!("Paste data is missing"))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to store pasted text".into())
+            ))
+        }
+    }
+
     pub async fn answer_question(
         &self,
         session_id: &str,
         payload: AnswerQuestionDto,
-    ) -> Result<()> {
-        let url = self
+    ) -> Result<()> {        let url = self
             .transport
             .url(&format!("/api/sessions/{}/answer", session_id))
             .await;
