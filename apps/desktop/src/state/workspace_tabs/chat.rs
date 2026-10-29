@@ -25,7 +25,8 @@ impl ConsoleDesktopApp {
         }
 
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
-        let composer_input = cx.new(|cx| ComposerInput::new(window, cx));
+        let composer_input =
+            cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
         let question_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .search_field()

@@ -158,8 +158,8 @@ pub struct ComposerLargePaste {
 
 /// Paste sizes that collapse into a chip instead of filling the composer.
 /// A 5,000-line log is far over both; ordinary code snippets fit under both.
-pub(crate) const LARGE_PASTE_MAX_LINES: usize = 200;
-pub(crate) const LARGE_PASTE_MAX_BYTES: usize = 64 * 1024;
+pub(crate) const LARGE_PASTE_MAX_LINES: usize = 25;
+pub(crate) const LARGE_PASTE_MAX_BYTES: usize = 4 * 1024;
 
 /// True when `text` would fill the composer as an inline paste.
 ///
@@ -227,6 +227,11 @@ pub(crate) struct VerticalNavigation {
 pub struct ComposerInput {
     pub(crate) focus_handle: FocusHandle,
     pub(crate) mode: FieldMode,
+    /// Whether this field collapses large pastes into a mention chip. Opt-in
+    /// because the event has no subscriber on most compose fields — settings
+    /// inputs, dialogs, the launcher card — and an unhandled event would drop
+    /// the pasted text entirely. Only chat composers turn it on.
+    pub(crate) large_paste_chip: bool,
     pub(crate) read_only: bool,
     /// The focusing click selects the whole content on release, the way a
     /// browser address bar arms its URL for retyping.
@@ -314,6 +319,7 @@ impl ComposerInput {
         Self {
             focus_handle,
             mode: FieldMode::Composer,
+            large_paste_chip: false,
             read_only: false,
             select_all_on_focus_click: false,
             focus_click_select_all: false,
@@ -448,6 +454,15 @@ impl ComposerInput {
     /// "find next" keeps the query, and pasted line breaks become spaces.
     pub fn search_field(mut self) -> Self {
         self.mode = FieldMode::Search;
+        self
+    }
+
+    /// Let this field collapse large pastes into a paste mention chip. Only
+    /// fields with a subscriber wired for [`ComposerLargePaste`] — the chat
+    /// composers — may turn this on; elsewhere the event would be emitted
+    /// into thin air and the pasted text would be lost.
+    pub fn enable_large_paste_chip(mut self) -> Self {
+        self.large_paste_chip = true;
         self
     }
 
@@ -1316,7 +1331,7 @@ impl ComposerInput {
         // A paste is its own undo step, never part of the typing around it —
         // the native NSTextView boundary, stricter than Zed's time grouping.
         self.history.seal();
-        if self.mode == FieldMode::Composer && is_large_paste(&text) {
+        if self.large_paste_chip && is_large_paste(&text) {
             cx.emit(ComposerLargePaste { text, range: self.selected_range.clone() });
             return;
         }
