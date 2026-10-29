@@ -57,7 +57,8 @@ func PairingURL(baseURL, serverID, code string) string {
 
 // ParsedPairingURL is the content of a pairing URL.
 type ParsedPairingURL struct {
-	// BaseURL is the server's address: scheme, host and port.
+	// BaseURL is the server's address: scheme, host, port and any path prefix
+	// the server is served under.
 	BaseURL string
 	// ServerID is the server the URL was minted by.
 	ServerID string
@@ -99,8 +100,14 @@ func ParsePairingURL(raw string) (ParsedPairingURL, error) {
 	if code == "" {
 		return ParsedPairingURL{}, fmt.Errorf("pairing URL has no pairing code")
 	}
+	// A server behind a path-based relay lives under a prefix that precedes
+	// the pairing path; it belongs to the address, so it is kept.
+	prefix := ""
+	if p := strings.TrimRight(parsed.Path, "/"); strings.HasSuffix(p, PairingURLPath) {
+		prefix = strings.TrimRight(strings.TrimSuffix(p, PairingURLPath), "/")
+	}
 	return ParsedPairingURL{
-		BaseURL:  parsed.Scheme + "://" + parsed.Host,
+		BaseURL:  parsed.Scheme + "://" + parsed.Host + prefix,
 		ServerID: serverID,
 		Code:     code,
 	}, nil

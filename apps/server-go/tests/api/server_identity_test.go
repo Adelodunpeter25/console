@@ -38,6 +38,23 @@ func TestPairingURLRoundTrips(t *testing.T) {
 // The grant is in the fragment, so it is never sent to the server. A URL
 // that carried it in the query string would put a credential in every
 // access log along the path.
+// A server behind a path-based relay lives under a prefix, and the pairing URL
+// carries it. Parsing must keep it or every request lands on the relay's root.
+func TestPairingURLKeepsARelayPathPrefix(t *testing.T) {
+	base := "https://relay.adelodunpeter.workers.dev/peter-dev"
+	parsed, err := auth.ParsePairingURL(auth.PairingURL(base, "srv1", "code-1"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if parsed.BaseURL != base {
+		t.Fatalf("BaseURL = %q, want %q", parsed.BaseURL, base)
+	}
+	plain, err := auth.ParsePairingURL(auth.PairingURL("http://192.168.1.10:3000", "srv1", "code-1"))
+	if err != nil || plain.BaseURL != "http://192.168.1.10:3000" {
+		t.Fatalf("plain base = %q, %v", plain.BaseURL, err)
+	}
+}
+
 func TestPairingURLKeepsTheGrantOutOfThePath(t *testing.T) {
 	url := auth.PairingURL("http://host:3000", "server-123", "secret-code")
 	if !contains(url, "#") {

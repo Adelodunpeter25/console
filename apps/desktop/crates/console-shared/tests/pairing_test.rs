@@ -151,3 +151,35 @@ fn the_scheme_is_case_insensitive_and_normalised() {
     // Case-insensitivity must not widen what is accepted.
     assert!(parse_pairing_url("FTP://host#abc").is_err());
 }
+
+// A server behind a path-based relay lives under a prefix, and the pairing URL
+// carries it before /console/pair. Dropping it sent every request to the
+// relay's root.
+#[test]
+fn a_relay_path_prefix_is_kept() {
+    let parsed = parse_pairing_url(
+        "https://relay.example.workers.dev/peter-dev/console/pair#v=1&server=s&code=c",
+    )
+    .expect("valid pairing URL");
+    assert_eq!(parsed.base_url, "https://relay.example.workers.dev/peter-dev");
+
+    let (address, code) = split_pairing_line(
+        "https://relay.example.workers.dev/peter-dev/console/pair#v=1&server=s&code=abc",
+    );
+    assert_eq!(address, "https://relay.example.workers.dev/peter-dev");
+    assert_eq!(code, "abc");
+}
+
+#[test]
+fn a_prefix_with_a_trailing_slash_is_tidied() {
+    let parsed = parse_pairing_url("https://r.example/peter-dev//console/pair/#v=1&server=s&code=c")
+        .expect("valid pairing URL");
+    assert_eq!(parsed.base_url, "https://r.example/peter-dev");
+}
+
+#[test]
+fn an_unrelated_path_is_still_dropped() {
+    let parsed = parse_pairing_url("http://host:3000/some/path#v=1&server=s&code=c")
+        .expect("valid pairing URL");
+    assert_eq!(parsed.base_url, "http://host:3000");
+}

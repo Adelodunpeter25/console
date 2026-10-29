@@ -56,6 +56,30 @@ pub fn default_scheme(address: &str) -> &'static str {
     if host.contains('.') { "https" } else { "http" }
 }
 
+/// The address a pairing URL names: its host plus any path the server lives
+/// under.
+///
+/// A server reached through a path-based relay is not at the root of its
+/// host: "https://relay.example/peter-dev/console/pair" is the server at
+/// "https://relay.example/peter-dev". The pairing path is stripped and what
+/// precedes it kept, so requests keep the prefix. Any other path is dropped,
+/// as it always was.
+fn address_of(rest: &str) -> String {
+    let (authority, path) = match rest.split_once('/') {
+        Some((authority, path)) => (authority.trim(), format!("/{path}")),
+        None => (rest.trim(), String::new()),
+    };
+    let prefix = path
+        .trim_end_matches('/')
+        .strip_suffix(PAIRING_PATH)
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    format!("{authority}{prefix}")
+}
+
+/// The path a pairing URL points at, after the server's own address.
+const PAIRING_PATH: &str = "/console/pair";
+
 /// Split an authority into its host and an optional explicit port.
 ///
 /// IPv6 literals are bracketed ("[::1]:3000") and carry colons of their own,
@@ -119,9 +143,10 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
     if scheme != "http" && scheme != "https" {
         return Err("A pairing URL must start with http:// or https://.".to_string());
     }
-    // The path is /console/pair; the address is just the authority.
-    let host = authority.split('/').next().unwrap_or_default().trim();
-    if host.is_empty() {
+    // The path ends in /console/pair; what precedes it is where the server
+    // lives (a relay's /<name>), and is kept.
+    let host = address_of(&authority);
+    if authority.split('/').next().unwrap_or_default().trim().is_empty() {
         return Err("A pairing URL must name a server.".to_string());
     }
 
@@ -183,13 +208,13 @@ pub fn split_pairing_line(text: &str) -> (String, String) {
     };
     let address = match base.split_once("://") {
         Some((scheme, rest)) => {
-            let authority = rest.split('/').next().unwrap_or(rest).trim();
+            let authority = address_of(rest);
             // The host field assumes http when it carries no scheme, so the
             // scheme is only dropped when it is the default one. An https
             // address has to keep its own or it would be spoken to in the
             // wrong protocol.
             if scheme.eq_ignore_ascii_case("http") {
-                authority.to_string()
+                authority
             } else {
                 format!("{scheme}://{authority}")
             }
