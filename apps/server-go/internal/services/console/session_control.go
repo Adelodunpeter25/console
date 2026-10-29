@@ -187,3 +187,82 @@ func (r *Runtime) sessionsFork(_ context.Context, args map[string]any) (*jskerne
 	}
 	return marshalResult(map[string]any{"session": header})
 }
+
+// PromptFunc delivers a follow-up prompt to an existing session: it starts a
+// run when the session is idle, or stages the prompt to run when the current
+// run settles (queued=true). It lives behind a callback because the run
+// service imports this package.
+type PromptFunc func(sessionID, text, model, provider, approval, thinking string) (queued bool, err error)
+
+// sessionsPrompt sends a follow-up prompt to an existing session.
+//
+// The approval mode for the turn is capped at this run's own mode. A target
+// session often stores a higher mode than the caller holds; without the cap a
+// restricted run could act with the target's authority by prompting it. The cap
+// applies to this turn only and never rewrites the session's stored mode.
+func (r *Runtime) sessionsPrompt(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+	if err := r.requireSessions(); err != nil {
+		return nil, err
+	}
+	if r.prompt == nil {
+		return nil, fmt.Errorf("prompting sessions is unavailable")
+	}
+	id, err := stringArg(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	text, err := stringArg(args, "prompt")
+	if err != nil {
+		return nil, err
+	}
+	if id == r.sessionID {
+		return nil, fmt.Errorf("cannot prompt the session you are running in; finish this turn instead")
+	}
+	header, err := r.sessions.Header(id)
+	if err != nil {
+		return nil, err
+	}
+	if header == nil {
+		return nil, fmt.Errorf("session %q not found", id)
+	}
+	model, _ := args["model"].(string)
+	provider, _ := args["provider"].(string)
+	thinking, _ := args["thinking_level"].(string)
+	requested, _ := args["approval_mode"].(string)
+
+	if thinking != "" {
+		checkModel, checkProvider := model, provider
+		if checkModel == "" {
+			checkModel = header.ModelID
+		}
+		if checkProvider == "" {
+			checkProvider = header.Provider
+		}
+		if err := r.validateThinking(ctx, checkModel, checkProvider, thinking); err != nil {
+			return nil, err
+		}
+	}
+
+	// An omitted mode means "the session's own"; either way the result is
+	// capped at this run's authority.
+	if requested == "" {
+		requested = header.ApprovalMode
+	}
+	approval, clamped, note, err := clampApproval(r.ceiling, requested)
+	if err != nil {
+		return nil, err
+	}
+
+	queued, err := r.prompt(id, text, model, provider, approval, thinking)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"session_id": id, "queued": queued, "approval_mode": approval}
+	if queued {
+		out["note"] = "the session is busy; the prompt will run when its current run finishes"
+	}
+	if clamped {
+		out["clamped"] = note
+	}
+	return marshalResult(out)
+}

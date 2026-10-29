@@ -20,7 +20,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | 6 — Security prerequisites | **Half done** | Path boundary shipped (`permissions/guard.go`: writes confined to session cwd, symlinks resolved, `batchWrite` covered). **Missing:** plan-mode hard deny (§8.2) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
-**Not in the API yet:** `console.pr.*`. Shipped since the last update: `sessions.abort`, `set_model`, `set_approval`, `fork`, `scripts.output`.
+**Not in the API yet:** `console.pr.*`. Shipped since the last update: `sessions.abort`, `set_model`, `set_approval`, `fork`, `prompt`, `scripts.output`.
 
 **Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`. A run cannot abort itself or change its own approval mode. **Still open:** plan mode itself is not hard-enforced (§8.2), so a `plan-mode` ceiling currently limits what a run can hand out but does not stop that run writing.
 

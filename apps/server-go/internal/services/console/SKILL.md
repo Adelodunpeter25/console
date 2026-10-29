@@ -60,6 +60,8 @@ when a project action requires inspecting or changing a local port forward.
 
 `console.sessions.set_approval({session_id, mode})` — change a session's approval mode. A session can be moved down the scale, never above this run's own mode; a higher request is clamped and reported in `clamped`. You cannot change the mode of the session you are running in.
 
+`console.sessions.prompt({session_id, prompt, model?, provider?, thinking_level?, approval_mode?})` — send a follow-up prompt to an existing session. An idle session starts working on it now; a busy one queues it to run when its current run finishes, and the result says `queued: true`. Only one prompt can be queued per session: if one is already waiting (including one the user staged) the call fails rather than replace it, so wait and retry. The turn's approval mode is capped at this run's own mode even if the target session stores a higher one (reported as `clamped`); the session's stored mode is not changed. You cannot prompt the session you are running in. Sending the prompt does not wait for the reply: read the result later with `console.sessions.read`.
+
 `console.sessions.fork({session_id, message_id})` — copy a session's history through `message_id` (inclusive) into a new idle session. Message ids are on the messages from `console.sessions.read`. The fork's approval mode is clamped to this run's mode.
 
 ### Scripts

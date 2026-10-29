@@ -238,3 +238,105 @@ func TestForkWithinCeilingIsNotClamped(t *testing.T) {
 func newSource(mode string) types.CreateSessionOptions {
 	return types.CreateSessionOptions{Title: "src", Cwd: "/tmp", ApprovalMode: mode}
 }
+
+type promptCall struct {
+	id, text, model, provider, approval, thinking string
+}
+
+func newPromptRuntime(t *testing.T, ceiling string, queued bool, calls *[]promptCall) (*Runtime, *services.SessionService) {
+	t.Helper()
+	var aborted []string
+	runtime, sessions := newControlRuntime(t, ceiling, &aborted)
+	runtime.prompt = func(id, text, model, provider, approval, thinking string) (bool, error) {
+		*calls = append(*calls, promptCall{id, text, model, provider, approval, thinking})
+		return queued, nil
+	}
+	return runtime, sessions
+}
+
+func TestPromptStartsIdleSession(t *testing.T) {
+	var calls []promptCall
+	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
+	target, _ := sessions.Create(newSource("accept-edits"))
+	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"also add tests"})`).(map[string]any)
+	if out["queued"] != false || out["note"] != nil {
+		t.Fatalf("idle prompt = %#v", out)
+	}
+	if len(calls) != 1 || calls[0].text != "also add tests" || calls[0].id != target.ID {
+		t.Fatalf("calls = %+v", calls)
+	}
+	// Omitted mode means the session's own.
+	if calls[0].approval != "accept-edits" {
+		t.Fatalf("approval = %q, want the session's accept-edits", calls[0].approval)
+	}
+}
+
+func TestPromptReportsQueueingWhenBusy(t *testing.T) {
+	var calls []promptCall
+	runtime, sessions := newPromptRuntime(t, "full-access", true, &calls)
+	target, _ := sessions.Create(newSource("always-ask"))
+	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"next"})`).(map[string]any)
+	if out["queued"] != true {
+		t.Fatalf("busy prompt must report queued: %#v", out)
+	}
+	if note, _ := out["note"].(string); !strings.Contains(note, "when its current run finishes") {
+		t.Fatalf("note = %q", note)
+	}
+}
+
+// The target may store more authority than the caller holds; prompting it
+// must not let a restricted run act with that higher mode.
+func TestPromptCannotBorrowTheTargetsHigherMode(t *testing.T) {
+	var calls []promptCall
+	runtime, sessions := newPromptRuntime(t, "always-ask", false, &calls)
+	target, _ := sessions.Create(newSource("full-access"))
+	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go"})`).(map[string]any)
+	if calls[0].approval != "always-ask" || out["clamped"] == nil {
+		t.Fatalf("approval = %q out = %#v", calls[0].approval, out)
+	}
+	// Explicitly asking for more is clamped too.
+	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go", approval_mode:"full-access"})`)
+	if calls[1].approval != "always-ask" {
+		t.Fatalf("explicit request approval = %q", calls[1].approval)
+	}
+	// The turn cap never rewrites the session's stored mode.
+	if h, _ := sessions.Header(target.ID); h.ApprovalMode != "full-access" {
+		t.Fatalf("stored mode changed to %q", h.ApprovalMode)
+	}
+}
+
+func TestPromptRefusals(t *testing.T) {
+	var calls []promptCall
+	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
+	target, _ := sessions.Create(newSource("always-ask"))
+	for name, code := range map[string]string{
+		"missing session":  `console.sessions.prompt({session_id:"ghost", prompt:"x"})`,
+		"missing prompt":   `console.sessions.prompt({session_id:"` + target.ID + `"})`,
+		"missing id":       `console.sessions.prompt({prompt:"x"})`,
+		"own session":      `console.sessions.prompt({session_id:"caller", prompt:"x"})`,
+		"unknown approval": `console.sessions.prompt({session_id:"` + target.ID + `", prompt:"x", approval_mode:"bogus"})`,
+	} {
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	if len(calls) != 0 {
+		t.Fatalf("refused prompts must not reach the run service: %+v", calls)
+	}
+}
+
+func TestPromptValidatesThinkingAgainstTheSessionsModel(t *testing.T) {
+	withCatalog(t)
+	var calls []promptCall
+	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
+	opts := newSource("always-ask")
+	opts.ModelID, opts.Provider = "thinker", "claude"
+	target, _ := sessions.Create(opts)
+	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"x", thinking_level:"high"})`)
+	if calls[0].thinking != "high" {
+		t.Fatalf("thinking = %q", calls[0].thinking)
+	}
+	if err := evalErr(runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"x", thinking_level:"max"})`); err == nil {
+		t.Fatal("unsupported level must be refused")
+	}
+}

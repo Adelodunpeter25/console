@@ -27,6 +27,7 @@ type Runtime struct {
 	projects  *services.ProjectService
 	active    func(string) bool
 	abort     func(string) bool
+	prompt    PromptFunc
 	ceiling   string
 	start     func(string, string, string, string, string, string) error
 	projectID string
@@ -35,8 +36,8 @@ type Runtime struct {
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, start: start, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, prompt: prompt, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -94,6 +95,9 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 		}},
 		{Name: "sessions.set_approval", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsSetApproval(ctx, args)
+		}},
+		{Name: "sessions.prompt", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsPrompt(ctx, args)
 		}},
 		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsFork(ctx, args)

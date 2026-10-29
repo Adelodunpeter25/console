@@ -25,13 +25,13 @@ type managedRun struct {
 	// its worktrees). Kept server-side only: it scopes the "already running"
 	// guard and the run list per checkout, so the same script can run in two
 	// worktrees at once.
-	root        string
-	process     *exec.Cmd
+	root    string
+	process *exec.Cmd
 	// outTotal / errTotal count every byte ever written to each stream, so a
 	// reader cursor is an absolute offset that stays valid after the head of
 	// the buffer is trimmed.
-	outTotal int64
-	errTotal int64
+	outTotal    int64
+	errTotal    int64
 	mu          sync.Mutex
 	subscribers map[chan types.ScriptRunEvent]bool
 }
