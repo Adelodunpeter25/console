@@ -324,8 +324,23 @@ class ChatRepository(
             queuePrompt(sessionId, prompt)
             return
         }
+        startRun(sessionId, prompt, session.attachments, contextFiles = mentionPaths(prompt), clearComposer = true)
+    }
+
+    /**
+     * Open POST /run with `prompt` after appending the user bubble. Callers
+     * must have already verified the session is idle. A queued prompt's
+     * send-now path passes [clearComposer] = false so the composer's freshly
+     * typed note survives the click.
+     */
+    private fun startRun(
+        sessionId: String,
+        prompt: String,
+        attachments: List<ImageAttachment>,
+        contextFiles: List<String>,
+        clearComposer: Boolean,
+    ) {
         val view = sessions.getView(sessionId)
-        val attachments = session.attachments
 
         if (attachments.isNotEmpty() && providerRepo?.supportsImages(view.sessionProvider, view.sessionModelId) == false) {
             chats.update(sessionId) { current ->
@@ -353,10 +368,10 @@ class ChatRepository(
                     createdAt = System.currentTimeMillis(),
                     content = prompt,
                     attachments = userMessageAttachments,
-                    contextFiles = mentionPaths(prompt),
+                    contextFiles = contextFiles,
                 ),
-                input = "",
-                draftUpdatedAt = null,
+                input = if (clearComposer) "" else it.input,
+                draftUpdatedAt = if (clearComposer) null else it.draftUpdatedAt,
                 streamingText = "",
                 streamingThinking = "",
                 activeToolCalls = emptyList(),
@@ -366,12 +381,14 @@ class ChatRepository(
                     startedAt = System.currentTimeMillis(),
                     status = com.console.mobile.core.chat.RunStatus.Working,
                 ),
-                attachments = emptyList(),
+                attachments = if (clearComposer) emptyList() else it.attachments,
             )
         }
-        // The prompt no longer lives in the composer; drop the cached draft
-        // before the suppressed save window.
-        persistence?.removeSession(sessionId)
+        if (clearComposer) {
+            // The prompt no longer lives in the composer; drop the cached
+            // draft before the suppressed save window.
+            persistence?.removeSession(sessionId)
+        }
         sessions.setStatus(sessionId, SessionStatus.Working)
 
         val body = RunPromptDto(
@@ -381,7 +398,7 @@ class ChatRepository(
             approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
             thinkingLevel = providerRepo?.validThinkingLevel(view.sessionProvider, view.sessionModelId, view.thinkingLevel) ?: view.thinkingLevel.takeIf { providerRepo == null },
             attachments = attachments,
-            contextFiles = mentionPaths(prompt),
+            contextFiles = contextFiles,
         )
         val bodyJson = ConsoleJson.encodeToString(RunPromptDto.serializer(), body)
         val controller = getOrCreate(sessionId, bodyJson)
@@ -493,6 +510,28 @@ class ChatRepository(
     fun steerQueuedPrompt(sessionId: String) {
         val session = chats.get(sessionId)
         val q = session.queuedPrompt ?: return
+        if (!session.running && controllers[sessionId]?.isActive != true) {
+            // Idle: there is no run to pivot, so the send button is send-now —
+            // start a fresh run with the staged prompt. The server's staged
+            // copy is cleared first, or the new run would fire it again after
+            // settling; the composer's fresh note survives (clearComposer =
+            // false).
+            chats.update(sessionId) { it.copy(queuedPrompt = null) }
+            val attachments = q.attachments.map {
+                ImageAttachment(
+                    id = UUID.randomUUID().toString(),
+                    bytes = android.util.Base64.decode(it.data_, android.util.Base64.DEFAULT),
+                    mimeType = it.mime_type,
+                )
+            }
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+                } catch (_: Exception) {}
+                startRun(sessionId, q.prompt, attachments, contextFiles = q.context_files, clearComposer = false)
+            }
+            return
+        }
         val view = sessions.getView(sessionId)
         val attachments = q.attachments.map {
             ImageAttachment(

@@ -13,6 +13,25 @@ use gpui::Context;
 
 use super::ConsoleDesktopApp;
 use super::user_prompt_history;
+use console_core::model::ThinkingLevel;
+
+/// One run start. A composer submit and sending a queued prompt now share
+/// the same implementation; the queued path keeps the composer's freshly
+/// typed draft, does not re-record the prompt into recall history (that
+/// happened when it was queued), and its staged choices beat the pane's
+/// current ones.
+struct PromptStart {
+    prompt: String,
+    attachments: Vec<ImageAttachment>,
+    context_files: Vec<String>,
+    model_id: Option<String>,
+    provider: Option<String>,
+    approval_mode: Option<String>,
+    thinking_level: Option<ThinkingLevel>,
+    /// Keep the composer text and attachment chips (send-now) instead of
+    /// the submit behavior of clearing them.
+    keep_draft: bool,
+}
 
 impl ConsoleDesktopApp {
     /// Publish streaming transcript changes at a bounded cadence instead of
@@ -161,31 +180,7 @@ impl ConsoleDesktopApp {
         };
         self.remove_queued_prompt_for_session(&session_id, &prompt_id);
         cx.notify();
-        let client = self.client.clone();
-        let remaining = self.queued_prompts_for_session(&session_id);
-        if remaining.is_empty() {
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.clear_queued_prompt(&session_id).await;
-            })
-            .detach();
-        } else {
-            let next = remaining[0].clone();
-            let dq = console_core::RunPromptDto {
-                prompt: next.prompt,
-                context_files: console_core::queued_strings_from_proto(&next.context_files),
-                model_id: next.model_id,
-                provider: next.provider,
-                approval_mode: next.approval_mode,
-                thinking_level: console_core::queued_thinking_from_proto(
-                    next.thinking_level.as_deref(),
-                ),
-                attachments: console_core::queued_attachments_from_proto(&next.attachments),
-            };
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.queue_prompt(&session_id, dq).await;
-            })
-            .detach();
-        }
+        self.sync_server_queue_for_session(&session_id, cx);
     }
 
     pub fn edit_queued_prompt_for_pane(
@@ -212,7 +207,30 @@ impl ConsoleDesktopApp {
             self.set_attachments_for_pane(&pane_id, attachments);
         }
         cx.notify();
+        self.sync_server_queue_for_session(&session_id, cx);
+    }
+
+    /// Turn the queued card's own choices into the run DTO. Shared by the
+    /// server queue bookkeeping, so a re-staged prompt carries everything.
+    fn queued_prompt_to_run_dto(queued: &console_core::QueuedPrompt) -> RunPromptDto {
+        RunPromptDto {
+            prompt: queued.prompt.clone(),
+            context_files: console_core::queued_strings_from_proto(&queued.context_files),
+            model_id: queued.model_id.clone(),
+            provider: queued.provider.clone(),
+            approval_mode: queued.approval_mode.clone(),
+            thinking_level: console_core::queued_thinking_from_proto(
+                queued.thinking_level.as_deref(),
+            ),
+            attachments: console_core::queued_attachments_from_proto(&queued.attachments),
+        }
+    }
+
+    /// Mirror the local queue onto the server's single staged prompt: when no
+    /// card remains, discard the staged copy; otherwise stage the next card.
+    fn sync_server_queue_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
         let client = self.client.clone();
+        let session_id = session_id.to_string();
         let remaining = self.queued_prompts_for_session(&session_id);
         if remaining.is_empty() {
             cx.spawn(async move |_, _| {
@@ -220,26 +238,19 @@ impl ConsoleDesktopApp {
             })
             .detach();
         } else {
-            let next = remaining[0].clone();
-            let dq = console_core::RunPromptDto {
-                prompt: next.prompt,
-                context_files: console_core::queued_strings_from_proto(&next.context_files),
-                model_id: next.model_id,
-                provider: next.provider,
-                approval_mode: next.approval_mode,
-                thinking_level: console_core::queued_thinking_from_proto(
-                    next.thinking_level.as_deref(),
-                ),
-                attachments: console_core::queued_attachments_from_proto(&next.attachments),
-            };
+            let next = Self::queued_prompt_to_run_dto(&remaining[0]);
             cx.spawn(async move |_, _| {
-                let _ = client.runs.queue_prompt(&session_id, dq).await;
+                let _ = client.runs.queue_prompt(&session_id, next).await;
             })
             .detach();
         }
     }
 
-    pub fn steer_queued_prompt_for_pane(
+    /// Send a queued prompt immediately as a fresh run (the send path for an
+    /// idle session). The server's staged copy is cleared first so the new
+    /// run does not drain it again after settling; the composer's fresh
+    /// draft survives, the same rule steering follows.
+    fn send_queued_prompt_for_pane(
         &mut self,
         pane_id: String,
         prompt_id: String,
@@ -251,6 +262,48 @@ impl ConsoleDesktopApp {
         let Some(queued) = self.remove_queued_prompt_for_session(&session_id, &prompt_id) else {
             return;
         };
+        cx.notify();
+        self.sync_server_queue_for_session(&session_id, cx);
+        self.active_pane_id = Some(pane_id.clone());
+        self.selected_session_id = Some(session_id.clone());
+        self.start_prompt_run(
+            PromptStart {
+                prompt: queued.prompt,
+                attachments: console_core::queued_attachments_from_proto(&queued.attachments)
+                    .unwrap_or_default(),
+                context_files: console_core::queued_strings_from_proto(&queued.context_files)
+                    .unwrap_or_default(),
+                model_id: queued.model_id,
+                provider: queued.provider,
+                approval_mode: queued.approval_mode,
+                thinking_level: console_core::queued_thinking_from_proto(
+                    queued.thinking_level.as_deref(),
+                ),
+                keep_draft: true,
+            },
+            cx,
+        );
+    }
+
+    pub fn steer_queued_prompt_for_pane(
+        &mut self,
+        pane_id: String,
+        prompt_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self.active_session_for_pane(&pane_id) else {
+            return;
+        };
+        // Idle: there is no run to pivot, so the card's button is send-now —
+        // start the queued prompt as a fresh run.
+        if !self.is_session_running(&session_id) {
+            self.send_queued_prompt_for_pane(pane_id, prompt_id, cx);
+            return;
+        }
+        let Some(queued) = self.remove_queued_prompt_for_session(&session_id, &prompt_id) else {
+            return;
+        };
+        let restore = queued.clone();
         let dto = RunPromptDto {
             prompt: queued.prompt.clone(),
             context_files: console_core::queued_strings_from_proto(&queued.context_files),
@@ -282,6 +335,9 @@ impl ConsoleDesktopApp {
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            // The run may have settled mid-flight; put the
+                            // card back so the prompt is not silently lost.
+                            this.add_queued_prompt_for_session(&session_id, restore);
                             this.set_error_for_session(&session_id, msg, cx);
                         });
                     }
@@ -291,9 +347,11 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Cmd/Ctrl+Enter while a turn is running: if a prompt is already staged,
-    /// steer with it; otherwise queue the current composer content (spec §5.1:
-    /// SubmitSteer falls back to queue when no staged prompt exists).
+    /// Cmd/Ctrl+Enter, and the queued card's "steer / send now". While a
+    /// turn is running it steers or queues (spec §5.1: SubmitSteer falls
+    /// back to queue when no staged prompt exists). When the session is
+    /// idle there is nothing to pivot, so it sends instead — either the
+    /// staged prompt or the composer text as a fresh run.
     pub fn submit_steer_for_pane(
         &mut self,
         pane_id: String,
@@ -301,20 +359,37 @@ impl ConsoleDesktopApp {
         context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
+        let running = self.is_active_session_running_for_pane(&pane_id);
         if let Some(queued) = self.queued_prompt_for_pane(&pane_id) {
             // Steer with the staged prompt; any freshly typed text stays in the
-            // composer so it is not lost.
-            self.steer_queued_prompt_for_pane(pane_id, queued.id, cx);
+            // composer so it is not lost. Idle: send it now instead.
+            if running {
+                self.steer_queued_prompt_for_pane(pane_id, queued.id, cx);
+            } else {
+                self.send_queued_prompt_for_pane(pane_id, queued.id, cx);
+            }
             return;
         }
         if prompt.trim().is_empty() {
             return;
         }
-        // No staged prompt: behave like a normal queue (POST /queue, no abort).
+        if !running {
+            // Idle: behave like Enter — a normal turn, not a queue behind
+            // nothing.
+            self.active_pane_id = Some(pane_id.clone());
+            self.selected_session_id = self.active_session_for_pane(&pane_id);
+            let attachments = (*self.attachments_for_pane(&pane_id)).clone();
+            self.submit_prompt_with_context(prompt, attachments, context_files, cx);
+            return;
+        }
+        // Running with no staged prompt: behave like a normal queue (POST
+        // /queue, no abort).
         let attachments = (*self.attachments_for_pane(&pane_id)).clone();
         self.queue_prompt_for_pane(pane_id, prompt, attachments, context_files, cx);
     }
 
+    /// Composer submit (Enter): a normal turn. See `start_prompt_run` for
+    /// the variants a queued prompt's send-now takes.
     pub fn submit_prompt_with_context(
         &mut self,
         prompt: String,
@@ -322,9 +397,35 @@ impl ConsoleDesktopApp {
         context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
-        if prompt.trim().is_empty() {
+        self.start_prompt_run(
+            PromptStart {
+                prompt,
+                attachments,
+                context_files,
+                model_id: None,
+                provider: None,
+                approval_mode: None,
+                thinking_level: None,
+                keep_draft: false,
+            },
+            cx,
+        );
+    }
+
+    fn start_prompt_run(&mut self, start: PromptStart, cx: &mut Context<Self>) {
+        if start.prompt.trim().is_empty() {
             return;
         }
+        let PromptStart {
+            prompt,
+            attachments,
+            context_files,
+            model_id: queued_model_id,
+            provider: queued_provider,
+            approval_mode: queued_approval_mode,
+            thinking_level: queued_thinking,
+            keep_draft,
+        } = start;
         let run_pane_id = self
             .active_pane_id
             .clone()
@@ -335,17 +436,24 @@ impl ConsoleDesktopApp {
         let active_session = self
             .active_session_for_pane(&run_pane_id)
             .map(|s| s.to_string());
-        self.clear_draft_for_session(active_session.as_deref(), cx);
-        if let Some(ref sid) = active_session {
-            self.revoke_sidebar_draft(sid);
+        if !keep_draft {
+            self.clear_draft_for_session(active_session.as_deref(), cx);
+            if let Some(ref sid) = active_session {
+                self.revoke_sidebar_draft(sid);
+            }
+            self.composer_for_pane(&run_pane_id)
+                .update(cx, |input, cx| {
+                    // Optimistic: this message has no server id yet, so recalling
+                    // it restores text and mentions but not images. The rebuilt
+                    // history after the run settles carries the real id.
+                    input.record_prompt_history(
+                        prompt.clone(),
+                        context_files.clone(),
+                        None,
+                        cx,
+                    );
+                });
         }
-        self.composer_for_pane(&run_pane_id)
-            .update(cx, |input, cx| {
-                // Optimistic: this message has no server id yet, so recalling
-                // it restores text and mentions but not images. The rebuilt
-                // history after the run settles carries the real id.
-                input.record_prompt_history(prompt.clone(), context_files.clone(), None, cx);
-            });
 
         // Push the clean prompt and structured paths into the optimistic
         // transcript. The server receives the same two fields separately.
@@ -369,11 +477,22 @@ impl ConsoleDesktopApp {
             t.begin_streaming(cx);
         });
 
+        // The queued prompt's staged choices win over the pane's current
+        // ones, so a card the user queued with a different model still runs
+        // the way it was queued.
         let selected_model = self.pane_selected_model(&run_pane_id);
-        let model_id = selected_model.as_ref().map(|m| m.model_id.clone());
-        let provider = selected_model.as_ref().map(|m| m.provider.clone());
-        let approval_mode = Some(self.pane_approval_mode(&run_pane_id).value().to_string());
-        let thinking_level = self.pane_thinking_level(&run_pane_id);
+        let model_id = queued_model_id.or_else(|| {
+            selected_model
+                .as_ref()
+                .map(|m| m.model_id.clone())
+        });
+        let provider = queued_provider.or_else(|| {
+            selected_model.as_ref().map(|m| m.provider.clone())
+        });
+        let approval_mode = Some(queued_approval_mode.unwrap_or_else(|| {
+            self.pane_approval_mode(&run_pane_id).value().to_string()
+        }));
+        let thinking_level = queued_thinking.or_else(|| self.pane_thinking_level(&run_pane_id));
         let active_sid = self.active_session_for_pane(&run_pane_id);
         let session_project_id = self.pane_real_project_id(&run_pane_id);
         let session_cwd = self
@@ -382,13 +501,15 @@ impl ConsoleDesktopApp {
         let client = self.client.clone();
         let transport = self.transport.clone();
 
-        self.composer_for_pane(&run_pane_id)
-            .update(cx, |input, cx| {
-                input.set_content("", cx);
-            });
-        // Clear only this pane's staged attachments; other splits keep their
-        // chips for their own next prompt.
-        self.set_attachments_for_pane(&run_pane_id, Vec::new());
+        if !keep_draft {
+            self.composer_for_pane(&run_pane_id)
+                .update(cx, |input, cx| {
+                    input.set_content("", cx);
+                });
+            // Clear only this pane's staged attachments; other splits keep
+            // their chips for their own next prompt.
+            self.set_attachments_for_pane(&run_pane_id, Vec::new());
+        }
         // Capture the run's start time once. Running state is keyed by session
         // id so it stays attached to the owning chat across pane switches. For
         // an existing chat we know the session id now; for a brand-new chat the
