@@ -105,6 +105,7 @@ func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsSe
 	}
 	kernel, err := jskernel.New(jskernel.Options{
 		Root:             "console",
+		PlainResults:     true,
 		InterruptMessage: "console stopped; action completion is unknown. Inspect fresh state before retrying.",
 		AsyncMessage:     "async code is not supported: call console methods directly, they already wait for the result",
 	}, methods)
@@ -339,7 +340,14 @@ func (r *Runtime) sessionsRead(_ context.Context, args map[string]any) (*jskerne
 	if err != nil {
 		return nil, err
 	}
-	loaded, err := r.sessions.Load(id, 0, 0)
+	// limit returns only the most recent N messages; pass nextCursor back as
+	// `before` to page further into history. Omitted, the whole transcript.
+	limit, _ := optionalInt(args, "limit")
+	before, _ := optionalInt(args, "before")
+	if limit < 0 || before < 0 {
+		return nil, fmt.Errorf("limit and before must not be negative")
+	}
+	loaded, err := r.sessions.Load(id, int64(limit), int64(before))
 	if err != nil {
 		return nil, err
 	}

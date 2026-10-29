@@ -36,7 +36,7 @@ type consoleTool struct {
 // its variables never leak into another session's kernel.
 func NewConsoleTool(manager *Manager, sessionID, projectID, cwd, mode string) tools.Tool {
 	inner := tools.NewTool("console",
-		"Run JavaScript against the console API (console.ports.list(), console.approvalModes(), console.sessions.read({session_id}), ...). One call can manage ports, run scripts, and control sessions. Variables persist until console_reset. The console-control instructions in this conversation document the methods.",
+		"Run JavaScript against the console API (console.ports.list(), console.sessions.read({session_id}), ...). One call can manage ports, run scripts, and control sessions. Methods return their data directly. Valid model ids, providers and thinking levels come from console.models(); valid approval modes from console.approvalModes(). Variables persist until console_reset. The console-control instructions in this conversation document the methods.",
 		tools.TierExec,
 		func(ctx context.Context, in consoleInput) (any, error) {
 			return nil, tools.NewToolError("console requires call context")

@@ -9,14 +9,17 @@ calls until `console_reset` clears them.
 
 ```js
 var ports = console.ports.list();
-print(ports.structuredContent);
+print(ports);
 ```
 
 Calls are synchronous: no `async`, no `await`, no `.then` — every method
 already waits for its result, and async completions are refused rather than
 left hanging. Arguments are a single object; a method with no arguments takes
-none. Every call returns `{content, structuredContent, isError}`. If
-`isError` is true, read the message before deciding what to do next.
+none. A call returns its data directly (an object or array), so
+`console.sessions.list()` is the array of sessions, not a wrapper around it. A
+failed call throws an error with the reason; read the message before deciding
+what to do next. Results over about 100,000 characters are cut off with a note
+saying how much was lost, so ask for less (see `limit` on `sessions.read`).
 
 `print()` narrates and shows intermediate values. The final value is returned
 to you as well.
@@ -48,7 +51,7 @@ when a project action requires inspecting or changing a local port forward.
 
 `console.sessions.list({project_id?, cwd?})` — list persisted, non-deleted sessions, optionally filtered
 
-`console.sessions.read(session_id)` — read a session header and transcript
+`console.sessions.read({session_id, limit?, before?})` — read a session header and transcript. Without `limit` you get every message, which can be very large; pass `limit` for just the most recent N. The result has `hasMore` and `nextCursor`: pass `nextCursor` back as `before` to read further back.
 
 `console.sessions.create({prompt?, project_id?, cwd?, model?, provider?, thinking_level?, approval_mode?, worktree?})` — create a persistent session and, when `prompt` is provided, start it; `worktree` may include `branch` and `base_branch`. `thinking_level` needs an explicit `model` and must be one of that model's levels (see `console.models()`). `approval_mode` is clamped to this run's own mode and defaults to it; the result reports `approval_mode` and, when lowered, a `clamped` note — do not retry to get more
 

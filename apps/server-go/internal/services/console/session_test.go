@@ -42,11 +42,12 @@ func evalJSON(t *testing.T, runtime *Runtime, code string) any {
 	if !ok {
 		t.Fatalf("evaluation text = %#v", parts[len(parts)-1])
 	}
-	var decoded map[string]any
+	// Methods return their data directly, so the final text is the data itself.
+	var decoded any
 	if err := json.Unmarshal([]byte(text), &decoded); err != nil {
 		t.Fatalf("evaluation text is not JSON: %q: %v", text, err)
 	}
-	return decoded["structuredContent"]
+	return decoded
 }
 
 func TestConsoleSessionLifecycle(t *testing.T) {

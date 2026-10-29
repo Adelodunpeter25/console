@@ -76,6 +76,11 @@ type Options struct {
 	// InterruptMessage is reported when an evaluation is interrupted. Callers
 	// whose actions may already have taken effect should say so here.
 	InterruptMessage string
+	// PlainResults makes root.* methods return their structured data directly
+	// instead of the {content, structuredContent, isError} wrapper. A method
+	// that returned only text or images still gets the wrapper, so nothing is
+	// lost. Off by default: computer use relies on the wrapper for images.
+	PlainResults bool
 	// AsyncMessage is reported when a script returns a Promise. No microtask
 	// pump runs between evaluations, so a promise would silently never settle.
 	AsyncMessage string
@@ -278,6 +283,12 @@ func (r *Runtime) resultObject(result *Result) goja.Value {
 	if result == nil {
 		result = &Result{}
 	}
+	if r.opts.PlainResults && !result.IsError && len(result.Content) == 0 && len(result.StructuredContent) > 0 {
+		var decoded any
+		if json.Unmarshal(result.StructuredContent, &decoded) == nil && decoded != nil {
+			return r.rt.ToValue(decoded)
+		}
+	}
 	content := make([]any, 0, len(result.Content))
 	for _, part := range result.Content {
 		switch part.Type {
@@ -439,7 +450,8 @@ func (r *Runtime) renderCompletion(completion goja.Value) ([]map[string]any, err
 		joined = "(no output)"
 	}
 	if len(joined) > r.opts.MaxResultText {
-		joined = joined[:r.opts.MaxResultText] + "\n… [truncated]"
+		cut := len(joined) - r.opts.MaxResultText
+		joined = joined[:r.opts.MaxResultText] + fmt.Sprintf("\n… [truncated: %d more characters; request less, for example with a limit argument, or print only the fields you need]", cut)
 	}
 	out := []map[string]any{{"type": "text", "text": joined}}
 	return append(out, images...), nil
