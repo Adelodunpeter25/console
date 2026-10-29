@@ -15,7 +15,7 @@ fn fixture(name: &str) -> String {
 fn decodes_golden_commands_fixture() {
     let cmds: Vec<SlashCommandInfo> =
         serde_json::from_str(fixture("commands.json").trim()).expect("decode commands fixture");
-    assert_eq!(cmds.len(), 4);
+    assert_eq!(cmds.len(), 5);
     assert_eq!(cmds[0].name, "init");
     assert!(cmds[0].builtin);
     assert_eq!(cmds[1].name, "computer-use");
@@ -24,8 +24,10 @@ fn decodes_golden_commands_fixture() {
     assert!(cmds[2].builtin);
     // A discovered skill omits `builtin` on the wire and decodes to false —
     // the protojson zero, not a missing concept.
-    assert_eq!(cmds[3].name, "find-skills");
-    assert!(!cmds[3].builtin);
+    assert_eq!(cmds[3].name, "console");
+    assert!(cmds[3].builtin);
+    assert_eq!(cmds[4].name, "find-skills");
+    assert!(!cmds[4].builtin);
 }
 
 #[test]

@@ -27,6 +27,10 @@ const (
 	// visual tool. Like computer-use, the model learns nothing until invoked.
 	visualizeCommandName        = "visualize"
 	visualizeCommandDescription = "Render a chart, table, or metric card in the chat"
+	// consoleCommandName loads the console API documentation. The tools are
+	// always present; the model only learns the methods once it is invoked.
+	consoleCommandName        = "console"
+	consoleCommandDescription = "Operate the app: run scripts, manage ports and sessions through the console API"
 )
 
 func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
@@ -36,6 +40,7 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 			{Name: initCommandName, Description: initCommandDescription, Builtin: true},
 			{Name: computerUseCommandName, Description: computerUseCommandDescription, Builtin: true},
 			{Name: visualizeCommandName, Description: visualizeCommandDescription, Builtin: true},
+			{Name: consoleCommandName, Description: consoleCommandDescription, Builtin: true},
 		}
 		for _, skill := range skills.Discover(cwd) {
 			commands = append(commands, &consolev1.SlashCommandInfo{

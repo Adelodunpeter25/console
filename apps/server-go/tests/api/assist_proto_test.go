@@ -66,6 +66,7 @@ func TestAssistCommandsFixture(t *testing.T) {
 		&consolev1.SlashCommandInfo{Name: "init", Description: "Generate a console.toml with project run scripts for the Run tab", Builtin: true},
 		&consolev1.SlashCommandInfo{Name: "computer-use", Description: "Drive the computer: read app windows and operate them with keyboard and mouse", Builtin: true},
 		&consolev1.SlashCommandInfo{Name: "visualize", Description: "Render a chart, table, or metric card in the chat", Builtin: true},
+		&consolev1.SlashCommandInfo{Name: "console", Description: "Operate the app: run scripts, manage ports and sessions through the console API", Builtin: true},
 		&consolev1.SlashCommandInfo{Name: "find-skills", Description: "Helps users discover and install agent skills when they ask them to", Builtin: false},
 	})
 }
