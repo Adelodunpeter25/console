@@ -109,7 +109,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
                 Section("${deleted.size} deleted chat${if (deleted.size == 1) "" else "s"}") {
                     deleted.forEachIndexed { index, item ->
                         DeletedRow(item = item, busy = busyId == item.id || busyId == "all", onRestore = { restore(item.id) }, onDelete = {
-                            val title = item.title.ifBlank { "Untitled Chat" }
+                            val title = item.title
                             confirmAlert("Delete Chat Permanently", "\"$title\" and its message history will be permanently deleted. This cannot be undone.", listOf(ConfirmButton("Cancel", cancel = true), ConfirmButton("Delete", destructive = true, onPress = {
                                 busyId = item.id
                                 scope.launch {
@@ -174,7 +174,7 @@ fun DeletedChatsSettings(onBack: () -> Unit) {
 @Composable
 private fun DeletedRow(item: SessionHeader, busy: Boolean, onRestore: () -> Unit, onDelete: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp)) {
-        Text(item.title.ifBlank { "Untitled Chat" }, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(item.title, color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val ts = item.deleted_at ?: item.updated_at
         Text("${folderName(item.cwd)} · Deleted ${formatRelativeTime(ts).ifBlank { "recently" }}", color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
         Row(modifier = Modifier.padding(top = 12.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {

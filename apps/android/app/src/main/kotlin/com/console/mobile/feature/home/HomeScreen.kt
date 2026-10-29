@@ -352,7 +352,7 @@ fun HomeScreen(
                     activeSession = null
                     confirmAlert(
                         "Delete Chat",
-                        "Are you sure you want to delete \"${sheetSession.title.ifBlank { "Untitled Session" }}\"?",
+                        "Are you sure you want to delete \"${sheetSession.title}\"?",
                         listOf(
                             ConfirmButton("Cancel", cancel = true),
                             ConfirmButton("Delete", destructive = true, onPress = {
@@ -423,7 +423,7 @@ private fun SessionRow(
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    session.title.ifBlank { "Untitled Session" },
+                    session.title,
                     color = NewTheme.TextPrimary,
                     fontSize = 17.sp,
                     maxLines = 1,

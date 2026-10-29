@@ -36,12 +36,9 @@ pub trait SessionHeaderExt {
 
 impl SessionHeaderExt for SessionHeader {
     fn display_title(&self) -> &str {
-        let trimmed = self.title.trim();
-        if trimmed.is_empty() {
-            "New Chat"
-        } else {
-            trimmed
-        }
+        // The server guarantees a non-empty stored title (Create/UpdateTitle
+        // default it), so there is no client-side fallback to keep in sync.
+        self.title.trim()
     }
 
     fn sort_timestamp(&self) -> i64 {

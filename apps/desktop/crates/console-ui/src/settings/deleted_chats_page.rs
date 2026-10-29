@@ -75,7 +75,7 @@ impl RenderOnce for DeletedChatsPage {
                             let on_rest = on_restore.clone();
                             let on_perm = on_permanent_delete.clone();
 
-                            let title = if session.title.is_empty() { "Untitled conversation".to_string() } else { session.title };
+                            let title = session.title;
                             let date_str = chrono::DateTime::from_timestamp_millis(session.updated_at)
                                 .map(|dt| dt.format("%b %d, %Y · %H:%M").to_string())
                                 .unwrap_or_default();

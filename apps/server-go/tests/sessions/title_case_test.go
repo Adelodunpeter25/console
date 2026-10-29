@@ -79,3 +79,24 @@ func TestRenameCapitalizesTitle(t *testing.T) {
 		t.Fatalf("meta title = %q; want %q", loaded.Header.Title, "Rename me later")
 	}
 }
+
+// A blank rename keeps a default, so clients never need their own fallback.
+func TestBlankRenameKeepsDefaultTitle(t *testing.T) {
+	sessions := newTitleStore(t)
+	header, err := sessions.Create(types.CreateSessionOptions{
+		Title: "original", Cwd: t.TempDir(), ModelID: "m", Provider: "p",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := sessions.UpdateTitle(header.ID, "   "); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	loaded, err := sessions.Load(header.ID, 0, 0)
+	if err != nil || loaded == nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Header.Title != "New Session" {
+		t.Fatalf("title = %q; want New Session", loaded.Header.Title)
+	}
+}

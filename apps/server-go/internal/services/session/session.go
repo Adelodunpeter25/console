@@ -352,6 +352,11 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 // a rename can't reintroduce a lowercase first letter.
 func (s *Service) UpdateTitle(sessionID, title string) error {
 	title = utils.TitleFirst(title)
+	// A stored title is never empty (same default as Create), so clients
+	// render it as-is with no fallback of their own.
+	if title == "" {
+		title = "New Session"
+	}
 	projectID, ok, err := s.projectIDBySession(sessionID)
 	if err != nil {
 		return err
