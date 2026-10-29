@@ -466,6 +466,27 @@ impl ComposerInput {
         self
     }
 
+    /// Delete a mention chip together with the padding its insert added: the
+    /// run of spaces reserved for the icon before the label, and the two
+    /// trailing spaces. Deleting only the label would leave that reservation
+    /// behind as plain blank space.
+    ///
+    /// The preceding run is consumed from all the reserved spaces plus any
+    /// real separator the user already had — removing the chip entirely, so
+    /// neighbors rejoin across the vacated gap. Only exactly-two trailing
+    /// spaces are folded in; anything longer is the user's own spacing.
+    fn remove_mention_atom(&mut self, mention: ComposerMention, cx: &mut Context<Self>) {
+        let mut start = mention.range.start;
+        while start > 0 && self.content.as_bytes()[start - 1] == b' ' {
+            start -= 1;
+        }
+        let mut end = mention.range.end;
+        if self.content[end..].starts_with("  ") {
+            end += 2;
+        }
+        self.replace_range(start..end, "", cx);
+    }
+
     /// Turn the field into a search box: Enter submits without clearing, so
     /// "find next" keeps the query, and pasted line breaks become spaces.
     pub fn search_field(mut self) -> Self {
@@ -1195,8 +1216,7 @@ impl ComposerInput {
                 .find(|m| m.range.end == cursor)
                 .cloned()
             {
-                self.selected_range = mention.range;
-                self.replace_text_in_range(None, "", window, cx);
+                self.remove_mention_atom(mention, cx);
                 return;
             }
         }
@@ -1215,8 +1235,7 @@ impl ComposerInput {
                 .find(|m| m.range.start == cursor)
                 .cloned()
             {
-                self.selected_range = mention.range;
-                self.replace_text_in_range(None, "", window, cx);
+                self.remove_mention_atom(mention, cx);
                 return;
             }
         }
