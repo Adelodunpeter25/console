@@ -386,7 +386,13 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		case "askMany":
 			toolList = append(toolList, tools.NewAskManyTool(askHandler))
 		case "bash":
-			toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+			if mode == permissions.PlanMode {
+				// Plan mode keeps bash, but sandboxed read-only (writePlan is
+				// the only file write). bashJob stays denied by its tier.
+				toolList = append(toolList, tools.NewPlanModeBashTool(s.bashJobManager(), sessionID, runID))
+			} else {
+				toolList = append(toolList, tools.NewBashTool(s.bashJobManager(), sessionID, runID))
+			}
 		case "bashJob":
 			toolList = append(toolList, tools.NewBashJobTool(s.bashJobManager(), sessionID))
 		case "browser":

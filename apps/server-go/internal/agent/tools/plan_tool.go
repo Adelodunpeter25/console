@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 // PlanDir is where plans live, relative to the session's working directory.
@@ -40,6 +42,23 @@ type planTool struct {
 }
 
 func (planTool) PlanSafe() bool { return true }
+
+// sandboxedBash marks the plan-mode bash tool as safe to run in plan mode: it
+// runs every command under the read-only sandbox, so the executor lets it
+// through instead of denying its exec tier.
+type sandboxedBash struct {
+	Tool
+}
+
+func (sandboxedBash) PlanSafe() bool { return true }
+
+// NewPlanModeBashTool is bash for plan mode. It is allowed to run because it
+// runs commands in the read-only sandbox where the machine has one. Where it
+// has none it runs commands normally, which is a deliberate choice by the
+// owner, not an oversight.
+func NewPlanModeBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+	return sandboxedBash{Tool: NewSandboxedBashTool(SandboxReadOnly, jobs, ownerSessionID, parentIDs...)}
+}
 
 // NewWritePlanTool builds writePlan, bound to one session's working directory.
 // An empty cwd reports the tool unavailable rather than writing somewhere

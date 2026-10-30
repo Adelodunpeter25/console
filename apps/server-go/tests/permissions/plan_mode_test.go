@@ -221,3 +221,33 @@ func TestPlanModeAppliesToSubagentsToo(t *testing.T) {
 		t.Fatal("an executor in plan mode must deny writes, subagent or not")
 	}
 }
+
+// Plan mode allows bash only in its sandboxed form. The ordinary bash tool, and
+// background jobs, stay denied.
+func TestPlanModeAllowsOnlySandboxedBash(t *testing.T) {
+	dir := t.TempDir()
+	asked := 0
+
+	plain := loop.NewExecutor(tools.NewRegistry(tools.NewBashTool(nil, "")), permissions.PlanMode, denyApprover{&asked})
+	res, _ := plain.Execute(context.Background(), planCall(t, "bash", map[string]any{"command": "echo x > " + filepath.Join(dir, "p.txt")}))
+	if !res.IsError || !strings.Contains(res.Content.(string), "plan mode is read-only") {
+		t.Fatalf("ordinary bash must stay denied in plan mode: %#v", res)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "p.txt")); err == nil {
+		t.Fatal("ordinary bash wrote a file in plan mode")
+	}
+
+	sandboxed := loop.NewExecutor(tools.NewRegistry(tools.NewPlanModeBashTool(nil, "")), permissions.PlanMode, denyApprover{&asked})
+	res, err := sandboxed.Execute(context.Background(), planCall(t, "bash", map[string]any{"command": "echo hello", "cwd": dir}))
+	if err != nil || res.IsError {
+		t.Fatalf("sandboxed bash must run in plan mode: %v %#v", err, res)
+	}
+	if asked != 0 {
+		t.Fatalf("plan mode must not prompt: asked %d times", asked)
+	}
+
+	// Outside plan mode the sandboxed flag grants nothing special.
+	if permissions.Resolve(permissions.AlwaysAsk, tools.TierExec) != permissions.Prompt {
+		t.Fatal("always-ask still prompts for exec")
+	}
+}

@@ -61,6 +61,14 @@ func shellArgv(command string) []string {
 // NewBashTool builds the "bash" tool bound to jobs (for background=true
 // runs). A nil manager disables background mode (headless singleton).
 func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+	return NewSandboxedBashTool(SandboxOff, jobs, ownerSessionID, parentIDs...)
+}
+
+// NewSandboxedBashTool is NewBashTool for a given sandbox mode. Plan mode passes
+// SandboxReadOnly. Background jobs are refused in that mode: a job outlives the
+// call, which is hard to justify in a read-only plan, and the job manager is
+// not sandbox-aware.
+func NewSandboxedBashTool(mode SandboxMode, jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
 	parentRunID, parentCallID := "", ""
 	if len(parentIDs) > 0 {
 		parentRunID = parentIDs[0]
@@ -83,6 +91,9 @@ func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs
 			}
 
 			if in.Background {
+				if mode == SandboxReadOnly {
+					return nil, NewToolError("Background jobs are not available in plan mode. Run the command in the foreground, or describe it in your plan.")
+				}
 				if jobs == nil {
 					return nil, NewToolError("Background jobs are not available in this context.")
 				}
@@ -112,7 +123,7 @@ func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs
 			if timeoutMs <= 0 {
 				timeoutMs = bashDefaultTimeout
 			}
-			res := terminal.SpawnCapture(ctx, shellArgv(in.Command), terminal.SpawnCaptureOptions{
+			res := terminal.SpawnCapture(ctx, sandboxedShellArgv(in.Command, mode), terminal.SpawnCaptureOptions{
 				Cwd: cwd, Env: mergedEnv(in.Env), TimeoutMs: timeoutMs,
 			})
 
@@ -142,6 +153,9 @@ func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs
 				sections = append(sections, "", "stderr:", stderr)
 			}
 			result := strings.Join(sections, "\n")
+			if mode == SandboxReadOnly && res.ExitCode != 0 && looksLikeBlockedWrite(res.Stderr) && SandboxAvailable() {
+				result += sandboxHint
+			}
 			return Envelope{Content: textResult(result), IsError: res.ExitCode != 0}, nil
 		})
 }
