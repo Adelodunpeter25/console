@@ -9,10 +9,9 @@
 - Run only the specific test file relevant to the task, e.g.:
   - `cd apps/server-go && go test ./tests/<area>/ -run <TestName> -v`
   - `cd apps/desktop && cargo test -p <crate> <test_name>`
-- Never run `run-all-tests.ts` or the full suite unless explicitly asked.
 - If a test fails, fix the cause and re-run the same specific test until it passes before committing.
 - Never write inline `#[cfg(test)]` modules at the bottom of Rust source files; always place tests in dedicated `tests/` files. Same rule for Kotlin: no test functions inside `app/src/main` sources.
-- **The Android app is native Kotlin/Compose at `apps/android`** (not Expo). Verify a change with:
+- **The Android app is native Kotlin/Compose at `apps/android`** . Verify a change with:
   `cd apps/android && ./gradlew :app:assembleDebug`
   `minifyReleaseWithR8` needs `key.properties`, so only run it when explicitly asked.
 - **Android tests live in `apps/android/tests/`** (one flat folder, wired into the `test` source set
