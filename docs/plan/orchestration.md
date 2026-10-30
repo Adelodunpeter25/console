@@ -17,18 +17,19 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | 3 — Discovery + session control | **Done** | `models()`, `approvalModes()`, `sessions.list/read/delete`; deleting the active session is refused. Also shipped, not in the plan: `projects.list/add` |
 | 4 — Spawn (`sessions.create`) | **Partial** | `sessions.create` takes prompt, model, provider, `thinking_level` (validated against the model), cwd, project, worktree, and `approval_mode`, which is **clamped to the calling run's mode** with the clamp reported. **Decision:** it stays `sessions.create`; the `console.spawn` rename is dropped. **Missing:** depth cap, token budget, concurrency cap, usage rollup |
 | 5 — `sessions.fork` | **Done** | Exposed to the kernel; the fork's inherited approval mode is clamped to the calling run |
-| 6 — Security prerequisites | **Half done** | Path boundary shipped (`permissions/guard.go`: writes confined to session cwd, symlinks resolved, `batchWrite` covered). **Missing:** plan-mode hard deny (§8.2) |
+| 6 — Security prerequisites | **Done** | Path boundary shipped (`permissions/guard.go`). Plan mode is now enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `.console/plans/` (§8.2) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
 **Not in the API yet:** `console.pr.*`. Shipped since the last update: `sessions.abort`, `set_model`, `set_approval`, `fork`, `prompt`, `scripts.output`.
 
-**Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`. A run cannot abort itself or change its own approval mode. **Still open:** plan mode itself is not hard-enforced (§8.2), so a `plan-mode` ceiling currently limits what a run can hand out but does not stop that run writing.
+**Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`, and plan mode is now genuinely read-only, so the ceiling means what it says. A run cannot abort itself or change its own approval mode.
+
+**Plan mode (enforced):** write and exec tools are denied, never prompted. Reads, `browser` and `memory` (now read tier) still run. `writePlan` is the one exception: it writes `.console/plans/<name>.md` only, builds the filename itself, refuses symlinks, caps size, and the folder ignores itself with its own `.gitignore`. Subagents inherit the mode. Known gaps, accepted: `browser` can still submit forms, and MCP tools are tiered by naming convention.
 
 **Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
 
 ### Next
 
-- Plan-mode hard deny of `TierWrite` / `TierExec` in `permissions.Resolve` (§8.2); this is what makes the `plan-mode` ceiling mean something
 - Depth cap 2, per-spawn token budget, concurrency cap and usage rollup for spawned sessions (§7)
 - `console.pr.*` plus the GitHub service (Phase 7). Now designed in full, with the desktop and Android UI, in [`pull-requests.md`](pull-requests.md); that plan supersedes the Phase 7 sketch below
 

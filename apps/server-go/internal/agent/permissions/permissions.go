@@ -36,13 +36,19 @@ type Request struct {
 
 // Resolve maps (mode, tier) to a policy.
 //
-// PlanMode is treated the same as FullAccess at the tool-permission layer
-// The restriction on writes/exec in plan mode is communicated to the model
-// only via the system prompt instructions, not enforced as a hard deny here.
+// PlanMode is read-only and enforced here, not just asked of the model: write
+// and exec tools are denied outright rather than prompted. The only writes a
+// plan-mode run can make are tools that declare themselves tools.PlanSafe
+// (writePlan), which the executor lets through before consulting this table.
 func Resolve(mode Mode, tier tools.ToolTier) Policy {
 	switch mode {
-	case FullAccess, PlanMode:
+	case FullAccess:
 		return Allow
+	case PlanMode:
+		if tier == tools.TierRead {
+			return Allow
+		}
+		return Deny
 	case AcceptEdits:
 		switch tier {
 		case tools.TierWrite:

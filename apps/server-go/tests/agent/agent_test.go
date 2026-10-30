@@ -280,8 +280,9 @@ func TestPermissionMatrix(t *testing.T) {
 		{permissions.FullAccess, tools.TierExec, permissions.Allow},
 		{permissions.AcceptEdits, tools.TierWrite, permissions.Allow},
 		{permissions.AcceptEdits, tools.TierExec, permissions.Prompt},
-		{permissions.PlanMode, tools.TierExec, permissions.Allow},
-		{permissions.PlanMode, tools.TierWrite, permissions.Allow},
+		{permissions.PlanMode, tools.TierExec, permissions.Deny},
+		{permissions.PlanMode, tools.TierWrite, permissions.Deny},
+		{permissions.PlanMode, tools.TierRead, permissions.Allow},
 		{permissions.AlwaysAsk, tools.TierRead, permissions.Allow},
 		{permissions.AlwaysAsk, tools.TierWrite, permissions.Prompt},
 	}
@@ -469,17 +470,24 @@ func TestStreamNoEventLoss(t *testing.T) {
 	}
 }
 
-func TestExecutorAllowsWriteInPlanMode(t *testing.T) {
+func TestExecutorDeniesWriteInPlanMode(t *testing.T) {
 	registry := tools.NewRegistry(tools.WriteFile)
 	executor := loop.NewExecutor(registry, permissions.PlanMode, helpers.AutoApprover{})
+	target := filepath.Join(t.TempDir(), "x.txt")
 	result, err := executor.Execute(context.Background(), tools.ToolCall{
 		ID: "c1", Name: "write_file",
-		Arguments: helpers.MustJSONRaw(t, map[string]any{"path": "/tmp/x.txt", "content": "y"}),
+		Arguments: helpers.MustJSONRaw(t, map[string]any{"path": target, "content": "y"}),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.IsError {
-		t.Fatalf("write_file must be allowed in plan mode (gate is system-prompt only): %#v", result)
+	if !result.IsError {
+		t.Fatalf("write_file must be denied in plan mode: %#v", result)
+	}
+	if text, _ := result.Content.(string); !strings.Contains(text, "plan mode is read-only") || !strings.Contains(text, "writePlan") {
+		t.Fatalf("the deny must say why and what to do instead: %v", result.Content)
+	}
+	if _, statErr := os.Stat(target); statErr == nil {
+		t.Fatal("the file was written despite the deny")
 	}
 }

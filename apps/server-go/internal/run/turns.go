@@ -402,6 +402,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		projectID = *header.ProjectID
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
+	// writePlan is offered in plan mode only: it is the sole file write a
+	// read-only run may make, and in every other mode write_file does the job.
+	if mode == permissions.PlanMode {
+		toolList = append(toolList, tools.NewWritePlanTool(header.Cwd))
+	}
 	usage := &loop.UsageTracker{}
 	setup := prompt.Setup
 	mcpManager := s.mcpManager()

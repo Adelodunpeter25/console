@@ -323,7 +323,7 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 			"Plan mode is ACTIVE. Read-only by default:",
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
 			"- You MUST NOT create, edit, or delete files; run build/install/migration/test commands; commit, push, or spawn implementation subagents.",
-			"- Plans live in chat. Only write a plan file when the user explicitly asks.",
+			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes .console/plans/<name>.md); it is the only way to write a file in this mode.",
 			"- If the user asks you to implement, tell them to switch agents. Do not silently start implementing.",
 			"</approval-mode-instructions>",
 		}, "\n")
@@ -344,6 +344,9 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 func BuildSystemPrompt(opts BuildOptions) Result {
 	if opts.ToolNames == nil {
 		opts.ToolNames = DefaultToolNames
+		if opts.ApprovalMode == PlanMode {
+			opts.ToolNames = append(append([]string(nil), DefaultToolNames...), "writePlan")
+		}
 	}
 	context := DiscoverContext(opts)
 	identity := renderIdentity(opts, systemMdContent(context.SystemPromptFile))

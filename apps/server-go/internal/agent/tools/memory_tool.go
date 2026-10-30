@@ -25,7 +25,7 @@ type memoryInput struct {
 func NewMemoryTool(projectID string, registry *memory.Registry) Tool {
 	return NewTool("memory",
 		"Persistent memory across sessions. Store things worth remembering (user preferences, corrections, project facts); recall or list before assuming. Defaults to project scope.",
-		TierWrite,
+		TierRead,
 		func(ctx context.Context, in memoryInput) (any, error) {
 			if registry == nil {
 				return nil, NewToolError("Memory is not available in this run.")

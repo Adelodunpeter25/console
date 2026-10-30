@@ -48,6 +48,13 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 	}
 
 	decision := permissions.Resolve(e.mode, tool.Tier())
+	// A plan-safe tool (writePlan) is the one write plan mode permits: it is
+	// confined to the plan folder, so it needs no approval and is not denied.
+	if e.mode == permissions.PlanMode {
+		if safe, ok := tool.(tools.PlanSafe); ok && safe.PlanSafe() {
+			decision = permissions.Allow
+		}
+	}
 	if decision == permissions.Prompt {
 		if e.approver == nil {
 			return e.errResult(call, tools.NewToolError("Tool '%s' requires approval but no approver is connected (mode %s).", call.Name, e.mode).Error()), nil
@@ -78,7 +85,7 @@ func (e *Executor) Execute(ctx context.Context, call tools.ToolCall) (tools.Tool
 		return tools.ToolResult{
 			ToolCallID: call.ID,
 			ToolName:   call.Name,
-			Content:    tools.NewToolError("Tool '%s' is denied in %s mode.", call.Name, e.mode).Error(),
+			Content:    deniedMessage(call.Name, e.mode),
 			IsError:    true,
 			Args:       call.Arguments,
 		}, nil
@@ -160,4 +167,14 @@ func newRequestID() string {
 		panic(err)
 	}
 	return "perm_" + hex.EncodeToString(b)
+}
+
+// deniedMessage explains a deny so the model does not retry. In plan mode it
+// says what to do instead: the model is otherwise left guessing why a write
+// that worked a turn ago now fails.
+func deniedMessage(tool string, mode permissions.Mode) string {
+	if mode == permissions.PlanMode {
+		return tools.NewToolError("Tool '%s' is denied: plan mode is read-only. Describe the change in your plan; to save the plan as a file use writePlan. To make changes, ask the user to switch out of plan mode.", tool).Error()
+	}
+	return tools.NewToolError("Tool '%s' is denied in %s mode.", tool, mode).Error()
 }
