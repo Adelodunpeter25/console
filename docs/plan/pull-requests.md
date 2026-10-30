@@ -22,6 +22,8 @@ Reference: `/Users/adelodunpeter/Developer/Projects/t3code` has a much larger PR
 - Stacked PRs, AI review guide, linking a PR to a chat thread, label and reviewer pickers, multiple git hosts, GitHub Enterprise.
 - Per-file "viewed" tracking, auto-merge, revert, branch updates.
 - Filters beyond: state (open / closed / merged), involvement (mine / reviewing / all), draft.
+- **Notifications.** No push or alerts for finished checks or new reviews in v1 (decided). Clients refresh on open, pull-to-refresh and after an action.
+- **Forks.** Not supported: creating a PR from a fork into an upstream repo. The author does not work from forks (decided).
 
 **Principle: minimal data.** Every response carries only the fields a screen draws. The list is a trimmed summary; the detail is fetched only when a PR is opened. No client re-derives anything the server can send (the usage and tool-call work in `docs/plan/orchestration.md` and the clients audit set this rule): status wording, check rollups and merge-readiness are computed once on the server.
 
@@ -43,7 +45,7 @@ Reference: `/Users/adelodunpeter/Developer/Projects/t3code` has a much larger PR
 ### 2.1 The GitHub service
 
 New `internal/providers/github/pulls.go` (client) and `internal/services/pull_requests.go` (service). The service owns:
-- **Repo resolution.** A project's PR repo comes from its git remote (`origin`), parsed to `owner/repo`; only `github.com` remotes resolve, anything else returns a clear "not a GitHub repository" error. To verify before building: how `GitService` exposes remotes, and how worktrees map to the same repo.
+- **Repo resolution.** A project's PR repo is its `origin` remote, parsed to `owner/repo` (decided: `origin` only, no `base_repo` argument). Only `github.com` remotes resolve; anything else returns a clear "not a GitHub repository" error. A worktree shares its repo's remote, so it resolves the same way. To verify before building: how `GitService` exposes remotes.
 - **Token loading at call time.** Read from the credential file per call; never cached in a package var, never returned to a client, never logged. All of this is the existing rule from the orchestration plan §Phase 7.
 - **One HTTP client** with a timeout, `User-Agent`, and `Accept: application/vnd.github+json` / `X-GitHub-Api-Version` pinned.
 - **Error mapping.** 401 → "token rejected, reconnect in Settings". 403 with `x-ratelimit-remaining: 0` → "rate limited until <time>". 403 otherwise → missing scope, naming the scope. 404 → not found *or* no access (GitHub deliberately returns 404 for private repos you cannot see; the message must say both). 422 → surface GitHub's own validation text.
@@ -52,6 +54,7 @@ New `internal/providers/github/pulls.go` (client) and `internal/services/pull_re
 
 REST would need a request for the PR, one for combined status, one for check runs, one for reviews, and one for mergeability. **Use GraphQL for reads** so the list is one request and the detail is one request:
 
+- **"Mine" and "Review requested" span every repo**, so they use GitHub `search` (`author:@me is:pr`, `review-requested:@me is:pr`), which is the most expensive list query. Mitigations: cache by query for 30s, request only the trimmed fields, page at 30, and surface a rate-limit message rather than retrying. A classic PAT needs `repo` (or a fine-grained token with access to the repos in question) for private repos to appear.
 - **List** (`pullRequests`): per row only `number, title, state, isDraft, author.login, updatedAt, headRefName, baseRefName, reviewDecision, checks rollup state, additions, deletions, changedFiles`. Authored-by-me and review-requested are two `search` queries; the repo's open list is one `repository.pullRequests` query. No bodies, no files, no comments in the list.
 - **Detail** (`pullRequest(number)`): the above plus `body`, `mergeable`, `mergeStateStatus`, merge methods the repo allows, `headRefOid` (needed for safe merge, below), the check runs (name, status, conclusion, url), the latest review per reviewer, and the last N issue comments (default 30, cursor for more). Files are **not** in the detail query; see 2.4.
 
@@ -91,6 +94,9 @@ Mutations are simple and REST has the clearest error semantics:
 
 ```
 GET  /api/pull-requests?scope=mine|review|repo&state=open|closed|merged&project_id=&draft=
+     scope=mine    PRs I authored, across ALL my repos (GitHub search, not limited to registered projects)
+     scope=review  PRs where my review is requested, across all my repos
+     scope=repo    open PRs of one registered project (requires project_id)
 GET  /api/pull-requests/:owner/:repo/:number            detail
 GET  /api/pull-requests/:owner/:repo/:number/files      file list
 GET  /api/pull-requests/:owner/:repo/:number/files/*path   one file's diff
@@ -122,7 +128,7 @@ Typed methods in the console kernel, calling the **same service** as the routes.
 ```js
 console.pr.list({ scope, state, project_id?, owner?, repo? })      // read
 console.pr.read({ owner, repo, number })                           // read: checks, review state, mergeability, comments
-console.pr.create({ owner, repo, head, base, title, body, draft }) // write
+console.pr.create({ owner?, repo?, head, base, title, body, draft? }) // write; draft defaults to TRUE
 console.pr.update({ owner, repo, number, title?, body?, base? })   // write
 console.pr.comment({ owner, repo, number, body })                  // write
 console.pr.merge({ owner, repo, number, method, expected_head? })  // write, gated
@@ -130,7 +136,8 @@ console.pr.close / reopen / ready({ owner, repo, number })         // write
 ```
 
 Rules:
-- `owner`/`repo` default from the session's project when omitted, so the common call is `console.pr.create({head, base, title, body})`.
+- `owner`/`repo` default from the session's project (its `origin`) when omitted, so the common call is `console.pr.create({head, base, title, body})`.
+- **Agent-created PRs are drafts by default** (decided). Pass `draft: false` to open one ready for review. A human flips a draft ready with `console.pr.ready` or the UI's Ready for review button. The desktop and Android create dialogs default the draft toggle on too.
 - `merge` requires the head SHA from a prior `read` (`expected_head`); omitted, the server reads it and merges only that exact commit, then reports the SHA it merged. It is never the default path and never a side effect of another call.
 - Results are minimal and carry the server-computed `merge_state` / `merge_blocker`, so the model is told *why* a merge cannot proceed rather than retrying.
 - The token never appears in any result; `RedactSecrets` stays on the output path.
@@ -178,7 +185,7 @@ Same capability as desktop, native to the platform; this is not a stripped-down 
 
 ## 7. Phases
 
-1. **Server service + read path.** Repo resolution, GraphQL list and detail, error mapping, cache, proto + fixtures, `GET` routes. *Verification:* `go test ./tests/api/ -run TestPullRequests -v` against an `httptest` GitHub (`APIBase` swap): list/detail mapping, `UNKNOWN` mergeability retry, rate-limit and 404 messages, trimmed fields only.
+1. **Server service + read path.** Repo resolution, GraphQL list and detail, error mapping, cache, proto + fixtures, `GET` routes. *Verification:* `go test ./tests/api/ -run TestPullRequests -v` against an `httptest` GitHub (`APIBase` swap): list/detail mapping, `mine` / `review` scopes using search across repos, `UNKNOWN` mergeability retry, rate-limit and 404 messages, trimmed fields only.
 2. **Server write path.** Create, update, state changes, ready/draft, comment, merge with head-SHA guard. *Verification:* same package: 409 on SHA mismatch is refused, 405 surfaces GitHub's message, disallowed merge method rejected, token never in any response body or log.
 3. **Agent methods.** `console.pr.*` over the service, `TierWrite` gating, `SKILL.md`. *Verification:* `go test ./internal/services/console/ -run TestConsolePR -v`: defaults from project, merge requires/uses head SHA, result carries `merge_blocker`.
 4. **Desktop.** List, detail, files, comments, actions, create, not-connected state. *Verification:* `cd apps/desktop && cargo test -p console-core pull_requests` for the DTO/fixture decode; the UI is checked by running the app against a real PR.
@@ -189,12 +196,18 @@ Phases 1–3 are server-only and shippable on their own: the agent can create an
 
 ---
 
-## 8. Open Questions
+## 8. Decisions
 
-- **Repo resolution for worktrees and forks.** A worktree shares its repo's remote, so it resolves the same way; a fork's `origin` is the fork while the PR targets `upstream`. Decide whether `console.pr.create` needs a `base_repo` argument or whether v1 assumes `origin`.
-- **Notifications.** Should "a check finished" or "someone reviewed" notify? It needs the live stream or polling; out of v1, but it shapes whether the server keeps per-PR state.
-- **Which PRs appear in "Mine".** Across all your repos (needs the search API and a broad scope) or only repos that are registered projects. Recommendation: registered projects plus an explicit "all my PRs" segment, since an unscoped search is the most expensive query.
-- **Draft-PR creation default.** Whether an agent-created PR is a draft by default. Recommendation: yes. It is the safer default and a human flips it ready.
+All four earlier open questions are settled.
+
+- **Repo resolution: `origin` only.** `console.pr.create` assumes the `origin` remote and takes no `base_repo`. The author does not work from forks; revisit only if that changes.
+- **"Mine" means all of the user's repos**, not just registered projects. It is the search API (see 2.2), so it is cached and trimmed. "Review requested" works the same way. The repo-scoped list stays limited to registered projects.
+- **Agent-created PRs default to draft.** Safer default; a human or `console.pr.ready` flips it. Both UIs default the toggle on.
+- **No notifications in v1.** No push, polling or per-PR server state. This also means no live check updates; the feature is read, check and merge on demand.
+
+Still open, not blocking v1:
+
+- Whether `console.pr.merge` should refuse when the PR is a draft with a clear message, or just surface GitHub's own error. Recommendation: refuse early with the `merge_blocker` text.
 
 ---
 
