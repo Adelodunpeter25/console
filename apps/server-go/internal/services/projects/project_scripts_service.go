@@ -1,7 +1,7 @@
 // Managed script runs: one child shell
 // per run in the project's own process group, output ring-buffered to
 // 256KB, subscriber fan-out, SIGTERM-to-group stop.
-package services
+package projects
 
 import (
 	"fmt"
@@ -14,7 +14,11 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const scriptMaxOutput = 256 * 1024
@@ -92,10 +96,6 @@ func capOutput(s string) string {
 	return s
 }
 
-func nowISO() string {
-	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
-}
-
 // BuildScriptEnv strips daemon-owned env vars so project dev servers that
 // honor $PORT don't inherit the console daemon's port.
 func BuildScriptEnv() []string {
@@ -113,12 +113,12 @@ func BuildScriptEnv() []string {
 	// Scripts that shell out to `gh` authenticate with the stored PAT, same
 	// as agent bash runs — no interactive login on a headless box. The user
 	// bin dir rides along so a server-installed `gh` resolves too.
-	return github.AppendToEnv(EnsureUserBinDir(out))
+	return github.AppendToEnv(integrations.EnsureUserBinDir(out))
 }
 
 type ProjectScriptsService struct {
 	projects *ProjectService
-	ports    *PortRegistry
+	ports    *terminal.PortRegistry
 
 	mu   sync.Mutex
 	runs map[string]*managedRun
@@ -130,7 +130,7 @@ type ProjectScriptsService struct {
 	}
 }
 
-func NewProjectScriptsService(projects *ProjectService, ports *PortRegistry) *ProjectScriptsService {
+func NewProjectScriptsService(projects *ProjectService, ports *terminal.PortRegistry) *ProjectScriptsService {
 	return &ProjectScriptsService{
 		projects: projects,
 		ports:    ports,
@@ -157,7 +157,7 @@ func resolveScriptRoot(projectPath, cwd string) string {
 	if want == canonicalPath(projectPath) {
 		return projectPath
 	}
-	infos, err := NewWorktreeService().WorktreeList(projectPath)
+	infos, err := git.NewWorktreeService().WorktreeList(projectPath)
 	if err != nil {
 		return projectPath
 	}
@@ -285,9 +285,9 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 
 	run := &managedRun{
 		ScriptRun: types.ScriptRun{
-			RunID: randomID(), ProjectID: projectID, ScriptID: scriptID,
+			RunID: utils.RandomID(), ProjectID: projectID, ScriptID: scriptID,
 			Label: script.Label, Persistent: script.Persistent,
-			Status: "running", StartedAt: nowISO(),
+			Status: "running", StartedAt: utils.NowISO(),
 		},
 		root:        root,
 		process:     cmd,
@@ -304,7 +304,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 	var observe func(text string)
 	var clearPorts func()
 	if s.ports != nil {
-		owner := PortOwner{Kind: "job", ID: run.RunID}
+		owner := terminal.PortOwner{Kind: "job", ID: run.RunID}
 		projectID := run.ProjectID
 		observe = func(text string) {
 			s.ports.ObserveOutput(owner, text, projectID)
@@ -329,7 +329,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 				code = exitErr.ExitCode()
 			}
 			run.ExitCode = &code
-			ended := nowISO()
+			ended := utils.NowISO()
 			run.EndedAt = &ended
 			if code == 0 {
 				run.Status = "succeeded"
@@ -352,11 +352,11 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 
 func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, stream string, observe func(string)) {
 	buf := make([]byte, 32*1024)
-	decoder := newUTF8Decoder()
+	decoder := terminal.NewUTF8Decoder()
 	for {
 		n, err := file.Read(buf)
 		if n > 0 {
-			text := decoder.decode(buf[:n])
+			text := decoder.Decode(buf[:n])
 			run.appendOutput(stream, text)
 			run.publish(types.ScriptRunEvent{Type: "output", Stream: stream, Text: text})
 			if observe != nil {
@@ -429,7 +429,7 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 	sig := "SIGTERM"
 	run.Signal = &sig
 	run.Status = "stopped"
-	ended := nowISO()
+	ended := utils.NowISO()
 	run.EndedAt = &ended
 	run.mu.Unlock()
 
@@ -438,7 +438,7 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 	run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 	run.mu.Unlock()
 	if s.ports != nil {
-		s.ports.RemoveOwner(PortOwner{Kind: "job", ID: runID})
+		s.ports.RemoveOwner(terminal.PortOwner{Kind: "job", ID: runID})
 	}
 	return true
 }

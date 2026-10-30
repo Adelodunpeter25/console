@@ -1,5 +1,5 @@
 // Filesystem operations and preview gating rules.
-package services
+package fs
 
 import (
 	"bytes"
@@ -27,6 +27,14 @@ var manager *fff.Manager
 
 // SetFffManager wires the fff index manager into the fs service.
 func SetFffManager(m *fff.Manager) { manager = m }
+
+// PrewarmFff starts the file-search index scan for cwd when fff is wired.
+// nil manager means fff is disabled; callers treat that as a no-op.
+func PrewarmFff(cwd string) {
+	if manager != nil {
+		manager.Prewarm(cwd)
+	}
+}
 
 // PreviewBlocked carries the structured code/status the /file routes emit.
 type PreviewBlocked struct {

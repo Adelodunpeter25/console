@@ -34,7 +34,7 @@ type SettingsService struct{}
 func NewSettingsService() *SettingsService { return &SettingsService{} }
 
 func settingsPath() string {
-	if p := osGetenv("CONSOLE_SETTINGS_PATH"); p != "" {
+	if p := os.Getenv("CONSOLE_SETTINGS_PATH"); p != "" {
 		return p
 	}
 	return filepath.Join(utils.ConsoleStorageDir(), "settings.json")

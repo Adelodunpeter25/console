@@ -1,7 +1,7 @@
 // Localhost port discovery + reverse proxy: observe terminal
 // and job output for localhost URLs, probe liveness, allocate a proxy port
 // per entry (HTTP + WebSocket passthrough), reap dead entries.
-package services
+package terminal
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -82,7 +83,7 @@ func NewPortRegistry() *PortRegistry {
 }
 
 func rangeFromEnv(name string, fallback int) int {
-	v, err := strconv.Atoi(osGetenv(name))
+	v, err := strconv.Atoi(os.Getenv(name))
 	if err == nil && v >= 1024 && v <= 65535 {
 		return v
 	}

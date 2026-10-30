@@ -1,7 +1,7 @@
 // Background bash job manager: one child shell per job in
 // its own process group (tree-kill via negative pid), output ring-buffered
 // per stream, cursor-paginated reads, retention after completion.
-package services
+package terminal
 
 import (
 	"fmt"
@@ -10,6 +10,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 const (
@@ -69,7 +72,7 @@ type bashJobRecord struct {
 	timer                        *time.Timer
 	retentionTimer               *time.Timer
 	ownerSessionID               string
-	workManager                  *BackgroundWorkManager
+	workManager                  *background.Manager
 	// changed is closed and replaced whenever output arrives or the status
 	// moves, so any number of stream watchers can wait for the next change.
 	changed chan struct{}
@@ -79,7 +82,7 @@ type bashJobRecord struct {
 type BashJobManager struct {
 	mu   sync.Mutex
 	jobs map[string]*bashJobRecord
-	work *BackgroundWorkManager
+	work *background.Manager
 
 	// ports backs live dev-server detection:
 	// job output is scanned for localhost:PORT candidates, and the job's
@@ -92,7 +95,7 @@ func NewBashJobManager(ports *PortRegistry) *BashJobManager {
 	return &BashJobManager{jobs: make(map[string]*bashJobRecord), ports: ports}
 }
 
-func (m *BashJobManager) SetBackgroundWorkManager(work *BackgroundWorkManager) {
+func (m *BashJobManager) SetBackgroundWorkManager(work *background.Manager) {
 	m.mu.Lock()
 	m.work = work
 	m.mu.Unlock()
@@ -117,7 +120,7 @@ type StartBashJobOptions struct {
 	Env            []string
 	TimeoutMs      int
 	OwnerSessionID string
-	WorkManager    *BackgroundWorkManager
+	WorkManager    *background.Manager
 	ParentRunID    string
 	ParentCallID   string
 }
@@ -150,7 +153,7 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 	}
 	m.mu.Unlock()
 
-	jobID := "job_" + randomID()[:16]
+	jobID := "job_" + utils.RandomID()[:16]
 	cmd := exec.Command("sh", "-c", opts.Command)
 	cmd.Dir = opts.Cwd
 	cmd.Env = append(append([]string{}, opts.Env...), "CONSOLE_BASH_JOB_ID="+jobID)
@@ -184,7 +187,7 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 	rec := &bashJobRecord{
 		BashJobSnapshot: BashJobSnapshot{
 			JobID: jobID, Command: opts.Command, Cwd: opts.Cwd,
-			Status: BashJobRunning, StartedAt: nowISO(),
+			Status: BashJobRunning, StartedAt: utils.NowISO(),
 		},
 		cmd:            cmd,
 		ownerSessionID: ownerSessionID,
@@ -192,9 +195,9 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 		changed:        make(chan struct{}),
 	}
 	if opts.WorkManager != nil {
-		work, err := opts.WorkManager.Register(BackgroundWorkOptions{
+		work, err := opts.WorkManager.Register(background.Options{
 			SessionID: ownerSessionID, ParentRunID: opts.ParentRunID, ParentCallID: opts.ParentCallID,
-			Kind: BackgroundWorkShell, Metadata: map[string]string{"job_id": jobID, "command": opts.Command},
+			Kind: background.KindShell, Metadata: map[string]string{"job_id": jobID, "command": opts.Command},
 		})
 		if err != nil {
 			_ = cmd.Process.Kill()
@@ -300,7 +303,7 @@ func (m *BashJobManager) maybeFinish(rec *bashJobRecord) {
 	}
 	code := rec.rawExit
 	rec.ExitCode = &code
-	rec.FinishedAt = nowISO()
+	rec.FinishedAt = utils.NowISO()
 	if code == 0 {
 		rec.Status = BashJobExited
 	} else {
@@ -323,7 +326,7 @@ func (m *BashJobManager) expire(rec *bashJobRecord) {
 	}
 	rec.TimedOut = true
 	rec.Status = BashJobExpired
-	rec.FinishedAt = nowISO()
+	rec.FinishedAt = utils.NowISO()
 	pid := rec.cmd.Process.Pid
 	rec.signalLocked()
 	rec.mu.Unlock()
@@ -425,7 +428,7 @@ func (m *BashJobManager) Kill(jobID, ownerSessionID string) (BashJobSnapshot, er
 	}
 	rec.Status = BashJobKilled
 	rec.Aborted = true
-	rec.FinishedAt = nowISO()
+	rec.FinishedAt = utils.NowISO()
 	rec.signalLocked()
 	rec.mu.Unlock()
 
@@ -512,7 +515,7 @@ func (m *BashJobManager) killRecord(rec *bashJobRecord) {
 	jobID := rec.JobID
 	rec.Status = BashJobKilled
 	rec.Aborted = true
-	rec.FinishedAt = nowISO()
+	rec.FinishedAt = utils.NowISO()
 	rec.signalLocked()
 	rec.mu.Unlock()
 
@@ -539,16 +542,16 @@ func (m *BashJobManager) notifyBackgroundWork(rec *bashJobRecord) {
 		return
 	}
 	snap := rec.snapshot()
-	status := BackgroundWorkCompleted
+	status := background.StatusCompleted
 	failure := ""
 	if snap.Status == BashJobFailed {
-		status = BackgroundWorkFailed
+		status = background.StatusFailed
 		failure = fmt.Sprintf("Command exited with code %d", valueOrZero(snap.ExitCode))
 	} else if snap.Status == BashJobExpired {
-		status = BackgroundWorkTimedOut
+		status = background.StatusTimedOut
 		failure = "Command timed out"
 	} else if snap.Status == BashJobKilled {
-		status = BackgroundWorkCancelled
+		status = background.StatusCancelled
 		failure = "Command was cancelled"
 	}
 	_, _ = rec.workManager.Complete(rec.WorkID, rec.ownerSessionID, status,

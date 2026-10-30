@@ -9,7 +9,7 @@
 // works in every agent command, script, and terminal. No sudo anywhere —
 // Homebrew and ~/.local/bin are both user-writable. Other platforms answer
 // 400 with the download URL so the user can do it by hand.
-package services
+package integrations
 
 import (
 	"archive/tar"

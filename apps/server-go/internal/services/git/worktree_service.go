@@ -4,7 +4,7 @@
 //
 // Worktree code lives here, not in GitService (git_service.go), on purpose:
 // git stays status/diff/branches/checkout, worktrees stay in this service.
-package services
+package git
 
 import (
 	"errors"
@@ -62,7 +62,7 @@ func DefaultRoot() (string, error) {
 
 // isGitRepo reports whether dir is inside a git work tree.
 func isGitRepo(dir string) bool {
-	out, err := runGit(dir, "rev-parse", "--is-inside-work-tree")
+	out, err := RunGit(dir, "rev-parse", "--is-inside-work-tree")
 	return err == nil && strings.TrimSpace(out) == "true"
 }
 
@@ -75,15 +75,15 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error 
 	if !isGitRepo(repoDir) {
 		return ErrNotGitRepo
 	}
-	if _, err := runGit(repoDir, "rev-parse", "--verify", "HEAD"); err != nil {
+	if _, err := RunGit(repoDir, "rev-parse", "--verify", "HEAD"); err != nil {
 		return ErrUnbornHEAD
 	}
 	if base == "" {
 		base = resolveDefaultBranch(repoDir)
-	} else if _, err := runGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); err != nil {
+	} else if _, err := RunGit(repoDir, "rev-parse", "--verify", base+"^{commit}"); err != nil {
 		return fmt.Errorf("%w: base branch %q", ErrUnknownBaseBranch, base)
 	}
-	_, err := runGit(repoDir, "worktree", "add", "-b", branch, path, base)
+	_, err := RunGit(repoDir, "worktree", "add", "-b", branch, path, base)
 	if err != nil {
 		return err
 	}
@@ -103,11 +103,11 @@ func (s *WorktreeService) WorktreeAdd(repoDir, path, branch, base string) error 
 func resolveDefaultBranch(repoDir string) string {
 	// Try origin/HEAD first — git sets this on clone and it always points
 	// at the remote's default branch.
-	if out, err := runGit(repoDir, "rev-parse", "--verify", "origin/HEAD"); err == nil && strings.TrimSpace(out) != "" {
+	if out, err := RunGit(repoDir, "rev-parse", "--verify", "origin/HEAD"); err == nil && strings.TrimSpace(out) != "" {
 		return "origin/HEAD"
 	}
 	for _, candidate := range []string{"origin/main", "origin/master"} {
-		if out, err := runGit(repoDir, "rev-parse", "--verify", candidate); err == nil && strings.TrimSpace(out) != "" {
+		if out, err := RunGit(repoDir, "rev-parse", "--verify", candidate); err == nil && strings.TrimSpace(out) != "" {
 			return candidate
 		}
 	}
@@ -116,7 +116,7 @@ func resolveDefaultBranch(repoDir string) string {
 
 // WorktreeList parses `git worktree list --porcelain` for repoDir.
 func (s *WorktreeService) WorktreeList(repoDir string) ([]WorktreeInfo, error) {
-	out, err := runGit(repoDir, "worktree", "list", "--porcelain")
+	out, err := RunGit(repoDir, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (s *WorktreeService) WorktreeList(repoDir string) ([]WorktreeInfo, error) {
 // IsDirty reports whether the worktree at path has uncommitted changes.
 // Untracked files count — an agent's half-written work is still work.
 func (s *WorktreeService) IsDirty(path string) (bool, error) {
-	out, err := runGit(path, "status", "--porcelain=v1", "-u")
+	out, err := RunGit(path, "status", "--porcelain=v1", "-u")
 	if err != nil {
 		return false, err
 	}
@@ -175,7 +175,7 @@ func (s *WorktreeService) WorktreeRemove(repoDir, path, branch string, force boo
 		}
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		_, _ = runGit(repoDir, "worktree", "prune")
+		_, _ = RunGit(repoDir, "worktree", "prune")
 		_ = s.DeleteBranch(repoDir, branch, force)
 		return nil
 	}
@@ -192,11 +192,11 @@ func (s *WorktreeService) WorktreeRemove(repoDir, path, branch string, force boo
 	if force {
 		args = append(args, "--force")
 	}
-	if _, err := runGit(repoDir, args...); err != nil {
+	if _, err := RunGit(repoDir, args...); err != nil {
 		return err
 	}
 	_ = s.DeleteBranch(repoDir, branch, force)
-	_, _ = runGit(repoDir, "worktree", "prune")
+	_, _ = RunGit(repoDir, "worktree", "prune")
 	return nil
 }
 
@@ -239,14 +239,14 @@ func (s *WorktreeService) DeleteBranch(repoDir, branch string, force bool) error
 // WorktreePrune clears stale worktree metadata (e.g. after a crash left
 // a worktree dir behind without its admin files).
 func (s *WorktreeService) WorktreePrune(repoDir string) error {
-	_, err := runGit(repoDir, "worktree", "prune")
+	_, err := RunGit(repoDir, "worktree", "prune")
 	return err
 }
 
 // BranchOf returns the checked-out branch of the worktree at path,
 // or "" when detached.
 func (s *WorktreeService) BranchOf(path string) (string, error) {
-	out, err := runGit(path, "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := RunGit(path, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", err
 	}
@@ -342,6 +342,6 @@ func (s *WorktreeService) RemoveOrphan(root, path string, force bool) error {
 	if err := s.WorktreeRemove(repoDir, absPath, branch, force); err != nil {
 		return err
 	}
-	_, _ = runGit(repoDir, "worktree", "prune")
+	_, _ = RunGit(repoDir, "worktree", "prune")
 	return nil
 }

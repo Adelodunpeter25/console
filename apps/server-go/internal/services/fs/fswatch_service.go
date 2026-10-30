@@ -1,6 +1,6 @@
 // Recursive filesystem watcher with per-path debouncing, built on fsnotify (which
 // needs per-directory watch registration).
-package services
+package fs
 
 import (
 	"os"

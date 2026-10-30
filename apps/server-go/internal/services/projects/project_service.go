@@ -1,5 +1,5 @@
 // Project CRUD against the global DB.
-package services
+package projects
 
 import (
 	"os"

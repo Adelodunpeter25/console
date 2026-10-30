@@ -5,7 +5,7 @@
 //   - bounded queues with oldest-drop (8MB cap) so flooding programs can't OOM
 //   - pause/resume for send-buffer backpressure
 //   - cached base env, shell allowlist, concurrency cap, input size cap
-package services
+package terminal
 
 import (
 	"fmt"
@@ -18,7 +18,9 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	"github.com/creack/pty"
 )
 
@@ -377,7 +379,7 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	}
 
 	m.mu.Lock()
-	now := nowMillis()
+	now := utils.NowMillis()
 	recent := m.spawnTimes[:0]
 	for _, t := range m.spawnTimes {
 		if now-t < 60_000 {
@@ -419,7 +421,7 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 		rows = 24
 	}
 
-	id := randomID()
+	id := utils.RandomID()
 	cmd := exec.Command(shell)
 	cmd.Dir = params.Cwd
 	base := baseEnv()
@@ -430,7 +432,7 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	// takes effect on the next terminal without a server restart. Lets `gh`
 	// in interactive shells use the stored PAT instead of a browser login,
 	// and resolve a server-installed `gh` (~/.local/bin) under a thin PATH.
-	env = github.AppendToEnv(EnsureUserBinDir(env))
+	env = github.AppendToEnv(integrations.EnsureUserBinDir(env))
 	cmd.Env = env
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})

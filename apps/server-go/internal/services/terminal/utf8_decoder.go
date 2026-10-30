@@ -1,4 +1,4 @@
-package services
+package terminal
 
 import "unicode/utf8"
 

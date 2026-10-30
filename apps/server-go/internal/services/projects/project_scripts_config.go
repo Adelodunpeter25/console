@@ -1,5 +1,5 @@
 // console.toml script parsing.
-package services
+package projects
 
 import (
 	"fmt"

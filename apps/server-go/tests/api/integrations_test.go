@@ -22,6 +22,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	svcintegrations "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 )
 
 // newIntegrationsApp builds a Fiber app with only the integration routes.
@@ -199,15 +200,15 @@ func withIsolatedBox(t *testing.T, srv *httptest.Server) string {
 	home := t.TempDir()
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("HOME", home)
-	prevOS := services.GhInstallOS
-	services.GhInstallOS = "linux"
-	prevAPI, prevDL := services.GhReleaseAPIBase, services.GhReleaseDownloadBase
-	services.GhReleaseAPIBase = srv.URL
-	services.GhReleaseDownloadBase = srv.URL + "/download"
+	prevOS := svcintegrations.GhInstallOS
+	svcintegrations.GhInstallOS = "linux"
+	prevAPI, prevDL := svcintegrations.GhReleaseAPIBase, svcintegrations.GhReleaseDownloadBase
+	svcintegrations.GhReleaseAPIBase = srv.URL
+	svcintegrations.GhReleaseDownloadBase = srv.URL + "/download"
 	t.Cleanup(func() {
-		services.GhInstallOS = prevOS
-		services.GhReleaseAPIBase = prevAPI
-		services.GhReleaseDownloadBase = prevDL
+		svcintegrations.GhInstallOS = prevOS
+		svcintegrations.GhReleaseAPIBase = prevAPI
+		svcintegrations.GhReleaseDownloadBase = prevDL
 	})
 	return home
 }
@@ -255,12 +256,12 @@ func TestIntegrationsGhInstall(t *testing.T) {
 }
 
 func TestIntegrationsGhInstallBrewMissing(t *testing.T) {
-	prevOS, prevBrew := services.GhInstallOS, services.BrewBin
-	services.GhInstallOS = "darwin"
-	services.BrewBin = filepath.Join(t.TempDir(), "no-such-brew")
+	prevOS, prevBrew := svcintegrations.GhInstallOS, svcintegrations.BrewBin
+	svcintegrations.GhInstallOS = "darwin"
+	svcintegrations.BrewBin = filepath.Join(t.TempDir(), "no-such-brew")
 	t.Cleanup(func() {
-		services.GhInstallOS = prevOS
-		services.BrewBin = prevBrew
+		svcintegrations.GhInstallOS = prevOS
+		svcintegrations.BrewBin = prevBrew
 	})
 	t.Setenv("PATH", t.TempDir())
 
@@ -296,11 +297,11 @@ func TestIntegrationsGhInstallSkipsWhenPresent(t *testing.T) {
 	// A resolving `gh` short-circuits before any network: point the bases at
 	// an unroutable address to prove nothing is fetched.
 	fakeGh(t, `echo "gh version 1.2.3 (test)"`)
-	services.GhReleaseAPIBase = "http://127.0.0.1:1"
-	services.GhReleaseDownloadBase = "http://127.0.0.1:1"
+	svcintegrations.GhReleaseAPIBase = "http://127.0.0.1:1"
+	svcintegrations.GhReleaseDownloadBase = "http://127.0.0.1:1"
 	t.Cleanup(func() {
-		services.GhReleaseAPIBase = "https://api.github.com"
-		services.GhReleaseDownloadBase = "https://github.com/cli/cli/releases/download"
+		svcintegrations.GhReleaseAPIBase = "https://api.github.com"
+		svcintegrations.GhReleaseDownloadBase = "https://github.com/cli/cli/releases/download"
 	})
 
 	code, out := postInstall(t, newIntegrationsApp())

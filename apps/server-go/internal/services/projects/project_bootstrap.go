@@ -11,7 +11,7 @@
 // Registering the resulting project row is deliberately NOT done here. The
 // caller composes this with ProjectService.Create, so a failed bootstrap
 // never leaves an orphaned DB row pointing at a missing directory.
-package services
+package projects
 
 import (
 	"errors"
@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
 var (
@@ -69,7 +70,7 @@ func (s *ProjectBootstrapService) InitBlank(parentDir, name string) (string, err
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	if _, err := runGit(dir, "init", "-b", "main"); err != nil {
+	if _, err := git.RunGit(dir, "init", "-b", "main"); err != nil {
 		// Never leave a plain directory behind claiming to be a project.
 		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("could not initialize git repository: %w", err)
@@ -114,7 +115,7 @@ func (s *ProjectBootstrapService) Clone(url, parentDir, name string) (string, er
 		return "", ErrGitHubNotConnected
 	}
 
-	if _, err := runGit(parent, "clone", "--progress", url, dir); err != nil {
+	if _, err := git.RunGit(parent, "clone", "--progress", url, dir); err != nil {
 		// git cleans up after a failed clone itself in most cases, but a
 		// partial directory is possible (e.g. the network dropped mid-fetch).
 		// Removing it keeps the guard above honest on retry.

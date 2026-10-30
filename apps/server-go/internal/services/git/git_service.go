@@ -1,6 +1,6 @@
 // Git operations via the git CLI (status, diff, branches,
 // checkout).
-package services
+package git
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ func NewGitService() *GitService { return &GitService{inflight: make(map[string]
 // runGit runs a git command in dir and returns its stdout. On failure the
 // error carries git's stderr — without it a caller only sees "exit status
 // 128/255", which tells neither the user nor the retry logic what went wrong.
-func runGit(dir string, args ...string) (string, error) {
+func RunGit(dir string, args ...string) (string, error) {
 	return runGitCtx(context.Background(), dir, args...)
 }
 
@@ -78,7 +78,7 @@ func (s *GitService) GetGitStatus(repoPath string) types.GitStatusSummary {
 }
 
 func (s *GitService) computeGitStatus(repoPath string) types.GitStatusSummary {
-	statusOut, err := runGit(repoPath, "--no-optional-locks", "status", "--porcelain=v1", "--branch", "-u")
+	statusOut, err := RunGit(repoPath, "--no-optional-locks", "status", "--porcelain=v1", "--branch", "-u")
 	if err != nil {
 		// Not a git repository or git failed — clean empty summary.
 		return types.GitStatusSummary{Branch: "", Clean: true, Files: []types.GitFileEntry{}}
@@ -137,7 +137,7 @@ func (s *GitService) computeGitStatus(repoPath string) types.GitStatusSummary {
 // no HEAD, so the map is simply empty there.
 func (s *GitService) numstatMap(repoPath string) map[string][2]int64 {
 	m := make(map[string][2]int64)
-	if out, err := runGit(repoPath, "--no-optional-locks", "diff", "HEAD", "--numstat"); err == nil {
+	if out, err := RunGit(repoPath, "--no-optional-locks", "diff", "HEAD", "--numstat"); err == nil {
 		parseNumstat(out, m)
 	}
 	return m
@@ -191,7 +191,7 @@ func (s *GitService) GetDiff(repoPath string, filePath string) (string, error) {
 	if filePath != "" {
 		abs, _ := filepath.Abs(filePath)
 		if repoPath == "" {
-			if root, err := runGit(filepath.Dir(abs), "rev-parse", "--show-toplevel"); err == nil {
+			if root, err := RunGit(filepath.Dir(abs), "rev-parse", "--show-toplevel"); err == nil {
 				cwd = strings.TrimSpace(root)
 			} else {
 				cwd = filepath.Dir(abs)
@@ -199,17 +199,17 @@ func (s *GitService) GetDiff(repoPath string, filePath string) (string, error) {
 		}
 		target = " -- \"" + abs + "\""
 	}
-	if out, err := runGit(cwd, "diff", "HEAD"+strings.TrimPrefix(target, " --")); err == nil && out != "" {
+	if out, err := RunGit(cwd, "diff", "HEAD"+strings.TrimPrefix(target, " --")); err == nil && out != "" {
 		return out, nil
 	}
-	out, err := runGit(cwd, "diff")
+	out, err := RunGit(cwd, "diff")
 	if err != nil {
 		return "", err
 	}
 	if out == "" && filePath != "" {
 		// Untracked file: synthesize a whole-file diff.
-		if status, err := runGit(cwd, "status", "--porcelain", "--", filePath); err == nil && strings.TrimSpace(status) != "" {
-			if noIndex, err := runGit(cwd, "diff", "--no-index", "/dev/null", filePath); err == nil {
+		if status, err := RunGit(cwd, "status", "--porcelain", "--", filePath); err == nil && strings.TrimSpace(status) != "" {
+			if noIndex, err := RunGit(cwd, "diff", "--no-index", "/dev/null", filePath); err == nil {
 				return noIndex, nil
 			}
 		}
@@ -219,11 +219,11 @@ func (s *GitService) GetDiff(repoPath string, filePath string) (string, error) {
 
 // ListBranches lists local branches with the checked-out one marked.
 func (s *GitService) ListBranches(repoPath string) types.GitBranchesResponse {
-	if isRepo, err := runGit(repoPath, "rev-parse", "--is-inside-work-tree"); err != nil || strings.TrimSpace(isRepo) != "true" {
+	if isRepo, err := RunGit(repoPath, "rev-parse", "--is-inside-work-tree"); err != nil || strings.TrimSpace(isRepo) != "true" {
 		return types.GitBranchesResponse{Branches: []types.GitBranchInfo{}, IsGitRepository: false}
 	}
-	out, _ := runGit(repoPath, "branch", "--format=%(refname:short)")
-	currentOut, _ := runGit(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	out, _ := RunGit(repoPath, "branch", "--format=%(refname:short)")
+	currentOut, _ := RunGit(repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	current := strings.TrimSpace(currentOut)
 	branches := make([]types.GitBranchInfo, 0)
 	for _, name := range strings.Split(out, "\n") {
@@ -237,6 +237,6 @@ func (s *GitService) ListBranches(repoPath string) types.GitBranchesResponse {
 }
 
 func (s *GitService) CheckoutBranch(repoPath, branch string) error {
-	_, err := runGit(repoPath, "switch", branch)
+	_, err := RunGit(repoPath, "switch", branch)
 	return err
 }

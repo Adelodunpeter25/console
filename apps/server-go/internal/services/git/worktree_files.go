@@ -11,7 +11,7 @@
 // worktree creation proceeds exactly as if there were nothing to carry.
 // Never log file contents — entries like key.properties hold passwords,
 // so logs carry counts only.
-package services
+package git
 
 import (
 	"context"

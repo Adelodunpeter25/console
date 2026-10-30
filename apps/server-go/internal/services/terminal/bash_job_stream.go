@@ -1,6 +1,6 @@
 // Live output for a background bash job: replaces client polling with a push
 // of each new chunk as the job writes it.
-package services
+package terminal
 
 import (
 	"time"

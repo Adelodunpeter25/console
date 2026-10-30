@@ -2,7 +2,7 @@
 // (e.g. "quiet-austin"). Generated once at worktree creation time and never
 // renamed — decoupled from the session title so branch/worktree naming
 // never races auto-titling and never needs a risky git-branch rename.
-package services
+package git
 
 import (
 	"math/rand"

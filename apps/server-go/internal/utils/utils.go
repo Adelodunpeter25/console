@@ -22,3 +22,9 @@ func RandomID() string {
 		hex.EncodeToString(b[6:8]), hex.EncodeToString(b[8:10]),
 		hex.EncodeToString(b[10:16]))
 }
+
+// NowISO returns the UTC timestamp format used for records that carry both
+// date and time. The fractional second keeps adjacent records sortable.
+func NowISO() string {
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
+}

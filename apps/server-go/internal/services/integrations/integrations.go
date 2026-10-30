@@ -7,7 +7,7 @@
 // version probe has a hard timeout so a hung binary cannot wedge the
 // request. Plain data in, plain data out — the proto conversion lives with
 // the other wire converters in internal/routes.
-package services
+package integrations
 
 import (
 	"context"

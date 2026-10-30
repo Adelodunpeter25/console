@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -78,10 +79,10 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 		_ = s.wt.WorktreeRemove(wtRepo, wtPath, wtBranch, true)
 		return types.SessionHeader{}, err
 	}
-	if err == nil && header.Cwd != "" && manager != nil {
+	if err == nil && header.Cwd != "" {
 		// A new session means its project was just opened: start the
 		// file-search index scan now so the first @-mention/grep is warm.
-		manager.Prewarm(header.Cwd)
+		fs.PrewarmFff(header.Cwd)
 	}
 	return header, err
 }
@@ -132,9 +133,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		_ = s.wt.WorktreeRemove(repoDir, wtPath, branch, true)
 		return types.SessionHeader{}, err
 	}
-	if manager != nil {
-		manager.Prewarm(wtPath)
-	}
+	fs.PrewarmFff(wtPath)
 	updated, err := s.inner.Header(sessionID)
 	if err != nil {
 		return types.SessionHeader{}, err
@@ -182,9 +181,9 @@ func (s *SessionService) ListFiltered(f session.ListFilter) ([]types.SessionHead
 
 func (s *SessionService) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	loaded, err := s.inner.Load(sessionID, limit, before)
-	if err == nil && loaded != nil && loaded.Header.Cwd != "" && manager != nil {
+	if err == nil && loaded != nil && loaded.Header.Cwd != "" {
 		// Opening an existing session re-opens its project: same warm-up.
-		manager.Prewarm(loaded.Header.Cwd)
+		fs.PrewarmFff(loaded.Header.Cwd)
 	}
 	return loaded, err
 }
@@ -264,8 +263,8 @@ func (s *SessionService) Fork(sourceID, messageID string) (types.SessionHeader, 
 	if err != nil {
 		return types.SessionHeader{}, err
 	}
-	if header.Cwd != "" && manager != nil {
-		manager.Prewarm(header.Cwd)
+	if header.Cwd != "" {
+		fs.PrewarmFff(header.Cwd)
 	}
 	return header, nil
 }
@@ -283,9 +282,9 @@ func (s *SessionService) UpdateModel(sessionID, modelID, provider string) error 
 // an explicit null (true with nil — drop to a scratchpad session).
 func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string, projectGiven bool) error {
 	err := s.inner.UpdateCwd(sessionID, cwd, projectID, projectGiven)
-	if err == nil && cwd != "" && manager != nil {
+	if err == nil && cwd != "" {
 		// Session moved to another project root: warm that index too.
-		manager.Prewarm(cwd)
+		fs.PrewarmFff(cwd)
 	}
 	return err
 }

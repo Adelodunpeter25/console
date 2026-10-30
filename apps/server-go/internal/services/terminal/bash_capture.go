@@ -1,7 +1,7 @@
 // Synchronous subprocess runner (bash tool's non-background path). Captures stdout/stderr
 // with a hard byte cap, keeps draining past the cap so the child still
 // exits normally, and tree-kills on timeout or context cancellation.
-package services
+package terminal
 
 import (
 	"context"
