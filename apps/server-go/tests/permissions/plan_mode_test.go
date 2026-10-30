@@ -174,8 +174,13 @@ func TestWritePlanRefusesSymlinkTricks(t *testing.T) {
 
 func TestWritePlanLimitsAndInputs(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := tools.SavePlan(dir, "big", strings.Repeat("x", tools.MaxPlanBytes+1)); err == nil {
-		t.Fatal("an oversized plan must be refused")
+	// There is no size cap: a long plan is written whole.
+	long := strings.Repeat("a line of the plan\n", 100_000)
+	if _, err := tools.SavePlan(dir, "long", long); err != nil {
+		t.Fatalf("a long plan must be accepted: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, ".console", "plans", "long.md")); string(got) != long {
+		t.Fatal("a long plan was truncated")
 	}
 	if _, err := tools.SavePlan(dir, "empty", "   "); err == nil {
 		t.Fatal("an empty plan must be refused")

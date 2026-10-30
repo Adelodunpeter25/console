@@ -6,7 +6,7 @@
 //   - the model supplies a short name, and the tool builds the filename itself;
 //   - the folder carries its own .gitignore ("*"), so plans never reach git and
 //     no tracked file is edited to make that so;
-//   - content is size-capped and the destination must not escape through a symlink.
+//   - the destination must not escape through a symlink.
 package tools
 
 import (
@@ -20,9 +20,6 @@ import (
 
 // PlanDir is where plans live, relative to the session's working directory.
 const PlanDir = ".console/plans"
-
-// MaxPlanBytes caps one plan file.
-const MaxPlanBytes = 256 * 1024
 
 var planNameRe = regexp.MustCompile(`[^a-z0-9]+`)
 
@@ -82,9 +79,6 @@ func SavePlan(cwd, name, content string) (string, error) {
 	}
 	if strings.TrimSpace(content) == "" {
 		return "", NewToolError("content is empty; write the plan text")
-	}
-	if len(content) > MaxPlanBytes {
-		return "", NewToolError("plan is %d bytes; the limit is %d. Split it into several plans", len(content), MaxPlanBytes)
 	}
 	file, err := PlanFileName(name)
 	if err != nil {

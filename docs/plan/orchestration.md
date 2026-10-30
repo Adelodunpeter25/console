@@ -24,7 +24,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 **Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`, and plan mode is now genuinely read-only, so the ceiling means what it says. A run cannot abort itself or change its own approval mode.
 
-**Plan mode (enforced):** write and exec tools are denied, never prompted. Reads, `browser` and `memory` (now read tier) still run. `writePlan` is the one exception: it writes `.console/plans/<name>.md` only, builds the filename itself, refuses symlinks, caps size, and the folder ignores itself with its own `.gitignore`. Subagents inherit the mode. Known gaps, accepted: `browser` can still submit forms, and MCP tools are tiered by naming convention.
+**Plan mode (enforced):** write and exec tools are denied, never prompted. Reads, `browser` and `memory` (now read tier) still run. `writePlan` is the one exception: it writes `.console/plans/<name>.md` only, builds the filename itself, refuses symlinks, and the folder ignores itself with its own `.gitignore`. Subagents inherit the mode. Known gaps, accepted: `browser` can still submit forms, and MCP tools are tiered by naming convention.
 
 **Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
 
