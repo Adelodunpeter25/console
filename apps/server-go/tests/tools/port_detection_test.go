@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 func TestBashJobOutputRegistersPort(t *testing.T) {
@@ -23,8 +23,8 @@ func TestBashJobOutputRegistersPort(t *testing.T) {
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	registry := services.NewPortRegistry()
-	jobs := services.NewBashJobManager(registry)
+	registry := terminalsvc.NewPortRegistry()
+	jobs := terminalsvc.NewBashJobManager(registry)
 	bash := tools.NewBashTool(jobs, "sess1")
 
 	// The job must still be running when detection fires: maybeFinish
@@ -50,9 +50,9 @@ func TestPortRegistryRemovesOwnerOnExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	owner := services.PortOwner{Kind: "job", ID: "job_test"}
+	owner := terminalsvc.PortOwner{Kind: "job", ID: "job_test"}
 
-	registry := services.NewPortRegistry()
+	registry := terminalsvc.NewPortRegistry()
 	registry.ObserveOutput(owner, fmt.Sprintf("localhost:%d", port), "")
 	if !waitForPort(registry, port, 2*time.Second) {
 		ln.Close()
@@ -69,7 +69,7 @@ func TestPortRegistryRemovesOwnerOnExit(t *testing.T) {
 	}
 }
 
-func waitForPort(registry *services.PortRegistry, port int, timeout time.Duration) bool {
+func waitForPort(registry *terminalsvc.PortRegistry, port int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		for _, entry := range registry.List("localhost", "") {

@@ -1,7 +1,7 @@
 package run
 
 import (
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -9,7 +9,7 @@ import (
 // folder, so a worktree chat's agent reads console.toml from and runs scripts
 // in its worktree rather than the project's main checkout.
 type sessionScopedScripts struct {
-	svc *services.ProjectScriptsService
+	svc *projectssvc.ProjectScriptsService
 	cwd string
 }
 

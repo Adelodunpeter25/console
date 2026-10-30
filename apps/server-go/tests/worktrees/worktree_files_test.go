@@ -6,11 +6,10 @@
 package tests
 
 import (
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func writeRepoFile(t *testing.T, dir, name, content string, perm os.FileMode) {
@@ -58,7 +57,7 @@ func assertAbsent(t *testing.T, path string) {
 }
 
 func TestWorktreeAddCarriesGitignoredMatches(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".gitignore", ".env*\nconfig/*.json\n*.keystore\nkeys/\n", 0o644)
 	writeRepoFile(t, repo, ".worktreeinclude", "# local files carried into every worktree\n.env*\nconfig/*.json\n!config/*.example.json\nlink: keys/dev.keystore\nlink: keys/missing.keystore\n", 0o644)
@@ -116,7 +115,7 @@ func fiMode(fi os.FileInfo) os.FileMode {
 }
 
 func TestWorktreeAddLinksWholeDir(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".gitignore", "*.keystore\nkeystore\n", 0o644)
 	writeRepoFile(t, repo, ".worktreeinclude", "link: keystore/\n", 0o644)
@@ -138,7 +137,7 @@ func TestWorktreeAddLinksWholeDir(t *testing.T) {
 }
 
 func TestWorktreeAddDefaultsToEnv(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".gitignore", ".env*\nlocal.txt\n", 0o644)
 	commitAll(t, repo, "base")
@@ -159,7 +158,7 @@ func TestWorktreeAddDefaultsToEnv(t *testing.T) {
 // listing collapses ignored dirs for speed, so the carry-over must expand
 // the ones that aren't build/dependency output.
 func TestWorktreeAddCarriesEnvInsideIgnoredDir(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".gitignore", "secrets/\n", 0o644)
 	commitAll(t, repo, "base")
@@ -173,7 +172,7 @@ func TestWorktreeAddCarriesEnvInsideIgnoredDir(t *testing.T) {
 }
 
 func TestWorktreeAddSkipsBuildOutput(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".gitignore", "dist/\n", 0o644)
 	writeRepoFile(t, repo, ".worktreeinclude", "dist/**\n", 0o644)
@@ -188,7 +187,7 @@ func TestWorktreeAddSkipsBuildOutput(t *testing.T) {
 }
 
 func TestWorktreeAddBadPatternsStillSucceed(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	writeRepoFile(t, repo, ".worktreeinclude", "[[[bad\n# just a comment\n\n!\nlink:\n", 0o644)
 	commitAll(t, repo, "base")

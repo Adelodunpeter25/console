@@ -3,7 +3,7 @@
 // Seventh domain on the shared protobuf schema. All JSON payloads are built
 // from console.v1 generated types; the {success, data} envelope, SSE framing,
 // ETag/304 behavior, and raw-bytes endpoints are unchanged. Trimmed shapes
-// (see proto/console/v1/fs.proto): entry git status, Rust-only modified_at
+// (see proto/console/v1/fssvc.proto): entry git status, Rust-only modified_at
 // and is_binary, and window duration never crossed populated and are gone;
 // grep counts narrow to uint32 so they stay JSON numbers.
 package routes
@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"os"
 	"strconv"
 	"sync"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -106,7 +106,7 @@ func (c *entriesResponseCache) put(key string, version uint64, body []byte) {
 	c.items[key] = entriesCacheItem{version: version, at: time.Now(), body: body}
 }
 
-func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.FsWatchService) {
+func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchService) {
 	h := app.Group("/api/fs")
 
 	ok := func(c *fiber.Ctx, data any) error {
@@ -121,7 +121,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 	}
 	fail := func(c *fiber.Ctx, status int, err error) error {
 		resp := fiber.Map{"success": false, "error": err.Error()}
-		var blocked *services.PreviewBlocked
+		var blocked *fssvc.PreviewBlocked
 		if asErr(err, &blocked) {
 			resp["code"] = blocked.Code
 			for k, v := range blocked.Detail {
@@ -193,7 +193,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			return fail(c, fiber.StatusBadRequest, err)
 		}
 		maxMatches := clampInt(c.QueryInt("limit", 200), 1, 2000)
-		result, err := fs.Grep(root, query, services.GrepOptions{
+		result, err := fs.Grep(root, query, fssvc.GrepOptions{
 			Mode:         mode,
 			Case:         caseMode,
 			WholeWord:    c.Query("wholeWord") == "true",
@@ -202,7 +202,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 			Cursor:       uint32(c.QueryInt("cursor", 0)),
 		})
 		if err != nil {
-			if errors.Is(err, services.ErrFffUnavailable) {
+			if errors.Is(err, fssvc.ErrFffUnavailable) {
 				return fail(c, fiber.StatusServiceUnavailable, err)
 			}
 			return fail(c, fiber.StatusBadRequest, err)
@@ -241,7 +241,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		}
 
 		entries, err := fs.ListAllEntries(dirPath, maxDepth, hidden,
-			services.EntriesOptions{WithSizes: withSizes, MaxEntries: maxEntries})
+			fssvc.EntriesOptions{WithSizes: withSizes, MaxEntries: maxEntries})
 		if err != nil {
 			return fail(c, fiber.StatusBadRequest, err)
 		}
@@ -283,7 +283,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, previewStatus(err), err)
 		}
-		etag := services.BuildFileETag(meta.SizeBytes, meta.MtimeMs)
+		etag := fssvc.BuildFileETag(meta.SizeBytes, meta.MtimeMs)
 		if c.Get("If-None-Match") == etag {
 			return c.Status(fiber.StatusNotModified).Send(nil)
 		}
@@ -308,7 +308,7 @@ func RegisterFsRoutes(app *fiber.App, fs *services.FsService, watch *services.Fs
 		if err != nil {
 			return fail(c, previewStatus(err), err)
 		}
-		etag := services.BuildFileETag(result.SizeBytes, result.MtimeMs)
+		etag := fssvc.BuildFileETag(result.SizeBytes, result.MtimeMs)
 		if c.Get("If-None-Match") == etag {
 			return c.Status(fiber.StatusNotModified).Send(nil)
 		}
@@ -414,8 +414,8 @@ func clampInt(v, min, max int) int {
 	return v
 }
 
-func asErr(err error, target **services.PreviewBlocked) bool {
-	var b *services.PreviewBlocked
+func asErr(err error, target **fssvc.PreviewBlocked) bool {
+	var b *fssvc.PreviewBlocked
 	if ok := errorsAs(err, &b); ok {
 		*target = b
 		return true
@@ -424,7 +424,7 @@ func asErr(err error, target **services.PreviewBlocked) bool {
 }
 
 func previewStatus(err error) int {
-	var blocked *services.PreviewBlocked
+	var blocked *fssvc.PreviewBlocked
 	if ok := errorsAs(err, &blocked); ok {
 		return blocked.Status
 	}

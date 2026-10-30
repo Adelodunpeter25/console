@@ -21,6 +21,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -47,7 +48,7 @@ var upgrader = websocket.FastHTTPUpgrader{
 	CheckOrigin: func(ctx *fasthttp.RequestCtx) bool { return true },
 }
 
-func RegisterTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
+func RegisterTerminalRoutes(app *fiber.App, ptyManager *terminalsvc.PtyManager) {
 	app.Get("/api/terminals", func(c *fiber.Ctx) error {
 		params, perr := parseSpawnParams(
 			c.Query("cwd"), c.Query("shell"), c.Query("label"),
@@ -66,7 +67,7 @@ func RegisterTerminalRoutes(app *fiber.App, ptyManager *services.PtyManager) {
 	})
 }
 
-func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, params types.TerminalSpawnParams) {
+func handleTerminalConn(conn *websocket.Conn, ptyManager *terminalsvc.PtyManager, params types.TerminalSpawnParams) {
 	var connMu sync.Mutex
 	connClosed := false
 
@@ -150,7 +151,7 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *services.PtyManager, p
 	// Backpressure: WS writes are synchronous, so a slow client throttles
 	// flushes directly; the session queue itself is bounded at 8MB with
 	// oldest-drop, and Pause/Resume remain available for explicit control.
-	decoder := services.NewUTF8Decoder()
+	decoder := terminalsvc.NewUTF8Decoder()
 
 	session.SetCallbacks(func(chunk []byte) {
 		if params.Binary {

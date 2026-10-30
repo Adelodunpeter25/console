@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -53,13 +53,13 @@ func sendProject(c *fiber.Ctx, p types.ProjectInfo) error {
 // Everything else is a plain 400 — the error text is already written to be
 // displayed verbatim.
 func failProjectBootstrap(c *fiber.Ctx, err error) error {
-	if errors.Is(err, services.ErrGitHubNotConnected) {
+	if errors.Is(err, projectssvc.ErrGitHubNotConnected) {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"success": false, "error": err.Error()})
 	}
 	return fail400(c, err)
 }
 
-func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService, bootstrap *services.ProjectBootstrapService) {
+func RegisterProjectRoutes(app *fiber.App, projects *projectssvc.ProjectService, bootstrap *projectssvc.ProjectBootstrapService) {
 	app.Get("/api/projects", func(c *fiber.Ctx) error {
 		list, err := projects.List()
 		if err != nil {
@@ -85,7 +85,7 @@ func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService, bo
 		if err != nil || !info.IsDir() {
 			return fail400(c, fmt.Errorf("Directory does not exist: %s", abs))
 		}
-		project, err := projects.Create(services.CreateProjectOptions{
+		project, err := projects.Create(projectssvc.CreateProjectOptions{
 			Name: strings.TrimSpace(filepath.Base(abs)), Dir: abs,
 		})
 		if err != nil {
@@ -117,7 +117,7 @@ func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService, bo
 		if err != nil {
 			return fail400(c, err)
 		}
-		project, err := projects.Create(services.CreateProjectOptions{Name: body.Name, Dir: dir})
+		project, err := projects.Create(projectssvc.CreateProjectOptions{Name: body.Name, Dir: dir})
 		if err != nil {
 			return fail400(c, err)
 		}
@@ -150,7 +150,7 @@ func RegisterProjectRoutes(app *fiber.App, projects *services.ProjectService, bo
 		if strings.TrimSpace(name) == "" {
 			name = filepath.Base(dir)
 		}
-		project, err := projects.Create(services.CreateProjectOptions{Name: name, Dir: dir})
+		project, err := projects.Create(projectssvc.CreateProjectOptions{Name: name, Dir: dir})
 		if err != nil {
 			return fail400(c, err)
 		}

@@ -3,6 +3,7 @@ package tests
 
 import (
 	"fmt"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"net"
 	"os"
 	"os/exec"
@@ -12,30 +13,31 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
-func newScriptService(t *testing.T) (*services.ProjectScriptsService, string, string) {
+func newScriptService(t *testing.T) (*projects.ProjectScriptsService, string, string) {
 	scripts, _, projectID, root := newScriptServiceWithPorts(t)
 	return scripts, projectID, root
 }
 
-func newScriptServiceWithPorts(t *testing.T) (*services.ProjectScriptsService, *services.PortRegistry, string, string) {
+func newScriptServiceWithPorts(t *testing.T) (*projects.ProjectScriptsService, *terminalsvc.PortRegistry, string, string) {
 	t.Helper()
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(manager.Close)
-	projects := services.NewProjectService(manager)
+	projects := projects.NewProjectService(manager)
 	root := t.TempDir()
-	proj, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: root})
+	proj, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: root})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	ports := services.NewPortRegistry()
+	ports := terminalsvc.NewPortRegistry()
 	t.Cleanup(ports.CloseAll)
-	return services.NewProjectScriptsService(projects, ports), ports, proj.ID, root
+	return projectssvc.NewProjectScriptsService(projects, ports), ports, proj.ID, root
 }
 
 func writeConsoleToml(t *testing.T, root, content string) {
@@ -58,7 +60,7 @@ persistent = true
 label = "Tests"
 command = "bun test"
 `
-	scripts, err := services.ParseProjectScriptsForTest(tomlText)
+	scripts, err := projects.ParseProjectScriptsForTest(tomlText)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -74,7 +76,7 @@ command = "bun test"
 	}
 
 	// Bad identifier rejected.
-	if _, err := services.ParseProjectScriptsForTest(`
+	if _, err := projects.ParseProjectScriptsForTest(`
 [scripts."bad id"]
 label = "x"
 command = "y"
@@ -99,7 +101,7 @@ command = "echo a"
 label = "Mid"
 command = "echo m"
 `
-	scripts, err := services.ParseProjectScriptsForTest(tomlText)
+	scripts, err := projects.ParseProjectScriptsForTest(tomlText)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -115,7 +117,7 @@ command = "echo m"
 
 	// Cache refreshes re-parse the file; order must be stable every time.
 	for i := 0; i < 10; i++ {
-		again, err := services.ParseProjectScriptsForTest(tomlText)
+		again, err := projects.ParseProjectScriptsForTest(tomlText)
 		if err != nil {
 			t.Fatalf("parse %d: %v", i, err)
 		}
@@ -221,7 +223,7 @@ func TestScriptEnvStripsDaemonPort(t *testing.T) {
 	t.Setenv("PORT", "9999")
 	t.Setenv("CONSOLE_DAEMON", "1")
 	cmd := exec.Command("sh", "-c", "echo ${PORT:-unset}")
-	cmd.Env = services.BuildScriptEnv()
+	cmd.Env = projects.BuildScriptEnv()
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)

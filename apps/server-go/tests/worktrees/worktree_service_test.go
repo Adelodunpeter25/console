@@ -4,13 +4,12 @@ package tests
 
 import (
 	"errors"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -41,7 +40,7 @@ func initRepo(t *testing.T, committed bool) string {
 }
 
 func TestWorktreeAddListRemove(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	// git reports real paths; TempDir on macOS goes through /var -> /private/var.
 	tmp, err := filepath.EvalSymlinks(t.TempDir())
@@ -78,7 +77,7 @@ func TestWorktreeAddListRemove(t *testing.T) {
 }
 
 func TestWorktreeRemoveRefusesDirty(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
 	if err := svc.WorktreeAdd(repo, wt, "dirty-branch", ""); err != nil {
@@ -92,7 +91,7 @@ func TestWorktreeRemoveRefusesDirty(t *testing.T) {
 	if err != nil || !dirty {
 		t.Fatalf("IsDirty = %v, %v; want true, nil", dirty, err)
 	}
-	if err := svc.WorktreeRemove(repo, wt, "dirty-branch", false); !errors.Is(err, services.ErrWorktreeDirty) {
+	if err := svc.WorktreeRemove(repo, wt, "dirty-branch", false); !errors.Is(err, gitsvc.ErrWorktreeDirty) {
 		t.Fatalf("remove dirty = %v; want ErrWorktreeDirty", err)
 	}
 	if !branchExists(t, repo, "dirty-branch") {
@@ -107,10 +106,10 @@ func TestWorktreeRemoveRefusesDirty(t *testing.T) {
 }
 
 func TestWorktreeAddRefusesUnbornHEAD(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, false)
 	wt := filepath.Join(t.TempDir(), "wt")
-	if err := svc.WorktreeAdd(repo, wt, "nope", ""); !errors.Is(err, services.ErrUnbornHEAD) {
+	if err := svc.WorktreeAdd(repo, wt, "nope", ""); !errors.Is(err, gitsvc.ErrUnbornHEAD) {
 		t.Fatalf("add on unborn HEAD = %v; want ErrUnbornHEAD", err)
 	}
 }
@@ -120,7 +119,7 @@ func TestWorktreeAddRefusesUnbornHEAD(t *testing.T) {
 // failed (git exit 255) whenever the branch already existed. The base must be
 // a *starting point* for a differently-named branch.
 func TestWorktreeAddCutsFromBaseWithNewName(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	// An existing branch the card could offer as a base.
 	git(t, repo, "branch", "feature-x")
@@ -135,11 +134,11 @@ func TestWorktreeAddCutsFromBaseWithNewName(t *testing.T) {
 }
 
 func TestWorktreeAddRejectsUnknownBase(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
 	err := svc.WorktreeAdd(repo, wt, "quiet-austin", "no-such-branch")
-	if !errors.Is(err, services.ErrUnknownBaseBranch) {
+	if !errors.Is(err, gitsvc.ErrUnknownBaseBranch) {
 		t.Fatalf("add from unknown base = %v; want ErrUnknownBaseBranch", err)
 	}
 }
@@ -147,7 +146,7 @@ func TestWorktreeAddRejectsUnknownBase(t *testing.T) {
 // A git failure must carry git's own message, not just the exit code — the
 // composer's error banner showed a bare "exit status 255" until this.
 func TestWorktreeAddErrorCarriesGitStderr(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	git(t, repo, "branch", "feature-x")
 	wt := filepath.Join(t.TempDir(), "wt")
@@ -161,7 +160,7 @@ func TestWorktreeAddErrorCarriesGitStderr(t *testing.T) {
 }
 
 func TestWorktreePrune(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	if err := svc.WorktreePrune(repo); err != nil {
 		t.Fatalf("WorktreePrune: %v", err)
@@ -169,7 +168,7 @@ func TestWorktreePrune(t *testing.T) {
 }
 
 func TestRandomCodename(t *testing.T) {
-	got := services.RandomCodename()
+	got := gitsvc.RandomCodename()
 	parts := strings.Split(got, "-")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		t.Fatalf("RandomCodename = %q; want adjective-city", got)
@@ -177,15 +176,15 @@ func TestRandomCodename(t *testing.T) {
 }
 
 func TestWorktreeAddNotGitRepo(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	err := svc.WorktreeAdd(t.TempDir(), filepath.Join(t.TempDir(), "wt"), "b", "")
-	if !errors.Is(err, services.ErrNotGitRepo) {
+	if !errors.Is(err, gitsvc.ErrNotGitRepo) {
 		t.Fatalf("non-repo add = %v; want ErrNotGitRepo", err)
 	}
 }
 
 func TestBranchOfAndOrphans(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	root := t.TempDir()
 	wt := filepath.Join(root, "lonely")
@@ -213,7 +212,7 @@ func TestBranchOfAndOrphans(t *testing.T) {
 	if err != nil || len(orphans) != 1 || !orphans[0].Dirty {
 		t.Fatalf("dirty orphan = %+v, %v", orphans, err)
 	}
-	if err := svc.RemoveOrphan(root, wt, false); !errors.Is(err, services.ErrWorktreeDirty) {
+	if err := svc.RemoveOrphan(root, wt, false); !errors.Is(err, gitsvc.ErrWorktreeDirty) {
 		t.Fatalf("remove dirty orphan = %v; want ErrWorktreeDirty", err)
 	}
 	// Outside the root is refused outright.
@@ -240,7 +239,7 @@ func branchExists(t *testing.T, repo, branch string) bool {
 }
 
 func TestWorktreeRemoveKeepsUnmergedBranch(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
 	if err := svc.WorktreeAdd(repo, wt, "unmerged-branch", ""); err != nil {
@@ -265,7 +264,7 @@ func TestWorktreeRemoveKeepsUnmergedBranch(t *testing.T) {
 }
 
 func TestWorktreeRemoveAutoDetectsBranch(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	wt := filepath.Join(t.TempDir(), "wt")
 	if err := svc.WorktreeAdd(repo, wt, "auto-branch", ""); err != nil {
@@ -280,7 +279,7 @@ func TestWorktreeRemoveAutoDetectsBranch(t *testing.T) {
 }
 
 func TestDeleteBranchGuards(t *testing.T) {
-	svc := services.NewWorktreeService()
+	svc := gitsvc.NewWorktreeService()
 	repo := initRepo(t, true)
 	if err := svc.DeleteBranch(repo, "", false); err != nil {
 		t.Fatalf("empty branch: %v", err)

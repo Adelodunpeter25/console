@@ -5,6 +5,7 @@ package routes
 import (
 	"encoding/json"
 	"errors"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"strings"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -132,7 +133,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		}
 		jobID := work.Metadata["job_id"]
 		jobs := runs.BashJobs()
-		if work.Kind != services.BackgroundWorkShell || jobID == "" || jobs == nil {
+		if work.Kind != background.KindShell || jobID == "" || jobs == nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Background work has no shell job."})
 		}
 		if _, err := jobs.Status(jobID, sessionID); err != nil {
@@ -141,7 +142,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		cursor := c.QueryInt("cursor", 0)
 		return streamSSE(c, func(sse *sseStream) {
 			_ = jobs.StreamOutput(jobID, sessionID, cursor,
-				func(chunk services.BashJobChunk) error {
+				func(chunk terminalsvc.BashJobChunk) error {
 					frame := fiber.Map{
 						"stdout":     chunk.Stdout,
 						"nextCursor": chunk.NextCursor,
@@ -171,7 +172,7 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 		}
 		jobID := work.Metadata["job_id"]
 		jobs := runs.BashJobs()
-		if work.Kind != services.BackgroundWorkShell || jobID == "" || jobs == nil {
+		if work.Kind != background.KindShell || jobID == "" || jobs == nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Background work has no shell job."})
 		}
 		out, err := jobs.Output(jobID, sessionID, c.QueryInt("cursor", 0), c.QueryInt("limit", 50000))

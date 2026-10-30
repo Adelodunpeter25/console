@@ -13,6 +13,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"log/slog"
 	"net"
 	"net/http"
@@ -31,6 +34,7 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 // ConnectPath is the WT handshake path. The token rides the query string
@@ -43,12 +47,12 @@ type Deps struct {
 	Issuer        *auth.TokenIssuer
 	Authenticate  func(string) (auth.Claims, error)
 	Runs          *run.Service
-	PTY           *services.PtyManager
-	Ports         *services.PortRegistry
-	Watch         *services.FsWatchService
-	Git           *services.GitService
+	PTY           *terminalsvc.PtyManager
+	Ports         *terminalsvc.PortRegistry
+	Watch         *fssvc.FsWatchService
+	Git           *gitsvc.GitService
 	Notifications *services.NotificationService
-	Scripts       *services.ProjectScriptsService
+	Scripts       *projectssvc.ProjectScriptsService
 	Devices       *services.DeviceService
 }
 

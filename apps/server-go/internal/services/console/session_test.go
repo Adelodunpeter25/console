@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func newConsoleSessionRuntime(t *testing.T, active func(string) bool) (*Runtime,
 	}
 	t.Cleanup(database.Close)
 	sessions := services.NewSessionService(database)
-	projects := services.NewProjectService(database)
+	projects := projects.NewProjectService(database)
 	runtime, err := NewRuntime(nil, nil, sessions, projects, active, nil, nil, nil, QueueControl{}, "", "")
 	if err != nil {
 		t.Fatal(err)

@@ -12,7 +12,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
@@ -59,7 +59,7 @@ func TestSubagentCompletes(t *testing.T) {
 func TestBackgroundSubagentReturnsBeforeNestedCompletion(t *testing.T) {
 	release := make(chan struct{})
 	entered := make(chan struct{})
-	manager := services.NewBackgroundWorkManager()
+	manager := background.NewManager()
 	nested := &blockingProvider{release: release, entered: entered}
 	tool := loop.NewSubagentTool(&loop.SubagentContext{
 		Provider:       nested,
@@ -88,7 +88,7 @@ func TestBackgroundSubagentReturnsBeforeNestedCompletion(t *testing.T) {
 	deadline := time.After(time.Second)
 	for {
 		if completed := manager.TakeCompletions("session-1"); len(completed) == 1 {
-			if completed[0].Status != services.BackgroundWorkCompleted {
+			if completed[0].Status != background.StatusCompleted {
 				t.Fatalf("completion: %+v", completed[0])
 			}
 			return

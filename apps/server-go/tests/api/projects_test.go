@@ -5,6 +5,7 @@ package tests
 
 import (
 	"encoding/json"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func projectFixture(t *testing.T, name string) string {
@@ -68,9 +68,9 @@ func TestProjectRoutesRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(manager.Close)
-	svc := services.NewProjectService(manager)
+	svc := projectssvc.NewProjectService(manager)
 	app := fiber.New()
-	routes.RegisterProjectRoutes(app, svc, services.NewProjectBootstrapService())
+	routes.RegisterProjectRoutes(app, svc, projectssvc.NewProjectBootstrapService())
 
 	get := func() (int, map[string]any) {
 		req := httptest.NewRequest("GET", "/api/projects", nil)

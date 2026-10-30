@@ -13,6 +13,7 @@
 package wt
 
 import (
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"sync"
 
 	webtransport "github.com/quic-go/webtransport-go"
@@ -84,7 +85,7 @@ func (s *Server) serveTerminal(str *webtransport.Stream, w *streamWriter, id str
 	// JSON compat: stream-decode PTY bytes to text so multibyte sequences
 	// split across coalesced frames survive. Binary clients skip decoding
 	// entirely, same as the WS path.
-	decoder := services.NewUTF8Decoder()
+	decoder := terminalsvc.NewUTF8Decoder()
 	session.SetCallbacks(func(chunk []byte) {
 		if params.Binary {
 			bufPtr := wtTerminalFramePool.Get().(*[]byte)

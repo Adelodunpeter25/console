@@ -11,6 +11,7 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -158,9 +159,9 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			// Worktree request errors are client errors, not 500s.
 			if errors.Is(err, services.ErrWorktreeScratchpad) ||
 				errors.Is(err, services.ErrWorktreeNeedsCwd) ||
-				errors.Is(err, services.ErrNotGitRepo) ||
-				errors.Is(err, services.ErrUnknownBaseBranch) ||
-				errors.Is(err, services.ErrUnbornHEAD) {
+				errors.Is(err, gitsvc.ErrNotGitRepo) ||
+				errors.Is(err, gitsvc.ErrUnknownBaseBranch) ||
+				errors.Is(err, gitsvc.ErrUnbornHEAD) {
 				return sessionError(c, fiber.StatusBadRequest, err.Error())
 			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
@@ -327,8 +328,8 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 				errors.Is(err, services.ErrWorktreeAlreadyOwned),
 				errors.Is(err, services.ErrWorktreeScratchpad),
 				errors.Is(err, services.ErrWorktreeNeedsCwd),
-				errors.Is(err, services.ErrNotGitRepo),
-				errors.Is(err, services.ErrUnbornHEAD):
+				errors.Is(err, gitsvc.ErrNotGitRepo),
+				errors.Is(err, gitsvc.ErrUnbornHEAD):
 				return sessionError(c, fiber.StatusBadRequest, err.Error())
 			default:
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
@@ -410,7 +411,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		deleted, err := sessions.PermanentDelete(id)
 		if err != nil {
 			// Dirty worktree blocks the delete: conflict, session kept.
-			if errors.Is(err, services.ErrWorktreeDirty) {
+			if errors.Is(err, gitsvc.ErrWorktreeDirty) {
 				return sessionError(c, fiber.StatusConflict, err.Error())
 			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())

@@ -4,6 +4,7 @@ package tests
 
 import (
 	"encoding/json"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -18,7 +19,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 )
 
 func gitFixture(t *testing.T, name string) string {
@@ -80,13 +81,13 @@ func TestGitRoutesStatusAndCheckout(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	watch, err := services.NewFsWatchService()
+	watch, err := fssvc.NewFsWatchService()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(watch.Close)
 	app := fiber.New()
-	routes.RegisterGitRoutes(app, services.NewGitService(), watch)
+	routes.RegisterGitRoutes(app, gitsvc.NewGitService(), watch)
 
 	get := func(target string) (int, map[string]any) {
 		req := httptest.NewRequest("GET", target+"?path="+repo, nil)

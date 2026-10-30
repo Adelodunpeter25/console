@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
 func gitIn(t *testing.T, dir string, args ...string) {
@@ -38,7 +38,7 @@ func TestGitStatusStagedAndUnstagedNumstat(t *testing.T) {
 	gitIn(t, repo, "add", "tracked.txt")
 	write("tracked.txt", "one\ntwo\nthree\n")
 
-	status := services.NewGitService().GetGitStatus(repo)
+	status := git.NewGitService().GetGitStatus(repo)
 	if status.Branch != "main" {
 		t.Fatalf("branch: %q", status.Branch)
 	}
@@ -55,7 +55,7 @@ func TestGitStatusStagedAndUnstagedNumstat(t *testing.T) {
 }
 
 func TestGitStatusBranchHeaderForms(t *testing.T) {
-	git := services.NewGitService()
+	git := git.NewGitService()
 
 	fresh := t.TempDir()
 	gitIn(t, fresh, "init", "-b", "trunk")

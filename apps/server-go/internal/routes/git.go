@@ -18,13 +18,15 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
 // gitStatusDebounce is the minimum gap between status recomputations pushed
 // to a watch stream.
 const gitStatusDebounce = 1500 * time.Millisecond
 
-func RegisterGitRoutes(app *fiber.App, git *services.GitService, watch *services.FsWatchService) {
+func RegisterGitRoutes(app *fiber.App, git *gitsvc.GitService, watch *fs.FsWatchService) {
 	h := app.Group("/api/git")
 
 	okProto := func(c *fiber.Ctx, msg proto.Message) error {

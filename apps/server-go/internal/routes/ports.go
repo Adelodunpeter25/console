@@ -21,6 +21,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -44,7 +45,7 @@ func sendPortList(c *fiber.Ctx, list []types.ClientPort) error {
 	return c.JSON(fiber.Map{"success": true, "data": data})
 }
 
-func RegisterPortRoutes(app *fiber.App, registry *services.PortRegistry) {
+func RegisterPortRoutes(app *fiber.App, registry *terminalsvc.PortRegistry) {
 	h := app.Group("/api/ports")
 
 	h.Get("/stream", func(c *fiber.Ctx) error {

@@ -6,6 +6,7 @@ package tests
 
 import (
 	"encoding/json"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"io"
 	"net/http/httptest"
 	"os"
@@ -21,7 +22,6 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // bootstrapRouteApp builds an app with only the project routes, backed by an
@@ -34,7 +34,7 @@ func bootstrapRouteApp(t *testing.T) *fiber.App {
 	}
 	t.Cleanup(manager.Close)
 	app := fiber.New()
-	routes.RegisterProjectRoutes(app, services.NewProjectService(manager), services.NewProjectBootstrapService())
+	routes.RegisterProjectRoutes(app, projectssvc.NewProjectService(manager), projectssvc.NewProjectBootstrapService())
 	return app
 }
 
@@ -96,9 +96,9 @@ func TestInitRouteValidatesBody(t *testing.T) {
 	app := bootstrapRouteApp(t)
 
 	for name, body := range map[string]string{
-		"missing name":      `{"parentDir":"/tmp"}`,
-		"missing parentDir": `{"name":"x"}`,
-		"empty name":        `{"name":"  ","parentDir":"/tmp"}`,
+		"missing name":               `{"parentDir":"/tmp"}`,
+		"missing parentDir":          `{"name":"x"}`,
+		"empty name":                 `{"name":"  ","parentDir":"/tmp"}`,
 		"missing parent dir on disk": `{"name":"x","parentDir":"/no/such/dir"}`,
 	} {
 		code, raw := doPost(t, app, "/api/projects/init", body)

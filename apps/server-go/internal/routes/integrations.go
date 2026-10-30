@@ -6,11 +6,11 @@ package routes
 import (
 	"encoding/json"
 	"errors"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // RegisterIntegrationRoutes wires the /api/integrations routes onto an app.
@@ -32,9 +32,9 @@ func RegisterIntegrationRoutes(app *fiber.App) {
 	// github.com, checksum mismatch) or 400 for an unsupported platform —
 	// never silent, since a quiet button is worse than none.
 	app.Post("/api/integrations/gh/install", func(c *fiber.Ctx) error {
-		if _, err := services.InstallGhCLI(c.Context()); err != nil {
+		if _, err := integrations.InstallGhCLI(c.Context()); err != nil {
 			status := fiber.StatusBadGateway
-			if errors.Is(err, services.ErrGhPlatformUnsupported) {
+			if errors.Is(err, integrations.ErrGhPlatformUnsupported) {
 				status = fiber.StatusBadRequest
 			}
 			return c.Status(status).JSON(fiber.Map{"success": false, "error": err.Error()})
@@ -48,7 +48,7 @@ func RegisterIntegrationRoutes(app *fiber.App) {
 }
 
 func marshalIntegrations() (json.RawMessage, error) {
-	found := services.ListIntegrations()
+	found := integrations.ListIntegrations()
 	items := make([]*consolev1.IntegrationStatus, 0, len(found))
 	for _, info := range found {
 		items = append(items, integrationToProto(info))
@@ -59,7 +59,7 @@ func marshalIntegrations() (json.RawMessage, error) {
 // integrationToProto converts the detector's plain shape to the wire type.
 // Version and path stay absent (not empty) when the probe could not supply
 // them, so clients read "unknown" rather than "".
-func integrationToProto(info services.IntegrationInfo) *consolev1.IntegrationStatus {
+func integrationToProto(info integrations.IntegrationInfo) *consolev1.IntegrationStatus {
 	// Local copy: the installed flag has explicit presence, and taking the
 	// address of a range variable would alias every row to the last one.
 	installed := info.Installed

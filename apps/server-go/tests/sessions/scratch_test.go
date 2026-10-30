@@ -15,11 +15,12 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
-func newScratchStore(t *testing.T) (*services.SessionService, *services.ProjectService, string) {
+func newScratchStore(t *testing.T) (*services.SessionService, *projectssvc.ProjectService, string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("CONSOLE_STORAGE_DIR", dir)
@@ -31,14 +32,14 @@ func newScratchStore(t *testing.T) (*services.SessionService, *services.ProjectS
 	if manager.StorageDir() != dir {
 		t.Fatalf("storage dir = %q; want %q", manager.StorageDir(), dir)
 	}
-	return services.NewSessionService(manager), services.NewProjectService(manager), dir
+	return services.NewSessionService(manager), projectssvc.NewProjectService(manager), dir
 }
 
 // projectSession creates a session linked to a registered project dir.
-func projectSession(t *testing.T, sessions *services.SessionService, projects *services.ProjectService) types.SessionHeader {
+func projectSession(t *testing.T, sessions *services.SessionService, projects *projectssvc.ProjectService) types.SessionHeader {
 	t.Helper()
 	dir := t.TempDir()
-	project, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: dir})
+	project, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: dir})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}

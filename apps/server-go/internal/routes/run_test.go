@@ -13,20 +13,21 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	backgroundsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
-	work := services.BackgroundWork{
+	work := backgroundsvc.Work{
 		ID:        "work_test",
 		SessionID: "session-1",
-		Kind:      services.BackgroundWorkShell,
-		Status:    services.BackgroundWorkCompleted,
+		Kind:      backgroundsvc.KindShell,
+		Status:    backgroundsvc.StatusCompleted,
 		Metadata:  map[string]string{"job_id": "job_test", "exit_code": "0"},
 	}
 	name, body, drop := run.WireFrame(loop.Event{
 		Kind:    loop.EventBackgroundWork,
-		Message: services.BackgroundWorkEvent{Type: services.BackgroundWorkCompletedEvent, Work: work},
+		Message: backgroundsvc.Event{Type: backgroundsvc.EventCompleted, Work: work},
 	})
 	if drop {
 		t.Fatal("background work frame was dropped")
@@ -61,11 +62,11 @@ func TestWireFrameBackgroundWorkUsesWorkRecord(t *testing.T) {
 func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminalsvc.NewBashJobManager(nil)
 	runs.SetBashJobs(jobs)
 	RegisterRunRoutes(app, runs)
 
-	snapshot, err := jobs.Start(services.StartBashJobOptions{
+	snapshot, err := jobs.Start(terminalsvc.StartBashJobOptions{
 		Command:        "printf hello-route",
 		OwnerSessionID: "session-1",
 	})
@@ -74,7 +75,7 @@ func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
 	}
 	t.Cleanup(jobs.KillAll)
 
-	var work services.BackgroundWork
+	var work backgroundsvc.Work
 	items := runs.BackgroundWorkManager().List("session-1")
 	if len(items) == 0 {
 		t.Fatal("background work was not registered")
@@ -84,7 +85,7 @@ func TestBackgroundWorkOutputRouteReadsDetachedShell(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		status, err := jobs.Status(snapshot.JobID, "session-1")
-		if err == nil && status.Status != services.BashJobRunning {
+		if err == nil && status.Status != terminalsvc.BashJobRunning {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -146,11 +147,11 @@ func readOutputFrames(t *testing.T, app *fiber.App, path string) []map[string]an
 func TestBackgroundWorkOutputStreamPushesChunksThenCloses(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminalsvc.NewBashJobManager(nil)
 	runs.SetBashJobs(jobs)
 	RegisterRunRoutes(app, runs)
 
-	if _, err := jobs.Start(services.StartBashJobOptions{
+	if _, err := jobs.Start(terminalsvc.StartBashJobOptions{
 		Command:        "echo one; sleep 0.3; echo two; sleep 0.3; echo three >&2",
 		OwnerSessionID: "session-1",
 	}); err != nil {
@@ -189,11 +190,11 @@ func TestBackgroundWorkOutputStreamPushesChunksThenCloses(t *testing.T) {
 func TestBackgroundWorkOutputStreamResumesFromCursor(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminalsvc.NewBashJobManager(nil)
 	runs.SetBashJobs(jobs)
 	RegisterRunRoutes(app, runs)
 
-	if _, err := jobs.Start(services.StartBashJobOptions{
+	if _, err := jobs.Start(terminalsvc.StartBashJobOptions{
 		Command:        "printf abcdef",
 		OwnerSessionID: "session-1",
 	}); err != nil {
@@ -215,11 +216,11 @@ func TestBackgroundWorkOutputStreamResumesFromCursor(t *testing.T) {
 func TestBackgroundWorkOutputStreamStopsWhenKilled(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminalsvc.NewBashJobManager(nil)
 	runs.SetBashJobs(jobs)
 	RegisterRunRoutes(app, runs)
 
-	snap, err := jobs.Start(services.StartBashJobOptions{
+	snap, err := jobs.Start(terminalsvc.StartBashJobOptions{
 		Command:        "echo started; sleep 30",
 		OwnerSessionID: "session-1",
 	})
@@ -240,7 +241,7 @@ func TestBackgroundWorkOutputStreamStopsWhenKilled(t *testing.T) {
 func TestBackgroundWorkOutputStreamUnknownWorkIs404(t *testing.T) {
 	app := fiber.New()
 	runs := run.NewService(nil)
-	runs.SetBashJobs(services.NewBashJobManager(nil))
+	runs.SetBashJobs(terminalsvc.NewBashJobManager(nil))
 	RegisterRunRoutes(app, runs)
 	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/sessions/session-1/background-work/nope/output/stream", nil))
 	if err != nil {

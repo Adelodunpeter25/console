@@ -15,9 +15,12 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -48,7 +51,7 @@ type Prompt struct {
 	// continuing an idle session). Its text is built from the claimed work.
 	Synthetic bool
 	// woken lists the work that triggered a synthetic turn (wire event only).
-	woken []services.BackgroundWork
+	woken []background.Work
 }
 
 type activeRun struct {
@@ -68,10 +71,10 @@ type Service struct {
 	decisions  *Decisions
 	notify     *services.NotificationService
 	memories   *memory.Registry
-	bashJobs   *services.BashJobManager
-	background *services.BackgroundWorkManager
-	ports      *services.PortRegistry
-	scripts    *services.ProjectScriptsService
+	bashJobs   *terminalsvc.BashJobManager
+	background *background.Manager
+	ports      *terminalsvc.PortRegistry
+	scripts    *projectssvc.ProjectScriptsService
 	mcp        *mcp.Manager
 	prompts    promptCache
 	groups     toolGroups
@@ -109,7 +112,7 @@ type Service struct {
 }
 
 func NewService(sessions *services.SessionService) *Service {
-	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), background: services.NewBackgroundWorkManager()}
+	s := &Service{active: map[string]*activeRun{}, pending: map[string]Prompt{}, sessions: sessions, decisions: newDecisions(), Lookup: providers.Lookup, snapshots: newWriteSnapshots(), cuaManager: cua.NewManager(), consoleManager: console.NewManager(), background: background.NewManager()}
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
@@ -148,7 +151,7 @@ func (s *Service) memoryRegistry() *memory.Registry {
 // SetBashJobs attaches the background-job manager backing the per-run
 // bash/bashJob tools (nil-safe when unset: background mode reports
 // unavailable, matching the unbound DefaultTools() instances).
-func (s *Service) SetBashJobs(j *services.BashJobManager) {
+func (s *Service) SetBashJobs(j *terminalsvc.BashJobManager) {
 	s.mu.Lock()
 	s.bashJobs = j
 	work := s.background
@@ -158,7 +161,7 @@ func (s *Service) SetBashJobs(j *services.BashJobManager) {
 	}
 }
 
-func (s *Service) SetBackgroundWorkManager(work *services.BackgroundWorkManager) {
+func (s *Service) SetBackgroundWorkManager(work *background.Manager) {
 	s.mu.Lock()
 	s.background = work
 	s.mu.Unlock()
@@ -173,7 +176,7 @@ func (s *Service) SetBackgroundWorkManager(work *services.BackgroundWorkManager)
 	}
 }
 
-func (s *Service) backgroundWorkListener(event services.BackgroundWorkEvent) {
+func (s *Service) backgroundWorkListener(event background.Event) {
 	s.mu.Lock()
 	ar := s.active[event.Work.SessionID]
 	s.mu.Unlock()
@@ -181,12 +184,12 @@ func (s *Service) backgroundWorkListener(event services.BackgroundWorkEvent) {
 		ar.hub.Broadcast(loop.Event{Kind: loop.EventBackgroundWork, Message: event})
 	}
 	switch event.Work.Status {
-	case services.BackgroundWorkCompleted, services.BackgroundWorkFailed, services.BackgroundWorkTimedOut:
+	case background.StatusCompleted, background.StatusFailed, background.StatusTimedOut:
 		s.wakeIfIdle(event.Work.SessionID)
 	}
 }
 
-func (s *Service) BackgroundWorkManager() *services.BackgroundWorkManager {
+func (s *Service) BackgroundWorkManager() *background.Manager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.background
@@ -194,18 +197,18 @@ func (s *Service) BackgroundWorkManager() *services.BackgroundWorkManager {
 
 // BashJobs exposes the process-wide background job manager so read-only
 // routes can page a detached shell's output without starting a run.
-func (s *Service) BashJobs() *services.BashJobManager {
+func (s *Service) BashJobs() *terminalsvc.BashJobManager {
 	return s.bashJobManager()
 }
 
-func (s *Service) bashJobManager() *services.BashJobManager {
+func (s *Service) bashJobManager() *terminalsvc.BashJobManager {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.bashJobs
 }
 
 // SetPorts attaches the port registry backing the per-run ports tool.
-func (s *Service) SetPorts(p *services.PortRegistry) {
+func (s *Service) SetPorts(p *terminalsvc.PortRegistry) {
 	s.mu.Lock()
 	s.ports = p
 	manager := s.consoleManager
@@ -216,7 +219,7 @@ func (s *Service) SetPorts(p *services.PortRegistry) {
 }
 
 // SetProjectScripts attaches the script service to the console kernel.
-func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
+func (s *Service) SetProjectScripts(scripts *projectssvc.ProjectScriptsService) {
 	s.mu.Lock()
 	s.scripts = scripts
 	manager := s.consoleManager
@@ -228,7 +231,7 @@ func (s *Service) SetProjectScripts(scripts *services.ProjectScriptsService) {
 
 // SetConsoleServices attaches the project and session facades used by the
 // console kernel's discovery and session-control methods.
-func (s *Service) SetConsoleServices(projects *services.ProjectService) {
+func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	s.mu.Lock()
 	manager, sessions := s.consoleManager, s.sessions
 	s.mu.Unlock()

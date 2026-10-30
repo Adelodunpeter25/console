@@ -12,6 +12,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -33,7 +34,7 @@ const (
 	consoleCommandDescription = "Operate the app: run scripts, manage ports and sessions through the console API"
 )
 
-func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
+func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *services.SkillsService) {
 	handleCommands := func(c *fiber.Ctx) error {
 		cwd := resolveSessionCwd(c, sessions)
 		commands := []*consolev1.SlashCommandInfo{
@@ -106,7 +107,7 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 
 // RegisterAssistRoutes exposes the assist routes for tests, following the
 // same pattern as RegisterMCPRoutes.
-func RegisterAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *services.FsService, skills *services.SkillsService) {
+func RegisterAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *services.SkillsService) {
 	registerAssistRoutes(app, sessions, fs, skills)
 }
 

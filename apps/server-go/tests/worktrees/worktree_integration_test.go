@@ -14,6 +14,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -96,7 +97,7 @@ func TestCreateWithWorktree(t *testing.T) {
 		t.Fatalf("repo %q != %q", header.Worktree.Repo, repo)
 	}
 	// Branch exists on the repo; main checkout untouched.
-	branches := services.NewGitService().ListBranches(repo)
+	branches := gitsvc.NewGitService().ListBranches(repo)
 	found := false
 	for _, b := range branches.Branches {
 		if b.Name == header.Worktree.Branch {
@@ -145,7 +146,7 @@ func TestCreateWorktreeNonRepo(t *testing.T) {
 		Cwd:      t.TempDir(),
 		Worktree: &types.CreateWorktreeSpec{},
 	})
-	if !errors.Is(err, services.ErrNotGitRepo) {
+	if !errors.Is(err, gitsvc.ErrNotGitRepo) {
 		t.Fatalf("non-repo err = %v; want ErrNotGitRepo", err)
 	}
 	list, err := sessions.ListFiltered(session.ListFilter{})
@@ -190,7 +191,7 @@ func TestPermanentDeleteCleansWorktree(t *testing.T) {
 		t.Fatalf("worktree dir still exists: %s", path)
 	}
 	// Clean worktree with no unique commits: branch goes with it.
-	branches := services.NewGitService().ListBranches(repo)
+	branches := gitsvc.NewGitService().ListBranches(repo)
 	for _, b := range branches.Branches {
 		if b.Name == branch {
 			t.Fatalf("branch %q still exists after clean delete; want removed", branch)
@@ -220,7 +221,7 @@ func TestPermanentDeleteKeepsUnmergedBranch(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("worktree dir still exists after SoftDelete: %s", path)
 	}
-	branches := services.NewGitService().ListBranches(repo)
+	branches := gitsvc.NewGitService().ListBranches(repo)
 	kept := false
 	for _, b := range branches.Branches {
 		if b.Name == branch {
@@ -234,7 +235,7 @@ func TestPermanentDeleteKeepsUnmergedBranch(t *testing.T) {
 	if err != nil || !deleted {
 		t.Fatalf("PermanentDelete = %v, %v", deleted, err)
 	}
-	branches = services.NewGitService().ListBranches(repo)
+	branches = gitsvc.NewGitService().ListBranches(repo)
 	kept = false
 	for _, b := range branches.Branches {
 		if b.Name == branch {
@@ -322,7 +323,7 @@ func TestPermanentDeleteBlockedWhenDirty(t *testing.T) {
 		t.Fatalf("SoftDelete = %v, %v", ok, err)
 	}
 	_, err := sessions.PermanentDelete(header.ID)
-	if !errors.Is(err, services.ErrWorktreeDirty) {
+	if !errors.Is(err, gitsvc.ErrWorktreeDirty) {
 		t.Fatalf("dirty delete err = %v; want ErrWorktreeDirty", err)
 	}
 	// Session row kept (still soft-deleted, still owning its worktree).
@@ -468,7 +469,7 @@ func TestWorktreesDirCentralized(t *testing.T) {
 	if got := utils.WorktreesDir(); got != filepath.Join(home, "custom-wt") {
 		t.Fatalf("override root = %q", got)
 	}
-	root, err := services.DefaultRoot()
+	root, err := gitsvc.DefaultRoot()
 	if err != nil || root != utils.WorktreesDir() {
 		t.Fatalf("DefaultRoot = %q, %v; want %q", root, err, utils.WorktreesDir())
 	}

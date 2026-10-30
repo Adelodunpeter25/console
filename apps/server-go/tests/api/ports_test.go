@@ -7,6 +7,7 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"io"
 	"net"
 	"net/http/httptest"
@@ -20,7 +21,6 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func portFixture(t *testing.T, name string) string {
@@ -84,7 +84,7 @@ func mustCompact(t *testing.T, raw []byte) json.RawMessage {
 }
 
 func TestPortRoutesForward(t *testing.T) {
-	registry := services.NewPortRegistry()
+	registry := terminalsvc.NewPortRegistry()
 	t.Cleanup(registry.CloseAll)
 	app := fiber.New()
 	routes.RegisterPortRoutes(app, registry)

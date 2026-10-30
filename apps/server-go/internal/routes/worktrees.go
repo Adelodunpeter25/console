@@ -7,9 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
-func registerWorktreeRoutes(app *fiber.App, sessions *services.SessionService, wt *services.WorktreeService) {
+func registerWorktreeRoutes(app *fiber.App, sessions *services.SessionService, wt *gitsvc.WorktreeService) {
 	h := app.Group("/api/worktrees")
 
 	ok := func(c *fiber.Ctx, data any) error {
@@ -50,12 +51,12 @@ func registerWorktreeRoutes(app *fiber.App, sessions *services.SessionService, w
 		if req.Path == "" {
 			return fail(c, fiber.StatusBadRequest, fiber.NewError(fiber.StatusBadRequest, "Invalid request body: 'path' is required."))
 		}
-		root, err := services.DefaultRoot()
+		root, err := gitsvc.DefaultRoot()
 		if err != nil {
 			return fail(c, fiber.StatusInternalServerError, err)
 		}
 		if err := wt.RemoveOrphan(root, req.Path, req.Force); err != nil {
-			if err == services.ErrWorktreeDirty {
+			if err == gitsvc.ErrWorktreeDirty {
 				return fail(c, fiber.StatusConflict, err)
 			}
 			return fail(c, fiber.StatusBadRequest, err)
@@ -64,10 +65,10 @@ func registerWorktreeRoutes(app *fiber.App, sessions *services.SessionService, w
 	})
 }
 
-func worktreeInventory(sessions *services.SessionService, wt *services.WorktreeService) ([]services.WorktreeEntry, []services.WorktreeEntry, error) {
-	owned := make([]services.WorktreeEntry, 0)
-	orphans := make([]services.WorktreeEntry, 0)
-	root, err := services.DefaultRoot()
+func worktreeInventory(sessions *services.SessionService, wt *gitsvc.WorktreeService) ([]gitsvc.WorktreeEntry, []gitsvc.WorktreeEntry, error) {
+	owned := make([]gitsvc.WorktreeEntry, 0)
+	orphans := make([]gitsvc.WorktreeEntry, 0)
+	root, err := gitsvc.DefaultRoot()
 	if err != nil {
 		return owned, orphans, err
 	}
@@ -76,7 +77,7 @@ func worktreeInventory(sessions *services.SessionService, wt *services.WorktreeS
 		return owned, orphans, err
 	}
 	for _, p := range paths {
-		entry := services.WorktreeEntry{Path: p, Owned: true}
+		entry := gitsvc.WorktreeEntry{Path: p, Owned: true}
 		if branch, err := wt.BranchOf(p); err == nil {
 			entry.Branch = branch
 		}

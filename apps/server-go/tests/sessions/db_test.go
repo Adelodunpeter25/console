@@ -10,12 +10,13 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *services.ProjectService, *services.FavoriteService) {
+func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *projectssvc.ProjectService, *services.FavoriteService) {
 	t.Helper()
 	manager, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {
@@ -24,14 +25,14 @@ func newTestManager(t *testing.T) (*db.DB, *services.SessionService, *services.P
 	t.Cleanup(manager.Close)
 	return manager,
 		services.NewSessionService(manager),
-		services.NewProjectService(manager),
+		projectssvc.NewProjectService(manager),
 		services.NewFavoriteService(manager)
 }
 
 func TestProjectsCRUD(t *testing.T) {
 	_, _, projects, _ := newTestManager(t)
 
-	created, err := projects.Create(services.CreateProjectOptions{Name: "Console", Dir: "/tmp/console"})
+	created, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console", Dir: "/tmp/console"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -40,7 +41,7 @@ func TestProjectsCRUD(t *testing.T) {
 	}
 
 	// Upsert on same dir replaces the name.
-	updated, err := projects.Create(services.CreateProjectOptions{Name: "Console v2", Dir: "/tmp/console"})
+	updated, err := projects.Create(projectssvc.CreateProjectOptions{Name: "Console v2", Dir: "/tmp/console"})
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestModelFavorites(t *testing.T) {
 func TestDeleteProjectRemovesSessions(t *testing.T) {
 	_, sessions, projects, _ := newTestManager(t)
 
-	proj, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: "/tmp/p"})
+	proj, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: "/tmp/p"})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}

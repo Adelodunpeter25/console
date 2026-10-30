@@ -5,6 +5,7 @@ package tests
 
 import (
 	"encoding/json"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -106,7 +107,7 @@ func TestAssistSearchRouteEmitsProto(t *testing.T) {
 	}
 	app := fiber.New()
 	var sessions *services.SessionService
-	routes.RegisterAssistRoutes(app, sessions, services.NewFsService(), services.NewSkillsService())
+	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), services.NewSkillsService())
 
 	resp, err := app.Test(httptest.NewRequest("GET", "/api/assist/search?q=&root="+dir, nil), 10000)
 	if err != nil {
@@ -117,7 +118,7 @@ func TestAssistSearchRouteEmitsProto(t *testing.T) {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 	var envelope struct {
-		Success bool                         `json:"success"`
+		Success bool `json:"success"`
 		Data    *consolev1.AssistFileSearchResponse
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {

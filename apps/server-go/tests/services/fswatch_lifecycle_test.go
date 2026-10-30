@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 )
 
-func newWatcher(t *testing.T) *services.FsWatchService {
+func newWatcher(t *testing.T) *fssvc.FsWatchService {
 	t.Helper()
-	w, err := services.NewFsWatchService()
+	w, err := fssvc.NewFsWatchService()
 	if err != nil {
 		t.Fatal(err)
 	}

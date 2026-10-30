@@ -5,6 +5,8 @@
 package console
 
 import (
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -16,10 +18,10 @@ type Manager struct {
 	mu       sync.Mutex
 	js       *jskernel.Cache[*Runtime]
 	stopped  bool
-	ports    *services.PortRegistry
-	scripts  *services.ProjectScriptsService
+	ports    *terminalsvc.PortRegistry
+	scripts  *projectssvc.ProjectScriptsService
 	sessions *services.SessionService
-	projects *services.ProjectService
+	projects *projectssvc.ProjectService
 	active   func(string) bool
 	start    func(string, string, string, string, string, string) error
 	abort    func(string) bool
@@ -36,26 +38,26 @@ func NewManager() *Manager {
 }
 
 // SetPorts attaches the shared port registry used by console.ports.
-func (m *Manager) SetPorts(registry *services.PortRegistry) {
+func (m *Manager) SetPorts(registry *terminalsvc.PortRegistry) {
 	m.mu.Lock()
 	m.ports = registry
 	m.mu.Unlock()
 }
 
-func (m *Manager) portRegistry() *services.PortRegistry {
+func (m *Manager) portRegistry() *terminalsvc.PortRegistry {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.ports
 }
 
 // SetScripts attaches the project script service used by console.scripts.
-func (m *Manager) SetScripts(scripts *services.ProjectScriptsService) {
+func (m *Manager) SetScripts(scripts *projectssvc.ProjectScriptsService) {
 	m.mu.Lock()
 	m.scripts = scripts
 	m.mu.Unlock()
 }
 
-func (m *Manager) scriptService() *services.ProjectScriptsService {
+func (m *Manager) scriptService() *projectssvc.ProjectScriptsService {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.scripts
@@ -63,13 +65,13 @@ func (m *Manager) scriptService() *services.ProjectScriptsService {
 
 // SetSessions attaches session and project services plus run hooks used by the
 // console session control surface.
-func (m *Manager) SetSessions(sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error, prompt PromptFunc, queue QueueControl) {
+func (m *Manager) SetSessions(sessions *services.SessionService, projects *projectssvc.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error, prompt PromptFunc, queue QueueControl) {
 	m.mu.Lock()
 	m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue = sessions, projects, active, abort, start, prompt, queue
 	m.mu.Unlock()
 }
 
-func (m *Manager) sessionConfig() (*services.SessionService, *services.ProjectService, func(string) bool, func(string) bool, func(string, string, string, string, string, string) error, PromptFunc, QueueControl) {
+func (m *Manager) sessionConfig() (*services.SessionService, *projectssvc.ProjectService, func(string) bool, func(string) bool, func(string, string, string, string, string, string) error, PromptFunc, QueueControl) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue

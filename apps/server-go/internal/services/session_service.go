@@ -9,7 +9,8 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
@@ -17,11 +18,11 @@ import (
 
 type SessionService struct {
 	inner *session.Service
-	wt    *WorktreeService
+	wt    *gitsvc.WorktreeService
 }
 
 func NewSessionService(manager *db.DB) *SessionService {
-	return &SessionService{inner: session.New(manager), wt: NewWorktreeService()}
+	return &SessionService{inner: session.New(manager), wt: gitsvc.NewWorktreeService()}
 }
 
 // ErrWorktreeScratchpad rejects a worktree spec on a scratchpad session:
@@ -55,7 +56,7 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 			return types.SessionHeader{}, ErrWorktreeNeedsCwd
 		}
 		wtRepo = opts.Cwd
-		root, err := DefaultRoot()
+		root, err := gitsvc.DefaultRoot()
 		if err != nil {
 			return types.SessionHeader{}, err
 		}
@@ -82,7 +83,7 @@ func (s *SessionService) Create(opts types.CreateSessionOptions) (types.SessionH
 	if err == nil && header.Cwd != "" {
 		// A new session means its project was just opened: start the
 		// file-search index scan now so the first @-mention/grep is warm.
-		fs.PrewarmFff(header.Cwd)
+		fssvc.PrewarmFff(header.Cwd)
 	}
 	return header, err
 }
@@ -118,7 +119,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		wantBranch = spec.Branch
 		wantBase = spec.BaseBranch
 	}
-	root, err := DefaultRoot()
+	root, err := gitsvc.DefaultRoot()
 	if err != nil {
 		return types.SessionHeader{}, err
 	}
@@ -133,7 +134,7 @@ func (s *SessionService) AttachWorktree(sessionID string, spec *types.CreateWork
 		_ = s.wt.WorktreeRemove(repoDir, wtPath, branch, true)
 		return types.SessionHeader{}, err
 	}
-	fs.PrewarmFff(wtPath)
+	fssvc.PrewarmFff(wtPath)
 	updated, err := s.inner.Header(sessionID)
 	if err != nil {
 		return types.SessionHeader{}, err
@@ -159,7 +160,7 @@ func (s *SessionService) provisionWorktree(repoDir, root, wantBranch, wantBase s
 		return wtPath, wantBranch, nil
 	}
 	for range 20 {
-		branch := RandomCodename()
+		branch := gitsvc.RandomCodename()
 		wtPath := filepath.Join(root, branch)
 		if _, err := os.Stat(wtPath); err == nil {
 			continue
@@ -183,7 +184,7 @@ func (s *SessionService) Load(sessionID string, limit int64, before int64) (*typ
 	loaded, err := s.inner.Load(sessionID, limit, before)
 	if err == nil && loaded != nil && loaded.Header.Cwd != "" {
 		// Opening an existing session re-opens its project: same warm-up.
-		fs.PrewarmFff(loaded.Header.Cwd)
+		fssvc.PrewarmFff(loaded.Header.Cwd)
 	}
 	return loaded, err
 }
@@ -264,7 +265,7 @@ func (s *SessionService) Fork(sourceID, messageID string) (types.SessionHeader, 
 		return types.SessionHeader{}, err
 	}
 	if header.Cwd != "" {
-		fs.PrewarmFff(header.Cwd)
+		fssvc.PrewarmFff(header.Cwd)
 	}
 	return header, nil
 }
@@ -284,7 +285,7 @@ func (s *SessionService) UpdateCwd(sessionID, cwd string, projectID *string, pro
 	err := s.inner.UpdateCwd(sessionID, cwd, projectID, projectGiven)
 	if err == nil && cwd != "" {
 		// Session moved to another project root: warm that index too.
-		fs.PrewarmFff(cwd)
+		fssvc.PrewarmFff(cwd)
 	}
 	return err
 }

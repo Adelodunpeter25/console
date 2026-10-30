@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	integrationssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -113,12 +113,12 @@ func BuildScriptEnv() []string {
 	// Scripts that shell out to `gh` authenticate with the stored PAT, same
 	// as agent bash runs — no interactive login on a headless box. The user
 	// bin dir rides along so a server-installed `gh` resolves too.
-	return github.AppendToEnv(integrations.EnsureUserBinDir(out))
+	return github.AppendToEnv(integrationssvc.EnsureUserBinDir(out))
 }
 
 type ProjectScriptsService struct {
 	projects *ProjectService
-	ports    *terminal.PortRegistry
+	ports    *terminalsvc.PortRegistry
 
 	mu   sync.Mutex
 	runs map[string]*managedRun
@@ -130,7 +130,7 @@ type ProjectScriptsService struct {
 	}
 }
 
-func NewProjectScriptsService(projects *ProjectService, ports *terminal.PortRegistry) *ProjectScriptsService {
+func NewProjectScriptsService(projects *ProjectService, ports *terminalsvc.PortRegistry) *ProjectScriptsService {
 	return &ProjectScriptsService{
 		projects: projects,
 		ports:    ports,
@@ -157,7 +157,7 @@ func resolveScriptRoot(projectPath, cwd string) string {
 	if want == canonicalPath(projectPath) {
 		return projectPath
 	}
-	infos, err := git.NewWorktreeService().WorktreeList(projectPath)
+	infos, err := gitsvc.NewWorktreeService().WorktreeList(projectPath)
 	if err != nil {
 		return projectPath
 	}
@@ -304,7 +304,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 	var observe func(text string)
 	var clearPorts func()
 	if s.ports != nil {
-		owner := terminal.PortOwner{Kind: "job", ID: run.RunID}
+		owner := terminalsvc.PortOwner{Kind: "job", ID: run.RunID}
 		projectID := run.ProjectID
 		observe = func(text string) {
 			s.ports.ObserveOutput(owner, text, projectID)
@@ -352,7 +352,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 
 func pumpOutput(run *managedRun, file interface{ Read([]byte) (int, error) }, stream string, observe func(string)) {
 	buf := make([]byte, 32*1024)
-	decoder := terminal.NewUTF8Decoder()
+	decoder := terminalsvc.NewUTF8Decoder()
 	for {
 		n, err := file.Read(buf)
 		if n > 0 {
@@ -438,7 +438,7 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 	run.subscribers = make(map[chan types.ScriptRunEvent]bool)
 	run.mu.Unlock()
 	if s.ports != nil {
-		s.ports.RemoveOwner(terminal.PortOwner{Kind: "job", ID: runID})
+		s.ports.RemoveOwner(terminalsvc.PortOwner{Kind: "job", ID: runID})
 	}
 	return true
 }

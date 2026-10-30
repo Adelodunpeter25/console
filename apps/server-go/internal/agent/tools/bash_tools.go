@@ -10,7 +10,8 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 const (
@@ -43,14 +44,14 @@ func mergedEnv(overrides map[string]string) []string {
 		// an interactive browser login, which a headless box cannot do. The
 		// user bin dir lets a server-installed `gh` (~/.local/bin) resolve
 		// even when the daemon runs with a thin PATH.
-		return github.AppendToEnv(services.EnsureUserBinDir(env))
+		return github.AppendToEnv(integrations.EnsureUserBinDir(env))
 	}
 	out := make([]string, 0, len(env)+len(overrides))
 	out = append(out, env...)
 	for k, v := range overrides {
 		out = append(out, k+"="+v)
 	}
-	return github.AppendToEnv(services.EnsureUserBinDir(out))
+	return github.AppendToEnv(integrations.EnsureUserBinDir(out))
 }
 
 func shellArgv(command string) []string {
@@ -59,7 +60,7 @@ func shellArgv(command string) []string {
 
 // NewBashTool builds the "bash" tool bound to jobs (for background=true
 // runs). A nil manager disables background mode (headless singleton).
-func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
+func NewBashTool(jobs *terminal.BashJobManager, ownerSessionID string, parentIDs ...string) Tool {
 	parentRunID, parentCallID := "", ""
 	if len(parentIDs) > 0 {
 		parentRunID = parentIDs[0]
@@ -87,9 +88,9 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs
 				}
 				timeoutMs := in.TimeoutMs
 				if timeoutMs <= 0 {
-					timeoutMs = services.BashJobDefaultTimeoutMs
+					timeoutMs = terminal.BashJobDefaultTimeoutMs
 				}
-				snap, err := jobs.Start(services.StartBashJobOptions{
+				snap, err := jobs.Start(terminal.StartBashJobOptions{
 					Command: in.Command, Cwd: cwd, Env: mergedEnv(in.Env),
 					TimeoutMs: timeoutMs, OwnerSessionID: ownerSessionID,
 					ParentRunID: parentRunID, ParentCallID: parentCallID,
@@ -111,7 +112,7 @@ func NewBashTool(jobs *services.BashJobManager, ownerSessionID string, parentIDs
 			if timeoutMs <= 0 {
 				timeoutMs = bashDefaultTimeout
 			}
-			res := services.SpawnCapture(ctx, shellArgv(in.Command), services.SpawnCaptureOptions{
+			res := terminal.SpawnCapture(ctx, shellArgv(in.Command), terminal.SpawnCaptureOptions{
 				Cwd: cwd, Env: mergedEnv(in.Env), TimeoutMs: timeoutMs,
 			})
 

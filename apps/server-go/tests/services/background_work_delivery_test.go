@@ -3,16 +3,16 @@ package tests
 import (
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 )
 
 func TestBackgroundWorkCompletionIsClaimedOnce(t *testing.T) {
-	manager := services.NewBackgroundWorkManager()
-	work, err := manager.Register(services.BackgroundWorkOptions{SessionID: "session-1", Kind: services.BackgroundWorkShell})
+	manager := background.NewManager()
+	work, err := manager.Register(background.Options{SessionID: "session-1", Kind: background.KindShell})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Complete(work.ID, "session-1", services.BackgroundWorkCompleted, "done", "", nil); err != nil {
+	if _, err := manager.Complete(work.ID, "session-1", background.StatusCompleted, "done", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	first := manager.TakeCompletions("session-1")

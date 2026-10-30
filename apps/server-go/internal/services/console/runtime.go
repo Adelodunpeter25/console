@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,10 +23,10 @@ import (
 // Runtime is one session's console kernel.
 type Runtime struct {
 	kernel    *jskernel.Runtime
-	ports     *services.PortRegistry
-	scripts   *services.ProjectScriptsService
+	ports     *terminalsvc.PortRegistry
+	scripts   *projectssvc.ProjectScriptsService
 	sessions  *services.SessionService
-	projects  *services.ProjectService
+	projects  *projectssvc.ProjectService
 	active    func(string) bool
 	abort     func(string) bool
 	prompt    PromptFunc
@@ -37,7 +39,7 @@ type Runtime struct {
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *services.PortRegistry, scripts *services.ProjectScriptsService, sessions *services.SessionService, projects *services.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
+func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScriptsService, sessions *services.SessionService, projects *projectssvc.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
 	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
@@ -333,7 +335,7 @@ func (r *Runtime) projectsAdd(_ context.Context, args map[string]any) (*jskernel
 	if name == "" {
 		name = filepath.Base(filepath.Clean(dir))
 	}
-	project, err := r.projects.Create(services.CreateProjectOptions{Name: name, Dir: dir})
+	project, err := r.projects.Create(projectssvc.CreateProjectOptions{Name: name, Dir: dir})
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/gitconfig"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 )
 
 // bootstrapRepo creates a local git repo with one commit, usable as a clone
@@ -31,9 +31,9 @@ func bootstrapRepo(t *testing.T) string {
 
 // blankService returns a bootstrap service plus an empty parent dir to create
 // projects in.
-func blankService(t *testing.T) (*services.ProjectBootstrapService, string) {
+func blankService(t *testing.T) (*projectssvc.ProjectBootstrapService, string) {
 	t.Helper()
-	return services.NewProjectBootstrapService(), t.TempDir()
+	return projectssvc.NewProjectBootstrapService(), t.TempDir()
 }
 
 func TestInitBlankCreatesRepo(t *testing.T) {
@@ -50,8 +50,8 @@ func TestInitBlankCreatesRepo(t *testing.T) {
 		t.Fatalf(".git must exist in %s: %v", dir, err)
 	}
 	// A blank project is an empty repo — no seed commit. Verified by exit status:
-// `rev-parse --verify HEAD` fails on an unborn HEAD and prints to stderr, so
-// inspecting its output would read a correct repo as broken.
+	// `rev-parse --verify HEAD` fails on an unborn HEAD and prints to stderr, so
+	// inspecting its output would read a correct repo as broken.
 	if bootstrapGitOK(t, dir, "rev-parse", "--verify", "HEAD") {
 		t.Fatal("blank project must have no commits")
 	}
@@ -70,7 +70,7 @@ func TestInitBlankRefusesNonEmptyTarget(t *testing.T) {
 	}
 
 	_, err := svc.InitBlank(parent, "taken")
-	if !errors.Is(err, services.ErrTargetNotEmpty) {
+	if !errors.Is(err, projectssvc.ErrTargetNotEmpty) {
 		t.Fatalf("want ErrTargetNotEmpty, got %v", err)
 	}
 	// The refusal must not have touched the existing content.
@@ -141,7 +141,7 @@ func TestCloneRefusesNonEmptyTarget(t *testing.T) {
 	}
 
 	_, err := svc.Clone(origin, parent, "occupied")
-	if !errors.Is(err, services.ErrTargetNotEmpty) {
+	if !errors.Is(err, projectssvc.ErrTargetNotEmpty) {
 		t.Fatalf("want ErrTargetNotEmpty, got %v", err)
 	}
 	if _, err := os.Stat(keep); err != nil {
@@ -174,7 +174,7 @@ func TestCloneWithoutTokenOnlyBlocksGitHub(t *testing.T) {
 	isolateGitHubCredentials(t)
 
 	_, err := svc.Clone("https://github.com/octocat/private-thing.git", parent, "")
-	if !errors.Is(err, services.ErrGitHubNotConnected) {
+	if !errors.Is(err, projectssvc.ErrGitHubNotConnected) {
 		t.Fatalf("want ErrGitHubNotConnected for a GitHub URL, got %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestCloneWithStoredTokenIsNotBlocked(t *testing.T) {
 	// unreachable from a sandboxed test run), but it must fail as a git error,
 	// not as ErrGitHubNotConnected.
 	_, err := svc.Clone("https://github.com/octocat/hello.git", parent, "")
-	if errors.Is(err, services.ErrGitHubNotConnected) {
+	if errors.Is(err, projectssvc.ErrGitHubNotConnected) {
 		t.Fatalf("a stored token must satisfy the guard, got %v", err)
 	}
 }

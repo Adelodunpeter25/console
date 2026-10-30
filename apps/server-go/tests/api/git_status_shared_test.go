@@ -6,12 +6,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
 func TestGitStatusConcurrentCallsAgree(t *testing.T) {
 	repo := gitRepo(t)
-	git := services.NewGitService()
+	git := git.NewGitService()
 	var wg sync.WaitGroup
 	results := make([]string, 8)
 	for i := range results {

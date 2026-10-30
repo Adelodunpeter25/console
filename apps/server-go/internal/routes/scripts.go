@@ -18,6 +18,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -58,7 +59,7 @@ func scriptRunsToProto(runs []types.ScriptRun) []*consolev1.ScriptRun {
 
 // scriptRunEventToProto converts a stream event to the canonical wire type
 // plus the SSE event name previously carried in the "type" field.
-func RegisterScriptRoutes(app *fiber.App, scripts *services.ProjectScriptsService) {
+func RegisterScriptRoutes(app *fiber.App, scripts *projectssvc.ProjectScriptsService) {
 	ok := func(c *fiber.Ctx, data any, status ...int) error {
 		code := fiber.StatusOK
 		if len(status) > 0 {

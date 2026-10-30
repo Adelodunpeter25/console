@@ -21,8 +21,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	svcintegrations "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
+	integrationssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 )
 
 // newIntegrationsApp builds a Fiber app with only the integration routes.
@@ -146,7 +145,7 @@ func TestIntegrationsGhVersionExitNonZero(t *testing.T) {
 // checksums. corruptChecksum flips the hash so the mismatch path is covered.
 func releaseServer(t *testing.T, version, ghScript string, corruptChecksum bool) *httptest.Server {
 	t.Helper()
-	assetFile, innerPath, err := services.GhReleaseAsset(version)
+	assetFile, innerPath, err := integrationssvc.GhReleaseAsset(version)
 	if err != nil {
 		t.Skipf("platform has no gh asset: %v", err)
 	}
@@ -200,15 +199,15 @@ func withIsolatedBox(t *testing.T, srv *httptest.Server) string {
 	home := t.TempDir()
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("HOME", home)
-	prevOS := svcintegrations.GhInstallOS
-	svcintegrations.GhInstallOS = "linux"
-	prevAPI, prevDL := svcintegrations.GhReleaseAPIBase, svcintegrations.GhReleaseDownloadBase
-	svcintegrations.GhReleaseAPIBase = srv.URL
-	svcintegrations.GhReleaseDownloadBase = srv.URL + "/download"
+	prevOS := integrationssvc.GhInstallOS
+	integrationssvc.GhInstallOS = "linux"
+	prevAPI, prevDL := integrationssvc.GhReleaseAPIBase, integrationssvc.GhReleaseDownloadBase
+	integrationssvc.GhReleaseAPIBase = srv.URL
+	integrationssvc.GhReleaseDownloadBase = srv.URL + "/download"
 	t.Cleanup(func() {
-		svcintegrations.GhInstallOS = prevOS
-		svcintegrations.GhReleaseAPIBase = prevAPI
-		svcintegrations.GhReleaseDownloadBase = prevDL
+		integrationssvc.GhInstallOS = prevOS
+		integrationssvc.GhReleaseAPIBase = prevAPI
+		integrationssvc.GhReleaseDownloadBase = prevDL
 	})
 	return home
 }
@@ -256,12 +255,12 @@ func TestIntegrationsGhInstall(t *testing.T) {
 }
 
 func TestIntegrationsGhInstallBrewMissing(t *testing.T) {
-	prevOS, prevBrew := svcintegrations.GhInstallOS, svcintegrations.BrewBin
-	svcintegrations.GhInstallOS = "darwin"
-	svcintegrations.BrewBin = filepath.Join(t.TempDir(), "no-such-brew")
+	prevOS, prevBrew := integrationssvc.GhInstallOS, integrationssvc.BrewBin
+	integrationssvc.GhInstallOS = "darwin"
+	integrationssvc.BrewBin = filepath.Join(t.TempDir(), "no-such-brew")
 	t.Cleanup(func() {
-		svcintegrations.GhInstallOS = prevOS
-		svcintegrations.BrewBin = prevBrew
+		integrationssvc.GhInstallOS = prevOS
+		integrationssvc.BrewBin = prevBrew
 	})
 	t.Setenv("PATH", t.TempDir())
 
@@ -297,11 +296,11 @@ func TestIntegrationsGhInstallSkipsWhenPresent(t *testing.T) {
 	// A resolving `gh` short-circuits before any network: point the bases at
 	// an unroutable address to prove nothing is fetched.
 	fakeGh(t, `echo "gh version 1.2.3 (test)"`)
-	svcintegrations.GhReleaseAPIBase = "http://127.0.0.1:1"
-	svcintegrations.GhReleaseDownloadBase = "http://127.0.0.1:1"
+	integrationssvc.GhReleaseAPIBase = "http://127.0.0.1:1"
+	integrationssvc.GhReleaseDownloadBase = "http://127.0.0.1:1"
 	t.Cleanup(func() {
-		svcintegrations.GhReleaseAPIBase = "https://api.github.com"
-		svcintegrations.GhReleaseDownloadBase = "https://github.com/cli/cli/releases/download"
+		integrationssvc.GhReleaseAPIBase = "https://api.github.com"
+		integrationssvc.GhReleaseDownloadBase = "https://github.com/cli/cli/releases/download"
 	})
 
 	code, out := postInstall(t, newIntegrationsApp())

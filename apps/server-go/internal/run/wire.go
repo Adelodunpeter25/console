@@ -16,7 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	backgroundsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -389,7 +389,7 @@ func WireFrame(e loop.Event) (string, any, bool) {
 	case loop.EventSubagentStart, loop.EventSubagentActivity, loop.EventSubagentEnd:
 		return SubagentFrame(e)
 	case loop.EventBackgroundWork:
-		work, ok := e.Message.(services.BackgroundWorkEvent)
+		work, ok := e.Message.(backgroundsvc.Event)
 		if !ok {
 			return "", nil, true
 		}
@@ -398,7 +398,7 @@ func WireFrame(e loop.Event) (string, any, bool) {
 			"work": work.Work,
 		}, false
 	case loop.EventBackgroundContinue:
-		work, _ := e.Message.([]services.BackgroundWork)
+		work, _ := e.Message.([]backgroundsvc.Work)
 		return "backgroundWorkContinue", map[string]any{
 			"type": "backgroundWorkContinue", "message": e.Text, "work": work,
 		}, false

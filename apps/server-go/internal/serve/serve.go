@@ -27,6 +27,8 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/cfrelay"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
@@ -108,14 +110,14 @@ func Run() error {
 	}
 	defer manager.Close()
 
-	watch, err := services.NewFsWatchService()
+	watch, err := fssvc.NewFsWatchService()
 	if err != nil {
 		slog.Error("failed to start fs watcher", "error", err)
 		return err
 	}
 	defer watch.Close()
 
-	ports := services.NewPortRegistry()
+	ports := terminal.NewPortRegistry()
 	defer ports.CloseAll()
 	ports.StartReaper(5 * time.Second)
 	notifications := services.NewNotificationService()

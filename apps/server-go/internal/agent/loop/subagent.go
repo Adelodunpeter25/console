@@ -13,7 +13,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 )
 
 // SubagentContext wires a subagent tool run. A nil context yields the
@@ -49,7 +49,7 @@ type SubagentContext struct {
 	Usage *UsageTracker
 	// BackgroundWork, when set, registers detached subagent runs and queues
 	// their terminal summaries without blocking the parent tool call.
-	BackgroundWork *services.BackgroundWorkManager
+	BackgroundWork *background.Manager
 	SessionID      string
 	ParentRunID    string
 	// AccountID pins the subagent to the parent run's account credential
@@ -143,9 +143,9 @@ func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, pro
 	if c.BackgroundWork == nil || c.SessionID == "" {
 		return nil, tools.NewToolError("Background subagents are not available in this context.")
 	}
-	work, err := c.BackgroundWork.Register(services.BackgroundWorkOptions{
+	work, err := c.BackgroundWork.Register(background.Options{
 		SessionID: c.SessionID, ParentRunID: c.ParentRunID, ParentCallID: parentCallID,
-		Kind:     services.BackgroundWorkSubagent,
+		Kind:     background.KindSubagent,
 		Metadata: map[string]string{"name": name, "role": role},
 	})
 	if err != nil {
@@ -158,15 +158,15 @@ func (c *SubagentContext) startBackground(ctx context.Context, parentCallID, pro
 	}
 	go func() {
 		result, runErr := c.run(childCtx, parentCallID, prompt, name, role)
-		status := services.BackgroundWorkCompleted
+		status := background.StatusCompleted
 		summary := subagentSummary(result)
 		failure := ""
 		if runErr != nil {
 			if errors.Is(childCtx.Err(), context.Canceled) {
-				status = services.BackgroundWorkCancelled
+				status = background.StatusCancelled
 				failure = "Subagent was cancelled"
 			} else {
-				status = services.BackgroundWorkFailed
+				status = background.StatusFailed
 				failure = runErr.Error()
 			}
 			summary = ""

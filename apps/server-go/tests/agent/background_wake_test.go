@@ -9,22 +9,22 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	backgroundsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 func TestBackgroundCompletionWakesIdleSession(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	work := services.NewBackgroundWorkManager()
+	work := backgroundsvc.NewManager()
 	svc.SetBackgroundWorkManager(work)
 	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("ok, waiting", "build looks good"), nil }
 	header := helpers.CreateRunSession(t, sessions)
 
 	// A job that outlives the first run: it is registered while the run is
 	// active and completes only after the run has settled.
-	rec, err := work.Register(services.BackgroundWorkOptions{
-		SessionID: header.ID, Kind: services.BackgroundWorkShell,
+	rec, err := work.Register(backgroundsvc.Options{
+		SessionID: header.ID, Kind: backgroundsvc.KindShell,
 		Metadata: map[string]string{"command": "make build", "exit_code": "0"},
 	})
 	if err != nil {
@@ -42,7 +42,7 @@ func TestBackgroundCompletionWakesIdleSession(t *testing.T) {
 		}
 	}
 
-	if _, err := work.Complete(rec.ID, header.ID, services.BackgroundWorkCompleted, "done", "", nil); err != nil {
+	if _, err := work.Complete(rec.ID, header.ID, backgroundsvc.StatusCompleted, "done", "", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,12 +73,12 @@ func TestBackgroundCompletionWakesIdleSession(t *testing.T) {
 func TestCancelledBackgroundWorkDoesNotWake(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	work := services.NewBackgroundWorkManager()
+	work := backgroundsvc.NewManager()
 	svc.SetBackgroundWorkManager(work)
 	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("unexpected"), nil }
 	header := helpers.CreateRunSession(t, sessions)
 
-	rec, _ := work.Register(services.BackgroundWorkOptions{SessionID: header.ID, Kind: services.BackgroundWorkShell})
+	rec, _ := work.Register(backgroundsvc.Options{SessionID: header.ID, Kind: backgroundsvc.KindShell})
 	if _, err := work.Cancel(rec.ID, header.ID); err != nil {
 		t.Fatal(err)
 	}

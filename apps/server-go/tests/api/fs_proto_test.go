@@ -19,7 +19,7 @@ import (
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 )
 
 func fsFixture(t *testing.T, name string) string {
@@ -127,13 +127,13 @@ func TestFsProtoMatchesFixtures(t *testing.T) {
 
 func fsRoutesApp(t *testing.T) *fiber.App {
 	t.Helper()
-	watch, err := services.NewFsWatchService()
+	watch, err := fssvc.NewFsWatchService()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(watch.Close)
 	app := fiber.New()
-	routes.RegisterFsRoutes(app, services.NewFsService(), watch)
+	routes.RegisterFsRoutes(app, fssvc.NewFsService(), watch)
 	return app
 }
 

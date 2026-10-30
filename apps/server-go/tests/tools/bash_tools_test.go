@@ -6,12 +6,13 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 func TestBashSyncSuccess(t *testing.T) {
@@ -64,8 +65,8 @@ func TestBashBackgroundDisabledWithoutManager(t *testing.T) {
 }
 
 func TestBashJobLifecycle(t *testing.T) {
-	jobs := services.NewBashJobManager(nil)
-	jobs.SetBackgroundWorkManager(services.NewBackgroundWorkManager())
+	jobs := terminal.NewBashJobManager(nil)
+	jobs.SetBackgroundWorkManager(background.NewManager())
 	bash := tools.NewBashTool(jobs, "sess1")
 	bashJob := tools.NewBashJobTool(jobs, "sess1")
 
@@ -125,7 +126,7 @@ func TestBashJobLifecycle(t *testing.T) {
 }
 
 func TestBashJobKill(t *testing.T) {
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminal.NewBashJobManager(nil)
 	bash := tools.NewBashTool(jobs, "")
 	bashJob := tools.NewBashJobTool(jobs, "")
 
@@ -148,7 +149,7 @@ func TestBashJobKill(t *testing.T) {
 }
 
 func TestBashJobMissingJobID(t *testing.T) {
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminal.NewBashJobManager(nil)
 	bashJob := tools.NewBashJobTool(jobs, "")
 	for _, action := range []string{"output", "kill"} {
 		args, _ := json.Marshal(map[string]any{"action": action})
@@ -159,7 +160,7 @@ func TestBashJobMissingJobID(t *testing.T) {
 }
 
 func TestBashJobUnknownAction(t *testing.T) {
-	jobs := services.NewBashJobManager(nil)
+	jobs := terminal.NewBashJobManager(nil)
 	bashJob := tools.NewBashJobTool(jobs, "")
 	args, _ := json.Marshal(map[string]any{"action": "bogus"})
 	if _, err := bashJob.Execute(context.Background(), args); err == nil {

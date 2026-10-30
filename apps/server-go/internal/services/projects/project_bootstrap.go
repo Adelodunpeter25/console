@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 )
 
 var (
@@ -37,7 +37,7 @@ var (
 	// of showing an opaque git error.
 	ErrGitHubNotConnected = errors.New("GitHub is not connected. Add a personal access token in Settings > Accounts, then try again")
 
-	// ErrInvalidRepoURL is returned for a URL we refuse to hand to git.
+	// ErrInvalidRepoURL is returned for a URL we refuse to hand to gitsvc.
 	ErrInvalidRepoURL = errors.New("enter a valid GitHub repository URL")
 )
 
@@ -70,7 +70,7 @@ func (s *ProjectBootstrapService) InitBlank(parentDir, name string) (string, err
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	if _, err := git.RunGit(dir, "init", "-b", "main"); err != nil {
+	if _, err := gitsvc.RunGit(dir, "init", "-b", "main"); err != nil {
 		// Never leave a plain directory behind claiming to be a project.
 		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("could not initialize git repository: %w", err)
@@ -115,7 +115,7 @@ func (s *ProjectBootstrapService) Clone(url, parentDir, name string) (string, er
 		return "", ErrGitHubNotConnected
 	}
 
-	if _, err := git.RunGit(parent, "clone", "--progress", url, dir); err != nil {
+	if _, err := gitsvc.RunGit(parent, "clone", "--progress", url, dir); err != nil {
 		// git cleans up after a failed clone itself in most cases, but a
 		// partial directory is possible (e.g. the network dropped mid-fetch).
 		// Removing it keeps the guard above honest on retry.

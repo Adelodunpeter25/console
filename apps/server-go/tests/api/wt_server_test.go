@@ -16,6 +16,8 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"io"
 	"math/big"
 	"net"
@@ -35,6 +37,8 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
+	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
@@ -91,12 +95,12 @@ type wtHarness struct {
 	server        *wt.Server
 	addr          string
 	issuer        *auth.TokenIssuer
-	watch         *services.FsWatchService
-	git           *services.GitService
+	watch         *fs.FsWatchService
+	git           *gitsvc.GitService
 	notifications *services.NotificationService
-	scripts       *services.ProjectScriptsService
-	projects      *services.ProjectService
-	ports         *services.PortRegistry
+	scripts       *projectssvc.ProjectScriptsService
+	projects      *projectssvc.ProjectService
+	ports         *terminalsvc.PortRegistry
 	devices       *services.DeviceService
 }
 
@@ -104,9 +108,9 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	t.Helper()
 	certFile, keyFile := wtTestCert(t)
 	issuer := auth.NewTokenIssuerWithSecret([]byte("wt-test-secret-32-bytes-!!!!"))
-	ports := services.NewPortRegistry()
+	ports := terminalsvc.NewPortRegistry()
 	t.Cleanup(ports.CloseAll)
-	watch, err := services.NewFsWatchService()
+	watch, err := fs.NewFsWatchService()
 	if err != nil {
 		t.Fatalf("watch service: %v", err)
 	}
@@ -116,10 +120,10 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 		t.Fatal(err)
 	}
 	t.Cleanup(manager.Close)
-	projects := services.NewProjectService(manager)
+	projects := projectssvc.NewProjectService(manager)
 	notifications := services.NewNotificationService()
-	git := services.NewGitService()
-	scripts := services.NewProjectScriptsService(projects, ports)
+	git := gitsvc.NewGitService()
+	scripts := projectssvc.NewProjectScriptsService(projects, ports)
 	devices := services.NewDeviceService()
 	t.Cleanup(func() { _ = devices.Close() })
 	srv := wt.New(wt.Config{
@@ -128,7 +132,7 @@ func startWTTestServer(t *testing.T, runs *run.Service) wtHarness {
 	}, wt.Deps{
 		Issuer:        issuer,
 		Runs:          runs,
-		PTY:           services.NewPtyManager(ports, func(string) string { return "" }),
+		PTY:           terminalsvc.NewPtyManager(ports, func(string) string { return "" }),
 		Ports:         ports,
 		Watch:         watch,
 		Git:           git,
@@ -604,7 +608,7 @@ func TestWTWatchNotifications(t *testing.T) {
 func wtScriptProject(t *testing.T, h wtHarness, command string) (projectID, scriptID string) {
 	t.Helper()
 	root := t.TempDir()
-	proj, err := h.projects.Create(services.CreateProjectOptions{Name: "P", Dir: root})
+	proj, err := h.projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: root})
 	if err != nil {
 		t.Fatal(err)
 	}

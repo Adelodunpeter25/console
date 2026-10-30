@@ -22,12 +22,13 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
 // scratchRouteApp wires the session routes over a file-backed store so the
 // scratch root on disk matches what Create derives.
-func scratchRouteApp(t *testing.T) (*fiber.App, *services.SessionService, *services.ProjectService, string) {
+func scratchRouteApp(t *testing.T) (*fiber.App, *services.SessionService, *projectssvc.ProjectService, string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("CONSOLE_STORAGE_DIR", dir)
@@ -39,7 +40,7 @@ func scratchRouteApp(t *testing.T) (*fiber.App, *services.SessionService, *servi
 	sessions := services.NewSessionService(manager)
 	app := fiber.New()
 	routes.RegisterSessionRoutes(app, sessions, run.NewService(sessions))
-	return app, sessions, services.NewProjectService(manager), dir
+	return app, sessions, projectssvc.NewProjectService(manager), dir
 }
 
 func patchSession(t *testing.T, app *fiber.App, id, body string) *consolev1.SessionHeader {
@@ -73,7 +74,7 @@ func TestPatchSessionExplicitNullClearsProject(t *testing.T) {
 	app, sessions, projects, storageDir := scratchRouteApp(t)
 
 	projectDir := t.TempDir()
-	project, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: projectDir})
+	project, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: projectDir})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestPatchSessionOmittedProjectKeepsLink(t *testing.T) {
 	app, sessions, projects, _ := scratchRouteApp(t)
 
 	projectDir := t.TempDir()
-	project, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: projectDir})
+	project, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: projectDir})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -128,7 +129,7 @@ func TestPatchSessionNullWithoutCwdKeyClearsProject(t *testing.T) {
 	app, sessions, projects, storageDir := scratchRouteApp(t)
 
 	projectDir := t.TempDir()
-	project, err := projects.Create(services.CreateProjectOptions{Name: "P", Dir: projectDir})
+	project, err := projects.Create(projectssvc.CreateProjectOptions{Name: "P", Dir: projectDir})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}

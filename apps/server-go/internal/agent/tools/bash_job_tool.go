@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
 type bashJobInput struct {
@@ -18,7 +18,7 @@ type bashJobInput struct {
 	Limit  int    `json:"limit,omitempty" jsonschema:"description=max chars per stream (default 20000, max 50000)"`
 }
 
-func formatJobSnapshot(s services.BashJobSnapshot) string {
+func formatJobSnapshot(s terminal.BashJobSnapshot) string {
 	lines := []string{
 		fmt.Sprintf("Job: %s", s.JobID),
 		fmt.Sprintf("Status: %s", s.Status),
@@ -33,7 +33,7 @@ func formatJobSnapshot(s services.BashJobSnapshot) string {
 		lines = append(lines, fmt.Sprintf("Exit code: %d", *s.ExitCode))
 	}
 	if s.TimedOut {
-		lines = append(lines, fmt.Sprintf("Timed out: true (max %dms)", services.BashJobMaxTimeoutMs))
+		lines = append(lines, fmt.Sprintf("Timed out: true (max %dms)", terminal.BashJobMaxTimeoutMs))
 	}
 	if s.Aborted {
 		lines = append(lines, "Killed: true")
@@ -41,7 +41,7 @@ func formatJobSnapshot(s services.BashJobSnapshot) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID string, cursor, limit int) (string, error) {
+func renderJobOutputBody(jobs *terminal.BashJobManager, jobID, ownerSessionID string, cursor, limit int) (string, error) {
 	r, err := jobs.Output(jobID, ownerSessionID, cursor, limit)
 	if err != nil {
 		return "", err
@@ -68,7 +68,7 @@ func renderJobOutputBody(jobs *services.BashJobManager, jobID, ownerSessionID st
 // NewBashJobTool builds the "bashJob" tool bound to jobs, scoped to
 // ownerSessionID (must match the session that started the job via bash's
 // background=true).
-func NewBashJobTool(jobs *services.BashJobManager, ownerSessionID string) Tool {
+func NewBashJobTool(jobs *terminal.BashJobManager, ownerSessionID string) Tool {
 	return NewTool("bashJob", "Inspect or stop background bash jobs. action: output|kill|list. You do NOT need this to learn that a job finished: its exit status and output are delivered to you automatically, even if you end your turn. Use it only to read the output of a job that is still running (e.g. a dev server) or to kill one. Never poll in a loop.", TierExec,
 		func(ctx context.Context, in bashJobInput) (any, error) {
 			if jobs == nil {

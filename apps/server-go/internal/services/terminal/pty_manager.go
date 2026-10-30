@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
+	integrationssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 	"github.com/creack/pty"
@@ -432,7 +432,7 @@ func (m *PtyManager) Spawn(params types.TerminalSpawnParams) (*PtySession, error
 	// takes effect on the next terminal without a server restart. Lets `gh`
 	// in interactive shells use the stored PAT instead of a browser login,
 	// and resolve a server-installed `gh` (~/.local/bin) under a thin PATH.
-	env = github.AppendToEnv(integrations.EnsureUserBinDir(env))
+	env = github.AppendToEnv(integrationssvc.EnsureUserBinDir(env))
 	cmd.Env = env
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})

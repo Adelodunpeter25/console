@@ -3,10 +3,9 @@ package run
 import (
 	"errors"
 	"fmt"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"log/slog"
 	"strings"
-
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
 
 // backgroundContext claims completed detached work immediately before a
@@ -26,7 +25,7 @@ func (s *Service) backgroundContext(sessionID string) string {
 	return s.renderBackgroundWork(sessionID, completed)
 }
 
-func (s *Service) renderBackgroundWork(sessionID string, completed []services.BackgroundWork) string {
+func (s *Service) renderBackgroundWork(sessionID string, completed []background.Work) string {
 	lines := make([]string, 0, len(completed)*6)
 	for _, item := range completed {
 		lines = append(lines, fmt.Sprintf("Background work completed: %s (%s)", item.ID, item.Kind))
@@ -82,7 +81,7 @@ func (s *Service) wakeIfIdle(sessionID string) {
 
 // wakeContext claims the finished work and renders the synthetic user turn.
 // It returns false when nothing is left to deliver.
-func (s *Service) wakeContext(sessionID string) (string, []services.BackgroundWork, bool) {
+func (s *Service) wakeContext(sessionID string) (string, []background.Work, bool) {
 	work := s.BackgroundWorkManager()
 	if work == nil {
 		return "", nil, false
@@ -96,13 +95,13 @@ func (s *Service) wakeContext(sessionID string) (string, []services.BackgroundWo
 
 // wakeMessage is the short human label carried on the wake event so clients
 // can say what resumed the agent.
-func wakeMessage(items []services.BackgroundWork) string {
+func wakeMessage(items []background.Work) string {
 	shell, sub := false, false
 	for _, item := range items {
 		switch item.Kind {
-		case services.BackgroundWorkShell:
+		case background.KindShell:
 			shell = true
-		case services.BackgroundWorkSubagent:
+		case background.KindSubagent:
 			sub = true
 		}
 	}

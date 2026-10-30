@@ -3,12 +3,13 @@ package tests
 
 import (
 	"encoding/json"
+	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -23,7 +24,7 @@ func TestBrowseDirectory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".hidden"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fs := services.NewFsService()
+	fs := fssvc.NewFsService()
 
 	result, err := fs.BrowseDirectory(root, false)
 	if err != nil {
@@ -42,14 +43,14 @@ func TestBrowseDirectory(t *testing.T) {
 
 func TestFilePreviewGates(t *testing.T) {
 	root := t.TempDir()
-	fs := services.NewFsService()
+	fs := fssvc.NewFsService()
 
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), make([]byte, 600*1024), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := fs.ReadFileContentWithMeta(filepath.Join(root, "big.txt"), 0, 0); err == nil {
 		t.Fatal("oversized file should be blocked")
-	} else if blocked, ok := err.(*services.PreviewBlocked); !ok || blocked.Code != "FILE_TOO_LARGE" || blocked.Status != 413 {
+	} else if blocked, ok := err.(*fssvc.PreviewBlocked); !ok || blocked.Code != "FILE_TOO_LARGE" || blocked.Status != 413 {
 		t.Fatalf("wrong error: %v", err)
 	}
 
@@ -71,7 +72,7 @@ func TestFilePreviewGates(t *testing.T) {
 
 func TestWriteReadTree(t *testing.T) {
 	root := t.TempDir()
-	fs := services.NewFsService()
+	fs := fssvc.NewFsService()
 
 	if _, err := fs.WriteFileContent(filepath.Join(root, "nested", "f.txt"), "hello"); err != nil {
 		t.Fatalf("write: %v", err)
@@ -128,9 +129,9 @@ func TestGitStatusAndBranches(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	git := services.NewGitService()
+	gitSvc := gitsvc.NewGitService()
 
-	status := git.GetGitStatus(repo)
+	status := gitSvc.GetGitStatus(repo)
 	if status.Branch != "main" || status.Clean {
 		t.Fatalf("unexpected status: %+v", status)
 	}
@@ -150,19 +151,19 @@ func TestGitStatusAndBranches(t *testing.T) {
 		t.Fatalf("missing files in status: %+v", status.Files)
 	}
 
-	branches := git.ListBranches(repo)
+	branches := gitSvc.ListBranches(repo)
 	if !branches.IsGitRepository || len(branches.Branches) != 1 || !branches.Branches[0].Current {
 		t.Fatalf("branches: %+v", branches)
 	}
 
-	if _, err := git.GetDiff(repo, ""); err != nil {
+	if _, err := gitSvc.GetDiff(repo, ""); err != nil {
 		t.Fatalf("diff: %v", err)
 	}
 }
 
 func TestGitCheckout(t *testing.T) {
 	repo := gitRepo(t)
-	git := services.NewGitService()
+	gitSvc := gitsvc.NewGitService()
 	run := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = repo
@@ -172,10 +173,10 @@ func TestGitCheckout(t *testing.T) {
 	}
 	run("branch", "feature")
 
-	if err := git.CheckoutBranch(repo, "feature"); err != nil {
+	if err := gitSvc.CheckoutBranch(repo, "feature"); err != nil {
 		t.Fatalf("checkout: %v", err)
 	}
-	branches := git.ListBranches(repo)
+	branches := gitSvc.ListBranches(repo)
 	var current string
 	for _, b := range branches.Branches {
 		if b.Current {
@@ -193,13 +194,13 @@ func TestGitCheckout(t *testing.T) {
 // native library on this platform.
 func TestFsGrepUnavailableWithoutManager(t *testing.T) {
 	root := t.TempDir()
-	fs := services.NewFsService()
+	fs := fssvc.NewFsService()
 
-	_, err := fs.Grep(root, "needle", services.GrepOptions{})
+	_, err := fs.Grep(root, "needle", fssvc.GrepOptions{})
 	if err == nil {
 		t.Fatal("expected error when fff manager is not wired")
 	}
-	if err != services.ErrFffUnavailable {
+	if err != fssvc.ErrFffUnavailable {
 		t.Fatalf("expected ErrFffUnavailable, got: %v", err)
 	}
 }

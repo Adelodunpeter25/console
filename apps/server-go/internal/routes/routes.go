@@ -2,6 +2,7 @@
 package routes
 
 import (
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
 	"strings"
 	"time"
@@ -18,14 +19,17 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
+	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 type Config struct {
 	DB            *db.DB
-	Watch         *services.FsWatchService
-	Ports         *services.PortRegistry
+	Watch         *fs.FsWatchService
+	Ports         *terminal.PortRegistry
 	Notifications *services.NotificationService
 	// TokenIssuer mints the API bearer tokens the WT handshake validates.
 	// Nil builds one internally (persistent secret, ephemeral fallback).
@@ -85,11 +89,11 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
-	RegisterFsRoutes(app, services.NewFsService(), cfg.Watch)
-	gitSvc := services.NewGitService()
+	RegisterFsRoutes(app, fs.NewFsService(), cfg.Watch)
+	gitSvc := git.NewGitService()
 	RegisterGitRoutes(app, gitSvc, cfg.Watch)
-	projects := services.NewProjectService(cfg.DB)
-	ptyManager := services.NewPtyManager(cfg.Ports, func(cwd string) string {
+	projects := projectssvc.NewProjectService(cfg.DB)
+	ptyManager := terminal.NewPtyManager(cfg.Ports, func(cwd string) string {
 		project, err := projects.GetByDir(cwd)
 		if err != nil {
 			return ""
@@ -97,9 +101,9 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 		return project.ID
 	})
 	RegisterTerminalRoutes(app, ptyManager)
-	scriptsSvc := services.NewProjectScriptsService(services.NewProjectService(cfg.DB), cfg.Ports)
+	scriptsSvc := projectssvc.NewProjectScriptsService(projectssvc.NewProjectService(cfg.DB), cfg.Ports)
 	RegisterScriptRoutes(app, scriptsSvc)
-	RegisterProjectRoutes(app, services.NewProjectService(cfg.DB), services.NewProjectBootstrapService())
+	RegisterProjectRoutes(app, projectssvc.NewProjectService(cfg.DB), projectssvc.NewProjectBootstrapService())
 	// One shared usage instance: auth-driven account mutations invalidate
 	// the same cache the usage routes read from.
 	usageSvc := usage.NewService()
@@ -115,7 +119,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
 	runSvc.SetNotifications(cfg.Notifications)
 	runSvc.SetMemories(memory.NewRegistry(""))
-	bashJobs := services.NewBashJobManager(cfg.Ports)
+	bashJobs := terminal.NewBashJobManager(cfg.Ports)
 	runSvc.SetBashJobs(bashJobs)
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
@@ -125,7 +129,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	go mcpManager.AutoConnect()
 	registerMCPRoutes(app, mcpManager)
 	RegisterSessionRoutes(app, services.NewSessionService(cfg.DB), runSvc)
-	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), services.NewWorktreeService())
+	registerWorktreeRoutes(app, services.NewSessionService(cfg.DB), git.NewWorktreeService())
 	// The provider account store backs multi-account support. Configure
 	// also migrates the legacy single-credential files; a failure here must
 	// not block boot — providers keep working off their legacy files
@@ -141,14 +145,14 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 	} else {
 		slog.Warn("fff file-search index disabled, using walk fallback")
 	}
-	services.SetFffManager(fffManager)
+	fs.SetFffManager(fffManager)
 	tools.SetFffManager(fffManager)
 	RegisterRunRoutes(app, runSvc)
 	RegisterPasteRoutes(app, runSvc)
 	registerMiscRoutes(app, cfg.Notifications)
 	deviceSvc := services.NewDeviceService()
 	registerDeviceRoutes(app, deviceSvc)
-	registerAssistRoutes(app, services.NewSessionService(cfg.DB), services.NewFsService(), services.NewSkillsService())
+	registerAssistRoutes(app, services.NewSessionService(cfg.DB), fs.NewFsService(), services.NewSkillsService())
 
 	slog.Info("api routes registered")
 	// shutdown stops every process the server owns: in-flight agent runs,
