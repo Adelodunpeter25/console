@@ -38,6 +38,20 @@ func (r *Registry) Add(tools ...Tool) {
 	}
 }
 
+// Replace swaps in a tool of the same name, keeping its position, or adds it
+// when absent. Used to rebind a tool to the current run after the registry is
+// built.
+func (r *Registry) Replace(t Tool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.tools[t.Name()]; !exists {
+		r.tools[t.Name()] = t
+		r.added = append(r.added, t.Name())
+		return
+	}
+	r.tools[t.Name()] = t
+}
+
 func (r *Registry) Get(name string) (Tool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

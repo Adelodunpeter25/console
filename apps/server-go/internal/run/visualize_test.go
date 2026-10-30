@@ -6,20 +6,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-func TestVisualizeSessionsRememberActivation(t *testing.T) {
-	var sessions visualizeSessions
-	if sessions.isActive("s1") {
-		t.Fatal("a fresh session must not be active")
-	}
-	sessions.mark("s1")
-	if !sessions.isActive("s1") {
-		t.Fatal("marked session must be active")
-	}
-	if sessions.isActive("s2") {
-		t.Fatal("activation must not leak to another session")
-	}
-}
-
 // A subagent inherits the parent's tools, but a visual made there would have
 // no transcript card to render into, so the tool is filtered out.
 func TestWithoutToolDropsOnlyTheNamedTool(t *testing.T) {

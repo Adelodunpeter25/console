@@ -18,10 +18,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/titles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -272,25 +269,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		dto.Text, dto.woken = text, items
 	}
 
-	// /computer-use activates computer use for the session. The model has no
-	// prior knowledge of it, so the command is matched here rather than
-	// discovered. The message itself is never rewritten: what the user typed
-	// is what gets persisted and displayed, and the skill instructions travel
-	// in setup instead (sent every turn, never saved).
-	if _, computerInvoked := cua.SplitInvocation(dto.Text); computerInvoked {
-		s.computerUse.mark(sessionID)
-	}
-	// /console adds the console API documentation to the session. The tools
-	// themselves are always present; the skill is loaded on demand so its
-	// method reference does not ride every turn.
-	if _, consoleInvoked := console.SplitInvocation(dto.Text); consoleInvoked {
-		s.consoleUse.mark(sessionID)
-	}
-	// /visualize activates the visual tool the same way. The command text is
-	// left untouched; the grammar and examples travel in setup.
-	if _, visualizeInvoked := visualize.SplitInvocation(dto.Text); visualizeInvoked {
-		s.visualize.mark(sessionID)
-	}
+	// A typed /command (/computer-use, /visualize, /console) switches its
+	// capability on for the session. The message itself is never rewritten:
+	// what the user typed is what gets persisted and displayed, and the
+	// reference travels in setup (sent every turn, never saved).
+	s.activateInvoked(sessionID, dto.Text)
 
 	providerID := dto.Provider
 	if providerID == "" {
@@ -425,17 +408,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if mcpManager != nil && len(mcp.EnabledServers(mcpManager)) > 0 {
 		setup = strings.TrimSpace(setup + "\n\n" + mcpSetupHint)
 	}
-	// Computer-use instructions ride setup rather than the user message: setup
-	// is sent every turn but never persisted, so the chat history (and the
-	// bubbles rendered from it) keeps exactly what the user typed.
-	if s.computerUse.isActive(sessionID) {
-		setup = strings.TrimSpace(setup + "\n\n" + cua.SkillText())
-	}
-	if s.visualize.isActive(sessionID) {
-		setup = strings.TrimSpace(setup + "\n\n" + visualize.SkillText())
-	}
-	if s.consoleUse.isActive(sessionID) {
-		setup = strings.TrimSpace(setup + "\n\n" + console.SkillText())
+	// Capability references ride setup rather than the user message: setup is
+	// sent every turn but never persisted, so the chat history keeps exactly
+	// what the user typed.
+	for _, ref := range s.capabilitySetup(sessionID) {
+		setup = strings.TrimSpace(setup + "\n\n" + ref)
 	}
 	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
@@ -487,32 +464,16 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 			}
 		}
 	}
-	// Computer use restores the same way: sessions that invoked /computer-use
-	// keep the two tools from the next turn on, appended after everything
-	// else so the provider's cached prefix stays stable. With no driver the
-	// load fails honestly and the model is told, so it reports unavailability
-	// instead of calling into the void.
-	if s.computerUse.isActive(sessionID) {
-		loader := cua.NewLoader(s.cuaManager, sessionID)
-		if _, err := loader.Load(registry); err != nil {
-			user.Content += "\n\nComputer use is unavailable: " + err.Error()
-		}
+	// Capabilities that are on restore here, appended after everything else so
+	// the provider's cached tool prefix stays stable. A failed load is
+	// reported to the model so it says so instead of calling into the void.
+	loadCtx := &loadContext{sessionID: sessionID, projectID: projectID, cwd: header.Cwd, mode: string(mode)}
+	for _, failure := range s.loadCapabilities(loadCtx, registry) {
+		user.Content += "\n\n" + failure
 	}
-	// The console kernel is the control plane for ports, project scripts and
-	// sessions, so it is appended every turn after MCP/CUA to keep the cached
-	// tool prefix stable.
-	loader := console.NewLoader(s.consoleManager, sessionID, projectID, header.Cwd, string(mode))
-	if _, err := loader.Load(registry); err != nil {
-		user.Content += "\n\nConsole is unavailable: " + err.Error()
-	}
-	// Visualize restores the same way, appended after MCP/CUA so the cached
-	// tool prefix stays stable. The tool is stateless, so it cannot fail to
-	// load.
-	if s.visualize.isActive(sessionID) {
-		if _, err := visualize.NewLoader(sessionID).Load(registry); err != nil {
-			user.Content += "\n\nVisualize is unavailable: " + err.Error()
-		}
-	}
+	// readSkill is rebuilt per run so it can see which capabilities are on
+	// and, for the ones the agent may switch on, load their tools mid-turn.
+	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
 	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite

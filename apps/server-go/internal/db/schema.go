@@ -118,6 +118,8 @@ func InitGlobalDB(db *sql.DB, path string) error {
 	for _, col := range []string{
 		"worktree_path TEXT", "worktree_branch TEXT", "worktree_repo TEXT",
 		"thinking_level TEXT",
+		// Built-in capabilities switched on for the session (comma separated).
+		"capabilities TEXT",
 	} {
 		name := col[:len(col)-len(" TEXT")]
 		var count int

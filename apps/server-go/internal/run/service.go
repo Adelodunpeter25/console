@@ -83,16 +83,6 @@ type Service struct {
 	cuaManager *cua.Manager
 	// consoleManager owns the console kernel runtime.
 	consoleManager *console.Manager
-	// consoleUse remembers sessions that invoked /console, so later runs of
-	// the same session keep the API documentation in setup without
-	// re-invoking. The console tools themselves load every turn.
-	consoleUse consoleUseSessions
-	// computerUse remembers sessions that invoked /computer-use, so later
-	// runs of the same session keep the computer tools without re-invoking.
-	computerUse computerUseSessions
-	// visualize remembers sessions that invoked /visualize, so later runs
-	// keep the visual tool and skill without re-invoking.
-	visualize visualizeSessions
 	// ctxCache holds the last context-window snapshot per session, keyed
 	// by message count so the footer ring never recomputes a walk it
 	// already did. Has its own mutex: read on the request path while a

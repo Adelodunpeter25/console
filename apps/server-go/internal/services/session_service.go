@@ -294,6 +294,16 @@ func (s *SessionService) UpdateApprovalMode(sessionID, approvalMode string) erro
 	return s.inner.UpdateApprovalMode(sessionID, approvalMode)
 }
 
+// Capabilities lists the built-in capabilities switched on for a session.
+func (s *SessionService) Capabilities(sessionID string) ([]string, error) {
+	return s.inner.Capabilities(sessionID)
+}
+
+// AddCapability switches a built-in capability on for a session.
+func (s *SessionService) AddCapability(sessionID, name string) error {
+	return s.inner.AddCapability(sessionID, name)
+}
+
 func (s *SessionService) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
 	return s.inner.UpdateThinkingLevel(sessionID, thinkingLevel)
 }

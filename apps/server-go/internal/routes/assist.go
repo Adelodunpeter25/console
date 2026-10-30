@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -19,19 +20,6 @@ import (
 const (
 	initCommandName        = "init"
 	initCommandDescription = "Generate a console.toml with project run scripts for the Run tab"
-	// computerUseCommandName is the chat command that activates computer use:
-	// listed so the composer suggests it, while the model itself learns
-	// nothing until the user actually invokes it (see SplitInvocation).
-	computerUseCommandName        = "computer-use"
-	computerUseCommandDescription = "Drive the computer: read app windows and operate them with keyboard and mouse"
-	// visualizeCommandName is the chat command that activates the native
-	// visual tool. Like computer-use, the model learns nothing until invoked.
-	visualizeCommandName        = "visualize"
-	visualizeCommandDescription = "Render a chart, table, or metric card in the chat"
-	// consoleCommandName loads the console API documentation. The tools are
-	// always present; the model only learns the methods once it is invoked.
-	consoleCommandName        = "console"
-	consoleCommandDescription = "Operate the app: run scripts, manage ports and sessions through the console API"
 )
 
 func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs *fssvc.FsService, skills *services.SkillsService) {
@@ -39,9 +27,9 @@ func registerAssistRoutes(app *fiber.App, sessions *services.SessionService, fs 
 		cwd := resolveSessionCwd(c, sessions)
 		commands := []*consolev1.SlashCommandInfo{
 			{Name: initCommandName, Description: initCommandDescription, Builtin: true},
-			{Name: computerUseCommandName, Description: computerUseCommandDescription, Builtin: true},
-			{Name: visualizeCommandName, Description: visualizeCommandDescription, Builtin: true},
-			{Name: consoleCommandName, Description: consoleCommandDescription, Builtin: true},
+		}
+		for _, c := range run.CapabilityDescriptions() {
+			commands = append(commands, &consolev1.SlashCommandInfo{Name: c[0], Description: c[1], Builtin: true})
 		}
 		for _, skill := range skills.Discover(cwd) {
 			commands = append(commands, &consolev1.SlashCommandInfo{
