@@ -6,6 +6,7 @@ package tests
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -142,4 +143,39 @@ func TestAbortAndClearDiscardsTheQueuedPrompt(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The wait must follow a real run: block while the session works, return once
+// the run service says it is idle. This uses the actual run service's activity
+// check, not a stand-in, since that is what the kernel is wired to.
+func TestWaitFollowsARealRun(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var enteredOnce bool
+	svc.Lookup = func(string) (loop.Provider, error) {
+		return &blockingProvider{release: release, released: new(bool), entered: entered, enteredOnce: &enteredOnce}, nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "work", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	if !svc.IsActive(header.ID) {
+		t.Fatal("the run should be active while the provider is blocked")
+	}
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		close(release)
+	}()
+	deadline := time.Now().Add(10 * time.Second)
+	for svc.IsActive(header.ID) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if svc.IsActive(header.ID) {
+		t.Fatal("the run never finished")
+	}
+	helpers.WaitSettled(t, hub)
 }

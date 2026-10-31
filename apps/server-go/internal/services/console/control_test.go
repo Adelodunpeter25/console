@@ -2,7 +2,10 @@ package console
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -469,5 +472,226 @@ func TestTimeoutMessageSaysWhatToCheck(t *testing.T) {
 	_, err := runtime.Eval(context.Background(), `while(true){}`, 50*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "console.sessions.list()") || !strings.Contains(err.Error(), "console.scripts.status()") {
 		t.Fatalf("err = %v, want the read methods to check named", err)
+	}
+}
+
+// ---- sessions.wait
+
+// activeSet is a thread-safe stand-in for "which sessions have a live run".
+type activeSet struct {
+	mu  sync.Mutex
+	ids map[string]bool
+}
+
+func newActiveSet(ids ...string) *activeSet {
+	a := &activeSet{ids: map[string]bool{}}
+	for _, id := range ids {
+		a.ids[id] = true
+	}
+	return a
+}
+func (a *activeSet) has(id string) bool { a.mu.Lock(); defer a.mu.Unlock(); return a.ids[id] }
+func (a *activeSet) finish(id string)   { a.mu.Lock(); delete(a.ids, id); a.mu.Unlock() }
+
+func newWaitRuntime(t *testing.T, ceiling string, active *activeSet) (*Runtime, *services.SessionService) {
+	t.Helper()
+	runtime, sessions := newConsoleSessionRuntime(t, active.has)
+	runtime.ceiling = ceiling
+	runtime.sessionID = "caller"
+	return runtime, sessions
+}
+
+func TestWaitReturnsImmediatelyWhenAlreadyFinished(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(newSource("always-ask"))
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`"})`).(map[string]any)
+	if out["done"] != true || out["timed_out"] != false {
+		t.Fatalf("a finished session must return done: %#v", out)
+	}
+	if ms, _ := out["waited_ms"].(float64); ms > 1000 {
+		t.Fatalf("waited %vms for a session that was already finished", ms)
+	}
+}
+
+func TestWaitBlocksUntilTheSessionFinishes(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	if target.ID != "busy" {
+		t.Fatalf("id = %q", target.ID)
+	}
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		active.finish("busy")
+	}()
+	start := time.Now()
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"busy", timeout_ms: 10000})`).(map[string]any)
+	if out["done"] != true || out["timed_out"] != false {
+		t.Fatalf("expected done after the run ended: %#v", out)
+	}
+	if elapsed := time.Since(start); elapsed < 300*time.Millisecond || elapsed > 5*time.Second {
+		t.Fatalf("returned after %v; expected to block for roughly 400ms", elapsed)
+	}
+}
+
+func TestWaitTimesOutAndSaysToWaitAgain(t *testing.T) {
+	active := newActiveSet("forever")
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "forever", Title: "f", Cwd: "/tmp"})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"forever", timeout_ms: 300})`).(map[string]any)
+	if out["done"] != false || out["timed_out"] != true {
+		t.Fatalf("expected a timeout: %#v", out)
+	}
+	if note, _ := out["note"].(string); !strings.Contains(note, "wait again") {
+		t.Fatalf("a timeout must tell the caller what to do: %#v", out)
+	}
+	first := out["sessions"].([]any)[0].(map[string]any)
+	if first["status"] != "working" || first["done"] != false {
+		t.Fatalf("a still-running session must report working: %#v", first)
+	}
+}
+
+func TestWaitAnyVersusAll(t *testing.T) {
+	active := newActiveSet("a", "b")
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	for _, id := range []string{"a", "b"} {
+		_, _ = sessions.Create(types.CreateSessionOptions{ID: id, Title: id, Cwd: "/tmp"})
+	}
+	go func() { time.Sleep(300 * time.Millisecond); active.finish("a") }()
+
+	// "any" returns as soon as one finishes, while the other is still going.
+	anyOut := evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], mode:"any", timeout_ms: 5000})`).(map[string]any)
+	if anyOut["done"] != true {
+		t.Fatalf("any: %#v", anyOut)
+	}
+	byID := map[string]map[string]any{}
+	for _, s := range anyOut["sessions"].([]any) {
+		m := s.(map[string]any)
+		byID[m["session_id"].(string)] = m
+	}
+	if byID["a"]["done"] != true || byID["b"]["done"] != false {
+		t.Fatalf("any must report a finished and b still running: %#v", byID)
+	}
+
+	// "all" with b still running times out rather than returning early.
+	allOut := evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], mode:"all", timeout_ms: 300})`).(map[string]any)
+	if allOut["done"] != false || allOut["timed_out"] != true {
+		t.Fatalf("all must wait for every session: %#v", allOut)
+	}
+	go func() { time.Sleep(200 * time.Millisecond); active.finish("b") }()
+	allOut = evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], timeout_ms: 5000})`).(map[string]any)
+	if allOut["done"] != true {
+		t.Fatalf("all must return once every session has finished: %#v", allOut)
+	}
+}
+
+func TestWaitRefusals(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(newSource("always-ask"))
+	many := make([]string, 25)
+	for i := range many {
+		many[i] = fmt.Sprintf("%q", fmt.Sprintf("s%d", i))
+	}
+	for name, code := range map[string]string{
+		"own session":        `console.sessions.wait({session_id:"caller"})`,
+		"own among several":  `console.sessions.wait({session_ids:["` + target.ID + `","caller"]})`,
+		"unknown session":    `console.sessions.wait({session_id:"ghost"})`,
+		"no id":              `console.sessions.wait({})`,
+		"empty list":         `console.sessions.wait({session_ids:[]})`,
+		"too many":           `console.sessions.wait({session_ids:[` + strings.Join(many, ",") + `]})`,
+		"bad mode":           `console.sessions.wait({session_id:"` + target.ID + `", mode:"first"})`,
+		"negative timeout":   `console.sessions.wait({session_id:"` + target.ID + `", timeout_ms:-5})`,
+		"timeout as string":  `console.sessions.wait({session_id:"` + target.ID + `", timeout_ms:"5"})`,
+		"ids not an array":   `console.sessions.wait({session_ids:"abc"})`,
+		"non-string in list": `console.sessions.wait({session_ids:[1,2]})`,
+		"unknown argument":   `console.sessions.wait({session_id:"` + target.ID + `", wait:true})`,
+	} {
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestWaitTimeoutIsCapped(t *testing.T) {
+	if got := clampWait(0, false); got != waitDefault {
+		t.Errorf("default = %v", got)
+	}
+	if got := clampWait(0, true); got != waitDefault {
+		t.Errorf("explicit zero = %v, want the default", got)
+	}
+	if got := clampWait(10*60*1000, true); got != waitMax {
+		t.Errorf("a ten-minute request must be capped at %v, got %v", waitMax, got)
+	}
+	if got := clampWait(1500, true); got != 1500*time.Millisecond {
+		t.Errorf("in-range value changed: %v", got)
+	}
+	if waitMax >= 5*time.Minute {
+		t.Fatalf("one wait (%v) must fit inside the kernel's own timeout", waitMax)
+	}
+}
+
+func TestWaitDeduplicatesIDs(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(newSource("always-ask"))
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`", session_ids:["`+target.ID+`","`+target.ID+`"]})`).(map[string]any)
+	if n := len(out["sessions"].([]any)); n != 1 {
+		t.Fatalf("a repeated id must be reported once, got %d entries", n)
+	}
+}
+
+func TestWaitReturnsTheLastReply(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(newSource("always-ask"))
+	for _, m := range []types.AgentMessage{
+		{ID: "u1", Role: "user", Data: []byte(`{"user":{"content":"run the tests"}}`)},
+		{ID: "a1", Role: "assistant", Data: []byte(`{"assistant":{"id":"a1","content":[{"text":{"text":"All 42 tests passed."}}],"stopReason":"stop"}}`)},
+		// A trailing tool-call-only turn must not hide the last words.
+		{ID: "a2", Role: "assistant", Data: []byte(`{"assistant":{"id":"a2","content":[{"toolCall":{"id":"c","name":"bash"}}],"stopReason":"toolUse"}}`)},
+	} {
+		if err := sessions.AppendMessage(target.ID, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`"})`).(map[string]any)
+	first := out["sessions"].([]any)[0].(map[string]any)
+	if first["last_reply"] != "All 42 tests passed." {
+		t.Fatalf("last_reply = %#v", first["last_reply"])
+	}
+}
+
+func TestWaitCutsAVeryLongReply(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	target, _ := sessions.Create(newSource("always-ask"))
+	long := strings.Repeat("word ", replyMaxText) // far over the cap
+	data, _ := json.Marshal(map[string]any{"assistant": map[string]any{
+		"id": "a1", "stopReason": "stop",
+		"content": []any{map[string]any{"text": map[string]any{"text": long}}},
+	}})
+	_ = sessions.AppendMessage(target.ID, types.AgentMessage{ID: "a1", Role: "assistant", Data: data})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`"})`).(map[string]any)
+	reply := out["sessions"].([]any)[0].(map[string]any)["last_reply"].(string)
+	if !strings.Contains(reply, "reply cut") || len(reply) > replyMaxText+300 {
+		t.Fatalf("a long reply must be cut with a note (len %d)", len(reply))
+	}
+}
+
+func TestWaitStopsWhenTheCallIsCancelled(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(200 * time.Millisecond); cancel() }()
+	start := time.Now()
+	_, err := runtime.Eval(ctx, `console.sessions.wait({session_id:"busy", timeout_ms: 60000})`, 0)
+	if err == nil {
+		t.Fatal("a cancelled wait must fail, not report success")
+	}
+	if time.Since(start) > 10*time.Second {
+		t.Fatalf("cancellation took %v; the wait ignored it", time.Since(start))
 	}
 }

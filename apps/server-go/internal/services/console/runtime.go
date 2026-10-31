@@ -108,6 +108,9 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		{Name: "sessions.clear_queue", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsClearQueue(ctx, args)
 		}},
+		{Name: "sessions.wait", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.sessionsWait(ctx, args)
+		}},
 		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsFork(ctx, args)
 		}},
@@ -606,4 +609,5 @@ var methodArgs = map[string][]string{
 	"sessions.queue":        {"session_id"},
 	"sessions.clear_queue":  {"session_id"},
 	"sessions.fork":         {"session_id", "message_id"},
+	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms"},
 }
