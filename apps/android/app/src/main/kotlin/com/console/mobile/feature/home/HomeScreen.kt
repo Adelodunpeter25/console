@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +58,7 @@ import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.core.chat.buildGroupedProjectSections
 import com.console.mobile.core.chat.draftPreview
 import com.console.mobile.core.chat.formatProjectTitle
+import com.console.mobile.core.chat.isSessionTitlePending
 import com.console.mobile.core.chat.isDraftSession
 import com.console.mobile.core.chat.sessionBranch
 import com.console.mobile.core.util.ScrollMemory
@@ -73,6 +75,7 @@ import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.feature.home.EnvironmentSwitcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -414,6 +417,7 @@ private fun SessionRow(
     // Top-aligned, with a fixed first line shared by the title and the status pill.
     // Centring the right column on the whole row put "Ready" lower than the "Draft"
     // pill beside the title; giving both the same line height puts their centres level.
+    val titlePending = isSessionTitlePending(session)
     Row(
         modifier = Modifier.fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongPress)
@@ -422,14 +426,36 @@ private fun SessionRow(
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    session.title,
-                    color = NewTheme.TextPrimary,
-                    fontSize = 17.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
+                if (titlePending) {
+                    // The server is generating the title (first prompt sent,
+                    // placeholder still stored): pulse dots instead of the
+                    // raw placeholder until sessionTitleUpdated renames it.
+                    var dots by remember(session.id) { mutableStateOf(0) }
+                    LaunchedEffect(session.id) {
+                        while (true) {
+                            delay(400)
+                            dots = (dots + 1) % 4
+                        }
+                    }
+                    Text(
+                        "Generating title" + ".".repeat(dots),
+                        color = NewTheme.TextMuted,
+                        fontSize = 17.sp,
+                        fontStyle = FontStyle.Italic,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                } else {
+                    Text(
+                        session.title,
+                        color = NewTheme.TextPrimary,
+                        fontSize = 17.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
                 if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
             }
             if (isDraft && draftPreview != null) {

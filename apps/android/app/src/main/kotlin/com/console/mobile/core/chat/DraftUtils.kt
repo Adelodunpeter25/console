@@ -187,3 +187,24 @@ fun sessionBranch(worktreeBranch: String?, projectId: String?, projectBranches: 
     worktreeBranch?.takeIf { it.isNotBlank() }?.let { return it }
     return projectId?.let { projectBranches[it] }?.ifBlank { null }
 }
+
+/**
+ * Placeholder titles the server's autotitle treats as unset. Mirrors
+ * `titles.IsGenericTitle` in the server; keep the two lists in step.
+ */
+fun isGenericTitle(title: String): Boolean = title.trim() in setOf(
+    "",
+    "New Session",
+    "New mobile session",
+    "New Chat",
+    "New chat",
+    "Untitled",
+)
+
+/**
+ * The session's title is still a placeholder but the first prompt is already
+ * sent, so the server is generating a real one: rows show a loading label
+ * until `sessionTitleUpdated` renames them.
+ */
+fun isSessionTitlePending(session: SessionHeader): Boolean =
+    (session.message_count ?: 0) > 0 && isGenericTitle(session.title)

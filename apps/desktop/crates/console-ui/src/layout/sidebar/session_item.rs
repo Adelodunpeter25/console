@@ -116,7 +116,12 @@ impl RenderOnce for SidebarSessionItem {
                 .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd))
         };
 
-        let display_title = session.display_title().to_string();
+        let title_pending = sidebar::title_is_pending(session);
+        let display_title = if title_pending {
+            "Generating title…".to_string()
+        } else {
+            session.display_title().to_string()
+        };
         let drag = WorkspaceDrag::new(
             console_core::WorkspaceTabConfig::Chat {
                 session_id: session.id.clone(),
@@ -172,10 +177,15 @@ impl RenderOnce for SidebarSessionItem {
                 } else {
                     FontWeight::MEDIUM
                 })
-                .text_color(if is_active {
-                    theme.text
-                } else {
-                    theme.text_secondary
+                .when(title_pending, |s| {
+                    s.italic().text_color(theme.text_tertiary)
+                })
+                .when(!title_pending, |s| {
+                    s.text_color(if is_active {
+                        theme.text
+                    } else {
+                        theme.text_secondary
+                    })
                 })
                 .child(display_title.clone())
                 .into_any_element()

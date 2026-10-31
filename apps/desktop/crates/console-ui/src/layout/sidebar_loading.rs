@@ -5,7 +5,7 @@
 //! the merge here gives rows one source of truth for Working/Waiting display
 //! without coupling the sidebar layout to run orchestration.
 
-use console_core::SessionHeader;
+use console_core::{SessionHeader, SessionHeaderExt};
 use gpui::{AnyElement, IntoElement, SharedString};
 
 use crate::primitives::{IconName, app_icon};
@@ -62,6 +62,23 @@ pub fn status_indicator(state: SidebarLoadingState, theme: Theme) -> Option<AnyE
             Some(app_icon(IconName::Alert, 12.0, theme.warning).into_any_element())
         }
     }
+}
+
+/// Placeholder titles the server's autotitle treats as unset. Mirrors
+/// `titles.IsGenericTitle` in the server; keep the two lists in step.
+pub fn is_generic_title(title: &str) -> bool {
+    matches!(
+        title.trim(),
+        "" | "New Session" | "New mobile session" | "New Chat" | "New chat" | "Untitled"
+    )
+}
+
+/// The session's title is still the placeholder but the first prompt is
+/// already sent, so the server is generating a real one: show a loading
+/// label instead of the placeholder text. The same update that delivers the
+/// generated title clears the state, so no event link is needed.
+pub fn title_is_pending(session: &SessionHeader) -> bool {
+    is_generic_title(session.display_title()) && session.message_count.unwrap_or(0) >= 1
 }
 
 /// Render the live elapsed label for a working row. Waiting rows deliberately

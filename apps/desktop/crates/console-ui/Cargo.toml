@@ -70,6 +70,10 @@ name = "large_paste_test"
 path = "tests/composer/large_paste_test.rs"
 
 [[test]]
+name = "sidebar_title_test"
+path = "tests/sidebar/title_pending_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 
