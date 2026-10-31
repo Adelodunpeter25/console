@@ -8,7 +8,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 ---
 
-## Status (as of 2026-10-29)
+## Status (as of 2026-10-30)
 
 | Phase | State | Notes |
 | :--- | :--- | :--- |
@@ -20,7 +20,14 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | 6 — Security prerequisites | **Done** | Path boundary shipped (`permissions/guard.go`). Plan mode is now enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `.console/plans/` (§8.2) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
-**Not in the API yet:** `console.pr.*`. Shipped since the last update: `sessions.abort`, `set_model`, `set_approval`, `fork`, `prompt`, `scripts.output`.
+**The API as built** (every method takes one object, never positional values): `ports.{list,forward,unforward}`, `scripts.{list,run,status,output,stop}`, `models`, `approvalModes`, `projects.{list,add}`, `sessions.{list,read,create,delete,abort,set_model,set_approval,prompt,queue,clear_queue,fork}`. **Not in the API yet:** `console.pr.*`.
+
+**Kernel behaviour (changed after the first round of agent testing):**
+- **Plain results.** A call returns its data directly (`console.sessions.list()` is the array), not a `{content, structuredContent, isError}` wrapper; a failure throws with the reason. Only `console` does this; computer use keeps the wrapper because it returns images.
+- **Strict arguments.** Every method lists the keys it accepts (`methodArgs` in `runtime.go`). An unknown key or a wrong type fails with the accepted names instead of being ignored, so `{projectId: ...}` is caught. Whole numbers are accepted from JavaScript as any integer type (a bug rejected every port before this).
+- **Helpful errors.** An unknown method or namespace lists the valid ones; the timeout message says what to check (`sessions.list()`, `scripts.status()`, `ports.list()`); output past 100,000 characters is cut with a note saying how much was lost, and `sessions.read` takes `limit`/`before` to ask for less.
+- **`sessions.prompt`** starts an idle session or queues the prompt for a busy one (`queued: true`). One prompt can wait per session and it refuses to replace one, including the user's own. `sessions.queue` shows the waiting prompt and `sessions.clear_queue` discards it. `sessions.abort` also clears it, so an aborted session does not restart itself from its queue. A turn's approval mode is capped at the caller's even if the target stores a higher one.
+- **`sessions.create`** with a prompt reports `started: true` and `status: working`.
 
 **Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`, and plan mode is now genuinely read-only, so the ceiling means what it says. A run cannot abort itself or change its own approval mode.
 
@@ -28,7 +35,9 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 **Plan-mode bash.** `bash` runs under a read-only OS sandbox in plan mode only (`internal/agent/tools/sandbox*.go`): the kernel refuses every file write outside the system temp folder, so how a command is phrased does not matter. Network is open, reads are unrestricted (secrets included, by decision), `git push` works. macOS uses `sandbox-exec`; Linux uses `bwrap` (needs unprivileged user namespaces). A probe runs once and really tries a write; if it does not work, or the machine has no sandbox tool (or is Windows), plan-mode bash runs **unsandboxed** (the owner's decision), so on such a machine plan mode is not read-only for shell commands. `bashJob` stays denied in plan mode. Other modes are untouched. **Verified:** macOS, with the real sandbox, including a mutation check that disables it and watches the tests fail. **Not verified:** the Linux `bwrap` path, which compiles and type-checks but has not been run; run `go test ./tests/tools/ -run "Sandbox|PlanBash"` on the Linux box, and note it skips (rather than fails) if `bwrap` is missing.
 
-**Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Path-guard tests: `tests/permissions/path_guard_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
+**Capability registry (how `/commands` work).** `/console`, `/visualize` and `/computer-use` are declared once in a table (`internal/run/capabilities.go`); the run loop, the slash-command popup and `readSkill` all read it, so none can drift from the others. Which are switched on is stored in the session row (`sessions.capabilities`), so it survives a server restart (it used to live in memory). The agent cannot type a slash command, so `readSkill` knows them: `readSkill()` lists them with their state, and `readSkill("visualize")` or `("console")` returns the reference **and switches the capability on**, loading its tools into the running turn. `computer-use` is the exception: it needs the user's consent and OS permissions, so `readSkill("computer-use")` tells the agent to ask the user to type `/computer-use` and changes nothing. Adding a capability is one entry in the table.
+
+**Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level, queue, strict arguments, error messages), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Capability registry: `internal/run/capabilities_test.go`. Path-guard and plan-mode tests: `tests/permissions/`. Sandbox tests: `tests/tools/plan_sandbox_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
 
 ### Next
 
