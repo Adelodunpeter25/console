@@ -215,7 +215,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
             // account" action with a Plus.
             SectionCard {
                 if (accounts.isEmpty()) {
-                    Text("No accounts yet — sign in below.", color = NewTheme.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp))
+                    Note("No accounts yet — sign in below.")
                 } else {
                     accounts.forEachIndexed { i, acc ->
                         AccountSheetRow(
