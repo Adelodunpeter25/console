@@ -1,3 +1,10 @@
+// Release builds are GUI-only on Windows; without this a console window opens
+// behind the app.
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 mod app_menu;
 mod assets;
 mod keybindings;
@@ -16,8 +23,23 @@ use assets::{Assets, register_core_fonts};
 use console_ui::init_input_keybindings;
 use gpui::App;
 
+/// Directory that receives `panic.log`: `~/Library/Logs/console` on macOS,
+/// `%LOCALAPPDATA%\Console\logs` on Windows.
+fn panic_log_dir() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .map(|dir| std::path::PathBuf::from(dir).join("Console").join("logs"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        console_shared::path::home_dir().map(|home| home.join("Library/Logs/console"))
+    }
+}
+
 /// Install a panic hook that appends the message plus full backtrace to
-/// ~/Library/Logs/console/panic.log (and stderr). Never fails loudly.
+/// `panic.log` (and stderr). Never fails loudly.
 fn log_panics_to_file() {
     std::panic::set_hook(Box::new(|info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
@@ -27,8 +49,7 @@ fn log_panics_to_file() {
             "==== panic in thread '{thread_name}' ====\n{info}\nbacktrace:\n{backtrace}\n\n"
         );
         eprint!("{text}");
-        if let Some(home) = std::env::var_os("HOME") {
-            let dir = std::path::Path::new(&home).join("Library/Logs/console");
+        if let Some(dir) = panic_log_dir() {
             if std::fs::create_dir_all(&dir).is_ok() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
