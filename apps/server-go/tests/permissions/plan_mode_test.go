@@ -1,14 +1,16 @@
 // Plan mode is read-only by enforcement, not by request: write and exec tools
 // are denied, read tools run, and writePlan is the one write that gets through,
-// confined to .console/plans/.
+// confined to docs/plan/, and never overwriting what is already there.
 package tests
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -81,14 +83,13 @@ func TestPlanModeAllowsWritePlanOnly(t *testing.T) {
 	if err != nil || res.IsError {
 		t.Fatalf("writePlan must be allowed in plan mode: %v %#v", err, res)
 	}
-	got, err := os.ReadFile(filepath.Join(dir, ".console", "plans", "auth-refactor.md"))
+	got, err := os.ReadFile(filepath.Join(dir, "docs", "plan", "auth-refactor.md"))
 	if err != nil || string(got) != "# Plan\n1. do it" {
 		t.Fatalf("plan file = %q, %v", got, err)
 	}
-	// The folder ignores itself; no tracked file was touched.
-	ignore, err := os.ReadFile(filepath.Join(dir, ".console", "plans", ".gitignore"))
-	if err != nil || strings.TrimSpace(string(ignore)) != "*" {
-		t.Fatalf(".gitignore = %q, %v", ignore, err)
+	// docs/plan/ is a normal tracked folder: nothing in it hides plans from git.
+	if _, err := os.Stat(filepath.Join(dir, "docs", "plan", ".gitignore")); err == nil {
+		t.Fatal("writePlan must not create a .gitignore in the plan folder")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err == nil {
 		t.Fatal("writePlan must not create or edit the repository's own .gitignore")
@@ -140,12 +141,12 @@ func TestWritePlanRefusesSymlinkTricks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// .console is a symlink to somewhere else.
-	if err := os.Symlink(outside, filepath.Join(cwd, ".console")); err != nil {
+	// docs is a symlink to somewhere else.
+	if err := os.Symlink(outside, filepath.Join(cwd, "docs")); err != nil {
 		t.Skip("symlinks unavailable")
 	}
 	if _, err := tools.SavePlan(cwd, "p", "x"); err == nil {
-		t.Fatal("a symlinked .console must be refused")
+		t.Fatal("a symlinked docs folder must be refused")
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Fatalf("a write went through the symlink: %v", entries)
@@ -153,7 +154,7 @@ func TestWritePlanRefusesSymlinkTricks(t *testing.T) {
 
 	// The plan file itself is a symlink to a victim file.
 	cwd2 := filepath.Join(root, "repo2")
-	plans := filepath.Join(cwd2, ".console", "plans")
+	plans := filepath.Join(cwd2, "docs", "plan")
 	if err := os.MkdirAll(plans, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -164,11 +165,20 @@ func TestWritePlanRefusesSymlinkTricks(t *testing.T) {
 	if err := os.Symlink(victim, filepath.Join(plans, "p.md")); err != nil {
 		t.Skip("symlinks unavailable")
 	}
-	if _, err := tools.SavePlan(cwd2, "p", "overwrite"); err == nil {
-		t.Fatal("a symlinked plan file must be refused")
+	// The planted link is skipped, not followed: the plan lands under a new
+	// name and the victim file is untouched.
+	path, err := tools.SavePlan(cwd2, "p", "overwrite")
+	if err != nil {
+		t.Fatalf("a planted symlink should be stepped around, not fail the save: %v", err)
+	}
+	if path == tools.PlanDir+"/p.md" {
+		t.Fatal("the plan was written through the symlink's name")
 	}
 	if got, _ := os.ReadFile(victim); string(got) != "keep" {
 		t.Fatalf("the victim file was overwritten: %q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(cwd2, filepath.FromSlash(path))); string(got) != "overwrite" {
+		t.Fatalf("the plan did not land at %s: %q", path, got)
 	}
 }
 
@@ -179,7 +189,7 @@ func TestWritePlanLimitsAndInputs(t *testing.T) {
 	if _, err := tools.SavePlan(dir, "long", long); err != nil {
 		t.Fatalf("a long plan must be accepted: %v", err)
 	}
-	if got, _ := os.ReadFile(filepath.Join(dir, ".console", "plans", "long.md")); string(got) != long {
+	if got, _ := os.ReadFile(filepath.Join(dir, "docs", "plan", "long.md")); string(got) != long {
 		t.Fatal("a long plan was truncated")
 	}
 	if _, err := tools.SavePlan(dir, "empty", "   "); err == nil {
@@ -188,15 +198,20 @@ func TestWritePlanLimitsAndInputs(t *testing.T) {
 	if _, err := tools.SavePlan("", "p", "x"); err == nil {
 		t.Fatal("no working directory must be refused, not written to the current one")
 	}
-	// Replacing a plan with the same name overwrites it.
-	if _, err := tools.SavePlan(dir, "same", "one"); err != nil {
-		t.Fatal(err)
+	// A name that is taken is never replaced: the next save gets a suffix.
+	first, err := tools.SavePlan(dir, "same", "one")
+	if err != nil || first != "docs/plan/same.md" {
+		t.Fatalf("first = %q, %v", first, err)
 	}
-	if _, err := tools.SavePlan(dir, "same", "two"); err != nil {
-		t.Fatal(err)
+	second, err := tools.SavePlan(dir, "same", "two")
+	if err != nil || second != "docs/plan/same-01.md" {
+		t.Fatalf("second = %q, %v", second, err)
 	}
-	if got, _ := os.ReadFile(filepath.Join(dir, ".console", "plans", "same.md")); string(got) != "two" {
-		t.Fatalf("plan = %q, want the replacement", got)
+	if got, _ := os.ReadFile(filepath.Join(dir, "docs", "plan", "same.md")); string(got) != "one" {
+		t.Fatalf("the first plan was overwritten: %q", got)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "docs", "plan", "same-01.md")); string(got) != "two" {
+		t.Fatalf("second plan = %q", got)
 	}
 }
 
@@ -249,5 +264,126 @@ func TestPlanModeAllowsOnlySandboxedBash(t *testing.T) {
 	// Outside plan mode the sandboxed flag grants nothing special.
 	if permissions.Resolve(permissions.AlwaysAsk, tools.TierExec) != permissions.Prompt {
 		t.Fatal("always-ask still prompts for exec")
+	}
+}
+
+// docs/plan/ holds documents people edit by hand. A plan whose name matches one
+// must never replace it, however many times the name repeats.
+func TestWritePlanNeverOverwritesAnExistingDocument(t *testing.T) {
+	dir := t.TempDir()
+	plans := filepath.Join(dir, "docs", "plan")
+	if err := os.MkdirAll(plans, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const handWritten = "# Orchestration\nedited by a person\n"
+	if err := os.WriteFile(filepath.Join(plans, "orchestration.md"), []byte(handWritten), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var used []string
+	for i := 0; i < 5; i++ {
+		path, err := tools.SavePlan(dir, "orchestration", "agent plan "+string(rune('A'+i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		used = append(used, path)
+	}
+	if got, _ := os.ReadFile(filepath.Join(plans, "orchestration.md")); string(got) != handWritten {
+		t.Fatalf("a hand-written document was overwritten: %q", got)
+	}
+	want := []string{"orchestration-01.md", "orchestration-02.md", "orchestration-03.md", "orchestration-04.md", "orchestration-05.md"}
+	for i, w := range want {
+		if used[i] != "docs/plan/"+w {
+			t.Errorf("save %d used %q, want docs/plan/%s", i, used[i], w)
+		}
+	}
+	// Every save kept its own content.
+	for i, w := range want {
+		got, _ := os.ReadFile(filepath.Join(plans, w))
+		if string(got) != "agent plan "+string(rune('A'+i)) {
+			t.Errorf("%s = %q", w, got)
+		}
+	}
+}
+
+// The folder is created when the project has no docs/ at all.
+func TestWritePlanCreatesDocsPlanWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := os.Stat(filepath.Join(dir, "docs")); err == nil {
+		t.Fatal("test setup: docs must not exist yet")
+	}
+	path, err := tools.SavePlan(dir, "fresh", "# hi")
+	if err != nil || path != "docs/plan/fresh.md" {
+		t.Fatalf("path = %q, %v", path, err)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "docs", "plan")); err != nil || !info.IsDir() {
+		t.Fatalf("docs/plan was not created: %v", err)
+	}
+}
+
+// Two saves of the same name racing must each land in their own file: the
+// exclusive create, not a check beforehand, decides who gets which name.
+func TestWritePlanConcurrentSavesDoNotCollide(t *testing.T) {
+	dir := t.TempDir()
+	const n = 12
+	paths := make(chan string, n)
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p, err := tools.SavePlan(dir, "race", fmt.Sprintf("content-%d", i))
+			if err != nil {
+				errs <- err
+				return
+			}
+			paths <- p
+		}(i)
+	}
+	wg.Wait()
+	close(paths)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("a concurrent save failed: %v", err)
+	}
+	seen := map[string]bool{}
+	for p := range paths {
+		if seen[p] {
+			t.Fatalf("two saves were given the same file %s", p)
+		}
+		seen[p] = true
+	}
+	if len(seen) != n {
+		t.Fatalf("%d distinct files for %d saves", len(seen), n)
+	}
+	// And every payload survived somewhere.
+	contents := map[string]bool{}
+	for p := range seen {
+		b, _ := os.ReadFile(filepath.Join(dir, filepath.FromSlash(p)))
+		contents[string(b)] = true
+	}
+	if len(contents) != n {
+		t.Fatalf("a plan's content was lost: %d distinct contents for %d saves", len(contents), n)
+	}
+}
+
+// The tool tells the model when its name was changed, so it can refer to the file.
+func TestWritePlanToolReportsASuffix(t *testing.T) {
+	dir := t.TempDir()
+	tool := tools.NewWritePlanTool(dir)
+	call := func() string {
+		out, err := tool.Execute(context.Background(), []byte(`{"name":"report","content":"x"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		parts, _ := out.([]map[string]any)
+		return parts[0]["text"].(string)
+	}
+	if first := call(); !strings.Contains(first, "docs/plan/report.md") || strings.Contains(first, "suffix") {
+		t.Fatalf("first save = %q", first)
+	}
+	second := call()
+	if !strings.Contains(second, "docs/plan/report-01.md") || !strings.Contains(second, "nothing was overwritten") {
+		t.Fatalf("a renamed save must say so: %q", second)
 	}
 }

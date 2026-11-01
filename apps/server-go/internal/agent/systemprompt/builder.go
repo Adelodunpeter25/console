@@ -323,7 +323,7 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 			"Plan mode is ACTIVE. Read-only by default:",
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
 			"- You MUST NOT create, edit, or delete files; run build/install/migration/test commands; commit, push, or spawn implementation subagents.",
-			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes .console/plans/<name>.md); it is the only way to write a file in this mode.",
+			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
 			"- If the user asks you to implement, tell them to switch agents. Do not silently start implementing.",
 			"</approval-mode-instructions>",
 		}, "\n")

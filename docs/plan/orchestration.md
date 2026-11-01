@@ -15,9 +15,9 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | 1 — Kernel + ports | **Done** | `console` / `console_reset` tools, `ports.list/forward/unforward`; `ports` and `project_scripts` removed from `DefaultToolNames` |
 | 2 — Scripts | **Done** | `scripts.list/run/status/stop` plus `scripts.output` with absolute-offset cursors that survive the 256KB buffer trimming |
 | 3 — Discovery + session control | **Done** | `models()`, `approvalModes()`, `sessions.list/read/delete`; deleting the active session is refused. Also shipped, not in the plan: `projects.list/add` |
-| 4 — Spawn (`sessions.create`) | **Partial** | `sessions.create` takes prompt, model, provider, `thinking_level` (validated against the model), cwd, project, worktree, and `approval_mode`, which is **clamped to the calling run's mode** with the clamp reported. **Decision:** it stays `sessions.create`; the `console.spawn` rename is dropped. **Missing:** depth cap, token budget, concurrency cap, usage rollup |
+| 4 — Spawn (`sessions.create`) | **Done; limits dropped by decision** | `sessions.create` takes prompt, model, provider, `thinking_level` (validated against the model), cwd, project, worktree, and `approval_mode`, which is **clamped to the calling run's mode** with the clamp reported. **Decision:** it stays `sessions.create`; the `console.spawn` rename is dropped. **Not building:** depth cap, concurrency cap, token budget, usage rollup (see below) |
 | 5 — `sessions.fork` | **Done** | Exposed to the kernel; the fork's inherited approval mode is clamped to the calling run |
-| 6 — Security prerequisites | **Done** | File writes are confined to the session's working directory (`permissions/guard.go`, §8.1). Plan mode is enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `.console/plans/` (§8.2). `bash` is not path-confined outside plan mode (see §8.1) |
+| 6 — Security prerequisites | **Done** | File writes are confined to the session's working directory (`permissions/guard.go`, §8.1). Plan mode is enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `docs/plan/` (§8.2). `bash` is not path-confined outside plan mode (see §8.1) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
 **The API as built** (every method takes one object, never positional values): `ports.{list,forward,unforward}`, `scripts.{list,run,status,output,stop}`, `models`, `approvalModes`, `projects.{list,add}`, `sessions.{list,read,create,delete,abort,set_model,set_approval,prompt,queue,clear_queue,wait,fork}`. **Not in the API yet:** `console.pr.*`.
@@ -32,7 +32,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 **Permission ceiling:** enforced for `sessions.create`, `set_approval` and `fork` (`effective = min(run mode, requested)`, reported as `clamped`). With no run behind the kernel the ceiling fails closed to `plan-mode`, and plan mode is now genuinely read-only, so the ceiling means what it says. A run cannot abort itself or change its own approval mode.
 
-**Plan mode (enforced):** write and exec tools are denied, never prompted. Reads, `browser` and `memory` (now read tier) still run. `writePlan` is the one exception: it writes `.console/plans/<name>.md` only, builds the filename itself, refuses symlinks, and the folder ignores itself with its own `.gitignore`. Subagents inherit the mode. Known gaps, accepted: `browser` can still submit forms, and MCP tools are tiered by naming convention.
+**Plan mode (enforced):** write and exec tools are denied, never prompted. Reads, `browser` and `memory` (now read tier) still run. `writePlan` is the one exception: it writes `docs/plan/<name>.md` only (the same tracked folder as this document), builds the filename itself, never overwrites (a taken name gets `-01`, `-02`, ...), and refuses symlinks. Subagents inherit the mode. Known gaps, accepted: `browser` can still submit forms, and MCP tools are tiered by naming convention.
 
 **Plan-mode bash.** `bash` runs under a read-only OS sandbox in plan mode only (`internal/agent/tools/sandbox*.go`): the kernel refuses every file write outside the system temp folder, so how a command is phrased does not matter. Network is open, reads are unrestricted (secrets included, by decision), `git push` works. macOS uses `sandbox-exec`; Linux uses `bwrap` (needs unprivileged user namespaces). A probe runs once and really tries a write; if it does not work, or the machine has no sandbox tool (or is Windows), plan-mode bash runs **unsandboxed** (the owner's decision), so on such a machine plan mode is not read-only for shell commands. `bashJob` stays denied in plan mode. Other modes are untouched. **Verified:** macOS, with the real sandbox, including a mutation check that disables it and watches the tests fail. **Not verified:** the Linux `bwrap` path, which compiles and type-checks but has not been run; run `go test ./tests/tools/ -run "Sandbox|PlanBash"` on the Linux box, and note it skips (rather than fails) if `bwrap` is missing.
 
@@ -42,7 +42,6 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 ### Next
 
-- Depth cap 2, per-spawn token budget, concurrency cap and usage rollup for spawned sessions (§7)
 - `console.pr.*` plus the GitHub service (Phase 7). Now designed in full, with the desktop and Android UI, in [`pull-requests.md`](pull-requests.md); that plan supersedes the Phase 7 sketch below
 
 ---
@@ -190,14 +189,13 @@ So `session.cwd` is today mostly *prompt metadata* plus script scoping — it do
 
 ---
 
-## 7. Cost and Recursion Guards
+## 7. Cost and Recursion Guards — decided against
 
-`subagent` currently cannot recurse — the nested tool set strips it (`subagent.go:143`). Once a session can spawn sessions that can spawn agents, unbounded fan-out becomes possible. Required:
+The original design proposed a depth cap of 2, a per-spawn token budget, a concurrency cap and a usage rollup, to stop unbounded fan-out once a session can create sessions that create sessions.
 
-- **Depth cap** — 2. Deeper nesting buys nothing a well-written Level 2 prompt doesn't.
-- **Per-spawn token budget**, enforced and reported in the spawn result.
-- **Concurrency cap** on live spawned sessions.
-- **Usage rollup** — `UsageTracker` already collects subagent usage; spawned sessions should surface in the parent's total so the run's cost is attributable.
+**Decision: none of these are being built.** They add schema changes (a parent link on sessions), run-service accounting and a cancel-at-budget path, for a risk that the approval ceiling and current models already keep small: a model follows an instruction not to fan out, and a spawned session cannot hold more authority than its creator. Cost per task is not something the owner wants to track yet.
+
+Revisit only if a real runaway happens or per-task cost becomes a question. If it does, the order that makes sense is: parent link and depth cap first (the others depend on knowing who created a session), then the concurrency cap, then rollup, and the token budget last because it needs a mid-run cancel with a decision about half-finished tool calls.
 
 ---
 
@@ -218,7 +216,7 @@ Now `permissions/guard.go` runs in the executor before a call. `write_file`, `ed
 Originally `permissions.Resolve` treated `PlanMode` as full access and the restriction lived only in the system prompt.
 
 Now `Resolve` denies the write and exec tiers in plan mode and never prompts. Reads, `browser` and `memory` (read tier) still run. Two things are let through by the executor because they are confined:
-- **`writePlan`** saves `.console/plans/<name>.md`. The model gives only a name; the tool builds the filename, refuses symlinks, and the folder ignores itself with its own `.gitignore`. There is no size cap.
+- **`writePlan`** saves `docs/plan/<name>.md`, creating the folder if the project has none. The model gives only a name; the tool builds the filename and refuses symlinks. It **never overwrites**: `docs/plan/` holds tracked documents people edit by hand, so a taken name gets a numeric suffix (`-01`, `-02`, ...) and the tool tells the model which name it used. The file is created exclusively, so two saves at once cannot collide. Plans are ordinary tracked files, not git-ignored. There is no size cap.
 - **`bash`** runs under a read-only OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux): the kernel refuses every file write outside the system temp folder, whatever the command string says. The network stays open and reads are unrestricted, by decision. `bashJob` stays denied.
 
 Subagents inherit the mode. Accepted gaps: `browser` can still submit forms, MCP tools are tiered by naming convention, and a machine with no sandbox tool (or Windows) runs plan-mode bash unsandboxed. The Linux `bwrap` path compiles but has not been run; see the Status section. Tests: `tests/permissions/plan_mode_test.go`, `tests/tools/plan_sandbox_test.go`.
@@ -243,11 +241,11 @@ Subagents inherit the mode. Accepted gaps: `browser` can still submit forms, MCP
 - `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`. Later additions: `abort`, `set_model`, `set_approval`, `prompt`, `queue`, `clear_queue`, `wait`.
 - Delete: soft only, and **never the currently-running session**.
 
-### Phase 4 — Spawn via `sessions.create` (Level 2) — PARTIAL (ceiling done; depth/budget/concurrency caps open)
-- Session creation through the existing `session.Service`, worktree-scoped. **Done.**
-- Permission ceiling + clamp reporting (§4). **Done.**
-- Depth cap, token budget, concurrency cap, usage rollup (§7). **Not started.**
-- **Verification**: `cd apps/server-go && go test ./internal/services/console/ -run "Create|Clamp" -v` for what is built. The caps will need their own tests.
+### Phase 4 — Spawn via `sessions.create` (Level 2) — DONE
+- Session creation through the existing `session.Service`, worktree-scoped.
+- Permission ceiling + clamp reporting (§4).
+- Depth cap, token budget, concurrency cap and usage rollup (§7): **decided against**, not deferred.
+- **Verification**: `cd apps/server-go && go test ./internal/services/console/ -run "Create|Clamp" -v`.
 
 ### Phase 5 — `console.sessions.fork` — DONE
 - Wraps the existing `Fork(sourceID, messageID)`. High value: "branch this conversation at message 40 and try a different approach there."
@@ -292,8 +290,7 @@ Tests for the kernel live beside the code in `internal/services/console/`. Run o
 | Queue and run wiring | `go test ./tests/agent/ -run "PromptSession\|AbortAndClear\|WaitFollows" -v` | idle starts, busy queues, an occupied queue is not replaced, abort does not restart |
 | Script output cursors | `go test ./tests/api/ -run TestReadOutput -v` | absolute offsets survive the 256KB trim |
 | Path boundary | `go test ./tests/permissions/ -run PathGuard -v` | writes outside the session root denied |
-| Plan mode | `go test ./tests/permissions/ -run "PlanMode\|WritePlan\|Memory" -v` | write and exec denied without prompting; `writePlan` confined to `.console/plans/` |
+| Plan mode | `go test ./tests/permissions/ -run "PlanMode\|WritePlan\|Memory" -v` | write and exec denied without prompting; `writePlan` confined to `docs/plan/`, never overwrites, suffixes a taken name |
 | Plan-mode bash sandbox | `go test ./tests/tools/ -run "Sandbox\|PlanBash" -v` | no write outside temp; reads, pipes, network and temp work. Skips if no sandbox tool is installed |
 | gh pre-auth | `go test ./tests/tools/ -run 'TestGHEnv\|TestBashGH\|TestBashEnvDump\|TestRedactSecrets' -v` | `GH_TOKEN` in child env iff connected; explicit value wins; raw token never in output |
-| Spawn caps (depth, budget, concurrency) | not written | Phase 4 is open |
 | PR tools | not written | see `pull-requests.md` |
