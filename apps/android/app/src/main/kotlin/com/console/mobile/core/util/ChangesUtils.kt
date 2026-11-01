@@ -45,13 +45,9 @@ fun stripRepoPrefix(path: String, repoPath: String?): String {
 
 data class ChangeTotals(val files: Int, val additions: Int, val deletions: Int)
 
-fun sumTotals(changes: List<SessionFileChange>): ChangeTotals =
-    ChangeTotals(changes.size, changes.sumOf { it.additions }, changes.sumOf { it.deletions })
-
 /**
- * Totals for the pinned summary above the composer: one file per unique path
- * (a file edited over several turns is still one file), with the churn summed
- * across every row.
+ * Totals for a changes summary: one file per unique path (a file edited over
+ * several turns is still one file), with the churn summed across every row.
  */
 fun changeSummary(changes: List<SessionFileChange>): ChangeTotals =
     ChangeTotals(
@@ -61,8 +57,12 @@ fun changeSummary(changes: List<SessionFileChange>): ChangeTotals =
     )
 
 fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: String?): List<ChangesRow> {
+    // One row per file across the whole session: the server returns rows
+    // newest-first, so keeping the first for a path shows the latest turn's
+    // diff — the same choice the desktop's All Turns scope makes.
+    val unique = files.distinctBy { it.path }
     val groups = linkedMapOf<String, MutableList<SessionFileChange>>()
-    for (c in files) {
+    for (c in unique) {
         val d = dirOf(c.path).ifEmpty { "." }
         groups.getOrPut(d) { mutableListOf() }.add(c)
     }
@@ -72,8 +72,7 @@ fun buildRows(files: List<SessionFileChange>, collapsed: Set<String>, repoPath: 
         out.add(ChangesRow.Folder("dir:$dir", dir, fs.sumOf { it.additions }, fs.sumOf { it.deletions }, fs.size))
         if (collapsed.contains(dir)) continue
         for (f in fs.sortedBy { it.path }) {
-            // Same path can repeat across turns: key on both.
-            out.add(ChangesRow.File("file:${f.path}#${f.turn_index}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.reviewed, f.turn_index))
+            out.add(ChangesRow.File("file:${f.path}", f.path, baseOf(f.path), stripRepoPrefix(f.path, repoPath), f.status, f.additions, f.deletions, f.reviewed, f.turn_index))
         }
     }
     return out

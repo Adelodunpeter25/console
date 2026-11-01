@@ -43,7 +43,7 @@ import com.console.mobile.SharedNative
 import com.console.mobile.core.util.statusColorHex
 import com.console.mobile.core.util.statusLetter
 import com.console.mobile.core.util.stripRepoPrefix
-import com.console.mobile.core.util.sumTotals
+import com.console.mobile.core.util.changeSummary
 import com.console.mobile.feature.chat.DiffSummaryBadge
 import com.console.mobile.feature.chat.DiffView
 import com.console.mobile.ui.components.FileIcon
@@ -155,7 +155,7 @@ fun ChangesScreen(onBack: () -> Unit) {
         }
     }
 
-    val totals = sumTotals(files)
+    val totals = changeSummary(files)
     val rows = buildRows(files, collapsed, repoPath)
 
     // File diff view.
