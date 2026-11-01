@@ -8,6 +8,20 @@ use std::rc::Rc;
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
 
+/// Native window title. macOS hides it behind the transparent titlebar;
+/// Windows and Linux show it in the system titlebar.
+fn main_window_title() -> Option<SharedString> {
+    #[cfg(target_os = "macos")]
+    {
+        None
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Some("Console".into())
+    }
+}
+
 /// Titlebar options for app windows.
 ///
 /// macOS draws a transparent titlebar with inset traffic lights; other
@@ -159,7 +173,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
 
     let options = WindowOptions {
         window_bounds: Some(window_bounds),
-        titlebar: Some(titlebar_options(None)),
+        titlebar: Some(titlebar_options(main_window_title())),
         ..Default::default()
     };
 
