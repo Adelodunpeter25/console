@@ -39,6 +39,13 @@ pub enum AuxiliaryTab {
 
 impl AuxiliaryTab {
     /// Auxiliary tabs currently available to users in the right sidebar.
+    ///
+    /// Device preview is macOS-only, so Windows (the thin client) does not
+    /// offer the tab at all rather than showing a dead one.
+    #[cfg(target_os = "windows")]
+    pub const ALL: [Self; 2] = [Self::Subagents, Self::Shells];
+
+    #[cfg(not(target_os = "windows"))]
     pub const ALL: [Self; 3] = [Self::Subagents, Self::Shells, Self::Devices];
 
     pub fn label(self) -> &'static str {

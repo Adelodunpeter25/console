@@ -49,6 +49,8 @@ pub fn init(cx: &mut App) {
             MenuItem::action("Add Project…", AddProject),
             MenuItem::action("New Project…", NewProject),
             MenuItem::action("New Terminal", NewTerminal),
+            // Browser tabs are deferred on Windows.
+            #[cfg(not(target_os = "windows"))]
             MenuItem::action("New Browser Tab", NewBrowser),
             MenuItem::action("Quick Open File…", QuickOpenFile),
         ]),

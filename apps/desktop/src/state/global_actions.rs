@@ -41,6 +41,8 @@ fn command_palette_entries(
         })
         .icon(IconName::Terminal),
     ];
+    // Browser tabs are deferred on Windows.
+    #[cfg(not(target_os = "windows"))]
     entries.push(
         PaletteEntry::new("new-browser", "New Browser Tab", {
             let entity = entity.clone();

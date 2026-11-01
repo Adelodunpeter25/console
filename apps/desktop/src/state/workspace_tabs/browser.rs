@@ -135,6 +135,15 @@ impl ConsoleDesktopApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Browser tabs are deferred on Windows. A URL still opens in the
+        // system browser so forwarded ports and chat links stay useful.
+        if cfg!(target_os = "windows") {
+            if let Some(url) = url {
+                cx.open_url(&url);
+            }
+            return;
+        }
+
         let pane_id = self
             .active_pane_id
             .clone()

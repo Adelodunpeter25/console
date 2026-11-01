@@ -96,7 +96,10 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-shift-N", NewWindow, None),
         KeyBinding::new("secondary-shift-t", NewTerminal, None),
         KeyBinding::new("secondary-shift-T", NewTerminal, None),
+        // Browser tabs are deferred on Windows.
+        #[cfg(not(target_os = "windows"))]
         KeyBinding::new("secondary-shift-b", NewBrowser, None),
+        #[cfg(not(target_os = "windows"))]
         KeyBinding::new("secondary-shift-B", NewBrowser, None),
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
@@ -194,6 +197,8 @@ pub fn init_handlers(cx: &mut App) {
         }
     });
 
+    // Browser tabs are deferred on Windows.
+    #[cfg(not(target_os = "windows"))]
     cx.on_action(|_: &NewBrowser, cx| {
         if let Some((window, app)) = crate::window::get_active_window(cx) {
             cx.defer(move |cx| {
