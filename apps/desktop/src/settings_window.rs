@@ -296,6 +296,18 @@ impl SettingsWindow {
         cx.notify();
     }
 
+    /// Open the add-server form on the Servers tab.
+    ///
+    /// Used on a first run with no server configured: the user should land on
+    /// the form, not on an empty server list they have to figure out.
+    #[cfg(target_os = "windows")]
+    pub fn begin_add_server(&mut self, cx: &mut Context<Self>) {
+        self.is_adding_env = true;
+        self.editing_env_id = None;
+        self.new_env_probe = ProbeState::Unknown;
+        cx.notify();
+    }
+
     /// The tab the settings are showing.
     pub fn active_tab(&self) -> SettingsTab {
         self.active_tab

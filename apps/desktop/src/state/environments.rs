@@ -16,14 +16,25 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn default_local() -> Self {
-        let default_url = std::env::var("CONSOLE_BACKEND_URL")
-            .unwrap_or_else(|_| "http://localhost:3000".to_string());
-        Self {
+    /// The server seeded on first launch.
+    ///
+    /// Windows is a thin client with no local server to assume, so a first
+    /// run starts with no environment and lands on the add-server form.
+    /// `CONSOLE_BACKEND_URL` still seeds one for development.
+    pub fn default_local() -> Option<Self> {
+        let configured = std::env::var("CONSOLE_BACKEND_URL").ok();
+
+        #[cfg(target_os = "windows")]
+        let url = configured?;
+
+        #[cfg(not(target_os = "windows"))]
+        let url = configured.unwrap_or_else(|| "http://localhost:3000".to_string());
+
+        Some(Self {
             id: "default-local".to_string(),
             name: "Local Server".to_string(),
-            url: default_url,
-        }
+            url,
+        })
     }
 }
 
@@ -46,13 +57,17 @@ impl ConsoleDesktopApp {
                     .into_iter()
                     .map(|e| {
                         // Fix legacy mock 4040 port or placeholder from initial test to true default local url
-                        let url = if e.url == "http://127.0.0.1:4040"
-                            || e.url == "http://localhost:4040"
-                        {
-                            fixed_legacy_url = true;
-                            def.url.clone()
-                        } else {
-                            e.url
+                        let url = match e.url.as_str() {
+                            "http://127.0.0.1:4040" | "http://localhost:4040" => {
+                                match &def {
+                                    Some(def) => {
+                                        fixed_legacy_url = true;
+                                        def.url.clone()
+                                    }
+                                    None => e.url,
+                                }
+                            }
+                            _ => e.url,
                         };
                         Environment {
                             id: e.id,
@@ -73,9 +88,11 @@ impl ConsoleDesktopApp {
             }
         }
         if self.environments.is_empty() {
-            self.active_env_id = Some(def.id.clone());
-            self.environments = vec![def];
-            mutated = true;
+            if let Some(def) = def {
+                self.active_env_id = Some(def.id.clone());
+                self.environments = vec![def];
+                mutated = true;
+            }
         } else if self.active_env_id.is_none() {
             self.active_env_id = self.environments.first().map(|e| e.id.clone());
         }
@@ -134,7 +151,8 @@ impl ConsoleDesktopApp {
             .as_ref()
             .and_then(|id| self.environments.iter().find(|e| &e.id == id))
             .map(|e| e.url.clone())
-            .unwrap_or_else(|| Environment::default_local().url)
+            .or_else(|| Environment::default_local().map(|e| e.url))
+            .unwrap_or_default()
     }
 
     pub fn save_persisted_environments(&self) {

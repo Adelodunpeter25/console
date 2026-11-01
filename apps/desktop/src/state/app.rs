@@ -777,6 +777,15 @@ impl ConsoleDesktopApp {
         // afterwards would open the panel once on every launch.
         app.onboarding_seen = crate::persistence::onboarding_seen();
         app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
+
+        // Windows is a thin client: with no server configured there is nothing
+        // to show, so go straight to the add-server form instead of a dead
+        // localhost workspace.
+        #[cfg(target_os = "windows")]
+        if app.active_env_id.is_none() {
+            app.open_add_server(window, cx);
+        }
+
         app.refresh_auth_status(cx);
         app.init_notifications(cx);
 

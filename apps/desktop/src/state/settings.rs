@@ -150,6 +150,18 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Open Settings > Servers with the add-server form already showing.
+    ///
+    /// Windows has no local server to assume, so a first run needs to say
+    /// "connect to one" rather than land on a dead workspace.
+    #[cfg(target_os = "windows")]
+    pub fn open_add_server(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_settings_tab(console_ui::settings::SettingsTab::Servers, window, cx);
+        if let Some(view) = &self.settings_view {
+            view.update(cx, |view, cx| view.begin_add_server(cx));
+        }
+    }
+
     /// Close the settings and give the window back to the workspace.
     pub fn close_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.settings_open {
