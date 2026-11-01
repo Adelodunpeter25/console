@@ -3,8 +3,7 @@ use crate::utils::{HttpTransport, SseStreamReader};
 use anyhow::{Context, Result, anyhow};
 use std::pin::Pin;
 
-/// Agent run events as one owned stream type, shared by the SSE and
-/// WebTransport paths so callers hold a single type across transports.
+/// Agent run events as one owned stream type.
 pub type RunEventStream =
     Pin<Box<dyn futures_util::Stream<Item = Result<AgentSessionEvent>> + Send>>;
 

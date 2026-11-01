@@ -3,7 +3,8 @@
 //
 // These sit behind the same device-token boundary as every other route —
 // they are registered after the middleware, so a caller must already hold a
-// paired device credential.
+// paired device credential. (The session counters et al. from the old
+// WebTransport debug surface are gone with it.)
 package routes
 
 import (

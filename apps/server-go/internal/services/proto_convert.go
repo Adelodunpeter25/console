@@ -1,7 +1,6 @@
-// Shared entity-to-proto converters for transports. The SSE routes and the
-// WebTransport server render identical payloads from these, so client
-// parsers are shared across transports. Pure field mappings — no I/O, no
-// transport types.
+// Shared entity-to-proto converters. The SSE routes and both desktop and
+// mobile render identical payloads from these, so client parsers are shared
+// across clients. Pure field mappings — no I/O, no transport types.
 package services
 
 import (

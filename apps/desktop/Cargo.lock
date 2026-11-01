@@ -1329,7 +1329,6 @@ dependencies = [
  "tokio-stream",
  "tokio-tungstenite",
  "urlencoding",
- "webpki-roots",
 ]
 
 [[package]]
