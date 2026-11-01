@@ -235,15 +235,13 @@ func TestPermanentDeleteKeepsUnmergedBranch(t *testing.T) {
 	if err != nil || !deleted {
 		t.Fatalf("PermanentDelete = %v, %v", deleted, err)
 	}
+	// Permanent delete from the trash is force: the unmerged branch goes
+	// with the worktree.
 	branches = gitsvc.NewGitService().ListBranches(repo)
-	kept = false
 	for _, b := range branches.Branches {
 		if b.Name == branch {
-			kept = true
+			t.Fatalf("unmerged branch %q still exists after PermanentDelete; want force-deleted", branch)
 		}
-	}
-	if !kept {
-		t.Fatalf("unmerged branch %q was deleted; want kept", branch)
 	}
 	if h, _ := sessions.Header(header.ID); h != nil {
 		t.Fatalf("session row still present")
@@ -309,7 +307,10 @@ func TestSoftDeleteLeavesDirtyWorktree(t *testing.T) {
 	}
 }
 
-func TestPermanentDeleteBlockedWhenDirty(t *testing.T) {
+// TestPermanentDeleteForcesDirtyWorktree verifies that deleting a chat
+// permanently from the trash never gets stuck behind uncommitted work:
+// the dirty worktree (and its branch) is force-removed.
+func TestPermanentDeleteForcesDirtyWorktree(t *testing.T) {
 	isolateHome(t)
 	manager := openWorktreeManager(t)
 	sessions := services.NewSessionService(manager)
@@ -322,26 +323,15 @@ func TestPermanentDeleteBlockedWhenDirty(t *testing.T) {
 	if ok, err := sessions.SoftDelete(header.ID); err != nil || !ok {
 		t.Fatalf("SoftDelete = %v, %v", ok, err)
 	}
-	_, err := sessions.PermanentDelete(header.ID)
-	if !errors.Is(err, gitsvc.ErrWorktreeDirty) {
-		t.Fatalf("dirty delete err = %v; want ErrWorktreeDirty", err)
+	deleted, err := sessions.PermanentDelete(header.ID)
+	if err != nil || !deleted {
+		t.Fatalf("PermanentDelete = %v, %v", deleted, err)
 	}
-	// Session row kept (still soft-deleted, still owning its worktree).
-	owned, err := sessions.OwnedWorktreePaths()
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(header.Worktree.Path); !os.IsNotExist(err) {
+		t.Fatalf("dirty worktree dir still exists: %s", header.Worktree.Path)
 	}
-	kept := false
-	for _, p := range owned {
-		if p == header.Worktree.Path {
-			kept = true
-		}
-	}
-	if !kept {
-		t.Fatalf("session row removed despite blocked delete")
-	}
-	if _, err := os.Stat(filepath.Join(header.Worktree.Path, "wip.txt")); err != nil {
-		t.Fatalf("work lost: %v", err)
+	if h, _ := sessions.Header(header.ID); h != nil {
+		t.Fatalf("session row still present")
 	}
 }
 
