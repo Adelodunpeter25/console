@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * A build without the staged Rust library must still run.
  *
- * `libconsole_wt_android.so` is gitignored and built by `rust-wt/build.sh`, so
+ * `libconsole_shared_android.so` is gitignored and built by `shared-native/build.sh`, so
  * a fresh clone has none, and on the JVM — where these tests run — it is never
  * present. That is the same condition as a stale or missing library on a
  * device: every function must answer with its documented inert value instead
@@ -48,8 +48,8 @@ class SharedNativeTest {
     @Test
     fun theAbiNumberIsPinnedToTheRustSide() {
         // Bump SharedNative.EXPECTED_ABI together with ABI_VERSION in
-        // rust-wt/src/shared.rs; a mismatch makes `available` false on device.
-        val rust = java.io.File("../rust-wt/src/shared.rs").takeIf { it.exists() }?.readText() ?: return
+        // shared-native/src/shared.rs; a mismatch makes `available` false on device.
+        val rust = java.io.File("../shared-native/src/shared.rs").takeIf { it.exists() }?.readText() ?: return
         val declared = Regex("""const ABI_VERSION: jint = (\d+);""").find(rust)?.groupValues?.get(1)?.toInt()
         assertEquals(declared, SharedNative.EXPECTED_ABI)
     }

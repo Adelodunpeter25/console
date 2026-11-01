@@ -13,7 +13,7 @@ import java.nio.ByteOrder
  *
  * ### The library is optional at build time
  *
- * `libconsole_wt_android.so` is gitignored and built by `rust-wt/build.sh`,
+ * `libconsole_shared_android.so` is gitignored and built by `shared-native/build.sh`,
  * so a fresh clone, a JVM unit test, or a 32-bit ABI has none. [available] is
  * then false and every function here answers with its documented *inert*
  * value (`null`, empty, `false`) instead of throwing, which would take the
@@ -29,7 +29,7 @@ import java.nio.ByteOrder
  * or reshaped function, so bump both numbers together.
  */
 object SharedNative {
-    /** Must match `ABI_VERSION` in `rust-wt/src/shared.rs`. */
+    /** Must match `ABI_VERSION` in `shared-native/src/shared.rs`. */
     const val EXPECTED_ABI = 2
 
     /** Framed payloads start with `"CSHR"` and this version. */
@@ -38,7 +38,7 @@ object SharedNative {
 
     /** True when the library loaded *and* speaks the ABI this build expects. */
     val available: Boolean = try {
-        System.loadLibrary("console_wt_android")
+        System.loadLibrary("console_shared_android")
         abiVersion() == EXPECTED_ABI
     } catch (_: UnsatisfiedLinkError) {
         false

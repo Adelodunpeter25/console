@@ -370,7 +370,7 @@ object AppContainer {
         if (!SharedNative.available) {
             android.util.Log.e(
                 "ConsoleApp",
-                "console-shared unavailable (libconsole_wt_android.so missing or built for a different ABI): " +
+                "console-shared unavailable (libconsole_shared_android.so missing or built for a different ABI): " +
                     "pairing, diffs, labels and file icons are disabled",
             )
         }

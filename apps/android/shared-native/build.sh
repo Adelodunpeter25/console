@@ -6,8 +6,8 @@
 # paths are set here.
 #
 # Produces:
-#   app/src/main/jniLibs/arm64-v8a/libconsole_wt_android.so
-#   app/src/main/jniLibs/x86_64/libconsole_wt_android.so
+#   app/src/main/jniLibs/arm64-v8a/libconsole_shared_android.so
+#   app/src/main/jniLibs/x86_64/libconsole_shared_android.so
 #
 # Those copies are gitignored: a binary in the repo is not a reviewable
 # artifact, and it is reproducible from this script.
@@ -64,8 +64,8 @@ for pair in "aarch64-linux-android:arm64-v8a" "x86_64-linux-android:x86_64"; do
     echo "==> building $target"
     build_target "$target"
     mkdir -p "$APP_JNI/$abi"
-    cp "$SCRIPT_DIR/target/$target/release/libconsole_wt_android.so" "$APP_JNI/$abi/"
-    echo "    staged $(du -h "$APP_JNI/$abi/libconsole_wt_android.so" | cut -f1) for $abi"
+    cp "$SCRIPT_DIR/target/$target/release/libconsole_shared_android.so" "$APP_JNI/$abi/"
+    echo "    staged $(du -h "$APP_JNI/$abi/libconsole_shared_android.so" | cut -f1) for $abi"
 done
 
 echo "==> done"

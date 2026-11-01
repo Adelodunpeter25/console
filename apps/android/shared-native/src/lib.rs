@@ -5,8 +5,8 @@
 //! also carry the WebTransport client (`WtNative`, `bridge`); WebTransport
 //! is gone and Android rides SSE/WS only.
 //!
-//! The `.so` keeps its historical `console_wt_android` name so an existing
-//! staged library still loads. Build: `apps/android/rust-wt/build.sh`.
+//! Build: `apps/android/shared-native/build.sh`. It stages
+//! `libconsole_shared_android.so` into the app's jniLibs.
 
 mod shared;
 
@@ -39,7 +39,7 @@ fn init_logging() {
     ONCE.call_once(|| {
         android_logger::init_once(
             android_logger::Config::default()
-                .with_tag("console_wt")
+                .with_tag("console_shared")
                 .with_max_level(log::LevelFilter::Debug),
         );
         // Explicit hook: the default one writes to stderr, which Android
@@ -51,7 +51,7 @@ fn init_logging() {
 }
 
 use jni::objects::{JString};
-use jni::sys::{jbyteArray, jstring};
+use jni::sys::jbyteArray;
 use jni::JNIEnv;
 
 fn arg(env: &mut JNIEnv, value: &JString) -> Option<String> {

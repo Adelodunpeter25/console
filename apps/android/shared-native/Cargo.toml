@@ -1,13 +1,13 @@
 [package]
-name = "console-wt-android"
+name = "console-shared-android"
 version = "0.0.0"
 edition = "2021"
 publish = false
 
-# A shared library the Android app loads over JNI. `cdylib` only: there is no
-# Rust-side binary on Android.
+# The shared-logic library the Android app loads over JNI. `cdylib` only:
+# there is no Rust-side binary on Android.
 [lib]
-name = "console_wt_android"
+name = "console_shared_android"
 crate-type = ["cdylib"]
 
 [dependencies]
