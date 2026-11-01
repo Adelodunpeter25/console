@@ -1,7 +1,8 @@
-// webFetch tool: HTTP GET/POST/etc a URL, returning readable text.
-// GET requests to likely web pages try Firecrawl first (clean markdown
-// extraction); everything else, and any Firecrawl miss, falls back to a
-// direct HTTP request with naive HTML-to-text stripping.
+// webFetch tool: HTTP GET a URL, returning readable text.
+// Direct HTTP fetch with HTML-to-text / JSON formatting is the default.
+// When FIRECRAWL_API_KEY or FIRECRAWL_BASE_URL is configured, GET requests
+// to web pages try Firecrawl first for markdown extraction and fall back to
+// direct fetch on error.
 package tools
 
 import (
@@ -51,9 +52,7 @@ func isLikelyAPIURL(url string) bool {
 	return strings.Contains(url, "/api/") || strings.HasSuffix(url, ".json")
 }
 
-// Fetch performs an HTTP request and returns readable text. GET requests to
-// likely web pages try Firecrawl first; everything else (and any Firecrawl
-// miss) uses a direct request with content-type-aware formatting.
+// Fetch performs an HTTP request and returns readable text.
 var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdown or text.", TierRead,
 	func(ctx context.Context, in fetchInput) (any, error) {
 		if in.URL == "" {
@@ -72,7 +71,7 @@ var Fetch = NewTool("webFetch", "Fetch content from a URL or web page as markdow
 		reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 		defer cancel()
 
-		if !isLikelyAPIURL(in.URL) {
+		if IsFirecrawlConfigured() && !isLikelyAPIURL(in.URL) {
 			markdown, title, _, statusCode, ok, err := firecrawlScrape(reqCtx, in.URL)
 			if err == nil && ok {
 				sections := []string{

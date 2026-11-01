@@ -1,6 +1,6 @@
-// webSearch tool: keyless Firecrawl search first, DuckDuckGo HTML scrape on
-// retryable failure, or Brave (requires BRAVE_SEARCH_API_KEY) when
-// explicitly requested.
+// webSearch tool: DuckDuckGo HTML scrape by default, Brave when requested,
+// and optional Firecrawl search when FIRECRAWL_API_KEY or FIRECRAWL_BASE_URL
+// is configured.
 package tools
 
 import (
@@ -214,9 +214,10 @@ func renderSnippetResults(query string, results []webSearchResult) []map[string]
 const webSearchTimeout = 15 * time.Second
 
 // WebSearch searches the web for up-to-date documentation and information.
-// Default engine tries keyless Firecrawl first (full markdown per result),
-// falling back to DuckDuckGo's HTML lite page on a retryable Firecrawl
-// error or empty result set; "brave" bypasses Firecrawl entirely.
+// Default engine uses DuckDuckGo HTML lite page (no API key required),
+// or Brave when explicitly requested. If FIRECRAWL_API_KEY or
+// FIRECRAWL_BASE_URL is configured, it tries Firecrawl first and falls back
+// to DuckDuckGo on error or empty results.
 var WebSearch = NewTool("webSearch", "Search the web for up-to-date documentation and information.", TierRead,
 	func(ctx context.Context, in webSearchInput) (any, error) {
 		if strings.TrimSpace(in.Query) == "" {
@@ -244,15 +245,17 @@ var WebSearch = NewTool("webSearch", "Search the web for up-to-date documentatio
 			return renderSnippetResults(in.Query, results), nil
 		}
 
-		fcResults, ok, fcErr := firecrawlSearch(reqCtx, in.Query, numResults)
-		if fcErr == nil && ok {
-			return renderFirecrawlResults(in.Query, fcResults), nil
+		if IsFirecrawlConfigured() {
+			fcResults, ok, fcErr := firecrawlSearch(reqCtx, in.Query, numResults)
+			if fcErr == nil && ok {
+				return renderFirecrawlResults(in.Query, fcResults), nil
+			}
+			if fcErr != nil && !isRetryableFirecrawlError(fcErr) {
+				return nil, NewToolError("%v", fcErr)
+			}
+			// Firecrawl errored retryably or succeeded with zero results — fall back to DuckDuckGo.
 		}
-		if fcErr != nil && !isRetryableFirecrawlError(fcErr) {
-			return nil, NewToolError("%v", fcErr)
-		}
-		// Firecrawl errored retryably, or succeeded with zero results — fall
-		// back to DuckDuckGo.
+
 		results, err := searchDuckDuckGo(reqCtx, in.Query, numResults)
 		if err != nil {
 			return nil, NewToolError("%v", err)

@@ -106,3 +106,26 @@ func TestWebSearchMissingQuery(t *testing.T) {
 		t.Fatal("expected error for missing query")
 	}
 }
+
+func TestWebSearchDefaultDuckDuckGoWithoutFirecrawl(t *testing.T) {
+	t.Setenv("FIRECRAWL_BASE_URL", "")
+	t.Setenv("FIRECRAWL_API_KEY", "")
+
+	ddgSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`<div class="result"><a class="result__a" href="https://example.com/ddg">Default DDG Title</a><a class="result__snippet">Default DDG snippet</a></div></div>`))
+	}))
+	defer ddgSrv.Close()
+	restore := tools.SetDuckDuckGoURLForTest(ddgSrv.URL)
+	defer restore()
+
+	args, _ := json.Marshal(map[string]any{"query": "custom default", "numResults": 1})
+	out, err := tools.WebSearch.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	s := resultText(t, out)
+	if !strings.Contains(s, "Default DDG Title") {
+		t.Fatalf("output: %v", out)
+	}
+}

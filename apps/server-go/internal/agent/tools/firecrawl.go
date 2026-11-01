@@ -1,7 +1,7 @@
-// Firecrawl HTTP client — keyless-first. Uses
-// https://api.firecrawl.dev/v1 without Authorization by default; sends a
-// Bearer token when FIRECRAWL_API_KEY is set. Supports self-hosted via
-// FIRECRAWL_BASE_URL.
+// Firecrawl HTTP client — opt-in. Uses
+// https://api.firecrawl.dev/v1 when FIRECRAWL_API_KEY is set, or a custom
+// self-hosted endpoint when FIRECRAWL_BASE_URL is set. Without either,
+// callers skip Firecrawl and use custom built-in search/fetch implementations.
 package tools
 
 import (
@@ -20,6 +20,11 @@ const (
 	firecrawlMaxMarkdown    = 25_000
 	firecrawlTruncateNotice = "\n\n[...content truncated...]"
 )
+
+// IsFirecrawlConfigured returns true if an API key or custom endpoint is configured.
+func IsFirecrawlConfigured() bool {
+	return os.Getenv("FIRECRAWL_API_KEY") != "" || os.Getenv("FIRECRAWL_BASE_URL") != ""
+}
 
 func truncateMarkdown(text string) string {
 	if len(text) <= firecrawlMaxMarkdown {
@@ -159,17 +164,23 @@ func firecrawlSearch(ctx context.Context, query string, limit int) ([]FirecrawlS
 }
 
 // isRetryableFirecrawlError reports whether a Firecrawl error (rate limit,
-// network failure, 5xx) should trigger a fallback search engine rather than
-// surfacing directly.
+// auth/access/suspicious IP block, network failure, 5xx) should trigger
+// fallback to built-in handlers rather than hard-failing the tool call.
 func isRetryableFirecrawlError(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
-	if strings.Contains(msg, "429") || strings.Contains(msg, "Rate limit") {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "429") || strings.Contains(msg, "rate limit") {
 		return true
 	}
-	if strings.Contains(msg, "HTTP 5") {
+	if strings.Contains(msg, "401") || strings.Contains(msg, "403") || strings.Contains(msg, "unauthorized") || strings.Contains(msg, "forbidden") {
+		return true
+	}
+	if strings.Contains(msg, "suspicious") || strings.Contains(msg, "captcha") || strings.Contains(msg, "blocked") {
+		return true
+	}
+	if strings.Contains(msg, "http 5") || strings.Contains(msg, "500") || strings.Contains(msg, "502") || strings.Contains(msg, "503") || strings.Contains(msg, "504") {
 		return true
 	}
 	if strings.Contains(msg, "network") || strings.Contains(msg, "connection") || strings.Contains(msg, "timeout") {
