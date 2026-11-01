@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build the WebTransport client for Android and stage it into the APK.
+# Build the Android JNI backend and stage it into the APK.
 #
-# Plan Phase 3 spike. `cargo-ndk` would do the toolchain wiring, but the NDK
+# `cargo-ndk` would do the toolchain wiring, but the NDK
 # clang wrappers are enough and keep the dependency count down, so the tool
 # paths are set here.
 #
@@ -33,10 +33,9 @@ if [[ ! -x "$BIN/aarch64-linux-android21-clang" ]]; then
     exit 1
 fi
 
-# ring (wtransport's TLS backend) is C + asm, so its build script needs the
-# same NDK clang — not just the final link. The NDK ships `llvm-ar` only,
-# hence the explicit AR overrides. The names contain dashes, which `export`
-# rejects, so they go through `env` per build.
+# The NDK ships `llvm-ar` only, so the link needs explicit AR overrides.
+# The names contain dashes, which `export` rejects, so they go through
+# `env` per build.
 build_target() {
     local target="$1"
     # Must run inside the crate: `.cargo/config.toml` (the NDK linker) is

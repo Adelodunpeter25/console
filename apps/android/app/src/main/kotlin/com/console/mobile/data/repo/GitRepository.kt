@@ -5,24 +5,12 @@ import com.console.mobile.data.api.ConsoleApiClient
 import console.v1.GitBranchesResponse
 import console.v1.GitStatusSummary
 import console.v1.ProjectInfo
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
-import com.console.mobile.data.stream.WtTransport
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import java.io.IOException
 
 class GitRepository(
     private val api: ConsoleApi,
@@ -59,103 +47,6 @@ class GitRepository(
                     }
                 }
             }.awaitAll().filterNotNull().toMap()
-        }
-    }
-
-    /**
-     * Watches git status changes via GET /api/git/status/watch?path=... SSE.
-     */
-    private val gitStatusMoshi by lazy {
-        com.squareup.moshi.Moshi.Builder()
-            .add(com.squareup.wire.WireJsonAdapterFactory())
-            .build()
-            .adapter(GitStatusSummary::class.java)
-    }
-
-    /**
-     * Live git status, over WebTransport when the server serves it.
-     *
-     * Falls through to the SSE watch on a server without a WebTransport
-     * listener, which is why the SSE body below is unchanged.
-     */
-    fun watchStatus(path: String): Flow<GitStatusSummary> =
-        WtTransport.watch(
-            baseUrl = apiClient.baseUrl,
-            requestJson = WtTransport.watchRequest(WtTransport.TARGET_GIT_STATUS, path = path),
-            frameType = WtTransport.FRAME_GIT_STATUS,
-            authToken = apiClient.authToken,
-            decode = { raw -> gitStatusMoshi.fromJson(raw) },
-        ) ?: watchStatusOverSse(path)
-
-    private fun watchStatusOverSse(path: String): Flow<GitStatusSummary> = callbackFlow {
-        val baseUrl = apiClient.baseUrl.trimEnd('/')
-        val encoded = java.net.URLEncoder.encode(path, "UTF-8")
-        val url = "$baseUrl/api/git/status/watch?path=$encoded"
-
-        val reqBuilder = Request.Builder()
-            .url(url)
-            .addHeader("Accept", "text/event-stream")
-            .addHeader("Cache-Control", "no-cache")
-
-        apiClient.authToken?.let {
-            reqBuilder.addHeader("Authorization", "Bearer $it")
-        }
-
-        val call = httpClient.newCall(reqBuilder.build())
-
-        val job = launch(Dispatchers.IO) {
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    close()
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    if (!response.isSuccessful) {
-                        response.close()
-                        close()
-                        return
-                    }
-                    val body = response.body
-                    if (body == null) {
-                        response.close()
-                        close()
-                        return
-                    }
-                    try {
-                        val reader = BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8))
-                        var line: String?
-                        var eventType = "message"
-                        while (reader.readLine().also { line = it } != null) {
-                            if (call.isCanceled()) break
-                            val l = line?.trim() ?: continue
-                            if (l.isEmpty()) continue
-                            if (l.startsWith(":")) continue
-                            if (l.startsWith("event:")) {
-                                eventType = l.substring(6).trim()
-                                continue
-                            }
-                            if (l.startsWith("data:")) {
-                                val raw = l.substring(5).trim()
-                                if (eventType == "gitStatus" || eventType == "message") {
-                                    try {
-                                        gitStatusMoshi.fromJson(raw)?.let { trySend(it) }
-                                    } catch (_: Exception) {
-                                    }
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {
-                    } finally {
-                        response.close()
-                        close()
-                    }
-                }
-            })
-        }
-
-        awaitClose {
-            job.cancel()
-            call.cancel()
         }
     }
 }

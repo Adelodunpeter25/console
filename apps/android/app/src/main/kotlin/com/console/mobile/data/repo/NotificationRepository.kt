@@ -9,7 +9,6 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
-import com.console.mobile.data.stream.WtTransport
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -33,21 +32,9 @@ class NotificationRepository(
         .adapter(NotificationEvent::class.java)
 
     /**
-     * Notification banners, over WebTransport when the server serves it.
-     *
-     * The switch sits at the top so the SSE path below is untouched: a server
-     * without a WebTransport listener falls through to it.
+     * Notification banners, via GET /api/notifications/stream SSE.
      */
-    fun notifications(): Flow<NotificationEvent> =
-        WtTransport.watch(
-            baseUrl = apiClient.baseUrl,
-            requestJson = WtTransport.watchRequest(WtTransport.TARGET_NOTIFICATIONS),
-            frameType = WtTransport.FRAME_NOTIFICATION,
-            authToken = apiClient.authToken,
-            decode = { raw -> notificationAdapter.fromJson(raw) },
-        ) ?: notificationsOverSse()
-
-    private fun notificationsOverSse(): Flow<NotificationEvent> = callbackFlow {
+    fun notifications(): Flow<NotificationEvent> = callbackFlow {
         val baseUrl = apiClient.baseUrl.trimEnd('/')
         val url = "$baseUrl/api/notifications/stream"
 

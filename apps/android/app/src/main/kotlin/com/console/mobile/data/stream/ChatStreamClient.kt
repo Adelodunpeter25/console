@@ -1,6 +1,5 @@
 package com.console.mobile.data.stream
 
-import com.console.mobile.WtStream
 import com.console.mobile.data.api.ConsoleJson
 import com.console.mobile.data.model.AgentSessionEvent
 import com.console.mobile.data.model.BackgroundWorkOutputFrame
@@ -46,12 +45,7 @@ class ChatStreamClient(
     private val json: Json = ConsoleJson,
 ) {
     /**
-     * Start a run, over WebTransport when the server can serve it.
-     *
-     * The switch lives here so nothing above the transport changes: callers
-     * already consume [StreamOutcome], and both paths produce it. A server
-     * without a WebTransport listener — no TLS, blocked UDP — falls back to
-     * SSE, which is what makes this safe to default on.
+     * Start a run over SSE.
      */
     fun startRun(
         baseUrl: String,
@@ -59,13 +53,6 @@ class ChatStreamClient(
         bodyJson: String,
         authToken: String? = null,
     ): Flow<StreamOutcome> {
-        WtTransport.stream(
-            baseUrl = baseUrl,
-            sessionId = sessionId,
-            requestType = WtStream.REQUEST_START,
-            requestJson = runBodyToWtStart(bodyJson, sessionId),
-            authToken = authToken,
-        )?.let { return it }
         return stream(
             url = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/run",
             method = Method.Post(bodyJson),
@@ -79,13 +66,6 @@ class ChatStreamClient(
         since: Long? = null,
         authToken: String? = null,
     ): Flow<StreamOutcome> {
-        WtTransport.stream(
-            baseUrl = baseUrl,
-            sessionId = sessionId,
-            requestType = WtStream.REQUEST_ATTACH,
-            requestJson = attachRequestJson(sessionId, since),
-            authToken = authToken,
-        )?.let { return it }
         val base = "${baseUrl.trimEnd('/')}/api/sessions/$sessionId/run/stream"
         val url = if (since != null) "$base?since=$since" else base
         return stream(url = url, method = Method.Get, authToken = authToken)

@@ -364,17 +364,6 @@ object AppContainer {
 
         LocalNotificationPresenter.ensureChannelCreated(app)
 
-        // WebTransport is optional: a build without the staged Rust library
-        // (CI, the 32-bit ABIs) runs SSE/WS only. Say so once, at startup, so
-        // the downgrade is visible in logcat instead of looking like a slow
-        // server.
-        if (!WtNative.available) {
-            android.util.Log.w(
-                "ConsoleApp",
-                "WebTransport unavailable (libconsole_wt_android.so not staged): SSE/WS only",
-            )
-        }
-
         // Pairing, diffs, tool labels and file icons come from the shared Rust
         // library. Without it pairing is refused (never parsed leniently) and
         // diffs render empty, so say so loudly rather than look like a bug.
