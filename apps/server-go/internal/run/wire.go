@@ -1,4 +1,4 @@
-// Run-event wire encoding, shared by the SSE routes and the WebTransport
+// Run-event wire encoding, shared by the SSE routes
 // server. Every hub event maps to an (event name, JSON body) pair; the SSE
 // path frames it with an `id:` sequence line while the WT path packs the
 // body bytes into a WtFrame payload — both byte-identical bodies, so client

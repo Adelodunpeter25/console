@@ -59,7 +59,7 @@ func RequireDeviceToken(manager authManager) fiber.Handler {
 		credential := bearer(c)
 		// A player page opening the stream websocket cannot send the header
 		// either, so the device stream accepts its credential in the query
-		// string — the same carve-out the WebTransport handshake makes.
+		// string.
 		// Ordinary HTTP stays header-only, keeping tokens out of access logs.
 		if credential == "" && isWebSocketUpgrade(c) && deviceStreamPath(c.Path()) {
 			credential = strings.TrimSpace(c.Query("token"))
@@ -156,7 +156,8 @@ func qrBaseURL(requested string) string {
 }
 
 // RegisterDeviceRoutes wires the authenticated device-management routes.
-func RegisterDeviceRoutes(app *fiber.App, manager authManager) {	h := app.Group("/api/auth")
+func RegisterDeviceRoutes(app *fiber.App, manager authManager) {
+	h := app.Group("/api/auth")
 
 	h.Post("/pairing-grants", func(c *fiber.Ctx) error {
 		var req consolev1.PairingGrantRequest

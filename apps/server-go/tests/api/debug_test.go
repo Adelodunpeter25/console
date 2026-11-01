@@ -17,7 +17,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 func debugTestApp(t *testing.T) (*fiber.App, string, *services.NotificationService) {
@@ -42,9 +41,7 @@ func debugTestApp(t *testing.T) (*fiber.App, string, *services.NotificationServi
 	notifications := services.NewNotificationService()
 	app := fiber.New()
 	app.Use(routes.RequireDeviceToken(manager))
-	routes.RegisterDebugRoutes(app, notifications, func() wt.Stats {
-		return wt.Stats{UptimeMillis: 1234, Goroutines: 42, HeapAlloc: 1000, HeapSys: 2000, SessionsTotal: 3, StreamsByKind: map[string]uint64{"CHAT_RUN": 5}}
-	})
+	routes.RegisterDebugRoutes(app, notifications)
 	return app, paired.Token, notifications
 }
 
@@ -58,13 +55,10 @@ func TestDebugStatsRequiresToken(t *testing.T) {
 		t.Fatalf("stats: %d %v", code, out)
 	}
 	data, _ := out["data"].(map[string]any)
-	for _, key := range []string{"uptimeMillis", "goroutines", "heapAlloc", "heapSys", "sessionsTotal", "streamsByKind"} {
+	for _, key := range []string{"uptimeMillis", "goroutines", "heapAlloc", "heapSys"} {
 		if _, ok := data[key]; !ok {
 			t.Fatalf("snapshot missing %q: %v", key, data)
 		}
-	}
-	if data["sessionsTotal"] != float64(3) {
-		t.Fatalf("sessionsTotal: %v", data)
 	}
 }
 
@@ -87,16 +81,5 @@ func TestDebugNotifyInjectsAndDelivers(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("injected notification never arrived")
-	}
-}
-
-func TestWTStatsShapeOnUnstartedServer(t *testing.T) {
-	srv := wt.New(wt.Config{Mode: wt.TransportLegacy}, wt.Deps{})
-	snap := srv.Stats()
-	if snap.UptimeMillis < 0 || snap.Goroutines <= 0 {
-		t.Fatalf("process stats: %+v", snap)
-	}
-	if snap.SessionsTotal != 0 || len(snap.StreamsByKind) != 0 {
-		t.Fatalf("fresh server must report zero counters: %+v", snap)
 	}
 }

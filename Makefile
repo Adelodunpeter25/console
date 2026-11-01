@@ -1,4 +1,4 @@
-.PHONY: dev-server dev-server-wt dev-console dev-mobile dev-desktop dev-desktop-wt build-desktop package-desktop build-server install build-android check proto help
+.PHONY: dev-server dev-console dev-mobile dev-desktop build-desktop package-desktop build-server install build-android check proto help
 
 # Where `console upgrade` and this target install the binary (matches
 # resolveUpgradeTarget's CONSOLE_INSTALL_DIR fallback in upgrade.go).
@@ -10,21 +10,10 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 ## dev-server: Start the Go agent server in dev mode (uses ~/.console-dev storage)
 ##   Usage: make dev-server              (dev: port 3000, ~/.console-dev storage)
 ##          make dev-server PORT=3001    (dev: port 3001)
-##          make dev-server WT=1          (also serve WebTransport over QUIC)
-##          make dev-server WT=1 WT_PORT=24443 PORT=2003
-##
-## WT=1 turns on the QUIC/WebTransport listener. `console cert-fingerprint`
-## creates the dev certificate on first use (and replaces it when expired) so
-## there is nothing to generate by hand and no openssl involved. A client pins
-## it with CONSOLE_WT_TLS=pin:<fingerprint>; `make dev-desktop-wt` wires that
-## up for you.
-##
 ## Runs the server directly rather than through `console start`: this is a
 ## foreground server, not a managed daemon, and it must not refuse to start
 ## because a daemon from another mode is running.
 PORT ?=
-WT ?= 0
-WT_PORT ?= 14443
 # The server creates its remote tunnel (the permanent public address) a moment
 # after it starts, and on the very first run the pairing block printed above
 # cannot have it yet. This runs in the background, waits for the tunnel, then
@@ -34,31 +23,10 @@ REMOTE_PAIR = case "$$(echo $$CONSOLE_REMOTE | tr A-Z a-z)" in 0|off|false|no|di
 	( CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev --wait-remote 60 \
 	| sed 's/^/[remote] /' & ) ;; esac
 dev-server:
-ifeq ($(WT),1)
-	@CONSOLE_ENV=dev go -C apps/server-go run ./cmd/console cert-fingerprint --dev > /dev/null
-	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
-	@$(REMOTE_PAIR)
-	CONSOLE_ENV=dev CONSOLE_TRANSPORT=auto \
-	CONSOLE_TLS_CERT=$(HOME)/.console-dev/wt-dev.crt \
-	CONSOLE_TLS_KEY=$(HOME)/.console-dev/wt-dev.key \
-	CONSOLE_WT_ADDR=:$(WT_PORT) \
-	$(if $(PORT),PORT=$(PORT),) \
-	go -C apps/server-go run ./cmd/server
-else
 	@CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) go -C apps/server-go run ./cmd/console pair --dev
 	@$(REMOTE_PAIR)
 	CONSOLE_ENV=dev $(if $(PORT),PORT=$(PORT),) \
 	go -C apps/server-go run ./cmd/server
-endif
-
-## dev-server-wt: Start the Go agent server in dev mode with WebTransport enabled.
-##   The same as `make dev-server WT=1`; kept as its own name because that is
-##   what the docs and the run-together workflow say.
-##   Usage: make dev-server-wt              (HTTP 3000 + QUIC :14443)
-##          make dev-server-wt PORT=2003    (HTTP 2003 + QUIC :14443)
-##          make dev-server-wt WT_PORT=24443
-dev-server-wt:
-	@$(MAKE) dev-server WT=1 WT_PORT=$(WT_PORT) $(if $(PORT),PORT=$(PORT),)
 
 ## dev-console: Start the console agent as a background daemon (survives closing terminal)
 ##   Usage: make dev-console            (dev: port 3000, ~/.console-dev storage)
@@ -84,21 +52,6 @@ dev-mobile:
 
 ## dev-desktop: Build and launch the GPUI desktop app in dev mode (Console Dev.app)
 dev-desktop:
-	bash apps/desktop/scripts/dev.sh
-
-## dev-desktop-wt: Launch the desktop app in WebTransport mode (QUIC migration
-##   dogfooding). Pair it with `make dev-server-wt` running in another terminal:
-##   this points the app at that server's QUIC listener and pins its dev
-##   certificate. Every streaming surface (chat runs, watches, terminals) goes
-##   over QUIC; REST calls stay on the API port as usual.
-##   Usage: make dev-desktop-wt            (API 3000 + WT 127.0.0.1:14443)
-##          make dev-desktop-wt PORT=2003 WT_PORT=24443
-dev-desktop-wt:
-	CONSOLE_ENV=dev \
-	CONSOLE_TRANSPORT=wt \
-	CONSOLE_WT_ORIGIN=https://127.0.0.1:$(WT_PORT) \
-	CONSOLE_WT_TLS=pin:$$(go -C apps/server-go run ./cmd/console cert-fingerprint --dev) \
-	CONSOLE_BACKEND_URL=http://127.0.0.1:$(if $(PORT),$(PORT),3000) \
 	bash apps/desktop/scripts/dev.sh
 
 ## package-desktop: Package the GPUI desktop app into a production macOS .app bundle (Console.app)
@@ -163,11 +116,10 @@ proto:
 ## help: Show this help message
 help:
 	@echo "Available commands:"
-	@echo "  make dev-server        - Start the backend agent server (PORT=nnnn, WT=1 for WebTransport)"
+	@echo "  make dev-server        - Start the backend agent server (PORT=nnnn)"
 	@echo "  make dev-console       - Start the console agent as a background daemon (PORT=nnnn to set port)"
 	@echo "  make dev-mobile        - Build and run the native Android app in dev mode"
 	@echo "  make dev-desktop       - Start the GPUI desktop app in dev mode"
-	@echo "  make dev-desktop-wt    - Start the GPUI desktop app on WebTransport (needs make dev-server-wt)"
 	@echo "  make package-desktop   - Package the GPUI desktop app for production (.app bundle)"
 	@echo "  make build-desktop     - Build the GPUI desktop app for production"
 	@echo "  make desktop-check     - Fast typecheck of the GPUI desktop app"

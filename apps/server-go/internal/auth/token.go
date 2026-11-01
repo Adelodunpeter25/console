@@ -1,8 +1,7 @@
-// API bearer tokens for the QUIC/WebTransport migration (Phase 0).
+// Bearer tokens for device credentials (the pairing flow).
 //
-// These are short-lived, HMAC-signed handshake credentials: a client mints
-// one over REST (POST /api/auth/token) and presents it before a WebTransport
-// session is accepted, where the device id is bound to the QUIC connection.
+// Short-lived, HMAC-signed credentials: the pairing exchange mints one and
+// the client presents it on every API request, bound to the device id.
 // They are NOT provider credentials and never touch the LLM layer.
 //
 // Wire shape: `ct1_<base64url(payload)>.<base64url(sig)>` where the payload

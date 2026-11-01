@@ -1,37 +1,35 @@
-// Debug routes for load testing and profiling: process/WT snapshots and
+// Debug routes for load testing and profiling: process snapshots and
 // synthetic notification injection for fanout blasts.
 //
 // These sit behind the same device-token boundary as every other route —
 // they are registered after the middleware, so a caller must already hold a
-// paired device credential. The old dedicated bearer middleware is gone: two
-// token systems meant two revocation states, and the looser one leaked
-// through the query string.
+// paired device credential.
 package routes
 
 import (
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
-// RegisterDebugRoutes wires /api/debug/*: snapshot reads wt.Stats through
-// the provider so serve.go owns the server object. Exported for route tests.
-func RegisterDebugRoutes(app *fiber.App, notifications *services.NotificationService, snapshot func() wt.Stats) {
+// RegisterDebugRoutes wires /api/debug/*. Statistics are plain process
+// snapshots; the WT session counters went away with WebTransport.
+func RegisterDebugRoutes(app *fiber.App, notifications *services.NotificationService) {
 	h := app.Group("/api/debug")
 
 	h.Get("/stats", func(c *fiber.Ctx) error {
-		snap := snapshot()
+		var mem runtime.MemStats
+		runtime.ReadMemStats(&mem)
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
-			"uptimeMillis":  snap.UptimeMillis,
-			"goroutines":    snap.Goroutines,
-			"heapAlloc":     snap.HeapAlloc,
-			"heapSys":       snap.HeapSys,
-			"sessionsTotal": snap.SessionsTotal,
-			"streamsByKind": snap.StreamsByKind,
+			"uptimeMillis": time.Since(startTime).Milliseconds(),
+			"goroutines":   runtime.NumGoroutine(),
+			"heapAlloc":    mem.HeapAlloc,
+			"heapSys":      mem.HeapSys,
 		}})
 	})
 
@@ -58,3 +56,6 @@ func RegisterDebugRoutes(app *fiber.App, notifications *services.NotificationSer
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"pushed": true}})
 	})
 }
+
+// startTime marks when the process began serving, for the uptime metric.
+var startTime = time.Now()

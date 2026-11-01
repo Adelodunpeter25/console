@@ -1,4 +1,4 @@
-// API bearer token coverage (QUIC/WebTransport migration, Phase 0):
+// Bearer-token (device credential) coverage:
 // issuer round-trip, tamper/expiry/revocation failures, secret persistence,
 // the mint route, and the shared bearer-or-query middleware.
 package tests
@@ -197,9 +197,7 @@ func doTokenRequest(t *testing.T, app *fiber.App, method, target, authHeader str
 //
 // The important difference is the query string: a credential in a URL
 // leaks into access logs, proxy logs and browser history, so ordinary
-// HTTP routes accept the header only. The WebTransport handshake keeps
-// its own scoped copy of that path, because a CONNECT request from some
-// clients cannot carry headers.
+// HTTP routes accept the header only.
 func TestDeviceTokenMiddlewareRejectsQueryStringToken(t *testing.T) {
 	database, err := db.Open(db.OpenOptions{Path: ":memory:"})
 	if err != nil {

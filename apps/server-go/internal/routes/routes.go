@@ -4,7 +4,6 @@ package routes
 import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,7 +22,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 type Config struct {
@@ -31,18 +29,15 @@ type Config struct {
 	Watch         *fs.FsWatchService
 	Ports         *terminal.PortRegistry
 	Notifications *services.NotificationService
-	// TokenIssuer mints the API bearer tokens the WT handshake validates.
+	// TokenIssuer mints the device tokens the pairing flow hands out.
 	// Nil builds one internally (persistent secret, ephemeral fallback).
 	TokenIssuer *auth.TokenIssuer
 	// Identity is the server's public identity, reported in the pairing
 	// responses so a client can confirm which machine it paired with.
 	Identity auth.ServerIdentity
-	// AltSvc advertises the H3 port (e.g. "443" renders h3=":443").
-	// Empty disables the header. Registered before all routes.
-	AltSvc string
 }
 
-func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
+func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app := fiber.New(fiber.Config{
 		AppName:     "console-server-go",
 		IdleTimeout: 5 * time.Minute,
@@ -59,16 +54,6 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 		Immutable: true,
 	})
 	app.Use(recover.New())
-	if cfg.AltSvc != "" {
-		advertise := `h3="` + cfg.AltSvc + `"`
-		if !strings.HasPrefix(cfg.AltSvc, ":") {
-			advertise = `h3=":` + cfg.AltSvc + `"`
-		}
-		app.Use(func(c *fiber.Ctx) error {
-			c.Set("Alt-Svc", advertise)
-			return c.Next()
-		})
-	}
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
@@ -168,18 +153,7 @@ func New(cfg Config) (*fiber.App, *run.Service, wt.Deps, func()) {
 		mcpManager.CloseAll()
 		_ = deviceSvc.Close()
 	}
-	// The WT server drives the same services over QUIC; serve.go owns its
-	// listener lifecycle from this bundle.
-	return app, runSvc, wt.Deps{
-		Issuer:        tokenIssuer,
-		Authenticate:  authManager.Authenticate,
-		Runs:          runSvc,
-		PTY:           ptyManager,
-		Ports:         cfg.Ports,
-		Watch:         cfg.Watch,
-		Git:           gitSvc,
-		Notifications: cfg.Notifications,
-		Scripts:       scriptsSvc,
-		Devices:       deviceSvc,
-	}, shutdown
+	// Serve owns all listener lifecycle; routes hands back the shutdown that
+	// stops everything the server owns.
+	return app, runSvc, shutdown
 }

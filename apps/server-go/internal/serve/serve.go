@@ -5,7 +5,6 @@ package serve
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -33,7 +32,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/cfrelay"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/wt"
 )
 
 // startDeletedChatSweep purges soft-deleted chats past retention once
@@ -122,27 +120,8 @@ func Run() error {
 	ports.StartReaper(5 * time.Second)
 	notifications := services.NewNotificationService()
 
-	// Transport surface for the QUIC migration: WT serves alongside Fiber
-	// when TLS is configured, otherwise the server stays legacy-only. One
-	// token issuer feeds both the mint route and the WT handshake so a
-	// revocation applies everywhere.
-	wtCfg, err := wt.ConfigFromEnv()
-	if err != nil {
-		slog.Error("invalid transport config", "error", err)
-		return err
-	}
-	// Plain HTTP is the default for a local daemon, which is fine on a
-	// laptop. On a network it is not: every request, including the device
-	// credential, travels in the clear. The plan's rule is that a server
-	// reachable from off the machine must be encrypted, and the operator can
-	// insist on it with CONSOLE_REQUIRE_TLS.
-	if !wtCfg.WTEnabled() {
-		if strings.EqualFold(strings.TrimSpace(os.Getenv("CONSOLE_REQUIRE_TLS")), "true") {
-			slog.Error("CONSOLE_REQUIRE_TLS is set but the server has no TLS configured; refusing to serve plain HTTP")
-			return fmt.Errorf("TLS is required but not configured (set CONSOLE_TLS_CERT and CONSOLE_TLS_KEY, or use 'console start --wt')")
-		}
-		slog.Warn("serving plain HTTP: device credentials travel unencrypted. Use 'console start --wt' for TLS.")
-	}
+	// Plain HTTP serves the API. Encrypted remote access is provided by the
+	// OpenTunnel/relay TLS reverse proxy below, not by this listener.
 	tokenIssuer, err := auth.NewTokenIssuerStrict()
 	if err != nil {
 		slog.Error("failed to initialize authentication", "error", err)
@@ -163,9 +142,9 @@ func Run() error {
 	// Spent grants are purged here instead: the table would otherwise grow
 	// without bound, one row per pairing attempt.
 	manager.PurgePairingGrants(time.Now().UnixMilli())
-	app, runs, wtDeps, shutdownAll := routes.New(routes.Config{
+	app, runs, shutdownAll := routes.New(routes.Config{
 		DB: manager, Watch: watch, Ports: ports, Notifications: notifications,
-		TokenIssuer: tokenIssuer, Identity: identity, AltSvc: wtAltSvcPort(wtCfg),
+		TokenIssuer: tokenIssuer, Identity: identity,
 	})
 
 	// Deleted chats stay restorable for 7 days, then the backend purges
@@ -218,26 +197,8 @@ func Run() error {
 		}
 	}()
 
-	// Dual-stack serving when WebTransport is on: Fiber speaks TLS on the
-	// TCP half of WTAddr while the WT server takes the UDP half — same
-	// port, different sockets, no SO_REUSEPORT needed. The plaintext
-	// listener above stays as the dev path either way.
-	wtServer := wt.New(wtCfg, wtDeps)
-	routes.RegisterDebugRoutes(app, notifications, wtServer.Stats)
+	routes.RegisterDebugRoutes(app, notifications)
 	startDebugPprof()
-	if wtCfg.WTEnabled() {
-		go func() {
-			slog.Info("server listening (TLS)", "addr", wtCfg.WTAddr)
-			if err := app.ListenTLS(wtCfg.WTAddr, wtCfg.TLSCertFile, wtCfg.TLSKeyFile); err != nil {
-				slog.Error("TLS listener stopped", "error", err)
-				os.Exit(1)
-			}
-		}()
-		if err := wtServer.Start(); err != nil {
-			slog.Error("webtransport failed to start", "error", err)
-			return err
-		}
-	}
 
 	// Remote access: a permanent public HTTPS address through OpenTunnel,
 	// created on the first start and resumed on every later one. A tunnel that
@@ -250,10 +211,7 @@ func Run() error {
 	<-quit
 	slog.Info("shutting down")
 	stopTunnel()
-	// WT first: closing sessions unblocks every stream handler (chat and
-	// watch pumps observe session death even mid-silence), then the HTTP
-	// listener drains, then everything the server owns stops.
-	_ = wtServer.Close()
+	// The HTTP listener drains first, then everything the server owns stops.
 	_ = app.ShutdownWithTimeout(5 * time.Second)
 	// Stop the server means stop everything it owns: in-flight agent runs,
 	// detached background bash jobs, terminal PTYs, and managed project
@@ -330,18 +288,6 @@ func startRelay(dir, target string) func() {
 	}
 	slog.Info("remote access starting", "url", manager.URL())
 	return manager.Close
-}
-
-// wtAltSvcPort renders the H3 port for the Alt-Svc header ("443"), or ""
-// when WebTransport is off so nothing is advertised.
-func wtAltSvcPort(cfg wt.Config) string {
-	if !cfg.WTEnabled() {
-		return ""
-	}
-	if _, port, err := net.SplitHostPort(cfg.WTAddr); err == nil && port != "" {
-		return port
-	}
-	return ""
 }
 
 // startDebugPprof serves net/http/pprof when CONSOLE_DEBUG_PPROF_ADDR names

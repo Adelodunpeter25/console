@@ -8,9 +8,7 @@
 //
 // The query-string form (`?token=`) is gone too, for ordinary HTTP. URLs
 // leak through access logs, proxy logs, browser history and Referer headers,
-// so a credential in one is a credential in a log file. The WebTransport
-// handshake keeps its own scoped copy of that path, because a CONNECT
-// request from some clients cannot carry headers.
+// so a credential in one is a credential in a log file.
 package routes
 
 import (
