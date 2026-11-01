@@ -72,9 +72,8 @@ jobs:
           if-no-files-found: error
 
   # Windows preview. Kept separate from the macOS matrix because packaging is
-  # a plain .exe zip, not an .app bundle. Deliberately not wired into
-  # `publish` yet: until this job is green on main, a Windows failure must not
-  # block the macOS release.
+  # a plain .exe zip, not an .app bundle. It feeds `publish` alongside the
+  # macOS builds, so the Windows zip lands on the same rolling release.
   build-windows:
     runs-on: windows-latest
     steps:
@@ -109,8 +108,12 @@ jobs:
   # Single publisher: both matrix jobs previously uploaded to the same
   # rolling release in parallel, racing inside action-gh-release. Builds
   # stay parallel; only this job mutates the release.
+  #
+  # It waits on `build-windows` too: download-artifact can only fetch what
+  # already exists, so publishing when only the macOS matrix is done would
+  # race the Windows upload and ship a release without it.
   publish:
-    needs: build
+    needs: [build, build-windows]
     runs-on: ubuntu-latest
 
     # Prevent overlapping pushes from modifying the rolling release together.
@@ -143,3 +146,4 @@ jobs:
             files: |
               dist/Console-macos-x64.zip
               dist/Console-macos-arm64.zip
+              dist/Console-windows-x64.zip
