@@ -282,7 +282,9 @@ impl ConsoleDesktopApp {
                 origin: point(px(280.0), px(240.0)),
                 size: size(px(520.0), px(540.0)),
             })),
-            titlebar: Some(crate::window::titlebar_options(Some("Choose a folder".into()))),
+            titlebar: Some(crate::window::titlebar_options(Some(
+                "Choose a folder".into(),
+            ))),
             ..Default::default()
         };
 
