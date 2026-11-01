@@ -77,6 +77,16 @@ and `apps/server-go/tests/codemode/` for coverage.
    the script can call the build and test tools and check the result itself,
    and the harness rolls back when verification fails.
 
+**Deferred follow-up — background scripts.** Factory's long-running behavior is
+worth adopting, but it is explicitly **not part of the first codemode
+iteration**. A later iteration should let a script run in the background, return
+partial output when the foreground wait budget expires, and wake the session
+when the job completes. It should reuse the existing background-work/job
+lifecycle rather than treating `Runtime.Eval` as one inseparable synchronous
+call. The eventual control surface needs status/output, wait, and stop
+operations, and every partial result must include an explicit `running` state
+and `job_id` so the model cannot mistake it for completion and duplicate work.
+
 Why read-only first: the write path is where the risk and the complexity live
 (approvals mid-script, shadowing, rollback), and it is also where the value is
 most contested. Stage 1 proves the orchestration model, the context saving and
@@ -285,8 +295,10 @@ diff) belongs in `apps/server-go/tests/`.
 - **The change snapshot still fires.** A file written by a script appears in
   the session's file-change diff (`OnBeforeExecute`), so the desktop's change
   review shows it.
-- **The budget holds.** A runaway script is stopped at the budget and reported
-  as an unknown completion, the way CUA reports it.
+- **The budget holds for the first iteration.** A runaway script is stopped at
+  the evaluation budget and reported as an unknown completion, the way CUA
+  reports it. Background continuation, partial output, and session wake-up are
+  deferred follow-up behavior, not first-iteration requirements.
 - **The promise detector fails loudly.** `Promise.all` in stage 1 either runs
   or is refused with a clear message; it must never silently do nothing.
 
@@ -309,3 +321,7 @@ diff) belongs in `apps/server-go/tests/`.
 5. **Activation.** `/codemode` (mirroring `/computer-use`) is the
    conservative choice. Whether the harness should enable it automatically
    for long-horizon runs is a later question.
+6. **Background execution is deferred.** The first iteration remains a bounded,
+   synchronous read-only evaluator. A later iteration can add background jobs,
+   partial-output responses, status/output inspection, wait/stop controls, and
+   session wake-up on completion, following the Factory design.
