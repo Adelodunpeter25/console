@@ -231,19 +231,23 @@ func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, e
 	return s.inner.ExpiredDeletedSessions(cutoffMillis)
 }
 
+// PermanentDelete irreversibly removes an already soft-deleted session.
+// Deleting from the trash (mobile + desktop) is an explicit, irreversible
+// act: a worktree owned by the session is force-removed even when dirty
+// (uncommitted changes) and its branch is force-deleted even when unmerged.
+// Shared worktrees (forks) stay until the last owner deletes.
 func (s *SessionService) PermanentDelete(sessionID string) (bool, error) {
 	wt, err := s.inner.WorktreeOf(sessionID)
 	if err != nil {
 		return false, err
 	}
 	if wt != nil {
-		// Owned worktree goes first: dirty blocks the whole delete.
-		// Branch follows the same safe rule — unmerged branches are kept.
-		// A shared worktree (fork) stays: only the last owner removes it.
 		if owners, err := s.inner.CountWorktreeOwners(wt.Path, sessionID); err == nil && owners > 0 {
 			return s.inner.PermanentDelete(sessionID)
 		}
-		if err := s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, false); err != nil {
+		// Force: the user asked to destroy it from the trash page —
+		// uncommitted work and unmerged branches go with it.
+		if err := s.wt.WorktreeRemove(wt.Repo, wt.Path, wt.Branch, true); err != nil {
 			return false, err
 		}
 	}

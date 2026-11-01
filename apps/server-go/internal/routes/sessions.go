@@ -405,15 +405,12 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	})
 
 	// DELETE /api/sessions/:id/permanent — irreversibly delete a
-	// soft-deleted session.
+// soft-deleted session. Any owned worktree is force-removed (dirty
+// worktrees and unmerged branches included).
 	h.Delete("/:id/permanent", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		deleted, err := sessions.PermanentDelete(id)
 		if err != nil {
-			// Dirty worktree blocks the delete: conflict, session kept.
-			if errors.Is(err, gitsvc.ErrWorktreeDirty) {
-				return sessionError(c, fiber.StatusConflict, err.Error())
-			}
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
 		if !deleted {
