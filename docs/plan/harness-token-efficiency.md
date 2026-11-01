@@ -430,6 +430,24 @@ Also audit `SYSTEM.md` handling and the subagent preamble in the same pass.
 - **Watch:** `editFile` failure rate and citation accuracy on the
   code-question tasks (the checks assert on the cited line numbers).
 
+### Factory harness follow-ups
+
+The Factory article reinforces several principles for this plan:
+
+- **Minimal default tool surface:** aim for the smallest useful set, rather than
+  copying Factory's exact "2 tools rather than 11" number. Keep ordinary repo
+  work available and defer web access, memory, background-job inspection,
+  multi-question prompts, batch writes, and MCP groups until needed.
+- **Append-only discovery:** loading a tool must append its schema for the rest
+  of the run, never reorder or insert into the cached prefix.
+- **Structured data and compact results:** give scripts whole files and typed
+  search results; return concise mutation summaries and spill large output to a
+  searchable file with a bounded tail.
+- **Explicitly deferred work:** background scripts, partial output, wake-up,
+  and status/wait/stop controls are follow-up work, not first-iteration
+  codemode requirements. Bounded autonomy and model-specific tuning are also
+  later validation work.
+
 ### Task 4.4: `lazy_tools`: load rarely used tools on demand
 - **Always sent:** `read_file`, `list_dir`, `glob`, `grep`, `editFile`,
   `write_file`, `bash`, `todo`, `ask` (models call it even when it's
