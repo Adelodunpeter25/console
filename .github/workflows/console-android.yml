@@ -78,17 +78,18 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/android/rust-wt
+          workspaces: apps/android/shared-native
 
-      # libconsole_wt_android.so is gitignored on purpose (a binary is not a
-      # reviewable artifact) and produced by rust-wt/build.sh, so without this
-      # step both APKs ship with no WebTransport at all. The app falls back to
-      # SSE/WS when the library is missing, which is exactly why this runs: a
-      # silent downgrade on every released APK is not a fallback, it is a bug.
+      # libconsole_shared_android.so is gitignored on purpose (a binary is not
+      # a reviewable artifact) and produced by shared-native/build.sh, so
+      # without this step both APKs ship with no shared Rust logic at all.
+      # Pairing, diffs, tool labels and file icons then go inert at runtime,
+      # which is exactly why this runs: a silent downgrade on every released
+      # APK is not a fallback, it is a bug.
       #
       # The NDK is resolved here instead of being left to Gradle, which installs
       # one during the build — already too late for this step.
-      - name: Stage the WebTransport library
+      - name: Stage the shared native library
         working-directory: apps/android
         run: |
           set -euo pipefail
@@ -116,22 +117,23 @@ jobs:
             yes | "$SDKMANAGER" --install "ndk;$NDK_VERSION"
             NDK_DIR="$SDK/ndk/$NDK_VERSION"
           fi
-          echo "Staging WebTransport with NDK at $NDK_DIR"
-          ANDROID_NDK_HOME="$NDK_DIR" bash rust-wt/build.sh
+          echo "Staging the shared native library with NDK at $NDK_DIR"
+          ANDROID_NDK_HOME="$NDK_DIR" bash shared-native/build.sh
 
       - name: Build the release APK
         working-directory: apps/android
         run: ./gradlew assembleRelease
 
-      # The app runs without the library (SSE/WS fallback), so a packaging
-      # mistake here is invisible on the device — only WebTransport quietly
-      # stops being used. Assert it instead of trusting the step above.
-      - name: Verify the APK carries WebTransport
+      # The app runs without the library (every shared function goes inert), so
+      # a packaging mistake here is invisible on the device — only pairing,
+      # diffs, labels and icons quietly stop working. Assert it instead of
+      # trusting the step above.
+      - name: Verify the APK carries the shared library
         run: |
           set -euo pipefail
           apk=apps/android/app/build/outputs/apk/release/app-release.apk
-          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libconsole_wt_android.so' \
-            || { echo "$apk is missing libconsole_wt_android.so" >&2; exit 1; }
+          unzip -l "$apk" | grep -q 'lib/arm64-v8a/libconsole_shared_android.so' \
+            || { echo "$apk is missing libconsole_shared_android.so" >&2; exit 1; }
 
       - name: Collect the APK
         run: |
