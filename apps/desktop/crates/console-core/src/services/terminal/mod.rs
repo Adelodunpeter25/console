@@ -262,10 +262,9 @@ impl TerminalHandle {
 impl TerminalHandle {
     /// Assemble a handle around an already-plumbed inbound/outbound pair.
     ///
-    /// Both transports share one handle: the WS path builds its halves
-    /// inline in [`TerminalService::spawn`], the WebTransport path in
-    /// [`crate::services::WtService::spawn_terminal_handle`]. Keeping the
-    /// construction here means neither transport reaches into these fields.
+    /// The WS path builds its halves inline in [`TerminalService::spawn`];
+    /// keeping the construction here means spawn logic never reaches into
+    /// these fields.
     pub(crate) fn from_parts(
         id: Arc<RwLock<Option<TerminalId>>>,
         status: Arc<RwLock<TerminalStatus>>,

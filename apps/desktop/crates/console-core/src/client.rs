@@ -1,7 +1,5 @@
-use crate::net::WtTls;
 use crate::services::*;
 use crate::utils::HttpTransport;
-use anyhow::Result;
 
 #[derive(Clone)]
 pub struct ConsoleClient {
@@ -33,8 +31,8 @@ impl ConsoleClient {
     }
 
     /// Build a client that already carries a stored device token, so every
-    /// service (and the WebTransport handshake) is authenticated from the
-    /// first request. Callers that pair at runtime use [`Self::set_auth_token`].
+    /// service is authenticated from the first request. Callers that pair at
+    /// runtime use [`Self::set_auth_token`].
     pub fn new_with_auth(base_url: Option<String>, auth_token: Option<String>) -> Self {
         let transport = HttpTransport::new_with_auth(base_url, auth_token);
         Self {
@@ -65,19 +63,10 @@ impl ConsoleClient {
         TerminalService::new(self.transport.clone())
     }
 
-    /// The shared HTTP transport, for services that need it without
-    /// building a `TerminalService` (the WT transport switch).
+    /// The shared HTTP transport, for services that need it without owning
+    /// the client.
     pub fn transport(&self) -> &HttpTransport {
         &self.transport
-    }
-
-    /// Open a WebTransport session: mints the handshake token, then dials the
-    /// QUIC listener (QUIC migration). Held by the caller for as long as its
-    /// streams live — dropping it closes the connection. `origin` overrides
-    /// the API origin for servers that listen separately, as
-    /// `make dev-server-wt` does.
-    pub async fn connect_wt(&self, origin: Option<&str>, tls: WtTls) -> Result<WtService> {
-        WtService::connect(&self.transport, origin, tls).await
     }
 
     pub async fn set_base_url(&self, url: impl Into<String>) {

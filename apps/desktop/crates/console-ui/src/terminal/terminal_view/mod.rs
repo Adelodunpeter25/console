@@ -166,9 +166,8 @@ impl TerminalView {
         let size = self.size;
 
         cx.spawn(async move |this, cx| {
-            // The transport decides WS vs WebTransport and hands back the same
-            // handle either way, so nothing below this line knows which is in
-            // use (QUIC migration, Phase 4).
+            // The transport hands back one handle shape, so nothing below
+            // this line knows which transport spawned it.
             let handle = match transport.spawn_terminal(&client, params, size).await {
                 Ok(h) => Arc::new(h),
                 Err(e) => {

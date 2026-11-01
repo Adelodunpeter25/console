@@ -29,7 +29,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/settings.proto"),
         proto_root.join("console/v1/terminal.proto"),
         proto_root.join("console/v1/usage.proto"),
-        proto_root.join("console/v1/wt.proto"),
     ];
 
     println!("cargo:rerun-if-changed=build.rs");

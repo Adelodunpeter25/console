@@ -19,7 +19,6 @@ pub mod settings;
 pub mod terminal;
 pub mod transport;
 pub mod usage;
-pub mod wt;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
@@ -46,8 +45,5 @@ pub use server_auth::{
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
 pub use terminal::TerminalService;
-pub use transport::{
-    AUTO_DIAL_TIMEOUT, ChatEventStream, Transport, TransportMode, WT_RETRY_BACKOFF,
-};
+pub use transport::{ChatEventStream, Transport};
 pub use usage::UsageService;
-pub use wt::{WtService, WtTerminalEvent, WtTerminalHandle};

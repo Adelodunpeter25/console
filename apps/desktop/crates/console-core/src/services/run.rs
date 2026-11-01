@@ -58,7 +58,9 @@ impl RunService {
             .client()
             .post(&url)
             .headers(self.transport.build_headers().await)
-            .json(&CreatePasteDto { text: text.to_string() })
+            .json(&CreatePasteDto {
+                text: text.to_string(),
+            })
             .send()
             .await
             .context("Failed to upload pasted text")?;
@@ -82,7 +84,8 @@ impl RunService {
         &self,
         session_id: &str,
         payload: AnswerQuestionDto,
-    ) -> Result<()> {        let url = self
+    ) -> Result<()> {
+        let url = self
             .transport
             .url(&format!("/api/sessions/{}/answer", session_id))
             .await;
@@ -461,11 +464,9 @@ impl RunService {
             .context("Failed to parse cancel response")?;
         match (body.success, body.data) {
             (true, Some(work)) => Ok(work),
-            _ => {
-                Err(anyhow!(body.error.unwrap_or_else(|| {
-                    "Failed to cancel background work".into()
-                })))
-            }
+            _ => Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to cancel background work".into()
+            }))),
         }
     }
 

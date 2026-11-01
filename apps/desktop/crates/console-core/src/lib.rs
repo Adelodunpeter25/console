@@ -1,5 +1,4 @@
 pub mod client;
-pub mod net;
 pub mod services;
 pub mod types;
 pub mod utils;

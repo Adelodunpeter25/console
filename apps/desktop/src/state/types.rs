@@ -54,10 +54,8 @@ pub enum ImageFileState {
 
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
-    /// Which transport the streaming surfaces use — one hard switch from
-    /// `CONSOLE_TRANSPORT` (`wt` or `legacy`), cloned into every stream task
-    /// so the whole app shares a single WebTransport session. See
-    /// [`console_core::services::Transport`].
+    /// Streaming plumbing shared by every surface (start/attach run, watch
+    /// streams, terminal spawn). See [`console_core::services::Transport`].
     pub transport: console_core::services::Transport,
     /// Shared session history for the sidebar/titlebar. `Rc` so per-frame
     /// renders clone a refcount, not the vector; mutations go through

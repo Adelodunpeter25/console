@@ -131,7 +131,7 @@ impl ServerAuthService {
     }
 
     /// Put a freshly issued device token on the shared transport, so every
-    /// later request — and the WebTransport handshake — is authenticated.
+    /// later request is authenticated.
     pub async fn apply_pairing(&self, data: &PairingData) -> Result<()> {
         self.transport
             .set_auth_token(Some(data.token.clone()))
