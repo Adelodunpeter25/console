@@ -61,11 +61,33 @@ fn log_panics_to_file() {
     }));
 }
 
+/// Route `log::` output to stderr, or to a file on Windows where a GUI
+/// process has no console attached.
+fn init_logging() {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(dir) = panic_log_dir()
+            && std::fs::create_dir_all(&dir).is_ok()
+            && let Ok(file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("console.log"))
+        {
+            env_logger::Builder::from_default_env()
+                .target(env_logger::Target::Pipe(Box::new(file)))
+                .init();
+            return;
+        }
+    }
+
+    env_logger::init();
+}
+
 fn main() {
     // Route log:: macros to stderr (see scripts/dev.sh: RUST_LOG controls the
     // level, reload.sh captures output to dist/.dev_console.log). Without this
     // every log:: call in the codebase is silently discarded.
-    env_logger::init();
+    init_logging();
 
     // Record panics even when launched from Finder/launchd (stderr invisible):
     // GPUI re-raises view-handler panics as `panic_cannot_unwind` and macOS
