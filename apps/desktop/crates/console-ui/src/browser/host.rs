@@ -669,9 +669,7 @@ pub fn download_destination(
     base_dir: Option<std::path::PathBuf>,
 ) -> Option<std::path::PathBuf> {
     let base = base_dir.or_else(|| {
-        std::env::var("HOME")
-            .ok()
-            .map(|h| std::path::PathBuf::from(h).join("Downloads"))
+        console_shared::path::home_dir().map(|h| h.join("Downloads"))
     })?;
 
     let name = suggested

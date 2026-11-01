@@ -105,8 +105,8 @@ pub fn resolve_file_link(link: &str, cwd: Option<&str>, project_path: Option<&st
         path = percent_decode(&path);
     }
     if path.starts_with("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return format!("{}{}", home, &path[1..]);
+        if let Some(home) = crate::path::home_dir() {
+            return format!("{}{}", home.display(), &path[1..]);
         }
         return path;
     }

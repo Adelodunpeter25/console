@@ -1,7 +1,34 @@
 //! Path and folder display utilities.
 
+use std::path::PathBuf;
+
 // NOTE: there is deliberately no `base_name` here — the desktop UI uses
 // `console_ui::primitives::base_name`, the single shared implementation.
+
+/// The current user's home directory.
+///
+/// Windows does not set `HOME` outside MSYS/Git Bash, so fall back to
+/// `USERPROFILE` and then the `HOMEDRIVE` + `HOMEPATH` pair.
+pub fn home_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        // `HOME` can point at an MSYS path (`/c/Users/...`) that native
+        // Windows APIs cannot open, so prefer the native variables.
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let drive = std::env::var_os("HOMEDRIVE")?;
+                let path = std::env::var_os("HOMEPATH")?;
+                Some(PathBuf::from(drive).join(path))
+            })
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
+}
 
 /// Parent directory of a path, handling both separator styles.
 /// Returns `""` for bare filenames.

@@ -353,7 +353,9 @@ impl ConsoleDesktopApp {
         // Remember the clear until the server confirms, like select above.
         self.pending_project_override
             .insert(session_id.clone(), None);
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let home = console_shared::path::home_dir()
+            .map(|home| home.display().to_string())
+            .unwrap_or_else(|| ".".to_string());
         let is_dev = std::env::var("CONSOLE_ENV")
             .map(|v| v == "dev")
             .unwrap_or(false);

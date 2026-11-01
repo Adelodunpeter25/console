@@ -121,8 +121,8 @@ pub(crate) fn storage_directory() -> PathBuf {
     let folder = app_folder_name();
 
     #[cfg(target_os = "macos")]
-    if let Ok(home) = std::env::var("HOME") {
-        return PathBuf::from(home)
+    if let Some(home) = console_shared::path::home_dir() {
+        return home
             .join("Library")
             .join("Application Support")
             .join(folder);
@@ -139,9 +139,8 @@ pub(crate) fn storage_directory() -> PathBuf {
         return PathBuf::from(config_home).join(&unix_folder);
     }
 
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
+    console_shared::path::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
         .join(".config")
         .join(&unix_folder)
 }
