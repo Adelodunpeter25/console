@@ -8,7 +8,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 ---
 
-## Status (as of 2026-10-30)
+## Status (as of 2026-11-01)
 
 | Phase | State | Notes |
 | :--- | :--- | :--- |
@@ -17,7 +17,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 | 3 — Discovery + session control | **Done** | `models()`, `approvalModes()`, `sessions.list/read/delete`; deleting the active session is refused. Also shipped, not in the plan: `projects.list/add` |
 | 4 — Spawn (`sessions.create`) | **Partial** | `sessions.create` takes prompt, model, provider, `thinking_level` (validated against the model), cwd, project, worktree, and `approval_mode`, which is **clamped to the calling run's mode** with the clamp reported. **Decision:** it stays `sessions.create`; the `console.spawn` rename is dropped. **Missing:** depth cap, token budget, concurrency cap, usage rollup |
 | 5 — `sessions.fork` | **Done** | Exposed to the kernel; the fork's inherited approval mode is clamped to the calling run |
-| 6 — Security prerequisites | **Done** | Path boundary shipped (`permissions/guard.go`). Plan mode is now enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `.console/plans/` (§8.2) |
+| 6 — Security prerequisites | **Done** | File writes are confined to the session's working directory (`permissions/guard.go`, §8.1). Plan mode is enforced: `Resolve` denies write and exec tiers, and the only write it allows is the `writePlan` tool, confined to `.console/plans/` (§8.2). `bash` is not path-confined outside plan mode (see §8.1) |
 | 7 — GitHub | **Half done** | `GH_TOKEN` injection shipped (`providers/github/ghenv.go`). **Missing:** `console.pr.*`, GitHub REST service |
 
 **The API as built** (every method takes one object, never positional values): `ports.{list,forward,unforward}`, `scripts.{list,run,status,output,stop}`, `models`, `approvalModes`, `projects.{list,add}`, `sessions.{list,read,create,delete,abort,set_model,set_approval,prompt,queue,clear_queue,wait,fork}`. **Not in the API yet:** `console.pr.*`.
@@ -38,7 +38,7 @@ Target: `internal/services/console/` (kernel), `internal/agent/tools/console_too
 
 **Capability registry (how `/commands` work).** `/console`, `/visualize` and `/computer-use` are declared once in a table (`internal/run/capabilities.go`); the run loop, the slash-command popup and `readSkill` all read it, so none can drift from the others. Which are switched on is stored in the session row (`sessions.capabilities`), so it survives a server restart (it used to live in memory). The agent cannot type a slash command, so `readSkill` knows them: `readSkill()` lists them with their state, and `readSkill("visualize")` or `("console")` returns the reference **and switches the capability on**, loading its tools into the running turn. `computer-use` is the exception: it needs the user's consent and OS permissions, so `readSkill("computer-use")` tells the agent to ask the user to type `/computer-use` and changes nothing. Adding a capability is one entry in the table.
 
-**Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level, queue, strict arguments, error messages), not in `tests/tools/TestConsole*` as the phases below say. Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Capability registry: `internal/run/capabilities_test.go`. Path-guard and plan-mode tests: `tests/permissions/`. Sandbox tests: `tests/tools/plan_sandbox_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
+**Tests** live beside the code in `internal/services/console/*_test.go` (ceiling, abort, set_model, set_approval, fork, thinking level, queue, wait, strict arguments, error messages). Script cursor tests: `tests/api/scripts_output_cursor_test.go`. Capability registry: `internal/run/capabilities_test.go`. Path-guard and plan-mode tests: `tests/permissions/`. Sandbox tests: `tests/tools/plan_sandbox_test.go`. GH token tests: `tests/tools/bash_gh_env_test.go`.
 
 ### Next
 
@@ -89,48 +89,45 @@ Cwd, ProjectID, ModelID, Provider, ApprovalMode, ThinkingLevel, Worktree{Branch,
 
 ---
 
-## 3. API Surface (proposed)
+## 3. API Surface
+
+Every method takes a single object, never positional values. Full descriptions live in the kernel's `SKILL.md`; this is the inventory.
 
 ```js
-// Discovery — cheap, read-tier, always safe (§5)
-console.models()                        // ids, providers, supported thinking levels
-console.approvalModes()
-console.sessions.list({ status, project_id })
+// Discovery: cheap, read-only, always safe (§5)
+console.models()                         // ids, providers, supported thinking levels
+console.approvalModes()                  // valid modes and their ordering
+console.projects.list()   console.projects.add({ directory, name? })
 
-// Delegation (§4)
-console.spawn({
-  prompt, title,
-  model, provider, thinking_level,
-  approval_mode,                       // clamped to parent — result reports the clamp
-  worktree: { branch, base_branch },   // isolation via worktree, not raw cwd
-}) -> { session_id }
+// Sessions
+console.sessions.list({ project_id?, cwd? })
+console.sessions.read({ session_id, limit?, before? })
+console.sessions.create({ prompt?, project_id?, cwd?, model?, provider?,
+                          thinking_level?, approval_mode?, worktree? })   // delegation (§4)
+console.sessions.prompt({ session_id, prompt, model?, provider?, thinking_level?, approval_mode? })
+console.sessions.queue({ session_id })             // the prompt waiting to run
+console.sessions.clear_queue({ session_id })
+console.sessions.wait({ session_id | session_ids, mode?, timeout_ms? })
+console.sessions.abort({ session_id })
+console.sessions.set_model({ session_id, model, provider? })
+console.sessions.set_approval({ session_id, mode })     // clamped to the calling run
+console.sessions.fork({ session_id, message_id })
+console.sessions.delete({ session_id })                  // soft; never the running session
 
-// Session control
-console.sessions.read(session_id)      // transcript / status / result
-console.sessions.fork(session_id, message_id)
-console.sessions.delete(session_id)    // soft by default; never self; gated
-console.sessions.set_model(session_id, model, provider)
-console.sessions.set_approval(session_id, mode)   // clamped to the *owning* run
-console.sessions.abort(session_id)
-
-// Scripts + ports — same impl as the tools being replaced
+// Scripts and ports (same implementation as the tools they replaced)
 console.scripts.list()
-console.scripts.run(id, { wait_ms })
-console.scripts.status(run_id)
-console.scripts.stop(run_id)
-console.ports.list()
-console.ports.forward(port)
-console.ports.unforward(port)
-
-// Pull requests — typed wrappers over the stored GitHub PAT (§Phase 7)
-console.pr.create({ owner, repo, head, base, title, body, draft }) -> { number, url }
-console.pr.read({ owner, repo, number })     // status, checks, review state
-console.pr.list({ owner, repo, state })      // open by default
-console.pr.update({ owner, repo, number, title?, body?, base? })
-console.pr.merge({ owner, repo, number, method })  // gated, never the default path
+console.scripts.run({ id, wait_ms? })
+console.scripts.status({ run_id? })
+console.scripts.output({ run_id, stream?, cursor?, limit? })
+console.scripts.stop({ run_id })
+console.ports.list()   console.ports.forward({ port })   console.ports.unforward({ port })
 ```
 
-Deferred to a later phase: `console.tabs.*`, `console.panes.*`, `console.mcp.load(group)`, `console.ui.notify/openDiff/focusPane`.
+**Planned, not built:** `console.pr.*` (create, read, list, update, comment, merge, close, reopen, ready). Fully designed, including the desktop and Android UI, in [`pull-requests.md`](pull-requests.md).
+
+**Deferred:** `console.tabs.*`, `console.panes.*`, `console.mcp.load(group)`, `console.ui.notify/openDiff/focusPane`.
+
+**Decided against:** a separate `console.spawn`. Creating a task is `sessions.create`, which already carries every knob.
 
 ---
 
@@ -142,7 +139,7 @@ The single most important distinction in this plan. Three levels, and only the t
 | :--- | :--- | :--- | :--- |
 | **0 — today** | `subagent(prompt, name, role)` — inherits model, provider, cwd, tools, mode | No | No |
 | **1 — knobbed** | ephemeral, but model/provider/thinking/mode overridable | No | No |
-| **2 — real task** | `console.spawn()` → creates an actual `Session` | Yes | **Yes** |
+| **2 — real task** | `console.sessions.create()` creates an actual `Session` | Yes | **Yes** |
 
 Level 0 and 1 agents persist nothing — the `subagent.go` header says so explicitly, and they are assigned an in-memory `randomSubSession()` id. They vanish when the run ends. That is fine for "investigate this function and report back."
 
@@ -154,7 +151,7 @@ The existing invariant in `subagent.go:35-38` is explicit and must survive:
 
 > *"A subagent inherits its parent's tools, so it must inherit the parent's authority too: it may not act with more permission than the run that spawned it."*
 
-Exposing `approval_mode` as a parameter breaks that invariant unless it is enforced. Rule:
+Exposing `approval_mode` as a parameter breaks that invariant unless it is enforced. This is built for `sessions.create`, `set_approval`, `prompt` and `fork`. Rule:
 
 ```
 effective = min(parent_mode, requested_mode)
@@ -206,70 +203,58 @@ So `session.cwd` is today mostly *prompt metadata* plus script scoping — it do
 
 ## 8. Prerequisites — Security Findings
 
-These are load-bearing for this plan and were found while designing it. Both should be fixed before, or alongside, the kernel.
+Two findings that the kernel depended on. Both are fixed.
 
-### 8.1 There is no filesystem boundary
+### 8.1 Filesystem boundary — FIXED for the file tools
 
-A session created in `~/Developer/Projects/test` can **edit files anywhere on disk**, including `~/Developer/Projects/real-project`, if the model is told to. The chain:
+Originally a session could edit files anywhere on disk: `permissions.Resolve` took only a mode and a tier, nothing inspected tool arguments, and the file tools were unguarded.
 
-- `permissions.Resolve(mode, tier)` (`permissions/permissions.go:42`) takes only a mode and a tier. No path, no cwd, not even the tool arguments.
-- `Executor.Execute` (`loop/executor.go:39-106`) resolves permission then executes, inspecting nothing about the arguments in between.
-- The file tools are unguarded singletons; `write_file` also creates parent directories automatically.
-- `bash` accepts any `cwd`.
+Now `permissions/guard.go` runs in the executor before a call. `write_file`, `editFile` and `batchWrite` may only target paths inside the session's working directory (symlinks are resolved first, and a `batchWrite` is all-or-nothing), and `glob`/`grep` default their search root to it. Tests: `tests/permissions/path_guard_test.go`.
 
-Per-mode effect — the only control anywhere is the tier-based approval dialog:
+**Known limit:** `bash` is not path-confined outside plan mode. The command string is opaque, so `cd ../other-project && ...` walks past any cwd check. In plan mode the OS sandbox (§8.2) closes this; in other modes the approval prompt is the only control. This is accepted.
 
-| Mode | Write outside the project dir |
-| :--- | :--- |
-| `always-ask` | Allowed, but prompts with the path visible |
-| `accept-edits` | Allowed silently |
-| `full-access` | Allowed silently |
-| `plan-mode` | Allowed silently ← see 8.2 |
+### 8.2 Plan mode is read-only — FIXED, enforced by the server
 
-### 8.2 Plan mode's read-only guarantee is prompt-only
+Originally `permissions.Resolve` treated `PlanMode` as full access and the restriction lived only in the system prompt.
 
-`permissions.go:44` treats `PlanMode` as `FullAccess` for all tiers. The code comment concedes it: the restriction on writes and exec "is communicated to the model only via the system prompt instructions, not enforced as a hard deny here."
+Now `Resolve` denies the write and exec tiers in plan mode and never prompts. Reads, `browser` and `memory` (read tier) still run. Two things are let through by the executor because they are confined:
+- **`writePlan`** saves `.console/plans/<name>.md`. The model gives only a name; the tool builds the filename, refuses symlinks, and the folder ignores itself with its own `.gitignore`. There is no size cap.
+- **`bash`** runs under a read-only OS sandbox (`sandbox-exec` on macOS, `bwrap` on Linux): the kernel refuses every file write outside the system temp folder, whatever the command string says. The network stays open and reads are unrestricted, by decision. `bashJob` stays denied.
 
-A control that reads to the user as a guarantee but is only a suggestion to the model. `Resolve` should hard-deny `TierWrite` and `TierExec` in plan mode — a small change that converts a promise into an enforced rule.
-
-### 8.3 Boundary design for the kernel
-
-The boundary should be **path-based inside the kernel**, not tier-based, because spawning makes the mismatch dangerous: a `full-access` parent can spawn a Level 2 session on another project with no record beyond the sidebar entry. Concretely:
-
-- Writes allowed only within the session's `cwd + extraDirs`; reads within a separate, wider read allowlist.
-- `console.spawn` records the target root on the session so the audit trail shows where it was allowed to write.
-- Symlink escapes must be resolved before the check, or the boundary is trivially bypassed.
+Subagents inherit the mode. Accepted gaps: `browser` can still submit forms, MCP tools are tiered by naming convention, and a machine with no sandbox tool (or Windows) runs plan-mode bash unsandboxed. The Linux `bwrap` path compiles but has not been run; see the Status section. Tests: `tests/permissions/plan_mode_test.go`, `tests/tools/plan_sandbox_test.go`.
 
 ---
 
 ## 9. Phased Implementation
 
-### Phase 1 — Kernel skeleton + `ports` (smallest slice) — DONE
+### Phase 1 — Kernel skeleton + `ports` (smallest slice) — DONE (tests: `internal/services/console/`)
 - `internal/services/console/`: manager, per-session runtime, `console` + `console_reset` tools bound via the `computerTool` pattern.
 - Port methods wrapping `PortRegistry` unchanged. Remove `ports` from `DefaultToolNames`.
 - `console-control` skill carrying the API documentation.
-- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleKernel -v` — kernel state persists across calls, `console_reset` clears it, variables do not leak between sessions.
+- **Verification**: `cd apps/server-go && go test ./internal/services/console/ -v` — methods installed, arguments checked, results returned directly.
 
 ### Phase 2 — `project_scripts` — DONE
 - Script methods over `ProjectScriptsService`, preserving worktree scoping and port-owner cleanup exactly.
 - Add the cursor pagination the service lacks (`capOutput` retains only the last 256KB with no offset), shared with `shell.read` from the attachments plan.
 - Remove `project_scripts` from `DefaultToolNames`.
-- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleScripts -v` — behavior identical to the removed tool; cursor round-trips.
+- **Verification**: `cd apps/server-go && go test ./tests/api/ -run "TestReadOutput|Script" -v` — cursor round-trips and survives the buffer trimming.
 
 ### Phase 3 — Discovery + session control — DONE
-- `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`.
-- Delete: soft by default, permanent gated, **never the currently-running session**, and confirm when the session owns a worktree.
+- `console.models()`, `console.approvalModes()`, `console.sessions.{list,read,delete}`. Later additions: `abort`, `set_model`, `set_approval`, `prompt`, `queue`, `clear_queue`, `wait`.
+- Delete: soft only, and **never the currently-running session**.
 
 ### Phase 4 — Spawn via `sessions.create` (Level 2) — PARTIAL (ceiling done; depth/budget/concurrency caps open)
-- Session creation through the existing `session.Service`, worktree-scoped.
-- Permission ceiling + clamp reporting (§4), depth cap, token budget, concurrency cap.
-- **Verification**: `cd apps/server-go && go test ./tests/tools/ -run TestConsoleSpawn -v` — clamp enforced in both directions; budget and depth caps hold; spawned session appears in `sessions.list`.
+- Session creation through the existing `session.Service`, worktree-scoped. **Done.**
+- Permission ceiling + clamp reporting (§4). **Done.**
+- Depth cap, token budget, concurrency cap, usage rollup (§7). **Not started.**
+- **Verification**: `cd apps/server-go && go test ./internal/services/console/ -run "Create|Clamp" -v` for what is built. The caps will need their own tests.
 
 ### Phase 5 — `console.sessions.fork` — DONE
 - Wraps the existing `Fork(sourceID, messageID)`. High value: "branch this conversation at message 40 and try a different approach there."
 
-### Phase 6 — Security prerequisites landed — HALF DONE (path boundary yes, plan-mode deny no)
-- Path boundary for the kernel (§8.3); `PlanMode` hard deny (§8.2). Independent of the kernel, valuable on their own.
+### Phase 6 — Security prerequisites — DONE
+- File-write boundary (§8.1) and plan-mode enforcement with `writePlan` and the bash sandbox (§8.2).
+- Verification: `go test ./tests/permissions/ ./tests/tools/ -run "PlanMode|PlanBash|Sandbox|PathGuard" -v`.
 
 ### Phase 7 — GitHub surface: `gh` pre-auth + `console.pr.*` — HALF DONE (GH_TOKEN yes, `console.pr.*` no)
 Two layers over the same stored PAT, in shipping order:
@@ -284,28 +269,31 @@ Two layers over the same stored PAT, in shipping order:
 
 ## 10. Open Questions
 
-- **Does `shell.read` stay native?** Recommendation: yes. It is read-tier and hot, and a native tool is cheaper per call and always present without loading a skill. `console` absorbs the *control* plane (`ports`, `project_scripts`, sessions); `shell.read` stays a thin native reader over the same implementation. Needs a decision.
-- **Should Level 1 (knobbed ephemeral subagents) exist at all**, or should `subagent` jump straight to inheriting-only (Level 0) with everything else routed through `console.spawn` (Level 2)? Fewer overlapping mechanisms is appealing, but Level 1 is the cheap path for "quick side question" delegation.
+- **Does `shell.read` stay native?** Recommendation: yes. It is read-tier and hot, and a native tool is cheaper per call and always present without loading a skill. `console` absorbs the *control* plane; `shell.read` stays a thin native reader. Needs a decision.
+- **Should Level 1 (knobbed ephemeral subagents) exist at all**, or should `subagent` stay inheriting-only (Level 0) with everything else routed through `sessions.create` (Level 2)? Fewer overlapping mechanisms is appealing, but Level 1 is the cheap path for "quick side question" delegation.
 - **How long should spawned sessions live?** Indefinitely (user prunes) or TTL-reaped? `ExpiredDeletedSessions(cutoffMillis)` already exists for soft-deleted sessions and could be reused.
-- **Does the kernel survive a session reload?** A JS kernel holds variables that do not persist to disk. Decide whether `console` is documented as ephemeral state, or whether kernels are checkpointed.
 - **Is a UI-driving surface wanted at all** (`console.ui.*`)? It is the most powerful and the least bounded. Worth deciding before building rather than after.
+- **Wake the parent when a child finishes.** `sessions.wait` is bounded and the caller loops. Waking the parent with the child's result would need no call at all, but it needs a new kind of wake event.
+
+Answered since the first draft: the kernel does **not** survive a session reload (variables are ephemeral, and the skill says so); capability activation, by contrast, is stored in the session row and does survive.
 
 ---
 
 ## 11. Verification Matrix
 
+Tests for the kernel live beside the code in `internal/services/console/`. Run only the one you need.
+
 | Test Case | Method | Expected Outcome |
 | :--- | :--- | :--- |
-| Kernel lifecycle | `go test ./tests/tools/ -run TestConsoleKernel -v` | state persists; `console_reset` clears; session-isolated |
-| Scripts parity | `go test ./tests/tools/ -run TestConsoleScripts -v` | identical to removed `project_scripts` tool |
-| Ports parity | same | identical to removed `ports` tool |
-| Discovery | same | invalid model id discoverable before use |
-| Permission ceiling | `go test ./tests/tools/ -run TestConsoleSpawn -v` | `min(parent, requested)`; clamp reported, not silent |
-| Spawn isolation | same | spawned session confined to its worktree root |
-| Recursion + budget | same | depth cap 2; budget enforced; usage rolled up |
-| Delete safety | same | soft by default; self-delete refused; worktree deletion confirmed |
-| Path boundary | same | write outside root denied in every mode |
-| Plan mode deny | `go test ./tests/agent/ -run TestPlanModeDeny -v` | `TierWrite`/`TierExec` hard-denied |
-| gh pre-auth | `go test ./tests/tools/ -run 'TestGHEnv|TestBashGH|TestBashEnvDump|TestRedactSecrets' -v` | `GH_TOKEN` in child env iff connected; explicit value wins; raw token never in output |
-| PR tools | same | create/update/read/list round-trip against httptest; merge gated |
-| Token savings | bench | `ports` + `project_scripts` schemas gone from every request |
+| Kernel basics, strict arguments, errors | `go test ./internal/services/console/ -v` | methods installed; unknown or wrong-typed arguments refused with the accepted names; unknown method lists valid ones |
+| Permission ceiling | `go test ./internal/services/console/ -run "Clamp\|Create\|SetApproval\|Fork\|Prompt" -v` | `min(parent, requested)`; clamp reported, not silent; never raised |
+| Session control | same package, `-run "Abort\|SetModel\|Queue\|Wait"` | abort clears the queue; `wait` blocks, times out, any/all, refuses its own session |
+| Capability registry | `go test ./internal/run/ -run "Capab\|Typed\|ReadSkill\|Popup" -v` | typed command switches on and persists; `readSkill` enables visualize/console, refuses computer-use |
+| Queue and run wiring | `go test ./tests/agent/ -run "PromptSession\|AbortAndClear\|WaitFollows" -v` | idle starts, busy queues, an occupied queue is not replaced, abort does not restart |
+| Script output cursors | `go test ./tests/api/ -run TestReadOutput -v` | absolute offsets survive the 256KB trim |
+| Path boundary | `go test ./tests/permissions/ -run PathGuard -v` | writes outside the session root denied |
+| Plan mode | `go test ./tests/permissions/ -run "PlanMode\|WritePlan\|Memory" -v` | write and exec denied without prompting; `writePlan` confined to `.console/plans/` |
+| Plan-mode bash sandbox | `go test ./tests/tools/ -run "Sandbox\|PlanBash" -v` | no write outside temp; reads, pipes, network and temp work. Skips if no sandbox tool is installed |
+| gh pre-auth | `go test ./tests/tools/ -run 'TestGHEnv\|TestBashGH\|TestBashEnvDump\|TestRedactSecrets' -v` | `GH_TOKEN` in child env iff connected; explicit value wins; raw token never in output |
+| Spawn caps (depth, budget, concurrency) | not written | Phase 4 is open |
+| PR tools | not written | see `pull-requests.md` |
