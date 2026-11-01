@@ -1,14 +1,17 @@
-# Packages the GPUI desktop app (Console.app) for Intel + Apple Silicon macOS
-# on each push to main, then uploads them to a rolling GitHub Release tagged
-# `console-desktop` (latest always wins), mirroring console-server.yml.
+# Packages the GPUI desktop app for Intel + Apple Silicon macOS, and the
+# Windows x64 preview build, on each push to main. macOS assets go to the
+# rolling GitHub Release tagged `console-desktop` (latest always wins),
+# mirroring console-server.yml.
 #
 # Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
-# bundles, ad-hoc signed — see apps/desktop/scripts/build.sh).
+# bundles, ad-hoc signed — see apps/desktop/scripts/build.sh), plus
+# Console-windows-x64.zip (see apps/desktop/scripts/build.ps1).
 name: Build console-desktop
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -66,6 +69,41 @@ jobs:
         with:
           name: Console-${{ matrix.os-suffix }}
           path: Console-${{ matrix.os-suffix }}.zip
+          if-no-files-found: error
+
+  # Windows preview. Kept separate from the macOS matrix because packaging is
+  # a plain .exe zip, not an .app bundle. Deliberately not wired into
+  # `publish` yet: until this job is green on main, a Windows failure must not
+  # block the macOS release.
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop
+          key: windows-x64
+
+      - name: Package Console.exe
+        shell: pwsh
+        run: >
+          ./apps/desktop/scripts/build.ps1
+          -OutDir "$env:RUNNER_TEMP\dist"
+          -Target x86_64-pc-windows-msvc
+          -Locked
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Console-windows-x64
+          path: ${{ runner.temp }}/dist/Console-windows-x64.zip
           if-no-files-found: error
 
   # Single publisher: both matrix jobs previously uploaded to the same
