@@ -174,14 +174,6 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
 
-    // QUIC/WebTransport spike (plan Phase 3). Cronet is the only Android
-    // networking stack with QUIC; `cronet-embedded` is deprecated in favour
-    // of `cronet-bundled`, which carries the native implementation directly.
-    // The bidirectional-stream API WebTransport needs is experimental and
-    // absent from the Java fallback engine, so the spike asserts the native
-    // engine is the one in use.
-    androidTestImplementation("org.chromium.net:cronet-bundled:500.1.0")
-
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.core:core-ktx:1.15.0")
