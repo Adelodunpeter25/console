@@ -15,6 +15,10 @@ use gpui::{
 use crate::primitives::{IconName, app_icon};
 use crate::theme::{TITLEBAR_HEIGHT, Theme};
 
+/// Leading space in the title bar: reserved for the macOS traffic lights,
+/// normal padding when the window keeps its native system titlebar.
+const LEADING_INSET: f32 = if cfg!(target_os = "macos") { 72.0 } else { 8.0 };
+
 /// The action in the title bar's leading slot.
 enum LeadingAction {
     /// Show or hide the session sidebar.
@@ -101,15 +105,17 @@ impl RenderOnce for TitleBar {
             .border_b_1()
             .border_color(theme.sidebar_border)
             // Left: sidebar-width block keeps the center title optically
-            // centered. The toggle sits right after the macOS traffic lights
-            // (traffic lights end around x≈66, so 72 leaves a small gap).
+            // centered. On macOS the toggle sits right after the traffic
+            // lights (they end around x≈66, so 72 leaves a small gap);
+            // elsewhere the window keeps its native titlebar, so a normal
+            // inset is enough.
             .child(
                 div()
                     .w(px(sidebar_width))
                     .flex_none()
                     .flex()
                     .items_center()
-                    .pl(px(72.0))
+                    .pl(px(LEADING_INSET))
                     .child(match self.leading {
                         LeadingAction::SidebarToggle => div()
                             .id("titlebar-sidebar-toggle")

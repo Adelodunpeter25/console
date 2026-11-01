@@ -1,12 +1,36 @@
 use gpui::{
-    AnyWindowHandle, App, AppContext, Bounds, Pixels, PromptLevel, TitlebarOptions, WeakEntity,
-    Window, WindowBounds, WindowOptions, point, px,
+    AnyWindowHandle, App, AppContext, Bounds, Pixels, PromptLevel, SharedString, TitlebarOptions,
+    WeakEntity, Window, WindowBounds, WindowOptions, point, px,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::persistence;
 use crate::state::ConsoleDesktopApp;
+
+/// Titlebar options for app windows.
+///
+/// macOS draws a transparent titlebar with inset traffic lights; other
+/// platforms keep the native system titlebar so Windows still has
+/// minimize/maximize/close buttons.
+pub fn titlebar_options(title: Option<SharedString>) -> TitlebarOptions {
+    #[cfg(target_os = "macos")]
+    {
+        TitlebarOptions {
+            title,
+            appears_transparent: true,
+            traffic_light_position: Some(point(px(14.0), px(14.0))),
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        TitlebarOptions {
+            title,
+            ..Default::default()
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum WindowLaunchTarget {
@@ -135,11 +159,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
 
     let options = WindowOptions {
         window_bounds: Some(window_bounds),
-        titlebar: Some(TitlebarOptions {
-            title: None,
-            appears_transparent: true,
-            traffic_light_position: Some(point(px(14.0), px(14.0))),
-        }),
+        titlebar: Some(titlebar_options(None)),
         ..Default::default()
     };
 

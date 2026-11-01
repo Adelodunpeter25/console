@@ -4,8 +4,7 @@ use crate::settings_window::SettingsWindow;
 use console_core::ConsoleSettings;
 use console_ui::common::FileBrowser;
 use gpui::{
-    App, AppContext, Context, Entity, TitlebarOptions, Window, WindowBounds, WindowOptions, point,
-    px, size,
+    App, AppContext, Context, Entity, Window, WindowBounds, WindowOptions, point, px, size,
 };
 use std::rc::Rc;
 
@@ -197,11 +196,7 @@ impl ConsoleDesktopApp {
                 origin: point(px(180.0), px(160.0)),
                 size: size(px(620.0), px(490.0)),
             })),
-            titlebar: Some(TitlebarOptions {
-                title: Some("New Project".into()),
-                appears_transparent: true,
-                traffic_light_position: Some(point(px(14.0), px(14.0))),
-            }),
+            titlebar: Some(crate::window::titlebar_options(Some("New Project".into()))),
             ..Default::default()
         };
 
@@ -275,11 +270,7 @@ impl ConsoleDesktopApp {
                 origin: point(px(280.0), px(240.0)),
                 size: size(px(520.0), px(540.0)),
             })),
-            titlebar: Some(TitlebarOptions {
-                title: Some("Choose a folder".into()),
-                appears_transparent: true,
-                traffic_light_position: Some(point(px(14.0), px(14.0))),
-            }),
+            titlebar: Some(crate::window::titlebar_options(Some("Choose a folder".into()))),
             ..Default::default()
         };
 
