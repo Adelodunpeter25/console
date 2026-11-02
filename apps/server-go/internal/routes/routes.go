@@ -138,6 +138,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	deviceSvc := services.NewDeviceService()
 	registerDeviceRoutes(app, deviceSvc)
 	registerAssistRoutes(app, services.NewSessionService(cfg.DB), fs.NewFsService(), services.NewSkillsService())
+	registerChromeImportRoutes(app)
 
 	slog.Info("api routes registered")
 	// shutdown stops every process the server owns: in-flight agent runs,
