@@ -1290,6 +1290,7 @@ dependencies = [
  "console-shared",
  "console-ui",
  "editor-ui",
+ "embed-resource",
  "env_logger",
  "futures",
  "futures-util",

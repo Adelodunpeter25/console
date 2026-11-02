@@ -1,0 +1,6 @@
+// Windows resource script: the executable icon.
+//
+// The resource ID must stay 1: GPUI loads the window icon with
+// `LoadImageW(module, PCWSTR(1), IMAGE_ICON, ..)`, and Windows also uses the
+// first icon group for the exe in Explorer and the taskbar.
+1 ICON "../assets/Console.ico"
