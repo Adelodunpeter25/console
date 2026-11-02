@@ -410,25 +410,6 @@ impl TerminalView {
     }
 }
 
-/// Open a URL in the user's default browser. Fire-and-forget: a failure to
-/// spawn the opener is logged, never surfaced into the terminal UI.
-fn open_url_in_browser(url: &str) {
-    #[cfg(target_os = "macos")]
-    let result = std::process::Command::new("open").arg(url).spawn();
-    #[cfg(target_os = "linux")]
-    let result = std::process::Command::new("xdg-open").arg(url).spawn();
-    #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .spawn();
-    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
-    if let Err(err) = result {
-        log::warn!("Failed to open URL '{url}' in browser: {err}");
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    let _ = url;
-}
-
 impl Focusable for TerminalView {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus.clone()
@@ -905,7 +886,7 @@ impl Render for TerminalView {
                                         if let Some(url) = this.link_target_at(pos) {
                                             this.clear_selection();
                                             cx.notify();
-                                            open_url_in_browser(&url);
+                                            cx.open_url(&url);
                                             return;
                                         }
                                     }

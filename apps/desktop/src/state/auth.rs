@@ -5,23 +5,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::time::Duration;
 
-fn open_browser(url: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let _ = std::process::Command::new("open").arg(url).spawn();
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", url])
-            .spawn();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = std::process::Command::new("xdg-open").arg(url).spawn();
-    }
-}
-
 impl ConsoleDesktopApp {
     pub fn refresh_auth_status(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
@@ -117,8 +100,12 @@ impl ConsoleDesktopApp {
 
             let _ = listener.set_nonblocking(false);
 
-            // Now open browser safely
-            open_browser(&auth_url);
+            // Route through the platform opener: on Windows that is
+            // ShellExecuteW, so query strings keep their `&` separators
+            // instead of being split by `cmd /C start`.
+            let _ = cx.update(|cx| {
+                cx.open_url(&auth_url);
+            });
 
             // Spawn loopback callback handler
             let expected_state = state.clone();
