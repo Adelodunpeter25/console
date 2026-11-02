@@ -193,23 +193,73 @@ pub fn group_header(
         })
 }
 
-/// Static section header for the Pinned sessions group. Unlike date/project
-/// groups it never collapses, so it takes no toggle callback.
-pub fn pinned_group_header(theme: Theme) -> impl IntoElement {
+/// Collapsible section header for the Pinned sessions group. Same shape as
+/// [`drafts_group_header`] but with the Pinned label.
+pub fn pinned_group_header(
+    theme: Theme,
+    collapsed: bool,
+    with_add_button: bool,
+    on_add: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+) -> impl IntoElement {
+    let group_name = "sidebar-group-header-pinned";
+    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
+        .when(collapsed, |icon| {
+            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+        })
+        .invisible()
+        .group_hover(group_name, |icon| icon.visible());
+    let toggle_on_click = on_toggle.clone();
+    let toggle_on_key = on_toggle;
+
     div()
         .h(px(28.0))
         .flex()
         .items_center()
+        .justify_between()
+        .group(group_name)
         .child(
             div()
+                .id("sidebar-group-toggle-pinned")
+                .tab_index(0)
                 .h(px(22.0))
                 .flex()
                 .items_center()
+                .gap(px(4.0))
+                .cursor_default()
+                .hover(|s| s.bg(theme.overlay))
                 .text_size(px(14.5))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.text)
-                .child("Pinned"),
+                .child("Pinned")
+                .child(chevron)
+                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        (toggle_on_key)(window, cx);
+                        cx.stop_propagation();
+                    }
+                }),
         )
+        .when(with_add_button, |header| {
+            header.child(
+                div()
+                    .id("btn-add-project")
+                    .w(px(20.0))
+                    .h(px(20.0))
+                    .rounded(px(6.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_default()
+                    .hover(|s| s.bg(theme.overlay))
+                    .active(|s| s.bg(theme.overlay_strong))
+                    .on_click(move |_, window, cx| {
+                        (on_add)(window, cx);
+                    })
+                    .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
+            )
+        })
 }
 
 pub fn drafts_group_header(

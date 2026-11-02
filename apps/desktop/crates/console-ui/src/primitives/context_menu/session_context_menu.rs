@@ -35,11 +35,6 @@ where
         let on_toggle_pin = on_toggle_pin.clone();
         let on_delete = on_delete.clone();
         let pin_label: &'static str = if pinned { "Unpin" } else { "Pin" };
-        let pin_icon = if pinned {
-            IconName::StarFilled
-        } else {
-            IconName::Star
-        };
         menu.min_w(px(200.0))
             .item(
                 entry("Open in New Window", IconName::WindowRestore, false)
@@ -51,7 +46,7 @@ where
                     .on_click(move |_, window, cx| on_rename(window, cx)),
             )
             .item(
-                entry(pin_label, pin_icon, false)
+                entry(pin_label, IconName::Pin, false)
                     .on_click(move |_, window, cx| on_toggle_pin(window, cx)),
             )
             .separator()

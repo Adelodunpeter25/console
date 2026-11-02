@@ -260,6 +260,16 @@ impl RenderOnce for SidebarSessionItem {
                                 |el, indicator| el.child(indicator),
                             ),
                     )
+                    // Pin marker: always visible on pinned chats, sitting
+                    // beside the hover-revealed delete button.
+                    .when(pinned, |el| {
+                        el.child(
+                            div()
+                                .flex_none()
+                                .p(px(3.0))
+                                .child(app_icon(IconName::Pin, 11.0, theme.text_tertiary)),
+                        )
+                    })
                     // Delete Button: hidden until hover, then reveals on
                     // the right side of the card.
                     .child(

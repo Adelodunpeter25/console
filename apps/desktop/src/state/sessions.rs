@@ -927,9 +927,11 @@ impl ConsoleDesktopApp {
             session.pinned_at.is_some() && !draft_ids.contains(&session.id)
         };
         let mut ids = Vec::new();
-        for (index, session) in self.sessions.iter().enumerate() {
-            if is_live_pinned(index) {
-                ids.push(session.id.clone());
+        if !self.pinned_collapsed {
+            for (index, session) in self.sessions.iter().enumerate() {
+                if is_live_pinned(index) {
+                    ids.push(session.id.clone());
+                }
             }
         }
         match self.sidebar_sort_mode {

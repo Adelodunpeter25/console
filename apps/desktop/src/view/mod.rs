@@ -681,6 +681,7 @@ impl Render for ConsoleDesktopApp {
                         self.waiting_sessions_snapshot(),
                         self.draft_summaries(),
                         self.drafts_collapsed,
+                        self.pinned_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
                         self.server_menu.clone(),
@@ -764,6 +765,17 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.drafts_collapsed = !this.drafts_collapsed;
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.pinned_collapsed = !this.pinned_collapsed;
                                         cx.notify();
                                     });
                                 }

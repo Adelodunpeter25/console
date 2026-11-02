@@ -748,6 +748,7 @@ impl ConsoleDesktopApp {
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,
+            pinned_collapsed: false,
             collapsed_groups: Rc::new(
                 layout
                     .collapsed_groups

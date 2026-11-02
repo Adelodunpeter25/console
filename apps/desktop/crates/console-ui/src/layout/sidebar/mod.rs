@@ -49,7 +49,9 @@ enum SidebarRow {
     /// (not the header) keeps row construction allocation-free; only rows
     /// actually rendered by the virtualized list clone their header.
     Session(usize),
-    PinnedHeader,
+    /// Drafts section header inside the scroll list — only when the sticky
+    /// top row is occupied by Pinned instead.
+    DraftsHeader,
     GroupHeader {
         group: SessionDateGroup,
         collapsed: bool,
@@ -90,6 +92,9 @@ pub struct SidebarView {
     /// Unsent prompt drafts, each with preview and target session if any.
     pub draft_summaries: Vec<DraftSummary>,
     pub drafts_collapsed: bool,
+    /// Whether the Pinned section is collapsed (rows hidden, sticky header
+    /// chevron flipped).
+    pub pinned_collapsed: bool,
     /// Retained list state is owned by the desktop app so it survives root
     /// renders caused by scrolling, status ticks, and transcript updates.
     pub sidebar_list_state: ListState,
@@ -102,6 +107,7 @@ pub struct SidebarView {
     on_toggle_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_toggle_sort_mode: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_drafts: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_pinned: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -133,6 +139,7 @@ impl SidebarView {
         waiting_sessions: HashSet<String>,
         draft_summaries: Vec<DraftSummary>,
         drafts_collapsed: bool,
+        pinned_collapsed: bool,
         sidebar_list_state: ListState,
         environments: Vec<EnvironmentRow>,
         server_menu: ContextMenuHandle,
@@ -145,6 +152,7 @@ impl SidebarView {
         on_toggle_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_toggle_sort_mode: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_drafts: impl Fn(&mut Window, &mut App) + 'static,
+        on_toggle_pinned: impl Fn(&mut Window, &mut App) + 'static,
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -171,6 +179,7 @@ impl SidebarView {
             waiting_sessions,
             draft_summaries,
             drafts_collapsed,
+            pinned_collapsed,
             sidebar_list_state,
             on_select_session: Rc::new(on_select_session),
             on_open_in_new_window: Rc::new(on_open_in_new_window),
@@ -181,6 +190,7 @@ impl SidebarView {
             on_toggle_project: Rc::new(on_toggle_project),
             on_toggle_sort_mode: Rc::new(on_toggle_sort_mode),
             on_toggle_drafts: Rc::new(on_toggle_drafts),
+            on_toggle_pinned: Rc::new(on_toggle_pinned),
             on_rename_session: Rc::new(on_rename_session),
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
@@ -316,12 +326,56 @@ impl RenderOnce for SidebarView {
         };
 
         let has_drafts = !draft_summaries.is_empty();
+        let has_pinned = !pinned_positions.is_empty();
+        let pinned_collapsed = self.pinned_collapsed;
 
-        // The pinned header row above the list. With drafts it is Drafts;
-        // otherwise the first section header is pinned. The sort toggle and
-        // add-project button sit on the pinned row's right edge.
+        // The sticky header row above the list. Pinned wins the top spot;
+        // with drafts it is Drafts; otherwise the first section header is
+        // pinned. The sort toggle and add-project button sit on its right
+        // edge.
         let sort_toggle = sort_mode_toggle(theme, sort_mode, on_toggle_sort_mode.clone());
-        let pinned_header = if has_drafts {
+        let pinned_header = if has_pinned {
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(
+                    pinned_group_header(
+                        theme,
+                        pinned_collapsed,
+                        false,
+                        on_add.clone(),
+                        self.on_toggle_pinned.clone(),
+                    )
+                    .into_any_element(),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child(sort_toggle.into_any_element())
+                        .child(
+                            div()
+                                .id("btn-add-project")
+                                .w(px(20.0))
+                                .h(px(20.0))
+                                .rounded(px(6.0))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_default()
+                                .hover(|s| s.bg(theme.overlay))
+                                .active(|s| s.bg(theme.overlay_strong))
+                                .on_click({
+                                    let on_add = on_add.clone();
+                                    move |_, window, cx| (on_add)(window, cx)
+                                })
+                                .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
+                        ),
+                )
+                .into_any_element()
+        } else if has_drafts {
             div()
                 .flex()
                 .items_center()
@@ -472,14 +526,15 @@ impl RenderOnce for SidebarView {
             }
         };
 
-        // Scrollable rows: pinned sessions first under their own header,
-        // then the date/project sections below them.
+        // Scrollable rows: pinned sessions directly under the sticky Pinned
+        // header, then drafts (with their own header when pinned took the
+        // sticky row), then the date/project sections.
         let mut list_rows = Vec::new();
-        let has_pinned = !pinned_positions.is_empty();
+        let render_all_headers = has_drafts || has_pinned;
         let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
                                  sections: Vec<(SessionDateGroup, Vec<usize>)>,
-                                 has_drafts: bool| {
-            if has_drafts {
+                                 render_all: bool| {
+            if render_all {
                 for (group, positions) in sections {
                     let collapsed = collapsed_groups.contains(&group);
                     list_rows.push(SidebarRow::GroupHeader { group, collapsed });
@@ -504,10 +559,18 @@ impl RenderOnce for SidebarView {
             }
         };
         if has_pinned {
-            list_rows.push(SidebarRow::PinnedHeader);
-            list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
-        }
-        if has_drafts {
+            if !pinned_collapsed {
+                list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
+            }
+            if has_drafts {
+                list_rows.push(SidebarRow::DraftsHeader);
+                if !self.drafts_collapsed {
+                    for i in 0..draft_summaries.len() {
+                        list_rows.push(SidebarRow::Draft(i));
+                    }
+                }
+            }
+        } else if has_drafts {
             if !self.drafts_collapsed {
                 for i in 0..draft_summaries.len() {
                     list_rows.push(SidebarRow::Draft(i));
@@ -516,14 +579,14 @@ impl RenderOnce for SidebarView {
         }
         match sort_mode {
             SidebarSortMode::Date => {
-                push_section_rows(&mut list_rows, grouped, has_drafts);
+                push_section_rows(&mut list_rows, grouped, render_all_headers);
             }
             SidebarSortMode::Project => {
                 let sections: Vec<(String, String, Vec<usize>)> = project_sections
                     .into_iter()
                     .map(|(key, name, positions)| (collapse_key(&key), name, positions))
                     .collect();
-                if has_drafts {
+                if render_all_headers {
                     for (key, name, positions) in sections {
                         let collapsed = collapsed_projects.contains(&key);
                         list_rows.push(SidebarRow::ProjectHeader {
@@ -583,6 +646,8 @@ impl RenderOnce for SidebarView {
         let list_on_add = on_add.clone();
         let list_on_toggle_group = on_toggle_group.clone();
         let list_on_toggle_project = on_toggle_project.clone();
+        let list_drafts_collapsed = self.drafts_collapsed;
+        let list_on_toggle_drafts = self.on_toggle_drafts;
         let grouped_rows = list(sidebar_list_state, move |index, _window, _cx| {
             let Some(row) = list_rows.get(index).cloned() else {
                 return div().into_any_element();
@@ -630,7 +695,14 @@ impl RenderOnce for SidebarView {
                         list_rename_input.clone(),
                     )
                 }
-                SidebarRow::PinnedHeader => pinned_group_header(theme).into_any_element(),
+                SidebarRow::DraftsHeader => drafts_group_header(
+                    theme,
+                    list_drafts_collapsed,
+                    false,
+                    list_on_add.clone(),
+                    list_on_toggle_drafts.clone(),
+                )
+                .into_any_element(),
                 SidebarRow::GroupHeader { group, collapsed } => group_header(
                     theme,
                     group.label(),
