@@ -31,6 +31,7 @@ data class UpdateSessionDto(
     val provider: String? = null,
     val approvalMode: String? = null,
     val thinkingLevel: String? = null,
+    val pinned: Boolean? = null,
 )
 
 @Serializable

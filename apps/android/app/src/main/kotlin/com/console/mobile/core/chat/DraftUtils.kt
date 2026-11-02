@@ -120,8 +120,12 @@ fun buildGroupedProjectSections(
 
     data class ProjectGroup(val projectId: String?, val projectName: String, val list: MutableList<SessionHeader>)
 
+    val pinnedSessions = nonDraftSessions.filter { (it.pinned_at ?: 0L) > 0 }
+        .sortedByDescending { it.pinned_at }
+
     val byProject = linkedMapOf<String, ProjectGroup>()
     for (session in nonDraftSessions) {
+        if ((session.pinned_at ?: 0L) > 0) continue
         if (session.project_id == null) {
             val group = byProject.getOrPut("general") {
                 ProjectGroup(null, "General", mutableListOf())
@@ -160,7 +164,17 @@ fun buildGroupedProjectSections(
     }
 
     val sortedSections = sections.sortedByDescending { it.latestAt }
-    return if (draftSection != null) listOf(draftSection) + sortedSections else sortedSections
+    val withPinned = if (pinnedSessions.isNotEmpty()) {
+        listOf(
+            GroupedProjectSection(
+                projectId = "pinned",
+                projectName = "Pinned",
+                data = pinnedSessions,
+                latestAt = Long.MAX_VALUE,
+            ),
+        ) + sortedSections
+    } else sortedSections
+    return if (draftSection != null) listOf(draftSection) + withPinned else withPinned
 }
 
 /**

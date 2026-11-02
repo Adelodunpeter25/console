@@ -53,6 +53,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import io.github.lyxnx.compose.ui.tablericons.filled.Star
+import io.github.lyxnx.compose.ui.tablericons.outline.Star
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.core.chat.buildGroupedProjectSections
@@ -347,9 +349,30 @@ fun HomeScreen(
     val sheetSession = activeSession
     if (sheetSession != null) {
         var renameOpen by remember(sheetSession.id) { mutableStateOf(false) }
+        val isPinned = (sheetSession.pinned_at ?: 0L) > 0
         BaseSheet(onDismiss = { activeSession = null }) {
             SectionCard {
                 ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
+                SectionDivider()
+                ActionRow(
+                    icon = if (isPinned) TablerIcons.Filled.Star else TablerIcons.Outline.Star,
+                    title = if (isPinned) "Unpin" else "Pin",
+                ) {
+                    val target = sheetSession
+                    activeSession = null
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                AppContainer.projectRepository.updateSession(
+                                    target.id,
+                                    UpdateSessionDto(pinned = !isPinned),
+                                )
+                            }
+                        } catch (e: Exception) {
+                            confirmAlert("Failed", e.message ?: "Unable to update pin.")
+                        }
+                    }
+                }
                 SectionDivider()
                 ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
                     activeSession = null
@@ -457,6 +480,14 @@ private fun SessionRow(
                     )
                 }
                 if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
+                if ((session.pinned_at ?: 0L) > 0) {
+                    Icon(
+                        TablerIcons.Filled.Star,
+                        contentDescription = "Pinned",
+                        tint = NewTheme.Accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
             if (isDraft && draftPreview != null) {
                 Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
