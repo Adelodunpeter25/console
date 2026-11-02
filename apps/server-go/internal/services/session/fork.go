@@ -198,9 +198,9 @@ func (s *Service) Fork(sourceID, messageID string) (types.SessionHeader, error) 
 		return types.SessionHeader{}, err
 	}
 	for _, m := range copied {
-		if _, err := tx.Exec(
-			`INSERT INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
-			m.id, m.role, m.content, m.createdAt); err != nil {
+		// Re-split from the source's content rather than copying parts, so a
+		// fork is built by exactly the same code as any other message.
+		if _, err := insertMessage(tx, false, m.id, m.role, m.content, m.createdAt); err != nil {
 			tx.Rollback()
 			cleanupGlobal()
 			return types.SessionHeader{}, err

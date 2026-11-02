@@ -46,14 +46,12 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 			sum := sha256.Sum256(msg.Data)
 			id = hex.EncodeToString(sum[:])[:32]
 		}
-		res, err := tx.Exec(
-			`INSERT OR IGNORE INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
-			id, msg.Role, string(msg.Data), now)
+		added, err := insertMessage(tx, true, id, msg.Role, string(msg.Data), now)
 		if err != nil {
 			tx.Rollback()
 			return err
 		}
-		if n, _ := res.RowsAffected(); n > 0 {
+		if added {
 			inserted++
 		}
 	}
@@ -84,6 +82,12 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 	if err != nil {
 		return err
 	}
+	// Delete the parts explicitly rather than relying on ON DELETE CASCADE,
+	// which only fires when the connection has foreign_keys switched on.
+	if _, err := tx.Exec(`DELETE FROM message_parts`); err != nil {
+		tx.Rollback()
+		return err
+	}
 	if _, err := tx.Exec(`DELETE FROM messages`); err != nil {
 		tx.Rollback()
 		return err
@@ -94,9 +98,7 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 			sum := sha256.Sum256([]byte(jsonEncodeMessage(i, msg.Data)))
 			id = hex.EncodeToString(sum[:])
 		}
-		if _, err := tx.Exec(
-			`INSERT INTO messages (id, role, content, created_at) VALUES (?, ?, ?, ?)`,
-			id, msg.Role, string(msg.Data), now); err != nil {
+		if _, err := insertMessage(tx, false, id, msg.Role, string(msg.Data), now); err != nil {
 			tx.Rollback()
 			return err
 		}

@@ -300,5 +300,50 @@ func InitSessionDB(db *sql.DB, path string) error {
 		}
 	}
 
-	return nil
+	return migrateMessageParts(db)
+}
+
+// migrateMessageParts adds the split-message storage next to the original
+// `content` column, which stays authoritative until a later, deliberate step
+// drops it. Every statement is additive and idempotent, so an old database
+// upgrades in place and a new one is created the same way.
+//
+//	skeleton     the message JSON with its heavy bodies replaced by slot markers
+//	text         the human-readable words, for search
+//	split_state  0 = not yet split, 1 = split, 2 = could not be split (read content)
+//	message_parts one raw body per row (tool output, tool arguments, images)
+func migrateMessageParts(db *sql.DB) error {
+	for _, col := range []struct{ name, ddl string }{
+		{"skeleton", "skeleton TEXT"},
+		{"text", "text TEXT"},
+		{"split_state", "split_state INTEGER NOT NULL DEFAULT 0"},
+	} {
+		var n int
+		if err := db.QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = ?`, col.name,
+		).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			if _, err := db.Exec(`ALTER TABLE messages ADD COLUMN ` + col.ddl); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS message_parts (
+			message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+			slot INTEGER NOT NULL,
+			kind TEXT NOT NULL,
+			meta TEXT NOT NULL,
+			body BLOB,
+			PRIMARY KEY (message_id, slot)
+		) WITHOUT ROWID;
+
+		-- Only the rows still waiting to be split are indexed, so finding the
+		-- backlog stays cheap and the index empties as the migration finishes.
+		-- (An index on created_at, not rowid: rowid cannot be named in an index.)
+		CREATE INDEX IF NOT EXISTS idx_messages_unsplit ON messages(created_at) WHERE split_state = 0;
+	`)
+	return err
 }
