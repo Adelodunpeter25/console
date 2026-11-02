@@ -1,30 +1,50 @@
 //! Unit tests for chat tool-call row icons.
 //!
-//! Single-call rows show the file's type icon only for file-targeting tools;
-//! every other tool falls back to `activity_icon`, which must resolve both
-//! the snake_case and camelCase spellings the agent runtime emits.
+//! Icons come from the server-classified icon key on each `ToolCall`
+//! (tools.ToolIconKey, classify.go); a call without one falls back to the
+//! generic wrench. These tests pin the key → glyph mapping.
 
+use console_core::ToolCall;
 use console_ui::primitives::{IconName, activity_icon};
 
-#[test]
-fn test_search_tools_use_search_glyph() {
-    let expected = IconName::Search.path();
-    for name in ["grep", "search_files", "glob"] {
-        assert_eq!(activity_icon(name), expected, "{name}");
+/// A call with only its classified icon key set — the fields the icon path
+/// actually reads.
+fn call_with_icon(icon: &str) -> ToolCall {
+    ToolCall {
+        id: "c".to_string(),
+        name: "whatever".to_string(),
+        arguments: serde_json::json!({}),
+        thought_signature: None,
+        label: None,
+        kind_flags: None,
+        icon: Some(icon.to_string()),
     }
 }
 
 #[test]
-fn test_camel_case_tools_match_snake_case_twins() {
-    assert_eq!(activity_icon("readFile"), activity_icon("read_file"));
-    assert_eq!(activity_icon("editFile"), activity_icon("edit_file"));
-    assert_eq!(activity_icon("writeFile"), activity_icon("write_file"));
-    assert_eq!(activity_icon("listDir"), activity_icon("list_files"));
-    assert_eq!(activity_icon("webSearch"), activity_icon("web_search"));
+fn test_server_icon_keys_map_to_glyphs() {
+    assert_eq!(
+        activity_icon("search"),
+        IconName::Search.path()
+    );
+    assert_eq!(activity_icon("file"), IconName::File.path());
+    assert_eq!(activity_icon("folder"), IconName::Folder.path());
+    assert_eq!(activity_icon("terminal"), IconName::Terminal.path());
+    assert_eq!(activity_icon("globe"), IconName::Globe.path());
+    assert_eq!(activity_icon("pencil"), IconName::Pencil.path());
 }
 
 #[test]
-fn test_file_tools_keep_distinct_glyphs() {
-    assert_eq!(activity_icon("readFile"), IconName::File.path());
-    assert_eq!(activity_icon("listDir"), IconName::Folder.path());
+fn test_every_entry_of_console_tool_icon_table() {
+    for key in [
+        "sparkle", "terminal", "pencil", "file", "folder", "search", "globe",
+        "chart", "list", "memory", "package",
+    ] {
+        // Every mapped key must produce something other than the wrench.
+        assert_ne!(
+            activity_icon(key),
+            IconName::Wrench.path(),
+            "{key}"
+        );
+    }
 }

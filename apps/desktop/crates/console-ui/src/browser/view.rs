@@ -15,9 +15,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    App, Context, Div, Entity, FocusHandle, Focusable, HitboxBehavior, IntoElement, MouseButton,
-    ObjectFit, ParentElement, Render, SharedString, Stateful, Styled, Subscription, Window, canvas,
-    div, img, prelude::*, px,
+    AnyElement, App, Context, Div, ElementId, Entity, FocusHandle, Focusable, HitboxBehavior,
+    IntoElement, MouseButton, ObjectFit, ParentElement, Render, SharedString, Stateful, Styled,
+    Subscription, Window, canvas, div, img, prelude::*, px,
 };
 
 use super::actions::*;
@@ -84,6 +84,9 @@ pub struct BrowserView {
     can_go_back: bool,
     can_go_forward: bool,
     address_dirty: bool,
+    /// Whether the address input currently holds keyboard focus, tracked so
+    /// the render can show the history suggestions under the omnibox.
+    address_focused: bool,
     was_natively_focused: bool,
     last_window_focus: Option<FocusHandle>,
     occluded: bool,
@@ -152,11 +155,13 @@ impl BrowserView {
         let address_focus = address.read(cx).focus();
         let weak_for_focus_in = cx.entity().downgrade();
         let weak_for_focus_out = cx.entity().downgrade();
+        let weak_for_window_focus_out = weak_for_focus_out.clone();
 
         let focus_in_address = window.on_focus_in(&address_focus, cx, {
             let view = weak_for_focus_in;
             move |_, cx| {
                 let _ = view.update(cx, |this: &mut Self, cx| {
+                    this.address_focused = true;
                     if this
                         .host
                         .as_ref()
@@ -164,12 +169,23 @@ impl BrowserView {
                     {
                         this.reclaim_native_keyboard(cx);
                     }
+                    cx.notify();
+                });
+            }
+        });
+
+        let focus_out_address = window.on_focus_out(&address_focus, cx, {
+            let view = weak_for_focus_out;
+            move |_, _, cx| {
+                let _ = view.update(cx, |this: &mut Self, cx| {
+                    this.address_focused = false;
+                    cx.notify();
                 });
             }
         });
 
         let focus_out_surface = window.on_focus_out(&focus_handle, cx, {
-            let view = weak_for_focus_out;
+            let view = weak_for_window_focus_out;
             move |_, window, cx| {
                 let focused_elsewhere = window.is_window_active() && window.focused(cx).is_some();
                 let _ = view.update(cx, |this: &mut Self, cx| {
@@ -202,6 +218,7 @@ impl BrowserView {
             can_go_back: false,
             can_go_forward: false,
             address_dirty: false,
+            address_focused: false,
             was_natively_focused: false,
             last_window_focus: None,
             occluded: false,
@@ -212,7 +229,12 @@ impl BrowserView {
             inspecting: false,
             active_inspection: None,
             script_results: HashMap::new(),
-            _subscriptions: vec![submit_subscription, focus_in_address, focus_out_surface],
+            _subscriptions: vec![
+                submit_subscription,
+                focus_in_address,
+                focus_out_address,
+                focus_out_surface,
+            ],
         }
     }
 
@@ -472,6 +494,9 @@ impl BrowserView {
 
     fn title_changed(&mut self, title: String, cx: &mut Context<Self>) {
         let title = (!title.trim().is_empty()).then_some(title);
+        if let (Some(actual), Some(url)) = (&title, &self.current_url) {
+            super::browser_state::record_title(url, actual);
+        }
         if self.page_title != title {
             self.page_title = title;
             cx.notify();
@@ -487,6 +512,7 @@ impl BrowserView {
             return;
         }
         if self.current_url.as_deref() != Some(url.as_str()) {
+            super::browser_state::record_visit(&url, self.page_title.as_deref().unwrap_or(""));
             self.current_url = Some(url);
         }
     }
@@ -1008,6 +1034,9 @@ impl BrowserView {
                                 .rounded_full()
                                 .bg(gpui::rgb(0x007AFF)),
                         )
+                    })
+                    .when_some(self.render_history_suggestions(cx), |element, panel| {
+                        element.child(panel)
                     }),
             )
             .child(self.toolbar_button(
@@ -1032,6 +1061,86 @@ impl BrowserView {
                 |this, _, cx| this.open_external(cx),
                 cx,
             ))
+    }
+
+    /// The dropdown under the omnibox while it holds edits: top history
+    /// matches, click to navigate. Only proven while the field has focus
+    /// and content — a committed URL in the field is not a query.
+    fn render_history_suggestions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.address_focused || !self.address_dirty {
+            return None;
+        }
+        let query = self.address.read(cx).content().to_string();
+        let entries = super::browser_state::suggest(&query, 6);
+        if entries.is_empty() {
+            return None;
+        }
+        let theme = Theme::current(cx);
+        let weak = cx.entity().downgrade();
+        Some(
+            div()
+                .absolute()
+                .top(px(32.0))
+                .left_0()
+                .right_0()
+                .flex()
+                .flex_col()
+                .rounded(px(8.0))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.surface)
+                .overflow_hidden()
+                .children(entries.into_iter().map(|entry| {
+                    let weak = weak.clone();
+                    let url = entry.url.clone();
+                    div()
+                        .id(ElementId::from(format!(
+                            "browser-history-{}",
+                            url.split("//").last().unwrap_or(&url)
+                        )))
+                        .cursor_pointer()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(10.0))
+                        .py(px(6.0))
+                        .hover(|s| s.bg(theme.overlay))
+                        .on_click(move |_event, window, cx| {
+                            let _ = weak.update(cx, |this, cx| {
+                                this.address.update(cx, |address, cx| {
+                                    address.set_content(url.clone(), cx);
+                                });
+                                this.address_dirty = false;
+                                this.navigate_to_url(url.clone(), cx);
+                                this.focus_default(window, cx);
+                            });
+                        })
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .text_size(px(12.5))
+                                .text_color(theme.text)
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(if entry.title.is_empty() {
+                                    display_url(&entry.url).to_string()
+                                } else {
+                                    entry.title.clone()
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.0))
+                                .text_color(theme.text_tertiary)
+                                .max_w(px(180.0))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .child(display_url(&entry.url).to_string()),
+                        )
+                }))
+                .into_any_element(),
+        )
     }
 
     fn render_start_page(&self, theme: Theme) -> Div {

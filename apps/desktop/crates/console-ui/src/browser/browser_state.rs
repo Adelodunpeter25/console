@@ -37,6 +37,17 @@ pub fn history_len() -> usize {
     HISTORY.read().map(|h| h.len()).unwrap_or(0)
 }
 
+/// Record a title-only update for an existing entry (no count change).
+pub fn record_title(url: &str, title: &str) {
+    let loaded = HISTORY.read().ok().map(|h| h.as_ref().clone());
+    let Some(mut history) = loaded else { return };
+    history.set_title(url, title);
+    console_core::browser_history::save(&history);
+    if let Ok(mut slot) = HISTORY.write() {
+        *slot = Arc::new(history);
+    }
+}
+
 /// Top omnibox suggestions for a query.
 pub fn suggest(query: &str, limit: usize) -> Vec<HistorySuggestion> {
     let loaded = HISTORY.read().ok();

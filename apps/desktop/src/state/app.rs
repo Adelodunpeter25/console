@@ -568,6 +568,8 @@ impl ConsoleDesktopApp {
         ];
 
         let client_for_palettes = client.clone();
+        // The browser suggestion source starts from the persisted history.
+        crate::state::chrome_import::init_from_disk();
         let mut app = Self {
             client,
             transport: console_core::services::Transport::default(),
@@ -731,6 +733,11 @@ impl ConsoleDesktopApp {
             integrations_error: None,
             usage_reports: None,
             usage_loading: false,
+            chrome_profiles: Vec::new(),
+            chrome_selected_profile: None,
+            chrome_profiles_loading: false,
+            chrome_importing: false,
+            chrome_status: None,
             usage_last_fetched: None,
             context_usage: std::collections::HashMap::new(),
             environments: Vec::new(),

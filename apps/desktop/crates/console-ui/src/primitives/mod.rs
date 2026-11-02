@@ -117,6 +117,12 @@ pub fn activity_icon_for_call(call: &console_core::ToolCall) -> &'static str {
     icon_from_key(call.icon.as_deref().unwrap_or(""))
 }
 
+/// The key → glyph mapping itself, for tests and tool surfaces that
+/// already have the classified key in hand.
+pub fn activity_icon(key: &str) -> &'static str {
+    icon_from_key(key)
+}
+
 fn icon_from_key(key: &str) -> &'static str {
     let icon = match key {
         "sparkle" => IconName::Sparkle,

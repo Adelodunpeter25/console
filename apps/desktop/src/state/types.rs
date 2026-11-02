@@ -477,6 +477,14 @@ pub struct ConsoleDesktopApp {
     /// True only for windows launched as the persisted main window.
     /// Secondary "New Window" windows never persist layout or bounds.
     pub is_main_window: bool,
+    /// Chrome import state for the Browser settings tab. Profiles come from
+    /// the server's local scan; the import is one round-trip whose history
+    /// lands in the browser store and whose cookies inject into the webview.
+    pub chrome_profiles: Vec<console_core::types::ChromeProfile>,
+    pub chrome_selected_profile: Option<usize>,
+    pub chrome_profiles_loading: bool,
+    pub chrome_importing: bool,
+    pub chrome_status: Option<String>,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —

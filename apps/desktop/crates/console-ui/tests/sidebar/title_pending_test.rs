@@ -17,6 +17,7 @@ fn header(title: &str, message_count: u64) -> SessionHeader {
         message_count: Some(message_count.try_into().unwrap()),
         status: "done".to_string(),
         deleted_at: None,
+        pinned_at: None,
         worktree: None,
     }
 }

@@ -82,7 +82,18 @@ impl BrowserHistory {
         self.sort_and_cap();
     }
 
-    /// Top matches for an omnibox query: URL or title contains the query,
+    /// Record a title-only change for a URL already in the store.
+pub fn set_title(&mut self, url: &str, title: &str) {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    if let Some(index) = self.index_of(url) {
+        self.entries[index].title = trimmed.to_string();
+    }
+}
+
+/// Top matches for an omnibox query: URL or title contains the query,
     /// unique by normalized URL, most visited first.
     pub fn suggest(&self, query: &str, limit: usize) -> Vec<BrowserHistoryEntry> {
         let query = query.trim().to_lowercase();

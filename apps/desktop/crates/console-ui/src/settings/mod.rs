@@ -1,6 +1,7 @@
 //! Shared settings view-models and UI components.
 
 pub mod api_key_section;
+pub mod browser_page;
 pub mod deleted_chats_page;
 pub mod github_section;
 pub mod integrations_page;
@@ -17,6 +18,7 @@ pub mod settings_shell;
 pub mod usage_page;
 
 pub use api_key_section::*;
+pub use browser_page::*;
 pub use deleted_chats_page::*;
 pub use github_section::*;
 pub use integrations_page::*;
@@ -47,6 +49,7 @@ pub enum SettingsTab {
     Mcp,
     DeletedChats,
     Keybindings,
+    Browser,
 }
 
 impl SettingsTab {
@@ -65,6 +68,7 @@ impl SettingsTab {
             Self::Mcp => "MCP Servers",
             Self::DeletedChats => "Deleted Chats",
             Self::Keybindings => "Keyboard Shortcuts",
+            Self::Browser => "Browser",
         }
     }
 
@@ -79,6 +83,7 @@ impl SettingsTab {
             Self::Mcp => "mcp",
             Self::DeletedChats => "deleted-chats",
             Self::Keybindings => "keybindings",
+            Self::Browser => "browser",
         }
     }
 
@@ -93,6 +98,7 @@ impl SettingsTab {
             "mcp" => Some(Self::Mcp),
             "deleted-chats" | "deletedChats" => Some(Self::DeletedChats),
             "keybindings" => Some(Self::Keybindings),
+            "browser" => Some(Self::Browser),
             _ => None,
         }
     }

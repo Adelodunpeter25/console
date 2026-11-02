@@ -61,6 +61,17 @@ fn suggest_matches_url_or_title_unique_by_url() {
 }
 
 #[test]
+fn set_title_only_touches_the_title() {
+    let mut history = BrowserHistory::default();
+    history.record_visit("https://example.com", "");
+    history.set_title("https://example.com", "Example Domain");
+    assert_eq!(history.entries[0].title, "Example Domain");
+    assert_eq!(history.entries[0].visit_count, 1);
+    history.set_title("https://example.com", "");
+    assert_eq!(history.entries[0].title, "Example Domain");
+}
+
+#[test]
 fn round_trips_through_the_storage_file() {
     let dir = std::env::temp_dir().join(format!(
         "console-history-test-{}-{}",

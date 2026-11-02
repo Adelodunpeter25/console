@@ -46,12 +46,12 @@ const SETTINGS_GROUPS: &[SettingsGroup] = &[
             ),
         ],
     },
-    // The phone has no keyboard, so it has no shortcuts page. The desktop
-    // keeps it in a group of its own rather than filing it under one of the
-    // others, where it would not belong.
     SettingsGroup {
         title: "Preferences",
-        tabs: &[(SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts")],
+        tabs: &[
+            (SettingsTab::Browser, IconName::Globe, "Browser"),
+            (SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts"),
+        ],
     },
 ];
 

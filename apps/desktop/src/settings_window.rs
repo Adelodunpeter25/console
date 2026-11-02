@@ -1,8 +1,9 @@
 use crate::state::ConsoleDesktopApp;
 use console_ui::input::ComposerInput;
 use console_ui::settings::{
-    DeletedChatsPage, IntegrationsPage, KeybindingsPage, ModelsPage, ProbeState, ProjectsPage,
-    ProvidersPage, ServersPage, SettingsShell, SettingsTab, UsagePage,
+    BrowserPage, BrowserProfileRow, DeletedChatsPage, IntegrationsPage, KeybindingsPage,
+    ModelsPage, ProbeState, ProjectsPage, ProvidersPage, ServersPage, SettingsShell, SettingsTab,
+    UsagePage,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -517,6 +518,13 @@ impl Render for SettingsWindow {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
+                }
+                if tab == SettingsTab::Browser {
+                    if let Some(app) = app_handle.upgrade() {
+                        app.update(cx, |app_state, cx| {
+                            app_state.fetch_chrome_profiles(cx);
+                        });
+                    }
                 }
                 // Sidebar clicks bypass set_tab, and without this the GitHub
                 // row never re-reads: one failed load stuck it on
@@ -1151,6 +1159,55 @@ impl Render for SettingsWindow {
                 search_input: Some(self.keybindings_search.clone()),
             }
             .into_any_element(),
+            SettingsTab::Browser => {
+                let app_handle = self.app.clone();
+                let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.fetch_chrome_profiles(cx);
+                            });
+                        }
+                    });
+                let app_handle = self.app.clone();
+                let on_select: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static> =
+                    Rc::new(move |index, _w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.select_chrome_profile(index, cx);
+                            });
+                        }
+                    });
+                let app_handle = self.app.clone();
+                let on_import: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                app_state.import_chrome_profile(cx);
+                            });
+                        }
+                    });
+
+                BrowserPage {
+                    profiles: app
+                        .chrome_profiles
+                        .iter()
+                        .map(|p| BrowserProfileRow {
+                            id: p.id.clone(),
+                            name: p.name.clone(),
+                        })
+                        .collect(),
+                    selected_profile: app.chrome_selected_profile,
+                    loading_profiles: app.chrome_profiles_loading,
+                    importing: app.chrome_importing,
+                    status: app.chrome_status.clone(),
+                    history_count: console_ui::browser::browser_state::history_len(),
+                    on_refresh_profiles: on_refresh,
+                    on_select_profile: on_select,
+                    on_import,
+                }
+                .into_any_element()
+            }
         };
 
         // The modals. They are built here rather than inside the tab so
