@@ -1,11 +1,12 @@
 use crate::types::terminal::{
-    TerminalBackend, TerminalClientMessage, TerminalGridSnapshot, TerminalId, TerminalRecord,
-    TerminalServerMessage, TerminalSize, TerminalSpawnParams, TerminalStatus,
+    TerminalBackend, TerminalClientEvent, TerminalClientMessage, TerminalGridSnapshot, TerminalId,
+    TerminalRecord, TerminalServerMessage, TerminalSize, TerminalSpawnParams, TerminalStatus,
 };
 use crate::utils::HttpTransport;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
+use tokio_tungstenite::tungstenite::Error as WsError;
 
 /// Binary wire-frame tags for `proto=binary` connections (mirrors the server's
 /// `TERMINAL_OUTPUT_FRAME_TAG` / `TERMINAL_INPUT_FRAME_TAG`; see
@@ -13,6 +14,49 @@ use tokio::sync::{RwLock, mpsc};
 /// `[tag, ...payload]`; control messages remain JSON text frames.
 pub const TERMINAL_OUTPUT_FRAME_TAG: u8 = 0x01;
 pub const TERMINAL_INPUT_FRAME_TAG: u8 = 0x01;
+
+/// How many times a dropped terminal WS is silently redialed before the pane
+/// surfaces an error. Benign drops (server restart, relay/proxy blip,
+/// sleep/VPN, idle LB close) are the common case — the gold `WS read failed`
+/// banner for a bare `close_notify` EOF is noise, and the agent run is
+/// unaffected (it streams over SSE, not this socket).
+const MAX_RECONNECTS: u32 = 3;
+const RECONNECT_DELAYS_MS: [u64; 3] = [500, 1000, 2000];
+
+/// True for transport-level drops with no server verdict: bare TLS `close_notify`
+/// EOF, unclean TCP close, or a clean WS close handshake with no terminal
+/// `Exit`/`Error` frame. These say nothing about the shell itself, so the
+/// caller should respawn quietly instead of blaming the user with raw TLS text.
+fn is_benign_ws_disconnect(e: &WsError) -> bool {
+    match e {
+        WsError::ConnectionClosed | WsError::AlreadyClosed => true,
+        WsError::Io(io) if io.kind() == std::io::ErrorKind::UnexpectedEof => true,
+        _ => {
+            let m = e.to_string().to_lowercase();
+            m.contains("unexpected eof")
+                || m.contains("close_notify")
+                || m.contains("unclean closure")
+        }
+    }
+}
+
+/// How one WS attempt ended: the shell is really gone, or the socket dropped
+/// with no server verdict and a redial is worth trying.
+enum AttemptEnd {
+    Done,
+    Redial,
+}
+
+/// Next consecutive-attempt count. A connection that proved healthy (10s+)
+/// resets the budget so one long-lived terminal doesn't accumulate stale
+/// failures across unrelated blips.
+fn bump_dials(dials: u32, connected_at: std::time::Instant) -> u32 {
+    if connected_at.elapsed() > std::time::Duration::from_secs(10) {
+        1
+    } else {
+        dials + 1
+    }
+}
 
 /// Client-side terminal service — manages WS lifecycle against `GET /api/terminals`
 /// and owns the set of live `TerminalRecord`s. The VT grid itself lives in a
@@ -300,7 +344,7 @@ impl TerminalService {
         initial_size: TerminalSize,
     ) -> anyhow::Result<TerminalHandle> {
         let url = self.ws_url(&params).await;
-        let (tx, mut rx) = mpsc::unbounded_channel::<TerminalClientMessage>();
+        let (tx, rx) = mpsc::unbounded_channel::<TerminalClientMessage>();
 
         let backend = Arc::new(tokio::sync::Mutex::new(TermyBackend::new(initial_size)));
         let id: Arc<RwLock<Option<TerminalId>>> = Arc::new(RwLock::new(None));
@@ -318,136 +362,204 @@ impl TerminalService {
         // over the wire they travel as regular Input messages.
         let reply_sender = tx.clone();
 
-        // The server guards `/api/*` with its auth middleware, so the
-        // handshake has to carry the bearer token; failing here is a real
-        // spawn error, not something to discover after a retry loop.
-        let request = self.transport.ws_request(&url).await?;
-
+        let transport = self.transport.clone();
         let task = tokio::spawn(async move {
-            let ws_stream = match tokio_tungstenite::connect_async(request).await {
-                Ok((stream, _)) => stream,
-                Err(e) => {
-                    *status_clone.write().await = TerminalStatus::Error;
-                    *error_clone.write().await = Some(format!("WS connect failed: {e}"));
+            let mut rx = rx;
+            let mut dials: u32 = 0;
+            let mut client_killed = false;
+
+            loop {
+                if dials > 0 {
+                    let delay_ms = RECONNECT_DELAYS_MS
+                        .get((dials - 1) as usize)
+                        .copied()
+                        .unwrap_or(2000);
+                    log::warn!("Terminal WS reconnecting (attempt {dials})");
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    *status_clone.write().await = TerminalStatus::Spawning;
+                    *error_clone.write().await = None;
                     notify_clone.notify_one();
-                    return;
                 }
-            };
 
-            let (mut write, mut read) = futures_util::StreamExt::split(ws_stream);
-
-            let write_task = tokio::spawn(async move {
-                while let Some(msg) = rx.recv().await {
-                    // Binary protocol: input rides a binary frame
-                    // [0x01, ...bytes]; control messages stay JSON text.
-                    let wire = match &msg.event {
-                        Some(crate::types::TerminalClientEvent::Input(input)) => {
-                            let mut frame = Vec::with_capacity(input.data.len() + 1);
-                            frame.push(TERMINAL_INPUT_FRAME_TAG);
-                            frame.extend_from_slice(input.data.as_bytes());
-                            tokio_tungstenite::tungstenite::Message::Binary(frame.into())
-                        }
-                        Some(_) => match serde_json::to_string(&msg) {
-                            Ok(t) => tokio_tungstenite::tungstenite::Message::Text(t.into()),
-                            Err(e) => {
-                                log::warn!("Failed to serialize terminal msg: {e}");
-                                continue;
-                            }
-                        },
-                        None => continue,
-                    };
-                    if let Err(e) = futures_util::SinkExt::send(&mut write, wire).await {
-                        log::warn!("WS send failed: {e}");
-                        break;
-                    }
-                }
-            });
-
-            while let Some(msg) = futures_util::StreamExt::next(&mut read).await {
-                match msg {
-                    Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
-                        let server_msg: Result<TerminalServerMessage, _> =
-                            serde_json::from_str(&text);
-                        match server_msg {
-                            Ok(msg) => match msg.event {
-                                Some(crate::types::TerminalServerEvent::Spawned(s)) => {
-                                    *id_clone.write().await = Some(s.id);
-                                    *status_clone.write().await = TerminalStatus::Running;
-                                    notify_clone.notify_one();
-                                }
-                                Some(crate::types::TerminalServerEvent::Output(o)) => {
-                                    let mut b = backend_clone.lock().await;
-                                    let replies = b.advance_and_collect_replies(&o.data);
-                                    drop(b);
-                                    if !replies.is_empty() {
-                                        let _ = reply_sender.send(crate::types::client_input(
-                                            String::from_utf8_lossy(&replies).into_owned(),
-                                        ));
-                                    }
-                                    notify_clone.notify_one();
-                                }
-                                Some(crate::types::TerminalServerEvent::Exit(e)) => {
-                                    *status_clone.write().await = TerminalStatus::Exited;
-                                    if let Some(c) = e.code {
-                                        *error_clone.write().await =
-                                            Some(format!("Shell exited with code {c}"));
-                                    }
-                                    notify_clone.notify_one();
-                                    break;
-                                }
-                                Some(crate::types::TerminalServerEvent::Error(e)) => {
-                                    *status_clone.write().await = TerminalStatus::Error;
-                                    *error_clone.write().await = Some(e.message);
-                                    notify_clone.notify_one();
-                                    break;
-                                }
-                                None => {
-                                    log::warn!("Empty terminal frame: {text}");
-                                }
-                            },
-                            Err(e) => {
-                                log::warn!("Invalid terminal frame: {e} — {text}");
-                            }
-                        }
-                    }
-                    Ok(tokio_tungstenite::tungstenite::Message::Binary(bytes)) => {
-                        // Binary protocol data frame: [tag, ...payload].
-                        // Output is raw PTY bytes — feed without a string
-                        // round-trip (UTF-8 can split across frames).
-                        if bytes.first() != Some(&TERMINAL_OUTPUT_FRAME_TAG) {
-                            log::warn!("Unknown terminal binary frame tag: {:?}", bytes.first());
-                            continue;
-                        }
-                        let payload = &bytes[1..];
-                        if payload.is_empty() {
-                            continue;
-                        }
-                        let mut b = backend_clone.lock().await;
-                        let replies = b.advance_and_collect_replies_bytes(payload);
-                        drop(b);
-                        if !replies.is_empty() {
-                            let _ = reply_sender.send(crate::types::client_input(
-                                String::from_utf8_lossy(&replies).into_owned(),
-                            ));
-                        }
-                        notify_clone.notify_one();
-                    }
-                    Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
-                        *status_clone.write().await = TerminalStatus::Exited;
-                        notify_clone.notify_one();
-                        break;
-                    }
+                let request = match transport.ws_request(&url).await {
+                    Ok(r) => r,
                     Err(e) => {
                         *status_clone.write().await = TerminalStatus::Error;
-                        *error_clone.write().await = Some(format!("WS read failed: {e}"));
+                        *error_clone.write().await = Some(format!("WS connect failed: {e}"));
                         notify_clone.notify_one();
-                        break;
+                        return;
                     }
-                    _ => {}
+                };
+
+                let ws_stream = match tokio_tungstenite::connect_async(request).await {
+                    Ok((stream, _)) => stream,
+                    Err(e) => {
+                        if matches!(&e, WsError::Http(_) | WsError::Url(_)) {
+                            *status_clone.write().await = TerminalStatus::Error;
+                            *error_clone.write().await = Some(format!("WS connect failed: {e}"));
+                            notify_clone.notify_one();
+                            return;
+                        }
+                        dials += 1;
+                        if dials > MAX_RECONNECTS || client_killed {
+                            *status_clone.write().await = TerminalStatus::Error;
+                            *error_clone.write().await = Some(format!("WS connect failed: {e}"));
+                            notify_clone.notify_one();
+                            return;
+                        }
+                        log::warn!("Terminal WS dial failed (attempt {dials}): {e}");
+                        continue;
+                    }
+                };
+
+                let connected_at = std::time::Instant::now();
+                let (mut write, mut read) = futures_util::StreamExt::split(ws_stream);
+
+                let end = loop {
+                    tokio::select! {
+                            incoming = rx.recv() => {
+                                let Some(msg) = incoming else {
+                                    break AttemptEnd::Done;
+                                };
+                                if matches!(&msg.event, Some(TerminalClientEvent::Kill(_))) {
+                                    client_killed = true;
+                                }
+                                let wire = match &msg.event {
+                                    Some(TerminalClientEvent::Input(input)) => {
+                                        let mut frame = Vec::with_capacity(input.data.len() + 1);
+                                        frame.push(TERMINAL_INPUT_FRAME_TAG);
+                                        frame.extend_from_slice(input.data.as_bytes());
+                                        tokio_tungstenite::tungstenite::Message::Binary(frame.into())
+                                    }
+                                    Some(_) => match serde_json::to_string(&msg) {
+                                        Ok(t) => tokio_tungstenite::tungstenite::Message::Text(t.into()),
+                                        Err(e) => {
+                                            log::warn!("Failed to serialize terminal msg: {e}");
+                                            continue;
+                                        }
+                                    },
+                                    None => continue,
+                                };
+                                if let Err(e) = futures_util::SinkExt::send(&mut write, wire).await {
+                                    log::warn!("WS send failed: {e}");
+                                    break AttemptEnd::Done;
+                                }
+                            }
+                            msg = futures_util::StreamExt::next(&mut read) => {
+                                let Some(msg) = msg else {
+                                    if client_killed {
+                                        break AttemptEnd::Done;
+                                    }
+                                    log::warn!("Terminal WS stream ended without close frame");
+                                    break AttemptEnd::Redial;
+                                };
+                                match msg {
+                        Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                            let server_msg: Result<TerminalServerMessage, _> =
+                                serde_json::from_str(&text);
+                            match server_msg {
+                                Ok(msg) => match msg.event {
+                                    Some(crate::types::TerminalServerEvent::Spawned(s)) => {
+                                        *id_clone.write().await = Some(s.id);
+                                        *status_clone.write().await = TerminalStatus::Running;
+                                        dials = 0;
+                                        notify_clone.notify_one();
+                                    }
+                                    Some(crate::types::TerminalServerEvent::Output(o)) => {
+                                        let mut b = backend_clone.lock().await;
+                                        let replies = b.advance_and_collect_replies(&o.data);
+                                        drop(b);
+                                        if !replies.is_empty() {
+                                            let _ = reply_sender.send(crate::types::client_input(
+                                                String::from_utf8_lossy(&replies).into_owned(),
+                                            ));
+                                        }
+                                        notify_clone.notify_one();
+                                    }
+                                    Some(crate::types::TerminalServerEvent::Exit(e)) => {
+                                        *status_clone.write().await = TerminalStatus::Exited;
+                                        if let Some(c) = e.code {
+                                            *error_clone.write().await =
+                                                Some(format!("Shell exited with code {c}"));
+                                        }
+                                        notify_clone.notify_one();
+                                        break AttemptEnd::Done;
+                                    }
+                                    Some(crate::types::TerminalServerEvent::Error(e)) => {
+                                        *status_clone.write().await = TerminalStatus::Error;
+                                        *error_clone.write().await = Some(e.message);
+                                        notify_clone.notify_one();
+                                        break AttemptEnd::Done;
+                                    }
+                                    None => {
+                                        log::warn!("Empty terminal frame: {text}");
+                                    }
+                                },
+                                Err(e) => {
+                                    log::warn!("Invalid terminal frame: {e} — {text}");
+                                }
+                            }
+                        }
+                        Ok(tokio_tungstenite::tungstenite::Message::Binary(bytes)) => {
+                            if bytes.first() != Some(&TERMINAL_OUTPUT_FRAME_TAG) {
+                                log::warn!("Unknown terminal binary frame tag: {:?}", bytes.first());
+                                continue;
+                            }
+                            let payload = &bytes[1..];
+                            if payload.is_empty() {
+                                continue;
+                            }
+                            let mut b = backend_clone.lock().await;
+                            let replies = b.advance_and_collect_replies_bytes(payload);
+                            drop(b);
+                            if !replies.is_empty() {
+                                let _ = reply_sender.send(crate::types::client_input(
+                                    String::from_utf8_lossy(&replies).into_owned(),
+                                ));
+                            }
+                            notify_clone.notify_one();
+                        }
+                        Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
+                            if client_killed {
+                                *status_clone.write().await = TerminalStatus::Exited;
+                                notify_clone.notify_one();
+                                break AttemptEnd::Done;
+                            }
+                            log::warn!("Terminal WS closed without exit frame");
+                            break AttemptEnd::Redial;
+                        }
+                        Err(e) => {
+                            if !client_killed && is_benign_ws_disconnect(&e) {
+                                log::warn!("Terminal WS dropped: {e}");
+                                break AttemptEnd::Redial;
+                            }
+                            *status_clone.write().await = TerminalStatus::Error;
+                            *error_clone.write().await = Some(format!("WS read failed: {e}"));
+                            notify_clone.notify_one();
+                            break AttemptEnd::Done;
+                        }
+                        _ => {}
+                    }
+                            }
+                        }
+                };
+
+                match end {
+                    AttemptEnd::Done => return,
+                    AttemptEnd::Redial => {
+                        dials = bump_dials(dials, connected_at);
+                        if dials > MAX_RECONNECTS {
+                            *status_clone.write().await = TerminalStatus::Error;
+                            *error_clone.write().await = Some(
+                                "Terminal connection lost — close or respawn the terminal"
+                                    .to_string(),
+                            );
+                            notify_clone.notify_one();
+                            return;
+                        }
+                    }
                 }
             }
-
-            write_task.abort();
         });
 
         Ok(TerminalHandle::from_parts(
