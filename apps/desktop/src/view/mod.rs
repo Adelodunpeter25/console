@@ -799,7 +799,7 @@ impl Render for ConsoleDesktopApp {
                         },
                         {
                             let entity = entity.clone();
-                            move |id: String, window, cx| {
+                            move |id: String, _window, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.toggle_pin_session(id, cx);

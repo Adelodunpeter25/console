@@ -254,9 +254,6 @@ impl RenderOnce for SidebarSessionItem {
                                         .child("Draft"),
                                 )
                             })
-                            .when(pinned, |el| {
-                                el.child(app_icon(IconName::StarFilled, 11.0, theme.accent))
-                            })
                             .when_some(
                                 loading_state
                                     .and_then(|state| sidebar::status_indicator(state, theme)),

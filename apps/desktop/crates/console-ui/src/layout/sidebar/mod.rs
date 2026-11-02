@@ -503,16 +503,16 @@ impl RenderOnce for SidebarView {
                 }
             }
         };
+        if has_pinned {
+            list_rows.push(SidebarRow::PinnedHeader);
+            list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
+        }
         if has_drafts {
             if !self.drafts_collapsed {
                 for i in 0..draft_summaries.len() {
                     list_rows.push(SidebarRow::Draft(i));
                 }
             }
-        }
-        if has_pinned {
-            list_rows.push(SidebarRow::PinnedHeader);
-            list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
         }
         match sort_mode {
             SidebarSortMode::Date => {
