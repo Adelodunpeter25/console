@@ -21,18 +21,21 @@ func fixtureKey(material string, length int) []byte {
 }
 
 // encCBC builds a "v10"-prefixed AES-128-CBC payload like Chrome's classic
-// macOS store: PBKDF2-SHA1 ("saltysalt", 1003 rounds), IV = 16 spaces.
-func encCBC(key []byte, value string) []byte {
-	pad := 16 - len(value)%16
+// macOS store: PBKDF2-SHA1 ("saltysalt", 1003 rounds), IV = 16 spaces,
+// and SHA-256(host) prepended inside the encrypted plaintext.
+func encCBC(key []byte, host, value string) []byte {
+	digest := sha256.Sum256([]byte(host))
+	plaintext := append(digest[:], []byte(value)...)
+	pad := 16 - len(plaintext)%16
 	for i := 0; i < pad; i++ {
-		value += string(rune(pad))
+		plaintext = append(plaintext, byte(pad))
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		panic(err)
 	}
-	out := make([]byte, len(value))
-	cipher.NewCBCEncrypter(block, bytes.Repeat([]byte{' '}, 16)).CryptBlocks(out, []byte(value))
+	out := make([]byte, len(plaintext))
+	cipher.NewCBCEncrypter(block, bytes.Repeat([]byte{' '}, 16)).CryptBlocks(out, plaintext)
 	return append([]byte("v10"), out...)
 }
 
@@ -66,7 +69,7 @@ func chromeEpochUS(offset time.Duration) int64 {
 func TestDecryptCBC(t *testing.T) {
 	key := fixtureKey(fixtureSecret, 16)
 	value := "session-token-value"
-	encrypted := encCBC(key, value)
+	encrypted := encCBC(key, ".example.com", value)
 	got, ok := decryptCookieValue(encrypted, ".example.com", []string{fixtureSecret})
 	if !ok || got != value {
 		t.Fatalf("value = %q (ok=%v), want %q", got, ok, value)
@@ -88,7 +91,7 @@ func TestDecryptGCM(t *testing.T) {
 }
 
 func TestDecryptRowsFiltering(t *testing.T) {
-	encrypted := encCBC(fixtureKey(fixtureSecret, 16), "secret-1")
+	encrypted := encCBC(fixtureKey(fixtureSecret, 16), "b.com", "secret-1")
 	live := chromeEpochUS(24 * time.Hour)
 	past := chromeEpochUS(-1 * time.Hour)
 

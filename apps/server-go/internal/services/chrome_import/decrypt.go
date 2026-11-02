@@ -138,7 +138,7 @@ func decryptCookieValue(encrypted []byte, host string, keychainSecrets []string)
 	for _, secret := range keychainSecrets {
 		for _, material := range keyMaterials(secret) {
 			for _, iterations := range []int{1003, 1} {
-				if value, ok := tryCBC(payload, material, iterations); ok {
+				if value, ok := tryCBC(payload, material, host, iterations); ok {
 					return value, true
 				}
 				if value, ok := tryGCM(payload, material, host, iterations); ok {
@@ -170,7 +170,7 @@ func deriveKey(material []byte, iterations, length int) []byte {
 	return pbkdf2.Key(material, saltySalt, iterations, length, sha1.New)
 }
 
-func tryCBC(payload, material []byte, iterations int) (string, bool) {
+func tryCBC(payload, material []byte, host string, iterations int) (string, bool) {
 	if len(payload) == 0 || len(payload)%16 != 0 {
 		return "", false
 	}
@@ -191,7 +191,14 @@ func tryCBC(payload, material []byte, iterations int) (string, bool) {
 	if !valid {
 		return "", false
 	}
-	value := string(plain[:len(plain)-pad])
+	plaintext := plain[:len(plain)-pad]
+	// Chrome's macOS v10 cookie values bind the encrypted bytes to their
+	// host key: SHA-256(host_key) precedes the actual cookie value. The Swift
+	// importer strips this prefix after both CBC and GCM decryption.
+	if hostDigest := sha256.Sum256([]byte(host)); bytes.HasPrefix(plaintext, hostDigest[:]) {
+		plaintext = plaintext[sha256.Size:]
+	}
+	value := string(plaintext)
 	if !safePlaintext(value) {
 		return "", false
 	}
