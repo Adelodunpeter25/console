@@ -86,7 +86,7 @@ impl ConsoleDesktopApp {
                         this.chrome_importing = false;
                         match imported {
                             Ok(data) => {
-                                let history_count = data.history.len();
+                                let visit_count = data.history.len();
                                 let (cookie_count, cookie_note) =
                                     crate::state::chrome_import::install(
                                         &data.history,
@@ -94,10 +94,12 @@ impl ConsoleDesktopApp {
                                     );
                                 this.chrome_status = Some(match cookie_note {
                                     None => format!(
-                                        "Imported: {history_count} history entries, {cookie_count} cookies."
+                                        "Imported: {visit_count} Chrome visits ({} sites), {cookie_count} cookies.",
+                                        console_ui::browser::browser_state::history_len()
                                     ),
                                     Some(error) => format!(
-                                        "Imported {history_count} history entries, but cookies could not be injected: {error}"
+                                        "Imported {visit_count} Chrome visits ({} sites), but cookies could not be injected: {error}",
+                                        console_ui::browser::browser_state::history_len()
                                     ),
                                 });
                             }

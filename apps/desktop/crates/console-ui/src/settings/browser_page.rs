@@ -62,7 +62,7 @@ impl RenderOnce for BrowserPage {
                 ),
         );
 
-        // History summary.
+        // History summary: the store keeps unique sites, not raw visits.
         container = container.child(
             div()
                 .flex()
@@ -73,10 +73,16 @@ impl RenderOnce for BrowserPage {
                         .text_size(px(12.5))
                         .text_color(theme.text_secondary)
                         .child(format!(
-                            "{} history {}",
+                            "{} {} in history",
                             self.history_count,
-                            if self.history_count == 1 { "entry" } else { "entries" }
+                            if self.history_count == 1 { "site" } else { "sites" }
                         )),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.text_tertiary)
+                        .child("(repeated Chrome visits merge into one entry)"),
                 ),
         );
 
