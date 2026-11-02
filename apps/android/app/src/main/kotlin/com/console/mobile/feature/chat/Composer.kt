@@ -65,7 +65,7 @@ import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
-import io.github.lyxnx.compose.ui.tablericons.outline.Send
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -597,7 +597,7 @@ private fun SendStopButton(
                 .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.Send, contentDescription = null, tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted, modifier = Modifier.size(15.dp))
+            androidx.compose.material3.Icon(TablerIcons.Outline.ArrowUp, contentDescription = null, tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted, modifier = Modifier.size(15.dp))
         }
     }
 }
