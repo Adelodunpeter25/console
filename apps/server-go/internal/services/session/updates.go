@@ -193,7 +193,7 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			thinking_level, created_at, updated_at, message_count, status, deleted_at,
+			thinking_level, pinned_at, created_at, updated_at, message_count, status, deleted_at,
 			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
@@ -424,8 +424,6 @@ func (s *Service) UpdateApprovalMode(sessionID, approvalMode string) error {
 }
 
 // UpdateThinkingLevel persists the user-selected thinking level for a session.
-// Mirrors the pattern of UpdateApprovalMode: updates both the global index and
-// the per-session meta DB when the DB file exists.
 func (s *Service) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
 	projectID, _, err := s.projectIDBySession(sessionID)
 	if err != nil {
@@ -446,6 +444,20 @@ func (s *Service) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
 	_, err = s.manager.Global().Exec(
 		`UPDATE sessions SET thinking_level = ?, updated_at = ? WHERE id = ?`,
 		thinkingLevel, now, sessionID)
+	return err
+}
+
+// SetPinned pins (now) or unpins (NULL) a session. Pinning reorders the
+// list without touching updated_at.
+func (s *Service) SetPinned(sessionID string, pinned bool) error {
+	if pinned {
+		_, err := s.manager.Global().Exec(
+			`UPDATE sessions SET pinned_at = ? WHERE id = ?`,
+			utils.NowMillis(), sessionID)
+		return err
+	}
+	_, err := s.manager.Global().Exec(
+		`UPDATE sessions SET pinned_at = NULL WHERE id = ?`, sessionID)
 	return err
 }
 

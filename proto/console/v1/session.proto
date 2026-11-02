@@ -47,6 +47,7 @@ message SessionHeader {
   string status = 12;
   optional int64 deleted_at = 13;
   SessionWorktree worktree = 14;
+  optional int64 pinned_at = 15;
 }
 
 message SessionDeleteResponse {

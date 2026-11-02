@@ -171,6 +171,7 @@ type SessionHeader struct {
 	Status        string                 `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
 	DeletedAt     *int64                 `protobuf:"varint,13,opt,name=deleted_at,json=deletedAt,proto3,oneof" json:"deleted_at,omitempty"`
 	Worktree      *SessionWorktree       `protobuf:"bytes,14,opt,name=worktree,proto3" json:"worktree,omitempty"`
+	PinnedAt      *int64                 `protobuf:"varint,15,opt,name=pinned_at,json=pinnedAt,proto3,oneof" json:"pinned_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -301,6 +302,13 @@ func (x *SessionHeader) GetWorktree() *SessionWorktree {
 		return x.Worktree
 	}
 	return nil
+}
+
+func (x *SessionHeader) GetPinnedAt() int64 {
+	if x != nil && x.PinnedAt != nil {
+		return *x.PinnedAt
+	}
+	return 0
 }
 
 type SessionDeleteResponse struct {
@@ -1265,7 +1273,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x0fSessionWorktree\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04repo\x18\x03 \x01(\tR\x04repo\"\x93\x04\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\"\xc3\x04\n" +
 	"\rSessionHeader\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
@@ -1285,11 +1293,14 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x06status\x18\f \x01(\tR\x06status\x12\"\n" +
 	"\n" +
 	"deleted_at\x18\r \x01(\x03H\x03R\tdeletedAt\x88\x01\x01\x127\n" +
-	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktreeB\r\n" +
+	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktree\x12 \n" +
+	"\tpinned_at\x18\x0f \x01(\x03H\x04R\bpinnedAt\x88\x01\x01B\r\n" +
 	"\v_project_idB\x11\n" +
 	"\x0f_thinking_levelB\x10\n" +
 	"\x0e_message_countB\r\n" +
-	"\v_deleted_at\"A\n" +
+	"\v_deleted_atB\f\n" +
+	"\n" +
+	"_pinned_at\"A\n" +
 	"\x15SessionDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\adeleted\x18\x02 \x01(\bR\adeleted\"D\n" +

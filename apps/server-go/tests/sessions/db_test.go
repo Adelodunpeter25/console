@@ -136,6 +136,51 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 }
 
+func TestSessionPinOrdering(t *testing.T) {
+	_, sessions, _, _ := newTestManager(t)
+
+	mk := func(cwd string) string {
+		h, err := sessions.Create(types.CreateSessionOptions{
+			Cwd: cwd, ModelID: "m", Provider: "p",
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		if h.PinnedAt != nil {
+			t.Fatalf("new session should be unpinned")
+		}
+		return h.ID
+	}
+	a, b := mk("/tmp/a"), mk("/tmp/b")
+
+	if err := sessions.SetPinned(a, true); err != nil {
+		t.Fatalf("pin: %v", err)
+	}
+	list, err := sessions.ListFiltered(session.ListFilter{})
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list: %v %d", err, len(list))
+	}
+	if list[0].ID != a || list[0].PinnedAt == nil {
+		t.Fatalf("pinned session should sort first: %+v", list)
+	}
+
+	if err := sessions.SetPinned(a, false); err != nil {
+		t.Fatalf("unpin: %v", err)
+	}
+	list, err = sessions.ListFiltered(session.ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, h := range list {
+		if h.PinnedAt != nil {
+			t.Fatalf("session should be unpinned: %+v", h)
+		}
+	}
+	if list[0].ID != b {
+		t.Fatalf("newest unpinned session should sort first: %+v", list)
+	}
+}
+
 func TestModelFavorites(t *testing.T) {
 	_, _, _, favorites := newTestManager(t)
 

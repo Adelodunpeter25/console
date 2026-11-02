@@ -17,6 +17,7 @@ type SessionHeader struct {
 	MessageCount  int     `json:"messageCount"`
 	Status        string  `json:"status"`
 	DeletedAt     *int64  `json:"deletedAt,omitempty"`
+	PinnedAt      *int64  `json:"pinnedAt,omitempty"`
 	// Worktree is non-nil when the session lives in its own git worktree.
 	Worktree *SessionWorktree `json:"worktree,omitempty"`
 }

@@ -139,8 +139,15 @@ type ListFilter struct {
 	OnlyDeleted bool
 }
 
-// ListFiltered lists sessions: limit 100, newest first, cwd
-// takes precedence over projectId, deleted filter flips the condition.
+const sessionColumns = `id, title, cwd, project_id, model_id, provider, approval_mode,
+	thinking_level, pinned_at, created_at, updated_at, message_count, status, deleted_at,
+	worktree_path, worktree_branch, worktree_repo`
+
+const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC`
+
+// ListFiltered lists sessions: limit 100, pinned first (most recently
+// pinned), then newest first. Cwd takes precedence over projectId, deleted
+// filter flips the condition.
 func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	const limit = 100
 	deletedCondition := "deleted_at IS NULL"
@@ -152,22 +159,16 @@ func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	switch {
 	case f.Cwd != "":
 		rows, err = s.manager.Global().Query(`
-			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				thinking_level, created_at, updated_at, message_count, status, deleted_at,
-				worktree_path, worktree_branch, worktree_repo
-			FROM sessions WHERE cwd = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.Cwd, limit)
+			SELECT `+sessionColumns+`
+			FROM sessions WHERE cwd = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.Cwd, limit)
 	case f.ProjectID != "":
 		rows, err = s.manager.Global().Query(`
-			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				thinking_level, created_at, updated_at, message_count, status, deleted_at,
-				worktree_path, worktree_branch, worktree_repo
-			FROM sessions WHERE project_id = ? AND `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, f.ProjectID, limit)
+			SELECT `+sessionColumns+`
+			FROM sessions WHERE project_id = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.ProjectID, limit)
 	default:
 		rows, err = s.manager.Global().Query(`
-			SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-				thinking_level, created_at, updated_at, message_count, status, deleted_at,
-				worktree_path, worktree_branch, worktree_repo
-			FROM sessions WHERE `+deletedCondition+` ORDER BY updated_at DESC LIMIT ?`, limit)
+			SELECT `+sessionColumns+`
+			FROM sessions WHERE `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, limit)
 	}
 	if err != nil {
 		return nil, err
@@ -205,10 +206,11 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		var h types.SessionHeader
 		var projectID sql.NullString
 		var thinkingLevel sql.NullString
+		var pinnedAt sql.NullInt64
 		var deletedAt sql.NullInt64
 		var wtPath, wtBranch, wtRepo sql.NullString
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
-			&h.ApprovalMode, &thinkingLevel, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
+			&h.ApprovalMode, &thinkingLevel, &pinnedAt, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
 			&wtPath, &wtBranch, &wtRepo); err != nil {
 			return nil, err
 		}
@@ -219,6 +221,10 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		if thinkingLevel.Valid && thinkingLevel.String != "" {
 			v := thinkingLevel.String
 			h.ThinkingLevel = &v
+		}
+		if pinnedAt.Valid {
+			v := pinnedAt.Int64
+			h.PinnedAt = &v
 		}
 		if deletedAt.Valid {
 			v := deletedAt.Int64
@@ -242,9 +248,7 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 // content JSON with createdAt injected, exactly as the desktop parses them.
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
 	rows, err := s.manager.Global().Query(`
-		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			thinking_level, created_at, updated_at, message_count, status, deleted_at,
-			worktree_path, worktree_branch, worktree_repo
+		SELECT `+sessionColumns+`
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {
 		return nil, err

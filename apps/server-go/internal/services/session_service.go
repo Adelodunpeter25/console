@@ -312,6 +312,10 @@ func (s *SessionService) UpdateThinkingLevel(sessionID, thinkingLevel string) er
 	return s.inner.UpdateThinkingLevel(sessionID, thinkingLevel)
 }
 
+func (s *SessionService) SetPinned(sessionID string, pinned bool) error {
+	return s.inner.SetPinned(sessionID, pinned)
+}
+
 func (s *SessionService) UpdateStatus(sessionID, status string) error {
 	return s.inner.UpdateStatus(sessionID, status)
 }

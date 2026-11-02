@@ -93,6 +93,9 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	if h.DeletedAt != nil {
 		out.DeletedAt = h.DeletedAt
 	}
+	if h.PinnedAt != nil {
+		out.PinnedAt = h.PinnedAt
+	}
 	if h.Worktree != nil {
 		out.Worktree = &consolev1.SessionWorktree{
 			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,
@@ -216,6 +219,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			ApprovalMode  *string `json:"approvalMode"`
 			ThinkingLevel *string `json:"thinkingLevel"`
 			Cwd           *string `json:"cwd"`
+			Pinned        *bool   `json:"pinned"`
 		}
 		if err := json.Unmarshal(c.Body(), &req); err != nil {
 			return sessionError(c, fiber.StatusBadRequest, "Invalid request body.")
@@ -292,6 +296,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		}
 		if req.ThinkingLevel != nil && *req.ThinkingLevel != "" {
 			if err := sessions.UpdateThinkingLevel(id, *req.ThinkingLevel); err != nil {
+				return sessionError(c, fiber.StatusInternalServerError, err.Error())
+			}
+		}
+		if req.Pinned != nil {
+			if err := sessions.SetPinned(id, *req.Pinned); err != nil {
 				return sessionError(c, fiber.StatusInternalServerError, err.Error())
 			}
 		}

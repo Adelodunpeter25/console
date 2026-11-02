@@ -2,7 +2,10 @@
 // fields introduced after an existing session database was created.
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 func setPragmas(db *sql.DB, path string) error {
 	if path != "" && path != ":memory:" {
@@ -40,6 +43,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			status TEXT NOT NULL DEFAULT 'idle',
 			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
 			thinking_level TEXT,
+			pinned_at INTEGER,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			deleted_at INTEGER,
@@ -118,10 +122,13 @@ func InitGlobalDB(db *sql.DB, path string) error {
 	for _, col := range []string{
 		"worktree_path TEXT", "worktree_branch TEXT", "worktree_repo TEXT",
 		"thinking_level TEXT",
-		// Built-in capabilities switched on for the session (comma separated).
 		"capabilities TEXT",
+		"pinned_at INTEGER",
 	} {
 		name := col[:len(col)-len(" TEXT")]
+		if strings.HasSuffix(col, " INTEGER") {
+			name = col[:len(col)-len(" INTEGER")]
+		}
 		var count int
 		if err := db.QueryRow(
 			`SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = ?`, name,
