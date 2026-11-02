@@ -164,17 +164,22 @@ fun buildGroupedProjectSections(
     }
 
     val sortedSections = sections.sortedByDescending { it.latestAt }
-    val withPinned = if (pinnedSessions.isNotEmpty()) {
-        listOf(
-            GroupedProjectSection(
-                projectId = "pinned",
-                projectName = "Pinned",
-                data = pinnedSessions,
-                latestAt = Long.MAX_VALUE,
-            ),
-        ) + sortedSections
-    } else sortedSections
-    return if (draftSection != null) listOf(draftSection) + withPinned else withPinned
+    // Pinned sits at the absolute top, above Drafts.
+    val ordered = buildList {
+        if (pinnedSessions.isNotEmpty()) {
+            add(
+                GroupedProjectSection(
+                    projectId = "pinned",
+                    projectName = "Pinned",
+                    data = pinnedSessions,
+                    latestAt = Long.MAX_VALUE,
+                ),
+            )
+        }
+        if (draftSection != null) add(draftSection)
+        addAll(sortedSections)
+    }
+    return ordered
 }
 
 /**

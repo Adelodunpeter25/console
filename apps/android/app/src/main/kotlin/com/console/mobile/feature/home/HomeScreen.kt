@@ -53,8 +53,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
-import io.github.lyxnx.compose.ui.tablericons.filled.Star
-import io.github.lyxnx.compose.ui.tablericons.outline.Star
+import io.github.lyxnx.compose.ui.tablericons.filled.Pin
+import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.core.chat.buildGroupedProjectSections
@@ -262,11 +262,14 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 // The accent heading every grouped screen uses, with the folder glyph.
+                                // The Pinned section is a virtual group, not a folder.
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
-                                    Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+                                    if (section.projectId != "pinned") {
+                                        Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
+                                    }
+                                    Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = if (section.projectId != "pinned") 8.dp else 12.dp))
                                 }
-                                if (section.projectId != null && section.projectName != "Drafts") {
+                                if (section.projectId != null && section.projectId != "pinned" && section.projectName != "Drafts") {
                                     IconButton(
                                         onClick = {
                                             scope.launch {
@@ -355,7 +358,7 @@ fun HomeScreen(
                 ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
                 SectionDivider()
                 ActionRow(
-                    icon = if (isPinned) TablerIcons.Filled.Star else TablerIcons.Outline.Star,
+                    icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
                     title = if (isPinned) "Unpin" else "Pin",
                 ) {
                     val target = sheetSession
@@ -480,14 +483,6 @@ private fun SessionRow(
                     )
                 }
                 if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
-                if ((session.pinned_at ?: 0L) > 0) {
-                    Icon(
-                        TablerIcons.Filled.Star,
-                        contentDescription = "Pinned",
-                        tint = NewTheme.Accent,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
             }
             if (isDraft && draftPreview != null) {
                 Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
