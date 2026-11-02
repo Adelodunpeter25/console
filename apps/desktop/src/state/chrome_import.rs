@@ -125,10 +125,14 @@ pub(crate) fn install(
 ) -> (usize, Option<String>) {
     console_ui::browser::browser_state::merge_history(history);
     if cookies.is_empty() {
+        log::warn!("chrome import: server returned no cookies (history entries: {})", history.len());
         return (0, None);
     }
     match console_ui::browser::browser_state::inject_cookies(cookies) {
-        Ok(count) => (count, None),
+        Ok(count) => {
+            log::info!("chrome import: injected {count} cookies (history entries: {})", history.len());
+            (count, None)
+        }
         Err(error) => (0, Some(error)),
     }
 }
