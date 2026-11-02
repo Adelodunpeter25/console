@@ -28,10 +28,10 @@ type BackfillStats struct {
 
 // backfillSession converts every pending message of one session. It is a no-op
 // when nothing is pending, which is the common case after the first read.
-func backfillSession(conn *sql.DB) (BackfillStats, error) {
+func backfillSession(conn *sql.DB, images *imageStore) (BackfillStats, error) {
 	var stats BackfillStats
 	for {
-		n, bad, err := backfillBatchOnce(conn)
+		n, bad, err := backfillBatchOnce(conn, images)
 		stats.Split += n
 		stats.Unsplittable += bad
 		if err != nil {
@@ -52,7 +52,7 @@ type pendingRow struct {
 	content string
 }
 
-func backfillBatchOnce(conn *sql.DB) (split, unsplittable int, err error) {
+func backfillBatchOnce(conn *sql.DB, images *imageStore) (split, unsplittable int, err error) {
 	rows, err := conn.Query(
 		`SELECT id, content FROM messages WHERE split_state = ? ORDER BY created_at, rowid LIMIT ?`,
 		splitPending, backfillBatch)
@@ -105,7 +105,7 @@ func backfillBatchOnce(conn *sql.DB) (split, unsplittable int, err error) {
 			tx.Rollback()
 			return 0, 0, err
 		}
-		if err := insertParts(tx, r.id, res.Parts); err != nil {
+		if err := insertParts(tx, r.id, images.externalize(res.Parts)); err != nil {
 			tx.Rollback()
 			return 0, 0, err
 		}
@@ -132,11 +132,11 @@ const errRebuildDiffers = backfillError("the split did not rebuild to the origin
 // ensureBackfilled converts a session's old messages the first time the session
 // is loaded in this process. A failure is logged and not fatal: the original
 // content is complete, so the session keeps working and the next load retries.
-func (s *Service) ensureBackfilled(sessionID string, conn *sql.DB) {
+func (s *Service) ensureBackfilled(sessionID, projectID string, conn *sql.DB) {
 	if _, done := s.backfilled.Load(sessionID); done {
 		return
 	}
-	stats, err := backfillSession(conn)
+	stats, err := backfillSession(conn, s.imagesFor(sessionID, projectID))
 	if err != nil {
 		slog.Warn("backfill: will retry on the next load", "session", sessionID, "error", err)
 		return
@@ -153,6 +153,6 @@ func (s *Service) ensureBackfilled(sessionID string, conn *sql.DB) {
 // BackfillAll converts every pending message of one session database and returns
 // how many were left as-is. Exported for tests that run it on a database copy.
 func BackfillAll(conn *sql.DB) (leftAsIs int, err error) {
-	stats, err := backfillSession(conn)
+	stats, err := backfillSession(conn, nil)
 	return stats.Unsplittable, err
 }

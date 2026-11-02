@@ -75,8 +75,14 @@ func (s *Service) PermanentDelete(sessionID string) (bool, error) {
 		}
 		if project != "" {
 			removeDbFile(utils.SessionDBPath(storageDir, project, sessionID))
+			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, project, sessionID))
 		} else if found := findSessionDbFile(storageDir, sessionID); found != "" {
 			removeDbFile(found)
+			// The images folder sits beside whichever database was found, which
+			// may belong to a different project than the index says.
+			_ = os.RemoveAll(strings.TrimSuffix(found, ".db") + ".images")
+		} else {
+			_ = os.RemoveAll(utils.SessionImagesDir(storageDir, "", sessionID))
 		}
 		// Cleanup scratch working directory for scratchpad sessions.
 		// Safety: only delete under the scratch root.
@@ -286,9 +292,33 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 		storageDir := s.manager.StorageDir()
 		from := scratchOrProjectPath(storageDir, oldProjectID, sessionID)
 		to := scratchOrProjectPath(storageDir, target, sessionID)
-		relocateSessionDb(from, to)
+		if relocateSessionDb(from, to) {
+			// The images live beside the database; they must travel with it, or
+			// every image in the session would read back as missing.
+			relocateImagesDir(
+				utils.SessionImagesDir(storageDir, oldProjectID, sessionID),
+				utils.SessionImagesDir(storageDir, target, sessionID))
+		}
 	}
 	return nil
+}
+
+// relocateImagesDir moves a session's image folder, never clobbering an
+// existing destination. A missing source is fine: most sessions have no images.
+func relocateImagesDir(from, to string) {
+	if from == to {
+		return
+	}
+	if info, err := os.Lstat(from); err != nil || !info.IsDir() {
+		return
+	}
+	if _, err := os.Lstat(to); err == nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+		return
+	}
+	_ = os.Rename(from, to)
 }
 
 // normalizeProjectID normalizes a project id: empty/"scratch" means no project.

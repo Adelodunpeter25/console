@@ -80,7 +80,7 @@ func (v *verifiedSet) forget(session string) {
 
 // materialize returns the JSON of each row, rebuilt from parts where that is
 // possible and proven, and the original content otherwise.
-func (s *Service) materialize(sessionID string, conn *sql.DB, rows []storedRow) []string {
+func (s *Service) materialize(sessionID, projectID string, conn *sql.DB, rows []storedRow) []string {
 	out := make([]string, len(rows))
 	var need []string // split rows not yet verified in this process
 	for i, r := range rows {
@@ -103,12 +103,19 @@ func (s *Service) materialize(sessionID string, conn *sql.DB, rows []storedRow) 
 			"session", sessionID, "messages", len(need), "error", err)
 		return out
 	}
+	images := s.imagesFor(sessionID, projectID)
 	for i, r := range rows {
 		if r.state != splitDone || !r.skeleton.Valid || s.verified.has(sessionID, r.id) {
 			continue
 		}
 		parityChecked.Add(1)
-		back, err := msgparts.Assemble([]byte(r.skeleton.String), parts[r.id])
+		// Image bodies live in files; fetch them before rebuilding. A missing or
+		// unreadable file is a mismatch, not an error: the original still has it.
+		err := images.hydrate(parts[r.id])
+		var back []byte
+		if err == nil {
+			back, err = msgparts.Assemble([]byte(r.skeleton.String), parts[r.id])
+		}
 		if err == nil {
 			var same bool
 			if same, err = msgparts.Equal([]byte(r.content), back); err == nil && same {

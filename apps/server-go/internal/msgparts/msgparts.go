@@ -52,6 +52,11 @@ type Meta struct {
 	//   "text"    the original string was not valid base64, so Body is the string
 	//             itself and is written back as-is
 	Encoding string `json:"enc"`
+	// Ref names the file holding Body when the body is stored outside the
+	// database (an image). It is the lowercase hex SHA-256 of Body. The codec
+	// itself never reads it: the storage layer fills Body from Ref before
+	// Assemble.
+	Ref string `json:"ref,omitempty"`
 }
 
 // Result is what splitting one message produces.

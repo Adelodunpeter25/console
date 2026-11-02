@@ -35,6 +35,7 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 	}
 
 	now := utils.NowMillis()
+	images := s.imagesFor(sessionID, projectID)
 	tx, err := conn.Begin()
 	if err != nil {
 		return err
@@ -46,7 +47,7 @@ func (s *Service) AppendMessages(sessionID string, messages []types.AgentMessage
 			sum := sha256.Sum256(msg.Data)
 			id = hex.EncodeToString(sum[:])[:32]
 		}
-		added, err := insertMessage(tx, true, id, msg.Role, string(msg.Data), now)
+		added, err := insertMessage(tx, images, true, id, msg.Role, string(msg.Data), now)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -78,6 +79,7 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 	}
 
 	now := utils.NowMillis()
+	images := s.imagesFor(sessionID, projectID)
 	tx, err := conn.Begin()
 	if err != nil {
 		return err
@@ -98,7 +100,7 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 			sum := sha256.Sum256([]byte(jsonEncodeMessage(i, msg.Data)))
 			id = hex.EncodeToString(sum[:])
 		}
-		if _, err := insertMessage(tx, false, id, msg.Role, string(msg.Data), now); err != nil {
+		if _, err := insertMessage(tx, images, false, id, msg.Role, string(msg.Data), now); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -106,8 +108,10 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 	if err := tx.Commit(); err != nil {
 		return err
 	}
-	// Every message was rewritten, so every earlier verification is stale.
+	// Every message was rewritten, so every earlier verification is stale, and
+	// images the old history held may no longer be referenced by anything.
 	s.verified.forget(sessionID)
+	s.sweepImages(sessionID, projectID, conn)
 	s.bumpSessionUpdated(sessionID, now, len(messages))
 	return nil
 }

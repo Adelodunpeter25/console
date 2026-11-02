@@ -18,11 +18,12 @@ const (
 	splitUnsplittable = 2
 )
 
-// insertMessage stores one message. With ignore it behaves like INSERT OR
+// insertMessage stores one message. Image bodies go to the session's image
+// store (images may be nil, which keeps them in the database). With ignore it behaves like INSERT OR
 // IGNORE and reports whether a row was actually added. A message that cannot be
 // split is still stored (its content is complete); it is marked so reads use the
 // original JSON, and the failure is logged rather than failing the write.
-func insertMessage(tx *sql.Tx, ignore bool, id, role, content string, createdAt int64) (bool, error) {
+func insertMessage(tx *sql.Tx, images *imageStore, ignore bool, id, role, content string, createdAt int64) (bool, error) {
 	var (
 		skeleton any
 		text     any
@@ -34,7 +35,7 @@ func insertMessage(tx *sql.Tx, ignore bool, id, role, content string, createdAt 
 		slog.Warn("message could not be split; stored as-is", "message", id, "error", err)
 		state = splitUnsplittable
 	} else {
-		skeleton, text, parts = string(res.Skeleton), res.Text, res.Parts
+		skeleton, text, parts = string(res.Skeleton), res.Text, images.externalize(res.Parts)
 	}
 
 	verb := "INSERT"

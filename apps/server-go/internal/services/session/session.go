@@ -262,7 +262,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if err != nil {
 		return nil, err
 	}
-	s.ensureBackfilled(sessionID, conn)
+	s.ensureBackfilled(sessionID, projectIDFrom(headers[0].ProjectID), conn)
 
 	query := `SELECT content, created_at, rowid, id, skeleton, split_state FROM messages`
 	var args []any
@@ -302,7 +302,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	}
 	// Oldest first for display. Split messages are rebuilt from their parts and
 	// checked against the original; anything unproven is served as stored.
-	bodies := s.materialize(sessionID, conn, fetched)
+	bodies := s.materialize(sessionID, projectIDFrom(headers[0].ProjectID), conn, fetched)
 	messages := make([]json.RawMessage, 0, len(fetched))
 	for i := len(fetched) - 1; i >= 0; i-- {
 		messages = append(messages, withCreatedAt(bodies[i], fetched[i].createdAt, fetched[i].id))

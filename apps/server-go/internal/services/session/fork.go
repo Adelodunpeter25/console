@@ -200,7 +200,7 @@ func (s *Service) Fork(sourceID, messageID string) (types.SessionHeader, error) 
 	for _, m := range copied {
 		// Re-split from the source's content rather than copying parts, so a
 		// fork is built by exactly the same code as any other message.
-		if _, err := insertMessage(tx, false, m.id, m.role, m.content, m.createdAt); err != nil {
+		if _, err := insertMessage(tx, s.imagesFor(newID, srcProject), false, m.id, m.role, m.content, m.createdAt); err != nil {
 			tx.Rollback()
 			cleanupGlobal()
 			return types.SessionHeader{}, err

@@ -145,6 +145,16 @@ func SessionDBPath(storageDir, projectID, sessionID string) string {
 	return filepath.Join(ProjectSessionsDir(storageDir, projectID), sessionID+".db")
 }
 
+// SessionImagesDir is the folder holding one session's image files, beside its
+// database, so it shares the session's lifetime: deleting the session or its
+// project deletes the images with no reference counting.
+func SessionImagesDir(storageDir, projectID, sessionID string) string {
+	if projectID != "" {
+		return filepath.Join(ProjectSessionsDir(storageDir, projectID), sessionID+".images")
+	}
+	return filepath.Join(storageDir, "projects", "scratch", "sessions", sessionID+".images")
+}
+
 func ScratchSessionDBPath(storageDir, sessionID string) string {
 	return filepath.Join(storageDir, "projects", "scratch", "sessions", sessionID+".db")
 }
