@@ -51,5 +51,5 @@ windows-sys = { version = "0.61", features = [
 objc2 = { workspace = true }
 objc2-foundation = { workspace = true }
 objc2-user-notifications = { workspace = true }
-objc2-app-kit = { workspace = true, features = ["NSApplication", "NSDockTile"] }
+objc2-app-kit = { workspace = true, features = ["NSApplication", "NSDockTile", "NSWindow"] }
 block2 = { workspace = true }
