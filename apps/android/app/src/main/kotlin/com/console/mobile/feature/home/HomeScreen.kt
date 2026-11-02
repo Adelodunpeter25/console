@@ -1,112 +1,75 @@
 package com.console.mobile.feature.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
-import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
-import io.github.lyxnx.compose.ui.tablericons.outline.Message
-import io.github.lyxnx.compose.ui.tablericons.outline.Plus
-import io.github.lyxnx.compose.ui.tablericons.filled.Pin
-import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import com.console.mobile.AppContainer
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.core.chat.buildGroupedProjectSections
 import com.console.mobile.core.chat.draftPreview
 import com.console.mobile.core.chat.formatProjectTitle
-import com.console.mobile.core.chat.isSessionTitlePending
 import com.console.mobile.core.chat.isDraftSession
 import com.console.mobile.core.chat.sessionBranch
 import com.console.mobile.core.util.ScrollMemory
 import com.console.mobile.core.util.folderName
-import com.console.mobile.core.util.formatRelativeTime
-import console.v1.SessionHeader
+import com.console.mobile.feature.home.EnvironmentSwitcher
 import com.console.mobile.data.model.SessionStatus
-import com.console.mobile.data.model.UpdateSessionDto
-import com.console.mobile.ui.components.ConfirmButton
+import com.console.mobile.ui.components.confirmAlert
 import com.console.mobile.ui.components.common.new.BlurredBottomBar
-import com.console.mobile.ui.components.common.new.SearchBar
+import com.console.mobile.ui.components.common.new.EmptyView
 import com.console.mobile.ui.components.common.new.PageHeader
 import com.console.mobile.ui.components.common.new.PageHeaderHeight
-import com.console.mobile.ui.components.confirmAlert
-import com.console.mobile.feature.home.EnvironmentSwitcher
+import com.console.mobile.ui.components.common.new.SearchBar
+import com.console.mobile.ui.components.common.new.SectionCard
+import com.console.mobile.ui.components.common.new.SectionDivider
+import com.console.mobile.ui.components.common.new.SectionSkeleton
+import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
+import com.console.mobile.ui.theme.NewTheme
+import console.v1.SessionHeader
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.Message
+import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.console.mobile.ui.components.common.new.ActionButton
-import com.console.mobile.ui.components.common.new.ActionButtonKind
-import com.console.mobile.ui.components.common.new.ActionRow
-import com.console.mobile.ui.components.common.new.BaseSheet
-import com.console.mobile.ui.components.common.new.SectionCard
-import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.TextInput
-import com.console.mobile.ui.theme.NewTheme
-import io.github.lyxnx.compose.ui.tablericons.outline.Edit
-import io.github.lyxnx.compose.ui.tablericons.outline.Trash
-import com.console.mobile.ui.components.common.new.EmptyView
-import com.console.mobile.ui.components.common.new.SectionSkeleton
-import com.console.mobile.ui.components.common.new.StatusPill
-import com.console.mobile.ui.components.common.new.TintPill
-import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
-import io.github.lyxnx.compose.ui.tablericons.outline.Search
 
 /**
  * Port of screens/home/home-screen.tsx + components/home/session-list.tsx + hooks/useHomeSessions.
- * Grouped project sections (drafts first), search, pull-refresh, rename/delete sheet, compose.
+ * Grouped project sections (pinned, drafts, projects), search, pull-refresh, compose.
+ *
+ * The row, section header, and long-press sheet live in [SessionRow],
+ * [SessionSectionHeader], and [SessionActionsSheet].
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onOpenSettings: () -> Unit,
@@ -174,14 +137,15 @@ fun HomeScreen(
         }
     }
 
-    fun composeSession() {
+    fun startChat(projectId: String?) {
         if (creatingSession) return
         creatingSession = true
         scope.launch {
             try {
-                val project = projectState.projects.firstOrNull()
+                val proj = projectId?.let { id -> projectState.projects.firstOrNull { it.id == id } }
+                    ?: projectState.projects.firstOrNull()
                 val created = withContext(Dispatchers.IO) {
-                    AppContainer.projectRepository.createSession(cwd = project?.path ?: "", projectId = project?.id, title = "New Chat")
+                    AppContainer.projectRepository.createSession(cwd = proj?.path ?: "", projectId = proj?.id, title = "New Chat")
                 }
                 AppContainer.appStateHolder.openChatSession(created.id)
                 onOpenChat(created.id)
@@ -266,95 +230,53 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
-                        // Stable collapse key: virtual sections by name, then
-                        // project id, with the no-project bucket as "general".
-                        val sectionKey = when {
-                            section.projectName == "Pinned" -> "pinned"
-                            section.projectName == "Drafts" -> "drafts"
-                            section.projectId != null -> section.projectId
-                            else -> "general"
-                        }
-                        val collapsed = sectionKey in collapsedSections
-                        item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = if (sIdx == 0) 4.dp else 14.dp, bottom = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                // The accent heading every grouped screen uses, with the folder glyph.
-                                // The Pinned section is a virtual group, not a folder. Tapping the
-                                // label collapses/expands the sessions under the section, like desktop.
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { toggleSection(sectionKey) },
-                                ) {
-                                    if (section.projectId != "pinned") {
-                                        Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
-                                    }
-                                    Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = if (section.projectId != "pinned") 8.dp else 12.dp))
-                                    Icon(
-                                        TablerIcons.Outline.ChevronDown,
-                                        contentDescription = if (collapsed) "Expand ${section.projectName}" else "Collapse ${section.projectName}",
-                                        tint = NewTheme.TextMuted,
-                                        modifier = Modifier.padding(start = 6.dp).size(15.dp).rotate(if (collapsed) -90f else 0f),
-                                    )
-                                }
-                                if (section.projectId != null && section.projectId != "pinned" && section.projectName != "Drafts") {
-                                    IconButton(
-                                        onClick = {
-                                            scope.launch {
-                                                try {
-                                                    val created = withContext(Dispatchers.IO) {
-                                                        val proj = projectState.projects.firstOrNull { it.id == section.projectId }
-                                                        AppContainer.projectRepository.createSession(cwd = proj?.path ?: "", projectId = section.projectId, title = "New Chat")
-                                                    }
-                                                    AppContainer.appStateHolder.openChatSession(created.id)
-                                                    onOpenChat(created.id)
-                                                    launch { AppContainer.sessionRepository.loadDetail(created.id) }
-                                                } catch (_: Exception) {
-                                                    confirmAlert("Unable to start chat", "Check the backend connection and try again.")
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp),
-                                    ) {
-                                        Icon(TablerIcons.Outline.Plus, contentDescription = "New chat in ${section.projectName}", tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
+                            val sectionKey = sectionCollapseKey(section)
+                            val collapsed = sectionKey in collapsedSections
+                            item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
+                                SessionSectionHeader(
+                                    section = section,
+                                    isFirst = sIdx == 0,
+                                    collapsed = collapsed,
+                                    onToggle = { toggleSection(sectionKey) },
+                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectName != "Drafts") {
+                                        { startChat(section.projectId) }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
+                            if (!collapsed) {
+                                item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
+                                    SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                                        section.data.forEachIndexed { index, session ->
+                                            val draft = chatSessions[session.id]
+                                            val isDraft = draft != null && isDraftSession(draft)
+                                            val preview = if (isDraft) draftPreview(draft) else null
+                                            val status: SessionStatus? = sessionStatuses[session.id]
+                                                ?: SessionStatus.fromValue(session.status)
+                                            SessionRow(
+                                                session = session,
+                                                projectName = projectNameFor(session),
+                                                branch = branchFor(session),
+                                                status = status,
+                                                isDraft = isDraft,
+                                                draftPreview = preview,
+                                                onClick = {
+                                                    scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
+                                                    AppContainer.appStateHolder.openChatSession(session.id)
+                                                    onOpenChat(session.id)
+                                                },
+                                                onLongPress = { activeSession = session },
+                                            )
+                                            if (index < section.data.lastIndex) SectionDivider()
+                                        }
                                     }
                                 }
-                            }
-                        }
-                        if (!collapsed) {
-                            item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
-                                SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                                section.data.forEachIndexed { index, session ->
-                                    val draft = chatSessions[session.id]
-                                    val isDraft = draft != null && isDraftSession(draft)
-                                    val preview = if (isDraft) draftPreview(draft) else null
-                                    val status: SessionStatus? = sessionStatuses[session.id]
-                                        ?: SessionStatus.fromValue(session.status)
-                                    SessionRow(
-                                        session = session,
-                                        projectName = projectNameFor(session),
-                                        branch = branchFor(session),
-                                        status = status,
-                                        isDraft = isDraft,
-                                        draftPreview = preview,
-                                        onClick = {
-                                            scope.launch { AppContainer.sessionRepository.loadDetail(session.id) }
-                                            AppContainer.appStateHolder.openChatSession(session.id)
-                                            onOpenChat(session.id)
-                                        },
-                                        onLongPress = { activeSession = session },
-                                    )
-                                    if (index < section.data.lastIndex) SectionDivider()
-                                }
-                            }
                             }
                         }
                     }
                 }
             }
-        }
             PageHeader(
                 title = "Console",
                 blurred = true,
@@ -374,7 +296,7 @@ fun HomeScreen(
                 SearchBar(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    onComposePress = ::composeSession,
+                    onComposePress = { startChat(projectState.projects.firstOrNull()?.id) },
                     composeEnabled = !creatingSession,
                 )
             }
@@ -383,165 +305,9 @@ fun HomeScreen(
 
     val sheetSession = activeSession
     if (sheetSession != null) {
-        var renameOpen by remember(sheetSession.id) { mutableStateOf(false) }
-        val isPinned = (sheetSession.pinned_at ?: 0L) > 0
-        BaseSheet(onDismiss = { activeSession = null }) {
-            SectionCard {
-                ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
-                SectionDivider()
-                ActionRow(
-                    icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
-                    title = if (isPinned) "Unpin" else "Pin",
-                ) {
-                    val target = sheetSession
-                    activeSession = null
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                AppContainer.projectRepository.updateSession(
-                                    target.id,
-                                    UpdateSessionDto(pinned = !isPinned),
-                                )
-                            }
-                        } catch (e: Exception) {
-                            confirmAlert("Failed", e.message ?: "Unable to update pin.")
-                        }
-                    }
-                }
-                SectionDivider()
-                ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
-                    activeSession = null
-                    confirmAlert(
-                        "Delete Chat",
-                        "Are you sure you want to delete \"${sheetSession.title}\"?",
-                        listOf(
-                            ConfirmButton("Cancel", cancel = true),
-                            ConfirmButton("Delete", destructive = true, onPress = {
-                                scope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(sheetSession.id) }
-                                    } catch (e: Exception) {
-                                        confirmAlert("Failed", e.message ?: "Unable to delete chat.")
-                                    }
-                                }
-                            }),
-                        ),
-                    )
-                }
-            }
-        }
-        if (renameOpen) {
-            var renameValue by remember(sheetSession.id) { mutableStateOf(sheetSession.title) }
-            // A sheet inside the sheet: renaming is a one-field form, so it gets the
-            // same field + primary button as every other form instead of a system dialog.
-            BaseSheet(onDismiss = { renameOpen = false }, title = "Rename chat") {
-                TextInput("Title", renameValue, { renameValue = it }, "Chat title")
-                ActionButton(
-                    text = "Save",
-                    onClick = {
-                        renameOpen = false
-                        activeSession = null
-                        scope.launch {
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    AppContainer.projectRepository.updateSession(sheetSession.id, UpdateSessionDto(title = renameValue.trim().ifBlank { sheetSession.title }))
-                                }
-                            } catch (e: Exception) {
-                                confirmAlert("Failed", e.message ?: "Unable to rename chat.")
-                            }
-                        }
-                    },
-                    kind = ActionButtonKind.Primary,
-                    enabled = renameValue.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-                )
-            }
-        }
+        SessionActionsSheet(session = sheetSession, onDismiss = { activeSession = null })
     }
 }
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SessionRow(
-    session: SessionHeader,
-    projectName: String,
-    branch: String?,
-    status: SessionStatus?,
-    isDraft: Boolean,
-    draftPreview: String?,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit,
-) {
-    // Top-aligned, with a fixed first line shared by the title and the status pill.
-    // Centring the right column on the whole row put "Ready" lower than the "Draft"
-    // pill beside the title; giving both the same line height puts their centres level.
-    val titlePending = isSessionTitlePending(session)
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Row(modifier = Modifier.height(FirstLineHeight), verticalAlignment = Alignment.CenterVertically) {
-                if (titlePending) {
-                    // The server is generating the title (first prompt sent,
-                    // placeholder still stored): pulse dots instead of the
-                    // raw placeholder until sessionTitleUpdated renames it.
-                    var dots by remember(session.id) { mutableStateOf(0) }
-                    LaunchedEffect(session.id) {
-                        while (true) {
-                            delay(400)
-                            dots = (dots + 1) % 4
-                        }
-                    }
-                    Text(
-                        "Generating title" + ".".repeat(dots),
-                        color = NewTheme.TextMuted,
-                        fontSize = 17.sp,
-                        fontStyle = FontStyle.Italic,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                } else {
-                    Text(
-                        session.title,
-                        color = NewTheme.TextPrimary,
-                        fontSize = 17.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                }
-                if (isDraft) TintPill("Draft", NewTheme.Warning, Modifier.padding(start = 8.dp))
-            }
-            if (isDraft && draftPreview != null) {
-                Text(draftPreview, color = NewTheme.Warning, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 1.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
-                Text(projectName, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (branch != null) {
-                    Text(" • ", color = NewTheme.TextMuted, fontSize = 13.sp)
-                    Text(branch, color = NewTheme.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                }
-            }
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Box(modifier = Modifier.height(FirstLineHeight), contentAlignment = Alignment.CenterEnd) { StatusPill(status) }
-            val ts = if (session.updated_at > 0) session.updated_at else session.created_at
-            Text(shortRelative(ts), color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 1.dp))
-        }
-    }
-}
-
-/** Height of a row's first line: the title and the status pill are both centred in it. */
-private val FirstLineHeight = 28.dp
 
 /** One scroll position for the session list; it is the only scrolling list on Home. */
 private const val HomeSessionsScrollKey = "home:sessions"
-
-private fun shortRelative(ts: Long): String {
-    if (ts <= 0) return ""
-    return formatRelativeTime(ts).replace(" ago", "").replace("just now", "now")
-}
