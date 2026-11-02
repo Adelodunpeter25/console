@@ -3,6 +3,7 @@ package com.console.mobile.feature.home
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,10 +38,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
+import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
@@ -117,6 +121,13 @@ fun HomeScreen(
     var creatingSession by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
     var branches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // Section keys whose sessions are hidden (Pinned/Drafts/project ids).
+    // Survives navigating into a chat and back; resets on process death,
+    // like the rest of Home's transient UI state.
+    var collapsedSections by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    val toggleSection: (String) -> Unit = { key ->
+        collapsedSections = if (key in collapsedSections) collapsedSections - key else collapsedSections + key
+    }
 
     LaunchedEffect(Unit) {
         AppContainer.projectRepository.loadProjects()
@@ -255,6 +266,15 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).hideKeyboardOnScroll(),
                     ) {
                         sections.forEachIndexed { sIdx, section ->
+                        // Stable collapse key: virtual sections by name, then
+                        // project id, with the no-project bucket as "general".
+                        val sectionKey = when {
+                            section.projectName == "Pinned" -> "pinned"
+                            section.projectName == "Drafts" -> "drafts"
+                            section.projectId != null -> section.projectId
+                            else -> "general"
+                        }
+                        val collapsed = sectionKey in collapsedSections
                         item(key = "header-${section.projectId ?: section.projectName}-$sIdx") {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = if (sIdx == 0) 4.dp else 14.dp, bottom = 4.dp),
@@ -262,12 +282,22 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 // The accent heading every grouped screen uses, with the folder glyph.
-                                // The Pinned section is a virtual group, not a folder.
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                // The Pinned section is a virtual group, not a folder. Tapping the
+                                // label collapses/expands the sessions under the section, like desktop.
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { toggleSection(sectionKey) },
+                                ) {
                                     if (section.projectId != "pinned") {
                                         Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
                                     }
                                     Text(section.projectName, color = NewTheme.Accent, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = if (section.projectId != "pinned") 8.dp else 12.dp))
+                                    Icon(
+                                        TablerIcons.Outline.ChevronDown,
+                                        contentDescription = if (collapsed) "Expand ${section.projectName}" else "Collapse ${section.projectName}",
+                                        tint = NewTheme.TextMuted,
+                                        modifier = Modifier.padding(start = 6.dp).size(15.dp).rotate(if (collapsed) -90f else 0f),
+                                    )
                                 }
                                 if (section.projectId != null && section.projectId != "pinned" && section.projectName != "Drafts") {
                                     IconButton(
@@ -293,8 +323,9 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
-                            SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                        if (!collapsed) {
+                            item(key = "card-${section.projectId ?: section.projectName}-$sIdx") {
+                                SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
                                 section.data.forEachIndexed { index, session ->
                                     val draft = chatSessions[session.id]
                                     val isDraft = draft != null && isDraftSession(draft)
@@ -317,6 +348,7 @@ fun HomeScreen(
                                     )
                                     if (index < section.data.lastIndex) SectionDivider()
                                 }
+                            }
                             }
                         }
                     }
