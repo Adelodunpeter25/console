@@ -85,64 +85,8 @@ pub(crate) struct StorageDocument {
     pub(crate) onboarding: Option<PersistedOnboardingState>,
 }
 
-fn app_folder_name() -> &'static str {
-    if let Ok(env) = std::env::var("CONSOLE_ENV") {
-        if env == "dev" {
-            return "Console Dev";
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(exe) = std::env::current_exe() {
-            let exe_str = exe.to_string_lossy();
-            if exe_str.contains("Console Dev.app") {
-                return "Console Dev";
-            }
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        "Console Dev"
-    }
-
-    #[cfg(not(debug_assertions))]
-    {
-        "Console"
-    }
-}
-
 pub(crate) fn storage_directory() -> PathBuf {
-    if let Ok(path) = std::env::var("CONSOLE_STATE_DIR") {
-        return PathBuf::from(path);
-    }
-
-    let folder = app_folder_name();
-
-    #[cfg(target_os = "macos")]
-    if let Some(home) = console_shared::path::home_dir() {
-        return home
-            .join("Library")
-            .join("Application Support")
-            .join(folder);
-    }
-
-    #[cfg(target_os = "windows")]
-    if let Ok(app_data) = std::env::var("APPDATA") {
-        return PathBuf::from(app_data).join(folder);
-    }
-
-    let unix_folder = folder.to_lowercase().replace(' ', "-");
-
-    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
-        return PathBuf::from(config_home).join(&unix_folder);
-    }
-
-    console_shared::path::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config")
-        .join(&unix_folder)
+    console_shared::path::storage_directory()
 }
 
 fn storage_path() -> PathBuf {

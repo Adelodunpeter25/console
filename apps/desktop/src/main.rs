@@ -25,19 +25,10 @@ use assets::{Assets, register_core_fonts};
 use console_ui::init_input_keybindings;
 use gpui::App;
 
-/// Directory that receives `panic.log`: `~/Library/Logs/console` on macOS,
-/// `%LOCALAPPDATA%\Console\logs` on Windows.
+/// Directory that receives `panic.log`: `~/Library/Logs/<App>` on macOS,
+/// `%LOCALAPPDATA%\<App>\logs` on Windows, `$XDG_STATE_HOME/<app>` on Linux.
 fn panic_log_dir() -> Option<std::path::PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        std::env::var_os("LOCALAPPDATA")
-            .map(|dir| std::path::PathBuf::from(dir).join("Console").join("logs"))
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        console_shared::path::home_dir().map(|home| home.join("Library/Logs/console"))
-    }
+    console_shared::path::log_directory()
 }
 
 /// Install a panic hook that appends the message plus full backtrace to

@@ -30,6 +30,100 @@ pub fn home_dir() -> Option<PathBuf> {
     }
 }
 
+/// True for dev installs: `CONSOLE_ENV=dev` wins, then the macOS bundle name
+/// (a release-mode Dev bundle still reports dev), then debug builds.
+pub fn is_dev_install() -> bool {
+    if std::env::var("CONSOLE_ENV").as_deref() == Ok("dev") {
+        return true;
+    }
+    if is_dev_bundle() {
+        return true;
+    }
+    cfg!(debug_assertions)
+}
+
+#[cfg(target_os = "macos")]
+fn is_dev_bundle() -> bool {
+    std::env::current_exe()
+        .map(|exe| exe.to_string_lossy().contains("Console Dev.app"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_dev_bundle() -> bool {
+    false
+}
+
+/// Display folder for this install: `Console Dev` vs `Console`. Single source
+/// of truth for the desktop state dir, browser history, and log dir so dev
+/// and prod never share (or split) files.
+pub fn app_folder_name() -> &'static str {
+    if is_dev_install() {
+        "Console Dev"
+    } else {
+        "Console"
+    }
+}
+
+/// Lowercase dashed form for Unix config/state homes (`console-dev`).
+pub fn unix_folder_name() -> String {
+    app_folder_name().to_lowercase().replace(' ', "-")
+}
+
+/// Desktop app state home: `CONSOLE_STATE_DIR` wins, then the platform store
+/// (`~/Library/Application Support/<App>` on macOS).
+pub fn storage_directory() -> PathBuf {
+    if let Ok(path) = std::env::var("CONSOLE_STATE_DIR") {
+        return PathBuf::from(path);
+    }
+
+    let folder = app_folder_name();
+
+    #[cfg(target_os = "macos")]
+    if let Some(home) = home_dir() {
+        return home.join("Library").join("Application Support").join(folder);
+    }
+
+    #[cfg(target_os = "windows")]
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        return PathBuf::from(app_data).join(folder);
+    }
+
+    let unix_folder = unix_folder_name();
+
+    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+        return PathBuf::from(config_home).join(&unix_folder);
+    }
+
+    home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".config")
+        .join(&unix_folder)
+}
+
+/// Directory for `panic.log`: per-OS log home, per-install folder, so dev
+/// and prod stop sharing one file and Linux stops getting `~/Library/Logs`.
+pub fn log_directory() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    return home_dir().map(|home| {
+        home.join("Library")
+            .join("Logs")
+            .join(app_folder_name())
+    });
+
+    #[cfg(target_os = "windows")]
+    return std::env::var_os("LOCALAPPDATA")
+        .map(|dir| PathBuf::from(dir).join(app_folder_name()).join("logs"));
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let base = std::env::var_os("XDG_STATE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| home_dir().map(|home| home.join(".local").join("state")))?;
+        return Some(base.join(unix_folder_name()));
+    }
+}
+
 /// Parent directory of a path, handling both separator styles.
 /// Returns `""` for bare filenames.
 pub fn parent_dir(path: &str) -> &str {

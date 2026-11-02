@@ -152,29 +152,7 @@ pub fn storage_path() -> PathBuf {
     if let Ok(dir) = std::env::var("CONSOLE_STATE_DIR") {
         return PathBuf::from(dir).join("browser-history.json");
     }
-    let folder = if std::env::var("CONSOLE_ENV").ok().as_deref() == Some("dev") {
-        "Console Dev"
-    } else {
-        #[cfg(debug_assertions)]
-        {
-            "Console Dev"
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            "Console"
-        }
-    };
-    let home = console_shared::path::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    #[cfg(target_os = "macos")]
-    return home
-        .join("Library/Application Support")
-        .join(folder)
-        .join("browser-history.json");
-    #[cfg(not(target_os = "macos"))]
-    return home
-        .join(".config")
-        .join(folder.to_lowercase().replace(' ', "-"))
-        .join("browser-history.json");
+    console_shared::path::storage_directory().join("browser-history.json")
 }
 
 /// Load from disk; a missing or unreadable file is an empty store.

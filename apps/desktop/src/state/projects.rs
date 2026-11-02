@@ -263,8 +263,10 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Drop the project selection: new sessions use the sandboxed scratch
-    /// directory (`~/.console/scratch/<sessionId>`) with no project scope.
+    /// Drop the project selection: new sessions use the server's sandboxed
+    /// scratch directory with no project scope. The server owns that path
+    /// (its storage layout), so the client only clears the link and adopts
+    /// the confirmed header's cwd.
     pub fn clear_project_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         // Same lock as select_project_for_pane — clearing the project
         // changes cwd, which is unsafe once a chat has messages.
@@ -354,31 +356,18 @@ impl ConsoleDesktopApp {
         // Remember the clear until the server confirms, like select above.
         self.pending_project_override
             .insert(session_id.clone(), None);
-        let home = console_shared::path::home_dir()
-            .map(|home| home.display().to_string())
-            .unwrap_or_else(|| ".".to_string());
-        let is_dev = std::env::var("CONSOLE_ENV")
-            .map(|v| v == "dev")
-            .unwrap_or(false);
-        let folder = if is_dev { ".console-dev" } else { ".console" };
-        let fallback_cwd = format!("{}/{}/scratch/{}", home, folder, session_id);
 
         if let Some(session) = Rc::make_mut(&mut self.sessions)
             .iter_mut()
             .find(|s| s.id == session_id)
         {
             session.project_id = None;
-            session.cwd = fallback_cwd.clone();
         }
-
-        self.transcript_for_pane(&effective_pane)
-            .update(cx, |transcript, _| {
-                transcript.set_session_cwd(Some(fallback_cwd.clone()));
-            });
         self.maybe_refresh_inspector(cx);
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
+        let pane_for_confirm = effective_pane.clone();
         cx.spawn(async move |_entity, cx| {
             match client
                 .sessions
@@ -386,7 +375,11 @@ impl ConsoleDesktopApp {
                     &session_id,
                     UpdateSessionDto {
                         title: None,
-                        cwd: Some(fallback_cwd),
+                        // No cwd: the server derives its own sandboxed scratch
+                        // dir (its storage layout, which a client-side guess
+                        // cannot know — e.g. a remote host). The confirmed
+                        // header below carries the real path back.
+                        cwd: None,
                         // Explicit null: omitting the key would let the server
                         // re-infer a project from the cwd.
                         project_id: Some(None),
@@ -401,9 +394,16 @@ impl ConsoleDesktopApp {
             {
                 Ok(header) => {
                     let sid = session_id.clone();
+                    let cwd = header.cwd.clone();
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, _| this.confirm_project_override(&sid, &header));
+                            app.update(cx, |this, cx| {
+                                this.confirm_project_override(&sid, &header);
+                                this.transcript_for_pane(&pane_for_confirm)
+                                    .update(cx, |transcript, _| {
+                                        transcript.set_session_cwd(Some(cwd));
+                                    });
+                            });
                         }
                     });
                 }
