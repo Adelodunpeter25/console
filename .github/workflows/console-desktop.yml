@@ -5,7 +5,7 @@
 #
 # Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
 # bundles, ad-hoc signed — see apps/desktop/scripts/build.sh), plus
-# Console-windows-x64.zip (see apps/desktop/scripts/build.ps1).
+# Console-windows-x64.zip (NSIS installer, see apps/desktop/scripts/build.ps1).
 name: Build console-desktop
 
 on:
@@ -72,7 +72,7 @@ jobs:
           if-no-files-found: error
 
   # Windows preview. Kept separate from the macOS matrix because packaging is
-  # a plain .exe zip, not an .app bundle. It feeds `publish` alongside the
+  # an NSIS installer zip, not an .app bundle. It feeds `publish` alongside the
   # macOS builds, so the Windows zip lands on the same rolling release.
   build-windows:
     runs-on: windows-latest
@@ -90,7 +90,15 @@ jobs:
           workspaces: apps/desktop
           key: windows-x64
 
-      - name: Package Console.exe
+      # The image normally ships NSIS, but keep the build working if it moves.
+      - name: Ensure NSIS is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+
+      - name: Package Console installer
         shell: pwsh
         run: >
           ./apps/desktop/scripts/build.ps1
