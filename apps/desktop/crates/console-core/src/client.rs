@@ -6,6 +6,7 @@ pub struct ConsoleClient {
     transport: HttpTransport,
     pub sessions: SessionService,
     pub runs: RunService,
+    pub chrome: ChromeService,
     pub providers: ProviderService,
     pub assist: AssistService,
     pub devices: DeviceService,
@@ -38,6 +39,7 @@ impl ConsoleClient {
         Self {
             sessions: SessionService::new(transport.clone()),
             runs: RunService::new(transport.clone()),
+            chrome: ChromeService::new(transport.clone()),
             providers: ProviderService::new(transport.clone()),
             assist: AssistService::new(transport.clone()),
             devices: DeviceService::new(transport.clone()),

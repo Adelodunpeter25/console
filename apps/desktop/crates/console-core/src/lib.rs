@@ -1,3 +1,4 @@
+pub mod browser_history;
 pub mod client;
 pub mod services;
 pub mod types;

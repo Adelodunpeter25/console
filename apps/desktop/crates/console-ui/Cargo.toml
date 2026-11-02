@@ -44,10 +44,10 @@ wry = { version = "0.56", features = ["devtools"] }
 # Same major version gpui/wry use, so `HasWindowHandle` impls interoperate.
 raw-window-handle = "0.6"
 objc2 = { workspace = true }
-objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSValue", "NSProcessInfo", "NSString", "NSURL", "NSURLRequest", "NSError", "NSData", "NSDictionary", "NSValue", "NSTimer", "NSDate", "NSGeometry", "block2", "objc2-core-foundation"] }
+objc2-foundation = { workspace = true, features = ["NSDictionary", "NSKeyValueObserving", "NSValue", "NSProcessInfo", "NSString", "NSURL", "NSURLRequest", "NSError", "NSData", "NSDictionary", "NSValue", "NSTimer", "NSDate", "NSGeometry", "block2", "NSHTTPCookie", "objc2-core-foundation"] }
 objc2-app-kit = { workspace = true, features = ["NSView", "NSWindow", "NSApplication", "NSEvent", "NSAppearance", "NSImage", "NSImageRep", "NSBitmapImageRep"] }
 block2 = { workspace = true }
-objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate", "WKSnapshotConfiguration", "block2"] }
+objc2-web-kit = { workspace = true, features = ["WKWebView", "WKWebViewConfiguration", "WKNavigation", "WKNavigationDelegate", "WKSnapshotConfiguration", "WKWebsiteDataStore", "WKHTTPCookieStore", "block2"] }
 
 [[test]]
 name = "composer_mention_test"

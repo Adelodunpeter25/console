@@ -1,0 +1,103 @@
+//! Chrome import client: profiles and a one-shot history+cookies fetch.
+//!
+//! The heavy lifting lives on the server (SQLite reads + cookie decryption);
+//! this service is the thin REST pair for it. Cookie values are held in
+//! memory only — the UI injects them straight into the WKWebView cookie
+//! store and keeps nothing on disk.
+
+use crate::types::{ApiResponse, BrowserHistoryEntry, ChromeCookie, ChromeProfile};
+use crate::utils::HttpTransport;
+use anyhow::{Context, Result, anyhow};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
+pub struct ChromeService {
+    transport: HttpTransport,
+}
+
+#[derive(Debug, Serialize)]
+struct ChromeImportBody {
+    #[serde(rename = "profileId")]
+    profile_id: String,
+    #[serde(rename = "wantHistory")]
+    want_history: bool,
+    #[serde(rename = "wantCookies")]
+    want_cookies: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChromeImportData {
+    #[serde(default)]
+    pub history: Vec<BrowserHistoryEntry>,
+    #[serde(default)]
+    pub cookies: Vec<ChromeCookie>,
+}
+
+impl ChromeService {
+    pub fn new(transport: HttpTransport) -> Self {
+        Self { transport }
+    }
+
+    /// Chrome profiles with data on the server's machine. Empty when the
+    /// server has none (Chrome missing, or not a Mac).
+    pub async fn profiles(&self) -> Result<Vec<ChromeProfile>> {
+        let url = self.transport.url("/api/chrome/profiles").await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list Chrome profiles")?;
+        let body: ApiResponse<Vec<ChromeProfile>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse Chrome profiles response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to list Chrome profiles".into())
+            ))
+        }
+    }
+
+    /// Import a profile: most-visited history rows and decrypted, live
+    /// cookies. 409 carries the keychain refusal (user denied access, or a
+    /// headless daemon that cannot reach one).
+    pub async fn import(
+        &self,
+        profile_id: &str,
+        want_history: bool,
+        want_cookies: bool,
+    ) -> Result<ChromeImportData> {
+        let url = self.transport.url("/api/chrome/import").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .json(&ChromeImportBody {
+                profile_id: profile_id.to_string(),
+                want_history,
+                want_cookies,
+            })
+            .send()
+            .await
+            .context("Failed to import Chrome data")?;
+        let body: ApiResponse<ChromeImportData> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse Chrome import response")?;
+        if body.success {
+            body.data.context("Chrome import data missing")
+        } else {
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Chrome import failed".into())
+            ))
+        }
+    }
+}

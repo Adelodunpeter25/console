@@ -1,5 +1,6 @@
 pub mod assist;
 pub mod auth;
+pub mod chrome;
 pub mod device;
 pub mod fs;
 pub mod git;
@@ -22,6 +23,7 @@ pub mod usage;
 
 pub use assist::AssistService;
 pub use auth::AuthService;
+pub use chrome::{ChromeImportData, ChromeService};
 pub use device::DeviceService;
 pub use fs::{FsService, RawFileError};
 pub use git::GitService;

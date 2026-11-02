@@ -7,6 +7,8 @@
 mod actions;
 pub mod address;
 pub mod agent_script;
+pub mod browser_state;
+pub use browser_state::cookies;
 pub mod driver;
 pub mod host;
 pub mod inspector;
