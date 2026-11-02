@@ -3,7 +3,9 @@ pub mod group_header;
 pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
-pub use group_header::{drafts_group_header, group_header, project_header, sort_mode_toggle};
+pub use group_header::{
+    drafts_group_header, group_header, pinned_group_header, project_header, sort_mode_toggle,
+};
 pub use session_item::{
     CancelSessionRename, CommitSessionRename, SidebarSessionItem, init_session_rename_keybindings,
     render_sidebar_session_item,
@@ -47,6 +49,7 @@ enum SidebarRow {
     /// (not the header) keeps row construction allocation-free; only rows
     /// actually rendered by the virtualized list clone their header.
     Session(usize),
+    PinnedHeader,
     GroupHeader {
         group: SessionDateGroup,
         collapsed: bool,
@@ -102,6 +105,7 @@ pub struct SidebarView {
     on_rename_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_pin_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete_session: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete_draft: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<String>,
@@ -144,6 +148,7 @@ impl SidebarView {
         on_rename_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
+        on_toggle_pin_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_delete_session: impl Fn(String, &mut Window, &mut App) + 'static,
         on_delete_draft: impl Fn(String, &mut Window, &mut App) + 'static,
         renaming_session_id: Option<String>,
@@ -179,6 +184,7 @@ impl SidebarView {
             on_rename_session: Rc::new(on_rename_session),
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
+            on_toggle_pin_session: Rc::new(on_toggle_pin_session),
             on_delete_session: Rc::new(on_delete_session),
             on_delete_draft: Rc::new(on_delete_draft),
             renaming_session_id,
@@ -224,6 +230,7 @@ impl RenderOnce for SidebarView {
         let on_rename = self.on_rename_session;
         let on_commit_rename = self.on_commit_rename;
         let on_cancel_rename = self.on_cancel_rename;
+        let on_toggle_pin = self.on_toggle_pin_session;
         let on_del = self.on_delete_session;
         let on_delete_draft = self.on_delete_draft;
         let renaming_session_id = self.renaming_session_id;
@@ -248,13 +255,19 @@ impl RenderOnce for SidebarView {
                 session.sort_timestamp()
             }
         };
+        let is_pinned = |index: usize| sessions[index].pinned_at.is_some();
+        let pinned_positions: Vec<usize> = (0..sessions.len())
+            .filter(|&idx| is_pinned(idx) && !draft_sessions.contains(&sessions[idx].id))
+            .collect();
         let grouped: Vec<(SessionDateGroup, Vec<usize>)> =
             group_indices_by_date(sessions.len(), session_timestamp)
                 .into_iter()
                 .map(|(group, positions)| {
                     let filtered: Vec<usize> = positions
                         .into_iter()
-                        .filter(|&idx| !draft_sessions.contains(&sessions[idx].id))
+                        .filter(|&idx| {
+                            !draft_sessions.contains(&sessions[idx].id) && !is_pinned(idx)
+                        })
                         .collect();
                     (group, filtered)
                 })
@@ -459,8 +472,10 @@ impl RenderOnce for SidebarView {
             }
         };
 
-        // Scrollable rows:
+        // Scrollable rows: pinned sessions first under their own header,
+        // then the date/project sections below them.
         let mut list_rows = Vec::new();
+        let has_pinned = !pinned_positions.is_empty();
         let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
                                  sections: Vec<(SessionDateGroup, Vec<usize>)>,
                                  has_drafts: bool| {
@@ -494,6 +509,10 @@ impl RenderOnce for SidebarView {
                     list_rows.push(SidebarRow::Draft(i));
                 }
             }
+        }
+        if has_pinned {
+            list_rows.push(SidebarRow::PinnedHeader);
+            list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
         }
         match sort_mode {
             SidebarSortMode::Date => {
@@ -556,6 +575,7 @@ impl RenderOnce for SidebarView {
         let list_on_rename = on_rename;
         let list_on_commit_rename = on_commit_rename;
         let list_on_cancel_rename = on_cancel_rename;
+        let list_on_toggle_pin = on_toggle_pin;
         let list_on_del = on_del;
         let list_on_delete_draft = on_delete_draft;
         let list_renaming_session_id = renaming_session_id;
@@ -604,11 +624,13 @@ impl RenderOnce for SidebarView {
                         &list_on_rename,
                         &list_on_commit_rename,
                         &list_on_cancel_rename,
+                        &list_on_toggle_pin,
                         &list_on_del,
                         list_renaming_session_id.as_deref(),
                         list_rename_input.clone(),
                     )
                 }
+                SidebarRow::PinnedHeader => pinned_group_header(theme).into_any_element(),
                 SidebarRow::GroupHeader { group, collapsed } => group_header(
                     theme,
                     group.label(),

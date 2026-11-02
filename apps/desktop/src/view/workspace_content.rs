@@ -1030,6 +1030,7 @@ impl ConsoleDesktopApp {
                                             provider: Some(prov.clone()),
                                             approval_mode: None,
                                             thinking_level: None,
+                            pinned: None,
                                         },
                                         cx,
                                     );
@@ -1091,6 +1092,7 @@ impl ConsoleDesktopApp {
                                         provider: None,
                                         approval_mode: Some(mode.value().to_string()),
                                         thinking_level: None,
+                            pinned: None,
                                     },
                                     cx,
                                 );

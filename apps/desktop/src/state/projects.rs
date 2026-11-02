@@ -223,6 +223,7 @@ impl ConsoleDesktopApp {
                             provider: None,
                             approval_mode: None,
                             thinking_level: None,
+                            pinned: None,
                         },
                     )
                     .await
@@ -393,6 +394,7 @@ impl ConsoleDesktopApp {
                         provider: None,
                         approval_mode: None,
                         thinking_level: None,
+                            pinned: None,
                     },
                 )
                 .await

@@ -584,6 +584,7 @@ impl ConsoleDesktopApp {
                 provider: None,
                 approval_mode: None,
                 thinking_level: Some(next_level),
+                pinned: None,
             },
             cx,
         );
@@ -659,6 +660,7 @@ impl ConsoleDesktopApp {
                 provider: None,
                 approval_mode: Some(next.value().to_string()),
                 thinking_level: None,
+                            pinned: None,
             },
             cx,
         );

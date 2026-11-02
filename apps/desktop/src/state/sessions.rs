@@ -151,6 +151,7 @@ impl ConsoleDesktopApp {
                         provider: None,
                         approval_mode: None,
                         thinking_level: None,
+                        pinned: None,
                     },
                 )
                 .await
@@ -163,6 +164,82 @@ impl ConsoleDesktopApp {
                         });
                     }
                 });
+            }
+        })
+        .detach();
+    }
+
+    pub(crate) fn toggle_pin_session(
+        &mut self,
+        session_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(current) = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.pinned_at.is_some())
+        else {
+            return;
+        };
+        let pinned = !current;
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.pinned_at = if pinned {
+                Some(chrono::Utc::now().timestamp_millis())
+            } else {
+                None
+            };
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            match client
+                .sessions
+                .update(
+                    &session_id,
+                    UpdateSessionDto {
+                        title: None,
+                        cwd: None,
+                        project_id: None,
+                        model_id: None,
+                        provider: None,
+                        approval_mode: None,
+                        thinking_level: None,
+                        pinned: Some(pinned),
+                    },
+                )
+                .await
+            {
+                Ok(header) => {
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                if let Some(session) = Rc::make_mut(&mut this.sessions)
+                                    .iter_mut()
+                                    .find(|session| session.id == session_id)
+                                {
+                                    session.pinned_at = header.pinned_at;
+                                }
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(error) => {
+                    let message = format!("Unable to update pin: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, message, cx)
+                            });
+                        }
+                    });
+                }
             }
         })
         .detach();
@@ -845,7 +922,16 @@ impl ConsoleDesktopApp {
                 session.sort_timestamp()
             }
         };
+        let is_live_pinned = |index: usize| {
+            let session = &self.sessions[index];
+            session.pinned_at.is_some() && !draft_ids.contains(&session.id)
+        };
         let mut ids = Vec::new();
+        for (index, session) in self.sessions.iter().enumerate() {
+            if is_live_pinned(index) {
+                ids.push(session.id.clone());
+            }
+        }
         match self.sidebar_sort_mode {
             SidebarSortMode::Date => {
                 let grouped = group_indices_by_date(self.sessions.len(), timestamp);
@@ -855,7 +941,7 @@ impl ConsoleDesktopApp {
                     }
                     for idx in positions {
                         let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id) {
+                        if !draft_ids.contains(&session.id) && !is_live_pinned(idx) {
                             ids.push(session.id.clone());
                         }
                     }
@@ -880,7 +966,7 @@ impl ConsoleDesktopApp {
                     }
                     for idx in positions {
                         let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id) {
+                        if !draft_ids.contains(&session.id) && !is_live_pinned(idx) {
                             ids.push(session.id.clone());
                         }
                     }

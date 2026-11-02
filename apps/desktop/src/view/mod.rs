@@ -799,6 +799,16 @@ impl Render for ConsoleDesktopApp {
                         },
                         {
                             let entity = entity.clone();
+                            move |id: String, window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.toggle_pin_session(id, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
                             let client = client.clone();
                             move |id: String, _w, cx| {
                                 let client = client.clone();

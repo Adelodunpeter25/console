@@ -25,13 +25,9 @@ pub use console_proto::{SessionHeader, SessionWorktree};
 pub trait SessionHeaderExt {
     fn display_title(&self) -> &str;
 
-    /// Sidebar ordering key: creation time.
-    ///
-    /// The sidebar used to key on last activity, so opening a session (which
-    /// refreshed only that row's timestamp) or a run producing output would
-    /// reshuffle the list. Keying on creation time keeps every row in the day
-    /// it was created and never moves it afterwards.
     fn sort_timestamp(&self) -> i64;
+
+    fn is_pinned(&self) -> bool;
 }
 
 impl SessionHeaderExt for SessionHeader {
@@ -43,6 +39,10 @@ impl SessionHeaderExt for SessionHeader {
 
     fn sort_timestamp(&self) -> i64 {
         self.created_at
+    }
+
+    fn is_pinned(&self) -> bool {
+        self.pinned_at.is_some()
     }
 }
 
@@ -137,6 +137,8 @@ pub struct UpdateSessionDto {
     pub approval_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<ThinkingLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned: Option<bool>,
 }
 
 /// Request body for `POST /api/sessions/:id/fork` — the message to fork

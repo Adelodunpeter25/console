@@ -55,6 +55,7 @@ pub struct SidebarSessionItem {
     on_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_pin: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
@@ -72,6 +73,7 @@ impl SidebarSessionItem {
         on_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
+        on_toggle_pin: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
@@ -87,6 +89,7 @@ impl SidebarSessionItem {
             on_rename: Rc::new(on_rename),
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
+            on_toggle_pin: Rc::new(on_toggle_pin),
             on_delete: Rc::new(on_delete),
         }
     }
@@ -102,7 +105,9 @@ impl RenderOnce for SidebarSessionItem {
         let on_rename = self.on_rename;
         let on_commit_rename = self.on_commit_rename;
         let on_cancel_rename = self.on_cancel_rename;
+        let on_toggle_pin = self.on_toggle_pin;
         let on_delete = self.on_delete;
+        let pinned = session.pinned_at.is_some();
 
         let loading_state = self.loading_state;
         let is_renaming = self.is_renaming;
@@ -249,6 +254,9 @@ impl RenderOnce for SidebarSessionItem {
                                         .child("Draft"),
                                 )
                             })
+                            .when(pinned, |el| {
+                                el.child(app_icon(IconName::StarFilled, 11.0, theme.accent))
+                            })
                             .when_some(
                                 loading_state
                                     .and_then(|state| sidebar::status_indicator(state, theme)),
@@ -338,11 +346,14 @@ impl RenderOnce for SidebarSessionItem {
                 })
                 .into_any_element()
         } else {
+            let on_toggle_pin = on_toggle_pin;
             session_context_menu(
                 row,
                 move |window, cx| (on_open_in_new_window)(window, cx),
                 move |window, cx| (on_rename)(window, cx),
+                move |window, cx| (on_toggle_pin)(window, cx),
                 move |window, cx| (on_delete)(window, cx),
+                pinned,
             )
             .into_any_element()
         }
@@ -361,6 +372,7 @@ pub fn render_sidebar_session_item(
     on_rename: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_commit_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_toggle_pin: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<&str>,
     rename_input: Option<Entity<ComposerInput>>,
@@ -403,6 +415,11 @@ pub fn render_sidebar_session_item(
         {
             let on_cancel_rename = on_cancel_rename.clone();
             move |window, cx| (on_cancel_rename)(window, cx)
+        },
+        {
+            let session_id = session_id.clone();
+            let on_toggle_pin = on_toggle_pin.clone();
+            move |window, cx| (on_toggle_pin)(session_id.clone(), window, cx)
         },
         {
             let on_delete = on_delete.clone();

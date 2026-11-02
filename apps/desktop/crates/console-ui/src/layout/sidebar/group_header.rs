@@ -193,6 +193,27 @@ pub fn group_header(
         })
 }
 
+/// Static section header for the Pinned sessions group. Unlike date/project
+/// groups it never collapses, so it takes no toggle callback.
+pub fn pinned_group_header(theme: Theme) -> impl IntoElement {
+    div()
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .child(
+            div()
+                .h(px(22.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .text_size(px(14.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text)
+                .child(app_icon(IconName::StarFilled, 11.0, theme.accent))
+                .child("Pinned"),
+        )
+}
+
 pub fn drafts_group_header(
     theme: Theme,
     collapsed: bool,
