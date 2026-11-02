@@ -27,6 +27,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"time"
 
@@ -79,6 +80,7 @@ func decryptRows(rows []rawCookieRow, keys ...string) ([]ChromeCookie, error) {
 	}
 	now := nowUnixMS()
 	out := make([]ChromeCookie, 0, len(rows))
+	failedDecrypt, failedPartition, failedExpired := 0, 0, 0
 	for _, row := range rows {
 		if row.Name == "" {
 			// A nameless row is not a cookie Chrome would send.
@@ -87,18 +89,21 @@ func decryptRows(rows []rawCookieRow, keys ...string) ([]ChromeCookie, error) {
 		if row.TopFrameSiteKey != "" {
 			// CHIPS partitioned cookie: scoped to the third-party embed, not
 			// useful (and misleading) in a plain cookie jar.
+			failedPartition++
 			continue
 		}
 		value := row.Value
 		if value == "" {
 			decrypted, ok := decryptCookieValue(row.Encrypted, row.Host, keys)
 			if !ok {
+				failedDecrypt++
 				continue
 			}
 			value = decrypted
 		}
 		expires := chromeEpochToUnixMS(row.ExpiresUTC)
 		if expires > 0 && expires < now {
+			failedExpired++
 			continue
 		}
 		out = append(out, ChromeCookie{
@@ -110,6 +115,11 @@ func decryptRows(rows []rawCookieRow, keys ...string) ([]ChromeCookie, error) {
 			Secure:      row.Secure,
 			HTTPOnly:    row.HTTPOnly,
 		})
+	}
+	if len(out) == 0 && len(rows) > 0 {
+		slog.Warn("chrome import: no cookies decrypted",
+			"rows", len(rows), "decrypt_failed", failedDecrypt,
+			"partitioned", failedPartition, "expired", failedExpired)
 	}
 	return out, nil
 }
@@ -154,7 +164,7 @@ func keyMaterials(secret string) [][]byte {
 var saltySalt = []byte("saltysalt")
 
 // Chris Paget / Chromium's fixed IV: sixteen spaces.
-var ivSpaces = make([]byte, 16)
+var ivSpaces = bytes.Repeat([]byte{' '}, 16)
 
 func deriveKey(material []byte, iterations, length int) []byte {
 	return pbkdf2.Key(material, saltySalt, iterations, length, sha1.New)

@@ -3,6 +3,7 @@
 package chromeimport
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha1"
@@ -31,7 +32,7 @@ func encCBC(key []byte, value string) []byte {
 		panic(err)
 	}
 	out := make([]byte, len(value))
-	cipher.NewCBCEncrypter(block, make([]byte, 16)).CryptBlocks(out, []byte(value))
+	cipher.NewCBCEncrypter(block, bytes.Repeat([]byte{' '}, 16)).CryptBlocks(out, []byte(value))
 	return append([]byte("v10"), out...)
 }
 
