@@ -110,6 +110,10 @@ pub mod cookies {
     /// is the browser's jar). Main thread only. Returns how many cookies
     /// the store accepted; a cookie with unusable properties is skipped.
     pub fn inject_cookies(input: &[ChromeCookie]) -> Result<usize, String> {
+        use block2::RcBlock;
+        use std::ptr::NonNull;
+        use objc2_foundation::NSArray;
+
         let Some(mtm) = MainThreadMarker::new() else {
             return Err("cookie injection must run on the main thread".to_string());
         };
@@ -117,14 +121,28 @@ pub mod cookies {
         unsafe {
             let store = WKWebsiteDataStore::defaultDataStore(mtm).httpCookieStore();
             for cookie in input {
-                let Some(cookie) = build_cookie(cookie) else {
+                let Some(cookie_obj) = build_cookie(cookie) else {
                     continue;
                 };
-                // Each completion fires on its own; results need no waiting —
-                // the next navigation proves them.
-                store.setCookie_completionHandler(&cookie, None);
+                let name = cookie.name.clone();
+                let domain = cookie.domain.clone();
+                let handler = RcBlock::new(move || {
+                    // The handler firing is the acceptance signal; a rejected
+                    // cookie stays silent here, and the store-wide read below
+                    // counts what actually landed.
+                    log::debug!("chrome cookies: stored {}.{}", domain, name);
+                });
+                store.setCookie_completionHandler(&cookie_obj, Some(&handler));
                 injected += 1;
             }
+            // Store-wide read right after the loop: how many cookies the jar
+            // holds at this instant (recent sets may still be landing, so
+            // treat low numbers here as provisional).
+            let read = RcBlock::new(|cookies: NonNull<NSArray<NSHTTPCookie>>| {
+                let total = unsafe { cookies.as_ref().count() };
+                log::info!("chrome cookies: jar read-back holds {total} cookies");
+            });
+            store.getAllCookies(&read);
         }
         Ok(injected)
     }
