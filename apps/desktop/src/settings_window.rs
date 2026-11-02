@@ -796,6 +796,11 @@ impl Render for SettingsWindow {
                         )
                     },
                     account_error: app.account_error.clone(),
+                    login_error: app.auth_login_error.clone(),
+                    login_url: app.auth_login_url.clone(),
+                    on_copy_login_url: Rc::new(|url: String, _w: &mut Window, cx: &mut App| {
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(url));
+                    }),
                     api_keys,
                     github: Some(console_ui::settings::GitHubSection {
                         status: app.github_status.clone(),

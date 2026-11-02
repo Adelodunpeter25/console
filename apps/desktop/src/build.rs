@@ -11,6 +11,8 @@
 //! build neither compiles nor links it.
 
 fn main() {
+    emit_git_sha();
+
     #[cfg(windows)]
     {
         println!("cargo:rerun-if-changed=console.rc");
@@ -24,5 +26,30 @@ fn main() {
         {
             panic!("failed to embed the Windows icon resource: {result}");
         }
+    }
+}
+
+/// Records the commit the binary was built from. The app logs it at startup,
+/// so a report from an installed copy can be matched to a revision without
+/// guessing which build is running.
+fn emit_git_sha() {
+    println!("cargo:rerun-if-changed=build.rs");
+    // Re-run when HEAD moves. On a branch HEAD points at a ref, so watch the
+    // branch too; in CI's detached checkout HEAD itself changes.
+    println!("cargo:rerun-if-changed=../../../.git/HEAD");
+    println!("cargo:rerun-if-changed=../../../.git/refs/heads/main");
+
+    let Ok(output) = std::process::Command::new("git")
+        .args(["rev-parse", "--short=12", "HEAD"])
+        .output()
+    else {
+        return;
+    };
+    if !output.status.success() {
+        return;
+    }
+    let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !sha.is_empty() {
+        println!("cargo:rustc-env=CONSOLE_GIT_SHA={sha}");
     }
 }

@@ -8,11 +8,13 @@
 mod app_menu;
 mod assets;
 mod keybindings;
+mod log_filter;
 mod new_project_dialog;
 mod persistence;
 mod picker;
 mod settings;
 mod settings_window;
+mod single_instance;
 mod state;
 mod types;
 mod view;
@@ -73,14 +75,29 @@ fn init_logging() {
                 .append(true)
                 .open(dir.join("console.log"))
         {
-            env_logger::Builder::from_default_env()
+            let logger = env_logger::Builder::from_default_env()
                 .target(env_logger::Target::Pipe(Box::new(file)))
-                .init();
+                .build();
+            log_filter::install(logger);
             return;
         }
     }
 
-    env_logger::init();
+    log_filter::install(env_logger::Builder::from_default_env().build());
+}
+
+/// Log the version, commit and exe path so a log from an installed copy can be
+/// matched to the build that produced it.
+fn log_build_identity() {
+    let exe = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "<unknown>".to_string());
+    log::info!(
+        "Console {} ({}) starting from {}",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("CONSOLE_GIT_SHA").unwrap_or("unknown"),
+        exe
+    );
 }
 
 fn main() {
@@ -88,6 +105,14 @@ fn main() {
     // level, reload.sh captures output to dist/.dev_console.log). Without this
     // every log:: call in the codebase is silently discarded.
     init_logging();
+    log_build_identity();
+
+    // One client per session. A second launch restores the existing window and
+    // exits before Tokio/GPUI start, so it cannot hold the OAuth loopback port
+    // or add another window-teardown cycle. No-op outside Windows.
+    let Some(_instance_guard) = single_instance::acquire() else {
+        return;
+    };
 
     // Record panics even when launched from Finder/launchd (stderr invisible):
     // GPUI re-raises view-handler panics as `panic_cannot_unwind` and macOS

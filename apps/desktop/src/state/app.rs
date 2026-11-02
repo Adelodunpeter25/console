@@ -703,6 +703,8 @@ impl ConsoleDesktopApp {
             agent_browser_tab: None,
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
+            auth_login_error: None,
+            auth_login_url: None,
             account_busy: None,
             rename_form: None,
             account_error: None,

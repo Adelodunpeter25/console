@@ -359,6 +359,13 @@ pub struct ConsoleDesktopApp {
     pub agent_browser_tab: Option<String>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
+    /// Last OAuth sign-in failure, shown verbatim on that provider's card.
+    /// (provider, text). Cleared when the next login for that provider starts.
+    pub auth_login_error: Option<(String, String)>,
+    /// The authorize URL for the in-flight sign-in, as (provider, url). Lets
+    /// the user copy the full link when the system browser opener misbehaves
+    /// (on Windows an old build truncated the URL at the first `&`).
+    pub auth_login_url: Option<(String, String)>,
     /// One account mutation (Use/Remove) in flight, as (provider, account id),
     /// so its row can disable its buttons rather than firing duplicates.
     pub account_busy: Option<(String, String)>,

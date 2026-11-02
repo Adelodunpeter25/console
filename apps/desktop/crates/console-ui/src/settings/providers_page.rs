@@ -34,6 +34,14 @@ pub struct ProvidersPage {
     /// (provider, server-authored failure text) for the last account
     /// mutation failure, shown verbatim on that provider's card.
     pub account_error: Option<(String, String)>,
+    /// (provider, text) for the last OAuth sign-in failure, shown verbatim on
+    /// that provider's card.
+    pub login_error: Option<(String, String)>,
+    /// (provider, authorize URL) for the in-flight sign-in. Rendered as a
+    /// "Copy sign-in link" action so a misbehaving system browser opener can
+    /// be worked around by pasting the link manually.
+    pub login_url: Option<(String, String)>,
+    pub on_copy_login_url: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     /// GitHub git-credential state. Rendered below the LLM providers as a
     /// sibling section — GitHub is not a chat provider and authenticates by
     /// token, not OAuth.
@@ -203,6 +211,7 @@ impl RenderOnce for ProvidersPage {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_login = self.on_login.clone();
+        let on_copy_login_url = self.on_copy_login_url.clone();
 
         div()
             .flex()
@@ -276,6 +285,22 @@ impl RenderOnce for ProvidersPage {
                                 .as_ref()
                                 .filter(|(p, _)| p == &provider_id)
                                 .map(|(_, text)| text.clone());
+                            let login_error = self
+                                .login_error
+                                .as_ref()
+                                .filter(|(p, _)| p == &provider_id)
+                                .map(|(_, text)| text.clone());
+                            // While a sign-in is in flight (or just failed) the
+                            // authorize URL is still valid, so the row keeps a
+                            // manual copy as a fallback for the system opener.
+                            let copy_link = if is_logging_in || login_error.is_some() {
+                                self.login_url
+                                    .as_ref()
+                                    .filter(|(p, _)| p == &provider_id)
+                                    .map(|(_, url)| url.clone())
+                            } else {
+                                None
+                            };
 
                             let status_text = if is_logging_in {
                                 "Authenticating...".to_string()
@@ -302,6 +327,8 @@ impl RenderOnce for ProvidersPage {
                             let on_use = self.on_account_use.clone();
                             let on_remove = self.on_account_remove.clone();
                             let on_rename = self.on_account_rename.clone();
+                            let on_copy_url = on_copy_login_url.clone();
+                            let copy_pid = provider_id.clone();
 
                             div()
                                 .id(ElementId::from(format!("provider-row-{pid}")))
@@ -314,6 +341,14 @@ impl RenderOnce for ProvidersPage {
                                 .flex_col()
                                 .gap(px(10.0))
                                 .when_some(account_error, |card, error| {
+                                    card.child(
+                                        div()
+                                            .text_size(px(11.5))
+                                            .text_color(theme.danger)
+                                            .child(error),
+                                    )
+                                })
+                                .when_some(login_error, |card, error| {
                                     card.child(
                                         div()
                                             .text_size(px(11.5))
@@ -442,6 +477,41 @@ impl RenderOnce for ProvidersPage {
                                                 ),
                                         ),
                                 )
+                                .when_some(copy_link, |card, url| {
+                                    let copy_pid = copy_pid.clone();
+                                    card.child(
+                                        div()
+                                            .flex()
+                                            .flex_wrap()
+                                            .items_center()
+                                            .gap(px(6.0))
+                                            .child(
+                                                div()
+                                                    .text_size(px(11.0))
+                                                    .text_color(theme.text_tertiary)
+                                                    .child("Browser didn't open the full link?"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .id(ElementId::from(format!(
+                                                        "btn-copy-login-{copy_pid}"
+                                                    )))
+                                                    .text_size(px(11.5))
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(theme.accent)
+                                                    .cursor_pointer()
+                                                    .hover(|s| s.text_color(theme.text))
+                                                    .on_mouse_down(
+                                                        MouseButton::Left,
+                                                        move |_event, window, cx| {
+                                                            cx.stop_propagation();
+                                                            (on_copy_url)(url.clone(), window, cx);
+                                                        },
+                                                    )
+                                                    .child("Copy sign-in link"),
+                                            ),
+                                    )
+                                })
                                 // Account list: every stored login for this
                                 // provider, oldest first. A provider with
                                 // rows but no ACTIVE account is disabled
