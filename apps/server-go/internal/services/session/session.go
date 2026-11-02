@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -15,6 +16,9 @@ import (
 
 type Service struct {
 	manager *db.DB
+	// backfilled remembers sessions whose old messages are all converted, so the
+	// check is skipped on every later load in this process.
+	backfilled sync.Map
 }
 
 func New(manager *db.DB) *Service {
@@ -255,6 +259,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if err != nil {
 		return nil, err
 	}
+	s.ensureBackfilled(sessionID, conn)
 
 	query := `SELECT content, created_at, rowid, id FROM messages`
 	var args []any
