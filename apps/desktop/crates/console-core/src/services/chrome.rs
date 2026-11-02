@@ -56,7 +56,8 @@ impl ChromeService {
             .send()
             .await
             .context("Failed to list Chrome profiles")?;
-        if is_unsupported_route(resp.status()) {
+        let status = resp.status();
+        if is_unsupported_route(status) {
             anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
         }
         let body: ApiResponse<Vec<ChromeProfile>> = self
@@ -64,6 +65,11 @@ impl ChromeService {
             .decode_json(resp)
             .await
             .context("Failed to parse Chrome profiles response")?;
+        log::info!(
+            "chrome profiles: status={status} success={} count={}",
+            body.success,
+            body.data.as_ref().map(Vec::len).unwrap_or(0)
+        );
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
@@ -83,6 +89,9 @@ impl ChromeService {
         want_cookies: bool,
     ) -> Result<ChromeImportData> {
         let url = self.transport.url("/api/chrome/import").await;
+        log::info!(
+            "chrome import: POST {url} profile={profile_id} want_history={want_history} want_cookies={want_cookies}"
+        );
         let resp = self
             .transport
             .client()
@@ -99,11 +108,18 @@ impl ChromeService {
         if is_unsupported_route(resp.status()) {
             anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
         }
+        let status = resp.status();
         let body: ApiResponse<ChromeImportData> = self
             .transport
             .decode_json(resp)
             .await
             .context("Failed to parse Chrome import response")?;
+        log::info!(
+            "chrome import: status={status} success={} history={} cookies={}",
+            body.success,
+            body.data.as_ref().map(|d| d.history.len()).unwrap_or(0),
+            body.data.as_ref().map(|d| d.cookies.len()).unwrap_or(0)
+        );
         if body.success {
             body.data.context("Chrome import data missing")
         } else {
