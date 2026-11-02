@@ -33,6 +33,12 @@ pub struct ChromeImportData {
     pub cookies: Vec<ChromeCookie>,
 }
 
+/// Older servers answer the import routes with a router 404; surface that
+/// as "update your server" instead of a decode failure.
+fn is_unsupported_route(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::NOT_IMPLEMENTED
+}
+
 impl ChromeService {
     pub fn new(transport: HttpTransport) -> Self {
         Self { transport }
@@ -50,6 +56,9 @@ impl ChromeService {
             .send()
             .await
             .context("Failed to list Chrome profiles")?;
+        if is_unsupported_route(resp.status()) {
+            anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
+        }
         let body: ApiResponse<Vec<ChromeProfile>> = self
             .transport
             .decode_json(resp)
@@ -87,6 +96,9 @@ impl ChromeService {
             .send()
             .await
             .context("Failed to import Chrome data")?;
+        if is_unsupported_route(resp.status()) {
+            anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
+        }
         let body: ApiResponse<ChromeImportData> = self
             .transport
             .decode_json(resp)
