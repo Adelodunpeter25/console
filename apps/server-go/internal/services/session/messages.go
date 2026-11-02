@@ -106,6 +106,8 @@ func (s *Service) ReplaceMessages(sessionID string, messages []types.AgentMessag
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	// Every message was rewritten, so every earlier verification is stale.
+	s.verified.forget(sessionID)
 	s.bumpSessionUpdated(sessionID, now, len(messages))
 	return nil
 }

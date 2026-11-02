@@ -19,6 +19,9 @@ type Service struct {
 	// backfilled remembers sessions whose old messages are all converted, so the
 	// check is skipped on every later load in this process.
 	backfilled sync.Map
+	// verified remembers which messages were already proven to rebuild from
+	// their parts exactly, so each is checked once per process.
+	verified verifiedSet
 }
 
 func New(manager *db.DB) *Service {
@@ -261,7 +264,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	}
 	s.ensureBackfilled(sessionID, conn)
 
-	query := `SELECT content, created_at, rowid, id FROM messages`
+	query := `SELECT content, created_at, rowid, id, skeleton, split_state FROM messages`
 	var args []any
 	if before > 0 {
 		query += ` WHERE rowid < ?`
@@ -276,23 +279,20 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if err != nil {
 		return nil, err
 	}
-	defer msgRows.Close()
-
-	type row struct {
-		content   string
-		createdAt int64
-		rowid     int64
-		id        string
-	}
-	fetched := make([]row, 0)
+	fetched := make([]storedRow, 0)
 	for msgRows.Next() {
-		var r row
-		if err := msgRows.Scan(&r.content, &r.createdAt, &r.rowid, &r.id); err != nil {
+		var r storedRow
+		if err := msgRows.Scan(&r.content, &r.createdAt, &r.rowid, &r.id, &r.skeleton, &r.state); err != nil {
+			msgRows.Close()
 			return nil, err
 		}
 		fetched = append(fetched, r)
 	}
-	if err := msgRows.Err(); err != nil {
+	err = msgRows.Err()
+	// Close before reading parts: the session database has one connection, so a
+	// second query while these rows are open would wait on itself forever.
+	msgRows.Close()
+	if err != nil {
 		return nil, err
 	}
 
@@ -300,10 +300,12 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if hasMore {
 		fetched = fetched[:limit]
 	}
-	// Oldest first for display.
+	// Oldest first for display. Split messages are rebuilt from their parts and
+	// checked against the original; anything unproven is served as stored.
+	bodies := s.materialize(sessionID, conn, fetched)
 	messages := make([]json.RawMessage, 0, len(fetched))
 	for i := len(fetched) - 1; i >= 0; i-- {
-		messages = append(messages, withCreatedAt(fetched[i].content, fetched[i].createdAt, fetched[i].id))
+		messages = append(messages, withCreatedAt(bodies[i], fetched[i].createdAt, fetched[i].id))
 	}
 	result := &types.LoadedSession{Header: headers[0], Messages: messages, HasMore: hasMore}
 	if hasMore && len(fetched) > 0 {
