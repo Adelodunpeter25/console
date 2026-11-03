@@ -37,13 +37,14 @@ fun PickerChip(
     enabled: Boolean = true,
     /** Fill. [NewTheme.Card] on the page; pass [NewTheme.Raised] when the chip sits on a card (the composer bubble). */
     surface: Color = NewTheme.Card,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(10.dp),
     onClick: () -> Unit,
 ) {
     Row(
         modifier = modifier
             .alpha(if (enabled) 1f else 0.45f)
             .floatingSurface(
-                shape = RoundedCornerShape(999.dp),
+                shape = shape,
                 backgroundColor = surface,
                 borderColor = Color.White.copy(alpha = 0.08f),
                 elevation = 4.dp,

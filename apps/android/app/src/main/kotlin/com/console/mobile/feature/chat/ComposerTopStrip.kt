@@ -3,6 +3,7 @@ package com.console.mobile.feature.chat
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -78,6 +79,7 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             PickerChip(
                 icon = if (projectLocked) TablerIcons.Outline.Lock else TablerIcons.Outline.Folder,
                 label = selectedProject?.name ?: if (cwd.isNullOrEmpty()) "Select Folder" else "No project",
+                shape = RoundedCornerShape(999.dp),
                 modifier = Modifier.padding(end = 8.dp),
             ) {
                 if (!projectLocked) {
@@ -88,7 +90,11 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         }
         if (isRepo == true && currentBranch != null) {
             item {
-                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch) { branchSheet = true }
+                PickerChip(
+                    icon = TablerIcons.Outline.GitBranch,
+                    label = currentBranch,
+                    shape = RoundedCornerShape(999.dp),
+                ) { branchSheet = true }
             }
         }
     }

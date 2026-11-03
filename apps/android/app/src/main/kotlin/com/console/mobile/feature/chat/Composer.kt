@@ -265,14 +265,16 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
-        Box(
+        Column(
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .fillMaxWidth(),
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .padding(top = 6.dp, bottom = if (expansion > 0.05f) 4.dp else 6.dp),
             ) {
                 if (topBanner != null) topBanner()
                 // Kept in composition while collapsed (just zero-height) so a sheet it owns
@@ -381,16 +383,25 @@ fun Composer(
                 null -> {}
             }
         }
+        }
         Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(NewTheme.Background),
+                    .background(NewTheme.Background)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 ComposerBottomStrip(sessionId = sessionId)
             }
         }
-    }
+        if (expansion > 0.05f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .background(NewTheme.Background),
+            )
+        }
     }
     }
 }

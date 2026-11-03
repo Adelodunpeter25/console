@@ -155,7 +155,7 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
         modifier = modifier
             .alpha(if (running) 0.45f else 1f)
             .floatingSurface(
-                shape = RoundedCornerShape(999.dp),
+                shape = RoundedCornerShape(10.dp),
                 backgroundColor = NewTheme.Raised,
                 borderColor = Color.White.copy(alpha = 0.08f),
                 elevation = 4.dp,
