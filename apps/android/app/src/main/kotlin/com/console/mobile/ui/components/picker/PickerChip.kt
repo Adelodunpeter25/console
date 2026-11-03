@@ -3,6 +3,7 @@ package com.console.mobile.ui.components.picker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,7 +51,8 @@ fun PickerChip(
                 elevation = 4.dp,
             )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .heightIn(min = 34.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (provider != null && getProviderIconKey(provider) != null) {

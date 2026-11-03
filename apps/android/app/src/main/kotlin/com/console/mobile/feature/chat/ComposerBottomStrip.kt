@@ -3,6 +3,7 @@ package com.console.mobile.feature.chat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
@@ -161,7 +162,8 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
                 elevation = 4.dp,
             )
             .clickable(enabled = !running, onClick = { sheet = true })
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .heightIn(min = 34.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

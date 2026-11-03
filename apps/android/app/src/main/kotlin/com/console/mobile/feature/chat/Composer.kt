@@ -489,7 +489,7 @@ private fun ComposerInput(
                 maxLines = 6,
                 onTextLayout = { mentionLayout = it },
                 decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
+                    Box(contentAlignment = Alignment.TopStart) {
                         val layout = mentionLayout
                         val slots = mentionVisual.segments
                         if (layout != null && slots.isNotEmpty() && layout.size.height <= fieldHeightPx) {
@@ -501,6 +501,7 @@ private fun ComposerInput(
                                     val pillHeight = with(density) { 18.dp.toPx() }
                                     Box(
                                         modifier = Modifier
+                                            .align(Alignment.TopStart)
                                             .offset {
                                                 androidx.compose.ui.unit.IntOffset(
                                                     (startBox.left - with(density) { 2.dp.toPx() }).roundToInt(),
@@ -555,7 +556,9 @@ private fun ComposerInput(
             // are always visible, pinned at bottom start and end.
             Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(SEND_SIZE),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Spacer(Modifier.width(SEND_SIZE + 8.dp))
