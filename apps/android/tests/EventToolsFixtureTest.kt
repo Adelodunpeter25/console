@@ -44,8 +44,19 @@ class EventToolsFixtureTest {
         assertEquals("sig", first.thought_signature)
         // Render model recovers the JSON args from the bytes.
         assertEquals("ls", first.toUi().arguments?.jsonObject?.getValue("cmd")?.toString()?.trim('"'))
+        // The server's classification must survive the wire-to-UI conversion: the
+        // rows render from these, and a dropped field shows a raw name and no icon.
+        val ui = first.toUi()
+        assertEquals("Run Command", ui.label)
+        assertEquals("Run Command", ui.displayLabel)
+        assertEquals("terminal", ui.icon)
+        assertEquals(0, ui.kindFlags)
         val bare = callAdapter.fromJson(calls[1].toString())!!
         assertEquals("c2", bare.id)
+        val bareUi = bare.toUi()
+        assertEquals("Read File", bareUi.displayLabel)
+        assertTrue("read is a file target", bareUi.isRead && bareUi.isFileTarget)
+        assertTrue("a read is not an edit", !bareUi.isEdit)
         assertEquals("Read File", bare.label)
         assertEquals(12, bare.kind_flags) // read (4) + file-target (8)
         assertTrue(bare.arguments.utf8().isEmpty())

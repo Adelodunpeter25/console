@@ -26,6 +26,12 @@ internal fun console.v1.ToolCall.toUi(): ToolCall = ToolCall(
     name = name,
     arguments = bytesToJson(arguments),
     thoughtSignature = thought_signature,
+    // The server classifies every call (label, kind flags, icon key). They must
+    // be carried across: the rows render from these and fall back to the raw
+    // name and a generic icon without them.
+    label = label,
+    kindFlags = kind_flags,
+    icon = icon,
 )
 
 internal fun console.v1.ToolResult.toUi(): ToolResult = ToolResult(
