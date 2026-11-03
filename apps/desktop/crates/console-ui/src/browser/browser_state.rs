@@ -115,7 +115,9 @@ pub mod cookies {
         let Some(mtm) = MainThreadMarker::new() else {
             return Err("cookie injection must run on the main thread".to_string());
         };
+        log::info!("cookie inject: input={} cookies", input.len());
         let mut injected = 0usize;
+        let mut skipped = 0usize;
         unsafe {
             let store = WKWebsiteDataStore::defaultDataStore(mtm).httpCookieStore();
             // One synthetic control cookie, independent of Chrome's data: if
@@ -135,6 +137,13 @@ pub mod cookies {
             let mut first_back = true;
             for cookie in &all {
                 let Some(cookie_obj) = build_cookie(cookie) else {
+                    skipped += 1;
+                    log::warn!(
+                        "cookie build skipped: name_empty={} value_empty={} domain_empty={}",
+                        cookie.name.is_empty(),
+                        cookie.value.is_empty(),
+                        cookie.domain.is_empty()
+                    );
                     continue;
                 };
                 if first_back {
@@ -165,6 +174,7 @@ pub mod cookies {
                 injected += 1;
             }
         }
+        log::info!("cookie inject: handed {injected} to WebKit, skipped {skipped}");
         Ok(injected)
     }
 
