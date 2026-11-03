@@ -101,7 +101,7 @@ pub mod cookies {
     use objc2::runtime::AnyObject;
     use objc2_foundation::MainThreadMarker;
     use objc2_foundation::ns_string;
-    use objc2_foundation::{NSDate, NSDictionary, NSHTTPCookie, NSString};
+    use objc2_foundation::{NSDate, NSDictionary, NSHTTPCookie, NSNumber, NSString};
     use objc2_web_kit::WKWebsiteDataStore;
 
     /// Inject cookies into the shared default webview data store — the same
@@ -245,11 +245,17 @@ pub mod cookies {
 
         if cookie.secure {
             keys.push(ns_string!("NSHTTPCookieSecure"));
-            objects.push(truth());
+            // Documented as the literal string "TRUE", unlike the boolean
+            // HttpOnly below.
+            objects.push(unsafe { into_any(NSString::from_str("TRUE")) });
         }
         if cookie.http_only {
+            // Undocumented-but-honored key (Foundation's isHTTPOnly is set
+            // from it; Chromium passes the same). Its value is a boolean
+            // NSNumber — the "TRUE" string here made cookieWithProperties
+            // return nil for every cookie.
             keys.push(ns_string!("NSHTTPCookieIsHttpOnly"));
-            objects.push(truth());
+            objects.push(unsafe { into_any(NSNumber::numberWithBool(true)) });
         }
         if cookie.expires_at_ms > 0 {
             // NSDate wants seconds; the ms → s conversion keeps the same
