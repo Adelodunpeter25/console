@@ -60,12 +60,14 @@ import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.components.common.new.BlurredBottomBar
+import com.console.mobile.ui.components.common.new.LocalHazeState
+import com.console.mobile.ui.components.common.new.liquidGlass
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Microphone
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -265,27 +267,26 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
-    BlurredBottomBar(
-        modifier = Modifier
-            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
-    ) {
-        Column(
+        Box(
             modifier = Modifier
+                .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp)
-                .padding(top = 8.dp, bottom = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 6.dp),
         ) {
-            if (topBanner != null) topBanner()
-            // Kept in composition while collapsed (just zero-height) so a sheet it owns
-            // and its loaded branch list survive the composer folding up.
-            Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
-                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
-            }
-            // Attachments are content, not configuration, so they stay visible collapsed.
-            if (attachments.isNotEmpty()) {
-                AttachmentStrip(sessionId = sessionId, attachments = attachments)
-            }
-            ComposerInput(
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (topBanner != null) topBanner()
+                // Kept in composition while collapsed (just zero-height) so a sheet it owns
+                // and its loaded branch list survive the composer folding up.
+                Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+                    ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+                }
+                // Attachments are content, not configuration, so they stay visible collapsed.
+                if (attachments.isNotEmpty()) {
+                    AttachmentStrip(sessionId = sessionId, attachments = attachments)
+                }
+                ComposerInput(
                 value = value,
                 fieldValue = fieldValue,
                 mentionVisual = mentionVisual,
@@ -425,13 +426,22 @@ private fun ComposerInput(
     val fieldMinHeight = androidx.compose.ui.unit.lerp(lineDp, lineDp * 2, expansion)
     val fieldMaxHeight = androidx.compose.ui.unit.lerp(lineDp, maxOf(80.dp, lineDp * 2), expansion)
     // Collapsed, the send button sits at the end of the same row, so text must stop short of it.
-    val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
-    // Pill when collapsed, the rounded rect when expanded; radii larger than half
-    // the height are clamped, so 26dp reads as a full pill at any font scale.
-    val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
+    val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 6.dp, 8.dp, expansion)
+    val fieldStartPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 6.dp, 8.dp, expansion)
+    // Pill when collapsed, rounded rect when expanded; radii larger than half
+    // the height are clamped, so 28dp reads as a full pill at any font scale.
+    val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(28.dp, 20.dp, expansion))
     Box(
-        modifier = Modifier.fillMaxWidth().clip(bubbleShape)
-            .background(NewTheme.Card)
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                hazeState = LocalHazeState.current,
+                shape = bubbleShape,
+                backgroundColor = Color(0xFF16161E).copy(alpha = 0.78f),
+                borderWidth = 1.dp,
+                blurRadius = 24.dp,
+                elevation = 8.dp,
+            )
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }
@@ -447,7 +457,7 @@ private fun ComposerInput(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
+                .padding(start = fieldStartPad, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
                 .heightIn(min = fieldMinHeight, max = fieldMaxHeight)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
@@ -494,7 +504,7 @@ private fun ComposerInput(
                             }
                         }
                         if (value.isEmpty()) {
-                            Text("Ask anything…", color = NewTheme.TextMuted, fontSize = 14.sp)
+                            Text("Message…", color = NewTheme.TextMuted, fontSize = 14.sp)
                         }
                         innerTextField()
                     }
@@ -528,21 +538,14 @@ private fun ComposerInput(
                 }
             }
         }
-            // Attach and the chips only exist once expanded; the send button below is
-            // the one control that is always there, so it lives outside this row.
+            // Chips only exist once expanded; the attach and send buttons below
+            // are always visible, pinned at bottom start and end.
             Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
-                    }
-                    // Fills the gap so the chips stay clear of the send button; the model
-                    // chip truncates rather than pushing anything off a narrow screen.
+                    Spacer(Modifier.size(SEND_SIZE))
                     ThinkingChip(sessionId = sessionId, running = running)
                     Row(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
@@ -556,6 +559,13 @@ private fun ComposerInput(
                 }
             }
         }
+
+        // Pinned bottom-start: + button always accessible
+        AttachButton(
+            attach = attach,
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
+
         // Pinned bottom-end: beside the text when collapsed, at the end of the
         // action row when expanded. The bubble's height animates and the button
         // rides its bottom edge, so it slides into place with no separate animation.
@@ -564,12 +574,36 @@ private fun ComposerInput(
             canSend = canSend,
             onSend = onSend,
             onStop = onStop,
+            onMicClick = onTapBubble,
             modifier = Modifier.align(Alignment.BottomEnd),
         )
     }
 }
 
-private val SEND_SIZE = 35.dp
+private val SEND_SIZE = 36.dp
+
+@Composable
+private fun AttachButton(
+    attach: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(SEND_SIZE)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+            .clickable(onClickLabel = "Attach image", onClick = attach),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            TablerIcons.Outline.Plus,
+            contentDescription = "Attach",
+            tint = NewTheme.TextSecondary,
+            modifier = Modifier.size(19.dp),
+        )
+    }
+}
 
 @Composable
 private fun SendStopButton(
@@ -577,6 +611,7 @@ private fun SendStopButton(
     canSend: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onMicClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (running) {
@@ -584,20 +619,53 @@ private fun SendStopButton(
         // mid-send, and destructive red so the control's meaning is readable at
         // a glance rather than only from a tiny glyph.
         Box(
-            modifier = modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Danger)
+            modifier = modifier
+                .size(SEND_SIZE)
+                .clip(CircleShape)
+                .background(NewTheme.Danger)
                 .clickable(onClickLabel = "Stop", onClick = onStop),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = NewTheme.OnPrimary, modifier = Modifier.size(14.dp))
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.PlayerStop,
+                contentDescription = "Stop generating",
+                tint = NewTheme.OnPrimary,
+                modifier = Modifier.size(14.dp),
+            )
         }
-    } else {
+    } else if (canSend) {
         Box(
-            modifier = modifier.size(SEND_SIZE).clip(CircleShape)
-                .background(if (canSend) NewTheme.Primary else NewTheme.PrimaryDisabled)
+            modifier = modifier
+                .size(SEND_SIZE)
+                .clip(CircleShape)
+                .background(NewTheme.Primary)
                 .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(TablerIcons.Outline.ArrowUp, contentDescription = null, tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted, modifier = Modifier.size(15.dp))
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.ArrowUp,
+                contentDescription = "Send",
+                tint = NewTheme.OnPrimary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    } else {
+        // Soft blue tinted circular action/mic button matching Hermes liquid glass screenshot
+        Box(
+            modifier = modifier
+                .size(SEND_SIZE)
+                .clip(CircleShape)
+                .background(Color(0xFF38BDF8).copy(alpha = 0.18f))
+                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.32f), CircleShape)
+                .clickable(onClickLabel = "Voice or send", onClick = onMicClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.Microphone,
+                contentDescription = "Voice input",
+                tint = Color(0xFF7DD3FC),
+                modifier = Modifier.size(17.dp),
+            )
         }
     }
 }
