@@ -92,3 +92,30 @@ func TestParseMCPToolName(t *testing.T) {
 		t.Error("single underscore must not split")
 	}
 }
+
+// Tools added after the first classification pass must not fall through to a raw
+// name and a wrench: a console call is the thing agents do most.
+func TestEveryBuiltInToolHasALabelAndAnIcon(t *testing.T) {
+	for name, want := range map[string]struct{ label, icon string }{
+		"console":        {"Console", "terminal"},
+		"console_reset":  {"Reset Console", "terminal"},
+		"computer":       {"Computer", "globe"},
+		"computer_reset": {"Reset Computer", "globe"},
+		"writePlan":      {"Write Plan", "file"},
+	} {
+		if got := tools.ToolLabel(name); got != want.label {
+			t.Errorf("ToolLabel(%q) = %q, want %q", name, got, want.label)
+		}
+		if got := tools.ToolIconKey(name); got != want.icon {
+			t.Errorf("ToolIconKey(%q) = %q, want %q", name, got, want.icon)
+		}
+	}
+}
+
+// writePlan takes {name, content}, not a path, so it must not be classed as a file
+// write: the clients would try to diff it against a path that is not there.
+func TestWritePlanIsNotClassedAsAFileWrite(t *testing.T) {
+	if flags := tools.ToolKindFlags("writePlan"); flags != 0 {
+		t.Fatalf("writePlan flags = %d, want 0", flags)
+	}
+}

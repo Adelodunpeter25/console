@@ -66,6 +66,16 @@ func builtinLabel(name string) string {
 		return "Read Skill"
 	case "loadTools":
 		return "Load Tools"
+	case "console":
+		return "Console"
+	case "console_reset":
+		return "Reset Console"
+	case "computer":
+		return "Computer"
+	case "computer_reset":
+		return "Reset Computer"
+	case "writePlan":
+		return "Write Plan"
 	default:
 		return ""
 	}
@@ -167,6 +177,13 @@ func ToolIconKey(name string) string {
 		return "memory"
 	case "loadTools":
 		return "package"
+	case "console", "console_reset":
+		// A script that drives the app: the terminal glyph, like bash.
+		return "terminal"
+	case "computer", "computer_reset":
+		return "globe"
+	case "writePlan":
+		return "file"
 	default:
 		return "wrench"
 	}

@@ -139,3 +139,28 @@ func TestPlanModeRunActuallyWritesAPlanFile(t *testing.T) {
 		t.Fatal("write_file succeeded in plan mode during the same run")
 	}
 }
+
+// Every tool a real run offers must have a human label: otherwise the chat shows
+// a raw identifier and a wrench. This is the test that would have caught
+// `console`, `computer` and `writePlan` being left out of the table.
+func TestEveryToolARunOffersHasALabel(t *testing.T) {
+	seen := map[string]bool{}
+	for _, mode := range []string{"plan-mode", "always-ask", "full-access"} {
+		for name := range toolNamesSent(t, mode) {
+			seen[name] = true
+		}
+	}
+	// Tools only present once activated: bring them in the way a run would.
+	for _, name := range []string{"visualize", "computer", "computer_reset"} {
+		seen[name] = true
+	}
+	var missing []string
+	for name := range seen {
+		if tools.ToolLabel(name) == name { // an unlabelled tool falls back to its raw name
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("these tools have no label in classify.go, so clients show the raw name: %v", missing)
+	}
+}

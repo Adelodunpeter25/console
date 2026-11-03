@@ -59,6 +59,11 @@ pub fn argument_summary(name: &str, arguments: &Value, cwd: Option<&str>) -> Opt
     if name == "loadTools" {
         return string("group").map(|value| truncate(value, 72));
     }
+    // The console and computer tools take a script in `code`. The script is
+    // noise in a one-line row; the calls it makes say what it did.
+    if matches!(name, "console" | "computer") {
+        return string("code").and_then(|code| script_calls(name, code));
+    }
     if name == "memory" {
         let op = string("op").unwrap_or("memory");
         if let Some(query) = string("query") {
@@ -108,6 +113,87 @@ pub fn argument_summary(name: &str, arguments: &Value, cwd: Option<&str>) -> Opt
         }
     }
     None
+}
+
+/// The distinct `root.method(` calls a script makes, in first-use order, as
+/// `sessions.list, scripts.run`. `root` is the object the script calls (`console`
+/// or `computer`); only names that look like calls on it are listed, so a string
+/// or comment that merely mentions one is not mistaken for a call.
+///
+/// Returns None when the script calls nothing on `root` (pure JavaScript), so the
+/// row falls back to showing no summary rather than inventing one.
+pub fn script_calls(root: &str, code: &str) -> Option<String> {
+    let bytes = code.as_bytes();
+    let root_b = root.as_bytes();
+    let mut calls: Vec<String> = Vec::new();
+    let mut i = 0;
+    let mut quote: Option<u8> = None;
+    while i < bytes.len() {
+        let c = bytes[i];
+        // Skip string literals and comments so `"console.x()"` is not a call.
+        if let Some(q) = quote {
+            if c == b'\\' {
+                i += 2;
+                continue;
+            }
+            if c == q {
+                quote = None;
+            }
+            i += 1;
+            continue;
+        }
+        match c {
+            b'"' | b'\'' | b'`' => {
+                quote = Some(c);
+                i += 1;
+                continue;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i += 2;
+                continue;
+            }
+            _ => {}
+        }
+        let at_boundary = i == 0 || !is_ident_byte(bytes[i - 1]) && bytes[i - 1] != b'.';
+        if at_boundary && bytes[i..].starts_with(root_b) && bytes.get(i + root_b.len()) == Some(&b'.') {
+            let mut j = i + root_b.len() + 1;
+            let start = j;
+            while j < bytes.len() && (is_ident_byte(bytes[j]) || bytes[j] == b'.') {
+                j += 1;
+            }
+            let path = &code[start..j];
+            // A call has an opening parenthesis next (allowing whitespace).
+            let mut k = j;
+            while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+                k += 1;
+            }
+            let path = path.trim_end_matches('.');
+            if bytes.get(k) == Some(&b'(') && !path.is_empty() && !calls.iter().any(|c| c == path) {
+                calls.push(path.to_owned());
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+    if calls.is_empty() {
+        return None;
+    }
+    Some(truncate(&calls.join(", "), 72))
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_' || b == b'$'
 }
 
 pub fn parse_read_file_output(raw: &str) -> (String, String) {

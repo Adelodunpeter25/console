@@ -48,9 +48,9 @@ name = "path_test"
 path = "tests/path_test.rs"
 
 [[test]]
-name = "throughput_test"
-path = "tests/throughput_test.rs"
+name = "tool_summary_test"
+path = "tests/tool_summary_test.rs"
 
 [[test]]
-name = "tools_test"
-path = "tests/tools_test.rs"
+name = "throughput_test"
+path = "tests/throughput_test.rs"
