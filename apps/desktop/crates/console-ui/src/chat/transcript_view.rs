@@ -1364,26 +1364,25 @@ fn cite_popup(
     selection: TranscriptSelection,
     theme: Theme,
 ) -> impl IntoElement {
-    const PILL_WIDTH_ESTIMATE: f32 = 60.0;
-    const PILL_HEIGHT: f32 = 30.0;
+    const PILL_SIZE: f32 = 30.0;
     const PILL_GAP: f32 = 6.0;
     const SELECTION_GAP: f32 = 8.0;
-    const HIT_PAD: f32 = 8.0;
+    const HIT_PAD: f32 = 6.0;
     let container_x = f32::from(container.origin.x);
     let container_y = f32::from(container.origin.y);
     let container_w = f32::from(container.size.width);
     let container_h = f32::from(container.size.height);
-    // Row of two pills, right edge anchored past the selection's last line;
-    // flip below when that would poke past the container's top edge.
+    // Row of two icon pills, right edge anchored past the selection's last
+    // line; flip below when that would poke past the container's top edge.
     let row_right = line[0] + line[2] - container_x + SELECTION_GAP;
-    let mut cite_x = row_right - PILL_WIDTH_ESTIMATE;
-    let mut y = line[1] - container_y - PILL_HEIGHT - 6.0;
+    let mut cite_x = row_right - PILL_SIZE;
+    let mut y = line[1] - container_y - PILL_SIZE - 6.0;
     if y < 0.0 {
         y = line[1] + line[3] - container_y + 6.0;
     }
-    let copy_x = cite_x - PILL_WIDTH_ESTIMATE - PILL_GAP;
-    cite_x = cite_x.clamp(0.0, (container_w - PILL_WIDTH_ESTIMATE).max(0.0));
-    y = y.clamp(0.0, (container_h - PILL_HEIGHT).max(0.0));
+    let copy_x = cite_x - PILL_SIZE - PILL_GAP;
+    cite_x = cite_x.clamp(0.0, (container_w - PILL_SIZE).max(0.0));
+    y = y.clamp(0.0, (container_h - PILL_SIZE).max(0.0));
     // Record both hit rects at render time, from the same placement math
     // that positions the pills — deliberately generous so clicks near the
     // rounded edges still count. No paint-time probe: how Taffy sizes an
@@ -1393,51 +1392,47 @@ fn cite_popup(
         state.set_cite_button(Some([
             container_x + cite_x - HIT_PAD,
             container_y + y - HIT_PAD,
-            PILL_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
-            PILL_HEIGHT + 2.0 * HIT_PAD,
+            PILL_SIZE + 2.0 * HIT_PAD,
+            PILL_SIZE + 2.0 * HIT_PAD,
         ]));
         state.set_copy_button(Some([
             container_x + copy_x - HIT_PAD,
             container_y + y - HIT_PAD,
-            PILL_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
-            PILL_HEIGHT + 2.0 * HIT_PAD,
+            PILL_SIZE + 2.0 * HIT_PAD,
+            PILL_SIZE + 2.0 * HIT_PAD,
         ]));
     }
     div()
         .absolute()
         .left(px(cite_x))
         .top(px(y))
-        .child(popup_pill("cite-popup", "Cite", theme.clone()))
+        .child(popup_pill("cite-popup", IconName::Reply, theme.clone()))
         .child(
             div()
                 .absolute()
                 .left(px(copy_x - cite_x))
                 .top(px(0.0))
-                .child(popup_pill("copy-popup", "Copy", theme)),
+                .child(popup_pill("copy-popup", IconName::Copy, theme)),
         )
 }
 
-/// One popup pill. Activation lives in the selection mouse handlers, so this
-/// is styling and hover only.
-fn popup_pill(id: &'static str, label: &'static str, theme: Theme) -> impl IntoElement {
+/// One icon popup pill. Activation lives in the selection mouse handlers, so
+/// this is styling and hover only.
+fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElement {
     div()
         .id(gpui::ElementId::Name(id.into()))
-        .px(px(10.0))
-        .py(px(4.0))
+        .size(px(30.0))
         .rounded(px(7.0))
         .border_1()
         .border_color(theme.border)
         .bg(theme.raised)
         .shadow_sm()
         .cursor_pointer()
+        .flex()
+        .items_center()
+        .justify_center()
         .hover(|element| element.bg(theme.overlay_strong))
-        .child(
-            div()
-                .text_size(px(12.0))
-                .line_height(px(16.0))
-                .text_color(theme.text_secondary)
-                .child(label),
-        )
+        .child(app_icon(icon, 15.0, theme.text_secondary))
 }
 
 fn transcript_row(
