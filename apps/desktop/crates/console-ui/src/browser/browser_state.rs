@@ -118,10 +118,40 @@ pub mod cookies {
         let mut injected = 0usize;
         unsafe {
             let store = WKWebsiteDataStore::defaultDataStore(mtm).httpCookieStore();
-            for cookie in input {
+            // One synthetic control cookie, independent of Chrome's data: if
+            // even this never lands, the failure is in how these cookies are
+            // built or set, not in the imported values.
+            let probe = ChromeCookie {
+                domain: ".console-cookie-probe.invalid".to_string(),
+                path: "/".to_string(),
+                name: "probe".to_string(),
+                value: "1".to_string(),
+                expires_at_ms: (now_unix_ms_placeholder() + 3_600_000) as i64,
+                secure: false,
+                http_only: false,
+            };
+            let mut all: Vec<ChromeCookie> = vec![probe];
+            all.extend(input.iter().cloned());
+            let mut first_back = true;
+            for cookie in &all {
                 let Some(cookie_obj) = build_cookie(cookie) else {
                     continue;
                 };
+                if first_back {
+                    first_back = false;
+                    // What WebKit parsed back from the properties we set —
+                    // empty fields here mean the property dictionary is
+                    // being ignored/misread. Values never logged.
+                    log::info!(
+                        "cookie build check: name={} domain={} path={} secure={} http_only={} expires={:?}",
+                        cookie_obj.name().to_string(),
+                        cookie_obj.domain().to_string(),
+                        cookie_obj.path().to_string(),
+                        cookie_obj.isSecure(),
+                        cookie_obj.isHTTPOnly(),
+                        cookie_obj.expiresDate().map(|d| d.timeIntervalSince1970() as i64),
+                    );
+                }
                 let name = cookie.name.clone();
                 let domain = cookie.domain.clone();
                 // The handler firing is the acceptance signal; a rejected
@@ -136,6 +166,13 @@ pub mod cookies {
             }
         }
         Ok(injected)
+    }
+
+    fn now_unix_ms_placeholder() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
     }
 
     /// Read the shared cookie jar back and log its size plus the top
