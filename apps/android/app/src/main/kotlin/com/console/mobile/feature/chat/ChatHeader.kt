@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -71,7 +72,7 @@ internal fun ChatHeader(
             icon = TablerIcons.Outline.ChevronLeft,
             contentDescription = "Back",
             onClick = onBack,
-            size = 40.dp,
+            size = 46.dp,
             iconSize = 22.dp,
         )
 
@@ -79,20 +80,21 @@ internal fun ChatHeader(
         Box(
             modifier = Modifier
                 .weight(1f, fill = false)
+                .height(46.dp)
                 .padding(horizontal = 8.dp)
                 .floatingSurface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(23.dp),
                     backgroundColor = Color(0xFF1E1E24),
                     borderColor = Color.White.copy(alpha = 0.08f),
                     elevation = 4.dp,
                 )
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 18.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = title.ifBlank { "Chat" },
                 color = NewTheme.TextPrimary,
-                fontSize = 13.5.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -105,8 +107,8 @@ internal fun ChatHeader(
                 icon = TablerIcons.Outline.Dots,
                 contentDescription = "More options",
                 onClick = { overflowMenu = true },
-                size = 40.dp,
-                iconSize = 20.dp,
+                size = 46.dp,
+                iconSize = 22.dp,
             )
             OverflowMenu(
                 expanded = overflowMenu,

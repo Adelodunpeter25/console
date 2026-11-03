@@ -63,8 +63,8 @@ fun FloatingGlassIconButton(
     contentDescription: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 40.dp,
-    iconSize: Dp = 20.dp,
+    size: Dp = 46.dp,
+    iconSize: Dp = 22.dp,
     tint: Color = NewTheme.TextPrimary,
     backgroundColor: Color = Color(0xFF1E1E24),
 ) {

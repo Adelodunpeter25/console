@@ -41,8 +41,8 @@ internal fun ChatTranscript(
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(
-            top = 56.dp,
-            bottom = 80.dp,
+            top = 62.dp,
+            bottom = 84.dp,
         ),
         modifier = Modifier
             .fillMaxSize()

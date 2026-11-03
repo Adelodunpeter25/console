@@ -64,7 +64,6 @@ import com.console.mobile.ui.components.common.new.floatingSurface
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
-import io.github.lyxnx.compose.ui.tablericons.outline.Microphone
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import kotlinx.coroutines.delay
@@ -571,13 +570,12 @@ private fun ComposerInput(
             canSend = canSend,
             onSend = onSend,
             onStop = onStop,
-            onMicClick = onTapBubble,
             modifier = Modifier.align(Alignment.BottomEnd),
         )
     }
 }
 
-private val SEND_SIZE = 36.dp
+private val SEND_SIZE = 40.dp
 
 @Composable
 private fun AttachButton(
@@ -597,7 +595,7 @@ private fun AttachButton(
             TablerIcons.Outline.Plus,
             contentDescription = "Attach",
             tint = NewTheme.TextSecondary,
-            modifier = Modifier.size(19.dp),
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -608,7 +606,6 @@ private fun SendStopButton(
     canSend: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
-    onMicClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (running) {
@@ -627,41 +624,23 @@ private fun SendStopButton(
                 TablerIcons.Outline.PlayerStop,
                 contentDescription = "Stop generating",
                 tint = NewTheme.OnPrimary,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(16.dp),
             )
         }
-    } else if (canSend) {
+    } else {
         Box(
             modifier = modifier
                 .size(SEND_SIZE)
                 .clip(CircleShape)
-                .background(NewTheme.Primary)
+                .background(if (canSend) NewTheme.Primary else NewTheme.PrimaryDisabled)
                 .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.material3.Icon(
                 TablerIcons.Outline.ArrowUp,
                 contentDescription = "Send",
-                tint = NewTheme.OnPrimary,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    } else {
-        // Clean solid circular action/mic button
-        Box(
-            modifier = modifier
-                .size(SEND_SIZE)
-                .clip(CircleShape)
-                .background(Color(0xFF282830))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-                .clickable(onClickLabel = "Voice or send", onClick = onMicClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.material3.Icon(
-                TablerIcons.Outline.Microphone,
-                contentDescription = "Voice input",
-                tint = NewTheme.TextSecondary,
-                modifier = Modifier.size(17.dp),
+                tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted,
+                modifier = Modifier.size(18.dp),
             )
         }
     }
