@@ -97,6 +97,9 @@ impl ChromeService {
             .client()
             .post(&url)
             .headers(self.transport.build_headers().await)
+            // The response carries ~1700 cookie JSON objects; a stalled
+            // connection must not hang the import forever.
+            .timeout(std::time::Duration::from_secs(120))
             .json(&ChromeImportBody {
                 profile_id: profile_id.to_string(),
                 want_history,
@@ -105,10 +108,11 @@ impl ChromeService {
             .send()
             .await
             .context("Failed to import Chrome data")?;
-        if is_unsupported_route(resp.status()) {
+        log::info!("chrome import: response status={}", resp.status());
+        let status = resp.status();
+        if is_unsupported_route(status) {
             anyhow::bail!("This server does not support Chrome import yet — update it (console upgrade).");
         }
-        let status = resp.status();
         let body: ApiResponse<ChromeImportData> = self
             .transport
             .decode_json(resp)
