@@ -38,7 +38,8 @@ use super::parser::{
     Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock, format_math,
 };
 use super::selection::{
-    ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, line_range, word_range,
+    ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, format_cite_quote,
+    line_range, word_range,
 };
 use super::veil::{RowVeil, apply_veil};
 use crate::browser::{
@@ -1107,15 +1108,10 @@ pub fn plain_log_line(text: impl Into<SharedString>, color: Hsla, ctx: &Ctx) -> 
 
 /// A zero-size canvas that clears the frame's registry. Paint it *before* any
 /// transcript text so the registry holds exactly this frame's visible elements.
-/// The stale Cite popup rect goes with it; the popup re-records its own bounds
-/// later in the same frame when it is still shown.
 pub fn frame_reset(selection: TranscriptSelection) -> impl IntoElement {
     canvas(
         |_, _, _| (),
-        move |_, _, _, _| {
-            selection.registry.borrow_mut().clear();
-            selection.selection.borrow_mut().set_cite_button(None);
-        },
+        move |_, _, _, _| selection.registry.borrow_mut().clear(),
     )
     .absolute()
     .w(px(0.0))
@@ -1240,6 +1236,23 @@ fn registry_point(
     Some((index, offset))
 }
 
+/// Whether `position` sits on the rendered Cite pill, with a few pixels of
+/// slack so edge clicks near the rounded corners still register.
+fn cite_button_contains(state: &TranscriptSelection, position: Point<Pixels>) -> bool {
+    const SLACK: f32 = 4.0;
+    state
+        .selection
+        .borrow()
+        .cite_button()
+        .is_some_and(|[x, y, w, h]| {
+            Bounds::new(
+                point(px(x - SLACK), px(y - SLACK)),
+                size(px(w + 2.0 * SLACK), px(h + 2.0 * SLACK)),
+            )
+            .contains(&position)
+        })
+}
+
 /// Install the frame's selection mouse listeners.
 ///
 /// These live once per frame at the transcript root rather than once per
@@ -1253,17 +1266,17 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             if phase != DispatchPhase::Bubble || event.button != MouseButton::Left {
                 return;
             }
-            // A press on the Cite popup itself must not clear the selection:
-            // the popup would vanish before the click could fire.
-            {
-                let selection = state.selection.borrow();
-                if let Some([x, y, w, h]) = selection.cite_button() {
-                    if Bounds::new(point(px(x), px(y)), size(px(w), px(h)))
-                        .contains(&event.position)
-                    {
-                        return;
-                    }
-                }
+            // A press on the Cite pill must not clear the selection: the
+            // release below activates the citation instead, so the pill has
+            // to survive until then. The contains check takes its own short
+            // borrow and must finish before the mutable flag borrow begins.
+            let on_popup = cite_button_contains(&state, event.position);
+            state
+                .selection
+                .borrow_mut()
+                .set_press_on_popup(on_popup);
+            if on_popup {
+                return;
             }
             let registry = state.registry.borrow();
             let hit = registry.entries().iter().enumerate().find(|(_, entry)| {
@@ -1339,8 +1352,30 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
 
     window.on_mouse_event({
         let state = state.clone();
-        move |_: &MouseUpEvent, phase, window, _| {
+        move |event: &MouseUpEvent, phase, window, cx| {
             if phase != DispatchPhase::Bubble {
+                return;
+            }
+            // Cite activation: the press and release both landed on the pill.
+            // The handler is invoked straight from here — the pill never
+            // registers its own click handlers, so nothing can race it.
+            if state.selection.borrow_mut().take_press_on_popup() {
+                let inside = cite_button_contains(&state, event.position);
+                let quote = state
+                    .selection
+                    .borrow()
+                    .selected_text()
+                    .and_then(|text| format_cite_quote(&text));
+                let handler = state.cite_handler();
+                if inside && quote.is_some() && handler.is_some() {
+                    state.selection.borrow_mut().clear();
+                    window.refresh();
+                    (handler.unwrap())(quote.unwrap(), window, cx);
+                    return;
+                }
+                // Missed the pill or nothing to cite: dismiss like any press.
+                state.selection.borrow_mut().clear();
+                window.refresh();
                 return;
             }
             let key = state.selection.borrow().anchor().cloned();
@@ -1356,20 +1391,22 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             let Some(_) = finished else {
                 return;
             };
-            // Anchor the Cite popup at the selection's last visible row: the
-            // right edge of the head span's final wash rect, in window space.
-            let anchor = head.and_then(|span| {
+            // Anchor the Cite popup at the selection's last visible line: its
+            // window-space rect, so the popup can sit just above it.
+            let line_rect = head.and_then(|span| {
                 let registry = state.registry.borrow();
                 let entry = registry.entries().iter().find(|e| e.key == span.key)?;
                 let rects = range_rects(&entry.geometry, &span.range, 0.0, 0.0);
                 let rect = rects.last()?;
                 Some([
-                    f32::from(rect.origin.x) + f32::from(rect.size.width),
-                    f32::from(rect.origin.y) + f32::from(rect.size.height),
+                    f32::from(rect.origin.x),
+                    f32::from(rect.origin.y),
+                    f32::from(rect.size.width),
+                    f32::from(rect.size.height),
                 ])
             });
-            if anchor.is_some() {
-                state.selection.borrow_mut().set_cite_anchor(anchor);
+            if let Some(rect) = line_rect {
+                state.selection.borrow_mut().set_cite_line(Some(rect));
                 window.refresh();
             }
         }

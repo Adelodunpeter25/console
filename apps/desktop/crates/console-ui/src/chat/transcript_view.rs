@@ -21,7 +21,6 @@ use crate::chat::{
 };
 use crate::markdown::file_links::{is_file_link, is_http_url};
 use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
-use crate::markdown::selection::{CiteHandler, format_cite_quote};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -98,8 +97,6 @@ pub struct TranscriptView {
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
     on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
-    /// Cites the current selection into the pane's composer as a quote.
-    on_cite: Option<CiteHandler>,
     /// Window-space bounds of this transcript's container, recorded by a
     /// paint-time canvas probe each frame. The Cite popup's window-space
     /// anchor converts to container-relative coordinates through it; a
@@ -152,7 +149,6 @@ impl TranscriptView {
             session_changes: Rc::new(Vec::new()),
             on_open_change: None,
             on_fork: None,
-            on_cite: None,
             cite_origin: Rc::new(RefCell::new(None)),
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
             expanded_user_messages: Rc::new(RefCell::new(HashSet::new())),
@@ -205,9 +201,11 @@ impl TranscriptView {
     }
 
     /// Wire the Cite popup: the app inserts the quoted selection into the
-    /// pane's composer. The popup only renders when a handler is wired.
+    /// pane's composer. The handler lives on the shared selection state so
+    /// the selection mouse handlers can invoke it directly; the popup only
+    /// renders when one is wired.
     pub fn set_on_cite(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
-        self.on_cite = Some(Rc::new(handler));
+        self.selection.set_cite_handler(Some(Rc::new(handler)));
     }
 
     /// Copy server-assigned ids onto this transcript's user messages that
@@ -1288,17 +1286,11 @@ impl Render for TranscriptView {
             }
         }
 
-        // The Cite popup shows while a completed selection exists: the quote
-        // is captured here so clicking Cite cannot race a cleared selection.
-        let (cite_quote, cite_anchor) = {
-            let selection = self.selection.selection.borrow();
-            (
-                selection
-                    .selected_text()
-                    .and_then(|text| format_cite_quote(&text)),
-                selection.cite_anchor(),
-            )
-        };
+        // The Cite popup shows while a completed selection exists. Activation
+        // is handled by the selection mouse handlers (render.rs); here the
+        // popup only needs to render.
+        let cite_line = self.selection.selection.borrow().cite_line();
+        let cite_available = self.selection.cite_handler().is_some();
         let cite_origin = self.cite_origin.clone();
 
         let root = div()
@@ -1332,13 +1324,15 @@ impl Render for TranscriptView {
                     .into_any_element()
             })
             .child(selection_input(selection.clone()));
-        if let (Some(anchor), Some(quote), Some(on_cite)) =
-            (cite_anchor, cite_quote, self.on_cite.clone())
+        if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
             return root
                 .child(cite_popup(
-                    anchor, quote, container, selection, on_cite, theme,
+                    line,
+                    container,
+                    selection.clone(),
+                    theme.clone(),
                 ))
                 .into_any_element();
         }
@@ -1351,41 +1345,52 @@ impl Render for TranscriptView {
 /// coordinates. Paints beneath everything and registers no hitbox.
 fn cite_origin_probe(cell: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>) -> impl IntoElement {
     canvas(
-        |_, _, _| (),
-        move |bounds, _, _, _| {
-            *cell.borrow_mut() = Some(bounds);
+        move |probe: gpui::Bounds<gpui::Pixels>, _, _| {
+            *cell.borrow_mut() = Some(probe);
         },
+        |_, _, _, _| (),
     )
     .absolute()
-    .size_full()
+    .inset_0()
 }
 
-/// The floating Cite button shown at the end of an active selection. Clicking
-/// it hands the markdown-formatted quote to the app (which inserts it into the
-/// pane's composer) and clears the selection.
+/// The floating Cite pill shown just above an active selection. It is purely
+/// visual: the selection mouse handlers (render.rs) detect a press and
+/// release on the hit rect recorded here and fire the cite callback, so no
+/// click handler here can race the selection-clearing mouse-down.
 fn cite_popup(
-    anchor: [f32; 2],
-    quote: String,
+    line: [f32; 4],
     container: gpui::Bounds<gpui::Pixels>,
     selection: TranscriptSelection,
-    on_cite: CiteHandler,
     theme: Theme,
 ) -> impl IntoElement {
-    const POPUP_WIDTH_ESTIMATE: f32 = 52.0;
-    const POPUP_HEIGHT: f32 = 26.0;
+    const POPUP_WIDTH_ESTIMATE: f32 = 60.0;
+    const POPUP_HEIGHT: f32 = 30.0;
     const POPUP_GAP: f32 = 8.0;
+    const HIT_PAD: f32 = 8.0;
     let container_x = f32::from(container.origin.x);
     let container_y = f32::from(container.origin.y);
     let container_w = f32::from(container.size.width);
     let container_h = f32::from(container.size.height);
-    let mut x = anchor[0] - container_x + POPUP_GAP;
-    let mut y = anchor[1] - container_y + POPUP_GAP;
-    if y + POPUP_HEIGHT > container_h {
-        // Near the bottom: flip above the selection end instead.
-        y = anchor[1] - container_y - POPUP_HEIGHT - 6.0;
+    let mut x = line[0] + line[2] - container_x + POPUP_GAP;
+    // Above the selection's last line; flip below when that would poke past
+    // the container's top edge.
+    let mut y = line[1] - container_y - POPUP_HEIGHT - 6.0;
+    if y < 0.0 {
+        y = line[1] + line[3] - container_y + 6.0;
     }
     x = x.clamp(0.0, (container_w - POPUP_WIDTH_ESTIMATE).max(0.0));
     y = y.clamp(0.0, (container_h - POPUP_HEIGHT).max(0.0));
+    // Record the hit rect at render time, from the same placement math that
+    // positions the pill — deliberately generous so clicks near the rounded
+    // edges still count. No paint-time probe: how Taffy sizes an absolute
+    // probe inside this pill is exactly what we would be guessing at.
+    selection.selection.borrow_mut().set_cite_button(Some([
+        container_x + x - HIT_PAD,
+        container_y + y - HIT_PAD,
+        POPUP_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
+        POPUP_HEIGHT + 2.0 * HIT_PAD,
+    ]));
     div()
         .id("cite-popup")
         .absolute()
@@ -1400,38 +1405,12 @@ fn cite_popup(
         .shadow_sm()
         .cursor_pointer()
         .hover(|element| element.bg(theme.overlay_strong))
-        .on_click({
-            let selection = selection.clone();
-            move |_, window, cx| {
-                (on_cite)(quote.clone(), window, cx);
-                selection.selection.borrow_mut().clear();
-                window.refresh();
-                cx.stop_propagation();
-            }
-        })
         .child(
             div()
                 .text_size(px(12.0))
                 .line_height(px(16.0))
                 .text_color(theme.text_secondary)
                 .child("Cite"),
-        )
-        // Record the popup's window-space rect so a press inside it does not
-        // clear the selection before the click can land.
-        .child(
-            canvas(|_, _, _| (), {
-                let selection = selection.clone();
-                move |bounds, _, _, _| {
-                    selection.selection.borrow_mut().set_cite_button(Some([
-                        f32::from(bounds.origin.x),
-                        f32::from(bounds.origin.y),
-                        f32::from(bounds.size.width),
-                        f32::from(bounds.size.height),
-                    ]));
-                }
-            })
-            .absolute()
-            .size_full(),
         )
 }
 

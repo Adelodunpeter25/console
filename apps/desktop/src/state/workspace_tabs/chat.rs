@@ -337,11 +337,16 @@ impl ConsoleDesktopApp {
     ) {
         let composer = self.composer_for_pane(pane_id);
         composer.update(cx, |input, cx| {
-            let caret = input.cursor();
+            let content = input.content().to_string();
+            // The caret must sit on a char boundary or `replace_range` would
+            // silently no-op; clamp defensively rather than lose the quote.
+            let mut caret = input.cursor().min(content.len());
+            while caret > 0 && !content.is_char_boundary(caret) {
+                caret -= 1;
+            }
             // Start the quote on its own line when the composer already has
             // text before the caret.
-            let content = input.content().to_string();
-            let prefix = if content[..caret.min(content.len())]
+            let prefix = if content[..caret]
                 .chars()
                 .next_back()
                 .is_some_and(|c| c != '\n')
