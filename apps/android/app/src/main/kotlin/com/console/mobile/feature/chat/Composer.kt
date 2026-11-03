@@ -60,12 +60,12 @@ import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.components.common.new.floatingSurface
+import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -265,28 +265,27 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
+    BlurredBottomBar(
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+    ) {
         Column(
             modifier = Modifier
-                .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .padding(top = 8.dp, bottom = 8.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp)
-                    .padding(top = 6.dp, bottom = if (expansion > 0.05f) 4.dp else 6.dp),
-            ) {
-                if (topBanner != null) topBanner()
-                // Kept in composition while collapsed (just zero-height) so a sheet it owns
-                // and its loaded branch list survive the composer folding up.
-                Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
-                    ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
-                }
-                // Attachments are content, not configuration, so they stay visible collapsed.
-                if (attachments.isNotEmpty()) {
-                    AttachmentStrip(sessionId = sessionId, attachments = attachments)
-                }
-                ComposerInput(
+            if (topBanner != null) topBanner()
+            // Kept in composition while collapsed (just zero-height) so a sheet it owns
+            // and its loaded branch list survive the composer folding up.
+            Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+            }
+            // Attachments are content, not configuration, so they stay visible collapsed.
+            if (attachments.isNotEmpty()) {
+                AttachmentStrip(sessionId = sessionId, attachments = attachments)
+            }
+            ComposerInput(
                 value = value,
                 fieldValue = fieldValue,
                 mentionVisual = mentionVisual,
@@ -383,25 +382,10 @@ fun Composer(
                 null -> {}
             }
         }
-        }
         Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(NewTheme.Background)
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
-                ComposerBottomStrip(sessionId = sessionId)
-            }
+            ComposerBottomStrip(sessionId = sessionId)
         }
-        if (expansion > 0.05f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(24.dp)
-                    .background(NewTheme.Background),
-            )
-        }
+    }
     }
     }
 }
@@ -441,20 +425,13 @@ private fun ComposerInput(
     val fieldMinHeight = androidx.compose.ui.unit.lerp(lineDp, lineDp * 2, expansion)
     val fieldMaxHeight = androidx.compose.ui.unit.lerp(lineDp, maxOf(80.dp, lineDp * 2), expansion)
     // Collapsed, the send button sits at the end of the same row, so text must stop short of it.
-    val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 6.dp, 8.dp, expansion)
-    val fieldStartPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 6.dp, 8.dp, expansion)
-    // Pill when collapsed, rounded rect when expanded; radii larger than half
-    // the height are clamped, so 28dp reads as a full pill at any font scale.
-    val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(28.dp, 20.dp, expansion))
+    val fieldEndPad = androidx.compose.ui.unit.lerp(SEND_SIZE + 4.dp, 8.dp, expansion)
+    // Pill when collapsed, the rounded rect when expanded; radii larger than half
+    // the height are clamped, so 26dp reads as a full pill at any font scale.
+    val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .floatingSurface(
-                shape = bubbleShape,
-                backgroundColor = Color(0xFF1E1E24),
-                borderColor = Color.White.copy(alpha = 0.08f),
-                elevation = 4.dp,
-            )
+        modifier = Modifier.fillMaxWidth().clip(bubbleShape)
+            .background(NewTheme.Card)
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }
@@ -470,7 +447,7 @@ private fun ComposerInput(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = fieldStartPad, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
+                .padding(start = 8.dp, end = fieldEndPad, top = fieldVPad, bottom = fieldVPad)
                 .heightIn(min = fieldMinHeight, max = fieldMaxHeight)
                 .onGloballyPositioned { fieldHeightPx = it.size.height }
                 .clipToBounds(),
@@ -518,7 +495,7 @@ private fun ComposerInput(
                             }
                         }
                         if (value.isEmpty()) {
-                            Text("Message…", color = NewTheme.TextMuted, fontSize = 14.sp)
+                            Text("Ask anything…", color = NewTheme.TextMuted, fontSize = 14.sp)
                         }
                         innerTextField()
                     }
@@ -552,16 +529,21 @@ private fun ComposerInput(
                 }
             }
         }
-            // Chips only exist once expanded; the attach and send buttons below
-            // are always visible, pinned at bottom start and end.
+            // Attach and the chips only exist once expanded; the send button below is
+            // the one control that is always there, so it lives outside this row.
             Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(SEND_SIZE),
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Spacer(Modifier.width(SEND_SIZE + 8.dp))
+                    Box(
+                        modifier = Modifier.size(SEND_SIZE).clip(CircleShape).clickable(onClickLabel = "Attach image", onClick = attach),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
+                    }
+                    // Fills the gap so the chips stay clear of the send button; the model
+                    // chip truncates rather than pushing anything off a narrow screen.
                     ThinkingChip(sessionId = sessionId, running = running)
                     Row(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
@@ -571,17 +553,10 @@ private fun ComposerInput(
                         ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
                     }
                     // Reserves the slot the send button floats over.
-                    Spacer(Modifier.width(SEND_SIZE + 4.dp))
+                    Spacer(Modifier.size(SEND_SIZE))
                 }
             }
         }
-
-        // Pinned bottom-start: + button always accessible
-        AttachButton(
-            attach = attach,
-            modifier = Modifier.align(Alignment.BottomStart),
-        )
-
         // Pinned bottom-end: beside the text when collapsed, at the end of the
         // action row when expanded. The bubble's height animates and the button
         // rides its bottom edge, so it slides into place with no separate animation.
@@ -595,28 +570,7 @@ private fun ComposerInput(
     }
 }
 
-private val SEND_SIZE = 40.dp
-
-@Composable
-private fun AttachButton(
-    attach: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(SEND_SIZE)
-            .clip(CircleShape)
-            .clickable(onClickLabel = "Attach image", onClick = attach),
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.material3.Icon(
-            TablerIcons.Outline.Plus,
-            contentDescription = "Attach",
-            tint = NewTheme.TextSecondary,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
+private val SEND_SIZE = 35.dp
 
 @Composable
 private fun SendStopButton(
@@ -631,35 +585,20 @@ private fun SendStopButton(
         // mid-send, and destructive red so the control's meaning is readable at
         // a glance rather than only from a tiny glyph.
         Box(
-            modifier = modifier
-                .size(SEND_SIZE)
-                .clip(CircleShape)
-                .background(NewTheme.Danger)
+            modifier = modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Danger)
                 .clickable(onClickLabel = "Stop", onClick = onStop),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(
-                TablerIcons.Outline.PlayerStop,
-                contentDescription = "Stop generating",
-                tint = NewTheme.OnPrimary,
-                modifier = Modifier.size(16.dp),
-            )
+            androidx.compose.material3.Icon(TablerIcons.Outline.PlayerStop, contentDescription = "Stop generating", tint = NewTheme.OnPrimary, modifier = Modifier.size(14.dp))
         }
     } else {
         Box(
-            modifier = modifier
-                .size(SEND_SIZE)
-                .clip(CircleShape)
+            modifier = modifier.size(SEND_SIZE).clip(CircleShape)
                 .background(if (canSend) NewTheme.Primary else NewTheme.PrimaryDisabled)
                 .clickable(enabled = canSend, onClickLabel = "Send", onClick = onSend),
             contentAlignment = Alignment.Center,
         ) {
-            androidx.compose.material3.Icon(
-                TablerIcons.Outline.ArrowUp,
-                contentDescription = "Send",
-                tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted,
-                modifier = Modifier.size(18.dp),
-            )
+            androidx.compose.material3.Icon(TablerIcons.Outline.ArrowUp, contentDescription = null, tint = if (canSend) NewTheme.OnPrimary else NewTheme.TextMuted, modifier = Modifier.size(15.dp))
         }
     }
 }
