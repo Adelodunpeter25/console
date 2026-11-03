@@ -100,8 +100,7 @@ pub mod cookies {
     use objc2::rc::Retained;
     use objc2::runtime::AnyObject;
     use objc2_foundation::MainThreadMarker;
-    use objc2_foundation::ns_string;
-    use objc2_foundation::{NSDate, NSDictionary, NSHTTPCookie, NSNumber, NSString};
+    use objc2_foundation::{NSDate, NSDictionary, NSHTTPCookie, NSString};
     use objc2_web_kit::WKWebsiteDataStore;
 
     /// Inject cookies into the shared default webview data store — the same
@@ -226,10 +225,14 @@ pub mod cookies {
         }
 
         let mut keys: Vec<&NSString> = vec![
-            ns_string!("NSHTTPCookieName"),
-            ns_string!("NSHTTPCookieValue"),
-            ns_string!("NSHTTPCookieDomain"),
-            ns_string!("NSHTTPCookiePath"),
+            // SAFETY: extern statics of the framework-dylib kind; reading
+            // them is safe. These are the real Foundation property-key
+            // constants — cookieWithProperties matches keys by pointer
+            // identity, so content-equal plain strings all failed.
+            unsafe { objc2_foundation::NSHTTPCookieName },
+            unsafe { objc2_foundation::NSHTTPCookieValue },
+            unsafe { objc2_foundation::NSHTTPCookieDomain },
+            unsafe { objc2_foundation::NSHTTPCookiePath },
         ];
         let name = NSString::from_str(&cookie.name);
         let value = NSString::from_str(&cookie.value);
@@ -244,24 +247,20 @@ pub mod cookies {
         ];
 
         if cookie.secure {
-            keys.push(ns_string!("NSHTTPCookieSecure"));
-            // Documented as the literal string "TRUE", unlike the boolean
-            // HttpOnly below.
+            keys.push(unsafe { objc2_foundation::NSHTTPCookieSecure });
+            // Documented as the literal string "TRUE".
             objects.push(unsafe { into_any(NSString::from_str("TRUE")) });
         }
-        if cookie.http_only {
-            // Undocumented-but-honored key (Foundation's isHTTPOnly is set
-            // from it; Chromium passes the same). Its value is a boolean
-            // NSNumber — the "TRUE" string here made cookieWithProperties
-            // return nil for every cookie.
-            keys.push(ns_string!("NSHTTPCookieIsHttpOnly"));
-            objects.push(unsafe { into_any(NSNumber::numberWithBool(true)) });
-        }
+        // HttpOnly: the "NSHTTPCookieIsHttpOnly" key is not framework-
+        // exported, and with pointer-identity key matching an unexported
+        // string is silently ignored (cookie still created, flag lost).
+        // Login flows work without the flag — the browser just lets JS read
+        // those cookies too — so cookies ship without it.
         if cookie.expires_at_ms > 0 {
             // NSDate wants seconds; the ms → s conversion keeps the same
             // instant, and zero stays a session cookie.
             let date = NSDate::dateWithTimeIntervalSince1970(cookie.expires_at_ms as f64 / 1_000.0);
-            keys.push(ns_string!("NSHTTPCookieExpires"));
+            keys.push(unsafe { objc2_foundation::NSHTTPCookieExpires });
             objects.push(unsafe { into_any(date) });
         }
         let refs: Vec<&AnyObject> = objects.iter().map(|o| &**o).collect();
