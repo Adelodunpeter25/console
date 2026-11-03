@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.UpdateSessionDto
+import com.console.mobile.ui.components.common.new.floatingSurface
 import com.console.mobile.ui.components.picker.ApprovalModePickerSheet
 import com.console.mobile.ui.components.picker.ThinkingLevelPickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
@@ -151,11 +152,16 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
     HoldComposerOpen(sheet)
 
     Row(
-        modifier = modifier.alpha(if (running) 0.45f else 1f)
-            .clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(NewTheme.Raised)
+        modifier = modifier
+            .alpha(if (running) 0.45f else 1f)
+            .floatingSurface(
+                shape = RoundedCornerShape(999.dp),
+                backgroundColor = NewTheme.Raised,
+                borderColor = Color.White.copy(alpha = 0.08f),
+                elevation = 4.dp,
+            )
             .clickable(enabled = !running, onClick = { sheet = true })
-            .padding(horizontal = 9.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

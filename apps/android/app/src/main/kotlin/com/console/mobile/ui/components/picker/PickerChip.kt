@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.core.icons.getProviderIconKey
 import com.console.mobile.ui.components.ProviderIcon
+import com.console.mobile.ui.components.common.new.floatingSurface
 import com.console.mobile.ui.theme.NewTheme
 
 /**
@@ -39,11 +40,16 @@ fun PickerChip(
     onClick: () -> Unit,
 ) {
     Row(
-        modifier = modifier.alpha(if (enabled) 1f else 0.45f)
-            .clip(RoundedCornerShape(NewTheme.ChipRadius))
-            .background(surface)
+        modifier = modifier
+            .alpha(if (enabled) 1f else 0.45f)
+            .floatingSurface(
+                shape = RoundedCornerShape(999.dp),
+                backgroundColor = surface,
+                borderColor = Color.White.copy(alpha = 0.08f),
+                elevation = 4.dp,
+            )
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 11.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (provider != null && getProviderIconKey(provider) != null) {
