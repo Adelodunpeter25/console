@@ -105,10 +105,10 @@ pub mod cookies {
     use objc2_web_kit::WKWebsiteDataStore;
 
     /// Inject cookies into the shared default webview data store — the same
-    /// store every `WebviewHost` was built against (wry creates its
-    /// WKWebViewConfiguration without a custom store, so `defaultDataStore`
-    /// is the browser's jar). Main thread only. Returns how many cookies
-    /// the store accepted; a cookie with unusable properties is skipped.
+    /// store every `WebviewHost` was built against (wry without an explicit
+    /// store uses `defaultDataStore`). Main thread only. Returns how many
+    /// cookies went to the store ("injected" ≠ "accepted": acceptance is
+    /// verified by the settled read-back log that follows).
     pub fn inject_cookies(input: &[ChromeCookie]) -> Result<usize, String> {
         use block2::RcBlock;
         use std::ptr::NonNull;
@@ -118,6 +118,7 @@ pub mod cookies {
             return Err("cookie injection must run on the main thread".to_string());
         };
         let mut injected = 0usize;
+        let injected_for_log;
         unsafe {
             let store = WKWebsiteDataStore::defaultDataStore(mtm).httpCookieStore();
             for cookie in input {
@@ -126,25 +127,59 @@ pub mod cookies {
                 };
                 let name = cookie.name.clone();
                 let domain = cookie.domain.clone();
+                // The handler firing is the acceptance signal; a rejected
+                // cookie stays silent here, and the settled read-back below
+                // counts what actually landed. Never log values.
                 let handler = RcBlock::new(move || {
-                    // The handler firing is the acceptance signal; a rejected
-                    // cookie stays silent here, and the store-wide read below
-                    // counts what actually landed.
-                    log::debug!("chrome cookies: stored {}.{}", domain, name);
+                    log::debug!("chrome cookies: accepted {}.{}", domain, name);
                 });
                 store.setCookie_completionHandler(&cookie_obj, Some(&handler));
                 injected += 1;
             }
-            // Store-wide read right after the loop: how many cookies the jar
-            // holds at this instant (recent sets may still be landing, so
-            // treat low numbers here as provisional).
-            let read = RcBlock::new(|cookies: NonNull<NSArray<NSHTTPCookie>>| {
-                let total = unsafe { cookies.as_ref().count() };
-                log::info!("chrome cookies: jar read-back holds {total} cookies");
+            injected_for_log = injected;
+            // Sets and completions are async, so read the jar once they have
+            // propagated. A count far below `injected` means WebKit rejected
+            // the cookies; the top-domain split shows which survived.
+            let read = RcBlock::new(move |cookies: NonNull<NSArray<NSHTTPCookie>>| {
+                let cookies = unsafe { cookies.as_ref() };
+                let total = cookies.count();
+                let mut by_domain: std::collections::HashMap<String, usize> = Default::default();
+                for cookie in cookies.iter() {
+                    *by_domain
+                        .entry(cookie.domain().to_string())
+                        .or_insert(0) += 1;
+                }
+                let mut top: Vec<(String, usize)> = by_domain.into_iter().collect();
+                top.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+                let top: Vec<String> =
+                    top.iter().take(8).map(|(d, n)| format!("{d}x{n}")).collect();
+                log::info!(
+                    "chrome cookies: jar holds {total} cookies (injected {injected_for_log}); top: {}",
+                    top.join(", ")
+                );
             });
-            store.getAllCookies(&read);
+            dispatch_after_main(2_000_000_000, read);
         }
         Ok(injected)
+    }
+
+    /// Run a block on the main queue after `ns` nanoseconds.
+    fn dispatch_after_main(
+        ns: u64,
+        block: block2::RcBlock<dyn Fn(std::ptr::NonNull<objc2_foundation::NSArray<NSHTTPCookie>>)>,
+    ) {
+        unsafe extern "C" {
+            fn dispatch_after(when: u64, queue: *const AnyObject, block: *const AnyObject);
+            fn dispatch_time(when: u64, delta: i64) -> u64;
+            fn dispatch_get_main_queue() -> *const AnyObject;
+        }
+        const DISPATCH_TIME_NOW: u64 = 0;
+        let when = unsafe { dispatch_time(DISPATCH_TIME_NOW, ns as i64) };
+        // Deref coercion: &RcBlock → &Block, the pointer dispatch_after takes.
+        let raw: &block2::Block<
+            dyn Fn(std::ptr::NonNull<objc2_foundation::NSArray<NSHTTPCookie>>),
+        > = &block;
+        unsafe { dispatch_after(when, dispatch_get_main_queue(), raw as *const _ as *const AnyObject) }
     }
 
     /// Foundation has no documented property key for HttpOnly; the private
