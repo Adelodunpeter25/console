@@ -21,6 +21,7 @@ use crate::chat::{
 };
 use crate::markdown::file_links::{is_file_link, is_http_url};
 use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
+use crate::markdown::selection::{CiteHandler, format_cite_quote};
 use crate::primitives::scrollbar::{self, ScrollbarState};
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -97,6 +98,13 @@ pub struct TranscriptView {
     on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
     on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    /// Cites the current selection into the pane's composer as a quote.
+    on_cite: Option<CiteHandler>,
+    /// Window-space bounds of this transcript's container, recorded by a
+    /// paint-time canvas probe each frame. The Cite popup's window-space
+    /// anchor converts to container-relative coordinates through it; a
+    /// one-frame-stale origin after a resize is invisible.
+    cite_origin: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>,
     /// Turns (by their user message id) whose changed-file row is expanded
     /// past the collapsed chip count. Lives here so virtualized rows that
     /// remount keep their state.
@@ -144,6 +152,8 @@ impl TranscriptView {
             session_changes: Rc::new(Vec::new()),
             on_open_change: None,
             on_fork: None,
+            on_cite: None,
+            cite_origin: Rc::new(RefCell::new(None)),
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
             expanded_user_messages: Rc::new(RefCell::new(HashSet::new())),
         }
@@ -192,6 +202,12 @@ impl TranscriptView {
     /// the clicked message and opens the new chat).
     pub fn set_on_fork(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
         self.on_fork = Some(Rc::new(handler));
+    }
+
+    /// Wire the Cite popup: the app inserts the quoted selection into the
+    /// pane's composer. The popup only renders when a handler is wired.
+    pub fn set_on_cite(&mut self, handler: impl Fn(String, &mut Window, &mut App) + 'static) {
+        self.on_cite = Some(Rc::new(handler));
     }
 
     /// Copy server-assigned ids onto this transcript's user messages that
@@ -1272,7 +1288,20 @@ impl Render for TranscriptView {
             }
         }
 
-        div()
+        // The Cite popup shows while a completed selection exists: the quote
+        // is captured here so clicking Cite cannot race a cleared selection.
+        let (cite_quote, cite_anchor) = {
+            let selection = self.selection.selection.borrow();
+            (
+                selection
+                    .selected_text()
+                    .and_then(|text| format_cite_quote(&text)),
+                selection.cite_anchor(),
+            )
+        };
+        let cite_origin = self.cite_origin.clone();
+
+        let root = div()
             .id("transcript-view")
             .key_context("TranscriptView")
             .track_focus(&self.focus_handle)
@@ -1280,8 +1309,9 @@ impl Render for TranscriptView {
             .size_full()
             .bg(theme.chat_canvas)
             .child(render::frame_reset(selection.clone()))
+            .child(cite_origin_probe(cite_origin.clone()))
             .child(if self.messages.is_empty() && !is_streaming {
-                empty_state(theme).into_any_element()
+                empty_state(theme.clone()).into_any_element()
             } else {
                 div()
                     .size_full()
@@ -1301,8 +1331,108 @@ impl Render for TranscriptView {
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
                     .into_any_element()
             })
-            .child(selection_input(selection))
+            .child(selection_input(selection.clone()));
+        if let (Some(anchor), Some(quote), Some(on_cite)) =
+            (cite_anchor, cite_quote, self.on_cite.clone())
+            && let Some(container) = *cite_origin.borrow()
+        {
+            return root
+                .child(cite_popup(
+                    anchor, quote, container, selection, on_cite, theme,
+                ))
+                .into_any_element();
+        }
+        root.into_any_element()
     }
+}
+
+/// Records the transcript container's window-space bounds every frame so the
+/// Cite popup's window-space anchor can be converted to container-relative
+/// coordinates. Paints beneath everything and registers no hitbox.
+fn cite_origin_probe(cell: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>) -> impl IntoElement {
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, _, _| {
+            *cell.borrow_mut() = Some(bounds);
+        },
+    )
+    .absolute()
+    .size_full()
+}
+
+/// The floating Cite button shown at the end of an active selection. Clicking
+/// it hands the markdown-formatted quote to the app (which inserts it into the
+/// pane's composer) and clears the selection.
+fn cite_popup(
+    anchor: [f32; 2],
+    quote: String,
+    container: gpui::Bounds<gpui::Pixels>,
+    selection: TranscriptSelection,
+    on_cite: CiteHandler,
+    theme: Theme,
+) -> impl IntoElement {
+    const POPUP_WIDTH_ESTIMATE: f32 = 52.0;
+    const POPUP_HEIGHT: f32 = 26.0;
+    const POPUP_GAP: f32 = 8.0;
+    let container_x = f32::from(container.origin.x);
+    let container_y = f32::from(container.origin.y);
+    let container_w = f32::from(container.size.width);
+    let container_h = f32::from(container.size.height);
+    let mut x = anchor[0] - container_x + POPUP_GAP;
+    let mut y = anchor[1] - container_y + POPUP_GAP;
+    if y + POPUP_HEIGHT > container_h {
+        // Near the bottom: flip above the selection end instead.
+        y = anchor[1] - container_y - POPUP_HEIGHT - 6.0;
+    }
+    x = x.clamp(0.0, (container_w - POPUP_WIDTH_ESTIMATE).max(0.0));
+    y = y.clamp(0.0, (container_h - POPUP_HEIGHT).max(0.0));
+    div()
+        .id("cite-popup")
+        .absolute()
+        .left(px(x))
+        .top(px(y))
+        .px(px(10.0))
+        .py(px(4.0))
+        .rounded(px(7.0))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.raised)
+        .shadow_sm()
+        .cursor_pointer()
+        .hover(|element| element.bg(theme.overlay_strong))
+        .on_click({
+            let selection = selection.clone();
+            move |_, window, cx| {
+                (on_cite)(quote.clone(), window, cx);
+                selection.selection.borrow_mut().clear();
+                window.refresh();
+                cx.stop_propagation();
+            }
+        })
+        .child(
+            div()
+                .text_size(px(12.0))
+                .line_height(px(16.0))
+                .text_color(theme.text_secondary)
+                .child("Cite"),
+        )
+        // Record the popup's window-space rect so a press inside it does not
+        // clear the selection before the click can land.
+        .child(
+            canvas(|_, _, _| (), {
+                let selection = selection.clone();
+                move |bounds, _, _, _| {
+                    selection.selection.borrow_mut().set_cite_button(Some([
+                        f32::from(bounds.origin.x),
+                        f32::from(bounds.origin.y),
+                        f32::from(bounds.size.width),
+                        f32::from(bounds.size.height),
+                    ]));
+                }
+            })
+            .absolute()
+            .size_full(),
+        )
 }
 
 fn transcript_row(

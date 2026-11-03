@@ -110,6 +110,10 @@ name = "math_test"
 path = "tests/markdown/math_test.rs"
 
 [[test]]
+name = "cite_quote_test"
+path = "tests/markdown/cite_quote_test.rs"
+
+[[test]]
 name = "tool_icon_test"
 path = "tests/chat/tool_icon_test.rs"
 

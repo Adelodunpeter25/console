@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::rc::Rc;
 
 use gpui::{
     App, BorderStyle, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId,
@@ -6,7 +7,8 @@ use gpui::{
     WhiteSpace, Window, div, point, px, quad,
 };
 
-use crate::markdown::render::range_rects;
+use crate::markdown::render::{Palette, TranscriptSelection, range_rects};
+use crate::markdown::selection::{RegisteredText, TextKey};
 use crate::theme::Theme;
 
 /// Icon size for the inline file-mention chip. Shared by the composer paint
@@ -96,6 +98,10 @@ pub(crate) struct InlineFileMentionLayout {
     text: StyledText,
     text_layout_state: (),
     mention_icons: Vec<MentionIconLayout>,
+    /// The display text actually shaped (spacers included), for the
+    /// selection registry's copy snapshot.
+    flat_text: String,
+    selection: Option<(TranscriptSelection, TextKey)>,
 }
 
 /// One wrapped text layout with file mentions painted inline.
@@ -107,6 +113,10 @@ pub(crate) struct InlineFileMentionLayout {
 pub(crate) struct InlineFileMentionText {
     text: String,
     mentions: Vec<InlineFileMention>,
+    /// Participation in the transcript's cross-element text selection: the
+    /// shared selection state plus this element's registry key. `None` for
+    /// surfaces without selection (the composer's own field).
+    selection: Option<(TranscriptSelection, TextKey)>,
 }
 
 impl InlineFileMentionText {
@@ -114,7 +124,16 @@ impl InlineFileMentionText {
         Self {
             text: text.into(),
             mentions,
+            selection: None,
         }
+    }
+
+    /// Make this text selectable inside the transcript: its flat text and
+    /// layout join the frame's selection registry, and the active selection
+    /// washes across it.
+    pub(crate) fn with_selection(mut self, selection: TranscriptSelection, key: TextKey) -> Self {
+        self.selection = Some((selection, key));
+        self
     }
 }
 
@@ -219,7 +238,7 @@ impl Element for InlineFileMentionText {
             })
             .collect();
 
-        let mut text = StyledText::new(display_text).with_runs(runs);
+        let mut text = StyledText::new(display_text.clone()).with_runs(runs);
         let (text_layout_id, text_layout_state) = window.with_text_style(
             Some(TextStyleRefinement {
                 white_space: Some(WhiteSpace::Normal),
@@ -270,6 +289,8 @@ impl Element for InlineFileMentionText {
                 text,
                 text_layout_state,
                 mention_icons,
+                flat_text: display_text,
+                selection: self.selection.take(),
             },
         )
     }
@@ -343,6 +364,30 @@ impl Element for InlineFileMentionText {
                     BorderStyle::default(),
                 ));
             }
+        }
+
+        // Transcript selection: the active range washes under this text and
+        // the element joins the frame's registry so drags resolve across it.
+        if let Some((selection, key)) = &layout_state.selection {
+            if let Some(range) = selection.selection.borrow().wash_range(key) {
+                let wash = Palette::from_theme(&theme).selection;
+                for rect in range_rects(&layout, &range, 0.0, 0.0) {
+                    window.paint_quad(quad(
+                        rect,
+                        px(0.0),
+                        wash,
+                        px(0.0),
+                        gpui::transparent_black(),
+                        BorderStyle::default(),
+                    ));
+                }
+            }
+            selection.registry.borrow_mut().push(RegisteredText {
+                key: key.clone(),
+                text: Rc::from(layout_state.flat_text.as_str()),
+                block_break: false,
+                geometry: layout.clone(),
+            });
         }
 
         layout_state.text.paint(

@@ -1107,10 +1107,15 @@ pub fn plain_log_line(text: impl Into<SharedString>, color: Hsla, ctx: &Ctx) -> 
 
 /// A zero-size canvas that clears the frame's registry. Paint it *before* any
 /// transcript text so the registry holds exactly this frame's visible elements.
+/// The stale Cite popup rect goes with it; the popup re-records its own bounds
+/// later in the same frame when it is still shown.
 pub fn frame_reset(selection: TranscriptSelection) -> impl IntoElement {
     canvas(
         |_, _, _| (),
-        move |_, _, _, _| selection.registry.borrow_mut().clear(),
+        move |_, _, _, _| {
+            selection.registry.borrow_mut().clear();
+            selection.selection.borrow_mut().set_cite_button(None);
+        },
     )
     .absolute()
     .w(px(0.0))
@@ -1248,6 +1253,18 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             if phase != DispatchPhase::Bubble || event.button != MouseButton::Left {
                 return;
             }
+            // A press on the Cite popup itself must not clear the selection:
+            // the popup would vanish before the click could fire.
+            {
+                let selection = state.selection.borrow();
+                if let Some([x, y, w, h]) = selection.cite_button() {
+                    if Bounds::new(point(px(x), px(y)), size(px(w), px(h)))
+                        .contains(&event.position)
+                    {
+                        return;
+                    }
+                }
+            }
             let registry = state.registry.borrow();
             let hit = registry.entries().iter().enumerate().find(|(_, entry)| {
                 !layout_missing(&entry.geometry)
@@ -1322,13 +1339,38 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
 
     window.on_mouse_event({
         let state = state.clone();
-        move |_: &MouseUpEvent, phase, _, _| {
+        move |_: &MouseUpEvent, phase, window, _| {
             if phase != DispatchPhase::Bubble {
                 return;
             }
             let key = state.selection.borrow().anchor().cloned();
-            if let Some(key) = key {
-                state.selection.borrow_mut().end_drag(&key);
+            let Some(key) = key else {
+                return;
+            };
+            let (head, finished) = {
+                let mut selection = state.selection.borrow_mut();
+                let head = selection.head_span().cloned();
+                let finished = selection.end_drag(&key);
+                (head, finished)
+            };
+            let Some(_) = finished else {
+                return;
+            };
+            // Anchor the Cite popup at the selection's last visible row: the
+            // right edge of the head span's final wash rect, in window space.
+            let anchor = head.and_then(|span| {
+                let registry = state.registry.borrow();
+                let entry = registry.entries().iter().find(|e| e.key == span.key)?;
+                let rects = range_rects(&entry.geometry, &span.range, 0.0, 0.0);
+                let rect = rects.last()?;
+                Some([
+                    f32::from(rect.origin.x) + f32::from(rect.size.width),
+                    f32::from(rect.origin.y) + f32::from(rect.size.height),
+                ])
+            });
+            if anchor.is_some() {
+                state.selection.borrow_mut().set_cite_anchor(anchor);
+                window.refresh();
             }
         }
     });

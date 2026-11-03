@@ -3,7 +3,9 @@ use console_core::{
     ApprovalMode, SelectedModel, ThinkingLevel, TodoItem, UpdateSessionDto, WorkspaceTabConfig,
 };
 use console_ui::chat::TranscriptView;
-use console_ui::input::{ComposerAttachmentPaste, ComposerLargePaste, ComposerEvent, ComposerInput};
+use console_ui::input::{
+    ComposerAttachmentPaste, ComposerEvent, ComposerInput, ComposerLargePaste,
+};
 use console_ui::model_picker::PickerTab;
 use console_ui::primitives::menu::ContextMenuHandle;
 use console_ui::workspace::ops as workspace_ops;
@@ -25,8 +27,7 @@ impl ConsoleDesktopApp {
         }
 
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
-        let composer_input =
-            cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
+        let composer_input = cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
         let question_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .search_field()
@@ -113,6 +114,11 @@ impl ConsoleDesktopApp {
                 pane_id_owned.clone(),
             );
             super::super::transcript_wiring::wire_fork_for_pane(
+                transcript,
+                entity.clone(),
+                pane_id_owned.clone(),
+            );
+            super::super::transcript_wiring::wire_cite_for_pane(
                 transcript,
                 entity.clone(),
                 pane_id_owned.clone(),
@@ -317,6 +323,36 @@ impl ConsoleDesktopApp {
             .as_deref()
             .map(|pane_id| self.composer_for_pane(pane_id))
             .unwrap_or_else(|| self.composer_input.clone())
+    }
+
+    /// Insert a Cite quote (markdown `>` block with a trailing blank line)
+    /// into the pane's composer at the caret and focus it, ready for the
+    /// user's comment below the quote.
+    pub(crate) fn cite_quote_into_composer(
+        &mut self,
+        pane_id: &str,
+        quote: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let composer = self.composer_for_pane(pane_id);
+        composer.update(cx, |input, cx| {
+            let caret = input.cursor();
+            // Start the quote on its own line when the composer already has
+            // text before the caret.
+            let content = input.content().to_string();
+            let prefix = if content[..caret.min(content.len())]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c != '\n')
+            {
+                "\n"
+            } else {
+                ""
+            };
+            input.replace_range(caret..caret, &format!("{prefix}{quote}"), cx);
+            window.focus(&input.focus_handle(cx), cx);
+        });
     }
 
     pub(crate) fn pane_selected_model(&self, pane_id: &str) -> Option<SelectedModel> {
@@ -660,7 +696,7 @@ impl ConsoleDesktopApp {
                 provider: None,
                 approval_mode: Some(next.value().to_string()),
                 thinking_level: None,
-                            pinned: None,
+                pinned: None,
             },
             cx,
         );

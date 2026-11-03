@@ -69,6 +69,38 @@ pub(crate) fn wire_fork_for_pane(
     });
 }
 
+/// Cite the pane transcript's selection into the pane's composer.
+pub(crate) fn wire_cite_for_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+    pane_id: String,
+) {
+    transcript.set_on_cite(move |quote, window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                this.cite_quote_into_composer(&pane_id, &quote, window, cx);
+            });
+        }
+    });
+}
+
+pub(crate) fn wire_cite_for_active_pane(
+    transcript: &mut TranscriptView,
+    entity: WeakEntity<ConsoleDesktopApp>,
+) {
+    transcript.set_on_cite(move |quote, window, cx| {
+        if let Some(app) = entity.upgrade() {
+            app.update(cx, |this, cx| {
+                let pane_id = this
+                    .active_pane_id
+                    .clone()
+                    .unwrap_or_else(|| "pane-main".to_string());
+                this.cite_quote_into_composer(&pane_id, &quote, window, cx);
+            });
+        }
+    });
+}
+
 pub(crate) fn wire_fork_for_active_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,

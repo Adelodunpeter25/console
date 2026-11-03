@@ -64,6 +64,14 @@ pub struct Selection {
     dragging: bool,
     /// Resolved spans in document order. Empty until a drag moves.
     spans: Vec<Span>,
+    /// Window-space point where the selection ends, recorded on mouse-up so
+    /// the Cite popup can anchor next to the highlighted text. `None` while
+    /// no completed selection is active.
+    cite_anchor: Option<[f32; 2]>,
+    /// Window-space rect of the rendered Cite popup, recorded at paint time.
+    /// Mouse-down inside it must not clear the selection, or the click would
+    /// land on a popup that vanished mid-press.
+    cite_button: Option<[f32; 4]>,
 }
 
 impl Selection {
@@ -128,6 +136,32 @@ impl Selection {
         self.anchor_offset = 0;
         self.dragging = false;
         self.spans.clear();
+        self.cite_anchor = None;
+        self.cite_button = None;
+    }
+
+    /// The last resolved span in document order — the selection's head.
+    /// `None` before a drag has resolved any spans.
+    pub fn head_span(&self) -> Option<&Span> {
+        self.spans.last()
+    }
+
+    /// Window-space point where the selection ended, for Cite popup anchoring.
+    pub fn cite_anchor(&self) -> Option<[f32; 2]> {
+        self.cite_anchor
+    }
+
+    pub fn set_cite_anchor(&mut self, anchor: Option<[f32; 2]>) {
+        self.cite_anchor = anchor;
+    }
+
+    /// Window-space rect of the rendered Cite popup, set at paint time.
+    pub fn cite_button(&self) -> Option<[f32; 4]> {
+        self.cite_button
+    }
+
+    pub fn set_cite_button(&mut self, rect: Option<[f32; 4]>) {
+        self.cite_button = rect;
     }
 
     /// The wash range for `key` this frame. `None` means nothing to paint.
@@ -155,8 +189,14 @@ impl Selection {
                 }
             }
             // The renderer reserves an em space before icon-bearing links;
-            // it is layout only and must not leak into the clipboard.
-            out.push_str(&span.text[span.range.clone()].replace(ICON_GAP, ""));
+            // it is layout only and must not leak into the clipboard. The
+            // user-bubble mention chips reserve a non-breaking-space run the
+            // same way; collapse it to one plain space.
+            out.push_str(
+                &span.text[span.range.clone()]
+                    .replace(ICON_GAP, "")
+                    .replace(crate::common::file_mention_chip::FILE_MENTION_SPACER, " "),
+            );
             has_span = true;
         }
         out
@@ -174,6 +214,10 @@ pub struct RegisteredText<G = ()> {
     pub block_break: bool,
     pub geometry: G,
 }
+
+/// Cite callback: receives the selection formatted as a markdown quote (with
+/// the trailing blank line for the reply) and inserts it into the composer.
+pub type CiteHandler = std::rc::Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App) + 'static>;
 
 /// The frame's document-ordered text elements. Paint order is document order,
 /// so the renderer simply pushes as it paints and clears at the frame's start.
@@ -284,6 +328,29 @@ impl<G> SelectionState<G> {
         self.selection.borrow_mut().clear();
         self.registry.borrow_mut().clear();
     }
+}
+
+/// Format selected transcript text as a markdown quote for the composer:
+/// each non-empty line gets a `> ` prefix, then a blank line for the reply.
+/// Leading/trailing blank lines are dropped; interior blanks stay unquoted
+/// so the quoted shape survives. Returns `None` for blank input.
+pub fn format_cite_quote(selected: &str) -> Option<String> {
+    let trimmed = selected.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut out = String::with_capacity(trimmed.len() + 8);
+    for line in trimmed.lines() {
+        if line.trim().is_empty() {
+            out.push('\n');
+        } else {
+            out.push_str("> ");
+            out.push_str(line.trim_end());
+            out.push('\n');
+        }
+    }
+    out.push('\n');
+    Some(out)
 }
 
 /// Byte range around `offset` for a double click: a word-ish run, or the

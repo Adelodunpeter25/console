@@ -242,6 +242,19 @@ impl RenderOnce for UserMessageBubble {
         let (message_text, mentions) =
             message_text_with_mentions(&self.content, &self.context_files);
         let has_content = !message_text.is_empty();
+        // The bubble's text joins the transcript's selection registry, so
+        // prompts are highlightable (and citable) like assistant replies.
+        let message_text_element = match &self.selection {
+            Some(selection) => InlineFileMentionText::new(message_text.clone(), mentions)
+                .with_selection(
+                    selection.clone(),
+                    crate::markdown::selection::TextKey::new(
+                        format!("{}-body", self.selection_row),
+                        0,
+                    ),
+                ),
+            None => InlineFileMentionText::new(message_text.clone(), mentions),
+        };
         // Long prompts fold to 8 lines with a Show more/less toggle inside the card,
         // mirroring mobile's 4-line fold.
         let foldable = has_content && estimated_text_lines(&message_text) > USER_FOLDED_LINES;
@@ -330,7 +343,7 @@ impl RenderOnce for UserMessageBubble {
                                             el.max_h(px(USER_FOLDED_MAX_HEIGHT_PX))
                                                 .overflow_hidden()
                                         })
-                                        .child(InlineFileMentionText::new(message_text, mentions)),
+                                        .child(message_text_element),
                                 )
                                 .when_some(expand_toggle, |card, on_toggle| {
                                     card.child(
