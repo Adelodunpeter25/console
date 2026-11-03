@@ -7,7 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,7 +40,7 @@ import com.console.mobile.ui.components.common.new.ScrollThumb
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowDown
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -266,14 +267,18 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
-                        FloatingActionButton(
+                        SmallFloatingActionButton(
                             onClick = {
                                 transcriptScroll.scrollToBottom(scope)
                             },
                             containerColor = NewTheme.Raised,
                             contentColor = NewTheme.TextPrimary,
                         ) {
-                            Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
+                            Icon(
+                                TablerIcons.Outline.ArrowNarrowDown,
+                                contentDescription = "Scroll to bottom",
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
                     }
                 }
