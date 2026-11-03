@@ -716,7 +716,7 @@ impl ConsoleDesktopApp {
             floating_composer: FloatingComposerState::new(window, cx),
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
-            agent_browser_tab: None,
+            agent_browser_tabs: std::collections::HashMap::new(),
             auth_status: None,
             auth_logging_in: std::collections::HashSet::new(),
             auth_login_error: None,

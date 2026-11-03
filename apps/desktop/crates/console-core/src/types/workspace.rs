@@ -62,6 +62,12 @@ pub enum WorkspaceTabConfig {
         browser_id: String,
         url: String,
         title: String,
+        /// The chat session that owns this tab, when an agent opened it.
+        /// Only that chat's browser actions (navigate, snapshot, click, …)
+        /// may target it, so parallel chats never share or stomp tabs.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "sessionId")]
+        session_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         project_id: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

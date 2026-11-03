@@ -849,6 +849,8 @@ impl Render for ConsoleDesktopApp {
                                         // Deleting a worktree's last chat removes the
                                         // worktree's workspace with it.
                                         this.sweep_dead_worktree_workspaces(cx);
+                                        // The chat's agent browser tabs go with it.
+                                        this.close_session_browser_tabs(&id, cx);
                                         // Drop all run-derived state for the deleted
                                         // session, now keyed by session id.
                                         this.running_sessions.remove(&id);

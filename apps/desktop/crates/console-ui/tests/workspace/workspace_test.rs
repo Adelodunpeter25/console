@@ -308,6 +308,7 @@ fn test_browser_ids_lists_only_browser_tabs() {
             browser_id: "browser-1".into(),
             url: String::new(),
             title: "One".into(),
+            session_id: None,
             project_id: None,
             last_active_at_ms: None,
         },

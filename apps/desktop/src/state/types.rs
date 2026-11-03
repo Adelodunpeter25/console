@@ -357,9 +357,10 @@ pub struct ConsoleDesktopApp {
     /// `WorkspaceTabConfig::Browser { browser_id }`. Separate from the
     /// inspector's singleton `browser_view`.
     pub browser_views: std::collections::HashMap<String, Entity<console_ui::BrowserView>>,
-    /// Browser tab the agent last navigated or acted on. Untargeted browser
-    /// actions default to this rather than the user's visible tab.
-    pub agent_browser_tab: Option<String>,
+    /// Browser tab each chat's agent last navigated or acted on, keyed by
+    /// session id. Untargeted browser actions default to the session's own
+    /// tab; actions never reach another chat's or the user's tabs.
+    pub agent_browser_tabs: std::collections::HashMap<String, String>,
     pub auth_status: Option<console_core::types::AuthStatusResponse>,
     pub auth_logging_in: std::collections::HashSet<String>,
     /// Last OAuth sign-in failure, shown verbatim on that provider's card.
