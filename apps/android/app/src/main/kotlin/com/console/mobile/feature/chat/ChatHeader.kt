@@ -27,10 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.components.common.new.FloatingGlassIconButton
-import com.console.mobile.ui.components.common.new.LocalHazeState
 import com.console.mobile.ui.components.common.new.OverflowMenu
 import com.console.mobile.ui.components.common.new.OverflowMenuItem
-import com.console.mobile.ui.components.common.new.liquidGlass
+import com.console.mobile.ui.components.common.new.floatingSurface
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.BrandGit
@@ -59,13 +58,11 @@ internal fun ChatHeader(
     modifier: Modifier = Modifier,
 ) {
     var overflowMenu by remember { mutableStateOf(false) }
-    val hazeState = LocalHazeState.current
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -74,8 +71,7 @@ internal fun ChatHeader(
             icon = TablerIcons.Outline.ChevronLeft,
             contentDescription = "Back",
             onClick = onBack,
-            hazeState = hazeState,
-            size = 42.dp,
+            size = 40.dp,
             iconSize = 22.dp,
         )
 
@@ -84,59 +80,23 @@ internal fun ChatHeader(
             modifier = Modifier
                 .weight(1f, fill = false)
                 .padding(horizontal = 8.dp)
-                .liquidGlass(
-                    hazeState = hazeState,
-                    shape = RoundedCornerShape(22.dp),
-                    backgroundColor = Color(0xFF16161E).copy(alpha = 0.72f),
-                    borderWidth = 1.dp,
-                    blurRadius = 24.dp,
-                    elevation = 6.dp,
+                .floatingSurface(
+                    shape = RoundedCornerShape(20.dp),
+                    backgroundColor = Color(0xFF1E1E24),
+                    borderColor = Color.White.copy(alpha = 0.08f),
+                    elevation = 4.dp,
                 )
-                .padding(horizontal = 14.dp, vertical = 7.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                // Purple mascot / Hermes bot icon with eyes
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(RoundedCornerShape(6.5.dp))
-                        .background(Color(0xFF8B5CF6)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(3.2.dp)
-                                .clip(CircleShape)
-                                .background(Color.White),
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(3.2.dp)
-                                .clip(CircleShape)
-                                .background(Color.White),
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Text(
-                    text = title.ifBlank { "Hermes" },
-                    color = NewTheme.TextPrimary,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            Text(
+                text = title.ifBlank { "Chat" },
+                color = NewTheme.TextPrimary,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
 
         // Floating Options Button
@@ -145,8 +105,7 @@ internal fun ChatHeader(
                 icon = TablerIcons.Outline.Dots,
                 contentDescription = "More options",
                 onClick = { overflowMenu = true },
-                hazeState = hazeState,
-                size = 42.dp,
+                size = 40.dp,
                 iconSize = 20.dp,
             )
             OverflowMenu(

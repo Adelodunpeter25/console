@@ -191,8 +191,6 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation("io.github.lyxnx.compose.ui:tabler-icons-android:3.31.0")
     implementation("com.valentinilk.shimmer:compose-shimmer:1.4.0")
-    implementation("dev.chrisbanes.haze:haze:1.5.3")
-    implementation("dev.chrisbanes.haze:haze-materials:1.5.3")
 
     implementation("io.coil-kt.coil3:coil-compose:3.0.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.0")

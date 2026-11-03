@@ -207,119 +207,112 @@ fun ChatScreen(
         },
     )
 
-    val hazeState = remember { dev.chrisbanes.haze.HazeState() }
-
-    androidx.compose.runtime.CompositionLocalProvider(
-        com.console.mobile.ui.components.common.new.LocalHazeState provides hazeState,
-    ) {
-        Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
-            when {
-                loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
-                !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight, bottom = 80.dp))
-                else -> {
-                    ChatTranscript(
-                        sessionId = sessionId,
-                        messages = displayMessages,
-                        listState = transcriptScroll.listState,
-                        runs = runs,
-                        userRunMap = userRunMap,
-                        assistantTurnChanges = assistantTurnChanges,
-                        latestUserIndex = latestUserIndex,
-                        running = chat.running,
-                        isStreaming = isStreaming,
-                        streamingText = chat.streamingText,
-                        streamingThinking = chat.streamingThinking,
-                        cwd = cwd,
-                        onOpenChange = { inspectingChange = it },
-                        onFork = { messageId ->
-                            scope.launch {
-                                try {
-                                    val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
-                                    AppContainer.appStateHolder.setSelectedSessionId(forked.id)
-                                } catch (_: Exception) {
-                                }
-                            }
-                        },
-                        hazeState = hazeState,
-                    )
-                    ScrollThumb(
-                        state = transcriptScroll.listState,
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = PageHeaderHeight, bottom = 80.dp),
-                    )
-                }
-            }
-
-            ChatHeader(
-                title = chatTitle,
-                onBack = {
-                    AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
-                    onBackToHome()
-                },
-                onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
-                onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
-                onOpenPorts = onOpenPorts,
-                onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
-                onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-
-            Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                Column {
-                    // Above the pills so it can never sit on them; it only shows
-                    // while the reader is scrolled away from the latest message.
-                    if (transcriptScroll.showScrollToBottom) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
-                            contentAlignment = Alignment.CenterEnd,
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    transcriptScroll.scrollToBottom(scope)
-                                },
-                                containerColor = NewTheme.Raised,
-                                contentColor = NewTheme.TextPrimary,
-                            ) {
-                                Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
+    Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
+        when {
+            loadingMessages && !hasMessages -> ChatLoadingSkeleton(modifier = Modifier.padding(top = PageHeaderHeight))
+            !hasMessages && !isStreaming -> EmptyView(title = "Start the conversation", description = "Ask anything about your project.", icon = TablerIcons.Outline.Message, modifier = Modifier.fillMaxSize().padding(top = PageHeaderHeight, bottom = 80.dp))
+            else -> {
+                ChatTranscript(
+                    sessionId = sessionId,
+                    messages = displayMessages,
+                    listState = transcriptScroll.listState,
+                    runs = runs,
+                    userRunMap = userRunMap,
+                    assistantTurnChanges = assistantTurnChanges,
+                    latestUserIndex = latestUserIndex,
+                    running = chat.running,
+                    isStreaming = isStreaming,
+                    streamingText = chat.streamingText,
+                    streamingThinking = chat.streamingThinking,
+                    cwd = cwd,
+                    onOpenChange = { inspectingChange = it },
+                    onFork = { messageId ->
+                        scope.launch {
+                            try {
+                                val forked = AppContainer.projectRepository.forkSession(sessionId, messageId)
+                                AppContainer.appStateHolder.setSelectedSessionId(forked.id)
+                            } catch (_: Exception) {
                             }
                         }
-                    }
-                    if (subagentPanelOpen && subagents.isNotEmpty()) {
-                        SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
-                            subagentPanelOpen = false
-                            selectedSubagentId = id
-                        })
-                    }
-                    ComposerPills(
-                        completedTasks = todoDone,
-                        totalTasks = todoTotal,
-                        showTasks = hasActiveTodos,
-                        subagents = subagents,
-                        shellCount = liveShells.size,
-                        changes = changeTotals,
-                        onTasks = { todoSheet = true },
-                        onSubagents = { subagentPanelOpen = !subagentPanelOpen },
-                        onShells = { shellSheet = true },
-                        onChanges = { jumpToProjectTab(MobileTab.Changes) },
-                    )
-                    if (hasPending) {
-                        InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
-                    } else {
-                        Composer(
-                            sessionId = sessionId,
-                            value = chat.input,
-                            onChange = { AppContainer.chatRepository.setInput(sessionId, it) },
-                            running = chat.running,
-                            projectLocked = hasMessages,
-                            onAddProject = onAddProject,
-                            onSend = {
-                                subagentPanelOpen = false
-                                keyboardController?.hide()
-                                AppContainer.chatRepository.sendMessage(sessionId)
+                    },
+                )
+                ScrollThumb(
+                    state = transcriptScroll.listState,
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = PageHeaderHeight, bottom = 80.dp),
+                )
+            }
+        }
+
+        ChatHeader(
+            title = chatTitle,
+            onBack = {
+                AppContainer.appStateHolder.setActiveTab(MobileTab.Home)
+                onBackToHome()
+            },
+            onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
+            onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
+            onOpenPorts = onOpenPorts,
+            onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
+            onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+
+        Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            Column {
+                // Above the pills so it can never sit on them; it only shows
+                // while the reader is scrolled away from the latest message.
+                if (transcriptScroll.showScrollToBottom) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        FloatingActionButton(
+                            onClick = {
                                 transcriptScroll.scrollToBottom(scope)
                             },
-                            onStop = { AppContainer.chatRepository.abort(sessionId) },
-                        )
+                            containerColor = NewTheme.Raised,
+                            contentColor = NewTheme.TextPrimary,
+                        ) {
+                            Icon(TablerIcons.Outline.ChevronDown, contentDescription = "Scroll to bottom")
+                        }
                     }
+                }
+                if (subagentPanelOpen && subagents.isNotEmpty()) {
+                    SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
+                        subagentPanelOpen = false
+                        selectedSubagentId = id
+                    })
+                }
+                ComposerPills(
+                    completedTasks = todoDone,
+                    totalTasks = todoTotal,
+                    showTasks = hasActiveTodos,
+                    subagents = subagents,
+                    shellCount = liveShells.size,
+                    changes = changeTotals,
+                    onTasks = { todoSheet = true },
+                    onSubagents = { subagentPanelOpen = !subagentPanelOpen },
+                    onShells = { shellSheet = true },
+                    onChanges = { jumpToProjectTab(MobileTab.Changes) },
+                )
+                if (hasPending) {
+                    InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
+                } else {
+                    Composer(
+                        sessionId = sessionId,
+                        value = chat.input,
+                        onChange = { AppContainer.chatRepository.setInput(sessionId, it) },
+                        running = chat.running,
+                        projectLocked = hasMessages,
+                        onAddProject = onAddProject,
+                        onSend = {
+                            subagentPanelOpen = false
+                            keyboardController?.hide()
+                            AppContainer.chatRepository.sendMessage(sessionId)
+                            transcriptScroll.scrollToBottom(scope)
+                        },
+                        onStop = { AppContainer.chatRepository.abort(sessionId) },
+                    )
                 }
             }
         }

@@ -60,8 +60,7 @@ import com.console.mobile.core.util.parseFileMentions
 import console.v1.FileSearchResult
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
-import com.console.mobile.ui.components.common.new.LocalHazeState
-import com.console.mobile.ui.components.common.new.liquidGlass
+import com.console.mobile.ui.components.common.new.floatingSurface
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
@@ -434,13 +433,11 @@ private fun ComposerInput(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(
-                hazeState = LocalHazeState.current,
+            .floatingSurface(
                 shape = bubbleShape,
-                backgroundColor = Color(0xFF16161E).copy(alpha = 0.78f),
-                borderWidth = 1.dp,
-                blurRadius = 24.dp,
-                elevation = 8.dp,
+                backgroundColor = Color(0xFF1E1E24),
+                borderColor = Color.White.copy(alpha = 0.08f),
+                elevation = 4.dp,
             )
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
@@ -591,8 +588,8 @@ private fun AttachButton(
         modifier = modifier
             .size(SEND_SIZE)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+            .background(Color(0xFF282830))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
             .clickable(onClickLabel = "Attach image", onClick = attach),
         contentAlignment = Alignment.Center,
     ) {
@@ -650,20 +647,20 @@ private fun SendStopButton(
             )
         }
     } else {
-        // Soft blue tinted circular action/mic button matching Hermes liquid glass screenshot
+        // Clean solid circular action/mic button
         Box(
             modifier = modifier
                 .size(SEND_SIZE)
                 .clip(CircleShape)
-                .background(Color(0xFF38BDF8).copy(alpha = 0.18f))
-                .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.32f), CircleShape)
+                .background(Color(0xFF282830))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
                 .clickable(onClickLabel = "Voice or send", onClick = onMicClick),
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.material3.Icon(
                 TablerIcons.Outline.Microphone,
                 contentDescription = "Voice input",
-                tint = Color(0xFF7DD3FC),
+                tint = NewTheme.TextSecondary,
                 modifier = Modifier.size(17.dp),
             )
         }

@@ -24,78 +24,38 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.console.mobile.ui.theme.NewTheme
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 
 /**
- * Ambient HazeState for sharing backdrop blur context between a scrolling transcript
- * and overlaid floating chrome (header island, floating composer dock).
+ * Applies a solid floating surface effect:
+ * 1. Clean drop shadow for floating elevation
+ * 2. Solid dark surface background (no blur/translucency)
+ * 3. Subtle hairline rim border
  */
-val LocalHazeState = compositionLocalOf<HazeState?> { null }
-
-/**
- * Standard liquid glass specular rim brush: bright rim at the top where ambient
- * light catches the curve, fading softly toward the bottom edge.
- */
-fun liquidGlassRimBrush(
-    topAlpha: Float = 0.28f,
-    midAlpha: Float = 0.10f,
-    bottomAlpha: Float = 0.04f,
-): Brush = Brush.verticalGradient(
-    0.0f to Color.White.copy(alpha = topAlpha),
-    0.5f to Color.White.copy(alpha = midAlpha),
-    1.0f to Color.White.copy(alpha = bottomAlpha),
-)
-
-/**
- * Applies a true liquid glass effect:
- * 1. Hardware backdrop blur via Haze (when available)
- * 2. Translucent tinted backing surface
- * 3. Specular rim highlight border
- * 4. Soft atmospheric drop shadow
- */
-fun Modifier.liquidGlass(
-    hazeState: HazeState? = null,
-    shape: Shape = RoundedCornerShape(26.dp),
-    backgroundColor: Color = Color(0xFF16161C).copy(alpha = 0.72f),
+fun Modifier.floatingSurface(
+    shape: Shape = RoundedCornerShape(24.dp),
+    backgroundColor: Color = Color(0xFF1E1E24),
+    borderColor: Color = Color.White.copy(alpha = 0.08f),
     borderWidth: Dp = 1.dp,
-    rimBrush: Brush = liquidGlassRimBrush(),
-    blurRadius: Dp = 24.dp,
-    elevation: Dp = 6.dp,
+    elevation: Dp = 4.dp,
 ): Modifier {
-    val hazeMod = if (hazeState != null) {
-        Modifier.hazeEffect(
-            state = hazeState,
-            style = HazeStyle(
-                backgroundColor = backgroundColor,
-                tints = emptyList(),
-                blurRadius = blurRadius,
-            ),
-        )
-    } else {
-        Modifier.background(backgroundColor)
-    }
-
     return this
         .shadow(
             elevation = elevation,
             shape = shape,
-            spotColor = Color.Black.copy(alpha = 0.45f),
-            ambientColor = Color.Black.copy(alpha = 0.25f),
+            spotColor = Color.Black.copy(alpha = 0.40f),
+            ambientColor = Color.Black.copy(alpha = 0.20f),
         )
-        .then(hazeMod)
         .clip(shape)
+        .background(backgroundColor)
         .border(
             width = borderWidth,
-            brush = rimBrush,
+            color = borderColor,
             shape = shape,
         )
 }
 
 /**
- * A floating circular action button styled with liquid glass translucency,
- * backdrop blur, and a specular rim.
+ * A floating circular action button with solid raised styling and subtle border.
  */
 @Composable
 fun FloatingGlassIconButton(
@@ -103,21 +63,20 @@ fun FloatingGlassIconButton(
     contentDescription: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 42.dp,
+    size: Dp = 40.dp,
     iconSize: Dp = 20.dp,
     tint: Color = NewTheme.TextPrimary,
-    hazeState: HazeState? = LocalHazeState.current,
-    backgroundColor: Color = Color(0xFF1A1A22).copy(alpha = 0.75f),
+    backgroundColor: Color = Color(0xFF1E1E24),
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .size(size)
-            .liquidGlass(
-                hazeState = hazeState,
+            .floatingSurface(
                 shape = CircleShape,
                 backgroundColor = backgroundColor,
-                elevation = 6.dp,
+                borderColor = Color.White.copy(alpha = 0.08f),
+                elevation = 4.dp,
             )
             .clickable(
                 interactionSource = interactionSource,
