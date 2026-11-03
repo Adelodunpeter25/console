@@ -30,6 +30,9 @@ pkill -f "$APP_EXEC" 2>/dev/null || true
 
 # Launch new instance in background and store PID
 export CONSOLE_ENV=dev
+# Same log level dev.sh installs; a reload without it launches the app at
+# env_logger's error-only default, so every info/log line disappears.
+export RUST_LOG="${RUST_LOG:-warn,console_ui=debug,console_core=debug,console_app=debug}"
 # Keep stdout/stderr in a log file (was /dev/null, which swallowed every
 # log:: line). Tail it with: tail -f "$DESKTOP_DIR/dist/.dev_console.log"
 LOG_FILE="$DESKTOP_DIR/dist/.dev_console.log"
