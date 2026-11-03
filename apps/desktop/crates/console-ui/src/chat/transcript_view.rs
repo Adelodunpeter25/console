@@ -1454,7 +1454,7 @@ fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElemen
         .items_center()
         .justify_center()
         .hover(|element| element.bg(theme.overlay_strong))
-        .child(app_icon(icon, 13.0, theme.text_secondary))
+        .child(app_icon(icon, 11.0, theme.text_secondary))
 }
 
 fn transcript_row(
