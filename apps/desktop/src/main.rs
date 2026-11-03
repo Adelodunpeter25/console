@@ -9,6 +9,7 @@ mod app_menu;
 mod assets;
 mod keybindings;
 mod log_filter;
+mod menubar;
 mod new_project_dialog;
 mod persistence;
 mod picker;

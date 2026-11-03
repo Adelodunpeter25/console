@@ -211,6 +211,9 @@ pub struct ConsoleDesktopApp {
     pub forwarded_ports_by_project:
         std::collections::HashMap<String, Rc<Vec<console_core::ForwardedPort>>>,
     pub ports_menu_handle: console_ui::ContextMenuHandle,
+    /// In-window menu bar dropdowns (Windows/Linux; macOS uses the native menu).
+    pub menubar_file_menu: console_ui::ContextMenuHandle,
+    pub menubar_edit_menu: console_ui::ContextMenuHandle,
     pub inspector_add_tab_menu: console_ui::ContextMenuHandle,
     pub inspector_search_query: String,
     pub inspector_tree: Rc<Vec<console_ui::FileTreeNode>>,

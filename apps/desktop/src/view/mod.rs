@@ -661,6 +661,13 @@ impl Render for ConsoleDesktopApp {
                     .with_right_sidebar_toggle(self.right_sidebar_visible, on_toggle_right_sidebar)
                     .with_ports(Some(ports_popover.into_any_element()))
             })
+            // In-window menu bar on platforms without a native app menu
+            // (Windows/Linux); macOS keeps its native menu bar and gets None.
+            .children(crate::menubar::menu_bar(
+                &self.menubar_file_menu,
+                &self.menubar_edit_menu,
+                cx,
+            ))
             // Sidebar + workspace sit in a row below the title bar.
             .child(
                 div()
