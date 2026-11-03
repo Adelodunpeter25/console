@@ -64,11 +64,7 @@ pub struct Selection {
     dragging: bool,
     /// Resolved spans in document order. Empty until a drag moves.
     spans: Vec<Span>,
-    /// Window-space rect of the selection's last visible line, recorded on
-    /// mouse-up so the Cite popup can anchor just above it. `None` while no
-    /// completed selection is active.
-    cite_line: Option<[f32; 4]>,
-    /// Window-space rect of the rendered Cite popup, recorded at paint time.
+    /// Window-space rect of the rendered Cite pill, set at render time.
     /// Mouse-down inside it must not clear the selection, or the popup would
     /// vanish mid-press.
     cite_button: Option<[f32; 4]>,
@@ -153,26 +149,21 @@ impl Selection {
         self.anchor_offset = 0;
         self.dragging = false;
         self.spans.clear();
-        self.cite_line = None;
         self.cite_button = None;
         self.copy_button = None;
         self.press_action = PressAction::None;
+    }
+
+    /// Whether a selection drag is in flight; the popup only shows once the
+    /// drag has settled.
+    pub fn is_dragging(&self) -> bool {
+        self.dragging
     }
 
     /// The last resolved span in document order — the selection's head.
     /// `None` before a drag has resolved any spans.
     pub fn head_span(&self) -> Option<&Span> {
         self.spans.last()
-    }
-
-    /// Window-space rect of the selection's last visible line, for anchoring
-    /// the Cite popup above it.
-    pub fn cite_line(&self) -> Option<[f32; 4]> {
-        self.cite_line
-    }
-
-    pub fn set_cite_line(&mut self, rect: Option<[f32; 4]>) {
-        self.cite_line = rect;
     }
 
     /// Window-space rect of the rendered Cite pill, set at render time.

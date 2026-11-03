@@ -1286,10 +1286,32 @@ impl Render for TranscriptView {
             }
         }
 
-        // The Cite popup shows while a completed selection exists. Activation
-        // is handled by the selection mouse handlers (render.rs); here the
-        // popup only needs to render.
-        let cite_line = self.selection.selection.borrow().cite_line();
+        // The Copy/Cite popup shows while a settled selection exists and its
+        // end is still on screen. The head rect is recomputed from the live
+        // selection registry each frame, so scrolling re-anchors the pills
+        // with the text and hides them once the selection's end scrolls out.
+        let cite_line = {
+            let state = self.selection.selection.borrow();
+            let head = (!state.is_dragging())
+                .then(|| state.head_span().cloned())
+                .flatten();
+            drop(state);
+            head.and_then(|span| {
+                let registry = self.selection.registry.borrow();
+                let entry = registry
+                    .entries()
+                    .iter()
+                    .find(|entry| entry.key == span.key)?;
+                let rects = render::range_rects(&entry.geometry, &span.range, 0.0, 0.0);
+                let rect = rects.last()?;
+                Some([
+                    f32::from(rect.origin.x),
+                    f32::from(rect.origin.y),
+                    f32::from(rect.size.width),
+                    f32::from(rect.size.height),
+                ])
+            })
+        };
         let cite_available = self.selection.cite_handler().is_some();
         let cite_origin = self.cite_origin.clone();
 
@@ -1366,7 +1388,7 @@ fn cite_popup(
 ) -> impl IntoElement {
     const PILL_SIZE: f32 = 30.0;
     const PILL_GAP: f32 = 6.0;
-    const SELECTION_GAP: f32 = 8.0;
+    const SELECTION_GAP: f32 = 2.0;
     const HIT_PAD: f32 = 6.0;
     let container_x = f32::from(container.origin.x);
     let container_y = f32::from(container.origin.y);
@@ -1376,9 +1398,9 @@ fn cite_popup(
     // line; flip below when that would poke past the container's top edge.
     let row_right = line[0] + line[2] - container_x + SELECTION_GAP;
     let mut cite_x = row_right - PILL_SIZE;
-    let mut y = line[1] - container_y - PILL_SIZE - 6.0;
+    let mut y = line[1] - container_y - PILL_SIZE - 2.0;
     if y < 0.0 {
-        y = line[1] + line[3] - container_y + 6.0;
+        y = line[1] + line[3] - container_y + 2.0;
     }
     let copy_x = cite_x - PILL_SIZE - PILL_GAP;
     cite_x = cite_x.clamp(0.0, (container_w - PILL_SIZE).max(0.0));

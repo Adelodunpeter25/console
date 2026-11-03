@@ -1421,31 +1421,10 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             let Some(key) = key else {
                 return;
             };
-            let (head, finished) = {
-                let mut selection = state.selection.borrow_mut();
-                let head = selection.head_span().cloned();
-                let finished = selection.end_drag(&key);
-                (head, finished)
-            };
-            let Some(_) = finished else {
-                return;
-            };
-            // Anchor the Cite popup at the selection's last visible line: its
-            // window-space rect, so the popup can sit just above it.
-            let line_rect = head.and_then(|span| {
-                let registry = state.registry.borrow();
-                let entry = registry.entries().iter().find(|e| e.key == span.key)?;
-                let rects = range_rects(&entry.geometry, &span.range, 0.0, 0.0);
-                let rect = rects.last()?;
-                Some([
-                    f32::from(rect.origin.x),
-                    f32::from(rect.origin.y),
-                    f32::from(rect.size.width),
-                    f32::from(rect.size.height),
-                ])
-            });
-            if let Some(rect) = line_rect {
-                state.selection.borrow_mut().set_cite_line(Some(rect));
+            let finished = state.selection.borrow_mut().end_drag(&key);
+            // The popup anchors from the live registry at render time, so
+            // finishing a drag only needs a repaint for it to appear.
+            if finished.is_some() {
                 window.refresh();
             }
         }
