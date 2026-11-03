@@ -8,6 +8,7 @@ mod actions;
 pub mod address;
 pub mod agent_script;
 pub mod browser_state;
+#[cfg(target_os = "macos")]
 pub use browser_state::cookies;
 pub mod driver;
 pub mod host;
