@@ -1354,9 +1354,9 @@ fn cite_origin_probe(cell: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>) -> i
     .inset_0()
 }
 
-/// The floating Cite pill shown just above an active selection. It is purely
-/// visual: the selection mouse handlers (render.rs) detect a press and
-/// release on the hit rect recorded here and fire the cite callback, so no
+/// The floating Copy + Cite pills shown just above an active selection. They
+/// are purely visual: the selection mouse handlers (render.rs) detect a press
+/// and release on the hit rects recorded here and fire the actions, so no
 /// click handler here can race the selection-clearing mouse-down.
 fn cite_popup(
     line: [f32; 4],
@@ -1364,38 +1364,64 @@ fn cite_popup(
     selection: TranscriptSelection,
     theme: Theme,
 ) -> impl IntoElement {
-    const POPUP_WIDTH_ESTIMATE: f32 = 60.0;
-    const POPUP_HEIGHT: f32 = 30.0;
-    const POPUP_GAP: f32 = 8.0;
+    const PILL_WIDTH_ESTIMATE: f32 = 60.0;
+    const PILL_HEIGHT: f32 = 30.0;
+    const PILL_GAP: f32 = 6.0;
+    const SELECTION_GAP: f32 = 8.0;
     const HIT_PAD: f32 = 8.0;
     let container_x = f32::from(container.origin.x);
     let container_y = f32::from(container.origin.y);
     let container_w = f32::from(container.size.width);
     let container_h = f32::from(container.size.height);
-    let mut x = line[0] + line[2] - container_x + POPUP_GAP;
-    // Above the selection's last line; flip below when that would poke past
-    // the container's top edge.
-    let mut y = line[1] - container_y - POPUP_HEIGHT - 6.0;
+    // Row of two pills, right edge anchored past the selection's last line;
+    // flip below when that would poke past the container's top edge.
+    let row_right = line[0] + line[2] - container_x + SELECTION_GAP;
+    let mut cite_x = row_right - PILL_WIDTH_ESTIMATE;
+    let mut y = line[1] - container_y - PILL_HEIGHT - 6.0;
     if y < 0.0 {
         y = line[1] + line[3] - container_y + 6.0;
     }
-    x = x.clamp(0.0, (container_w - POPUP_WIDTH_ESTIMATE).max(0.0));
-    y = y.clamp(0.0, (container_h - POPUP_HEIGHT).max(0.0));
-    // Record the hit rect at render time, from the same placement math that
-    // positions the pill — deliberately generous so clicks near the rounded
-    // edges still count. No paint-time probe: how Taffy sizes an absolute
-    // probe inside this pill is exactly what we would be guessing at.
-    selection.selection.borrow_mut().set_cite_button(Some([
-        container_x + x - HIT_PAD,
-        container_y + y - HIT_PAD,
-        POPUP_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
-        POPUP_HEIGHT + 2.0 * HIT_PAD,
-    ]));
+    let copy_x = cite_x - PILL_WIDTH_ESTIMATE - PILL_GAP;
+    cite_x = cite_x.clamp(0.0, (container_w - PILL_WIDTH_ESTIMATE).max(0.0));
+    y = y.clamp(0.0, (container_h - PILL_HEIGHT).max(0.0));
+    // Record both hit rects at render time, from the same placement math
+    // that positions the pills — deliberately generous so clicks near the
+    // rounded edges still count. No paint-time probe: how Taffy sizes an
+    // absolute probe inside a pill is exactly what we would be guessing at.
+    {
+        let mut state = selection.selection.borrow_mut();
+        state.set_cite_button(Some([
+            container_x + cite_x - HIT_PAD,
+            container_y + y - HIT_PAD,
+            PILL_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
+            PILL_HEIGHT + 2.0 * HIT_PAD,
+        ]));
+        state.set_copy_button(Some([
+            container_x + copy_x - HIT_PAD,
+            container_y + y - HIT_PAD,
+            PILL_WIDTH_ESTIMATE + 2.0 * HIT_PAD,
+            PILL_HEIGHT + 2.0 * HIT_PAD,
+        ]));
+    }
     div()
-        .id("cite-popup")
         .absolute()
-        .left(px(x))
+        .left(px(cite_x))
         .top(px(y))
+        .child(popup_pill("cite-popup", "Cite", theme.clone()))
+        .child(
+            div()
+                .absolute()
+                .left(px(copy_x - cite_x))
+                .top(px(0.0))
+                .child(popup_pill("copy-popup", "Copy", theme)),
+        )
+}
+
+/// One popup pill. Activation lives in the selection mouse handlers, so this
+/// is styling and hover only.
+fn popup_pill(id: &'static str, label: &'static str, theme: Theme) -> impl IntoElement {
+    div()
+        .id(gpui::ElementId::Name(id.into()))
         .px(px(10.0))
         .py(px(4.0))
         .rounded(px(7.0))
@@ -1410,7 +1436,7 @@ fn cite_popup(
                 .text_size(px(12.0))
                 .line_height(px(16.0))
                 .text_color(theme.text_secondary)
-                .child("Cite"),
+                .child(label),
         )
 }
 

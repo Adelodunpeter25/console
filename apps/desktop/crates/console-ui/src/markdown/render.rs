@@ -38,8 +38,8 @@ use super::parser::{
     Block, IncrementalParser, InlineRun, ListItem, TableAlign, TopBlock, format_math,
 };
 use super::selection::{
-    ICON_GAP, RegisteredText, SelectionRegistry, SelectionState, TextKey, format_cite_quote,
-    line_range, word_range,
+    ICON_GAP, PressAction, RegisteredText, Selection, SelectionRegistry, SelectionState, TextKey,
+    format_cite_quote, line_range, word_range,
 };
 use super::veil::{RowVeil, apply_veil};
 use crate::browser::{
@@ -1236,21 +1236,22 @@ fn registry_point(
     Some((index, offset))
 }
 
-/// Whether `position` sits on the rendered Cite pill, with a few pixels of
-/// slack so edge clicks near the rounded corners still register.
-fn cite_button_contains(state: &TranscriptSelection, position: Point<Pixels>) -> bool {
+/// Whether `position` sits on the popup pill `rect_of` names, with a few
+/// pixels of slack so edge clicks near the rounded corners still register.
+fn cite_button_contains(
+    state: &TranscriptSelection,
+    rect_of: impl Fn(&Selection) -> Option<[f32; 4]>,
+    position: Point<Pixels>,
+) -> bool {
     const SLACK: f32 = 4.0;
-    state
-        .selection
-        .borrow()
-        .cite_button()
-        .is_some_and(|[x, y, w, h]| {
-            Bounds::new(
-                point(px(x - SLACK), px(y - SLACK)),
-                size(px(w + 2.0 * SLACK), px(h + 2.0 * SLACK)),
-            )
-            .contains(&position)
-        })
+    let selection = state.selection.borrow();
+    rect_of(&selection).is_some_and(|[x, y, w, h]| {
+        Bounds::new(
+            point(px(x - SLACK), px(y - SLACK)),
+            size(px(w + 2.0 * SLACK), px(h + 2.0 * SLACK)),
+        )
+        .contains(&position)
+    })
 }
 
 /// Install the frame's selection mouse listeners.
@@ -1266,16 +1267,26 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             if phase != DispatchPhase::Bubble || event.button != MouseButton::Left {
                 return;
             }
-            // A press on the Cite pill must not clear the selection: the
-            // release below activates the citation instead, so the pill has
-            // to survive until then. The contains check takes its own short
-            // borrow and must finish before the mutable flag borrow begins.
-            let on_popup = cite_button_contains(&state, event.position);
-            state
-                .selection
-                .borrow_mut()
-                .set_press_on_popup(on_popup);
-            if on_popup {
+            // A press on either popup pill must not clear the selection: the
+            // release below finishes that action, so the pill has to survive
+            // until then. The contains checks take their own short borrows
+            // and must finish before the mutable flag borrow begins.
+            let on_copy =
+                cite_button_contains(&state, |selection| selection.copy_button(), event.position);
+            let on_cite = if on_copy {
+                false
+            } else {
+                cite_button_contains(&state, |selection| selection.cite_button(), event.position)
+            };
+            let action = if on_copy {
+                PressAction::Copy
+            } else if on_cite {
+                PressAction::Cite
+            } else {
+                PressAction::None
+            };
+            state.selection.borrow_mut().set_press_action(action);
+            if action != PressAction::None {
                 return;
             }
             let registry = state.registry.borrow();
@@ -1356,24 +1367,52 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             if phase != DispatchPhase::Bubble {
                 return;
             }
-            // Cite activation: the press and release both landed on the pill.
-            // The handler is invoked straight from here — the pill never
-            // registers its own click handlers, so nothing can race it.
-            if state.selection.borrow_mut().take_press_on_popup() {
-                let inside = cite_button_contains(&state, event.position);
-                let quote = state
-                    .selection
-                    .borrow()
-                    .selected_text()
-                    .and_then(|text| format_cite_quote(&text));
-                let handler = state.cite_handler();
-                if inside && quote.is_some() && handler.is_some() {
+            // Popup activation: the press and release landed on the same
+            // pill. The handler is invoked straight from here — the pills
+            // never register their own click handlers, so nothing can race
+            // them.
+            let action = state.selection.borrow_mut().take_press_action();
+            if action != PressAction::None {
+                let inside = match action {
+                    PressAction::Copy => cite_button_contains(
+                        &state,
+                        |selection| selection.copy_button(),
+                        event.position,
+                    ),
+                    PressAction::Cite => cite_button_contains(
+                        &state,
+                        |selection| selection.cite_button(),
+                        event.position,
+                    ),
+                    PressAction::None => false,
+                };
+                let text = state.selection.borrow().selected_text();
+                let cite_ready = inside
+                    && match action {
+                        PressAction::Cite => text
+                            .as_deref()
+                            .map(|text| format_cite_quote(text).is_some())
+                            .unwrap_or(false),
+                        _ => text.is_some(),
+                    };
+                if inside && cite_ready {
                     state.selection.borrow_mut().clear();
                     window.refresh();
-                    (handler.unwrap())(quote.unwrap(), window, cx);
+                    match action {
+                        PressAction::Copy => {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text.unwrap()));
+                        }
+                        PressAction::Cite => {
+                            let quote = format_cite_quote(&text.unwrap()).unwrap();
+                            if let Some(handler) = state.cite_handler() {
+                                (handler)(quote, window, cx);
+                            }
+                        }
+                        PressAction::None => {}
+                    }
                     return;
                 }
-                // Missed the pill or nothing to cite: dismiss like any press.
+                // Missed the pill or nothing to act on: dismiss like any press.
                 state.selection.borrow_mut().clear();
                 window.refresh();
                 return;

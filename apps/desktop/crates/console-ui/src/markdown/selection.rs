@@ -64,14 +64,31 @@ pub struct Selection {
     dragging: bool,
     /// Resolved spans in document order. Empty until a drag moves.
     spans: Vec<Span>,
-    /// Window-space point where the selection ends, recorded on mouse-up so
-    /// the Cite popup can anchor next to the highlighted text. `None` while
-    /// no completed selection is active.
-    cite_anchor: Option<[f32; 2]>,
+    /// Window-space rect of the selection's last visible line, recorded on
+    /// mouse-up so the Cite popup can anchor just above it. `None` while no
+    /// completed selection is active.
+    cite_line: Option<[f32; 4]>,
     /// Window-space rect of the rendered Cite popup, recorded at paint time.
-    /// Mouse-down inside it must not clear the selection, or the click would
-    /// land on a popup that vanished mid-press.
+    /// Mouse-down inside it must not clear the selection, or the popup would
+    /// vanish mid-press.
     cite_button: Option<[f32; 4]>,
+    /// Window-space rect of the rendered Copy pill, next to the Cite pill.
+    copy_button: Option<[f32; 4]>,
+    /// The popup pill a press landed on. The release finishes that action,
+    /// so the choice must survive the mouse-down that would otherwise begin
+    /// a new selection.
+    press_action: PressAction,
+}
+
+/// Which popup pill an in-flight press started on.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PressAction {
+    #[default]
+    None,
+    /// Copy the selected text to the clipboard.
+    Copy,
+    /// Cite the selected text into the composer.
+    Cite,
 }
 
 impl Selection {
@@ -136,8 +153,10 @@ impl Selection {
         self.anchor_offset = 0;
         self.dragging = false;
         self.spans.clear();
-        self.cite_anchor = None;
+        self.cite_line = None;
         self.cite_button = None;
+        self.copy_button = None;
+        self.press_action = PressAction::None;
     }
 
     /// The last resolved span in document order — the selection's head.
@@ -146,22 +165,41 @@ impl Selection {
         self.spans.last()
     }
 
-    /// Window-space point where the selection ended, for Cite popup anchoring.
-    pub fn cite_anchor(&self) -> Option<[f32; 2]> {
-        self.cite_anchor
+    /// Window-space rect of the selection's last visible line, for anchoring
+    /// the Cite popup above it.
+    pub fn cite_line(&self) -> Option<[f32; 4]> {
+        self.cite_line
     }
 
-    pub fn set_cite_anchor(&mut self, anchor: Option<[f32; 2]>) {
-        self.cite_anchor = anchor;
+    pub fn set_cite_line(&mut self, rect: Option<[f32; 4]>) {
+        self.cite_line = rect;
     }
 
-    /// Window-space rect of the rendered Cite popup, set at paint time.
+    /// Window-space rect of the rendered Cite pill, set at render time.
     pub fn cite_button(&self) -> Option<[f32; 4]> {
         self.cite_button
     }
 
     pub fn set_cite_button(&mut self, rect: Option<[f32; 4]>) {
         self.cite_button = rect;
+    }
+
+    /// Window-space rect of the rendered Copy pill, set at render time.
+    pub fn copy_button(&self) -> Option<[f32; 4]> {
+        self.copy_button
+    }
+
+    pub fn set_copy_button(&mut self, rect: Option<[f32; 4]>) {
+        self.copy_button = rect;
+    }
+
+    pub fn set_press_action(&mut self, action: PressAction) {
+        self.press_action = action;
+    }
+
+    /// Take the in-flight press action, resetting it for the next press.
+    pub fn take_press_action(&mut self) -> PressAction {
+        std::mem::take(&mut self.press_action)
     }
 
     /// The wash range for `key` this frame. `None` means nothing to paint.
@@ -299,9 +337,15 @@ fn clamp_boundary(text: &str, offset: usize) -> usize {
 }
 
 /// Shared handles the renderer clones into paint closures.
+///
+/// `cite` holds the Cite callback so the selection mouse handlers can invoke
+/// it directly when the floating popup is pressed — the popup itself is purely
+/// visual and never registers its own click handlers, which would race the
+/// selection-clearing mouse-down.
 pub struct SelectionState<G = ()> {
     pub selection: Rc<RefCell<Selection>>,
     pub registry: Rc<RefCell<SelectionRegistry<G>>>,
+    pub cite: Rc<RefCell<Option<CiteHandler>>>,
 }
 
 impl<G> Clone for SelectionState<G> {
@@ -309,6 +353,7 @@ impl<G> Clone for SelectionState<G> {
         Self {
             selection: self.selection.clone(),
             registry: self.registry.clone(),
+            cite: self.cite.clone(),
         }
     }
 }
@@ -318,6 +363,7 @@ impl<G> Default for SelectionState<G> {
         Self {
             selection: Rc::default(),
             registry: Rc::default(),
+            cite: Rc::new(RefCell::new(None)),
         }
     }
 }
@@ -327,6 +373,15 @@ impl<G> SelectionState<G> {
     pub fn clear(&self) {
         self.selection.borrow_mut().clear();
         self.registry.borrow_mut().clear();
+    }
+
+    /// The wired Cite callback, if any.
+    pub fn cite_handler(&self) -> Option<CiteHandler> {
+        self.cite.borrow().clone()
+    }
+
+    pub fn set_cite_handler(&self, handler: Option<CiteHandler>) {
+        *self.cite.borrow_mut() = handler;
     }
 }
 
