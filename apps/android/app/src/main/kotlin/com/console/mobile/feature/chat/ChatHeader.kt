@@ -115,7 +115,7 @@ internal fun ChatHeader(
                 onDismissRequest = { overflowMenu = false },
             ) {
                 OverflowMenuItem(
-                    label = "Open file explorer",
+                    label = "Open file",
                     icon = TablerIcons.Outline.Folder,
                     onClick = {
                         overflowMenu = false

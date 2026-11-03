@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -21,7 +20,6 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ChevronDown
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 
@@ -66,12 +64,6 @@ internal fun SessionSectionHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = if (!isVirtual) 8.dp else 12.dp),
-            )
-            Icon(
-                TablerIcons.Outline.ChevronDown,
-                contentDescription = if (collapsed) "Expand ${section.projectName}" else "Collapse ${section.projectName}",
-                tint = NewTheme.TextMuted,
-                modifier = Modifier.padding(start = 6.dp).size(15.dp).rotate(if (collapsed) -90f else 0f),
             )
         }
         if (onNewChat != null) {

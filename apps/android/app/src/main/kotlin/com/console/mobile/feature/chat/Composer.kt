@@ -265,11 +265,21 @@ fun Composer(
     // ime minus nav bars: Scaffold already pads the nav bar, so only lift
     // by the keyboard itself — otherwise the gap doubles when typing.
     CompositionLocalProvider(LocalComposerHold provides hold) {
+        val bgAlpha = expansion.coerceIn(0f, 1f)
+        val hPad = androidx.compose.ui.unit.lerp(14.dp, 10.dp, expansion)
+        val vPad = androidx.compose.ui.unit.lerp(6.dp, 8.dp, expansion)
         Box(
             modifier = Modifier
                 .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars))
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .then(
+                    if (bgAlpha > 0.01f) {
+                        Modifier.background(NewTheme.Background.copy(alpha = bgAlpha))
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(horizontal = hPad, vertical = vPad),
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
