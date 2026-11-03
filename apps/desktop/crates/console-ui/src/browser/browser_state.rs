@@ -275,9 +275,4 @@ pub mod cookies {
         unsafe { Retained::cast_unchecked::<AnyObject>(value) }
     }
 
-    fn truth() -> Retained<AnyObject> {
-        // SAFETY: NSString is a subclass of NSObject; the AnyObject view is
-        // the same object, nothing stored changes.
-        unsafe { into_any(NSString::from_str("TRUE")) }
-    }
 }
