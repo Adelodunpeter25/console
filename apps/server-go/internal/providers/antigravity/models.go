@@ -24,6 +24,12 @@ var (
 	modelCacheMu sync.Mutex
 	modelCacheAt time.Time
 	modelCache   []types.Model
+	// Last known list, served while a background refresh re-discovers
+	// models for a freshly activated account. Cleared by the hard
+	// InvalidateModelCache (logout, tests).
+	staleModels []types.Model
+	// Single-flight guard for background re-discovery.
+	refreshing bool
 )
 
 // DiscoveryBaseURL overrides the models endpoint (tests).
@@ -44,6 +50,22 @@ func InvalidateModelCache() {
 	defer modelCacheMu.Unlock()
 	modelCacheAt = time.Time{}
 	modelCache = nil
+	staleModels = nil
+	refreshing = false
+}
+
+// MarkModelCacheStale keeps the current list available while revalidating:
+// an account switch may change model availability, but serving the old list
+// for a moment beats blocking every catalog read on a token refresh plus a
+// discovery round-trip. A background fetch replaces it (see CachedModels).
+func MarkModelCacheStale() {
+	modelCacheMu.Lock()
+	defer modelCacheMu.Unlock()
+	modelCacheAt = time.Time{}
+	if len(modelCache) > 0 {
+		staleModels = modelCache
+	}
+	modelCache = nil
 }
 
 // Snapshot returns the last discovered list without fetching. Empty (never
@@ -56,34 +78,63 @@ func Snapshot() []types.Model {
 }
 
 // CachedModels returns the cached discovery, refreshing when stale or
-// missing. Empty (never nil) when logged out or when the fetch fails with
-// nothing cached.
+// missing. With a stale list on hand (recent account switch) it returns
+// immediately and re-discovers in the background; only a cold cache blocks.
+// Empty (never nil) when logged out or when the fetch fails with nothing
+// cached.
 func CachedModels(ctx context.Context) []types.Model {
 	modelCacheMu.Lock()
 	fresh := len(modelCache) > 0 && time.Since(modelCacheAt) < modelCacheTTL
-	if fresh {
-		out := copyModels(modelCache)
-		modelCacheMu.Unlock()
-		return out
-	}
+	stale := copyModels(staleModels)
+	busy := refreshing
 	modelCacheMu.Unlock()
+	if fresh {
+		return Snapshot()
+	}
+	if len(stale) > 0 {
+		if !busy {
+			go discover()
+		}
+		return stale
+	}
+	return discover()
+}
+
+// discover fetches models with the currently active credential and stores
+// them on success. Single-flight: concurrent callers either join a running
+// fetch (served via Snapshot) or skip. Empty on failure — the previous list
+// keeps being served as stale.
+func discover() []types.Model {
+	modelCacheMu.Lock()
+	if refreshing {
+		modelCacheMu.Unlock()
+		return Snapshot()
+	}
+	refreshing = true
+	modelCacheMu.Unlock()
+	defer func() {
+		modelCacheMu.Lock()
+		refreshing = false
+		modelCacheMu.Unlock()
+	}()
 
 	cred, err := LoadCredential()
 	if err != nil {
-		return Snapshot()
+		return nil
 	}
 	if refreshed, err := RefreshIfNeeded(nil, cred); err == nil {
 		cred = refreshed
 	}
 	base := DiscoveryBaseURL
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	discovered, err := FetchModels(ctx, nil, base, cred.AccessToken)
 	if err != nil || len(discovered) == 0 {
-		return Snapshot()
+		return nil
 	}
 	modelCacheMu.Lock()
 	modelCache, modelCacheAt = discovered, time.Now()
+	staleModels = discovered
 	out := copyModels(modelCache)
 	modelCacheMu.Unlock()
 	return out

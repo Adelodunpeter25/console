@@ -35,6 +35,9 @@ type Service struct {
 	mu       sync.Mutex
 	cache    map[string]cacheEntry
 	inflight map[string]*call
+	// Last known reports, served while a background refresh re-reads the
+	// freshly activated account's quota (stale-while-revalidate).
+	stale map[string]*Report
 	// BaseURL overrides the Codex endpoint (tests).
 	BaseURL string
 	// HTTPClient overrides the default client (tests).
@@ -42,7 +45,7 @@ type Service struct {
 }
 
 func NewService() *Service {
-	return &Service{cache: map[string]cacheEntry{}, inflight: map[string]*call{}}
+	return &Service{cache: map[string]cacheEntry{}, inflight: map[string]*call{}, stale: map[string]*Report{}}
 }
 
 // IsValidProvider reports whether provider is a supported usage provider.
@@ -76,7 +79,9 @@ func (s *Service) GetAllUsage(ctx context.Context) map[string]any {
 }
 
 // GetUsage returns the cached or freshly fetched report (nil when logged
-// out, unsupported, or upstream fails). Unknown providers return an error.
+// out, unsupported, or upstream fails). After MarkStale (account switch) it
+// returns the previous account's report immediately and refreshes in the
+// background. Unknown providers return an error.
 func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error) {
 	if !IsValidProvider(provider) {
 		return nil, &invalidProviderError{provider}
@@ -90,6 +95,11 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 		s.mu.Unlock()
 		return report, nil
 	}
+	if stale, ok := s.stale[provider]; ok {
+		s.mu.Unlock()
+		s.refreshAsync(provider)
+		return stale, nil
+	}
 	if in, ok := s.inflight[provider]; ok {
 		s.mu.Unlock()
 		select {
@@ -99,26 +109,75 @@ func (s *Service) GetUsage(ctx context.Context, provider string) (*Report, error
 			return nil, nil
 		}
 	}
+	s.mu.Unlock()
+	return s.refreshSync(ctx, provider), nil
+}
+
+// fetch dispatches one upstream report fetch.
+func (s *Service) fetch(ctx context.Context, provider string) *Report {
+	switch provider {
+	case "claude":
+		return s.fetchClaude(ctx)
+	case "antigravity":
+		return s.fetchAntigravity(ctx)
+	case "opencode":
+		return s.fetchOpenCode(ctx)
+	default:
+		return s.fetchCodex(ctx)
+	}
+}
+
+// store records a fetch outcome and clears the stale fallback on success.
+func (s *Service) store(provider string, report *Report) {
+	s.mu.Lock()
+	s.cache[provider] = cacheEntry{report: report, fetchedAt: time.Now()}
+	delete(s.inflight, provider)
+	if report != nil {
+		delete(s.stale, provider)
+	}
+	s.mu.Unlock()
+}
+
+// refreshSync fetches inline under the shared in-flight dedup.
+func (s *Service) refreshSync(ctx context.Context, provider string) *Report {
+	s.mu.Lock()
+	if in, ok := s.inflight[provider]; ok {
+		s.mu.Unlock()
+		select {
+		case <-in.done:
+			return in.report
+		case <-ctx.Done():
+			return nil
+		}
+	}
 	c := &call{done: make(chan struct{})}
 	s.inflight[provider] = c
 	s.mu.Unlock()
 
-	switch provider {
-	case "claude":
-		c.report = s.fetchClaude(ctx)
-	case "antigravity":
-		c.report = s.fetchAntigravity(ctx)
-	case "opencode":
-		c.report = s.fetchOpenCode(ctx)
-	default:
-		c.report = s.fetchCodex(ctx)
-	}
-	s.mu.Lock()
-	s.cache[provider] = cacheEntry{report: c.report, fetchedAt: time.Now()}
-	delete(s.inflight, provider)
-	s.mu.Unlock()
+	c.report = s.fetch(ctx, provider)
+	s.store(provider, c.report)
 	close(c.done)
-	return c.report, nil
+	return c.report
+}
+
+// refreshAsync re-fetches off the request path (single-flight), replacing
+// the stale report when it lands. A failed fetch keeps the stale report
+// served; a logged-out fetch stores nil, ending the fallback.
+func (s *Service) refreshAsync(provider string) {
+	s.mu.Lock()
+	if _, ok := s.inflight[provider]; ok {
+		s.mu.Unlock()
+		return
+	}
+	c := &call{done: make(chan struct{})}
+	s.inflight[provider] = c
+	s.mu.Unlock()
+
+	go func() {
+		c.report = s.fetch(context.Background(), provider)
+		s.store(provider, c.report)
+		close(c.done)
+	}()
 }
 
 func (s *Service) fetchCodex(ctx context.Context) *Report {
@@ -201,10 +260,24 @@ func (s *Service) Invalidate(provider ...string) {
 	defer s.mu.Unlock()
 	if len(provider) == 0 {
 		s.cache = map[string]cacheEntry{}
+		s.stale = map[string]*Report{}
 		return
 	}
 	for _, p := range provider {
 		delete(s.cache, p)
+		delete(s.stale, p)
+	}
+}
+
+// MarkStale keeps the provider's last report for stale-while-revalidate
+// serving after an account switch: the next read returns the old report
+// immediately while a background fetch re-reads the new account's quota.
+func (s *Service) MarkStale(provider string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if entry, ok := s.cache[provider]; ok {
+		s.stale[provider] = entry.report
+		delete(s.cache, provider)
 	}
 }
 

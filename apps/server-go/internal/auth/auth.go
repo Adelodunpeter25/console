@@ -536,19 +536,20 @@ func (s *AuthService) DeleteAccount(provider, id string) (ProviderAuthStatus, er
 	return s.providerStatus(provider), nil
 }
 
-// invalidateProviderCaches drops everything downstream that assumed a
-// single account: model discovery and the provider's usage report.
+// invalidateProviderCaches hands everything downstream that assumed a
+// single account to stale-while-revalidate: the old model list and usage
+// report keep serving while background fetches re-read the new account.
 func (s *AuthService) invalidateProviderCaches(provider string) {
 	switch provider {
 	case "claude":
-		claude.InvalidateModelCache()
+		claude.MarkModelCacheStale()
 	case "codex":
-		codex.InvalidateModelCache()
+		codex.MarkModelCacheStale()
 	case "antigravity":
-		antigravity.InvalidateModelCache()
+		antigravity.MarkModelCacheStale()
 	}
 	if s.Usage != nil {
-		s.Usage.Invalidate(provider)
+		s.Usage.MarkStale(provider)
 	}
 }
 
