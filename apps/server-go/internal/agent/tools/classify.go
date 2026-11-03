@@ -2,11 +2,16 @@
 // clients render labels, icons and kinds instead of each keeping its own
 // table of tool names (see proto/console/v1/message.proto ToolCall).
 //
-// The registered names are the Go server's tools (./tool.go Name values);
-// the snake_case / camelCase aliases cover older sessions and names other
-// providers emit. MCP tools are `mcp__<server>__<tool>`: segments are
-// sanitised to [A-Za-z0-9_-] server-side, so splitting on the double
-// underscore is safe — single underscores never form one.
+// Only the names this server registers appear here. The server is the source of
+// every tool name a client sees, so there are no aliases: a name that is not
+// registered gets no label, no icon and no flags, and shows as its raw name,
+// which is honest and visible. A test (tests/tools/classify_registry_test.go)
+// checks every name in these tables against the real registry, so the tables
+// cannot drift from it in either direction.
+//
+// MCP tools are `mcp__<server>__<tool>`: segments are sanitised to
+// [A-Za-z0-9_-] server-side, so splitting on the double underscore is safe —
+// single underscores never form one.
 package tools
 
 import (
@@ -26,27 +31,27 @@ const (
 // builtinLabel is the exact-match label for a built-in tool name.
 func builtinLabel(name string) string {
 	switch name {
-	case "readFile", "read_file":
+	case "read_file":
 		return "Read File"
-	case "writeFile", "write_file":
+	case "write_file":
 		return "Write File"
-	case "batchWrite", "batch_write":
+	case "batchWrite":
 		return "Batch Write"
-	case "editFile", "edit_file", "str_replace":
+	case "editFile":
 		return "Edit File"
-	case "bash", "shell", "command":
+	case "bash":
 		return "Run Command"
-	case "bashJob", "bash_job":
+	case "bashJob":
 		return "Bash Job"
-	case "grep", "search_files":
+	case "grep":
 		return "Search Code"
-	case "glob", "list_files":
+	case "glob":
 		return "Find Files"
-	case "listDir", "list_dir", "ls":
+	case "list_dir":
 		return "List Directory"
-	case "fetch", "webFetch":
+	case "webFetch":
 		return "Fetch URL"
-	case "webSearch", "web_search":
+	case "webSearch":
 		return "Web Search"
 	case "browser":
 		return "Browser"
@@ -95,9 +100,7 @@ func ParseMCPToolName(name string) (server, tool string, ok bool) {
 }
 
 // ToolLabel renders the display label for a tool call: a built-in label,
-// `"<tool> (<server>)"` for an MCP tool, or the raw name when it is
-// neither. Mirrors console-shared's tool_label (desktop/Android fallback
-// for pre-classification sessions).
+// `"<tool> (<server>)"` for an MCP tool, or the raw name when it is neither.
 func ToolLabel(name string) string {
 	if label := builtinLabel(name); label != "" {
 		return label
@@ -111,7 +114,7 @@ func ToolLabel(name string) string {
 // IsEditFile reports a file edit whose arguments carry oldContent/newContent.
 func IsEditFile(name string) bool {
 	switch name {
-	case "editFile", "edit_file", "str_replace":
+	case "editFile":
 		return true
 	}
 	return false
@@ -120,7 +123,7 @@ func IsEditFile(name string) bool {
 // IsWriteFile reports a whole-file write: only the new content is known.
 func IsWriteFile(name string) bool {
 	switch name {
-	case "writeFile", "write_file", "batchWrite", "batch_write":
+	case "write_file", "batchWrite":
 		return true
 	}
 	return false
@@ -129,7 +132,7 @@ func IsWriteFile(name string) bool {
 // IsReadFile reports a call that reads file content into its result.
 func IsReadFile(name string) bool {
 	switch name {
-	case "readFile", "read_file", "view", "Read":
+	case "read_file":
 		return true
 	}
 	return false
@@ -155,23 +158,21 @@ func ToolIconKey(name string) string {
 		return "package"
 	}
 	switch name {
-	case "reasoning", "think":
-		return "sparkle"
-	case "bash", "shell", "command", "bashJob", "bash_job":
+	case "bash", "bashJob":
 		return "terminal"
-	case "edit_file", "editFile", "write_file", "writeFile", "str_replace":
+	case "editFile", "write_file", "batchWrite":
 		return "pencil"
-	case "read_file", "readFile":
+	case "read_file":
 		return "file"
-	case "list_files", "list_dir", "listDir", "ls":
+	case "list_dir":
 		return "folder"
-	case "search_files", "grep", "glob", "find", "findFile", "find_file":
+	case "grep", "glob":
 		return "search"
-	case "web_search", "webSearch", "browser":
+	case "webSearch", "webFetch", "browser":
 		return "globe"
 	case "visualize":
 		return "chart"
-	case "plan":
+	case "todo":
 		return "list"
 	case "memory":
 		return "memory"

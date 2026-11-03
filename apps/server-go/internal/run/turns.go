@@ -174,8 +174,7 @@ func countUserMessages(history []any) int {
 // the later recording step falls back to argument-only information.
 func writePaths(call tools.ToolCall) []string {
 	switch call.Name {
-	case "writeFile", "write_file", "batchWrite", "batch_write",
-		"editFile", "edit_file", "replace_file_content":
+	case "write_file", "batchWrite", "editFile":
 	default:
 		return nil
 	}

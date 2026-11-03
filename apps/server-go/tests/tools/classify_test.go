@@ -9,15 +9,14 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-func TestToolLabelAliases(t *testing.T) {
+// Labels for the names the server really registers. There are no aliases.
+func TestToolLabels(t *testing.T) {
 	cases := map[string]string{
-		"read_file": "Read File", "readFile": "Read File",
-		"editFile": "Edit File", "edit_file": "Edit File", "str_replace": "Edit File",
+		"read_file": "Read File", "editFile": "Edit File",
 		"batchWrite": "Batch Write", "write_file": "Write File",
-		"bash": "Run Command", "shell": "Run Command", "command": "Run Command",
-		"bashJob": "Bash Job", "bash_job": "Bash Job",
+		"bash": "Run Command", "bashJob": "Bash Job",
 		"grep": "Search Code", "glob": "Find Files",
-		"list_dir": "List Directory", "listDir": "List Directory", "ls": "List Directory",
+		"list_dir": "List Directory",
 		"webFetch": "Fetch URL", "webSearch": "Web Search",
 		"browser": "Browser", "visualize": "Visualize", "subagent": "Subagent",
 		"ask": "Ask Question", "askMany": "Ask Questions", "todo": "Todo",
@@ -49,13 +48,10 @@ func TestToolKindFlags(t *testing.T) {
 		name  string
 		flags uint32
 	}{
-		{"edit_file", tools.KindFlagEdit | tools.KindFlagFileTarget},
 		{"editFile", tools.KindFlagEdit | tools.KindFlagFileTarget},
-		{"batch_write", tools.KindFlagWrite | tools.KindFlagFileTarget},
-		{"writeFile", tools.KindFlagWrite | tools.KindFlagFileTarget},
+		{"batchWrite", tools.KindFlagWrite | tools.KindFlagFileTarget},
+		{"write_file", tools.KindFlagWrite | tools.KindFlagFileTarget},
 		{"read_file", tools.KindFlagRead | tools.KindFlagFileTarget},
-		{"Read", tools.KindFlagRead | tools.KindFlagFileTarget},
-		{"view", tools.KindFlagRead | tools.KindFlagFileTarget},
 		{"subagent", tools.KindFlagSubagent},
 		// A search scope is not a file target.
 		{"grep", 0},
@@ -71,11 +67,13 @@ func TestToolKindFlags(t *testing.T) {
 
 func TestToolIconKey(t *testing.T) {
 	cases := map[string]string{
-		"bash": "terminal", "edit_file": "pencil", "readFile": "file",
-		"list_dir": "folder", "grep": "search", "webSearch": "globe",
-		"browser": "globe", "visualize": "chart", "memory": "memory",
-		"loadTools": "package", "mcp__gh__x": "package", "plan": "list",
-		"reasoning": "sparkle", "unknown_thing": "wrench",
+		"bash": "terminal", "bashJob": "terminal",
+		"editFile": "pencil", "write_file": "pencil", "batchWrite": "pencil",
+		"read_file": "file", "list_dir": "folder", "grep": "search", "glob": "search",
+		"webSearch": "globe", "webFetch": "globe", "browser": "globe",
+		"visualize": "chart", "memory": "memory", "todo": "list",
+		"loadTools": "package", "mcp__gh__x": "package",
+		"unknown_thing": "wrench",
 	}
 	for name, want := range cases {
 		if got := tools.ToolIconKey(name); got != want {

@@ -120,13 +120,13 @@ func (s *Service) generateAndRecordFileChange(
 
 	var paths []string
 	switch toolName {
-	case "writeFile", "write_file", "editFile", "edit_file", "replace_file_content":
+	case "write_file", "editFile":
 		if p, ok := args["path"].(string); ok && p != "" {
 			paths = append(paths, p)
 		} else if p, ok := args["targetFile"].(string); ok && p != "" {
 			paths = append(paths, p)
 		}
-	case "batchWrite", "batch_write":
+	case "batchWrite":
 		files, _ := args["files"].([]any)
 		for _, file := range files {
 			if fileMap, ok := file.(map[string]any); ok {
