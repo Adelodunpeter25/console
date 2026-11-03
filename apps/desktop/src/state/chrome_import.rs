@@ -113,6 +113,14 @@ impl ConsoleDesktopApp {
                     });
                 }
             });
+            // The cookie store settles asynchronously; the read-back that
+            // says what WebKit actually kept runs a couple of seconds later.
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(2))
+                .await;
+            let _ = cx.update(|_cx| {
+                console_ui::browser::browser_state::cookies::log_cookie_jar();
+            });
         })
         .detach();
     }
