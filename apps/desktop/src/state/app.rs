@@ -418,7 +418,18 @@ impl ConsoleDesktopApp {
             }
         }
 
+        // Flush unsaved drafts when the app quits: the 500ms debounced save
+        // can be cut short by an exit, losing the last edit (e.g. a
+        // just-cited quote).
+        let drafts_quit_subscription = cx.on_app_quit(|this, _| {
+            let drafts = this.drafts.clone();
+            async move {
+                crate::persistence::store::save_drafts(drafts);
+            }
+        });
+
         let subscriptions = vec![
+            drafts_quit_subscription,
             cx.observe_window_activation(window, |this, window, cx| {
                 this.is_window_active = window.is_window_active();
                 if this.is_window_active {

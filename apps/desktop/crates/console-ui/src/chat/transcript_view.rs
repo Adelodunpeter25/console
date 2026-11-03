@@ -1386,7 +1386,7 @@ fn cite_popup(
     selection: TranscriptSelection,
     theme: Theme,
 ) -> impl IntoElement {
-    const PILL_SIZE: f32 = 30.0;
+    const PILL_SIZE: f32 = 26.0;
     const PILL_GAP: f32 = 6.0;
     const SELECTION_GAP: f32 = 2.0;
     const HIT_PAD: f32 = 6.0;
@@ -1454,7 +1454,7 @@ fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElemen
         .items_center()
         .justify_center()
         .hover(|element| element.bg(theme.overlay_strong))
-        .child(app_icon(icon, 11.0, theme.text_secondary))
+        .child(app_icon(icon, 12.0, theme.text_secondary))
 }
 
 fn transcript_row(
