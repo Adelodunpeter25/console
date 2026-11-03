@@ -43,8 +43,6 @@ internal fun SessionActionsSheet(
     val isPinned = (session.pinned_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
         SectionCard {
-            ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
-            SectionDivider()
             ActionRow(
                 icon = if (isPinned) TablerIcons.Filled.Pin else TablerIcons.Outline.Pin,
                 title = if (isPinned) "Unpin" else "Pin",
@@ -64,6 +62,8 @@ internal fun SessionActionsSheet(
                     }
                 }
             }
+            SectionDivider()
+            ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
             SectionDivider()
             ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
                 onDismiss()

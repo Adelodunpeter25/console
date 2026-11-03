@@ -42,12 +42,12 @@ where
             )
             .separator()
             .item(
-                entry("Rename", IconName::Pencil, false)
-                    .on_click(move |_, window, cx| on_rename(window, cx)),
-            )
-            .item(
                 entry(pin_label, IconName::Pin, false)
                     .on_click(move |_, window, cx| on_toggle_pin(window, cx)),
+            )
+            .item(
+                entry("Rename", IconName::Pencil, false)
+                    .on_click(move |_, window, cx| on_rename(window, cx)),
             )
             .separator()
             .item(

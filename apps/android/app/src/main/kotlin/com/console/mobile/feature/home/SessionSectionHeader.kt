@@ -21,6 +21,7 @@ import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
+import io.github.lyxnx.compose.ui.tablericons.outline.Pin
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 
 /** Stable collapse key for a section: virtual sections by name, then project
@@ -32,7 +33,7 @@ internal fun sectionCollapseKey(section: GroupedProjectSection): String = when {
     else -> "general"
 }
 
-/** A section heading on Home: folder glyph (except Pinned, a virtual group),
+/** A section heading on Home: folder glyph (a pin for Pinned, a virtual group),
  * name, collapse chevron, and the new-chat button for real projects. Tapping
  * the label collapses/expands the sessions under the section, like desktop. */
 @Composable
@@ -53,9 +54,12 @@ internal fun SessionSectionHeader(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle),
         ) {
-            if (!isVirtual) {
-                Icon(TablerIcons.Outline.FolderOpen, contentDescription = null, tint = NewTheme.Accent, modifier = Modifier.size(17.dp))
-            }
+            Icon(
+                if (isVirtual) TablerIcons.Outline.Pin else TablerIcons.Outline.FolderOpen,
+                contentDescription = null,
+                tint = NewTheme.Accent,
+                modifier = Modifier.size(17.dp),
+            )
             Text(
                 section.projectName,
                 color = NewTheme.Accent,
@@ -63,7 +67,7 @@ internal fun SessionSectionHeader(
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = if (!isVirtual) 8.dp else 12.dp),
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
         if (onNewChat != null) {
