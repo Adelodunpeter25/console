@@ -190,6 +190,13 @@ object AppContainer {
      */
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /**
+     * For actions started from a sheet that closes itself right away (pin,
+     * rename, delete): a composable's own scope is cancelled the moment it
+     * leaves composition, which would drop the result of the request.
+     */
+    val actionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     fun initialize(context: Context) {
         val app = context.applicationContext
         appContext = app

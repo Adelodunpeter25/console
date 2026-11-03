@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,7 +39,6 @@ internal fun SessionActionsSheet(
     session: SessionHeader,
     onDismiss: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     var renameOpen by remember(session.id) { mutableStateOf(false) }
     val isPinned = (session.pinned_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
@@ -53,7 +51,7 @@ internal fun SessionActionsSheet(
             ) {
                 val target = session
                 onDismiss()
-                scope.launch {
+                AppContainer.actionScope.launch {
                     try {
                         withContext(Dispatchers.IO) {
                             AppContainer.projectRepository.updateSession(
@@ -75,7 +73,7 @@ internal fun SessionActionsSheet(
                     listOf(
                         ConfirmButton("Cancel", cancel = true),
                         ConfirmButton("Delete", destructive = true, onPress = {
-                            scope.launch {
+                            AppContainer.actionScope.launch {
                                 try {
                                     withContext(Dispatchers.IO) { AppContainer.projectRepository.deleteSession(session.id) }
                                 } catch (e: Exception) {
@@ -99,7 +97,7 @@ internal fun SessionActionsSheet(
                 onClick = {
                     renameOpen = false
                     onDismiss()
-                    scope.launch {
+                    AppContainer.actionScope.launch {
                         try {
                             withContext(Dispatchers.IO) {
                                 AppContainer.projectRepository.updateSession(session.id, UpdateSessionDto(title = renameValue.trim().ifBlank { session.title }))
