@@ -1290,11 +1290,14 @@ impl Render for TranscriptView {
         // end is still on screen. The head rect is recomputed from the live
         // selection registry each frame, so scrolling re-anchors the pills
         // with the text and hides them once the selection's end scrolls out.
+        // Selections ending in a user message never get the popup — citing
+        // is for the agent's words.
         let cite_line = {
             let state = self.selection.selection.borrow();
             let head = (!state.is_dragging())
                 .then(|| state.head_span().cloned())
-                .flatten();
+                .flatten()
+                .filter(|span| !span.key.row.starts_with("user-"));
             drop(state);
             head.and_then(|span| {
                 let registry = self.selection.registry.borrow();
@@ -1376,83 +1379,89 @@ fn cite_origin_probe(cell: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>) -> i
     .inset_0()
 }
 
-/// The floating Copy + Cite pills shown just above an active selection. They
-/// are purely visual: the selection mouse handlers (render.rs) detect a press
-/// and release on the hit rects recorded here and fire the actions, so no
-/// click handler here can race the selection-clearing mouse-down.
+/// The floating Copy + Cite strip shown just above an active selection: one
+/// card holding both icon buttons. It is purely visual: the selection mouse
+/// handlers (render.rs) detect a press and release on the recorded hit rects
+/// and fire the actions, so no click handler here can race the
+/// selection-clearing mouse-down.
 fn cite_popup(
     line: [f32; 4],
     container: gpui::Bounds<gpui::Pixels>,
     selection: TranscriptSelection,
     theme: Theme,
 ) -> impl IntoElement {
-    const PILL_SIZE: f32 = 26.0;
-    const PILL_GAP: f32 = 6.0;
+    const PILL_SIZE: f32 = 24.0;
+    const PILL_GAP: f32 = 2.0;
+    const STRIP_PAD: f32 = 3.0;
     const SELECTION_GAP: f32 = 2.0;
     const HIT_PAD: f32 = 6.0;
     let container_x = f32::from(container.origin.x);
     let container_y = f32::from(container.origin.y);
     let container_w = f32::from(container.size.width);
     let container_h = f32::from(container.size.height);
-    // Row of two icon pills, right edge anchored past the selection's last
-    // line; flip below when that would poke past the container's top edge.
+    let strip_w = STRIP_PAD * 2.0 + PILL_SIZE * 2.0 + PILL_GAP;
+    let strip_h = STRIP_PAD * 2.0 + PILL_SIZE;
+    // Right edge anchored past the selection's last line; flip below when
+    // that would poke past the container's top edge.
     let row_right = line[0] + line[2] - container_x + SELECTION_GAP;
-    let mut cite_x = row_right - PILL_SIZE;
-    let mut y = line[1] - container_y - PILL_SIZE - 2.0;
+    let mut strip_x = row_right - strip_w;
+    let mut y = line[1] - container_y - strip_h - 2.0;
     if y < 0.0 {
         y = line[1] + line[3] - container_y + 2.0;
     }
-    let copy_x = cite_x - PILL_SIZE - PILL_GAP;
-    cite_x = cite_x.clamp(0.0, (container_w - PILL_SIZE).max(0.0));
-    y = y.clamp(0.0, (container_h - PILL_SIZE).max(0.0));
+    strip_x = strip_x.clamp(0.0, (container_w - strip_w).max(0.0));
+    y = y.clamp(0.0, (container_h - strip_h).max(0.0));
+    let copy_x = strip_x + STRIP_PAD;
+    let cite_x = copy_x + PILL_SIZE + PILL_GAP;
     // Record both hit rects at render time, from the same placement math
-    // that positions the pills — deliberately generous so clicks near the
+    // that positions the strip — deliberately generous so clicks near the
     // rounded edges still count. No paint-time probe: how Taffy sizes an
     // absolute probe inside a pill is exactly what we would be guessing at.
     {
         let mut state = selection.selection.borrow_mut();
-        state.set_cite_button(Some([
-            container_x + cite_x - HIT_PAD,
-            container_y + y - HIT_PAD,
+        state.set_copy_button(Some([
+            container_x + copy_x - HIT_PAD,
+            container_y + y + STRIP_PAD - HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
         ]));
-        state.set_copy_button(Some([
-            container_x + copy_x - HIT_PAD,
-            container_y + y - HIT_PAD,
+        state.set_cite_button(Some([
+            container_x + cite_x - HIT_PAD,
+            container_y + y + STRIP_PAD - HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
         ]));
     }
     div()
+        .id("cite-popup-strip")
         .absolute()
-        .left(px(cite_x))
+        .left(px(strip_x))
         .top(px(y))
-        .child(popup_pill("cite-popup", IconName::Reply, theme.clone()))
-        .child(
-            div()
-                .absolute()
-                .left(px(copy_x - cite_x))
-                .top(px(0.0))
-                .child(popup_pill("copy-popup", IconName::Copy, theme)),
-        )
-}
-
-/// One icon popup pill. Activation lives in the selection mouse handlers, so
-/// this is styling and hover only.
-fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElement {
-    div()
-        .id(gpui::ElementId::Name(id.into()))
-        .size(px(30.0))
-        .rounded(px(7.0))
+        .px(px(STRIP_PAD))
+        .py(px(STRIP_PAD))
+        .rounded(px(8.0))
         .border_1()
         .border_color(theme.border)
         .bg(theme.raised)
         .shadow_sm()
-        .cursor_pointer()
+        .flex()
+        .items_center()
+        .gap(px(PILL_GAP))
+        .child(popup_pill("copy-popup", IconName::Copy, theme.clone()))
+        .child(popup_pill("cite-popup", IconName::Reply, theme))
+}
+
+/// One icon button inside the popup strip. Activation lives in the selection
+/// mouse handlers, so this is styling and hover only.
+fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElement {
+    div()
+        .id(gpui::ElementId::Name(id.into()))
+        .size(px(24.0))
+        .rounded(px(6.0))
         .flex()
         .items_center()
         .justify_center()
+        .cursor_pointer()
         .hover(|element| element.bg(theme.overlay_strong))
         .child(app_icon(icon, 12.0, theme.text_secondary))
 }
@@ -1518,7 +1527,7 @@ fn transcript_row(
             let expand_entity = entity.clone();
             let mut bubble = UserMessageBubble::new(content.clone())
                 .created_at(*created_at)
-                .selection(view_ref.selection.clone(), format!("message-{index}"))
+                .selection(view_ref.selection.clone(), format!("user-{index}"))
                 .expanded(user_expanded)
                 .on_toggle_expand(move |_window, cx| {
                     if let Some(view) = expand_entity.upgrade() {
