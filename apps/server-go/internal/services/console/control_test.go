@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -372,6 +374,36 @@ func TestUnknownAndWrongTypedArgumentsAreRefused(t *testing.T) {
 	}
 }
 
+// Every installed method has an argument allow-list, and every allow-list entry
+// is an installed method. A method added without one would accept any argument,
+// silently ignoring typos, which is the bug the allow-list exists to prevent.
+func TestEveryInstalledMethodIsInTheArgumentTable(t *testing.T) {
+	runtime, _ := newConsoleSessionRuntime(t, nil)
+	_ = runtime
+	src, err := os.ReadFile("runtime.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`\{Name: "([a-z_.A-Z]+)", Call:`)
+	installed := map[string]bool{}
+	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+		installed[m[1]] = true
+	}
+	if len(installed) < 20 {
+		t.Fatalf("found only %d installed methods; the pattern is out of date", len(installed))
+	}
+	for name := range installed {
+		if _, ok := methodArgs[name]; !ok {
+			t.Errorf("%s is installed but has no entry in methodArgs", name)
+		}
+	}
+	for name := range methodArgs {
+		if !installed[name] {
+			t.Errorf("methodArgs lists %s, which is not an installed method", name)
+		}
+	}
+}
+
 func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
 	runtime, _ := newConsoleSessionRuntime(t, nil)
 	_ = runtime
@@ -382,6 +414,7 @@ func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
 		"projects.list", "projects.add", "sessions.list", "sessions.read", "sessions.create",
 		"sessions.delete", "sessions.abort", "sessions.set_model", "sessions.set_approval",
 		"sessions.prompt", "sessions.queue", "sessions.clear_queue", "sessions.fork",
+		"sessions.wait", "sessions.search",
 	} {
 		if _, ok := methodArgs[name]; !ok {
 			t.Errorf("%s is not in methodArgs", name)
@@ -693,5 +726,128 @@ func TestWaitStopsWhenTheCallIsCancelled(t *testing.T) {
 	}
 	if time.Since(start) > 10*time.Second {
 		t.Fatalf("cancellation took %v; the wait ignored it", time.Since(start))
+	}
+}
+
+// ---- sessions.search
+
+func newSearchRuntime(t *testing.T, projectID, cwd string) (*Runtime, *services.SessionService) {
+	t.Helper()
+	runtime, sessions := newConsoleSessionRuntime(t, nil)
+	runtime.sessionID = "caller"
+	runtime.projectID = projectID
+	runtime.cwd = cwd
+	return runtime, sessions
+}
+
+func searchSession(t *testing.T, sessions *services.SessionService, id, title, cwd, text string) {
+	t.Helper()
+	h, err := sessions.Create(types.CreateSessionOptions{ID: id, Title: title, Cwd: cwd, ModelID: "m", Provider: "p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte(`{"user":{"content":` + mustJSONString(text) + `}}`)
+	if err := sessions.AppendMessage(h.ID, types.AgentMessage{ID: "m-" + id, Role: "user", Data: data}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustJSONString(s string) string { b, _ := json.Marshal(s); return string(b) }
+
+func searchHits(t *testing.T, out any) []map[string]any {
+	t.Helper()
+	m, ok := out.(map[string]any)
+	if !ok {
+		t.Fatalf("result = %#v", out)
+	}
+	raw, _ := m["hits"].([]any)
+	var hits []map[string]any
+	for _, h := range raw {
+		hits = append(hits, h.(map[string]any))
+	}
+	return hits
+}
+
+func TestSearchDefaultsToTheCurrentDirectoryAndLeavesOutTheAgentsOwnSession(t *testing.T) {
+	runtime, sessions := newSearchRuntime(t, "", "/work/app")
+	searchSession(t, sessions, "caller", "Me", "/work/app", "the quarterly report is here")
+	searchSession(t, sessions, "other1", "Other", "/work/app", "the quarterly report draft")
+	searchSession(t, sessions, "elsewhere", "Far", "/somewhere/else", "the quarterly report too")
+
+	hits := searchHits(t, evalJSON(t, runtime, `console.sessions.search({query:"quarterly report"})`))
+	if len(hits) != 1 || hits[0]["session_id"] != "other1" {
+		t.Fatalf("hits = %#v; want only the other session in this directory", hits)
+	}
+}
+
+func TestSearchScopeOptions(t *testing.T) {
+	runtime, sessions := newSearchRuntime(t, "", "/work/app")
+	searchSession(t, sessions, "a", "A", "/work/app", "needle in app")
+	searchSession(t, sessions, "b", "B", "/work/lib", "needle in lib")
+
+	count := func(code string) int { return len(searchHits(t, evalJSON(t, runtime, code))) }
+	if n := count(`console.sessions.search({query:"needle", cwd:"/work/lib"})`); n != 1 {
+		t.Fatalf("cwd scope = %d hits", n)
+	}
+	if n := count(`console.sessions.search({query:"needle", all_projects:true})`); n != 2 {
+		t.Fatalf("all_projects scope = %d hits, want both", n)
+	}
+	if n := count(`console.sessions.search({query:"needle", session_id:"b"})`); n != 1 {
+		t.Fatalf("session_id scope = %d hits", n)
+	}
+}
+
+func TestSearchRefusals(t *testing.T) {
+	runtime, sessions := newSearchRuntime(t, "", "/work/app")
+	searchSession(t, sessions, "a", "A", "/work/app", "x")
+	for name, code := range map[string]string{
+		"no query":         `console.sessions.search({})`,
+		"empty query":      `console.sessions.search({query:""})`,
+		"two scopes":       `console.sessions.search({query:"x", cwd:"/a", project_id:"p"})`,
+		"scope + all":      `console.sessions.search({query:"x", cwd:"/a", all_projects:true})`,
+		"own session":      `console.sessions.search({query:"x", session_id:"caller"})`,
+		"unknown session":  `console.sessions.search({query:"x", session_id:"ghost"})`,
+		"bad roles":        `console.sessions.search({query:"x", roles:["toolResult"]})`,
+		"roles not array":  `console.sessions.search({query:"x", roles:"user"})`,
+		"zero limit":       `console.sessions.search({query:"x", limit:0})`,
+		"limit as string":  `console.sessions.search({query:"x", limit:"5"})`,
+		"all_projects str": `console.sessions.search({query:"x", all_projects:"yes"})`,
+		"unknown argument": `console.sessions.search({query:"x", where:"here"})`,
+	} {
+		if err := evalErr(runtime, code); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestSearchWithNoProjectOrDirectoryExplainsWhatToPass(t *testing.T) {
+	runtime, _ := newSearchRuntime(t, "", "")
+	err := evalErr(runtime, `console.sessions.search({query:"x"})`)
+	if err == nil || !strings.Contains(err.Error(), "all_projects") {
+		t.Fatalf("err = %v, want guidance naming the scope options", err)
+	}
+}
+
+func TestSearchResultCarriesWhatAFindBarNeeds(t *testing.T) {
+	runtime, sessions := newSearchRuntime(t, "", "/work/app")
+	searchSession(t, sessions, "other", "Other", "/work/app", "alpha needle beta needle gamma")
+	out := evalJSON(t, runtime, `console.sessions.search({query:"needle"})`).(map[string]any)
+	hits := searchHits(t, out)
+	if len(hits) != 1 {
+		t.Fatalf("hits = %#v", hits)
+	}
+	h := hits[0]
+	for _, key := range []string{"session_id", "session_title", "message_id", "role", "snippet", "matches", "created_at"} {
+		if _, ok := h[key]; !ok {
+			t.Errorf("hit is missing %q", key)
+		}
+	}
+	if m, _ := h["matches"].([]any); len(m) != 2 {
+		t.Fatalf("matches = %v, want both occurrences", h["matches"])
+	}
+	for _, key := range []string{"query", "sessions_searched", "truncated"} {
+		if _, ok := out[key]; !ok {
+			t.Errorf("result is missing %q", key)
+		}
 	}
 }

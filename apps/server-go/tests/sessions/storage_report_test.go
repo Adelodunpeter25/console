@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 )
 
 // Reports, on copies of the developer's real databases, what the split storage
@@ -101,4 +103,90 @@ func TestStorageReportOnRealCopies(t *testing.T) {
 	after := skeletonBytes + textBytes + partBytes
 	t.Logf("  => AFTER dropping content: database holds %.2f MB (+ %.2f MB images as files) vs %.2f MB today", mb(after), mb(imgFileBytes), mb(contentBytes))
 	t.Logf("  => reading a message's words now touches %.2f MB (text) instead of %.2f MB", mb(textBytes), mb(contentBytes))
+}
+
+// Searches copies of the developer's real history through the same Search the
+// agent uses. It asserts nothing about content (that is private); it reports
+// timing and checks that results are well formed and that a word known to be in
+// the history is found.
+func TestSearchOverCopiesOfRealHistory(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	store := filepath.Join(home, ".console")
+	var srcs []string
+	_ = filepath.Walk(store, func(p string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(p, ".db") && strings.Contains(p, string(filepath.Separator)+"sessions"+string(filepath.Separator)) {
+			srcs = append(srcs, p)
+		}
+		return nil
+	})
+	dir := t.TempDir()
+	manager, err := db.Open(db.OpenOptions{Path: filepath.Join(dir, "global.db"), StorageDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Close)
+	svc := services.NewSessionService(manager)
+	loaded := 0
+	for _, src := range srcs {
+		probe, err := sql.Open("sqlite", "file:"+src+"?mode=ro&immutable=1")
+		if err != nil {
+			continue
+		}
+		var n int
+		bad := probe.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&n) != nil
+		probe.Close()
+		if bad {
+			continue
+		}
+		id := strings.TrimSuffix("s"+filepath.Base(src), ".db")
+		dst := filepath.Join(dir, "projects", "p", "sessions", id+".db")
+		_ = os.MkdirAll(filepath.Dir(dst), 0o755)
+		if copyFile(src, dst) != nil {
+			continue
+		}
+		_, _ = manager.Global().Exec(`INSERT INTO sessions (id, title, cwd, project_id, model_id, provider, message_count, status, approval_mode, created_at, updated_at) VALUES (?, ?, '/w', 'p', 'm', 'p', ?, 'idle', 'always-ask', 1, ?)`, id, "session "+id, n, loaded+1)
+		loaded++
+	}
+	if loaded == 0 {
+		t.Skip("no readable databases")
+	}
+
+	// First search converts any session not yet split (the cost a user pays once).
+	first := time.Now()
+	r, err := svc.Search(session.SearchScope{ProjectID: "p"}, "the", session.SearchOptions{Limit: 100, PerSession: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstTook := time.Since(first)
+
+	// Later searches are the steady state.
+	const reps = 20
+	start := time.Now()
+	var last *session.SearchResult
+	for i := 0; i < reps; i++ {
+		last, err = svc.Search(session.SearchScope{ProjectID: "p"}, "the", session.SearchOptions{Limit: 100, PerSession: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	each := time.Since(start) / reps
+
+	for _, h := range last.Hits {
+		if h.MessageID == "" || h.SessionID == "" || h.Snippet == "" || len(h.Matches) == 0 {
+			t.Fatalf("malformed hit: %+v", h)
+		}
+		if h.Role != "user" && h.Role != "assistant" {
+			t.Fatalf("a %q message was returned", h.Role)
+		}
+		if strings.Contains(h.Snippet, "\n") {
+			t.Fatalf("snippet has a newline")
+		}
+	}
+	t.Logf("%d sessions copied; search for \"the\": %d hits across %d sessions", loaded, len(last.Hits), last.SessionsSearched)
+	t.Logf("first search (includes converting any unsplit session): %v", firstTook.Round(time.Millisecond))
+	t.Logf("steady-state search: %v each", each.Round(time.Microsecond))
+	_ = r
 }

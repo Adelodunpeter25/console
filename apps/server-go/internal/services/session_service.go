@@ -298,6 +298,12 @@ func (s *SessionService) UpdateApprovalMode(sessionID, approvalMode string) erro
 	return s.inner.UpdateApprovalMode(sessionID, approvalMode)
 }
 
+// Search finds messages whose words contain every word of query. See
+// session.Service.Search.
+func (s *SessionService) Search(scope session.SearchScope, query string, opts session.SearchOptions) (*session.SearchResult, error) {
+	return s.inner.Search(scope, query, opts)
+}
+
 // Capabilities lists the built-in capabilities switched on for a session.
 func (s *SessionService) Capabilities(sessionID string) ([]string, error) {
 	return s.inner.Capabilities(sessionID)

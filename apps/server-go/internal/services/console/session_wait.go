@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 )
 
 const (
@@ -234,4 +235,111 @@ func (r *Runtime) lastReply(id string) string {
 		return text
 	}
 	return ""
+}
+
+// sessionsSearch finds messages that contain every word of a query. It calls the
+// same session.Service.Search a future in-chat Cmd+F will call, so there is one
+// definition of a match.
+//
+// By default it searches the current session's project (or, with no project, its
+// directory) and leaves out the session the agent is running in: that one is
+// already in context, and finding the agent's own words again is noise.
+func (r *Runtime) sessionsSearch(_ context.Context, args map[string]any) (*jskernel.Result, error) {
+	if err := r.requireSessions(); err != nil {
+		return nil, err
+	}
+	query, err := stringArg(args, "query")
+	if err != nil {
+		return nil, err
+	}
+	scope := session.SearchScope{Exclude: []string{r.sessionID}}
+	sessionID, err := optionalString(args, "session_id")
+	if err != nil {
+		return nil, err
+	}
+	projectID, err := optionalString(args, "project_id")
+	if err != nil {
+		return nil, err
+	}
+	cwd, err := optionalString(args, "cwd")
+	if err != nil {
+		return nil, err
+	}
+	allProjects, _ := args["all_projects"].(bool)
+	if raw, present := args["all_projects"]; present {
+		if _, ok := raw.(bool); !ok {
+			return nil, fmt.Errorf("all_projects must be true or false, got %v", raw)
+		}
+	}
+
+	scoped := 0
+	for _, set := range []bool{sessionID != "", projectID != "", cwd != "", allProjects} {
+		if set {
+			scoped++
+		}
+	}
+	if scoped > 1 {
+		return nil, fmt.Errorf("choose one scope: session_id, project_id, cwd or all_projects")
+	}
+	switch {
+	case sessionID != "":
+		// Searching one named session is deliberate; do not exclude it, except
+		// that the agent's own session is still not worth searching.
+		scope.SessionID = sessionID
+		if sessionID == r.sessionID {
+			return nil, fmt.Errorf("that is the session you are running in; its messages are already in your context")
+		}
+	case projectID != "":
+		scope.ProjectID = projectID
+	case cwd != "":
+		scope.Cwd = cwd
+	case allProjects:
+		// every session
+	default:
+		// The current project, or the current directory when there is none.
+		if r.projectID != "" {
+			scope.ProjectID = r.projectID
+		} else if r.cwd != "" {
+			scope.Cwd = r.cwd
+		} else {
+			return nil, fmt.Errorf("this session has no project or directory to search; pass project_id, cwd, session_id or all_projects: true")
+		}
+	}
+
+	var opts session.SearchOptions
+	if raw, present := args["roles"]; present {
+		list, ok := raw.([]any)
+		if !ok {
+			return nil, fmt.Errorf(`roles must be an array such as ["user","assistant"]`)
+		}
+		for _, item := range list {
+			role, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("roles must contain only strings, got %v", item)
+			}
+			opts.Roles = append(opts.Roles, role)
+		}
+	}
+	if n, ok, err := optionalInt(args, "limit"); err != nil {
+		return nil, err
+	} else if ok {
+		if n <= 0 {
+			return nil, fmt.Errorf("limit must be positive")
+		}
+		opts.Limit = n
+	}
+	if n, ok, err := optionalInt(args, "per_session"); err != nil {
+		return nil, err
+	} else if ok {
+		if n <= 0 {
+			return nil, fmt.Errorf("per_session must be positive")
+		}
+		opts.PerSession = n
+	}
+
+	result, err := r.sessions.Search(scope, query, opts)
+	if err != nil {
+		return nil, err
+	}
+	return marshalResult(result)
 }

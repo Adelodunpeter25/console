@@ -14,7 +14,7 @@ Every message is stored twice during the transition, and the copies are kept pro
 | :--- | :--- | :--- |
 | `messages.content` | the original JSON, untouched | **still the source of truth**; the fallback for everything |
 | `messages.skeleton` | the JSON with heavy bodies replaced by `{"$part":N}` markers | rebuilding |
-| `messages.text` | the words: what you wrote, what the assistant said, and one line per tool call (`read_file src/auth.go`) | search (not built yet) |
+| `messages.text` | the words: what you wrote, what the assistant said, and one line per tool call (`read_file src/auth.go`) | search (`session.Service.Search`) |
 | `messages.split_state` | `0` not yet split, `1` split, `2` could not be split (read `content`) | the migration |
 | `message_parts` | one row per extracted body: tool arguments, tool results, images, screenshots, stored as raw bytes (not base64) | rebuilding |
 | `<session>.images/<sha256>` | image and screenshot bodies as files, named by the hash of their bytes | rebuilding |
@@ -46,10 +46,14 @@ Each session has its own `<session>.images/` folder beside its database, so imag
 
 The saving is real but modest in absolute terms on this data. The larger win is that reading words no longer drags tool output and images with it.
 
+## Search
+
+`session.Service.Search` (`internal/services/session/search.go`) is the one definition of a match. It reads only the `text` column (words: never tool output, thinking, images or server-injected messages), requires every query word in the same message, folds Unicode case, treats every character as literal, and returns hits newest first with character offsets and a one-line snippet. `console.sessions.search` is a thin caller and the in-chat Cmd+F will be another, so the two cannot disagree. A session whose old messages are not yet split is converted on the way through, so history is never skipped. By default the agent searches its own project and leaves out the session it is running in. Measured on a copy of the real history: about 10 ms steady-state across 12 sessions, 0.6 s for the first search while it converts.
+
 ## What is NOT done
 
 - **Stage 6: dropping `content`.** This is the only step that is hard to undo, so it is a separate, deliberate change. Do it only after a stretch of real use with `ParityStats()` showing zero mismatches. Until then storage is *larger* than before, not smaller.
-- **Search.** The `text` column exists and is filled, but nothing reads it yet. `console.sessions.search` is designed (scan the `text` column, results with snippets, caps, scope) but not built.
+- **In-chat find (Cmd+F, and the Android equivalent).** The server half exists: `session.Service.Search` returns every match with character offsets for highlighting. Not built: the HTTP route (`GET /api/sessions/:id/search`) and the two clients (a find bar, highlighting inside the message renderers, next/previous). Chats load 50 messages at a time, so match locally over what is loaded first and fall back to the server for older pages.
 - **Runs still load whole transcripts** through `Load`, so they pay for the rebuild. Measured in Python on the worst real session, a full rebuild cost roughly 2x a plain read; a run that bypasses the JSON and hands parts straight to the model would be faster than today, but that second read path is not written.
 - **Linux/other platforms:** nothing here is platform specific, but it has only been run on macOS.
 

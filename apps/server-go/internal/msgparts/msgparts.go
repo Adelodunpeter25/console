@@ -174,7 +174,14 @@ func Split(content []byte) (*Result, error) {
 		if err := json.Unmarshal(raw, &u); err != nil {
 			return nil, fmt.Errorf("user: %w", err)
 		}
-		if c, ok := u["content"]; ok {
+		// A synthetic turn is injected by the server (a finished background job
+		// waking the session) and is never shown to the user, so its text is not
+		// words anyone wrote and must not turn up in a search.
+		synthetic := false
+		if sv, ok := u["synthetic"]; ok {
+			_ = json.Unmarshal(sv, &synthetic)
+		}
+		if c, ok := u["content"]; ok && !synthetic {
 			var s string
 			if json.Unmarshal(c, &s) == nil {
 				add(s)
