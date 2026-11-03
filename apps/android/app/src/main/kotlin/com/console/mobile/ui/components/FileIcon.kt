@@ -95,6 +95,7 @@ fun ProviderIcon(
             .decoderFactory(SvgDecoder.Factory())
             .build(),
         contentDescription = provider,
+        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(com.console.mobile.ui.theme.NewTheme.TextSecondary),
         contentScale = ContentScale.Fit,
         modifier = modifier.size(sizeDp.dp),
     )

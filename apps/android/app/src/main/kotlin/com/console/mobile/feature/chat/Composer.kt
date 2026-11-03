@@ -382,7 +382,13 @@ fun Composer(
             }
         }
         Collapsible(progress = expansion, modifier = Modifier.fillMaxWidth()) {
-            ComposerBottomStrip(sessionId = sessionId)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(NewTheme.Background),
+            ) {
+                ComposerBottomStrip(sessionId = sessionId)
+            }
         }
     }
     }
@@ -541,7 +547,7 @@ private fun ComposerInput(
                     modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Spacer(Modifier.size(SEND_SIZE))
+                    Spacer(Modifier.width(SEND_SIZE + 8.dp))
                     ThinkingChip(sessionId = sessionId, running = running)
                     Row(
                         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
@@ -551,7 +557,7 @@ private fun ComposerInput(
                         ModelChip(sessionId = sessionId, modifier = Modifier.weight(1f, fill = false))
                     }
                     // Reserves the slot the send button floats over.
-                    Spacer(Modifier.size(SEND_SIZE))
+                    Spacer(Modifier.width(SEND_SIZE + 4.dp))
                 }
             }
         }
@@ -586,8 +592,6 @@ private fun AttachButton(
         modifier = modifier
             .size(SEND_SIZE)
             .clip(CircleShape)
-            .background(Color(0xFF282830))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
             .clickable(onClickLabel = "Attach image", onClick = attach),
         contentAlignment = Alignment.Center,
     ) {
