@@ -49,7 +49,6 @@ import com.console.mobile.ui.components.common.new.PageHeaderHeight
 import com.console.mobile.ui.components.common.new.SearchBar
 import com.console.mobile.ui.components.common.new.SectionCard
 import com.console.mobile.ui.components.common.new.SectionDivider
-import com.console.mobile.ui.components.common.new.SectionSkeleton
 import com.console.mobile.ui.components.common.new.hideKeyboardOnScroll
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
@@ -169,9 +168,8 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (isLoading) {
-                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = PageHeaderHeight + 8.dp)) {
-                        SectionSkeleton(rows = 3)
-                        SectionSkeleton(rows = 2)
+                    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(top = PageHeaderHeight)) {
+                        HomeSkeleton()
                     }
                 } else if (sections.isEmpty() && projectState.error != null) {
                     LazyColumn(
