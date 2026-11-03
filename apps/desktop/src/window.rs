@@ -243,17 +243,28 @@ pub fn confirm_then(
     message: &str,
     on_confirm: impl FnOnce(&mut Window, &mut App) + 'static,
 ) {
-    let rx = window.prompt(
-        PromptLevel::Warning,
-        message,
-        Some("An agent is still running. Closing will stop its work."),
-        &["Close Anyway", "Cancel"],
-        cx,
-    );
+    let message = message.to_string();
     window
         .spawn(cx, async move |cx| {
-            if rx.await == Ok(0) {
-                cx.update(|window, cx| on_confirm(window, cx)).ok();
+            // Show the NSAlert off the current dispatch stack. window.prompt
+            // runs a modal AppKit loop on macOS, and calling it synchronously
+            // from inside menu/close dispatch (this function's two callers)
+            // re-enters GPUI while it holds its update borrow — the exact
+            // hazard picker.rs documents for nested run loops. Spawning here
+            // means the prompt is presented only once no borrow is held.
+            let reply = cx.update(|window, cx| {
+                window.prompt(
+                    PromptLevel::Warning,
+                    &message,
+                    Some("An agent is still running. Closing will stop its work."),
+                    &["Close Anyway", "Cancel"],
+                    cx,
+                )
+            });
+            if let Ok(rx) = reply
+                && rx.await == Ok(0)
+            {
+                cx.update(on_confirm).ok();
             }
         })
         .detach();
