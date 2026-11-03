@@ -21,7 +21,7 @@ import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
-import io.github.lyxnx.compose.ui.tablericons.outline.Pin
+import io.github.lyxnx.compose.ui.tablericons.outline.Pinned
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 
 /** Stable collapse key for a section: virtual sections by name, then project
@@ -33,7 +33,7 @@ internal fun sectionCollapseKey(section: GroupedProjectSection): String = when {
     else -> "general"
 }
 
-/** A section heading on Home: folder glyph (a pin for Pinned, a virtual group),
+/** A section heading on Home: folder glyph (a straight pin for Pinned, a virtual group),
  * name, collapse chevron, and the new-chat button for real projects. Tapping
  * the label collapses/expands the sessions under the section, like desktop. */
 @Composable
@@ -55,7 +55,7 @@ internal fun SessionSectionHeader(
             modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle),
         ) {
             Icon(
-                if (isVirtual) TablerIcons.Outline.Pin else TablerIcons.Outline.FolderOpen,
+                if (isVirtual) TablerIcons.Outline.Pinned else TablerIcons.Outline.FolderOpen,
                 contentDescription = null,
                 tint = NewTheme.Accent,
                 modifier = Modifier.size(17.dp),
