@@ -40,7 +40,9 @@ func (s *DraftService) Get(sessionID string) (*consolev1.ChatDraft, error) {
 
 // Put stores the draft when it is not older than the stored one. It returns
 // whether it was applied and the draft the caller should hold afterwards.
-// An empty draft deletes the row so cleared drafts do not accumulate.
+// A cleared draft is stored as an empty one rather than deleted: its
+// updatedAt is the tombstone that stops a device holding an older draft from
+// pushing it back after another device sent it.
 func (s *DraftService) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDraft, error) {
 	if draft.SessionId == "" {
 		return false, nil, fmt.Errorf("sessionId is required.")
@@ -66,13 +68,6 @@ func (s *DraftService) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDra
 		return false, stored, nil
 	}
 
-	if draft.Text == "" && len(draft.Comments) == 0 {
-		// Keep a tombstone-free table, but still report the cleared draft.
-		if _, err := tx.Exec(`DELETE FROM chat_drafts WHERE session_id = ?`, draft.SessionId); err != nil {
-			return false, nil, err
-		}
-		return true, draft, tx.Commit()
-	}
 	body, err := protojson.Marshal(draft)
 	if err != nil {
 		return false, nil, err

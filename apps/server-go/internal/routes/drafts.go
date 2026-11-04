@@ -5,6 +5,7 @@ package routes
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -49,7 +50,7 @@ func RegisterDraftRoutes(app *fiber.App, drafts *services.DraftService) {
 	app.Delete("/api/drafts/:sessionId", func(c *fiber.Ctx) error {
 		if _, _, err := drafts.Put(&consolev1.ChatDraft{
 			SessionId: c.Params("sessionId"),
-			UpdatedAt: 1<<62 - 1,
+			UpdatedAt: time.Now().UnixMilli(),
 		}); err != nil {
 			return fail400(c, err)
 		}

@@ -1,5 +1,5 @@
 // Chat draft sync: last write wins by updatedAt, whole-draft replace so
-// deletions propagate, and a cleared draft leaves no row behind.
+// deletions propagate, and a cleared draft stays as an empty tombstone.
 package tests
 
 import (
@@ -87,9 +87,15 @@ func TestDraftsLastWriteWinsAndClear(t *testing.T) {
 		t.Fatalf("unexpected stored draft: %+v", got)
 	}
 
-	// Clearing removes the row entirely.
+	// Clearing keeps an empty draft as a tombstone, so a device that still
+	// holds the old text cannot push it back over the clear.
 	draftCall(t, app, "PUT", `{"text":"","updatedAt":"300"}`)
-	if env := draftCall(t, app, "GET", ""); env.Data.Draft != nil {
-		t.Fatalf("cleared draft should be gone: %+v", env.Data.Draft)
+	cleared := draftCall(t, app, "GET", "").Data.Draft
+	if cleared == nil || cleared.Text != "" || cleared.UpdatedAt != "300" {
+		t.Fatalf("cleared draft should be an empty tombstone: %+v", cleared)
+	}
+	late := draftCall(t, app, "PUT", `{"text":"from phone","updatedAt":"250"}`)
+	if late.Data.Applied {
+		t.Fatal("a write older than the clear must lose")
 	}
 }
