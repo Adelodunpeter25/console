@@ -135,6 +135,11 @@ pub struct HostContent {
     pub on_new_window_url: Option<Box<dyn Fn(String)>>,
 }
 
+/// Shared snapshot result slot. `Arc<Mutex>` (not `Rc<RefCell>`) so the
+/// WebKit completion handler can hand the encoded PNG to a background
+/// thread for the decode/crop/re-encode without blocking the UI.
+pub type SnapshotSlot = std::sync::Arc<std::sync::Mutex<Option<Result<Vec<u8>, String>>>>;
+
 #[cfg(target_os = "macos")]
 mod macos_host {
     use std::cell::Cell;
@@ -426,7 +431,7 @@ mod macos_host {
         /// the main thread and writes into `slot`, which the caller polls.
         pub fn take_snapshot(
             &self,
-            slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+            slot: super::SnapshotSlot,
         ) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
@@ -455,10 +460,10 @@ mod macos_host {
                     .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?;
                     Ok(png.to_vec())
                 })();
-                *slot.borrow_mut() = Some(result);
+                *slot.lock().unwrap() = Some(result);
             });
             let Some(mtm) = MainThreadMarker::new() else {
-                *slot_for_error.borrow_mut() =
+                *slot_for_error.lock().unwrap() =
                     Some(Err("Snapshot must run on the main thread".to_string()));
                 return;
             };
@@ -478,7 +483,7 @@ mod macos_host {
         pub fn take_snapshot_cropped(
             &self,
             rect: (f64, f64, f64, f64),
-            slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+            slot: super::SnapshotSlot,
         ) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
@@ -508,40 +513,52 @@ mod macos_host {
                     }
                     .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?
                     .to_vec();
-                    let png = if w > 0.0 && h > 0.0 {
-                        match image::load_from_memory(&full_png) {
-                            Ok(img) => {
-                                let (pw, ph) = (img.width(), img.height());
-                                let scale = if view_w > 0.0 {
-                                    pw as f64 / view_w
-                                } else {
-                                    1.0
-                                };
-                                let cx0 = (x * scale).round().clamp(0.0, pw as f64) as u32;
-                                let cy0 = (y * scale).round().clamp(0.0, ph as f64) as u32;
-                                let cw = (w * scale).round().max(1.0).min((pw.saturating_sub(cx0)) as f64) as u32;
-                                let ch = (h * scale).round().max(1.0).min((ph.saturating_sub(cy0)) as f64) as u32;
-                                if cw > 0 && ch > 0 {
-                                    let cropped = img.crop_imm(cx0, cy0, cw, ch);
-                                    let mut buf = Vec::new();
-                                    cropped.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
-                                        .map_err(|e| format!("Could not encode cropped snapshot: {e}"))?;
-                                    buf
-                                } else {
-                                    full_png
+                    // Decode/crop/re-encode off the main thread: doing it in
+                    // this handler froze the UI for ~a second (the page
+                    // appeared to go blank while the screenshot was taken).
+                    let slot = slot.clone();
+                    if w > 0.0 && h > 0.0 {
+                        std::thread::spawn(move || {
+                            let result = match image::load_from_memory(&full_png) {
+                                Ok(img) => {
+                                    let (pw, ph) = (img.width(), img.height());
+                                    let scale = if view_w > 0.0 {
+                                        pw as f64 / view_w
+                                    } else {
+                                        1.0
+                                    };
+                                    let cx0 = (x * scale).round().clamp(0.0, pw as f64) as u32;
+                                    let cy0 = (y * scale).round().clamp(0.0, ph as f64) as u32;
+                                    let cw = (w * scale).round().max(1.0).min((pw.saturating_sub(cx0)) as f64) as u32;
+                                    let ch = (h * scale).round().max(1.0).min((ph.saturating_sub(cy0)) as f64) as u32;
+                                    if cw > 0 && ch > 0 {
+                                        let cropped = img.crop_imm(cx0, cy0, cw, ch);
+                                        let mut buf = Vec::new();
+                                        match cropped.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png) {
+                                            Ok(()) => buf,
+                                            Err(_) => full_png,
+                                        }
+                                    } else {
+                                        full_png
+                                    }
                                 }
-                            }
-                            Err(_) => full_png,
-                        }
+                                Err(_) => full_png,
+                            };
+                            *slot.lock().unwrap() = Some(Ok(result));
+                        });
                     } else {
-                        full_png
-                    };
-                    Ok(png)
+                        *slot.lock().unwrap() = Some(Ok(full_png));
+                    }
+                    return Ok(());
                 })();
-                *slot.borrow_mut() = Some(result);
+                // Success is written by the background thread; surface the
+                // synchronous failures from the handler itself.
+                if let Err(e) = result {
+                    *slot.lock().unwrap() = Some(Err(e));
+                }
             });
             let Some(mtm) = MainThreadMarker::new() else {
-                *slot_for_error.borrow_mut() =
+                *slot_for_error.lock().unwrap() =
                     Some(Err("Snapshot must run on the main thread".to_string()));
                 return;
             };
@@ -676,18 +693,11 @@ impl WebviewHost {
         None
     }
     pub fn evaluate_script(&self, _script: &str) {}
-    pub fn take_snapshot(
-        &self,
-        slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
-    ) {
-        *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));
+    pub fn take_snapshot(&self, slot: super::SnapshotSlot) {
+        *slot.lock().unwrap() = Some(Err("Screenshots are only supported on macOS".to_string()));
     }
-    pub fn take_snapshot_cropped(
-        &self,
-        _rect: (f64, f64, f64, f64),
-        slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
-    ) {
-        *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));
+    pub fn take_snapshot_cropped(&self, _rect: (f64, f64, f64, f64), slot: super::SnapshotSlot) {
+        *slot.lock().unwrap() = Some(Err("Screenshots are only supported on macOS".to_string()));
     }
     pub fn open_devtools(&self) {}
     pub fn close_devtools(&self) {}

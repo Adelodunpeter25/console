@@ -577,15 +577,15 @@ impl BrowserView {
         let Some(host) = self.host.clone() else {
             return;
         };
-        let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let slot = crate::browser::host::SnapshotSlot::default();
         host.take_snapshot_cropped(bounds, slot.clone());
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
             for _ in 0..20 {
                 cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
-                let done = slot.borrow().is_some();
+                let done = slot.lock().unwrap().is_some();
                 if done {
-                    let result = slot.borrow_mut().take();
+                    let result = slot.lock().unwrap().take();
                     if let Some(Ok(bytes)) = result {
                         use base64::Engine as _;
                         let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
@@ -647,9 +647,9 @@ impl BrowserView {
     /// fills once the webview finishes; `None` when there is no live webview.
     pub fn start_snapshot(
         &self,
-    ) -> Option<std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>> {
+    ) -> Option<crate::browser::host::SnapshotSlot> {
         let host = self.host.as_ref()?;
-        let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+        let slot = crate::browser::host::SnapshotSlot::default();
         host.take_snapshot(slot.clone());
         Some(slot)
     }
@@ -938,14 +938,14 @@ impl BrowserView {
         } else if occlusion_started && !self.snapshot_pending && self.snapshot.is_none() {
             self.snapshot_pending = true;
             let epoch = self.snapshot_epoch;
-            let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+            let slot = crate::browser::host::SnapshotSlot::default();
             host.take_snapshot(slot.clone());
             let view = cx.entity().downgrade();
             cx.spawn(async move |_, cx| {
                 for _ in 0..30 {
                     cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
-                    if slot.borrow().is_some() {
-                        let result = slot.borrow_mut().take();
+                    if slot.lock().unwrap().is_some() {
+                        let result = slot.lock().unwrap().take();
                         if let Some(Ok(bytes)) = result {
                             let image = std::sync::Arc::new(gpui::Image::from_bytes(
                                 gpui::ImageFormat::Png,

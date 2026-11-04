@@ -715,7 +715,7 @@ impl ConsoleDesktopApp {
                     let mut outcome = Err("Snapshot timed out".to_string());
                     for _ in 0..SCRIPT_RESULT_POLLS {
                         cx.background_executor().timer(BROWSER_POLL_INTERVAL).await;
-                        if let Some(done) = slot.borrow_mut().take() {
+                        if let Some(done) = slot.lock().unwrap().take() {
                             outcome = done;
                             break;
                         }
