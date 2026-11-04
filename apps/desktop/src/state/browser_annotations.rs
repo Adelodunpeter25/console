@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use console_core::BrowserElementAnnotation;
-use gpui::{Context, Focusable, Window};
+use gpui::Context;
 
 use super::ConsoleDesktopApp;
 
@@ -64,13 +64,6 @@ impl ConsoleDesktopApp {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn clear_annotations_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        if self.browser_annotations.remove(pane_id).is_some() {
-            self.schedule_drafts_save(cx);
-            cx.notify();
-        }
-    }
 
     /// Which pane currently shows `browser_id`, preferring the focused pane.
     /// Used to route an annotation from a workspace browser tab to the
@@ -189,17 +182,5 @@ impl ConsoleDesktopApp {
             })
             .collect();
         Rc::new(chips)
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn focus_annotation_input(
-        &mut self,
-        browser_id: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(view) = self.browser_views.get(browser_id).cloned() {
-            window.focus(&view.read(cx).focus_handle(cx), cx);
-        }
     }
 }

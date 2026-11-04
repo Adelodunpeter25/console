@@ -107,6 +107,9 @@ pub struct BrowserView {
     annotation_screenshot: Option<String>,
     /// Focus the annotation input on the next render after a pick.
     annotation_focus_pending: bool,
+    /// Refocus the page itself on the next render after an Attach, so the
+    /// next element pick works without an extra click.
+    refocus_page_pending: bool,
     /// Last synced page-area size, for clamping the popover. Updated from
     /// the canvas in `render_page_area`.
     surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
@@ -257,6 +260,7 @@ impl BrowserView {
             annotation_input,
             annotation_screenshot: None,
             annotation_focus_pending: false,
+            refocus_page_pending: false,
             surface_size: std::rc::Rc::new(std::cell::Cell::new(None)),
             annotation_handler: None,
             script_results: HashMap::new(),
@@ -541,6 +545,7 @@ impl BrowserView {
         if let Some(handler) = &self.annotation_handler {
             (handler)(annotation, cx);
         }
+        self.refocus_page_pending = true;
         // Resume inspect so the next pick works.
         if self.inspecting {
             if let Some(host) = &self.host {
@@ -1694,6 +1699,13 @@ impl Render for BrowserView {
             let input = self.annotation_input.clone();
             window.on_next_frame(move |window, cx| {
                 window.focus(&input.read(cx).focus(), cx);
+            });
+        }
+        if self.refocus_page_pending {
+            self.refocus_page_pending = false;
+            let page = self.focus_handle.clone();
+            window.on_next_frame(move |window, _cx| {
+                window.focus(&page, _cx);
             });
         }
 
