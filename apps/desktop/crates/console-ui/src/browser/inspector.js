@@ -220,6 +220,26 @@
     }
   }
 
+  // React 19 dropped _debugSource; dev fibers carry _debugStack (an Error
+  // captured where the JSX element was created). Its first frame outside
+  // React's runtime and node_modules is the authoring location.
+  function locationFromDebugStack(fiber) {
+    const stack = fiber && fiber._debugStack && fiber._debugStack.stack;
+    if (typeof stack !== 'string') return null;
+    for (const line of stack.split('\n')) {
+      const m = line.match(/\(?((?:https?|file):\/\/[^\s)]+?):(\d+):(\d+)\)?\s*$/);
+      if (!m) continue;
+      let url = m[1];
+      if (/node_modules|react-jsx|jsx-dev-runtime|jsx-runtime|react-dom|\/react\.|react_/.test(url)) continue;
+      try {
+        const u = new URL(url);
+        url = decodeURIComponent(u.pathname).replace(/^\/@fs\//, '/');
+      } catch (e) {}
+      return `${url}:${m[2]}:${m[3]}`;
+    }
+    return null;
+  }
+
   function extractComponentMetadata(el) {
     let componentName = null;
     let sourceLocation = null;
@@ -242,6 +262,12 @@
             }
           }
           fiber = fiber.return;
+        }
+        if (!sourceLocation) {
+          for (let f = el[fiberKey]; f; f = f.return) {
+            sourceLocation = locationFromDebugStack(f);
+            if (sourceLocation) break;
+          }
         }
       }
     } catch (e) {}
