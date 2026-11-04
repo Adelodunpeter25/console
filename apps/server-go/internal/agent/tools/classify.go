@@ -67,6 +67,8 @@ func builtinLabel(name string) string {
 		return "Todo"
 	case "memory":
 		return "Memory"
+	case "read_chat":
+		return "Read Chat"
 	case "readSkill":
 		return "Read Skill"
 	case "loadTools":
@@ -174,7 +176,9 @@ func ToolIconKey(name string) string {
 		return "chart"
 	case "todo":
 		return "list"
-	case "memory":
+	case "memory", "read_chat":
+		// Cross-session recall: reading another chat is the same kind
+		// of act as recalling a stored memory.
 		return "memory"
 	case "loadTools":
 		return "package"

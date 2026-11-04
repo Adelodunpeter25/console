@@ -24,6 +24,7 @@ func registered(t *testing.T) map[string]bool {
 	}
 	for _, tool := range []tools.Tool{
 		tools.NewMemoryTool("", nil),
+		tools.NewReadChatTool("", nil),
 		tools.NewWritePlanTool(t.TempDir()),
 		tools.NewPlanModeBashTool(nil, ""),
 	} {
