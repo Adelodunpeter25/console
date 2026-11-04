@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,11 +96,17 @@ fun ChatScreen(
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
     var shellSheet by remember { mutableStateOf(false) }
 
+    // Leaving the chat pushes the draft right away instead of waiting out the debounce.
+    DisposableEffect(sessionId) {
+        onDispose { AppContainer.chatRepository.flushDraft(sessionId) }
+    }
+
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
         loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
         val header = coroutineScope {
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
+            launch { AppContainer.chatRepository.loadDraft(sessionId) }
             launch { AppContainer.chatRepository.loadTodos(sessionId) }
             launch { AppContainer.chatRepository.loadSubagents(sessionId) }
             launch { AppContainer.chatRepository.loadBackgroundWork(sessionId) }

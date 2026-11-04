@@ -19,7 +19,9 @@ import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import console.v1.McpServerStatus
 import console.v1.Model
+import console.v1.ChatDraft
 import console.v1.ModelFavorite
+import console.v1.PutDraftResponse
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProjectInfo
@@ -138,6 +140,9 @@ interface ConsoleApi {
     suspend fun connectMcpServer(id: String, redirectUri: String?)
     suspend fun disconnectMcpServer(id: String)
     suspend fun forwardMcpOAuthCallback(id: String, payload: McpOAuthCallbackPayload)
+    // chat drafts (synced composer text; see proto/console/v1/draft.proto)
+    suspend fun getDraft(sessionId: String): ChatDraft?
+    suspend fun putDraft(draft: ChatDraft): PutDraftResponse
     // favorites
     suspend fun listFavorites(): List<ModelFavorite>
     suspend fun setFavorite(favorite: ModelFavorite, isFavorite: Boolean)

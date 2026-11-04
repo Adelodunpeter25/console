@@ -119,6 +119,77 @@ class ChatRepository(
                 draftUpdatedAt = if (value.trim().isNotEmpty() || it.attachments.isNotEmpty()) System.currentTimeMillis() else null,
             )
         }
+        scheduleDraftPush(sessionId)
+    }
+
+    // --- Synced drafts -----------------------------------------------------
+    // Text only on this slice. The server keeps one draft per chat and
+    // replaces it whole, so the file comments another device staged are held
+    // here from the last pull and echoed back on every push; dropping them
+    // would delete them from the desktop.
+    private val serverDrafts = mutableMapOf<String, console.v1.ChatDraft>()
+    private val draftPushJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+
+    /** Pull the chat's synced draft on open; adopt it when it is newer than ours. */
+    fun loadDraft(sessionId: String) {
+        scope.launch {
+            try {
+                val remote = withContext(Dispatchers.IO) { api.getDraft(sessionId) } ?: return@launch
+                serverDrafts[sessionId] = remote
+                val local = chats.get(sessionId)
+                if (local.running || remote.updated_at <= (local.draftUpdatedAt ?: 0L)) return@launch
+                chats.update(sessionId) {
+                    it.copy(
+                        input = remote.text,
+                        draftUpdatedAt = if (remote.text.trim().isNotEmpty()) remote.updated_at else null,
+                    )
+                }
+            } catch (_: Exception) {
+                // Offline: the local draft stays authoritative until the next push.
+            }
+        }
+    }
+
+    private fun scheduleDraftPush(sessionId: String) {
+        draftPushJobs.remove(sessionId)?.cancel()
+        draftPushJobs[sessionId] = scope.launch {
+            kotlinx.coroutines.delay(DRAFT_PUSH_DEBOUNCE_MS)
+            pushDraft(sessionId)
+        }
+    }
+
+    /** Push immediately, e.g. when leaving the chat; also used after a send clears the composer. */
+    fun flushDraft(sessionId: String) {
+        draftPushJobs.remove(sessionId)?.cancel()
+        scope.launch { pushDraft(sessionId) }
+    }
+
+    private suspend fun pushDraft(sessionId: String) {
+        val text = chats.get(sessionId).input
+        val held = serverDrafts[sessionId]
+        val draft = console.v1.ChatDraft(
+            session_id = sessionId,
+            text = text,
+            mentions = emptyList(),
+            comments = held?.comments ?: emptyList(),
+            updated_at = System.currentTimeMillis(),
+        )
+        try {
+            val result = withContext(Dispatchers.IO) { api.putDraft(draft) }
+            val stored = result.draft
+            if (stored != null) serverDrafts[sessionId] = stored
+            // Another device wrote later: adopt its text rather than overwrite it next time.
+            if (!result.applied && stored != null && chats.get(sessionId).input == text) {
+                chats.update(sessionId) {
+                    it.copy(
+                        input = stored.text,
+                        draftUpdatedAt = if (stored.text.trim().isNotEmpty()) stored.updated_at else null,
+                    )
+                }
+            }
+        } catch (_: Exception) {
+            // Offline: retried on the next edit or when the chat is reopened.
+        }
     }
 
     fun addAttachments(sessionId: String, attachments: List<ImageAttachment>) {
@@ -388,6 +459,8 @@ class ChatRepository(
             // The prompt no longer lives in the composer; drop the cached
             // draft before the suppressed save window.
             persistence?.removeSession(sessionId)
+            // Clear the synced copy too, so other devices stop offering sent text.
+            flushDraft(sessionId)
         }
         sessions.setStatus(sessionId, SessionStatus.Working)
 
@@ -694,5 +767,9 @@ class ChatRepository(
             tier = runCatching { ToolTier.valueOf(req.tier) }.getOrNull(),
             reason = req.reason,
         )
+    }
+
+    private companion object {
+        const val DRAFT_PUSH_DEBOUNCE_MS = 800L
     }
 }

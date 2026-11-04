@@ -29,7 +29,9 @@ import console.v1.Model
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.ConsoleSettings
+import console.v1.ChatDraft
 import console.v1.ModelFavorite
+import console.v1.PutDraftResponse
 import console.v1.GitBranchesResponse
 import console.v1.GitCheckoutRequest
 import console.v1.GitDiffResponse
@@ -84,6 +86,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     // Moshi JSON layer for Wire types (shared protobuf schema). kotlinx stays
     // for the {success, data} envelope and all non-wire types.
     private val wireMoshi: Moshi by lazy { Moshi.Builder().add(WireJsonAdapterFactory()).build() }
+    private val chatDraftAdapter by lazy { wireMoshi.adapter(ChatDraft::class.java) }
+    private val putDraftResponseAdapter by lazy { wireMoshi.adapter(PutDraftResponse::class.java) }
     private val favoriteAdapter by lazy { wireMoshi.adapter(ModelFavorite::class.java) }
     private val setFavoriteAdapter by lazy { wireMoshi.adapter(SetFavoriteRequest::class.java) }
     private val settingsAdapter by lazy { wireMoshi.adapter(ConsoleSettings::class.java) }
@@ -650,6 +654,21 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             if (value is JsonNull) null
             else usageReportAdapter.fromJson(value.toString())
         }
+    }
+
+    override suspend fun getDraft(sessionId: String): ChatDraft? {
+        val raw = http.get("/api/drafts/${enc(sessionId)}")
+        val data = http.unwrap(raw, JsonObject.serializer(), "get draft")
+        val draft = data["draft"]
+        if (draft == null || draft is JsonNull) return null
+        return chatDraftAdapter.fromJson(draft.toString())
+    }
+
+    override suspend fun putDraft(draft: ChatDraft): PutDraftResponse {
+        val raw = http.put("/api/drafts/${enc(draft.session_id)}", chatDraftAdapter.toJson(draft))
+        val data = http.unwrap(raw, JsonObject.serializer(), "save draft")
+        return putDraftResponseAdapter.fromJson(data.toString())
+            ?: throw ApiException("Failed to save draft")
     }
 
     override suspend fun listFavorites(): List<ModelFavorite> {

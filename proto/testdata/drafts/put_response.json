@@ -1,0 +1,1 @@
+{"applied":true,"draft":{"sessionId":"s1","text":"review @src/a.rs","mentions":[{"start":7,"end":16,"path":"/repo/src/a.rs","label":"@src/a.rs"}],"comments":[{"id":"c1","path":"/repo/src/a.rs","startLine":3,"endLine":5,"text":"rename this","snippet":"fn a() {}"}],"updatedAt":"1700000000000"}}
