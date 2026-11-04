@@ -820,6 +820,26 @@ impl ComposerInput {
             .collect()
     }
 
+    /// Submit the field's current text as a composer message — the same path
+    /// Enter takes: records prompt history, emits [`ComposerEvent::Submit`],
+    /// and clears the field. No-op when empty or outside composer mode.
+    /// Callers that are not the keyboard (the file-comment card's Send
+    /// button) use this instead of synthesizing a keypress.
+    pub fn submit(&mut self, cx: &mut Context<Self>) {
+        if self.mode != FieldMode::Composer {
+            return;
+        }
+        let value = self.content.trim().to_owned();
+        if value.is_empty() {
+            return;
+        }
+        let context_files: Vec<String> = self.mentions.iter().map(|m| m.path.clone()).collect();
+        self.prompt_history
+            .record(value.clone(), context_files.clone(), None);
+        cx.emit(ComposerEvent::Submit(value, context_files));
+        self.clear(cx);
+    }
+
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         self.prompt_history.reset_navigation();
         let changed = !self.content.is_empty();
@@ -1299,15 +1319,7 @@ impl ComposerInput {
                 cx.emit(ComposerEvent::Submit(self.content.to_string(), vec![]));
             }
             FieldMode::Composer => {
-                let value = self.content.trim().to_owned();
-                if !value.is_empty() {
-                    let context_files: Vec<String> =
-                        self.mentions.iter().map(|m| m.path.clone()).collect();
-                    self.prompt_history
-                        .record(value.clone(), context_files.clone(), None);
-                    cx.emit(ComposerEvent::Submit(value, context_files));
-                    self.clear(cx);
-                }
+                self.submit(cx);
             }
         }
     }

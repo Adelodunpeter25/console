@@ -14,6 +14,10 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+# NOTE: zed (gpui) is intentionally left unpinned here. gpui-component pins a
+# rev but depends on zed's main branch, so pinning zed anywhere in this
+# workspace creates a second, incompatible gpui source. The commit is held by
+# Cargo.lock instead.
 gpui = { version = "0.2.2", git = "https://github.com/zed-industries/zed" }
 gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "runtime_shaders"] }
@@ -25,8 +29,8 @@ console-shared = { path = "crates/console-shared" }
 console-ui = { path = "crates/console-ui" }
 
 # Editor & Syntax
-syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "46c3b1f51a09e4f0b3370cceb12386041c7f71e8" }
-editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "46c3b1f51a09e4f0b3370cceb12386041c7f71e8" }
+syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2" }
+editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2" }
 
 # UI components (command palette, dialogs, dock). Uses the same pinned zed gpui,
 # so cargo unifies sources. Must call gpui_component::init(cx) at startup and wrap

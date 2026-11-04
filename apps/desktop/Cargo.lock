@@ -1893,7 +1893,7 @@ dependencies = [
 [[package]]
 name = "diff"
 version = "0.1.0"
-source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=46c3b1f51a09e4f0b3370cceb12386041c7f71e8#46c3b1f51a09e4f0b3370cceb12386041c7f71e8"
+source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2#6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2"
 dependencies = [
  "similar",
 ]
@@ -2057,7 +2057,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 [[package]]
 name = "edit-buffer"
 version = "0.1.0"
-source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=46c3b1f51a09e4f0b3370cceb12386041c7f71e8#46c3b1f51a09e4f0b3370cceb12386041c7f71e8"
+source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2#6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2"
 dependencies = [
  "ropey 1.6.1",
 ]
@@ -2065,7 +2065,7 @@ dependencies = [
 [[package]]
 name = "editor-ui"
 version = "0.1.0"
-source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=46c3b1f51a09e4f0b3370cceb12386041c7f71e8#46c3b1f51a09e4f0b3370cceb12386041c7f71e8"
+source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2#6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2"
 dependencies = [
  "diff",
  "edit-buffer",
@@ -8272,7 +8272,7 @@ dependencies = [
 [[package]]
 name = "syntax"
 version = "0.1.0"
-source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=46c3b1f51a09e4f0b3370cceb12386041c7f71e8#46c3b1f51a09e4f0b3370cceb12386041c7f71e8"
+source = "git+https://github.com/Adelodunpeter25/gpui-editor.git?rev=6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2#6eb487a49ba90d91474d7ba46e5f7f4b433b0cb2"
 dependencies = [
  "lumis",
 ]

@@ -52,6 +52,27 @@ pub enum ImageFileState {
     },
 }
 
+/// A line range picked from an editor's comment gutter. Paths are absolute
+/// when they arrive and become project-relative in the chat prompt.
+#[derive(Clone, Debug)]
+pub(crate) struct FileCommentRequest {
+    pub path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+}
+
+/// The comment card currently open: which file and 1-based line range it
+/// targets. The prompt text lives in `file_comment_input`.
+#[derive(Clone, Debug)]
+pub(crate) struct FileCommentDraft {
+    pub path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    /// The card was just opened; focus the prompt on the next frame, once the
+    /// overlay is in the dispatch tree.
+    pub focus_pending: bool,
+}
+
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
     /// Streaming plumbing shared by every surface (start/attach run, watch
@@ -285,6 +306,14 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
+    /// Comment-gutter selections from editor views. The editor reports through
+    /// a plain callback (no app context), so handlers push here and a spawned
+    /// task opens the card on the app's behalf.
+    pub(crate) file_comment_tx: tokio::sync::mpsc::UnboundedSender<FileCommentRequest>,
+    /// The open "comment for the AI" card, if any.
+    pub(crate) file_comment: Option<FileCommentDraft>,
+    /// Prompt field shared by every file-comment card.
+    pub(crate) file_comment_input: Entity<ComposerInput>,
     pub viewer_diff_views: std::collections::HashMap<
         String,
         (

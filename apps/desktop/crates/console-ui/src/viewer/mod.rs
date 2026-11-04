@@ -1,6 +1,7 @@
 pub mod blocked_panel;
 pub mod code_viewer;
 pub mod diff_viewer;
+pub mod file_comment;
 pub mod file_viewer;
 pub mod image_preview;
 pub mod logs_viewer;
@@ -19,6 +20,7 @@ pub use editor_ui::{
     DiffState, DiffView as EditorDiffView, EditorState, EditorView, FontConfig, IndentOptions,
     Mode as EditorMode, SearchState as EditorSearchState, Selection as EditorSelection,
 };
+pub use file_comment::FileCommentComposer;
 pub use file_viewer::FileViewer;
 pub use image_preview::{
     ImageMeta, ImagePreview, SvgViewMode, format_bytes, image_dimensions, svg_source_header,

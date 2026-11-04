@@ -580,6 +580,9 @@ impl ConsoleDesktopApp {
         ];
 
         let client_for_palettes = client.clone();
+        // A single card is open at a time; the shared prompt field is reused so
+        // opening one comment never leaves a stale focus handle behind.
+        let (file_comment_tx, file_comment_rx) = tokio::sync::mpsc::unbounded_channel();
         // The browser suggestion source starts from the persisted history.
         crate::state::chrome_import::init_from_disk();
         let mut app = Self {
@@ -696,6 +699,11 @@ impl ConsoleDesktopApp {
             viewer_list_states: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
+            file_comment_tx,
+            file_comment: None,
+            file_comment_input: cx.new(|cx| {
+                ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
+            }),
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
             viewer_markdown_selections: std::collections::HashMap::new(),
@@ -815,6 +823,7 @@ impl ConsoleDesktopApp {
 
         app.wire_palette_callbacks(cx);
         app.wire_floating_composer_input(cx);
+        app.init_file_comments(file_comment_rx, cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),

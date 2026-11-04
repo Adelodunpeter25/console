@@ -84,11 +84,23 @@ impl ConsoleDesktopApp {
         }
 
         let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
+        let comment_tx = self.file_comment_tx.clone();
+        let comment_path = path.to_string();
         let state = cx.new(|cx| {
             let mut s = editor_ui::EditorState::readonly(content, lang);
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
+            // Review comments work in readonly mode; the gutter is opt-in so
+            // only file tabs get the "+" affordance.
+            s.set_comment_gutter(true, cx);
+            s.set_comment_target_handler(Some(Box::new(move |target| {
+                let _ = comment_tx.send(super::types::FileCommentRequest {
+                    path: comment_path.clone(),
+                    start_line: target.start_line,
+                    end_line: target.end_line,
+                });
+            })));
             s
         });
         let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
