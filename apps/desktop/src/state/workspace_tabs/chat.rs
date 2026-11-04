@@ -757,13 +757,33 @@ impl ConsoleDesktopApp {
     }
 
     pub(crate) fn active_session_for_pane(&self, pane_id: &str) -> Option<String> {
-        self.workspace_root
+        let leaf = self
+            .workspace_root
             .leaves()
             .into_iter()
-            .find(|leaf| leaf.id == pane_id)
-            .and_then(|leaf| leaf.active_tab_id.as_deref())
+            .find(|leaf| leaf.id == pane_id)?;
+        if let Some(session_id) = leaf
+            .active_tab_id
+            .as_deref()
             .and_then(|tab_id| tab_id.strip_prefix("chat:"))
-            .map(str::to_owned)
+        {
+            return Some(session_id.to_owned());
+        }
+        // A file/diff/terminal tab is in front, but the pane still belongs to
+        // its chats: the file composer must send to the one used most
+        // recently instead of creating a new chat on every send.
+        leaf.tabs
+            .iter()
+            .filter_map(|tab| match tab {
+                console_core::WorkspaceTabConfig::Chat {
+                    session_id,
+                    last_active_at_ms,
+                    ..
+                } => Some((last_active_at_ms.unwrap_or(0), session_id)),
+                _ => None,
+            })
+            .max_by_key(|(last_active, _)| *last_active)
+            .map(|(_, session_id)| session_id.clone())
     }
 
     /// The active leaf's tab id, for places that still want the flat view.
