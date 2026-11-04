@@ -479,10 +479,12 @@ impl ConsoleDesktopApp {
                     let comment_cards = self.file_comment_cards(pane_id, path, window, cx);
                     let viewer = console_ui::FileViewer::new(editor_view).comments(comment_cards);
                     let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+                    let collapse = self.composer_collapse_on_scroll(pane_id, cx);
                     return div()
                         .relative()
                         .size_full()
                         .child(viewer)
+                        .child(collapse)
                         .child(composer)
                         .into_any_element();
                 }
@@ -499,10 +501,12 @@ impl ConsoleDesktopApp {
             let theme = Theme::current(cx);
             let diff_view = self.get_or_build_diff_view(path, &diff_result, &raw_diff, &theme, cx);
             let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+            let collapse = self.composer_collapse_on_scroll(pane_id, cx);
             return div()
                 .relative()
                 .size_full()
                 .child(console_ui::DiffViewer::new(diff_view))
+                .child(collapse)
                 .child(composer)
                 .into_any_element();
         }
@@ -1003,6 +1007,29 @@ impl ConsoleDesktopApp {
 
     /// The pane's chat composer, used both as the docked footer in chat tabs
     /// and as a floating card over file/diff tabs.
+    /// Wheel scrolling over a file/diff collapses the floating composer back
+    /// to its resting bar by dropping its focus.
+    fn composer_collapse_on_scroll(
+        &self,
+        pane_id: &str,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let focus = self.composer_for_pane(pane_id).read(cx).focus();
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom(gpui::px(console_ui::FLOATING_COMPOSER_INSET))
+            .child(console_ui::scroll_watch(move |window, cx| {
+                if focus.is_focused(window) {
+                    window.blur();
+                    window.refresh();
+                }
+            }))
+            .into_any_element()
+    }
+
     fn pane_composer_view(
         &mut self,
         pane_id: &str,

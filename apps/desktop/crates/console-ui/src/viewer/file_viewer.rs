@@ -5,7 +5,35 @@
 //! geometry of the virtualized rows, including the live scroll offset, which
 //! lets the cards ride scrolling without being inserted into the list.
 
-use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px};
+use gpui::{
+    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce, ScrollWheelEvent,
+    Styled, Window, canvas, div, px,
+};
+use std::rc::Rc;
+
+/// Room kept free under a file/diff viewer so its last lines can scroll up
+/// above the floating composer's resting bar (bar height + its padding).
+pub const FLOATING_COMPOSER_INSET: f32 = 78.0;
+
+/// Invisible overlay that reports wheel scrolling anywhere over its bounds.
+/// Listens in the capture phase because the scrolling list stops propagation
+/// of the events it consumes.
+pub fn scroll_watch(on_scroll: impl Fn(&mut Window, &mut App) + 'static) -> impl IntoElement {
+    let on_scroll = Rc::new(on_scroll);
+    canvas(
+        |_, _, _| (),
+        move |bounds, _, window, _cx| {
+            let on_scroll = on_scroll.clone();
+            window.on_mouse_event(move |event: &ScrollWheelEvent, phase, window, cx| {
+                if phase == DispatchPhase::Capture && bounds.contains(&event.position) {
+                    on_scroll(window, cx);
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_full()
+}
 
 /// The vertical room reserved when a commented range sits near the bottom of
 /// the viewport. Cards are clamped above this line so they stay reachable.
@@ -114,7 +142,15 @@ impl RenderOnce for FileViewer {
             .size_full()
             .overflow_hidden()
             .bg(gpui::rgb(0x000000))
-            .child(div().absolute().inset_0().child(view))
+            .child(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom(px(FLOATING_COMPOSER_INSET))
+                    .child(view),
+            )
             .children(overlays)
     }
 }

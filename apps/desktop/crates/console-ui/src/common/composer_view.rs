@@ -546,8 +546,13 @@ impl RenderOnce for ComposerView {
 
         // Over a file/diff the composer rests as a one-line bar and grows to
         // the full card once it is focused or has something staged.
+        // An open model/approval dropdown means the user is still working in
+        // the composer, even though the menu holds keyboard focus.
+        let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open())
+            || self.approval_menu.as_ref().is_some_and(|(_, h)| h.is_open());
         if floating
             && !focused
+            && !menu_open
             && !has_draft
             && !autocomplete_open
             && matches!(run_state, ComposerRunState::Ready)

@@ -21,7 +21,7 @@ pub use editor_ui::{
     Mode as EditorMode, SearchState as EditorSearchState, Selection as EditorSelection,
 };
 pub use file_comment::{FileCommentCard, FileCommentCardState};
-pub use file_viewer::{FileCommentOverlay, FileViewer};
+pub use file_viewer::{FLOATING_COMPOSER_INSET, FileCommentOverlay, FileViewer, scroll_watch};
 pub use image_preview::{
     ImageMeta, ImagePreview, SvgViewMode, format_bytes, image_dimensions, svg_source_header,
 };
