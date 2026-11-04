@@ -14,6 +14,11 @@ pub struct ComposerMention {
 /// tracking, draft persistence); only what it sends and how it paints differ.
 pub const SKILL_PATH_PREFIX: &str = "skill:";
 
+/// `path` prefix marking a mention as a chat-reference chip rather than a
+/// file. The chip's text is the `$slug` the server parses; the slug rides
+/// in the path so the chip survives as a confirmed mention.
+pub const CHAT_PATH_PREFIX: &str = "chat:";
+
 impl ComposerMention {
     /// A skill chip over `range`, whose text is `/<name>`.
     pub fn skill(range: Range<usize>, name: &str) -> Self {
@@ -32,14 +37,32 @@ impl ComposerMention {
     pub fn skill_name(&self) -> Option<&str> {
         self.path.strip_prefix(SKILL_PATH_PREFIX)
     }
+
+    /// A chat chip over `range`, whose text is `$<slug>`.
+    pub fn chat(range: Range<usize>, slug: &str) -> Self {
+        Self {
+            range,
+            path: format!("{CHAT_PATH_PREFIX}{slug}"),
+            label: format!("${slug}"),
+        }
+    }
+
+    pub fn is_chat(&self) -> bool {
+        self.path.starts_with(CHAT_PATH_PREFIX)
+    }
+
+    /// The referenced chat's slug, when this is a chat chip.
+    pub fn chat_slug(&self) -> Option<&str> {
+        self.path.strip_prefix(CHAT_PATH_PREFIX)
+    }
 }
 
-/// Paths of the file mentions only: skills are text the agent reads, not
-/// context files to attach.
+/// Paths of the file mentions only: skills and chat refs are text the
+/// agent reads, not context files to attach.
 pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
     mentions
         .iter()
-        .filter(|mention| !mention.is_skill())
+        .filter(|mention| !mention.is_skill() && !mention.is_chat())
         .map(|mention| mention.path.clone())
         .collect()
 }

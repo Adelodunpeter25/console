@@ -355,11 +355,16 @@ impl ConsoleDesktopApp {
                 AutocompleteItem::Command(command) if !command.builtin => {
                     input.insert_skill_mention(range, &command.name, cx);
                 }
-                // `$` chat refs and built-in commands stay plain text: the
-                // server parses the ref out of the prompt itself.
-                AutocompleteItem::Chat(_) => {
-                    let insert = item.insert_text();
-                    input.replace_range(range, &insert, cx);
+                // `$` chat refs become chips (like file mentions); the
+                // buffer keeps the plain `$slug` the server parses.
+                AutocompleteItem::Chat(session) => {
+                    let slug = console_ui::slugify_chat_title(&session.title);
+                    let slug = if slug.is_empty() {
+                        session.id.as_str()
+                    } else {
+                        slug.as_str()
+                    };
+                    input.insert_chat_mention(range, slug, cx);
                 }
                 _ => {
                     let insert = item.insert_text();

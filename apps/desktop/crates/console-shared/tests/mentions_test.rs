@@ -71,6 +71,16 @@ fn a_skill_chip_is_text_with_a_slash_and_is_recognised() {
 }
 
 #[test]
+fn a_chat_chip_is_a_dollar_ref_with_a_chat_path() {
+    let chip = ComposerMention::chat(5..18, "fix-login-bug");
+    assert_eq!(chip.label, "$fix-login-bug");
+    assert!(chip.is_chat());
+    assert_eq!(chip.chat_slug(), Some("fix-login-bug"));
+    assert!(!chip.is_skill());
+    assert!(!mention(0..4, "/a/b.rs", "b.rs").is_chat());
+}
+
+#[test]
 fn skills_are_never_sent_as_context_files() {
     let mentions = vec![
         mention(0..4, "/a/b.rs", "b.rs"),

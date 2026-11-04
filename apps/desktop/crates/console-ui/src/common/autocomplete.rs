@@ -517,19 +517,21 @@ impl RenderOnce for AutocompleteView {
                 AutocompleteItem::Chat(session) => {
                     let slug = slugify_chat_title(&session.title);
                     let slug = if slug.is_empty() {
-                        session.id.as_str()
+                        session.id.clone()
                     } else {
-                        slug.as_str()
+                        slug
                     };
+                    // The title is what the user recognises; the slug it
+                    // inserts is secondary.
                     row.child(
-                        div()
-                            .text_size(px(13.0))
-                            .text_color(theme.text_tertiary)
-                            .flex_none()
-                            .child("$"),
+                        app_icon(IconName::ChatRoundLine, 13.0, theme.text_tertiary)
+                            .into_any_element(),
                     )
                     .child(
                         div()
+                            .min_w(px(0.0))
+                            .flex_1()
+                            .truncate()
                             .text_size(px(12.5))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if selected {
@@ -537,20 +539,15 @@ impl RenderOnce for AutocompleteView {
                             } else {
                                 theme.text_secondary
                             })
-                            .flex_none()
-                            .child(slug.to_owned()),
+                            .child(session.title.clone()),
                     )
-                    .when(!session.title.is_empty(), |el| {
-                        el.child(
-                            div()
-                                .min_w(px(0.0))
-                                .flex_1()
-                                .truncate()
-                                .text_size(px(12.0))
-                                .text_color(theme.text_tertiary)
-                                .child(session.title.clone()),
-                        )
-                    })
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(theme.text_tertiary)
+                            .flex_none()
+                            .child(format!("${slug}")),
+                    )
                     .into_any_element()
                 }
                 AutocompleteItem::File(file) => row

@@ -629,6 +629,18 @@ impl ComposerInput {
         self.insert_mention_chip(range, chip.label, chip.path, cx);
     }
 
+    /// Insert an accepted chat reference as an inline chip. The buffer keeps
+    /// the plain `$slug` text, which is what the server parses.
+    pub fn insert_chat_mention(
+        &mut self,
+        range: Range<usize>,
+        slug: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let chip = ComposerMention::chat(0..0, slug);
+        self.insert_mention_chip(range, chip.label, chip.path, cx);
+    }
+
     /// Insert a paste chip for an async-uploaded paste: explicit label
     /// (`pasted 5,000 lines`), server path as the mention target. The
     /// label — not the path — is what lands in the message text, so the
@@ -1398,7 +1410,10 @@ impl ComposerInput {
         // the native NSTextView boundary, stricter than Zed's time grouping.
         self.history.seal();
         if self.large_paste_chip && is_large_paste(&text) {
-            cx.emit(ComposerLargePaste { text, range: self.selected_range.clone() });
+            cx.emit(ComposerLargePaste {
+                text,
+                range: self.selected_range.clone(),
+            });
             return;
         }
         self.replace_text_in_range(None, &text, window, cx);

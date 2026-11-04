@@ -62,7 +62,14 @@ pub fn file_mention_chip(path: &str, label: impl Into<String>, theme: Theme) -> 
 /// The icon a mention chip paints: a file-type icon for files, one generic
 /// icon for skills.
 pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
-    if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
+    if path.starts_with(console_shared::composer::mentions::CHAT_PATH_PREFIX) {
+        crate::primitives::app_icon(
+            crate::primitives::IconName::ChatRoundLine,
+            FILE_MENTION_ICON_SIZE,
+            theme.accent,
+        )
+        .into_any_element()
+    } else if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
         crate::primitives::app_icon(
             crate::primitives::IconName::Sparkle,
             FILE_MENTION_ICON_SIZE,
