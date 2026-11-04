@@ -36,6 +36,8 @@ import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /** Floating suggestion list anchored above [anchor] (the composer input), with a real dp gap. */
@@ -97,7 +99,7 @@ fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
     }
 }
 
-/** `$` chat-ref suggestion row — `$slug` chip, full title muted alongside. */
+/** `$` chat-ref suggestion row — the chat title is what the user recognises, so it leads; the `$slug` it inserts is secondary. */
 @Composable
 fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
     val slug = com.console.mobile.core.util.slugifyChatTitle(session.title ?: "").ifBlank { session.id }
@@ -106,17 +108,14 @@ fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(MentionAccent.copy(alpha = 0.10f))
-                .border(1.dp, MentionAccent.copy(alpha = 0.28f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("\$$slug", color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(title, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
+        androidx.compose.material3.Icon(
+            TablerIcons.Outline.MessageChatbot,
+            contentDescription = null,
+            tint = NewTheme.TextSecondary,
+            modifier = Modifier.padding(end = 8.dp),
+        )
+        Text(title, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("\$$slug", color = NewTheme.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
     }
 }
 

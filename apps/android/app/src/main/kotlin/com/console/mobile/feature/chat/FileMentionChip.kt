@@ -116,7 +116,7 @@ fun mentionAnnotatedString(
  * One collapsed mention in transformed composer text: original `@path`
  * range plus the transformed slot (icon space) and filename range.
  */
-enum class MentionKind { File, Skill }
+enum class MentionKind { File, Skill, Chat }
 
 internal data class TransformedMention(
     val oStart: Int,
@@ -157,6 +157,7 @@ internal fun buildMentionVisual(
     original: String,
     fileMentions: List<FileMention>,
     skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList(),
+    chatMentions: List<com.console.mobile.core.util.ChatMention> = emptyList(),
 ): MentionVisual {
     val items = mutableListOf<MentionItem>()
     for (m in fileMentions) {
@@ -164,6 +165,9 @@ internal fun buildMentionVisual(
     }
     for (s in skillMentions) {
         items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+    }
+    for (c in chatMentions) {
+        items += MentionItem(c.range, "\$${c.slug}", "\$${c.slug}", MentionKind.Chat)
     }
     items.sortBy { it.range.first }
     if (items.isEmpty() || original.isEmpty()) {
@@ -234,8 +238,8 @@ internal fun buildMentionVisual(
     return MentionVisual(styled, mapping, segs)
 }
 
-fun mentionVisualTransformation(mentions: List<FileMention>, skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList()) = VisualTransformation { text ->
-    val visual = buildMentionVisual(text.text, mentions, skillMentions)
+fun mentionVisualTransformation(mentions: List<FileMention>, skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList(), chatMentions: List<com.console.mobile.core.util.ChatMention> = emptyList()) = VisualTransformation { text ->
+    val visual = buildMentionVisual(text.text, mentions, skillMentions, chatMentions)
     TransformedText(visual.text, visual.mapping)
 }
 

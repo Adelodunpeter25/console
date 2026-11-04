@@ -33,6 +33,33 @@ fun parseFileMentions(text: String): List<FileMention> {
 /** Distinct mention paths, for the run request's `contextFiles`. */
 fun mentionPaths(text: String): List<String> = parseFileMentions(text).map { it.path }.distinct()
 
+/**
+ * `$` chat-ref ranges in composer text, mirroring [parseSkillMentions]: `$`
+ * at start of text or after whitespace/opening punctuation, running over
+ * slug/id characters. Digit-only tokens never match (prices).
+ */
+data class ChatMention(val range: IntRange, val slug: String)
+
+fun parseChatMentions(text: String): List<ChatMention> {
+    val out = mutableListOf<ChatMention>()
+    var i = 0
+    while (i < text.length) {
+        val boundary = i == 0 || text[i - 1].isWhitespace() || text[i - 1] in "([{<\"'"
+        if (text[i] == '$' && boundary) {
+            var j = i + 1
+            while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '_' || text[j] == '-')) j++
+            val slug = text.substring(i + 1, j)
+            if (slug.isNotEmpty() && !slug.all(Char::isDigit)) {
+                out += ChatMention(i until j, slug)
+            }
+            i = j
+        } else {
+            i++
+        }
+    }
+    return out
+}
+
 
 /**
  * Slash skill mentions `/skill-name` in composer text. Starts with `/` at

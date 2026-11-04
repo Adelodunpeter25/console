@@ -1,4 +1,5 @@
 package com.console.mobile.feature.chat
+import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
 
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -107,6 +108,7 @@ fun Composer(
     // (even when it parses as a mention) keeps char-by-char deletion.
     var confirmedPaths by remember(sessionId) { mutableStateOf(setOf<String>()) }
     var confirmedSkills by remember(sessionId) { mutableStateOf(setOf<String>()) }
+    var confirmedChatRefs by remember(sessionId) { mutableStateOf(setOf<String>()) }
     var fieldCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val trigger = remember(fieldValue) { detectComposerTrigger(fieldValue.text, fieldValue.selection.start) }
     // Accent-wash styling for @-mention ranges (desktop file_mention_chip parity).
@@ -133,8 +135,19 @@ fun Composer(
             all
         }
     }
-    val mentionVisual = remember(fieldValue.text, confirmedMentions, confirmedSkillMentions) {
-        buildMentionVisual(fieldValue.text, confirmedMentions, confirmedSkillMentions)
+    val confirmedChatMentions = remember(fieldValue.text, trigger, confirmedChatRefs) {
+        val all = com.console.mobile.core.util.parseChatMentions(fieldValue.text)
+            .filter { it.slug in confirmedChatRefs }
+        val t = trigger
+        if (t is ComposerTrigger.Chat) {
+            val cursor = fieldValue.selection.start
+            all.filterNot { it.range.first < cursor && it.range.last + 1 > t.start }
+        } else {
+            all
+        }
+    }
+    val mentionVisual = remember(fieldValue.text, confirmedMentions, confirmedSkillMentions, confirmedChatMentions) {
+        buildMentionVisual(fieldValue.text, confirmedMentions, confirmedSkillMentions, confirmedChatMentions)
     }
 
     var slashCommands by remember(sessionId) { mutableStateOf<List<SlashCommandInfo>>(emptyList()) }
@@ -168,6 +181,7 @@ fun Composer(
 
     fun applyChatSuggestion(session: SessionHeader, replaceFrom: Int) {
         val slug = slugifyChatTitle(session.title ?: "").ifBlank { session.id }
+        confirmedChatRefs = confirmedChatRefs + slug
         applySuggestion("\$$slug ", replaceFrom)
     }
 
@@ -545,6 +559,12 @@ private fun ComposerInput(
                         ) {
                             if (seg.kind == MentionKind.Skill) {
                                 com.console.mobile.ui.components.SkillIcon(sizeDp = 12)
+                            } else if (seg.kind == MentionKind.Chat) {
+                                androidx.compose.material3.Icon(
+                                    TablerIcons.Outline.MessageChatbot,
+                                    contentDescription = null,
+                                    tint = MentionAccent,
+                                )
                             } else {
                                 FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)
                             }
