@@ -171,6 +171,11 @@ impl ConsoleDesktopApp {
         if self.drafts.remove(key).is_some() {
             self.schedule_drafts_save(cx);
         }
+        // A send or discard clears the draft everywhere, otherwise another
+        // device would keep offering the text that was just sent.
+        if let Some(session_id) = session_id {
+            self.schedule_draft_push(session_id.to_string(), cx);
+        }
     }
 
     /// Coalesce draft disk writes: memory updates immediately (crash-safe

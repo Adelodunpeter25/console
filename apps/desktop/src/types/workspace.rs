@@ -14,6 +14,8 @@ use gpui::Entity;
 /// in the pane's composer.
 pub(crate) struct FileComment {
     pub(crate) id: u64,
+    /// Stable across devices: the key the synced draft identifies it by.
+    pub(crate) sync_id: String,
     /// Absolute path; prompts render it project-relative.
     pub(crate) path: String,
     pub(crate) start_line: u32,

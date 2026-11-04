@@ -180,6 +180,9 @@ impl ConsoleDesktopApp {
                         &attachments,
                         cx,
                     );
+                    if let Some(session_id) = session_id {
+                        this.schedule_draft_push(session_id, cx);
+                    }
                 }
                 ComposerEvent::HistoryRecalled {
                     message_id,

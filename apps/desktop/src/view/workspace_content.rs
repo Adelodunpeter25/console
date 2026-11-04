@@ -1021,7 +1021,7 @@ impl ConsoleDesktopApp {
             .left_0()
             .right_0()
             .bottom(gpui::px(console_ui::FLOATING_COMPOSER_INSET))
-            .child(console_ui::scroll_watch(move |window, cx| {
+            .child(console_ui::scroll_watch(move |window, _cx| {
                 if focus.is_focused(window) {
                     window.blur();
                     window.refresh();

@@ -603,6 +603,7 @@ impl ConsoleDesktopApp {
             last_workspaces_persist: std::cell::Cell::new(None),
             persisted_workspaces_bytes: std::cell::RefCell::new(None),
             drafts_save_pending: false,
+            drafts_push_pending: std::collections::HashSet::new(),
             pending_project_override: std::collections::HashMap::new(),
             active_pane_id: initial_active_pane_id,
             providers: Rc::new(Vec::new()),

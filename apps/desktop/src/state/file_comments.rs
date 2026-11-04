@@ -110,6 +110,39 @@ impl ConsoleDesktopApp {
         }
     }
 
+    fn new_comment_sync_id(id: u64) -> String {
+        format!("c{}-{id}", chrono::Utc::now().timestamp_micros())
+    }
+
+    /// The comment card's input plus the subscription that turns Enter into a
+    /// commit. The subscription is owned by the comment it belongs to.
+    pub(super) fn new_comment_input(
+        &mut self,
+        pane_id: &str,
+        id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (gpui::Entity<console_ui::ComposerInput>, gpui::Subscription) {
+        let input = cx.new(|cx| {
+            console_ui::ComposerInput::new(window, cx)
+                .placeholder("Add a comment for the AI...")
+        });
+        let submit_pane = pane_id.to_string();
+        let subscription = cx.subscribe(
+            &input,
+            move |this, _input, event: &ComposerEvent, cx| match event {
+                // `submit()` clears the field right after emitting, and the event
+                // is delivered after that, so the text must come from the event.
+                ComposerEvent::Submit(text, _) => {
+                    this.commit_file_comment_text(&submit_pane, id, text.clone(), cx)
+                }
+                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        );
+        (input, subscription)
+    }
+
     fn open_file_comment(
         &mut self,
         request: FileCommentRequest,
@@ -139,25 +172,7 @@ impl ConsoleDesktopApp {
         }
 
         let id = pane.next_file_comment_id;
-        let input = cx.new(|cx| {
-            console_ui::ComposerInput::new(window, cx)
-                .placeholder("Add a comment for the AI...")
-        });
-
-        let submit_pane = pane_id.clone();
-        let submit_id = id;
-        let subscription = cx.subscribe(
-            &input,
-            move |this, _input, event: &ComposerEvent, cx| match event {
-                // `submit()` clears the field right after emitting, and the event
-                // is delivered after that, so the text must come from the event.
-                ComposerEvent::Submit(text, _) => {
-                    this.commit_file_comment_text(&submit_pane, submit_id, text.clone(), cx)
-                }
-                ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
-                _ => {}
-            },
-        );
+        let (input, subscription) = self.new_comment_input(&pane_id, id, window, cx);
 
         let Some(pane) = self.workspace_pane_states.get_mut(&pane_id) else {
             return;
@@ -168,6 +183,7 @@ impl ConsoleDesktopApp {
         pane.next_file_comment_id = id + 1;
         pane.file_comments.push(FileComment {
             id,
+            sync_id: Self::new_comment_sync_id(id),
             path: request.path.clone(),
             start_line: request.start_line,
             end_line: request.end_line,
@@ -203,7 +219,7 @@ impl ConsoleDesktopApp {
         self.commit_file_comment_text(pane_id, comment_id, text, cx);
     }
 
-    fn commit_file_comment_text(
+    pub(super) fn commit_file_comment_text(
         &mut self,
         pane_id: &str,
         comment_id: u64,
@@ -230,6 +246,7 @@ impl ConsoleDesktopApp {
         comment.focus_pending = false;
         comment.input.update(cx, |input, cx| input.clear(cx));
         self.sync_comment_selections(pane_id, &path, cx);
+        self.schedule_draft_push_for_pane(pane_id, cx);
         cx.notify();
     }
 
@@ -331,13 +348,14 @@ impl ConsoleDesktopApp {
         };
         let path = pane.file_comments.remove(index).path;
         self.sync_comment_selections(pane_id, &path, cx);
+        self.schedule_draft_push_for_pane(pane_id, cx);
         cx.notify();
     }
 
     /// Mirror the pane's comment ranges into the editor's persistent
     /// highlight. The editor also records the range on mouse-up; this keeps
     /// cancel/remove and reopened tabs in sync.
-    fn sync_comment_selections(&mut self, pane_id: &str, path: &str, cx: &mut Context<Self>) {
+    pub(super) fn sync_comment_selections(&mut self, pane_id: &str, path: &str, cx: &mut Context<Self>) {
         let ranges = self
             .workspace_pane_states
             .get(pane_id)
@@ -424,6 +442,7 @@ impl ConsoleDesktopApp {
         for path in paths {
             self.sync_comment_selections(pane_id, &path, cx);
         }
+        self.schedule_draft_push_for_pane(pane_id, cx);
         cx.notify();
     }
 

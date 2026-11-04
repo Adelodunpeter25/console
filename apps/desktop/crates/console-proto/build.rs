@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("console/v1/assist.proto"),
         proto_root.join("console/v1/auth.proto"),
         proto_root.join("console/v1/device.proto"),
+        proto_root.join("console/v1/draft.proto"),
         proto_root.join("console/v1/favorites.proto"),
         proto_root.join("console/v1/fs.proto"),
         proto_root.join("console/v1/git.proto"),

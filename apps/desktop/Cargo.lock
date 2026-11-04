@@ -1287,6 +1287,7 @@ dependencies = [
  "block2 0.6.2",
  "chrono",
  "console-core",
+ "console-proto",
  "console-shared",
  "console-ui",
  "editor-ui",

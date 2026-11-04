@@ -88,6 +88,8 @@ pub struct ConsoleDesktopApp {
     pub(crate) persisted_workspaces_bytes: std::cell::RefCell<Option<Vec<u8>>>,
     /// Trailing timer latch for draft file saves (see `schedule_drafts_save`).
     pub(crate) drafts_save_pending: bool,
+    /// Sessions with a debounced server draft push in flight.
+    pub(crate) drafts_push_pending: std::collections::HashSet<String>,
     /// User-picked folder per session awaiting server confirmation
     /// (`Some(pid)` = moved, `None` = cleared to No project). Reopens honor
     /// this over a possibly stale server header (see `sync_project_...`).

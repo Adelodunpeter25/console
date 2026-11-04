@@ -1058,6 +1058,7 @@ impl ConsoleDesktopApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
+        self.pull_draft(session_id.clone(), cx);
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
         cx.spawn(async move |entity, cx| {
