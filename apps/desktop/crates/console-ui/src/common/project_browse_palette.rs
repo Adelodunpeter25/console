@@ -152,7 +152,9 @@ impl Render for ProjectBrowsePalette {
 
 /// Shorten a path for the placeholder (home → ~, otherwise basename tail).
 fn short_path(path: &str) -> String {
-    if let Some(home) = console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok()) {
+    if let Some(home) =
+        console_shared::path::home_dir().and_then(|h| h.into_os_string().into_string().ok())
+    {
         if let Some(rest) = path.strip_prefix(&home) {
             if rest.is_empty() {
                 return "~".into();

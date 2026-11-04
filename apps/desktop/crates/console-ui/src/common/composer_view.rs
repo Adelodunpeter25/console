@@ -75,7 +75,6 @@ impl ComposerAnnotation {
     }
 }
 
-
 /// The composer state that is meaningful to the backend-facing shell.
 ///
 /// The component only paints this state and emits callbacks. It deliberately
@@ -658,7 +657,10 @@ impl RenderOnce for ComposerView {
         // An open model/approval dropdown means the user is still working in
         // the composer, even though the menu holds keyboard focus.
         let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open())
-            || self.approval_menu.as_ref().is_some_and(|(_, h)| h.is_open());
+            || self
+                .approval_menu
+                .as_ref()
+                .is_some_and(|(_, h)| h.is_open());
         if floating
             && !focused
             && !menu_open
@@ -795,9 +797,7 @@ impl RenderOnce for ComposerView {
                             .on_drop(move |paths: &ExternalPaths, window, cx| {
                                 (on_drop_files)(paths, window, cx);
                             })
-                            .when_some(comments, |element, comments| {
-                                element.child(comments)
-                            })
+                            .when_some(comments, |element, comments| element.child(comments))
                             .when_some(annotations, |element, annotations| {
                                 element.child(annotations)
                             })
