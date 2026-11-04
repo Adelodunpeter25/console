@@ -1,7 +1,7 @@
 // Package tunnel picks which remote-access backend the server uses.
 //
-// OpenTunnel is the default. Setting CONSOLE_RELAY=1 switches to the relay
-// Worker in apps/relay (package cfrelay) instead.
+// The relay Worker in apps/relay (package cfrelay) is the default. Setting
+// CONSOLE_RELAY=0 switches back to OpenTunnel.
 package tunnel
 
 import (
@@ -12,13 +12,14 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 )
 
-// RelayEnabled reports whether the operator chose the relay over OpenTunnel.
+// RelayEnabled reports whether the relay is the backend. It is unless the
+// operator chose OpenTunnel with CONSOLE_RELAY=0 (or off, false, no, opentunnel).
 func RelayEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("CONSOLE_RELAY"))) {
-	case "1", "on", "true", "yes", "enabled":
-		return true
+	case "0", "off", "false", "no", "disabled", "opentunnel":
+		return false
 	}
-	return false
+	return true
 }
 
 // Info is the public address of the active backend, as the CLI shows it.

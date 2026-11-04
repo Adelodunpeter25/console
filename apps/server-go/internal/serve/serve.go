@@ -229,7 +229,7 @@ func remoteAccessDisabled() bool {
 	return false
 }
 
-// startRemoteAccess opens the OpenTunnel tunnel (or the relay, with CONSOLE_RELAY=1) to this server and returns a
+// startRemoteAccess opens the relay tunnel (or OpenTunnel, with CONSOLE_RELAY=0) to this server and returns a
 // function that closes it. CONSOLE_REMOTE=off skips it; CONSOLE_TUNNEL_API
 // points it at another relay.
 func startRemoteAccess(listenAddr string) func() {
@@ -265,7 +265,7 @@ func startRemoteAccess(listenAddr string) func() {
 	return manager.Close
 }
 
-// startRelay opens the relay Worker tunnel (CONSOLE_RELAY=1). CONSOLE_RELAY_API
+// startRelay opens the relay Worker tunnel, the default backend. CONSOLE_RELAY_API
 // points it at another relay, and CONSOLE_RELAY_NAME asks for a name on the
 // first run, such as "peter-dev".
 func startRelay(dir, target string) func() {

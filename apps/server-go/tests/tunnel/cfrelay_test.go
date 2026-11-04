@@ -260,12 +260,18 @@ func TestCFRelayForwardsWebSocket(t *testing.T) {
 
 func TestRelaySelection(t *testing.T) {
 	t.Setenv("CONSOLE_RELAY", "")
-	if tunnel.RelayEnabled() {
-		t.Fatal("OpenTunnel must stay the default")
+	if !tunnel.RelayEnabled() {
+		t.Fatal("the relay must be the default")
+	}
+	for _, off := range []string{"0", "off", "false", "OpenTunnel"} {
+		t.Setenv("CONSOLE_RELAY", off)
+		if tunnel.RelayEnabled() {
+			t.Fatalf("CONSOLE_RELAY=%q must select OpenTunnel", off)
+		}
 	}
 	t.Setenv("CONSOLE_RELAY", "1")
 	if !tunnel.RelayEnabled() {
-		t.Fatal("CONSOLE_RELAY=1 must select the relay")
+		t.Fatal("CONSOLE_RELAY=1 must still select the relay")
 	}
 	dir := t.TempDir()
 	if err := (cfrelay.Store{Dir: dir}).Save(cfrelay.Identity{Name: "a", URL: "https://r/a", API: "https://r", Token: "t"}); err != nil {
