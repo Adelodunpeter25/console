@@ -1587,9 +1587,6 @@ impl Render for ConsoleDesktopApp {
             .when_some(self.floating_composer_view(window, cx), |el, card| {
                 el.child(card)
             })
-            .when_some(self.file_comment_view(window, cx), |el, card| {
-                el.child(card)
-            })
             .child(self.global_search_panel.clone())
             // Boxed so both render paths share a single return type — the
             // first-run setup branch above returns an AnyElement.

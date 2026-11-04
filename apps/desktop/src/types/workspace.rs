@@ -9,6 +9,45 @@ use console_ui::workspace::TabStripFollow;
 use console_ui::{ComposerInput, ContextMenuHandle, PickerTab, TranscriptView};
 use gpui::Entity;
 
+/// One staged line comment in a pane. A draft is the card opened by a gutter
+/// drag; committing it keeps the same card in the `Added` state and stages it
+/// in the pane's composer.
+pub(crate) struct FileComment {
+    pub(crate) id: u64,
+    /// Absolute path; prompts render it project-relative.
+    pub(crate) path: String,
+    pub(crate) start_line: u32,
+    pub(crate) end_line: u32,
+    /// Committed body, shown in the `Added` card.
+    pub(crate) text: String,
+    pub(crate) input: Entity<ComposerInput>,
+    pub(crate) state: FileCommentState,
+    /// Focus the input on the next frame (new draft or Edit clicked).
+    pub(crate) focus_pending: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FileCommentState {
+    Draft,
+    Added,
+    Editing,
+}
+
+impl FileComment {
+    /// `address.rs +23-35` (or `+23` for one line), the chip/card label.
+    pub(crate) fn label(&self) -> String {
+        let name = std::path::Path::new(&self.path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.path);
+        if self.start_line == self.end_line {
+            format!("{name} +{}", self.start_line)
+        } else {
+            format!("{name} +{}-{}", self.start_line, self.end_line)
+        }
+    }
+}
+
 /// Everything a single workspace split needs to render its chat: the
 /// transcript/composer/question entities plus the picker, approval, project,
 /// branch, and model-search controls. Keyed by pane id in
@@ -50,6 +89,11 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) model_search: Entity<ComposerInput>,
     /// The session id whose messages are currently loaded in this pane's transcript.
     pub(crate) loaded_session_id: Option<String>,
+    /// Line comments staged for this pane's next message. They stay here
+    /// (with their inline cards) until removed, and every send includes the
+    /// committed ones.
+    pub(crate) file_comments: Vec<FileComment>,
+    pub(crate) next_file_comment_id: u64,
     /// Retained tab strip scroll-follow state for this pane.
     pub(crate) tab_strip_follow: TabStripFollow,
 }

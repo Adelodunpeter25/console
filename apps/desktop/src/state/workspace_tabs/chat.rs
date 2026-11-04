@@ -27,7 +27,11 @@ impl ConsoleDesktopApp {
         }
 
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
-        let composer_input = cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
+        let composer_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .enable_large_paste_chip()
+                .allow_empty_submit(true)
+        });
         let question_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .search_field()
@@ -132,6 +136,10 @@ impl ConsoleDesktopApp {
             move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt, context_files) => {
                     let context_files = context_files.clone();
+                    let prompt = this.prompt_with_staged_comments(&submit_pane_id, prompt);
+                    if prompt.trim().is_empty() {
+                        return;
+                    }
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(
@@ -251,6 +259,8 @@ impl ConsoleDesktopApp {
                 branch_menu,
                 model_search,
                 loaded_session_id: None,
+                file_comments: Vec::new(),
+                next_file_comment_id: 1,
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );

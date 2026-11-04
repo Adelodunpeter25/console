@@ -249,6 +249,9 @@ pub struct ComposerInput {
     /// the pasted text entirely. Only chat composers turn it on.
     pub(crate) large_paste_chip: bool,
     pub(crate) read_only: bool,
+    /// A composer whose message can be carried entirely by staged comments
+    /// (or another out-of-band payload) may submit with an empty text field.
+    pub(crate) allow_empty_submit: bool,
     /// The focusing click selects the whole content on release, the way a
     /// browser address bar arms its URL for retyping.
     pub(crate) select_all_on_focus_click: bool,
@@ -339,6 +342,7 @@ impl ComposerInput {
             read_only: false,
             select_all_on_focus_click: false,
             focus_click_select_all: false,
+            allow_empty_submit: false,
             language: None,
             highlight: Vec::new(),
             search_matches: Vec::new(),
@@ -516,6 +520,18 @@ impl ComposerInput {
     pub fn read_only(mut self, read_only: bool) -> Self {
         self.read_only = read_only;
         self
+    }
+
+    /// Let Enter/Send submit even when the text field is empty. Chat composers
+    /// use this when staged file comments can supply the message body.
+    pub fn allow_empty_submit(mut self, allow: bool) -> Self {
+        self.allow_empty_submit = allow;
+        self
+    }
+
+    /// Toggle empty submission after construction without rebuilding the field.
+    pub fn set_allow_empty_submit(&mut self, allow: bool) {
+        self.allow_empty_submit = allow;
     }
 
     /// Flip read-only after construction. A file editor starts locked because
@@ -830,12 +846,14 @@ impl ComposerInput {
             return;
         }
         let value = self.content.trim().to_owned();
-        if value.is_empty() {
+        if value.is_empty() && !self.allow_empty_submit {
             return;
         }
         let context_files: Vec<String> = self.mentions.iter().map(|m| m.path.clone()).collect();
-        self.prompt_history
-            .record(value.clone(), context_files.clone(), None);
+        if !value.is_empty() {
+            self.prompt_history
+                .record(value.clone(), context_files.clone(), None);
+        }
         cx.emit(ComposerEvent::Submit(value, context_files));
         self.clear(cx);
     }

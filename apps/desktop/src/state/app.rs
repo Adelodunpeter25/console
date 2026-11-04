@@ -236,7 +236,11 @@ impl ConsoleDesktopApp {
             .or_else(|| initial_root.first_leaf().map(|l| l.id.clone()))
             .or_else(|| Some("pane-main".into()));
         let transcript_view = cx.new(|cx| TranscriptView::new(cx));
-        let composer_input = cx.new(|cx| ComposerInput::new(window, cx).enable_large_paste_chip());
+        let composer_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .enable_large_paste_chip()
+                .allow_empty_submit(true)
+        });
         let question_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .search_field()
@@ -700,10 +704,6 @@ impl ConsoleDesktopApp {
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
             file_comment_tx,
-            file_comment: None,
-            file_comment_input: cx.new(|cx| {
-                ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
-            }),
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),
             viewer_markdown_selections: std::collections::HashMap::new(),
@@ -850,6 +850,8 @@ impl ConsoleDesktopApp {
                 branch_menu: app.branch_menu.clone(),
                 model_search,
                 loaded_session_id: None,
+                file_comments: Vec::new(),
+                next_file_comment_id: 1,
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );

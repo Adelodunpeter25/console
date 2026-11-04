@@ -20,8 +20,8 @@ pub use editor_ui::{
     DiffState, DiffView as EditorDiffView, EditorState, EditorView, FontConfig, IndentOptions,
     Mode as EditorMode, SearchState as EditorSearchState, Selection as EditorSelection,
 };
-pub use file_comment::FileCommentComposer;
-pub use file_viewer::FileViewer;
+pub use file_comment::{FileCommentCard, FileCommentCardState};
+pub use file_viewer::{FileCommentOverlay, FileViewer};
 pub use image_preview::{
     ImageMeta, ImagePreview, SvgViewMode, format_bytes, image_dimensions, svg_source_header,
 };

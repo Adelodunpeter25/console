@@ -1,5 +1,7 @@
 use console_core::types::ChangesScope;
-use console_core::{ApprovalMode, ApproveToolPermissionDto, SelectedModel, UpdateSessionDto};
+use console_core::{
+    ApprovalMode, ApproveToolPermissionDto, SelectedModel, SessionHeaderExt, UpdateSessionDto,
+};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
@@ -474,7 +476,15 @@ impl ConsoleDesktopApp {
                         .unwrap_or_else(|| "Loading file content...".to_string());
 
                     let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
-                    return console_ui::FileViewer::new(editor_view).into_any_element();
+                    let comment_cards = self.file_comment_cards(pane_id, path, window, cx);
+                    let viewer = console_ui::FileViewer::new(editor_view).comments(comment_cards);
+                    let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+                    return div()
+                        .relative()
+                        .size_full()
+                        .child(viewer)
+                        .child(composer)
+                        .into_any_element();
                 }
             }
         }
@@ -488,7 +498,13 @@ impl ConsoleDesktopApp {
                 .unwrap_or_else(|| (console_core::DiffResult::default(), String::new()));
             let theme = Theme::current(cx);
             let diff_view = self.get_or_build_diff_view(path, &diff_result, &raw_diff, &theme, cx);
-            return console_ui::DiffViewer::new(diff_view).into_any_element();
+            let composer = self.pane_composer_view(pane_id, true, true, window, cx);
+            return div()
+                .relative()
+                .size_full()
+                .child(console_ui::DiffViewer::new(diff_view))
+                .child(composer)
+                .into_any_element();
         }
 
         // Changes review tab: every changed file in the tab's scope, stacked
@@ -563,33 +579,18 @@ impl ConsoleDesktopApp {
         let pane_id = pane_id.to_owned();
         self.ensure_workspace_pane_state(&pane_id, window, cx);
         let pane_transcript = self.transcript_for_pane(&pane_id);
-        let pane_composer = self.composer_for_pane(&pane_id);
-        let pane_selected_model = self.effective_model_for_pane(&pane_id);
-        let pane_picker_tab = self.pane_picker_tab(&pane_id);
-        let pane_approval_mode = self.pane_approval_mode(&pane_id);
-        let pane_thinking_level = self.pane_thinking_level(&pane_id);
-        let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(&pane_id);
         let pane_project_id = self.pane_real_project_id(&pane_id);
         let pane_branches = self.pane_branches(&pane_id);
         let pane_branch_loaded = self.pane_branch_loaded(&pane_id);
         let pane_is_git_repository = self.pane_is_git_repository(&pane_id);
         let pane_branch_pending = self.pane_branch_pending(&pane_id);
-        let pane_model_menu = self.pane_model_menu(&pane_id);
-        let pane_approval_menu = self.pane_approval_menu(&pane_id);
         let pane_project_menu = self.pane_project_menu(&pane_id);
         let pane_branch_menu = self.pane_branch_menu(&pane_id);
         let pane_usage_menu = self.pane_usage_menu(&pane_id);
-        let pane_model_search = self.pane_model_search(&pane_id);
-        // Snapshot the query this frame; the dropdown filters against it. Edits
-        // notify the app (see the model_search subscription), so this read is
-        // always fresh when the dropdown re-renders.
-        let pane_model_search_query = pane_model_search.read(cx).content().to_owned();
         let pane_session_id = active_tab.and_then(|tab| match tab {
             console_core::WorkspaceTabConfig::Chat { session_id, .. } => Some(session_id.clone()),
             _ => None,
         });
-        let autocomplete =
-            self.composer_autocomplete_for_pane(&pane_id, pane_session_id.as_deref(), window, cx);
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
@@ -681,6 +682,10 @@ impl ConsoleDesktopApp {
             changes_summary.zip(on_open_changes),
             theme,
         );
+
+        // Built before the composer's `.when` closure so the closure only
+        // captures the finished element, not `&mut self`.
+        let pane_composer_element = self.pane_composer_view(&pane_id, false, false, window, cx);
 
         div()
             .flex_1()
@@ -888,25 +893,10 @@ impl ConsoleDesktopApp {
         })
         .when(selected_sid.is_some(), |el| {
             el.child({
-                let providers = self.providers.clone();
-                let selected_model = pane_selected_model.clone();
-                let active_tab = pane_picker_tab.clone();
-                let favorites = self.favorites.clone();
-                let model_handle = pane_model_menu.clone();
-                let approval_handle = pane_approval_menu.clone();
-                let model_handle_for_select = model_handle.clone();
-                let approval_handle_for_select = approval_handle.clone();
                 let project_pane_id = pane_id.clone();
                 let clear_project_pane_id = pane_id.clone();
                 let branch_pane_id = pane_id.clone();
                 let new_worktree_pane_id = pane_id.clone();
-                let model_pane_id = pane_id.clone();
-                let picker_pane_id = pane_id.clone();
-                let approval_pane_id = pane_id.clone();
-                let composer_pane_id = pane_id.clone();
-                let submit_pane_id = composer_pane_id.clone();
-                let abort_pane_id = pane_id.clone();
-                let composer_autocomplete = autocomplete;
                 // Get current provider from active session
                 let current_provider = self
                     .active_session_for_pane(&pane_id)
@@ -997,111 +987,6 @@ impl ConsoleDesktopApp {
                 )
                 .project_locked(self.session_has_messages(&pane_id));
 
-                let model_dropdown = ModelDropdownMenu::new(
-                    providers,
-                    selected_model,
-                    active_tab,
-                    favorites,
-                    self.models_by_provider.clone(),
-                    pane_model_search.clone(),
-                    pane_model_search_query,
-                    {
-                        let entity = entity.clone();
-                        move |prov: String, m_id: String, window, cx| {
-                            model_handle_for_select.close(window, cx);
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let model = SelectedModel {
-                                        provider: prov.clone(),
-                                        model_id: m_id.clone(),
-                                    };
-                                    this.set_pane_model(
-                                        &model_pane_id,
-                                        Some(model),
-                                    );
-
-                                    this.update_session_settings_for_pane(
-                                        model_pane_id.clone(),
-                                        UpdateSessionDto {
-                                            title: None,
-                                            cwd: None,
-                                            project_id: None,
-                                            model_id: Some(m_id.clone()),
-                                            provider: Some(prov.clone()),
-                                            approval_mode: None,
-                                            thinking_level: None,
-                            pinned: None,
-                                        },
-                                        cx,
-                                    );
-
-                                    cx.notify();
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        let search_for_tab = pane_model_search.clone();
-                        move |tab: PickerTab, _window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    // Fetch the newly-selected provider's live models
-                                    // if not already cached. The popover-open handler
-                                    // eagerly loads all providers, but this covers the
-                                    // case where a provider was added to the catalog
-                                    // after the last open.
-                                    if let PickerTab::Provider(ref name) = tab {
-                                        this.load_models_for_provider(name, cx);
-                                    }
-                                    this.set_pane_picker_tab(&picker_pane_id, tab);
-                                    // Clear the filter when switching provider/favorites
-                                    // tabs, matching the Electron picker's selectTab.
-                                    search_for_tab.update(cx, |input, cx| input.clear(cx));
-                                    cx.notify();
-                                });
-                            }
-                        }
-                    },
-                    {
-                        let entity = entity.clone();
-                        move |prov: String, mid: String, _window, cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.toggle_model_favorite(prov, mid, cx);
-                                });
-                            }
-                        }
-                    },
-                );
-
-                let approval_dropdown = ApprovalModeDropdown::new(pane_approval_mode, {
-                    let entity = entity.clone();
-                    move |mode: ApprovalMode, window, cx| {
-                        approval_handle_for_select.close(window, cx);
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.set_pane_approval_mode(&approval_pane_id, mode);
-                                this.update_session_settings_for_pane(
-                                    approval_pane_id.clone(),
-                                    UpdateSessionDto {
-                                        title: None,
-                                        cwd: None,
-                                        project_id: None,
-                                        model_id: None,
-                                        provider: None,
-                                        approval_mode: Some(mode.value().to_string()),
-                                        thinking_level: None,
-                            pinned: None,
-                                    },
-                                    cx,
-                                );
-                                cx.notify();
-                            });
-                        }
-                    }
-                });
-
                 div()
                     .relative()
                     .w_full()
@@ -1109,252 +994,402 @@ impl ConsoleDesktopApp {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .max_w(px(768.0))
-                            .bg(theme.chat_canvas)
-                            .child(
-                                ComposerView::new(
-                                    pane_composer.clone(),
-                                    {
-                                        let entity = entity.clone();
-                                        let q_pane = submit_pane_id.clone();
-                                        move |_w, cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    if this.is_active_session_running_for_pane(&q_pane) {
-                                                        let prompt = this
-                                                            .composer_for_pane(&q_pane)
-                                                            .read(cx)
-                                                            .content()
-                                                            .to_string();
-                                                        let attachments = (*this
-                                                            .attachments_for_pane(&q_pane))
-                                                        .clone();
-                                                        let context_files = console_shared::composer::mentions::context_file_paths(
-    this.composer_for_pane(&q_pane).read(cx).mentions(),
-);
-                                                        this.queue_prompt_for_pane(
-                                                            q_pane.clone(),
-                                                            prompt,
-                                                            attachments,
-                                                            context_files,
-                                                            cx,
-                                                        );
-                                                        return;
-                                                    }
-                                                    let prompt = this
-                                                        .composer_for_pane(&submit_pane_id)
-                                                        .read(cx)
-                                                        .content()
-                                                        .to_string();
-                                                    let attachments = (*this
-                                                        .attachments_for_pane(&submit_pane_id))
-                                                    .clone();
-                                                    let context_files = console_shared::composer::mentions::context_file_paths(
-    this.composer_for_pane(&submit_pane_id).read(cx).mentions(),
-);
-                                                    this.active_pane_id =
-                                                        Some(submit_pane_id.clone());
-                                                    this.selected_session_id = this
-                                                        .active_session_for_pane(&submit_pane_id);
-                                                    this.submit_prompt_with_context(
-                                                        prompt,
-                                                        attachments,
-                                                        context_files,
-                                                        cx,
-                                                    );
-                                                });
-                                            }
-                                        }
-                                    },
-                                    {
-                                        let client = client.clone();
-                                        let entity = entity.clone();
-                                        move |_w, cx| {
-                                            let client = client.clone();
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.active_pane_id =
-                                                        Some(abort_pane_id.clone());
-                                                    this.selected_session_id = this
-                                                        .active_session_for_pane(&abort_pane_id);
-                                                    if let Some(sid) = &this.selected_session_id {
-                                                        // Clear the running state for the chat that
-                                                        // owns the run, keyed by session so the Stop
-                                                        // button only affects this chat.
-                                                        let sid_clone = sid.clone();
-                                                        this.set_session_running(&sid_clone, None);
-                                                        let entity_for_error = entity.clone();
-                                                        cx.spawn(async move |_entity, cx| {
-                                                            if let Err(error) =
-                                                                client.runs.abort(&sid_clone).await
-                                                            {
-                                                                let message = format!(
-                                                                    "Unable to stop the agent run: {error}"
-                                                                );
-                                                                cx.update(|cx| {
-                                                                    if let Some(app) =
-                                                                        entity_for_error.upgrade()
-                                                                    {
-                                                                        app.update(cx, |this, cx| {
-                                                                            this.set_error_for_session(&sid_clone, message, cx)
-                                                                        });
-                                                                    }
-                                                                });
-                                                            }
-                                                        }).detach();
-                                                    }
-                                                    cx.notify();
-                                                });
-                                            }
-                                        }
-                                    },
-                                    {
-                                        let entity = entity.clone();
-                                        let pane_id = composer_pane_id.clone();
-                                        move |_w, cx| {
-                                            if let Some(app) = entity.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.pick_image(&pane_id, cx);
-                                                });
-                                            }
-                                        }
-                                    },
-                                )
-                                .running(self.is_active_session_running_for_pane(&pane_id))
-                                .has_queued_prompt(self.has_queued_prompt_for_pane(&pane_id))
-                                .on_queue({
-                                    let entity = entity.clone();
-                                    let qp = pane_id.clone();
-                                    move |_w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            let pane = qp.clone();
-                                            app.update(cx, |this, cx| {
-                                                let prompt =
-                                                    this.composer_for_pane(&pane).read(cx).content().to_string();
-                                                let atts = (*this.attachments_for_pane(&pane)).clone();
-                                                let context_files = console_shared::composer::mentions::context_file_paths(
-    this.composer_for_pane(&pane).read(cx).mentions(),
-);
-                                                this.queue_prompt_for_pane(
-                                                    pane,
-                                                    prompt,
-                                                    atts,
-                                                    context_files,
-                                                    cx,
-                                                );
-                                            });
-                                        }
-                                    }
-                                })
-                                .selected_model(pane_selected_model)
-                                .approval_mode(pane_approval_mode)
-                                .thinking_level(pane_thinking_level)
-                                .supported_thinking_levels(pane_supported_thinking_levels)
-                                .on_cycle_thinking({
-                                    let entity = entity.clone();
-                                    let cycle_pane_id = composer_pane_id.clone();
-                                    move |_window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.cycle_thinking_level_for_pane(&cycle_pane_id, cx);
-                                            });
-                                        }
-                                    }
-                                })
-                                .model_dropdown(model_dropdown, model_handle)
-                                .approval_dropdown(approval_dropdown, approval_handle)
-                                .autocomplete(composer_autocomplete)
-                                .on_autocomplete_next({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |_window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.move_autocomplete_for_pane(&pane_id, true, cx);
-                                            });
-                                        }
-                                    }
-                                })
-                                .on_autocomplete_previous({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |_window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.move_autocomplete_for_pane(
-                                                    &pane_id, false, cx,
-                                                );
-                                            });
-                                        }
-                                    }
-                                })
-                                .on_autocomplete_confirm({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |_window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.accept_highlighted_autocomplete_for_pane(
-                                                    &pane_id, cx,
-                                                );
-                                            });
-                                        }
-                                    }
-                                })
-                                .on_autocomplete_dismiss({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |_window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.dismiss_autocomplete_for_pane(&pane_id, cx);
-                                            });
-                                        }
-                                    }
-                                })
-                                .attachments(self.attachments_for_pane(&composer_pane_id))
-                                .on_remove_attachment({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |index, _w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.remove_attachment(&pane_id, index, cx);
-                                            });
-                                        }
-                                    }
-                                })
-                                .on_preview_attachment({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |index, _w, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.preview_attachment(&pane_id, index, cx);
-                                            });
-                                        }
-                                    }
-                                })
-                                .on_drop_files({
-                                    let entity = entity.clone();
-                                    let pane_id = composer_pane_id.clone();
-                                    move |paths, window, cx| {
-                                        if let Some(app) = entity.upgrade() {
-                                            app.update(cx, |this, cx| {
-                                                this.stage_dropped_files(&pane_id, paths, window, cx);
-                                            });
-                                        }
-                                    }
-                                }),
-                            ),
-                    )
+                    .child(pane_composer_element)
                     .child(workspace_footer)
             })
         })
         .into_any_element()
     }
+
+    /// The pane's chat composer, used both as the docked footer in chat tabs
+    /// and as a floating card over file/diff tabs.
+    fn pane_composer_view(
+        &mut self,
+        pane_id: &str,
+        floating: bool,
+        reveal_chat: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let theme = Theme::current(cx);
+        let pane_composer = self.composer_for_pane(pane_id);
+        let pane_selected_model = self.effective_model_for_pane(pane_id);
+        let pane_picker_tab = self.pane_picker_tab(pane_id);
+        let pane_approval_mode = self.pane_approval_mode(pane_id);
+        let pane_thinking_level = self.pane_thinking_level(pane_id);
+        let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(pane_id);
+        let pane_model_menu = self.pane_model_menu(pane_id);
+        let pane_approval_menu = self.pane_approval_menu(pane_id);
+        let pane_model_search = self.pane_model_search(pane_id);
+        let pane_model_search_query = pane_model_search.read(cx).content().to_owned();
+        let pane_session_id = self.active_session_for_pane(pane_id);
+        let autocomplete = self.composer_autocomplete_for_pane(
+            pane_id,
+            pane_session_id.as_deref(),
+            window,
+            cx,
+        );
+        let comments = self.composer_comments_for_pane(pane_id, cx);
+        let attachments = self.attachments_for_pane(pane_id);
+
+        let entity = cx.entity().downgrade();
+        let client = self.client.clone();
+        let providers = self.providers.clone();
+        let favorites = self.favorites.clone();
+        let models_by_provider = self.models_by_provider.clone();
+
+        let model_dropdown = ModelDropdownMenu::new(
+            providers,
+            pane_selected_model.clone(),
+            pane_picker_tab,
+            favorites,
+            models_by_provider,
+            pane_model_search.clone(),
+            pane_model_search_query,
+            {
+                let entity = entity.clone();
+                let model_handle = pane_model_menu.clone();
+                let pane_id = pane_id.to_string();
+                move |prov: String, m_id: String, window, cx| {
+                    model_handle.close(window, cx);
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let model = SelectedModel {
+                                provider: prov.clone(),
+                                model_id: m_id.clone(),
+                            };
+                            this.set_pane_model(&pane_id, Some(model));
+                            this.update_session_settings_for_pane(
+                                pane_id.clone(),
+                                UpdateSessionDto {
+                                    title: None,
+                                    cwd: None,
+                                    project_id: None,
+                                    model_id: Some(m_id.clone()),
+                                    provider: Some(prov.clone()),
+                                    approval_mode: None,
+                                    thinking_level: None,
+                                    pinned: None,
+                                },
+                                cx,
+                            );
+                            cx.notify();
+                        });
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                let search = pane_model_search.clone();
+                let pane_id = pane_id.to_string();
+                move |tab: PickerTab, _window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if let PickerTab::Provider(ref name) = tab {
+                                this.load_models_for_provider(name, cx);
+                            }
+                            this.set_pane_picker_tab(&pane_id, tab);
+                            search.update(cx, |input, cx| input.clear(cx));
+                            cx.notify();
+                        });
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                move |prov: String, mid: String, _window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toggle_model_favorite(prov, mid, cx);
+                        });
+                    }
+                }
+            },
+        );
+
+        let approval_dropdown = ApprovalModeDropdown::new(pane_approval_mode, {
+            let entity = entity.clone();
+            let approval_handle = pane_approval_menu.clone();
+            let pane_id = pane_id.to_string();
+            move |mode: ApprovalMode, window, cx| {
+                approval_handle.close(window, cx);
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.set_pane_approval_mode(&pane_id, mode);
+                        this.update_session_settings_for_pane(
+                            pane_id.clone(),
+                            UpdateSessionDto {
+                                title: None,
+                                cwd: None,
+                                project_id: None,
+                                model_id: None,
+                                provider: None,
+                                approval_mode: Some(mode.value().to_string()),
+                                thinking_level: None,
+                                pinned: None,
+                            },
+                            cx,
+                        );
+                        cx.notify();
+                    });
+                }
+            }
+        });
+
+        let composer = ComposerView::new(
+            pane_composer.clone(),
+            {
+                let entity = entity.clone();
+                let pane_id = pane_id.to_string();
+                move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
+                            let prompt = this.prompt_with_staged_comments(&pane_id, &prompt);
+                            let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                            let context_files = console_shared::composer::mentions::context_file_paths(
+                                this.composer_for_pane(&pane_id).read(cx).mentions(),
+                            );
+                            if reveal_chat {
+                                this.reveal_chat_for_pane(&pane_id, cx);
+                            }
+                            if this.is_active_session_running_for_pane(&pane_id) {
+                                this.queue_prompt_for_pane(
+                                    pane_id.clone(),
+                                    prompt,
+                                    attachments,
+                                    context_files,
+                                    cx,
+                                );
+                                return;
+                            }
+                            this.active_pane_id = Some(pane_id.clone());
+                            this.selected_session_id = this.active_session_for_pane(&pane_id);
+                            this.submit_prompt_with_context(
+                                prompt,
+                                attachments,
+                                context_files,
+                                cx,
+                            );
+                        });
+                    }
+                }
+            },
+            {
+                let client = client.clone();
+                let entity = entity.clone();
+                let pane_id = pane_id.to_string();
+                move |_w, cx| {
+                    let client = client.clone();
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.active_pane_id = Some(pane_id.clone());
+                            this.selected_session_id = this.active_session_for_pane(&pane_id);
+                            if let Some(sid) = &this.selected_session_id {
+                                let sid_clone = sid.clone();
+                                this.set_session_running(&sid_clone, None);
+                                let entity_for_error = entity.clone();
+                                cx.spawn(async move |_entity, cx| {
+                                    if let Err(error) = client.runs.abort(&sid_clone).await {
+                                        let message = format!(
+                                            "Unable to stop the agent run: {error}"
+                                        );
+                                        cx.update(|cx| {
+                                            if let Some(app) = entity_for_error.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.set_error_for_session(&sid_clone, message, cx)
+                                                });
+                                            }
+                                        });
+                                    }
+                                })
+                                .detach();
+                            }
+                            cx.notify();
+                        });
+                    }
+                }
+            },
+            {
+                let entity = entity.clone();
+                let pane_id = pane_id.to_string();
+                move |_w, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.pick_image(&pane_id, cx);
+                        });
+                    }
+                }
+            },
+        )
+        .running(self.is_active_session_running_for_pane(pane_id))
+        .has_queued_prompt(self.has_queued_prompt_for_pane(pane_id))
+        .on_queue({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
+                        let prompt = this.prompt_with_staged_comments(&pane_id, &prompt);
+                        let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                        let context_files = console_shared::composer::mentions::context_file_paths(
+                            this.composer_for_pane(&pane_id).read(cx).mentions(),
+                        );
+                        if reveal_chat {
+                            this.reveal_chat_for_pane(&pane_id, cx);
+                        }
+                        this.queue_prompt_for_pane(
+                            pane_id.clone(),
+                            prompt,
+                            attachments,
+                            context_files,
+                            cx,
+                        );
+                    });
+                }
+            }
+        })
+        .selected_model(pane_selected_model)
+        .approval_mode(pane_approval_mode)
+        .thinking_level(pane_thinking_level)
+        .supported_thinking_levels(pane_supported_thinking_levels)
+        .on_cycle_thinking({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.cycle_thinking_level_for_pane(&pane_id, cx);
+                    });
+                }
+            }
+        })
+        .model_dropdown(model_dropdown, pane_model_menu)
+        .approval_dropdown(approval_dropdown, pane_approval_menu)
+        .autocomplete(autocomplete)
+        .on_autocomplete_next({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.move_autocomplete_for_pane(&pane_id, true, cx);
+                    });
+                }
+            }
+        })
+        .on_autocomplete_previous({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.move_autocomplete_for_pane(&pane_id, false, cx);
+                    });
+                }
+            }
+        })
+        .on_autocomplete_confirm({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.accept_highlighted_autocomplete_for_pane(&pane_id, cx);
+                    });
+                }
+            }
+        })
+        .on_autocomplete_dismiss({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.dismiss_autocomplete_for_pane(&pane_id, cx);
+                    });
+                }
+            }
+        })
+        .attachments(attachments)
+        .comments(comments)
+        .floating(floating)
+        .on_remove_attachment({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |index, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.remove_attachment(&pane_id, index, cx);
+                    });
+                }
+            }
+        })
+        .on_preview_attachment({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |index, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.preview_attachment(&pane_id, index, cx);
+                    });
+                }
+            }
+        })
+        .on_drop_files({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |paths, window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.stage_dropped_files(&pane_id, paths, window, cx);
+                    });
+                }
+            }
+        });
+
+        if floating {
+            div()
+                .absolute()
+                .bottom_0()
+                .left_0()
+                .right_0()
+                .flex()
+                .justify_center()
+                .child(
+                    div()
+                        .w_full()
+                        .max_w(px(768.0))
+                        .child(composer),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .relative()
+                .w_full()
+                .max_w(px(768.0))
+                .bg(theme.chat_canvas)
+                .child(composer)
+                .into_any_element()
+        }
+    }
+
+    /// Bring the pane's active chat to the front after a file-tab send so the
+    /// streamed answer is visible. A brand-new session is opened by the run
+    /// path itself.
+    fn reveal_chat_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let Some(session_id) = self.active_session_for_pane(pane_id) else {
+            return;
+        };
+        let title = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.display_title().to_string())
+            .unwrap_or_else(|| "Chat".to_string());
+        self.open_chat_tab_in_pane(pane_id, session_id, title);
+        cx.notify();
+    }
 }
+

@@ -32,7 +32,7 @@ pub use autocomplete::{
     init as init_autocomplete_keybindings,
 };
 pub use composer_pills::{TasksPill, composer_pills};
-pub use composer_view::ComposerView;
+pub use composer_view::{ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use file_browser::FileBrowser;

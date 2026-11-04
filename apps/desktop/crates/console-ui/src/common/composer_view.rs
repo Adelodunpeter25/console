@@ -9,11 +9,44 @@ use gpui::{
 use crate::common::{
     ApprovalModeDropdown, ApprovalModeIconExt, AutocompleteConfirm, AutocompleteDismiss,
     AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, ThinkingStepper,
-    attachment_image, format_model_name, provider_svg_path,
+    attachment_image, file_mention_chip, format_model_name, provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, app_icon, popover};
 use crate::theme::Theme;
+
+/// A staged file comment shown as a chip above the composer's text field.
+///
+/// The chip mirrors the inline file-mention pill (`address.rs +23-35`) and
+/// keeps the two actions the inline card also offers: reopen for editing and
+/// remove the comment from the message.
+#[derive(Clone)]
+pub struct ComposerComment {
+    pub id: u64,
+    pub path: String,
+    pub label: String,
+    pub on_edit: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_remove: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
+
+impl ComposerComment {
+    pub fn new(
+        id: u64,
+        path: impl Into<String>,
+        label: impl Into<String>,
+        on_edit: impl Fn(&mut Window, &mut App) + 'static,
+        on_remove: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            id,
+            path: path.into(),
+            label: label.into(),
+            on_edit: Rc::new(on_edit),
+            on_remove: Rc::new(on_remove),
+        }
+    }
+}
+
 
 /// The composer state that is meaningful to the backend-facing shell.
 ///
@@ -49,6 +82,12 @@ pub struct ComposerView {
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub attachments: Rc<Vec<ImageAttachment>>,
+    /// File line comments staged for this pane. Rendered as chips above the
+    /// input; they are part of the outgoing prompt without occupying the text
+    /// field.
+    pub comments: Rc<Vec<ComposerComment>>,
+    /// A floating overlay (file/diff tabs) rather than the docked chat footer.
+    floating: bool,
     /// Whether the active session already has a staged prompt (server's `queueUpdated` not null).
     /// Rendered independently of `run_state` so a replace does not need a new state variant.
     pub has_queued_prompt: bool,
@@ -85,6 +124,8 @@ impl ComposerView {
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
             attachments: Rc::new(Vec::new()),
+            comments: Rc::new(Vec::new()),
+            floating: false,
             has_queued_prompt: false,
             model_menu: None,
             approval_menu: None,
@@ -173,6 +214,16 @@ impl ComposerView {
 
     pub fn attachments(mut self, attachments: Rc<Vec<ImageAttachment>>) -> Self {
         self.attachments = attachments;
+        self
+    }
+
+    pub fn comments(mut self, comments: Rc<Vec<ComposerComment>>) -> Self {
+        self.comments = comments;
+        self
+    }
+
+    pub fn floating(mut self, floating: bool) -> Self {
+        self.floating = floating;
         self
     }
 
@@ -333,6 +384,58 @@ impl ComposerView {
     ) -> impl IntoElement {
         composer_attachment_row(attachments, on_remove, on_preview, theme)
     }
+
+    /// Staged file comments, styled like the composer's inline file-mention
+    /// pills. Clicking the pill reopens the inline card; the trailing `x`
+    /// removes the comment from the outgoing message.
+    fn render_comments(comments: Rc<Vec<ComposerComment>>, theme: Theme) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_wrap()
+            .gap(px(6.0))
+            .px(px(12.0))
+            .pb(px(7.0))
+            .children(comments.iter().cloned().map(move |comment| {
+                let edit = comment.on_edit.clone();
+                let remove = comment.on_remove.clone();
+                let chip_path = comment.path.clone();
+                let chip_label = comment.label.clone();
+                div()
+                    .id(ElementId::Name(
+                        format!("composer-comment-{}", comment.id).into(),
+                    ))
+                    .flex()
+                    .items_center()
+                    .gap(px(1.0))
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("edit-comment-{}", comment.id).into(),
+                            ))
+                            .cursor_default()
+                            .on_click(move |_, window, cx| (edit)(window, cx))
+                            .child(file_mention_chip(&chip_path, chip_label, theme)),
+                    )
+                    .child(
+                        div()
+                            .id(ElementId::Name(
+                                format!("remove-comment-{}", comment.id).into(),
+                            ))
+                            .size(px(16.0))
+                            .rounded_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .cursor_default()
+                            .hover(|style| style.bg(theme.overlay_strong))
+                            .on_click(move |_, window, cx| {
+                                (remove)(window, cx);
+                                cx.stop_propagation();
+                            })
+                            .child(app_icon(IconName::X, 9.0, theme.text_tertiary)),
+                    )
+            }))
+    }
 }
 
 impl RenderOnce for ComposerView {
@@ -415,7 +518,8 @@ impl RenderOnce for ComposerView {
         };
 
         let has_draft = !self.composer_input.read(cx).content().trim().is_empty()
-            || !self.attachments.is_empty();
+            || !self.attachments.is_empty()
+            || !self.comments.is_empty();
         let attachment_data = self.attachments.clone();
         let attachment_on_remove = self.on_remove_attachment.clone();
         let attachment_on_preview = self.on_preview_attachment.clone();
@@ -427,6 +531,9 @@ impl RenderOnce for ComposerView {
                 theme,
             )
         });
+        let comments = (!self.comments.is_empty())
+            .then(|| Self::render_comments(self.comments.clone(), theme));
+        let floating = self.floating;
         let autocomplete = self.autocomplete;
         let autocomplete_anchor = autocomplete.as_ref().map(AutocompleteView::anchor_cell);
         let autocomplete_open = autocomplete.is_some();
@@ -440,10 +547,10 @@ impl RenderOnce for ComposerView {
         div()
             .id("composer-wrapper")
             .w_full()
-            .px(px(20.0))
-            .pt(px(4.0))
-            .pb(px(9.0))
-            .bg(theme.composer)
+            .px(if floating { px(24.0) } else { px(20.0) })
+            .pt(px(if floating { 12.0 } else { 4.0 }))
+            .pb(px(if floating { 18.0 } else { 9.0 }))
+            .when(!floating, |el| el.bg(theme.composer))
             .flex()
             .flex_col()
             .items_center()
@@ -494,7 +601,8 @@ impl RenderOnce for ComposerView {
                             } else {
                                 theme.border_strong
                             })
-                            .shadow_sm()
+                            .when(floating, |el| el.shadow_lg())
+                            .when(!floating, |el| el.shadow_sm())
                             .overflow_hidden()
                             .py(px(10.0))
                             .flex()
@@ -509,6 +617,9 @@ impl RenderOnce for ComposerView {
                             })
                             .on_drop(move |paths: &ExternalPaths, window, cx| {
                                 (on_drop_files)(paths, window, cx);
+                            })
+                            .when_some(comments, |element, comments| {
+                                element.child(comments)
                             })
                             .when_some(attachments, |element, attachments| {
                                 element.child(attachments)

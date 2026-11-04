@@ -29,8 +29,8 @@ console-shared = { path = "crates/console-shared" }
 console-ui = { path = "crates/console-ui" }
 
 # Editor & Syntax
-syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "4c525db5ab09d2c2d3cdd7308ab26ee5cd97d46a" }
-editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "4c525db5ab09d2c2d3cdd7308ab26ee5cd97d46a" }
+syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "40e0cf9" }
+editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "40e0cf9" }
 
 # UI components (command palette, dialogs, dock). Uses the same pinned zed gpui,
 # so cargo unifies sources. Must call gpui_component::init(cx) at startup and wrap
