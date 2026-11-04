@@ -112,6 +112,17 @@ func materializeUserMessage(user UserMessage) UserMessage {
 	if blocks := renderAnnotations(user.Annotations); blocks != "" {
 		user.Content += blocks
 	}
+	// Annotation screenshots travel as image parts; the stored message keeps
+	// them on the annotation only, so copy before appending.
+	var shots []ImageAttachment
+	for _, a := range user.Annotations {
+		if a.ImageBase64 != "" {
+			shots = append(shots, ImageAttachment{Data: a.ImageBase64, MimeType: "image/png"})
+		}
+	}
+	if len(shots) > 0 {
+		user.Attachments = append(append([]ImageAttachment{}, user.Attachments...), shots...)
+	}
 	return user
 }
 

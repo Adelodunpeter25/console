@@ -64,8 +64,18 @@ func renderAnnotation(a types.BrowserAnnotation) string {
 	if styles := formatStyles(a.ComputedStyles); styles != "" {
 		writeTag(&b, "computed_styles", styles)
 	}
-	if snippet := truncate(strings.TrimSpace(a.HTMLSnippet), maxSnippetChars); snippet != "" {
-		b.WriteString("  <html_snippet><![CDATA[" + cdataSafe(snippet) + "]]></html_snippet>\n")
+	if a.ImageBase64 != "" {
+		b.WriteString("  <screenshot status=\"attached\"/>\n")
+	} else {
+		b.WriteString("  <screenshot status=\"skipped\" reason=\"no screenshot was captured for this annotation\"/>\n")
+	}
+	if full := strings.TrimSpace(a.HTMLSnippet); full != "" {
+		snippet := truncate(full, maxSnippetChars)
+		flag := ""
+		if snippet != full {
+			flag = " truncated=\"true\""
+		}
+		b.WriteString("  <html_snippet" + flag + "><![CDATA[" + cdataSafe(snippet) + "]]></html_snippet>\n")
 	}
 	if comment := truncate(strings.TrimSpace(a.UserComment), maxCommentChars); comment != "" {
 		writeTag(&b, "user_annotation", comment)
@@ -88,7 +98,10 @@ func writeTag(b *strings.Builder, tag, value string) {
 
 func accessibilitySummary(role, name string) string {
 	role = strings.TrimSpace(role)
-	name = truncate(strings.TrimSpace(name), maxTextField)
+	name = strings.TrimSpace(name)
+	if t := truncate(name, maxTextField); t != name {
+		name = t + " [truncated]"
+	}
 	switch {
 	case role != "" && name != "":
 		return role + " / " + name
