@@ -44,8 +44,8 @@ fn test_chat_chip_prefix_run_is_painted_in_pill_background() {
     assert!(runs.len() >= 3, "unexpected runs: {runs:?}");
     assert_eq!(runs[1].len, 1, "prefix run must be exactly one char");
     assert_eq!(
-        runs[1].color, bg(),
-        "the $ must paint in the pill bg, got {:?}",
+        runs[1].color, gpui::transparent_black(),
+        "the $ must be transparent, got {:?}",
         runs[1].color
     );
     assert_eq!(runs[2].color, accent());
@@ -56,7 +56,7 @@ fn test_skill_chip_prefix_run_is_painted_in_pill_background() {
     let mentions = vec![ComposerMention::skill(0..5, "plan")];
     let runs = runs_for(&mentions, 5);
     assert_eq!(runs[0].len, 1);
-    assert_eq!(runs[0].color, bg());
+    assert_eq!(runs[0].color, gpui::transparent_black());
     assert_eq!(runs[1].color, accent());
 }
 

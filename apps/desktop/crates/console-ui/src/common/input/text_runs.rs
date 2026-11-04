@@ -102,7 +102,9 @@ pub fn input_text_runs(
             let color = if is_selected {
                 gpui::white()
             } else if hidden_prefix {
-                mention_bg_color
+                // Fully transparent: any tint over the pill's own wash
+                // composites to a visible ghost.
+                gpui::transparent_black()
             } else if is_in_mention {
                 mention_color
             } else {
