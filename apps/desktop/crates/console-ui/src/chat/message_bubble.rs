@@ -429,6 +429,7 @@ impl RenderOnce for UserMessageBubble {
                                             el.max_h(px(USER_FOLDED_MAX_HEIGHT_PX))
                                                 .overflow_hidden()
                                         })
+                                        .when_some(comment_chips, |el, chips| el.child(chips))
                                         .child(message_text_element),
                                 )
                                 .when_some(expand_toggle, |card, on_toggle| {

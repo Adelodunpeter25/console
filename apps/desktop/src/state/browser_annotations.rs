@@ -64,6 +64,7 @@ impl ConsoleDesktopApp {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn clear_annotations_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
         if self.browser_annotations.remove(pane_id).is_some() {
             self.schedule_drafts_save(cx);
@@ -190,6 +191,7 @@ impl ConsoleDesktopApp {
         Rc::new(chips)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn focus_annotation_input(
         &mut self,
         browser_id: &str,

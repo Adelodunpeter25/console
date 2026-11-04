@@ -140,6 +140,18 @@ pub struct HostContent {
 /// thread for the decode/crop/re-encode without blocking the UI.
 pub type SnapshotSlot = std::sync::Arc<std::sync::Mutex<Option<Result<Vec<u8>, String>>>>;
 
+/// Result of a cropped element capture: the element PNG plus the full
+/// frame it was cropped from, so the caller can stand the full frame in
+/// as a cover without taking a second snapshot (each WebKit snapshot
+/// visibly flashes the page while it renders).
+pub struct CroppedSnapshot {
+    pub png: Vec<u8>,
+    pub full_png: Vec<u8>,
+}
+
+pub type CroppedSlot =
+    std::sync::Arc<std::sync::Mutex<Option<Result<CroppedSnapshot, String>>>>;
+
 #[cfg(target_os = "macos")]
 mod macos_host {
     use std::cell::Cell;
@@ -483,7 +495,7 @@ mod macos_host {
         pub fn take_snapshot_cropped(
             &self,
             rect: (f64, f64, f64, f64),
-            slot: super::SnapshotSlot,
+            slot: super::CroppedSlot,
         ) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
@@ -519,6 +531,7 @@ mod macos_host {
                     let slot = slot.clone();
                     if w > 0.0 && h > 0.0 {
                         std::thread::spawn(move || {
+                            let cover_png = full_png.clone();
                             let result = match image::load_from_memory(&full_png) {
                                 Ok(img) => {
                                     let (pw, ph) = (img.width(), img.height());
@@ -544,10 +557,17 @@ mod macos_host {
                                 }
                                 Err(_) => full_png,
                             };
-                            *slot.lock().unwrap() = Some(Ok(result));
+                            *slot.lock().unwrap() = Some(Ok(super::CroppedSnapshot {
+                                png: result,
+                                full_png: cover_png,
+                            }));
                         });
                     } else {
-                        *slot.lock().unwrap() = Some(Ok(full_png));
+                        let full_png_clone = full_png.clone();
+                        *slot.lock().unwrap() = Some(Ok(super::CroppedSnapshot {
+                            png: full_png,
+                            full_png: full_png_clone,
+                        }));
                     }
                     return Ok(());
                 })();
@@ -696,7 +716,7 @@ impl WebviewHost {
     pub fn take_snapshot(&self, slot: super::SnapshotSlot) {
         *slot.lock().unwrap() = Some(Err("Screenshots are only supported on macOS".to_string()));
     }
-    pub fn take_snapshot_cropped(&self, _rect: (f64, f64, f64, f64), slot: super::SnapshotSlot) {
+    pub fn take_snapshot_cropped(&self, _rect: (f64, f64, f64, f64), slot: super::CroppedSlot) {
         *slot.lock().unwrap() = Some(Err("Screenshots are only supported on macOS".to_string()));
     }
     pub fn open_devtools(&self) {}

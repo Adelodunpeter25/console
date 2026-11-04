@@ -539,7 +539,7 @@ impl ComposerView {
     }
 }
 impl RenderOnce for ComposerView {
-    fn render(self, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl gpui::IntoElement {
         let theme = Theme::current(cx);
         let run_state = self.run_state;
         let is_running = run_state.is_running();

@@ -577,7 +577,7 @@ impl BrowserView {
         let Some(host) = self.host.clone() else {
             return;
         };
-        let slot = crate::browser::host::SnapshotSlot::default();
+        let slot = crate::browser::host::CroppedSlot::default();
         host.take_snapshot_cropped(bounds, slot.clone());
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
@@ -586,14 +586,25 @@ impl BrowserView {
                 let done = slot.lock().unwrap().is_some();
                 if done {
                     let result = slot.lock().unwrap().take();
-                    if let Some(Ok(bytes)) = result {
+                    if let Some(Ok(captured)) = result {
                         use base64::Engine as _;
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                        let b64 =
+                            base64::engine::general_purpose::STANDARD.encode(&captured.png);
                         let _ = cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 // Only fill the popover that asked for it.
                                 if this.active_inspection.is_some() {
                                     this.annotation_screenshot = Some(b64);
+                                    // The same capture's full frame stands
+                                    // in as the cover, so the annotation
+                                    // popover needs no second snapshot.
+                                    let image = gpui::Image::from_bytes(
+                                        gpui::ImageFormat::Png,
+                                        captured.full_png,
+                                    );
+                                    this.snapshot = Some(Arc::new(image));
+                                    this.snapshot_pending = false;
+                                    this.apply_native_visibility();
                                     cx.notify();
                                 }
                             });
@@ -935,7 +946,11 @@ impl BrowserView {
                 self.snapshot_pending = false;
                 self.snapshot_epoch += 1;
             }
-        } else if occlusion_started && !self.snapshot_pending && self.snapshot.is_none() {
+        } else if occlusion_started
+            && !self.snapshot_pending
+            && self.snapshot.is_none()
+            && self.active_inspection.is_none()
+        {
             self.snapshot_pending = true;
             let epoch = self.snapshot_epoch;
             let slot = crate::browser::host::SnapshotSlot::default();
