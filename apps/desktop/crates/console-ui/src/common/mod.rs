@@ -29,7 +29,7 @@ pub use autocomplete::{
     AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,
     AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePrevious,
     AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
-    init as init_autocomplete_keybindings,
+    init as init_autocomplete_keybindings, slugify_chat_title,
 };
 pub use composer_pills::{TasksPill, composer_pills};
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};

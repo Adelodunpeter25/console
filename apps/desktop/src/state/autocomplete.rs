@@ -6,7 +6,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use console_core::{FileSearchResult, SlashCommandInfo};
+use console_core::{FileSearchResult, SessionHeader, SlashCommandInfo};
 use console_ui::{
     AutocompleteItem, AutocompleteTrigger, AutocompleteView, ComposerInput, detect_trigger,
     filter_items,
@@ -23,6 +23,8 @@ pub(crate) struct PaneAutocompleteState {
     files: Vec<FileSearchResult>,
     file_key: Option<(String, String, String)>,
     file_loading: bool,
+    chats: Vec<SessionHeader>,
+    chat_key: Option<String>,
     trigger: Option<AutocompleteTrigger>,
     highlighted: usize,
     dismissed: bool,
@@ -98,6 +100,13 @@ impl ConsoleDesktopApp {
         }
 
         let session_key = session_id.unwrap_or_default().to_owned();
+        // `$` chat refs need no backend round trip: the app already holds
+        // every session header, so the same-project siblings are a local
+        // filter (mirroring the server's ResolveReference scope).
+        if state.chat_key.as_deref() != Some(session_key.as_str()) {
+            state.chat_key = Some(session_key.clone());
+            state.chats = chat_ref_candidates(&self.sessions, session_id);
+        }
         let session_for_request = (!session_key.is_empty()).then(|| session_key.clone());
         let command_key = session_key.clone();
         let load_commands = if trigger.kind == console_ui::AutocompleteKind::Command
@@ -196,12 +205,13 @@ impl ConsoleDesktopApp {
             let loading = match trigger.kind {
                 console_ui::AutocompleteKind::Command => state.command_loading,
                 console_ui::AutocompleteKind::File => state.file_loading,
+                console_ui::AutocompleteKind::Chat => false,
             };
             // Borrow straight from state — cloning the whole files vec (potentially
             // thousands of FileSearchResult with paths) per frame was the hot path
             // for jank. `filter_items` caps to MAX_AUTOCOMPLETE_ITEMS and short-
             // circuits, so we only clone the ~80 that will be painted.
-            let items = filter_items(&state.commands, &state.files, &trigger);
+            let items = filter_items(&state.commands, &state.files, &state.chats, &trigger);
             (
                 state.highlighted,
                 state.anchor_bounds.clone(),
@@ -253,7 +263,7 @@ impl ConsoleDesktopApp {
         if state.dismissed {
             return;
         }
-        let items = filter_items(&state.commands, &state.files, &trigger);
+        let items = filter_items(&state.commands, &state.files, &state.chats, &trigger);
         if items.is_empty() {
             return;
         }
@@ -286,7 +296,7 @@ impl ConsoleDesktopApp {
         let Some(trigger) = state.trigger.clone() else {
             return;
         };
-        let items = filter_items(&state.commands, &state.files, &trigger);
+        let items = filter_items(&state.commands, &state.files, &state.chats, &trigger);
         let Some(item) = items
             .get(state.highlighted.min(items.len().saturating_sub(1)))
             .cloned()
@@ -345,6 +355,12 @@ impl ConsoleDesktopApp {
                 AutocompleteItem::Command(command) if !command.builtin => {
                     input.insert_skill_mention(range, &command.name, cx);
                 }
+                // `$` chat refs and built-in commands stay plain text: the
+                // server parses the ref out of the prompt itself.
+                AutocompleteItem::Chat(_) => {
+                    let insert = item.insert_text();
+                    input.replace_range(range, &insert, cx);
+                }
                 _ => {
                     let insert = item.insert_text();
                     input.replace_range(range, &insert, cx);
@@ -369,4 +385,27 @@ impl ConsoleDesktopApp {
             cx.notify();
         }
     }
+}
+
+/// Same-project siblings of the current chat, excluding the chat itself —
+/// the exact scope the server resolves `$` refs in (project first, cwd as
+/// the fallback). No current session means no scope, hence no candidates.
+fn chat_ref_candidates(all: &[SessionHeader], current_id: Option<&str>) -> Vec<SessionHeader> {
+    let Some(current) = current_id.and_then(|id| all.iter().find(|s| s.id == id)) else {
+        return Vec::new();
+    };
+    if let Some(project_id) = current.project_id.as_deref() {
+        return all
+            .iter()
+            .filter(|s| s.project_id.as_deref() == Some(project_id) && s.id != current.id)
+            .cloned()
+            .collect();
+    }
+    if current.cwd.is_empty() {
+        return Vec::new();
+    }
+    all.iter()
+        .filter(|s| s.cwd == current.cwd && s.id != current.id)
+        .cloned()
+        .collect()
 }

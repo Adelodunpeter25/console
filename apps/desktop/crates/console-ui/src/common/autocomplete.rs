@@ -4,7 +4,7 @@
 //! popup presentation. The desktop app owns the backend requests and keeps the
 //! results scoped to each workspace pane/session.
 
-use console_core::{FileSearchResult, SlashCommandInfo};
+use console_core::{FileSearchResult, SessionHeader, SlashCommandInfo};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -56,6 +56,7 @@ pub fn init(cx: &mut App) {
 pub enum AutocompleteKind {
     Command,
     File,
+    Chat,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,6 +72,7 @@ pub struct AutocompleteTrigger {
 pub enum AutocompleteItem {
     Command(SlashCommandInfo),
     File(FileSearchResult),
+    Chat(SessionHeader),
 }
 
 /// Comparable identity of an [`AutocompleteView`]'s content. See
@@ -98,6 +100,15 @@ impl AutocompleteItem {
                     &file.relative_path
                 };
                 format!("{} ", path)
+            }
+            Self::Chat(session) => {
+                let slug = slugify_chat_title(&session.title);
+                let slug = if slug.is_empty() {
+                    session.id.as_str()
+                } else {
+                    slug.as_str()
+                };
+                format!("${slug} ")
             }
         }
     }
@@ -140,6 +151,31 @@ pub fn detect_trigger(value: &str, cursor: usize) -> Option<AutocompleteTrigger>
         }
     }
 
+    // `$` chat references: same boundary rule as `/` (start, whitespace, or
+    // opening punctuation), slug/id characters only. Digit-only queries are
+    // prices, not refs — the server only treats a digit-led token as a ref
+    // when it looks like a session id.
+    if let Some(dollar) = before
+        .char_indices()
+        .rev()
+        .find_map(|(index, character)| (character == '$').then_some(index))
+    {
+        let previous = before[..dollar].chars().next_back();
+        let query = &value[dollar + 1..cursor];
+        let boundary = previous.is_none()
+            || previous.is_some_and(|c| c.is_whitespace() || "([{<\"'".contains(c));
+        if boundary
+            && query.chars().all(valid_ref_character)
+            && !(query.chars().all(|c| c.is_ascii_digit()) && !query.is_empty())
+        {
+            return Some(AutocompleteTrigger {
+                kind: AutocompleteKind::Chat,
+                range: dollar..cursor,
+                query: query.to_owned(),
+            });
+        }
+    }
+
     let at_start = before
         .char_indices()
         .rev()
@@ -163,6 +199,28 @@ fn valid_command_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | ':')
 }
 
+fn valid_ref_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || matches!(character, '_' | '-')
+}
+
+/// Chat-title slug, mirroring the server's SlugifyTitle: lowercase, every
+/// run of non-letters/digits collapsed to one '-', trimmed. A `$` ref typed
+/// from this slug resolves server-side against the chat's title.
+pub fn slugify_chat_title(title: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = true;
+    for character in title.to_lowercase().chars() {
+        if character.is_alphanumeric() {
+            out.push(character);
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    out.trim_matches('-').to_owned()
+}
+
 fn valid_file_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || matches!(character, '_' | '-' | '.' | '/')
 }
@@ -181,6 +239,7 @@ const MAX_AUTOCOMPLETE_ITEMS: usize = 80;
 pub fn filter_items(
     commands: &[SlashCommandInfo],
     files: &[FileSearchResult],
+    chats: &[SessionHeader],
     trigger: &AutocompleteTrigger,
 ) -> Vec<AutocompleteItem> {
     let query = trigger.query.to_ascii_lowercase();
@@ -207,6 +266,38 @@ pub fn filter_items(
                 }
             }
             out
+        }
+        AutocompleteKind::Chat => {
+            let mut scored: Vec<(u8, &SessionHeader)> = Vec::new();
+            for session in chats {
+                let slug = slugify_chat_title(&session.title);
+                let title = session.title.to_lowercase();
+                let id = session.id.to_lowercase();
+                let score = if query.is_empty() {
+                    Some(0)
+                } else if slug.starts_with(&query) {
+                    Some(3)
+                } else if id.starts_with(&query) {
+                    Some(2)
+                } else if title.starts_with(&query) {
+                    Some(1)
+                } else if slug.contains(&query) || title.contains(&query) {
+                    Some(0)
+                } else {
+                    None
+                };
+                if let Some(score) = score {
+                    scored.push((score, session));
+                    if scored.len() >= MAX_AUTOCOMPLETE_ITEMS {
+                        break;
+                    }
+                }
+            }
+            scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.title.cmp(&b.1.title)));
+            scored
+                .into_iter()
+                .map(|(_, session)| AutocompleteItem::Chat(session.clone()))
+                .collect()
         }
         AutocompleteKind::File => {
             if query.is_empty() {
@@ -280,6 +371,7 @@ impl AutocompleteView {
                         &file.relative_path
                     }
                 }
+                AutocompleteItem::Chat(session) => &session.id,
             };
             for byte in id.as_bytes() {
                 ids = ids.wrapping_mul(31).wrapping_add(*byte as u64);
@@ -422,6 +514,45 @@ impl RenderOnce for AutocompleteView {
                         )
                     })
                     .into_any_element(),
+                AutocompleteItem::Chat(session) => {
+                    let slug = slugify_chat_title(&session.title);
+                    let slug = if slug.is_empty() {
+                        session.id.as_str()
+                    } else {
+                        slug.as_str()
+                    };
+                    row.child(
+                        div()
+                            .text_size(px(13.0))
+                            .text_color(theme.text_tertiary)
+                            .flex_none()
+                            .child("$"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(if selected {
+                                theme.text
+                            } else {
+                                theme.text_secondary
+                            })
+                            .flex_none()
+                            .child(slug.to_owned()),
+                    )
+                    .when(!session.title.is_empty(), |el| {
+                        el.child(
+                            div()
+                                .min_w(px(0.0))
+                                .flex_1()
+                                .truncate()
+                                .text_size(px(12.0))
+                                .text_color(theme.text_tertiary)
+                                .child(session.title.clone()),
+                        )
+                    })
+                    .into_any_element()
+                }
                 AutocompleteItem::File(file) => row
                     .child(if file.is_dir {
                         app_icon(IconName::Folder, 13.0, theme.text_tertiary).into_any_element()

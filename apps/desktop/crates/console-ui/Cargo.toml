@@ -140,3 +140,7 @@ path = "tests/inspector/git_badges_test.rs"
 [[test]]
 name = "watch_streams_test"
 path = "tests/inspector/watch_streams_test.rs"
+
+[[test]]
+name = "chat_ref_autocomplete_test"
+path = "tests/composer/chat_ref_autocomplete_test.rs"
