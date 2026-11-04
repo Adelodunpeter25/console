@@ -134,9 +134,12 @@ func TestReadReferencedChatRendersWordsOnly(t *testing.T) {
 		{ID: "r1", Role: "toolResult", Data: []byte(`{"toolResult":{"results":[{"toolCallId":"c","content":"` + enc("SECRETWORD") + `"}]}}`)},
 	})
 
-	title, id, transcript, err := s.ReadReferencedChat(current.ID, "$fix-login-bug", 0)
+	title, id, transcript, next, err := s.ReadReferencedChat(current.ID, "$fix-login-bug", 0, 0)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if next != 0 {
+		t.Fatalf("nextCursor = %d, want 0 (whole transcript fits)", next)
 	}
 	if title != "Fix Login Bug" || id != target.ID {
 		t.Fatalf("got %q (%s)", title, id)
@@ -159,12 +162,48 @@ func TestReadReferencedChatLimit(t *testing.T) {
 		say("u2", "user", "second message"),
 		say("u3", "user", "third message"),
 	})
-	_, _, transcript, err := s.ReadReferencedChat(current.ID, target.ID, 2)
+	_, _, transcript, next, err := s.ReadReferencedChat(current.ID, target.ID, 2, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if next <= 0 {
+		t.Fatalf("nextCursor = %d, want > 0 with one message left", next)
+	}
 	if strings.Contains(transcript, "first message") || !strings.Contains(transcript, "third message") {
 		t.Fatalf("transcript = %q, want only the two most recent", transcript)
+	}
+}
+
+func TestReadReferencedChatPagesBackwards(t *testing.T) {
+	s, _ := partsStore(t)
+	current := refSession(t, s, "Current Chat", "p1")
+	target := refSession(t, s, "Fix Login Bug", "p1")
+	_ = s.AppendMessages(target.ID, []types.AgentMessage{
+		say("u1", "user", "first message"),
+		say("u2", "user", "second message"),
+		say("u3", "user", "third message"),
+	})
+	// Page 1: the two most recent, with a cursor to go further back.
+	_, _, newest, cursor, err := s.ReadReferencedChat(current.ID, target.ID, 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cursor <= 0 {
+		t.Fatalf("cursor = %d, want > 0 while earlier messages remain", cursor)
+	}
+	if strings.Contains(newest, "first message") || !strings.Contains(newest, "second message") {
+		t.Fatalf("page 1 = %q", newest)
+	}
+	// Page 2: everything before the cursor, and the walk ends there.
+	_, _, oldest, next, err := s.ReadReferencedChat(current.ID, target.ID, 2, cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next != 0 {
+		t.Fatalf("nextCursor = %d, want 0 at the start of the transcript", next)
+	}
+	if !strings.Contains(oldest, "first message") || strings.Contains(oldest, "second message") {
+		t.Fatalf("page 2 = %q", oldest)
 	}
 }
 

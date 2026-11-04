@@ -176,26 +176,35 @@ func (s *Service) ResolveReference(currentSessionID, ref string) (*types.Session
 // ReadReferencedChat resolves ref and renders the target chat's
 // transcript (user and assistant words only: thinking, tool output and
 // server-injected synthetic turns are never part of what people said).
-// It returns the most recent limit messages, oldest first.
-func (s *Service) ReadReferencedChat(currentSessionID, ref string, limit int) (title string, sessionID string, transcript string, err error) {
+// It returns the most recent limit messages, oldest first. before is the
+// nextCursor of a previous page (0 = start from the newest); nextCursor
+// is 0 when no earlier messages remain.
+func (s *Service) ReadReferencedChat(currentSessionID, ref string, limit int, before int64) (title string, sessionID string, transcript string, nextCursor int64, err error) {
 	if limit <= 0 {
 		limit = DefaultRefLimit
 	}
 	if limit > MaxRefLimit {
 		limit = MaxRefLimit
 	}
+	if before < 0 {
+		return "", "", "", 0, fmt.Errorf("before must be >= 0, got %d", before)
+	}
 	header, err := s.ResolveReference(currentSessionID, ref)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
-	loaded, err := s.Load(header.ID, int64(limit), 0)
+	loaded, err := s.Load(header.ID, int64(limit), before)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", 0, err
 	}
 	if loaded == nil {
-		return "", "", "", fmt.Errorf("chat %q (%s) not found", header.Title, header.ID)
+		return "", "", "", 0, fmt.Errorf("chat %q (%s) not found", header.Title, header.ID)
 	}
-	return header.Title, header.ID, renderTranscript(loaded.Messages), nil
+	cursor := int64(0)
+	if loaded.HasMore && loaded.NextCursor != nil {
+		cursor = *loaded.NextCursor
+	}
+	return header.Title, header.ID, renderTranscript(loaded.Messages), cursor, nil
 }
 
 // renderTranscript formats stored messages as "User: ...\nAssistant: ..."

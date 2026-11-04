@@ -14,13 +14,15 @@ import (
 type fakeChatReader struct {
 	title, id, transcript string
 	err                   error
+	nextCursor            int64
 	gotCurrent, gotRef    string
 	gotLimit              int
+	gotBefore             int64
 }
 
-func (f *fakeChatReader) ReadReferencedChat(current, ref string, limit int) (string, string, string, error) {
-	f.gotCurrent, f.gotRef, f.gotLimit = current, ref, limit
-	return f.title, f.id, f.transcript, f.err
+func (f *fakeChatReader) ReadReferencedChat(current, ref string, limit int, before int64) (string, string, string, int64, error) {
+	f.gotCurrent, f.gotRef, f.gotLimit, f.gotBefore = current, ref, limit, before
+	return f.title, f.id, f.transcript, f.nextCursor, f.err
 }
 
 func TestReadChatToolStripsDollarAndPassesLimit(t *testing.T) {
@@ -36,6 +38,22 @@ func TestReadChatToolStripsDollarAndPassesLimit(t *testing.T) {
 	}
 	if text := resultText(t, out); !strings.Contains(text, "Fix Login Bug") || !strings.Contains(text, "User: hi") {
 		t.Fatalf("output = %q", text)
+	}
+}
+
+func TestReadChatToolPagesWithBeforeCursor(t *testing.T) {
+	r := &fakeChatReader{title: "Fix Login Bug", id: "abc", transcript: "User: page one", nextCursor: 42}
+	tool := tools.NewReadChatTool("current-1", r)
+	out, err := tool.Execute(context.Background(), []byte(`{"ref":"fix-login-bug","limit":2,"before":99}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.gotBefore != 99 {
+		t.Fatalf("reader got before=%d, want 99", r.gotBefore)
+	}
+	text := resultText(t, out)
+	if !strings.Contains(text, "before=42") {
+		t.Fatalf("output lacks the next-page cursor: %q", text)
 	}
 }
 

@@ -11,15 +11,16 @@ import (
 )
 
 type readChatInput struct {
-	Ref   string `json:"ref" jsonschema:"required,description=Referenced chat: its $title-slug or full session id (leading $ optional)"`
-	Limit int    `json:"limit,omitempty" jsonschema:"description=Max messages to return, most recent first (default 50, max 200)"`
+	Ref    string `json:"ref" jsonschema:"required,description=Referenced chat: its $title-slug or full session id (leading $ optional)"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"description=Max messages to return, most recent first (default 50, max 200)"`
+	Before int64  `json:"before,omitempty" jsonschema:"description=Cursor from a previous read_chat result; pass it back to read the next older page (omit for the most recent)"`
 }
 
 // ChatReader is the persistence seam the tool reads through — satisfied
 // by *services.SessionService (kept as an interface here to avoid tools
 // depending on the concrete session storage implementation).
 type ChatReader interface {
-	ReadReferencedChat(currentSessionID, ref string, limit int) (title string, sessionID string, transcript string, err error)
+	ReadReferencedChat(currentSessionID, ref string, limit int, before int64) (title string, sessionID string, transcript string, nextCursor int64, err error)
 }
 
 // NewReadChatTool builds read_chat bound to the current session, so a
@@ -27,7 +28,7 @@ type ChatReader interface {
 // A nil reader reports unavailable (the run service always wires one).
 func NewReadChatTool(currentSessionID string, reader ChatReader) Tool {
 	return NewTool("read_chat",
-		"Read the transcript of another chat in this project, named by a $reference ($title-slug or $<session-id>) the user wrote. Returns the most recent user/assistant messages; thinking and tool output are excluded. Only chats from the same project as this one can be read, and never this chat itself.",
+		"Read the transcript of another chat in this project, named by a $reference ($title-slug or $<session-id>) the user wrote. Returns the most recent user/assistant messages; thinking and tool output are excluded. Only chats from the same project as this one can be read, and never this chat itself. When more messages exist before this page, the result ends with a before cursor: pass it back as `before` to read the next older page.",
 		TierRead,
 		func(ctx context.Context, in readChatInput) (any, error) {
 			if reader == nil {
@@ -37,13 +38,20 @@ func NewReadChatTool(currentSessionID string, reader ChatReader) Tool {
 			if ref == "" {
 				return nil, NewToolError("'ref' is required: a $title-slug or session id.")
 			}
-			title, id, transcript, err := reader.ReadReferencedChat(currentSessionID, ref, in.Limit)
+			if in.Before < 0 {
+				return nil, NewToolError("'before' must be >= 0.")
+			}
+			title, id, transcript, nextCursor, err := reader.ReadReferencedChat(currentSessionID, ref, in.Limit, in.Before)
 			if err != nil {
 				return nil, NewToolError("%s", err.Error())
 			}
 			if strings.TrimSpace(transcript) == "" {
 				return textResult(fmt.Sprintf("Chat %q (%s):\n(No messages yet)", title, id)), nil
 			}
-			return textResult(fmt.Sprintf("Chat %q (%s):\n\n%s", title, id, transcript)), nil
+			out := fmt.Sprintf("Chat %q (%s):\n\n%s", title, id, transcript)
+			if nextCursor > 0 {
+				out += fmt.Sprintf("\n\n[earlier messages exist — call read_chat again with before=%d to read the next older page]", nextCursor)
+			}
+			return textResult(out), nil
 		})
 }

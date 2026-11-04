@@ -202,8 +202,8 @@ func (s *SessionService) ResolveReference(currentSessionID, ref string) (*types.
 	return s.inner.ResolveReference(currentSessionID, ref)
 }
 
-func (s *SessionService) ReadReferencedChat(currentSessionID, ref string, limit int) (string, string, string, error) {
-	return s.inner.ReadReferencedChat(currentSessionID, ref, limit)
+func (s *SessionService) ReadReferencedChat(currentSessionID, ref string, limit int, before int64) (string, string, string, int64, error) {
+	return s.inner.ReadReferencedChat(currentSessionID, ref, limit, before)
 }
 
 // SoftDelete marks a session deleted (unconditional, idempotent success for
