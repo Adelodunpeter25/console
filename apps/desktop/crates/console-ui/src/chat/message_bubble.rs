@@ -23,25 +23,75 @@ use gpui::{
     px,
 };
 
+/// Find the next `pasted <N> lines` label (the friendly text a large-paste
+/// mention writes into the prompt) bounded by whitespace. Returns its
+/// byte range within `remaining`.
+pub(crate) fn find_paste_label(remaining: &str) -> Option<(usize, usize)> {
+    const PREFIX: &str = "pasted ";
+    let mut from = 0;
+    loop {
+        let rel = remaining[from..].find(PREFIX)?;
+        let start = from + rel;
+        let before_ok = start == 0
+            || remaining[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_whitespace());
+        let mut end = start + PREFIX.len();
+        let digits = remaining[end..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ',')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+        end += digits;
+        if before_ok
+            && digits > 0
+            && remaining[end..].starts_with(" lines")
+            && (end + " lines".len() >= remaining.len()
+                || remaining[end + " lines".len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_whitespace()))
+        {
+            return Some((start, end + " lines".len()));
+        }
+        from = start + PREFIX.len();
+    }
+}
+
+/// A pasted upload's context file lives under the server's pastes dir
+/// (`.../pastes/<session>/pasted-<ts>-<rand>.log|.txt`).
+fn is_paste_path(path: &str) -> bool {
+    path.contains("/pastes/") || Path::new(path).file_name().is_some_and(|n| {
+        n.to_str().is_some_and(|name| name.starts_with("pasted-"))
+    })
+}
+
 /// Keep the message as one flat string and return the ranges that should be
 /// painted as file mentions. Separate flex children cannot wrap text around a
 /// pill like the composer does.
-fn message_text_with_mentions(
+pub(crate) fn message_text_with_mentions(
     content: &str,
     context_files: &[String],
 ) -> (String, Vec<InlineFileMention>) {
-    // Build (label, path) pairs.
-    let pills: Vec<(String, String)> = context_files
-        .iter()
-        .map(|path| {
+    // Build (label, path) pairs. Pastes are kept apart: their friendly
+    // composer text is `pasted <N> lines`, which never matches the
+    // basename, so they are detected by pattern and mapped in order.
+    let mut pills: Vec<(String, String)> = Vec::new();
+    let mut paste_paths: Vec<String> = Vec::new();
+    for path in context_files {
+        if is_paste_path(path) {
+            paste_paths.push(path.clone());
+        } else {
             let label = Path::new(path)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or(path)
                 .to_string();
-            (label, path.clone())
-        })
-        .collect();
+            pills.push((label, path.clone()));
+        }
+    }
+    let mut next_paste = 0;
 
     let mut text = String::new();
     let mut mentions = Vec::new();
@@ -50,6 +100,10 @@ fn message_text_with_mentions(
     while !remaining.is_empty() {
         // Find the earliest label-or-path occurrence among all pills.
         let mut earliest: Option<(usize, usize, usize)> = None; // (match_start, match_end, pill_idx)
+        let mut earliest_paste: Option<(usize, usize)> = None;
+        if next_paste < paste_paths.len() {
+            earliest_paste = find_paste_label(remaining);
+        }
         for (pill_idx, (label, path)) in pills.iter().enumerate() {
             for needle in [label.as_str(), path.as_str()] {
                 if needle.is_empty() {
@@ -86,6 +140,41 @@ fn message_text_with_mentions(
                     break;
                 }
             }
+        }
+
+        // A paste label only wins if it starts before the earliest pill.
+        if let Some((pstart, pend)) = earliest_paste
+            && earliest.is_none_or(|(start, _, _)| pstart < start)
+        {
+            if pstart > 0 {
+                let prefix = &remaining[..pstart];
+                if prefix.chars().all(char::is_whitespace) && text.is_empty() {
+                } else if prefix.ends_with(|c: char| c.is_whitespace()) {
+                    let trimmed = prefix.trim_end_matches(' ');
+                    text.push_str(trimmed);
+                    if !text.is_empty() && !text.ends_with('\n') {
+                        text.push(' ');
+                    }
+                } else {
+                    text.push_str(prefix);
+                }
+            }
+            let label = &remaining[pstart..pend];
+            let mention_start = text.len();
+            text.push_str(label);
+            mentions.push(InlineFileMention {
+                range: mention_start..text.len(),
+                path: paste_paths[next_paste].clone(),
+            });
+            next_paste += 1;
+            remaining = &remaining[pend..];
+            if remaining.starts_with("  ") {
+                remaining = remaining.trim_start_matches(' ');
+                if !remaining.is_empty() {
+                    text.push(' ');
+                }
+            }
+            continue;
         }
 
         match earliest {
