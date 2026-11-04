@@ -469,13 +469,15 @@ mod macos_host {
             }
         }
 
-        /// Full-page snapshot used as spatial context for an annotation.
-        /// Bounds travel in the structured details, so the image needs no
-        /// native crop: `setRect:` proved brittle (selector/encoding crash
-        /// + Retina point-vs-pixel offset showing the wrong area).
+        /// Cropped PNG of one element: full snapshot, then crop the picked
+        /// rect in Rust with the `image` crate. Inspector bounds are CSS
+        /// pixels with a viewport top-left origin and the PNG shares that
+        /// origin, so no Y-flip applies here. Falls back to the full PNG
+        /// on any error or an empty rect. `setRect:` native cropping was
+        /// removed earlier (selector crash + point-vs-pixel offset).
         pub fn take_snapshot_cropped(
             &self,
-            _rect: (f64, f64, f64, f64),
+            rect: (f64, f64, f64, f64),
             slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
         ) {
             use block2::RcBlock;
@@ -483,6 +485,8 @@ mod macos_host {
             use objc2_foundation::{NSDictionary, NSError};
             use objc2_web_kit::WKSnapshotConfiguration;
 
+            let (x, y, w, h) = rect;
+            let view_w = self.wk.frame().size.width;
             let slot_for_error = slot.clone();
             let handler = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
                 let result = (|| {
@@ -499,11 +503,40 @@ mod macos_host {
                     let rep = NSBitmapImageRep::imageRepWithData(&tiff)
                         .ok_or_else(|| "Could not decode snapshot bitmap".to_string())?;
                     let props = NSDictionary::new();
-                    let png = unsafe {
+                    let full_png = unsafe {
                         rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props)
                     }
-                    .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?;
-                    Ok(png.to_vec())
+                    .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?
+                    .to_vec();
+                    let png = if w > 0.0 && h > 0.0 {
+                        match image::load_from_memory(&full_png) {
+                            Ok(img) => {
+                                let (pw, ph) = (img.width(), img.height());
+                                let scale = if view_w > 0.0 {
+                                    pw as f64 / view_w
+                                } else {
+                                    1.0
+                                };
+                                let cx0 = (x * scale).round().clamp(0.0, pw as f64) as u32;
+                                let cy0 = (y * scale).round().clamp(0.0, ph as f64) as u32;
+                                let cw = (w * scale).round().max(1.0).min((pw.saturating_sub(cx0)) as f64) as u32;
+                                let ch = (h * scale).round().max(1.0).min((ph.saturating_sub(cy0)) as f64) as u32;
+                                if cw > 0 && ch > 0 {
+                                    let cropped = img.crop_imm(cx0, cy0, cw, ch);
+                                    let mut buf = Vec::new();
+                                    cropped.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+                                        .map_err(|e| format!("Could not encode cropped snapshot: {e}"))?;
+                                    buf
+                                } else {
+                                    full_png
+                                }
+                            }
+                            Err(_) => full_png,
+                        }
+                    } else {
+                        full_png
+                    };
+                    Ok(png)
                 })();
                 *slot.borrow_mut() = Some(result);
             });
@@ -513,11 +546,7 @@ mod macos_host {
                 return;
             };
             unsafe {
-                use objc2::runtime::NSObjectProtocol;
                 let config = WKSnapshotConfiguration::new(mtm);
-                if config.respondsToSelector(objc2::runtime::Sel::register(c"setMaxWidth:")) {
-                    let _: () = objc2::msg_send![&config, setMaxWidth: 800.0];
-                }
                 self.wk
                     .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
             }

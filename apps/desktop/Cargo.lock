@@ -1370,6 +1370,7 @@ dependencies = [
  "gpui-component",
  "gpui_macros",
  "gpui_platform",
+ "image",
  "imagesize 0.14.0",
  "log",
  "objc2 0.6.4",
