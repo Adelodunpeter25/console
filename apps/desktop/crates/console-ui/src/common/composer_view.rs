@@ -439,7 +439,7 @@ impl ComposerView {
 }
 
 impl RenderOnce for ComposerView {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
         let theme = Theme::current(cx);
         let run_state = self.run_state;
         let is_running = run_state.is_running();
@@ -543,6 +543,69 @@ impl RenderOnce for ComposerView {
         let on_autocomplete_dismiss = self.on_autocomplete_dismiss.clone();
         let on_pick = self.on_pick_image.clone();
         let on_drop_files = self.on_drop_files.clone();
+
+        // Over a file/diff the composer rests as a one-line bar and grows to
+        // the full card once it is focused or has something staged.
+        if floating
+            && !focused
+            && !has_draft
+            && !autocomplete_open
+            && matches!(run_state, ComposerRunState::Ready)
+        {
+            let focus = self.composer_input.read(cx).focus();
+            let placeholder = self.composer_input.read(cx).placeholder.clone();
+            return div()
+                .id("composer-wrapper")
+                .w_full()
+                .px(px(24.0))
+                .pt(px(12.0))
+                .pb(px(18.0))
+                .flex()
+                .flex_col()
+                .items_center()
+                .child(
+                    div()
+                        .id("composer-compact")
+                        .w_full()
+                        .max_w(px(768.0))
+                        .h(px(48.0))
+                        .px(px(14.0))
+                        .rounded(px(13.0))
+                        .bg(theme.composer)
+                        .border_1()
+                        .border_color(theme.border_strong)
+                        .shadow_lg()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.0))
+                        .cursor_text()
+                        .on_click(move |_, window, cx| window.focus(&focus, cx))
+                        .child(
+                            div()
+                                .flex_1()
+                                .text_size(px(14.0))
+                                .text_color(theme.text_ghost)
+                                .child(placeholder),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(theme.text_ghost)
+                                .child("\u{2318}L to focus"),
+                        )
+                        .child(
+                            div()
+                                .size(px(26.0))
+                                .rounded_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .bg(theme.overlay_strong)
+                                .child(app_icon(IconName::ArrowUp, 15.0, theme.text_ghost)),
+                        ),
+                )
+                .into_any_element();
+        }
 
         div()
             .id("composer-wrapper")
@@ -770,5 +833,6 @@ impl RenderOnce for ComposerView {
                         element.child(autocomplete)
                     }),
             )
+            .into_any_element()
     }
 }

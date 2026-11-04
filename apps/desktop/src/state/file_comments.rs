@@ -149,8 +149,10 @@ impl ConsoleDesktopApp {
         let subscription = cx.subscribe(
             &input,
             move |this, _input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(_, _) => {
-                    this.commit_file_comment(&submit_pane, submit_id, cx)
+                // `submit()` clears the field right after emitting, and the event
+                // is delivered after that, so the text must come from the event.
+                ComposerEvent::Submit(text, _) => {
+                    this.commit_file_comment_text(&submit_pane, submit_id, text.clone(), cx)
                 }
                 ComposerEvent::Edited | ComposerEvent::Focus => cx.notify(),
                 _ => {}
@@ -192,6 +194,22 @@ impl ConsoleDesktopApp {
         comment_id: u64,
         cx: &mut Context<Self>,
     ) {
+        let text = self
+            .workspace_pane_states
+            .get(pane_id)
+            .and_then(|pane| pane.file_comments.iter().find(|c| c.id == comment_id))
+            .map(|comment| comment.input.read(cx).content().to_string())
+            .unwrap_or_default();
+        self.commit_file_comment_text(pane_id, comment_id, text, cx);
+    }
+
+    fn commit_file_comment_text(
+        &mut self,
+        pane_id: &str,
+        comment_id: u64,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
         let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
             return;
         };
@@ -202,7 +220,7 @@ impl ConsoleDesktopApp {
         else {
             return;
         };
-        let text = comment.input.read(cx).content().trim().to_owned();
+        let text = text.trim().to_owned();
         if text.is_empty() {
             return;
         }
