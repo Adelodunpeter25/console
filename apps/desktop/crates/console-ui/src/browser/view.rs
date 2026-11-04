@@ -110,6 +110,9 @@ pub struct BrowserView {
     /// Refocus the page itself on the next render after an Attach, so the
     /// next element pick works without an extra click.
     refocus_page_pending: bool,
+    /// The element screenshot failed; the popover shows this instead of
+    /// silently staging a text-only annotation.
+    annotation_capture_failed: bool,
     /// Last synced page-area size, for clamping the popover. Updated from
     /// the canvas in `render_page_area`.
     surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
@@ -261,6 +264,7 @@ impl BrowserView {
             annotation_screenshot: None,
             annotation_focus_pending: false,
             refocus_page_pending: false,
+            annotation_capture_failed: false,
             surface_size: std::rc::Rc::new(std::cell::Cell::new(None)),
             annotation_handler: None,
             script_results: HashMap::new(),
@@ -432,6 +436,7 @@ impl BrowserView {
                     );
                     self.active_inspection = Some(inspection);
                     self.annotation_screenshot = None;
+                    self.annotation_capture_failed = false;
                     self.annotation_focus_pending = true;
                     self.annotation_input.update(cx, |input, cx| {
                         input.clear(cx);
@@ -512,7 +517,9 @@ impl BrowserView {
             return;
         };
         let trimmed = comment.trim().to_string();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || self.annotation_screenshot.is_none() {
+            // The screenshot has not landed yet (or failed): keep the
+            // popover open rather than staging a text-only annotation.
             self.active_inspection = Some(inspection);
             return;
         }
@@ -586,11 +593,21 @@ impl BrowserView {
         host.take_snapshot_cropped(bounds, slot.clone());
         let view = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
-            for _ in 0..20 {
+            for _ in 0..100 {
                 cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
                 let done = slot.lock().unwrap().is_some();
                 if done {
                     let result = slot.lock().unwrap().take();
+                    if matches!(result, Some(Err(_))) {
+                        let _ = cx.update(|cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                if this.active_inspection.is_some() {
+                                    this.annotation_capture_failed = true;
+                                    cx.notify();
+                                }
+                            });
+                        });
+                    }
                     if let Some(Ok(captured)) = result {
                         use base64::Engine as _;
                         let b64 =
@@ -1654,11 +1671,21 @@ impl BrowserView {
                             .px(px(10.0))
                             .py(px(5.0))
                             .rounded(px(6.0))
-                            .bg(theme.accent)
+                            .bg(if self.annotation_screenshot.is_some() {
+                                theme.accent
+                            } else {
+                                theme.text_tertiary
+                            })
                             .text_size(px(12.0))
                             .text_color(theme.on_inverse)
                             .cursor_default()
-                            .hover(|s| s.opacity(0.9))
+                            .hover(|s| {
+                                if self.annotation_screenshot.is_some() {
+                                    s.opacity(0.9)
+                                } else {
+                                    s
+                                }
+                            })
                             .on_mouse_down(
                                 MouseButton::Left,
                                 move |_, _, cx| {
@@ -1674,7 +1701,13 @@ impl BrowserView {
                                     }
                                 },
                             )
-                            .child("Attach to Chat"),
+                            .child(if self.annotation_screenshot.is_some() {
+                                "Attach to Chat"
+                            } else if self.annotation_capture_failed {
+                                "Capture failed — Esc"
+                            } else {
+                                "Capturing…"
+                            }),
                     ),
             );
         Some(popover.into_any_element())
