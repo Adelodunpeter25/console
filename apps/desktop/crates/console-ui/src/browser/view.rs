@@ -96,7 +96,7 @@ pub struct BrowserView {
     /// through it, so a navigation or load event on an inactive tab can never
     /// re-show the native view above other content (e.g. the chat).
     surface_visible: bool,
-    snapshot: Option<Arc<gpui::RenderImage>>,
+    snapshot: Option<Arc<gpui::Image>>,
     snapshot_pending: bool,
     snapshot_epoch: u64,
     inspecting: bool,
@@ -921,20 +921,60 @@ impl BrowserView {
         occluded: bool,
         cx: &mut Context<Self>,
     ) {
-        let _occlusion_started = occluded && !self.occluded;
+        let occlusion_started = occluded && !self.occluded;
         self.occluded = occluded;
-        // Recorded even without a host yet, so a host created later (see
-        // `ensure_host`) starts from the right state.
         self.surface_visible = surface_visible;
 
         let Some(host) = self.host.clone() else {
             return;
         };
 
-        if !occluded && (self.snapshot.is_some() || self.snapshot_pending) {
-            self.snapshot = None;
-            self.snapshot_pending = false;
-            self.snapshot_epoch += 1;
+        if !occluded {
+            if self.snapshot.is_some() || self.snapshot_pending {
+                self.snapshot = None;
+                self.snapshot_pending = false;
+                self.snapshot_epoch += 1;
+            }
+        } else if occlusion_started && !self.snapshot_pending && self.snapshot.is_none() {
+            self.snapshot_pending = true;
+            let epoch = self.snapshot_epoch;
+            let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+            host.take_snapshot(slot.clone());
+            let view = cx.entity().downgrade();
+            cx.spawn(async move |_, cx| {
+                for _ in 0..30 {
+                    cx.background_executor().timer(std::time::Duration::from_millis(50)).await;
+                    if slot.borrow().is_some() {
+                        let result = slot.borrow_mut().take();
+                        if let Some(Ok(bytes)) = result {
+                            let image = std::sync::Arc::new(gpui::Image::from_bytes(
+                                gpui::ImageFormat::Png,
+                                bytes,
+                            ));
+                            let _ = cx.update(|cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    if this.snapshot_epoch == epoch && this.occluded {
+                                        this.snapshot = Some(image);
+                                        this.snapshot_pending = false;
+                                        cx.notify();
+                                    }
+                                });
+                            });
+                        } else {
+                            let _ = cx.update(|cx| {
+                                let _ = view.update(cx, |this, cx| {
+                                    if this.snapshot_epoch == epoch {
+                                        this.snapshot_pending = false;
+                                        cx.notify();
+                                    }
+                                });
+                            });
+                        }
+                        break;
+                    }
+                }
+            })
+            .detach();
         }
 
         let show = self.should_show();

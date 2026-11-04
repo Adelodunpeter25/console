@@ -469,20 +469,20 @@ mod macos_host {
             }
         }
 
-        /// Capture a single element's bounds as PNG, cropped natively by
-        /// `WKSnapshotConfiguration.rect`. Falls back to a full-page snapshot
-        /// when the rect configuration is unavailable.
+        /// Full-page snapshot used as spatial context for an annotation.
+        /// Bounds travel in the structured details, so the image needs no
+        /// native crop: `setRect:` proved brittle (selector/encoding crash
+        /// + Retina point-vs-pixel offset showing the wrong area).
         pub fn take_snapshot_cropped(
             &self,
-            rect: (f64, f64, f64, f64),
+            _rect: (f64, f64, f64, f64),
             slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
         ) {
             use block2::RcBlock;
             use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
-            use objc2_foundation::{NSDictionary, NSError, NSPoint, NSRect, NSSize};
+            use objc2_foundation::{NSDictionary, NSError};
             use objc2_web_kit::WKSnapshotConfiguration;
 
-            let (x, y, w, h) = rect;
             let slot_for_error = slot.clone();
             let handler = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
                 let result = (|| {
@@ -515,18 +515,8 @@ mod macos_host {
             unsafe {
                 use objc2::runtime::NSObjectProtocol;
                 let config = WKSnapshotConfiguration::new(mtm);
-                let webview_h = self.wk.frame().size.height;
-                let flipped_y = webview_h - y - h;
-                let ns_rect = NSRect {
-                    origin: NSPoint { x, y: flipped_y },
-                    size: NSSize { width: w, height: h },
-                };
-                if config.respondsToSelector(objc2::runtime::Sel::register(c"setRect:")) {
-                    let _: () = objc2::msg_send![&config, setRect: ns_rect];
-                }
                 if config.respondsToSelector(objc2::runtime::Sel::register(c"setMaxWidth:")) {
-                    let capped_w = w.min(400.0).max(1.0);
-                    let _: () = objc2::msg_send![&config, setMaxWidth: capped_w];
+                    let _: () = objc2::msg_send![&config, setMaxWidth: 800.0];
                 }
                 self.wk
                     .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
