@@ -239,9 +239,34 @@ impl RenderOnce for UserMessageBubble {
 
         let preview_handler = self.on_preview_image.clone();
 
+        // Staged file comments ride the prompt as tagged blocks; show them as
+        // chips like mentions instead of dumping the raw markup in the bubble.
+        let (body_text, file_comments) =
+            console_shared::composer::file_comments::split_file_comments(&self.content);
         let (message_text, mentions) =
-            message_text_with_mentions(&self.content, &self.context_files);
+            message_text_with_mentions(&body_text, &self.context_files);
         let has_content = !message_text.is_empty();
+        let comment_chips = (!file_comments.is_empty()).then(|| {
+            div()
+                .max_w(px(540.0))
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .justify_end()
+                .gap(px(6.0))
+                .children(file_comments.iter().map(|comment| {
+                    let name = Path::new(&comment.path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&comment.path);
+                    let lines = comment.lines.replace('–', "-");
+                    crate::common::file_mention_chip(
+                        &comment.path,
+                        format!("{name} +{lines}"),
+                        theme,
+                    )
+                }))
+        });
         // The bubble's text joins the transcript's selection registry, so
         // prompts are highlightable (and citable) like assistant replies.
         let message_text_element = match &self.selection {
@@ -320,6 +345,7 @@ impl RenderOnce for UserMessageBubble {
                                 )),
                         )
                     })
+                    .when_some(comment_chips, |element, chips| element.child(chips))
                     .when(has_content, |element| {
                         element.child(
                             div()

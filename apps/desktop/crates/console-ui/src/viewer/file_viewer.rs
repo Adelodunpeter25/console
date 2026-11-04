@@ -11,6 +11,11 @@ use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, RenderOnce, Styl
 /// the viewport. Cards are clamped above this line so they stay reachable.
 const FILE_COMMENT_CARD_ESTIMATE: f32 = 150.0;
 
+/// How far above the viewport a card's anchor may sit before the card is
+/// dropped. The viewer clips overflow, so a card straddling the top edge keeps
+/// scrolling out smoothly until it is fully gone.
+const FILE_COMMENT_CARD_HIDE_ABOVE: f32 = FILE_COMMENT_CARD_ESTIMATE;
+
 /// One host-rendered comment card plus the 1-based range it belongs under.
 pub struct FileCommentOverlay {
     pub start_line: u32,
@@ -75,12 +80,24 @@ impl RenderOnce for FileViewer {
                 let anchor = anchor?;
                 let raw_top =
                     anchor.top_padding + anchor.line_height * anchor.row_after as f32 + anchor.scroll_y;
+                // Cards ride scrolling: once the range they hang under has
+                // scrolled out of view (above, or below the fold) the card is
+                // dropped instead of being pinned to the viewport edge.
+                if anchor.viewport_height > px(0.0) {
+                    if raw_top < px(-FILE_COMMENT_CARD_HIDE_ABOVE)
+                        || raw_top >= anchor.viewport_height
+                    {
+                        return None;
+                    }
+                } else if raw_top < px(-FILE_COMMENT_CARD_HIDE_ABOVE) {
+                    return None;
+                }
                 let top = if anchor.viewport_height > px(0.0) {
                     let max_top = (anchor.viewport_height - px(FILE_COMMENT_CARD_ESTIMATE))
                         .max(px(0.0));
-                    raw_top.max(px(0.0)).min(max_top)
+                    raw_top.min(max_top)
                 } else {
-                    raw_top.max(px(0.0))
+                    raw_top
                 };
                 Some(
                     div()

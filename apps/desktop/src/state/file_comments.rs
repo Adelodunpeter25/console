@@ -156,7 +156,6 @@ impl ConsoleDesktopApp {
                 _ => {}
             },
         );
-        self._subscriptions.push(subscription);
 
         let Some(pane) = self.workspace_pane_states.get_mut(&pane_id) else {
             return;
@@ -174,6 +173,7 @@ impl ConsoleDesktopApp {
             input,
             state: FileCommentState::Draft,
             focus_pending: true,
+            _subscription: subscription,
         });
 
         self.sync_comment_selections(&pane_id, &request.path, cx);
@@ -359,22 +359,54 @@ impl ConsoleDesktopApp {
             }
             let path = self.comment_display_path(pane_id, &comment.path);
             let lines = Self::comment_lines(comment.start_line, comment.end_line);
-            blocks.push(format!("{path}:{lines}\n{text}"));
+            blocks.push(console_shared::composer::file_comments::format_file_comment(
+                &path, &lines, text,
+            ));
         }
         blocks.join("\n\n")
     }
 
-    /// Merge the typed prompt with any staged comments. Comments sit after the
-    /// user's text so the instruction reads first and the file references
-    /// follow.
-    pub(crate) fn prompt_with_staged_comments(&self, pane_id: &str, prompt: &str) -> String {
+    /// Merge the typed prompt with any staged comments and consume them, the
+    /// way a send consumes mentions. Comments sit after the user's text so the
+    /// instruction reads first. Nothing is consumed when the result is empty.
+    pub(crate) fn prompt_with_staged_comments(
+        &mut self,
+        pane_id: &str,
+        prompt: &str,
+        cx: &mut Context<Self>,
+    ) -> String {
         let comments = self.staged_comment_prompt(pane_id);
         let prompt = prompt.trim();
-        match (prompt.is_empty(), comments.is_empty()) {
-            (true, _) => comments,
+        let merged = match (prompt.is_empty(), comments.is_empty()) {
+            (true, _) => comments.clone(),
             (_, true) => prompt.to_string(),
             _ => format!("{prompt}\n\n{comments}"),
+        };
+        if !comments.is_empty() && !merged.trim().is_empty() {
+            self.clear_staged_comments(pane_id, cx);
         }
+        merged
+    }
+
+    /// Drop every committed comment after it has been sent. Drafts stay.
+    fn clear_staged_comments(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        let Some(pane) = self.workspace_pane_states.get_mut(pane_id) else {
+            return;
+        };
+        let mut paths = Vec::new();
+        pane.file_comments.retain(|comment| {
+            if comment.state == FileCommentState::Draft {
+                return true;
+            }
+            if !paths.contains(&comment.path) {
+                paths.push(comment.path.clone());
+            }
+            false
+        });
+        for path in paths {
+            self.sync_comment_selections(pane_id, &path, cx);
+        }
+        cx.notify();
     }
 
     /// Chips above the pane composer's input. Only committed comments appear;

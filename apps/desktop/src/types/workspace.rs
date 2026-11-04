@@ -24,6 +24,9 @@ pub(crate) struct FileComment {
     pub(crate) state: FileCommentState,
     /// Focus the input on the next frame (new draft or Edit clicked).
     pub(crate) focus_pending: bool,
+    /// Owned by the comment so removing it also drops the input subscription
+    /// instead of leaking one per comment into the app-wide list.
+    pub(crate) _subscription: gpui::Subscription,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

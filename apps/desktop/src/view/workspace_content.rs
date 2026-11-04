@@ -1145,7 +1145,7 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
-                            let prompt = this.prompt_with_staged_comments(&pane_id, &prompt);
+                            let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                             let context_files = console_shared::composer::mentions::context_file_paths(
                                 this.composer_for_pane(&pane_id).read(cx).mentions(),
@@ -1231,7 +1231,7 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
-                        let prompt = this.prompt_with_staged_comments(&pane_id, &prompt);
+                        let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                         let context_files = console_shared::composer::mentions::context_file_paths(
                             this.composer_for_pane(&pane_id).read(cx).mentions(),

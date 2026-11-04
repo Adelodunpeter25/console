@@ -136,7 +136,7 @@ impl ConsoleDesktopApp {
             move |this, input, event: &ComposerEvent, cx| match event {
                 ComposerEvent::Submit(prompt, context_files) => {
                     let context_files = context_files.clone();
-                    let prompt = this.prompt_with_staged_comments(&submit_pane_id, prompt);
+                    let prompt = this.prompt_with_staged_comments(&submit_pane_id, prompt, cx);
                     if prompt.trim().is_empty() {
                         return;
                     }
@@ -157,9 +157,10 @@ impl ConsoleDesktopApp {
                     this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
                 }
                 ComposerEvent::SubmitSteer(prompt, context_files) => {
+                    let prompt = this.prompt_with_staged_comments(&steer_pane_id, prompt, cx);
                     this.submit_steer_for_pane(
                         steer_pane_id.clone(),
-                        prompt.clone(),
+                        prompt,
                         context_files.clone(),
                         cx,
                     );
