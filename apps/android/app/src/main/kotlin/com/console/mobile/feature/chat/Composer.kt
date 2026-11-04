@@ -56,8 +56,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.core.util.ComposerTrigger
 import com.console.mobile.core.util.detectComposerTrigger
+import com.console.mobile.core.util.filterChatRefs
 import com.console.mobile.core.util.parseFileMentions
+import com.console.mobile.core.util.slugifyChatTitle
 import console.v1.FileSearchResult
+import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.BlurredBottomBar
@@ -140,6 +143,10 @@ fun Composer(
             slashCommands = AppContainer.assistRepository.listSlashCommands(sessionId)
         }
     }
+    var chatRefSessions by remember(sessionId) { mutableStateOf<List<SessionHeader>>(emptyList()) }
+    LaunchedEffect(sessionId) {
+        chatRefSessions = AppContainer.assistRepository.listChatRefs(sessionId)
+    }
     var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
     LaunchedEffect(trigger) {
         val t = trigger
@@ -157,6 +164,11 @@ fun Composer(
         val newText = current.substring(0, replaceFrom) + insert + current.substring(cursor)
         fieldValue = TextFieldValue(text = newText, selection = TextRange(replaceFrom + insert.length))
         onChange(newText)
+    }
+
+    fun applyChatSuggestion(session: SessionHeader, replaceFrom: Int) {
+        val slug = slugifyChatTitle(session.title ?: "").ifBlank { session.id }
+        applySuggestion("\$$slug ", replaceFrom)
     }
 
     fun applyFileSuggestion(file: console.v1.FileSearchResult, replaceFrom: Int) {
@@ -363,6 +375,18 @@ fun Composer(
                             items.take(20).forEach { cmd ->
                                 SlashCommandSuggestionRow(command = cmd) {
                                     applySkillSuggestion(cmd, t.start)
+                                }
+                            }
+                        }
+                    }
+                }
+                is ComposerTrigger.Chat -> {
+                    val items = filterChatRefs(chatRefSessions, sessionId, t.query)
+                    if (items.isNotEmpty()) {
+                        ComposerAutocompletePopup(anchor = anchor) {
+                            items.take(20).forEach { session ->
+                                ChatRefSuggestionRow(session = session) {
+                                    applyChatSuggestion(session, t.start)
                                 }
                             }
                         }

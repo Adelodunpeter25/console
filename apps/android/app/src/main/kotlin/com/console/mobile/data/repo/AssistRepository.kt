@@ -2,6 +2,7 @@ package com.console.mobile.data.repo
 
 import com.console.mobile.data.api.ConsoleApi
 import console.v1.FileSearchResult
+import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,5 +15,24 @@ class AssistRepository(private val api: ConsoleApi) {
 
     suspend fun searchMentionFiles(sessionId: String, query: String, root: String?): List<FileSearchResult> = withContext(Dispatchers.IO) {
         try { api.assistSearchFiles(sessionId, query, root).items } catch (_: Exception) { emptyList() }
+    }
+
+    /**
+     * Same-project chats for `$` chat-ref suggestions, excluding the current
+     * chat. The scope comes from the current session's own header (project,
+     * falling back to cwd), matching the server's ResolveReference scope.
+     */
+    suspend fun listChatRefs(sessionId: String): List<SessionHeader> = withContext(Dispatchers.IO) {
+        try {
+            val header = api.getSession(sessionId, limit = 0).header
+            val siblings = if (!header.project_id.isNullOrBlank()) {
+                api.getSessions(projectId = header.project_id)
+            } else {
+                api.getSessions(cwd = header.cwd)
+            }
+            siblings.filter { it.id != sessionId }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 }

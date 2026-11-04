@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import console.v1.FileSearchResult
+import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.NewTheme
@@ -93,6 +94,29 @@ fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
         if (command.description.isNotBlank()) {
             Text(command.description, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
         }
+    }
+}
+
+/** `$` chat-ref suggestion row — `$slug` chip, full title muted alongside. */
+@Composable
+fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
+    val slug = com.console.mobile.core.util.slugifyChatTitle(session.title ?: "").ifBlank { session.id }
+    val title = session.title?.takeIf { it.isNotBlank() } ?: session.id
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(MentionAccent.copy(alpha = 0.10f))
+                .border(1.dp, MentionAccent.copy(alpha = 0.28f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("\$$slug", color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(title, color = NewTheme.TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp).weight(1f))
     }
 }
 
