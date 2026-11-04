@@ -75,7 +75,17 @@ impl RenderOnce for DeletedChatsPage {
                             let on_rest = on_restore.clone();
                             let on_perm = on_permanent_delete.clone();
 
-                            let title = session.title;
+                            // A chat that never got a generated title keeps the
+                            // whole first prompt as its title. This card shows
+                            // one compact row, so use the first non-empty line;
+                            // `.truncate()` below ellipsizes it to fit.
+                            let title = session
+                                .title
+                                .lines()
+                                .map(str::trim)
+                                .find(|line| !line.is_empty())
+                                .unwrap_or("Untitled")
+                                .to_string();
                             let date_str = chrono::DateTime::from_timestamp_millis(session.updated_at)
                                 .map(|dt| dt.format("%b %d, %Y · %H:%M").to_string())
                                 .unwrap_or_default();
@@ -90,22 +100,27 @@ impl RenderOnce for DeletedChatsPage {
                                 .flex()
                                 .items_center()
                                 .justify_between()
+                                .gap(px(12.0))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
                                         .gap(px(2.0))
+                                        .flex_1()
+                                        .min_w(px(0.0))
                                         .child(
                                             div()
                                                 .text_size(px(13.5))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(theme.text)
+                                                .truncate()
                                                 .child(title),
                                         )
                                         .child(
                                             div()
                                                 .text_size(px(11.5))
                                                 .text_color(theme.text_tertiary)
+                                                .truncate()
                                                 .child(date_str),
                                         ),
                                 )
@@ -114,6 +129,7 @@ impl RenderOnce for DeletedChatsPage {
                                         .flex()
                                         .items_center()
                                         .gap(px(8.0))
+                                        .flex_shrink_0()
                                         .child(
                                             div()
                                                 .id(ElementId::from(format!("btn-restore-{}", session_id_restore)))
