@@ -64,6 +64,15 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			PRIMARY KEY (provider, model_id)
 		);
 
+		-- Composer drafts synced across devices, one per chat. The body is the
+		-- console.v1.ChatDraft as protojson; updated_at is lifted out so the
+		-- last-write-wins check does not need to parse it.
+		CREATE TABLE IF NOT EXISTS chat_drafts (
+			session_id TEXT PRIMARY KEY,
+			body TEXT NOT NULL,
+			updated_at INTEGER NOT NULL
+		);
+
 		CREATE TABLE IF NOT EXISTS auth_devices (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,

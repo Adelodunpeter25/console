@@ -72,6 +72,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	app.Use(RequireDeviceToken(authManager))
 
 	RegisterFavoriteRoutes(app, services.NewFavoriteService(cfg.DB))
+	RegisterDraftRoutes(app, services.NewDraftService(cfg.DB))
 	RegisterPortRoutes(app, cfg.Ports)
 	RegisterSettingsRoutes(app, services.NewSettingsService())
 	RegisterFsRoutes(app, fs.NewFsService(), cfg.Watch)

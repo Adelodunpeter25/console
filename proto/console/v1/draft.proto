@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Per-chat composer draft (/api/drafts/:sessionId), synced across devices.
+//
+// Sync model: whole-draft last write wins by updated_at (client-stamped
+// millis). A PUT older than the stored draft is rejected with the stored one
+// so the client can adopt it. Replacing the whole draft is what lets a delete
+// (a removed comment, cleared text) propagate. Attachments are not part of
+// this slice.
+message DraftMention {
+  // Byte range of the chip inside text.
+  uint32 start = 1;
+  uint32 end = 2;
+  string path = 3;
+  string label = 4;
+}
+
+message DraftFileComment {
+  // Stable across devices.
+  string id = 1;
+  string path = 2;
+  uint32 start_line = 3;
+  uint32 end_line = 4;
+  string text = 5;
+  // The commented line(s) as they were, so a client can flag a comment whose
+  // lines have since changed.
+  string snippet = 6;
+}
+
+message ChatDraft {
+  string session_id = 1;
+  string text = 2;
+  repeated DraftMention mentions = 3;
+  repeated DraftFileComment comments = 4;
+  int64 updated_at = 5;
+}
+
+// applied=false means the stored draft was newer; draft is what to adopt.
+message PutDraftResponse {
+  bool applied = 1;
+  ChatDraft draft = 2;
+}
