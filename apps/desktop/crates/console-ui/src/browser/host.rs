@@ -469,6 +469,67 @@ mod macos_host {
             }
         }
 
+        /// Capture a single element's bounds as PNG, cropped natively by
+        /// `WKSnapshotConfiguration.rect`. Falls back to a full-page snapshot
+        /// when the rect configuration is unavailable.
+        pub fn take_snapshot_cropped(
+            &self,
+            rect: (f64, f64, f64, f64),
+            slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+        ) {
+            use block2::RcBlock;
+            use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
+            use objc2_foundation::{NSDictionary, NSError, NSPoint, NSRect, NSSize};
+            use objc2_web_kit::WKSnapshotConfiguration;
+
+            let (x, y, w, h) = rect;
+            let slot_for_error = slot.clone();
+            let handler = RcBlock::new(move |image: *mut NSImage, error: *mut NSError| {
+                let result = (|| {
+                    if image.is_null() {
+                        let detail = unsafe { error.as_ref() }
+                            .map(|e| e.localizedDescription().to_string())
+                            .unwrap_or_else(|| "no image returned".to_string());
+                        return Err(format!("Snapshot failed: {detail}"));
+                    }
+                    let image = unsafe { &*image };
+                    let tiff = image
+                        .TIFFRepresentation()
+                        .ok_or_else(|| "Snapshot had no bitmap data".to_string())?;
+                    let rep = NSBitmapImageRep::imageRepWithData(&tiff)
+                        .ok_or_else(|| "Could not decode snapshot bitmap".to_string())?;
+                    let props = NSDictionary::new();
+                    let png = unsafe {
+                        rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props)
+                    }
+                    .ok_or_else(|| "Could not encode snapshot as PNG".to_string())?;
+                    Ok(png.to_vec())
+                })();
+                *slot.borrow_mut() = Some(result);
+            });
+            let Some(mtm) = MainThreadMarker::new() else {
+                *slot_for_error.borrow_mut() =
+                    Some(Err("Snapshot must run on the main thread".to_string()));
+                return;
+            };
+            unsafe {
+                let config = WKSnapshotConfiguration::new(mtm);
+                // WKWebView rect space is points, origin bottom-left.
+                // inspector bounds are CSS px, origin top-left. Flip Y.
+                let webview_h = self.wk.frame().size.height;
+                let flipped_y = webview_h - y - h;
+                let ns_rect = NSRect {
+                    origin: NSPoint { x, y: flipped_y },
+                    size: NSSize { width: w, height: h },
+                };
+                let _: () = objc2::msg_send![&config, setRect: ns_rect];
+                let capped_w = w.min(400.0).max(1.0);
+                let _: () = objc2::msg_send![&config, setMaxWidth: capped_w];
+                self.wk
+                    .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
+            }
+        }
+
         pub fn open_devtools(&self) {
             unsafe {
                 if let Some(inspector) = self.inspector() {
@@ -595,6 +656,13 @@ impl WebviewHost {
     pub fn evaluate_script(&self, _script: &str) {}
     pub fn take_snapshot(
         &self,
+        slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
+    ) {
+        *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));
+    }
+    pub fn take_snapshot_cropped(
+        &self,
+        _rect: (f64, f64, f64, f64),
         slot: std::rc::Rc<std::cell::RefCell<Option<Result<Vec<u8>, String>>>>,
     ) {
         *slot.borrow_mut() = Some(Err("Screenshots are only supported on macOS".to_string()));

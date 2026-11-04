@@ -19,6 +19,8 @@ pub struct RunPromptDto {
     pub thinking_level: Option<ThinkingLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<ImageAttachment>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<Vec<crate::types::agent::BrowserElementAnnotation>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

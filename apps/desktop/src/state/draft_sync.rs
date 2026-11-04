@@ -201,14 +201,17 @@ impl ConsoleDesktopApp {
             })
             .collect();
 
-        // Text, mentions and the local-file cache. Attachments stay as they
-        // are: they are not part of the synced draft yet.
         let attachments = self
             .drafts
             .get(&session_id)
             .map(|draft| draft.attachments.clone())
             .unwrap_or_default();
-        if remote.text.trim().is_empty() && attachments.is_empty() {
+        let annotations = self
+            .drafts
+            .get(&session_id)
+            .map(|draft| draft.annotations.clone())
+            .unwrap_or_default();
+        if remote.text.trim().is_empty() && attachments.is_empty() && annotations.is_empty() {
             self.drafts.remove(&session_id);
             self.sidebar_draft_ids.remove(&session_id);
         } else {
@@ -231,6 +234,7 @@ impl ConsoleDesktopApp {
                         &mentions,
                     ),
                     attachments,
+                    annotations,
                 },
             );
         }

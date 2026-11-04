@@ -29,12 +29,21 @@ impl ConsoleDesktopApp {
 
         let view = cx.new(|cx| {
             let mut view = BrowserView::new(window, cx);
-            if let Some(url) = initial_url {
+            if let Some(url) = initial_url.clone() {
                 if !url.is_empty() {
                     view.navigate_to_url(url, cx);
                 }
             }
             view
+        });
+        let handler_bid = browser_id.to_string();
+        let app_entity = cx.entity().downgrade();
+        view.update(cx, |v, _cx| {
+            v.set_annotation_handler(move |annotation, cx| {
+                let _ = app_entity.update(cx, |this, cx| {
+                    this.stage_browser_annotation(&handler_bid, annotation, cx);
+                });
+            });
         });
 
         let bid = browser_id.to_string();
@@ -115,12 +124,13 @@ impl ConsoleDesktopApp {
             })
             .collect();
 
-        let is_overlay_open = self.any_palette_open(cx);
+        let palettes_open = self.any_palette_open(cx);
 
         for (browser_id, view) in &self.browser_views {
             let is_active = active_browser_ids.contains(browser_id);
+            let occluded = palettes_open || view.read(cx).overlay_open(cx);
             view.update(cx, |v, cx| {
-                v.sync_native_state(is_active, is_overlay_open, cx);
+                v.sync_native_state(is_active, occluded, cx);
             });
         }
     }

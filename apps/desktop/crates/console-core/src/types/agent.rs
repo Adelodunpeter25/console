@@ -6,14 +6,15 @@ use serde::{Deserialize, Serialize};
 // transcript RENDER models: the UI constructs them optimistically, mutates
 // them while streaming, and matches on them everywhere. They decode from the
 // wire through from_proto constructors below — never derive wire serde.
-// Annotations exist only for replay markup server-side and are dropped here;
-// the desktop never reads them.
+// Browser annotations are kept on the render model so chips, history
+// recall, and queued prompts preserve them (plan §8.4 C).
 pub use console_proto::agent_message::Message as ProtoMessageEvent;
 pub use console_proto::assistant_content_part::Part as ProtoPartEvent;
 pub use console_proto::{
     AgentAssistantMessage as ProtoAssistantMessage, AgentMessage as ProtoAgentMessage,
     AskQuestionRequest as ProtoAskQuestionRequest, AssistantContentPart as ProtoContentPart,
-    BrowserActionRequest as ProtoBrowserActionRequest, ErrorPayload as ProtoErrorPayload,
+    BrowserActionRequest as ProtoBrowserActionRequest, BrowserAnnotation as ProtoBrowserAnnotation,
+    BrowserAnnotationRect as ProtoBrowserAnnotationRect, ErrorPayload as ProtoErrorPayload,
     ImageAttachment as ProtoImageAttachment, PermissionRequest as ProtoPermissionRequest,
     ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
 };
@@ -131,6 +132,36 @@ impl AgentMessage {
                 } else {
                     Some(u.context_files.clone())
                 },
+                annotations: if u.annotations.is_empty() {
+                    None
+                } else {
+                    Some(
+                        u.annotations
+                            .iter()
+                            .map(|a| BrowserElementAnnotation {
+                                id: a.id.clone(),
+                                session_id: a.session_id.clone(),
+                                url: a.url.clone(),
+                                title: a.title.clone(),
+                                component_name: a.component_name.clone(),
+                                source_location: a.source_location.clone(),
+                                selector: a.selector.clone(),
+                                html_snippet: a.html_snippet.clone(),
+                                dimensions: a.dimensions.as_ref().map(|d| RectDimensions {
+                                    x: d.x,
+                                    y: d.y,
+                                    width: d.width,
+                                    height: d.height,
+                                }),
+                                role: a.role.clone(),
+                                accessible_name: a.accessible_name.clone(),
+                                computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                                user_comment: a.user_comment.clone(),
+                                screenshot_base64: a.screenshot_base64.clone(),
+                            })
+                            .collect(),
+                    )
+                },
                 created_at: msg.created_at,
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
@@ -176,9 +207,6 @@ fn content_part_from_proto(part: &ProtoContentPart) -> Option<AssistantContentPa
 pub enum AgentMessage {
     #[serde(rename = "user")]
     User {
-        /// Server-assigned message id. The server has always sent it; the
-        /// composer needs it to re-stage a recalled prompt's image
-        /// attachments from the transcript.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         id: Option<String>,
         content: String,
@@ -190,6 +218,8 @@ pub enum AgentMessage {
             rename = "contextFiles"
         )]
         context_files: Option<Vec<String>>,
+        #[serde(default)]
+        annotations: Option<Vec<BrowserElementAnnotation>>,
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
     },
@@ -553,6 +583,70 @@ pub fn queued_attachments_from_proto(
                 .map(|a| ImageAttachment {
                     data: a.data.clone(),
                     mime_type: a.mime_type.clone(),
+                })
+                .collect(),
+        )
+    }
+}
+pub fn queued_annotations_to_proto(
+    items: Option<Vec<BrowserElementAnnotation>>,
+) -> Vec<ProtoBrowserAnnotation> {
+    items
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| ProtoBrowserAnnotation {
+            id: a.id,
+            session_id: a.session_id,
+            url: a.url,
+            title: a.title,
+            component_name: a.component_name,
+            source_location: a.source_location,
+            selector: a.selector,
+            html_snippet: a.html_snippet,
+            dimensions: a.dimensions.map(|d| ProtoBrowserAnnotationRect {
+                x: d.x,
+                y: d.y,
+                width: d.width,
+                height: d.height,
+            }),
+            role: a.role,
+            accessible_name: a.accessible_name,
+            computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            user_comment: a.user_comment,
+            screenshot_base64: a.screenshot_base64,
+        })
+        .collect()
+}
+
+pub fn queued_annotations_from_proto(
+    items: &[ProtoBrowserAnnotation],
+) -> Option<Vec<BrowserElementAnnotation>> {
+    if items.is_empty() {
+        None
+    } else {
+        Some(
+            items
+                .iter()
+                .map(|a| BrowserElementAnnotation {
+                    id: a.id.clone(),
+                    session_id: a.session_id.clone(),
+                    url: a.url.clone(),
+                    title: a.title.clone(),
+                    component_name: a.component_name.clone(),
+                    source_location: a.source_location.clone(),
+                    selector: a.selector.clone(),
+                    html_snippet: a.html_snippet.clone(),
+                    dimensions: a.dimensions.as_ref().map(|d| RectDimensions {
+                        x: d.x,
+                        y: d.y,
+                        width: d.width,
+                        height: d.height,
+                    }),
+                    role: a.role.clone(),
+                    accessible_name: a.accessible_name.clone(),
+                    computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                    user_comment: a.user_comment.clone(),
+                    screenshot_base64: a.screenshot_base64.clone(),
                 })
                 .collect(),
         )

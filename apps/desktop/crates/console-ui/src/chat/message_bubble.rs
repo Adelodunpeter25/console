@@ -169,6 +169,7 @@ pub fn estimated_text_lines(text: &str) -> usize {
 pub struct UserMessageBubble {
     pub content: String,
     pub attachments: Vec<ImageAttachment>,
+    pub annotations: Vec<console_core::BrowserElementAnnotation>,
     pub context_files: Vec<String>,
     pub created_at: Option<i64>,
     selection: Option<TranscriptSelection>,
@@ -183,6 +184,7 @@ impl UserMessageBubble {
         Self {
             content: content.into(),
             attachments: Vec::new(),
+            annotations: Vec::new(),
             context_files: Vec::new(),
             created_at: None,
             selection: None,
@@ -201,6 +203,11 @@ impl UserMessageBubble {
 
     pub fn attachments(mut self, attachments: Vec<ImageAttachment>) -> Self {
         self.attachments = attachments;
+        self
+    }
+
+    pub fn annotations(mut self, annotations: Vec<console_core::BrowserElementAnnotation>) -> Self {
+        self.annotations = annotations;
         self
     }
 
@@ -316,8 +323,6 @@ impl RenderOnce for UserMessageBubble {
                                 .gap(px(8.0))
                                 .children(self.attachments.iter().cloned().enumerate().filter_map(
                                     |(index, attachment)| {
-                                        // Decode to bytes so gpui actually renders it (a
-                                        // `data:` URI string would be fetched as a URL).
                                         let image = attachment_image(&attachment)?;
                                         let on_preview = preview_handler.clone();
                                         Some(
@@ -345,7 +350,62 @@ impl RenderOnce for UserMessageBubble {
                                 )),
                         )
                     })
-                    .when_some(comment_chips, |element, chips| element.child(chips))
+                    .when(!self.annotations.is_empty(), |element| {
+                        element.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .justify_end()
+                                .gap(px(8.0))
+                                .children(self.annotations.iter().cloned().enumerate().map(
+                                    |(index, ann)| {
+                                        let label = match (&ann.component_name, &ann.source_location) {
+                                            (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+                                            (Some(c), None) => format!("<{c} />"),
+                                            (None, Some(s)) => s.clone(),
+                                            (None, None) => ann.selector.clone(),
+                                        };
+                                        let thumb = ann.screenshot_base64.as_ref().and_then(|b64| {
+                                            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+                                            if bytes.is_empty() { return None; }
+                                            Some(Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, bytes)))
+                                        });
+                                        let on_preview = preview_handler.clone();
+                                        div()
+                                            .id(ElementId::Name(
+                                                format!("user-annotation-{index}").into(),
+                                            ))
+                                            .size(px(80.0))
+                                            .rounded(px(9.0))
+                                            .overflow_hidden()
+                                            .border_1()
+                                            .border_color(theme.user_bubble_border)
+                                            .bg(theme.overlay)
+                                            .cursor_default()
+                                            .flex()
+                                            .flex_col()
+                                            .when_some(thumb.clone(), |tile, image| {
+                                                tile.child(img(image).size_full())
+                                            })
+                                            .when(thumb.is_none(), |tile| {
+                                                tile.child(
+                                                    div().p(px(6.0)).text_size(px(10.5)).text_color(theme.text_secondary).child(label.clone()),
+                                                )
+                                            })
+                                            .when_some(on_preview, |tile, on_preview| {
+                                                let image = thumb.clone();
+                                                tile.on_click(move |_, window, cx| {
+                                                    if let Some(image) = image.clone() {
+                                                        (on_preview)(image, window, cx);
+                                                    }
+                                                    cx.stop_propagation();
+                                                })
+                                            })
+                                    },
+                                )),
+                        )
+                    })
                     .when(has_content, |element| {
                         element.child(
                             div()

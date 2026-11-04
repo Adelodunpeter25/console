@@ -46,10 +46,6 @@ pub fn queued_prompt_row(
     on_steer: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     theme: Theme,
 ) -> impl IntoElement {
-    // The first attachment renders as a thumbnail so a queued image reads like
-    // the screenshot it is; extra images collapse into a +N badge. When the
-    // first image can't be decoded (unsupported MIME or empty payload), fall
-    // back to the paperclip indicator.
     let first_image = prompt.attachments.first().and_then(|attachment| {
         attachment_image(&ImageAttachment {
             data: attachment.data.clone(),
@@ -58,12 +54,12 @@ pub fn queued_prompt_row(
     });
     let extra_attachments = prompt.attachments.len().saturating_sub(1);
     let show_attachment_icon = !prompt.attachments.is_empty() && first_image.is_none();
+    let first_annotation = prompt.annotations.first();
 
     let display_text = format_prompt_preview(&prompt.prompt);
     let edit_id = format!("queued-edit-{}", prompt.id);
     let delete_id = format!("queued-delete-{}", prompt.id);
     let steer_id = format!("queued-steer-{}", prompt.id);
-
     let edit_handler = on_edit.clone();
     let delete_handler = on_delete.clone();
     let steer_handler = on_steer.clone();
@@ -116,6 +112,23 @@ pub fn queued_prompt_row(
                                         .child(format!("+{extra_attachments}")),
                                 )
                             }),
+                    )
+                })
+                .when_some(first_annotation, |el, ann| {
+                    el.child(
+                        div()
+                            .flex_shrink_0()
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .rounded(px(10.0))
+                            .border_1()
+                            .border_color(theme.border)
+                            .text_size(px(10.5))
+                            .text_color(theme.text_secondary)
+                            .child(format!(
+                                "{}",
+                                ann.component_name.as_deref().unwrap_or(&ann.selector)
+                            )),
                     )
                 })
                 .child(

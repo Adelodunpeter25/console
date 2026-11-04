@@ -478,6 +478,20 @@ impl TranscriptView {
         })
     }
 
+    pub fn annotations_for_message(
+        &self,
+        message_id: &str,
+    ) -> Option<Vec<console_core::BrowserElementAnnotation>> {
+        self.messages.iter().find_map(|message| match message {
+            AgentMessage::User {
+                id: Some(id),
+                annotations,
+                ..
+            } if id == message_id => Some(annotations.clone().unwrap_or_default()),
+            _ => None,
+        })
+    }
+
     /// Re-anchor the list after the message set changed: keep following the
     /// tail when the user is already following it (streaming, new prompts),
     /// otherwise leave the scroll position alone.
@@ -1518,6 +1532,7 @@ fn transcript_row(
             id,
             content,
             attachments,
+            annotations,
             context_files,
             created_at,
             ..
@@ -1539,6 +1554,9 @@ fn transcript_row(
                 });
             if let Some(attachments) = attachments {
                 bubble = bubble.attachments(attachments.clone());
+            }
+            if let Some(annotations) = annotations {
+                bubble = bubble.annotations(annotations.clone());
             }
             if let Some(files) = context_files {
                 bubble = bubble.context_files(files.clone());

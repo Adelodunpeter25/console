@@ -150,12 +150,21 @@ pub struct ConsoleDesktopApp {
     /// staged composer images keyed by pane. Values are `Rc` so per-frame
     /// renders clone a refcount instead of megabyte base64 payloads.
     pub attachments: std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    /// Staged browser element annotations keyed by pane (plan §8.4 C).
+    /// Parallel to `attachments` rather than a mixed enum, so chips,
+    /// drafts, and queue threading stay type-specific.
+    pub browser_annotations:
+        std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
     /// Composer history recall swaps the staged chips as the user steps
     /// through past prompts, so the chips that were staged before stepping
     /// back are parked here and restored when they step forward onto the
     /// uncommitted draft again. Keyed by pane; removed once navigation ends.
     pub(crate) history_draft_attachments:
         std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
+    pub(crate) history_draft_annotations: std::collections::HashMap<
+        String,
+        Rc<Vec<console_core::BrowserElementAnnotation>>,
+    >,
     /// Run-derived interactive and display state. All of these are keyed by
     /// session id (not pane id) so a run's permission prompt, question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a

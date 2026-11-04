@@ -142,10 +142,12 @@ impl ConsoleDesktopApp {
                     }
                     if this.is_active_session_running_for_pane(&submit_pane_id) {
                         let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
+                        let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
                         this.queue_prompt_for_pane(
                             submit_pane_id.clone(),
                             prompt.clone(),
                             attachments,
+                            annotations,
                             context_files.clone(),
                             cx,
                         );
@@ -154,7 +156,8 @@ impl ConsoleDesktopApp {
                     this.active_pane_id = Some(submit_pane_id.clone());
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
-                    this.submit_prompt_with_context(prompt.clone(), attachments, context_files, cx);
+                    let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
+                    this.submit_prompt_with_context(prompt.clone(), attachments, annotations, context_files, cx);
                 }
                 ComposerEvent::SubmitSteer(prompt, context_files) => {
                     let prompt = this.prompt_with_staged_comments(&steer_pane_id, prompt, cx);
@@ -172,12 +175,14 @@ impl ConsoleDesktopApp {
                     let mentions = input.mentions().to_vec();
                     let session_id = this.active_session_for_pane(&edit_pane_id);
                     let attachments = this.attachments_for_pane(&edit_pane_id);
+                    let annotations = this.annotations_for_pane(&edit_pane_id);
                     this.save_draft_for_session_with_context(
                         session_id.as_deref(),
                         &text,
                         &mentions,
                         &[],
                         &attachments,
+                        &annotations,
                         cx,
                     );
                     if let Some(session_id) = session_id {

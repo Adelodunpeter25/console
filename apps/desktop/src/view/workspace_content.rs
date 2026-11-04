@@ -98,9 +98,9 @@ impl ConsoleDesktopApp {
                 window,
                 cx,
             );
-            let is_overlay_open = self.any_palette_open(cx);
+            let occluded = self.any_palette_open(cx) || view.read(cx).overlay_open(cx);
             view.update(cx, |v, cx| {
-                v.sync_native_state(true, is_overlay_open, cx);
+                v.sync_native_state(true, occluded, cx);
             });
             return div().size_full().child(view).into_any_element();
         }
@@ -1057,6 +1057,7 @@ impl ConsoleDesktopApp {
             cx,
         );
         let comments = self.composer_comments_for_pane(pane_id, cx);
+        let annotations = self.composer_annotations_for_pane(pane_id, cx);
         let attachments = self.attachments_for_pane(pane_id);
 
         let entity = cx.entity().downgrade();
@@ -1174,6 +1175,7 @@ impl ConsoleDesktopApp {
                             let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
                             let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                            let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                             let context_files = console_shared::composer::mentions::context_file_paths(
                                 this.composer_for_pane(&pane_id).read(cx).mentions(),
                             );
@@ -1185,6 +1187,7 @@ impl ConsoleDesktopApp {
                                     pane_id.clone(),
                                     prompt,
                                     attachments,
+                                    annotations,
                                     context_files,
                                     cx,
                                 );
@@ -1195,6 +1198,7 @@ impl ConsoleDesktopApp {
                             this.submit_prompt_with_context(
                                 prompt,
                                 attachments,
+                                annotations,
                                 context_files,
                                 cx,
                             );
@@ -1260,6 +1264,7 @@ impl ConsoleDesktopApp {
                         let prompt = this.composer_for_pane(&pane_id).read(cx).content().to_string();
                         let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                        let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                         let context_files = console_shared::composer::mentions::context_file_paths(
                             this.composer_for_pane(&pane_id).read(cx).mentions(),
                         );
@@ -1270,6 +1275,7 @@ impl ConsoleDesktopApp {
                             pane_id.clone(),
                             prompt,
                             attachments,
+                            annotations,
                             context_files,
                             cx,
                         );
@@ -1341,6 +1347,7 @@ impl ConsoleDesktopApp {
         })
         .attachments(attachments)
         .comments(comments)
+        .annotations(annotations)
         .floating(floating)
         .on_remove_attachment({
             let entity = entity.clone();
@@ -1349,6 +1356,17 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.remove_attachment(&pane_id, index, cx);
+                    });
+                }
+            }
+        })
+        .on_remove_annotation({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |index, _w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.remove_annotation(&pane_id, index, cx);
                     });
                 }
             }

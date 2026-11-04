@@ -10,6 +10,7 @@
 //! - Start page with instant localhost dev server launchers (3000, 5173, 8080).
 //! - Keyboard actions for address focus (⌘L), navigation (⌘[/⌘]), reload (⌘R), and devtools.
 
+use base64::Engine as _;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -100,6 +101,18 @@ pub struct BrowserView {
     snapshot_epoch: u64,
     inspecting: bool,
     active_inspection: Option<BrowserElementInspection>,
+    /// Comment input for the annotation popover, created once at `new`.
+    annotation_input: Entity<ComposerInput>,
+    /// Base64 PNG of the picked element, filled asynchronously after pick.
+    annotation_screenshot: Option<String>,
+    /// Focus the annotation input on the next render after a pick.
+    annotation_focus_pending: bool,
+    /// Last synced page-area size, for clamping the popover. Updated from
+    /// the canvas in `render_page_area`.
+    surface_size: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
+    /// Owner callback: fired with the finished annotation on Attach.
+    annotation_handler:
+        Option<Rc<dyn Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static>>,
     /// Results posted back by agent-run scripts, keyed by request id.
     script_results: HashMap<String, ScriptOutcome>,
     _subscriptions: Vec<Subscription>,
@@ -132,6 +145,10 @@ impl BrowserView {
                 .placeholder("Search or enter website address (e.g. localhost:3000)")
         });
 
+        let annotation_input = cx.new(|cx| {
+            ComposerInput::new(window, cx).placeholder("Add a comment for the AI...")
+        });
+
         let window_handle = window.window_handle();
         let submit_subscription = cx.subscribe(
             &address,
@@ -151,6 +168,15 @@ impl BrowserView {
             },
         );
 
+        let annotation_subscription = cx.subscribe(
+            &annotation_input,
+            move |this: &mut Self, _input, event: &ComposerEvent, cx| match event {
+                ComposerEvent::Submit(text, _) => {
+                    this.commit_annotation(text.clone(), cx);
+                }
+                _ => {}
+            },
+        );
         let focus_handle = cx.focus_handle();
         let address_focus = address.read(cx).focus();
         let weak_for_focus_in = cx.entity().downgrade();
@@ -228,9 +254,15 @@ impl BrowserView {
             snapshot_epoch: 0,
             inspecting: false,
             active_inspection: None,
+            annotation_input,
+            annotation_screenshot: None,
+            annotation_focus_pending: false,
+            surface_size: std::rc::Rc::new(std::cell::Cell::new(None)),
+            annotation_handler: None,
             script_results: HashMap::new(),
             _subscriptions: vec![
                 submit_subscription,
+                annotation_subscription,
                 focus_in_address,
                 focus_out_address,
                 focus_out_surface,
@@ -388,13 +420,31 @@ impl BrowserView {
         if let Ok(msg) = serde_json::from_str::<InspectorIpcMessage>(&payload) {
             match msg {
                 InspectorIpcMessage::ElementInspected(inspection) => {
-                    // The page script stays in inspect mode so several
-                    // elements can be picked; only Esc / the toggle exit it.
+                    let bounds = (
+                        inspection.bounds.x,
+                        inspection.bounds.y,
+                        inspection.bounds.width,
+                        inspection.bounds.height,
+                    );
                     self.active_inspection = Some(inspection);
+                    self.annotation_screenshot = None;
+                    self.annotation_focus_pending = true;
+                    self.annotation_input.update(cx, |input, cx| {
+                        input.clear(cx);
+                    });
+                    // Freeze hover while the popover is open (plan §8.3).
+                    if let Some(host) = &self.host {
+                        host.evaluate_script(
+                            "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(true); }",
+                        );
+                        self.start_element_screenshot(bounds, cx);
+                    }
                     cx.notify();
                 }
                 InspectorIpcMessage::InspectCancelled => {
                     self.inspecting = false;
+                    self.active_inspection = None;
+                    self.annotation_screenshot = None;
                     cx.notify();
                 }
                 InspectorIpcMessage::ScriptResult {
@@ -431,6 +481,11 @@ impl BrowserView {
             return;
         }
         self.inspecting = !self.inspecting;
+        if !self.inspecting {
+            self.active_inspection = None;
+            self.annotation_screenshot = None;
+            self.annotation_focus_pending = false;
+        }
         if let Some(host) = &self.host {
             let script = format!(
                 "if (typeof window.__consoleSetInspectMode === 'function') {{ window.__consoleSetInspectMode({}); }}",
@@ -439,6 +494,127 @@ impl BrowserView {
             host.evaluate_script(&script);
         }
         cx.notify();
+    }
+
+    pub fn set_annotation_handler(
+        &mut self,
+        handler: impl Fn(console_core::BrowserElementAnnotation, &mut gpui::App) + 'static,
+    ) {
+        self.annotation_handler = Some(Rc::new(handler));
+    }
+
+    pub fn commit_annotation(&mut self, comment: String, cx: &mut Context<Self>) {
+        let Some(inspection) = self.active_inspection.take() else {
+            return;
+        };
+        let trimmed = comment.trim().to_string();
+        if trimmed.is_empty() {
+            self.active_inspection = Some(inspection);
+            return;
+        }
+        let annotation = console_core::BrowserElementAnnotation {
+            id: format!("ann-{}", chrono::Utc::now().timestamp_micros()),
+            session_id: None,
+            url: inspection.url.clone(),
+            title: Some(inspection.title.clone()),
+            component_name: inspection.component_name.clone(),
+            source_location: inspection.source_location.clone(),
+            selector: inspection.selector.clone(),
+            html_snippet: inspection.html_snippet.clone(),
+            dimensions: Some(console_core::RectDimensions {
+                x: inspection.bounds.x,
+                y: inspection.bounds.y,
+                width: inspection.bounds.width,
+                height: inspection.bounds.height,
+            }),
+            role: inspection.role.clone(),
+            accessible_name: inspection.accessible_name.clone(),
+            computed_styles: inspection.computed_styles.clone(),
+            user_comment: trimmed,
+            screenshot_base64: self.annotation_screenshot.clone(),
+        };
+        self.annotation_screenshot = None;
+        self.annotation_focus_pending = false;
+        self.annotation_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+        if let Some(handler) = &self.annotation_handler {
+            (handler)(annotation, cx);
+        }
+        // Resume inspect so the next pick works.
+        if self.inspecting {
+            if let Some(host) = &self.host {
+                host.evaluate_script(
+                    "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    /// Close the popover without staging (Esc first press).
+    pub fn cancel_annotation(&mut self, cx: &mut Context<Self>) {
+        if self.active_inspection.is_none() {
+            return;
+        }
+        self.active_inspection = None;
+        self.annotation_screenshot = None;
+        self.annotation_focus_pending = false;
+        self.annotation_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+        if self.inspecting {
+            if let Some(host) = &self.host {
+                host.evaluate_script(
+                    "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    fn start_element_screenshot(&self, bounds: (f64, f64, f64, f64), cx: &mut Context<Self>) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+        host.take_snapshot_cropped(bounds, slot.clone());
+        let view = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            for _ in 0..20 {
+                cx.background_executor().timer(std::time::Duration::from_millis(100)).await;
+                let done = slot.borrow().is_some();
+                if done {
+                    let result = slot.borrow_mut().take();
+                    if let Some(Ok(bytes)) = result {
+                        use base64::Engine as _;
+                        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                        let _ = cx.update(|cx| {
+                            let _ = view.update(cx, |this, cx| {
+                                // Only fill the popover that asked for it.
+                                if this.active_inspection.is_some() {
+                                    this.annotation_screenshot = Some(b64);
+                                    cx.notify();
+                                }
+                            });
+                        });
+                    }
+                    break;
+                }
+                let still_open = cx
+                    .update(|cx| {
+                        let mut flag = false;
+                        let _ = view.update(cx, |this, _| {
+                            flag = this.active_inspection.is_some();
+                        });
+                        flag
+                    });
+                if !still_open {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     pub fn is_inspecting(&self) -> bool {
@@ -892,10 +1068,11 @@ impl BrowserView {
         }
     }
 
-    /// The address input's context menu floats above the native webview's area,
-    /// so the app's occlusion sync needs to know when it is open.
+    /// The address input's context menu or the annotation popover floats
+    /// above the native webview's area, so the app's occlusion sync needs
+    /// to know when either is open.
     pub fn overlay_open(&self, cx: &App) -> bool {
-        self.address.read(cx).context_menu_open()
+        self.address.read(cx).context_menu_open() || self.active_inspection.is_some()
     }
 
     fn toolbar_button(
@@ -1255,11 +1432,11 @@ impl BrowserView {
                 ),
             )
     }
-
-    fn render_page_area(&self, theme: Theme) -> Div {
+    fn render_page_area(&self, theme: Theme, cx: &mut Context<Self>) -> Div {
         let host = self.host.clone();
         let occluded = self.occluded;
-        div()
+        let surface_size = self.surface_size.clone();
+        let mut area = div()
             .flex_1()
             .min_h_0()
             .relative()
@@ -1267,6 +1444,10 @@ impl BrowserView {
             .child(
                 canvas(
                     move |bounds, window, _| {
+                        surface_size.set(Some((
+                            f32::from(bounds.size.width),
+                            f32::from(bounds.size.height),
+                        )));
                         if let Some(host) = &host {
                             host.sync_bounds(bounds, window.scale_factor());
                             if !occluded {
@@ -1292,7 +1473,151 @@ impl BrowserView {
                             .object_fit(ObjectFit::Fill),
                     )
                 },
+            );
+        if let Some(popover) = self.render_annotation_popover(theme, cx) {
+            area = area.child(popover);
+        }
+        area
+    }
+
+    /// Floating annotation popover anchored to the picked element. The
+    /// native webview sits above GPUI, so the owner's occlusion sync
+    /// (via `overlay_open`) hides it and shows the frozen snapshot while
+    /// this is open.
+    fn render_annotation_popover(
+        &self,
+        theme: Theme,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let inspection = self.active_inspection.as_ref()?;
+        let (sw, sh) = self.surface_size.get().unwrap_or((900.0, 700.0));
+        let pop_w = 340.0;
+        let pop_h = 220.0;
+        let mut left = inspection.bounds.x as f32;
+        let mut top = (inspection.bounds.y + inspection.bounds.height) as f32 + 8.0;
+        if left + pop_w > sw {
+            left = (sw - pop_w - 8.0).max(8.0);
+        }
+        if top + pop_h > sh {
+            top = ((inspection.bounds.y as f32) - pop_h - 8.0).max(8.0);
+        }
+        left = left.max(8.0);
+        top = top.max(8.0);
+
+        let component_label = match (&inspection.component_name, &inspection.source_location) {
+            (Some(c), Some(s)) => format!("<{c} />  •  {s}"),
+            (Some(c), None) => format!("<{c} />"),
+            (None, Some(s)) => s.clone(),
+            (None, None) => inspection.selector.clone(),
+        };
+        let thumb = self.annotation_screenshot.as_ref().and_then(|b64| {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(b64)
+                .ok()?;
+            if bytes.is_empty() {
+                return None;
+            }
+            Some(Arc::new(gpui::Image::from_bytes(
+                gpui::ImageFormat::Png,
+                bytes,
+            )))
+        });
+        let entity = cx.entity().downgrade();
+        let entity2 = entity.clone();
+        let popover = div()
+            .absolute()
+            .left(px(left))
+            .top(px(top))
+            .w(px(pop_w))
+            .flex()
+            .flex_col()
+            .p_3()
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.surface)
+            .shadow_lg()
+            .child(
+                div()
+                    .text_size(px(11.5))
+                    .text_color(theme.text_secondary)
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .child(component_label),
             )
+            .when_some(thumb, |element, image| {
+                element.child(
+                    div()
+                        .mt_2()
+                        .h(px(72.0))
+                        .rounded(px(6.0))
+                        .overflow_hidden()
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.inset)
+                        .child(img(image).size_full()),
+                )
+            })
+            .child(div().mt_2().child(self.annotation_input.clone()))
+            .child(
+                div()
+                    .mt_2()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .id("browser-annotation-cancel")
+                            .px(px(10.0))
+                            .py(px(5.0))
+                            .rounded(px(6.0))
+                            .border_1()
+                            .border_color(theme.border)
+                            .text_size(px(12.0))
+                            .text_color(theme.text_secondary)
+                            .cursor_default()
+                            .hover(|s| s.bg(theme.overlay))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                move |_, _, cx| {
+                                    if let Some(view) = entity.upgrade() {
+                                        view.update(cx, |this, cx| this.cancel_annotation(cx));
+                                    }
+                                },
+                            )
+                            .child("Esc to Cancel"),
+                    )
+                    .child(
+                        div()
+                            .id("browser-annotation-attach")
+                            .px(px(10.0))
+                            .py(px(5.0))
+                            .rounded(px(6.0))
+                            .bg(theme.accent)
+                            .text_size(px(12.0))
+                            .text_color(theme.on_inverse)
+                            .cursor_default()
+                            .hover(|s| s.opacity(0.9))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                move |_, _, cx| {
+                                    if let Some(view) = entity2.upgrade() {
+                                        view.update(cx, |this, cx| {
+                                            let text = this
+                                                .annotation_input
+                                                .read(cx)
+                                                .content()
+                                                .to_string();
+                                            this.commit_annotation(text, cx);
+                                        });
+                                    }
+                                },
+                            )
+                            .child("Attach to Chat"),
+                    ),
+            );
+        Some(popover.into_any_element())
     }
 }
 
@@ -1309,9 +1634,14 @@ impl Render for BrowserView {
         if self.loading {
             window.request_animation_frame();
         }
+        if self.annotation_focus_pending {
+            self.annotation_focus_pending = false;
+            let input = self.annotation_input.clone();
+            window.on_next_frame(move |window, cx| {
+                window.focus(&input.read(cx).focus(), cx);
+            });
+        }
 
-        // First navigation creates the native browser. A tab that never
-        // navigates never gets one, so nothing loads about:blank at open time.
         self.ensure_host(window, cx);
 
         let body = if let Some(error) = self.host_error.clone() {
@@ -1327,7 +1657,7 @@ impl Render for BrowserView {
             self.render_navigation_error(error, theme, cx)
                 .into_any_element()
         } else if self.navigation_requested {
-            self.render_page_area(theme).into_any_element()
+            self.render_page_area(theme, cx).into_any_element()
         } else {
             if let Some(host) = &self.host {
                 host.set_visible(false);
@@ -1344,7 +1674,11 @@ impl Render for BrowserView {
             .on_action(cx.listener(|this, _: &BrowserReload, _, cx| this.reload(cx)))
             .on_action(cx.listener(|this, _: &BrowserHardReload, _, cx| this.hard_reload(cx)))
             .on_action(cx.listener(|this, _: &BrowserStop, _, cx| {
-                if this.inspecting {
+                // Two-step Esc (plan §8.3): first press closes the popover,
+                // second press exits inspect mode.
+                if this.active_inspection.is_some() {
+                    this.cancel_annotation(cx);
+                } else if this.inspecting {
                     this.toggle_inspect(cx);
                 } else {
                     this.stop_loading(cx);

@@ -124,10 +124,11 @@ impl ConsoleDesktopApp {
         mentions: &[ComposerMention],
         context_files: &[String],
         attachments: &[console_core::ImageAttachment],
+        annotations: &[console_core::BrowserElementAnnotation],
         cx: &mut Context<Self>,
     ) {
         let key = session_id.unwrap_or("new_chat").to_string();
-        if text.trim().is_empty() && context_files.is_empty() && attachments.is_empty() {
+        if text.trim().is_empty() && context_files.is_empty() && attachments.is_empty() && annotations.is_empty() {
             if self.drafts.remove(&key).is_some() {
                 self.schedule_drafts_save(cx);
             }
@@ -147,6 +148,7 @@ impl ConsoleDesktopApp {
                         || existing.mentions != persisted_mentions
                         || existing.context_files != context_files
                         || existing.attachments != attachments
+                        || existing.annotations != annotations
                 }
                 None => true,
             };
@@ -159,6 +161,7 @@ impl ConsoleDesktopApp {
                         mentions: persisted_mentions,
                         context_files: context_files.to_vec(),
                         attachments: attachments.to_vec(),
+                        annotations: annotations.to_vec(),
                     },
                 );
                 self.schedule_drafts_save(cx);
@@ -171,15 +174,11 @@ impl ConsoleDesktopApp {
         if self.drafts.remove(key).is_some() {
             self.schedule_drafts_save(cx);
         }
-        // A send or discard clears the draft everywhere, otherwise another
-        // device would keep offering the text that was just sent.
         if let Some(session_id) = session_id {
             self.schedule_draft_push(session_id.to_string(), cx);
         }
     }
 
-    /// Coalesce draft disk writes: memory updates immediately (crash-safe
-    /// text stays live in the composer), the file flush trails typing.
     pub(crate) fn schedule_drafts_save(&mut self, cx: &mut Context<Self>) {
         if self.drafts_save_pending {
             return;
@@ -209,6 +208,7 @@ impl ConsoleDesktopApp {
         mentions: &[ComposerMention],
         context_files: &[String],
         attachments: &[console_core::ImageAttachment],
+        annotations: &[console_core::BrowserElementAnnotation],
         cx: &mut Context<Self>,
     ) {
         self.save_draft_for_session_with_context(
@@ -217,9 +217,10 @@ impl ConsoleDesktopApp {
             mentions,
             context_files,
             attachments,
+            annotations,
             cx,
         );
-        if text.trim().is_empty() && attachments.is_empty() {
+        if text.trim().is_empty() && attachments.is_empty() && annotations.is_empty() {
             self.sidebar_draft_ids.remove(session_id);
         } else {
             self.sidebar_draft_ids.insert(session_id.to_string());

@@ -453,23 +453,24 @@ impl ConsoleDesktopApp {
                         this.selected_session_id = this.active_session_for_pane("pane-main");
                         let pane_id = "pane-main".to_string();
                         if this.is_active_session_running_for_pane(&pane_id) {
-                            // Turn is running: queue behind it instead of starting a parallel run.
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
+                            let annotations = (*this.annotations_for_pane(&pane_id)).clone();
                             this.queue_prompt_for_pane(
                                 pane_id,
                                 prompt.clone(),
                                 attachments,
+                                annotations,
                                 context_files.clone(),
                                 cx,
                             );
                             return;
                         }
-                        // Deep-copy only at the submit boundary; the Rc
-                        // keeps per-frame renders cheap.
                         let attachments = (*this.attachments_for_pane("pane-main")).clone();
+                        let annotations = (*this.annotations_for_pane("pane-main")).clone();
                         this.submit_prompt_with_context(
                             prompt.clone(),
                             attachments,
+                            annotations,
                             context_files,
                             cx,
                         );
@@ -491,12 +492,14 @@ impl ConsoleDesktopApp {
                         let mentions = input.mentions().to_vec();
                         let session_id = this.active_session_for_pane("pane-main");
                         let attachments = this.attachments_for_pane("pane-main");
+                        let annotations = this.annotations_for_pane("pane-main");
                         this.save_draft_for_session_with_context(
                             session_id.as_deref(),
                             &text,
                             &mentions,
                             &[],
                             &attachments,
+                            &annotations,
                             cx,
                         );
                     }
@@ -636,7 +639,9 @@ impl ConsoleDesktopApp {
             composer_input,
             question_input,
             attachments: std::collections::HashMap::new(),
+            browser_annotations: std::collections::HashMap::new(),
             history_draft_attachments: std::collections::HashMap::new(),
+            history_draft_annotations: std::collections::HashMap::new(),
             pending_permissions: std::collections::HashMap::new(),
             pending_questions: std::collections::HashMap::new(),
             question_selected: std::collections::HashMap::new(),

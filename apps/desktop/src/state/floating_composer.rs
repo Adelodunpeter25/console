@@ -604,6 +604,7 @@ impl ConsoleDesktopApp {
                         this.submit_prompt_with_context(
                             prompt.clone(),
                             staged_attachments.clone(),
+                            Vec::new(),
                             context_files.clone(),
                             cx,
                         );

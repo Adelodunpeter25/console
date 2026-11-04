@@ -345,6 +345,9 @@ impl ConsoleDesktopApp {
                         this.workspace_pane_states.clear();
                         this.terminals.clear();
                         this.attachments.clear();
+                        this.browser_annotations.clear();
+                        this.history_draft_attachments.clear();
+                        this.history_draft_annotations.clear();
                         this.todo_items.clear();
                         this.queued_prompts.clear();
                         this.running_sessions.clear();

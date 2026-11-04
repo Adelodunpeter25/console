@@ -12,6 +12,7 @@ use crate::common::{
     attachment_image, file_mention_chip, format_model_name, provider_svg_path,
 };
 use crate::input::ComposerInput;
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, app_icon, popover};
 use crate::theme::Theme;
 
@@ -42,6 +43,33 @@ impl ComposerComment {
             path: path.into(),
             label: label.into(),
             on_edit: Rc::new(on_edit),
+            on_remove: Rc::new(on_remove),
+        }
+    }
+}
+
+/// A staged browser element annotation shown as a chip above the composer.
+/// Label is `Component • file:line` (or selector fallback); tooltip carries
+/// the user comment.
+#[derive(Clone)]
+pub struct ComposerAnnotation {
+    pub id: String,
+    pub label: String,
+    pub tooltip: String,
+    pub on_remove: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
+
+impl ComposerAnnotation {
+    pub fn new(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        tooltip: impl Into<String>,
+        on_remove: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            tooltip: tooltip.into(),
             on_remove: Rc::new(on_remove),
         }
     }
@@ -86,10 +114,9 @@ pub struct ComposerView {
     /// input; they are part of the outgoing prompt without occupying the text
     /// field.
     pub comments: Rc<Vec<ComposerComment>>,
+    pub annotations: Rc<Vec<ComposerAnnotation>>,
     /// A floating overlay (file/diff tabs) rather than the docked chat footer.
     floating: bool,
-    /// Whether the active session already has a staged prompt (server's `queueUpdated` not null).
-    /// Rendered independently of `run_state` so a replace does not need a new state variant.
     pub has_queued_prompt: bool,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
     approval_menu: Option<(ApprovalModeDropdown, ContextMenuHandle)>,
@@ -101,6 +128,7 @@ pub struct ComposerView {
     on_cycle_thinking: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+    on_remove_annotation: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
     on_autocomplete_next: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_autocomplete_previous: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -125,6 +153,7 @@ impl ComposerView {
             supported_thinking_levels: Vec::new(),
             attachments: Rc::new(Vec::new()),
             comments: Rc::new(Vec::new()),
+            annotations: Rc::new(Vec::new()),
             floating: false,
             has_queued_prompt: false,
             model_menu: None,
@@ -137,6 +166,7 @@ impl ComposerView {
             on_cycle_thinking: None,
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
+            on_remove_annotation: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_drop_files: Rc::new(|_: &ExternalPaths, _: &mut Window, _: &mut App| {}),
             on_autocomplete_next: Rc::new(|_, _| {}),
             on_autocomplete_previous: Rc::new(|_, _| {}),
@@ -222,6 +252,11 @@ impl ComposerView {
         self
     }
 
+    pub fn annotations(mut self, annotations: Rc<Vec<ComposerAnnotation>>) -> Self {
+        self.annotations = annotations;
+        self
+    }
+
     pub fn floating(mut self, floating: bool) -> Self {
         self.floating = floating;
         self
@@ -255,6 +290,14 @@ impl ComposerView {
         handler: impl Fn(usize, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_preview_attachment = Rc::new(handler);
+        self
+    }
+
+    pub fn on_remove_annotation(
+        mut self,
+        handler: impl Fn(usize, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_remove_annotation = Rc::new(handler);
         self
     }
 
@@ -385,9 +428,6 @@ impl ComposerView {
         composer_attachment_row(attachments, on_remove, on_preview, theme)
     }
 
-    /// Staged file comments, styled like the composer's inline file-mention
-    /// pills. Clicking the pill reopens the inline card; the trailing `x`
-    /// removes the comment from the outgoing message.
     fn render_comments(comments: Rc<Vec<ComposerComment>>, theme: Theme) -> impl IntoElement {
         div()
             .flex()
@@ -436,8 +476,69 @@ impl ComposerView {
                     )
             }))
     }
-}
 
+    fn render_annotations(
+        annotations: Rc<Vec<ComposerAnnotation>>,
+        on_remove: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
+        theme: Theme,
+    ) -> impl IntoElement {
+        div()
+            .flex()
+            .flex_wrap()
+            .gap(px(6.0))
+            .px(px(12.0))
+            .pb(px(7.0))
+            .children(
+                annotations
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(move |(index, ann)| {
+                        let on_remove = on_remove.clone();
+                        let label = ann.label.clone();
+                        let tooltip = ann.tooltip.clone();
+                        div()
+                            .id(ElementId::Name(
+                                format!("composer-annotation-{}", ann.id).into(),
+                            ))
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .px(px(8.0))
+                            .py(px(3.0))
+                            .rounded(px(12.0))
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.overlay)
+                            .tooltip(Tooltip::text(tooltip))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(theme.text_secondary)
+                                    .child(label),
+                            )
+                            .child(
+                                div()
+                                    .id(ElementId::Name(
+                                        format!("remove-annotation-{}", ann.id).into(),
+                                    ))
+                                    .size(px(16.0))
+                                    .rounded_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_default()
+                                    .hover(|s| s.bg(theme.overlay_strong))
+                                    .on_click(move |_, window, cx| {
+                                        (on_remove)(index, window, cx);
+                                        cx.stop_propagation();
+                                    })
+                                    .child(app_icon(IconName::X, 9.0, theme.text_tertiary)),
+                            )
+                    }),
+            )
+    }
+}
 impl RenderOnce for ComposerView {
     fn render(self, window: &mut Window, cx: &mut App) -> gpui::AnyElement {
         let theme = Theme::current(cx);
@@ -519,7 +620,8 @@ impl RenderOnce for ComposerView {
 
         let has_draft = !self.composer_input.read(cx).content().trim().is_empty()
             || !self.attachments.is_empty()
-            || !self.comments.is_empty();
+            || !self.comments.is_empty()
+            || !self.annotations.is_empty();
         let attachment_data = self.attachments.clone();
         let attachment_on_remove = self.on_remove_attachment.clone();
         let attachment_on_preview = self.on_preview_attachment.clone();
@@ -533,6 +635,13 @@ impl RenderOnce for ComposerView {
         });
         let comments = (!self.comments.is_empty())
             .then(|| Self::render_comments(self.comments.clone(), theme));
+        let annotations = (!self.annotations.is_empty()).then(|| {
+            Self::render_annotations(
+                self.annotations.clone(),
+                self.on_remove_annotation.clone(),
+                theme,
+            )
+        });
         let floating = self.floating;
         let autocomplete = self.autocomplete;
         let autocomplete_anchor = autocomplete.as_ref().map(AutocompleteView::anchor_cell);
@@ -688,6 +797,9 @@ impl RenderOnce for ComposerView {
                             })
                             .when_some(comments, |element, comments| {
                                 element.child(comments)
+                            })
+                            .when_some(annotations, |element, annotations| {
+                                element.child(annotations)
                             })
                             .when_some(attachments, |element, attachments| {
                                 element.child(attachments)

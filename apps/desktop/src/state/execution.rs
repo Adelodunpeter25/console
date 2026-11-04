@@ -191,6 +191,7 @@ impl ConsoleDesktopApp {
                 .remove(pane_id)
                 .unwrap_or_else(|| Rc::new(Vec::new()));
             self.set_attachments_for_pane(pane_id, (*parked).clone());
+            self.restore_recalled_annotations(pane_id, message_id, true, cx);
             cx.notify();
             return;
         }
@@ -198,8 +199,6 @@ impl ConsoleDesktopApp {
         let Some(message_id) = message_id else {
             return;
         };
-        // Park the pre-navigation chips on the first step back only; later
-        // steps must not overwrite them with another entry's images.
         if !self.history_draft_attachments.contains_key(pane_id) {
             let staged = self.attachments_for_pane(pane_id);
             self.history_draft_attachments
@@ -214,6 +213,7 @@ impl ConsoleDesktopApp {
             return;
         };
         self.set_attachments_for_pane(pane_id, attachments);
+        self.restore_recalled_annotations(pane_id, Some(message_id), false, cx);
         cx.notify();
     }
 

@@ -23,13 +23,12 @@ use console_core::model::ThinkingLevel;
 struct PromptStart {
     prompt: String,
     attachments: Vec<ImageAttachment>,
+    annotations: Vec<console_core::BrowserElementAnnotation>,
     context_files: Vec<String>,
     model_id: Option<String>,
     provider: Option<String>,
     approval_mode: Option<String>,
     thinking_level: Option<ThinkingLevel>,
-    /// Keep the composer text and attachment chips (send-now) instead of
-    /// the submit behavior of clearing them.
     keep_draft: bool,
 }
 
@@ -69,6 +68,7 @@ impl ConsoleDesktopApp {
         pane_id: String,
         prompt: String,
         attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
         context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
@@ -76,9 +76,7 @@ impl ConsoleDesktopApp {
             return;
         }
         let Some(session_id) = self.active_session_for_pane(&pane_id) else {
-            // No session yet — a fresh chat cannot have a running turn to queue behind.
-            // Fall through to a normal turn instead.
-            self.submit_prompt_with_context(prompt, attachments, context_files, cx);
+            self.submit_prompt_with_context(prompt, attachments, annotations, context_files, cx);
             return;
         };
         let dq = RunPromptDto {
@@ -103,6 +101,11 @@ impl ConsoleDesktopApp {
             } else {
                 Some(attachments.clone())
             },
+            annotations: if annotations.is_empty() {
+                None
+            } else {
+                Some(annotations.clone())
+            },
         };
         let queued_item = console_core::QueuedPrompt {
             id: format!("queued-{}", chrono::Utc::now().timestamp_micros()),
@@ -114,15 +117,15 @@ impl ConsoleDesktopApp {
             approval_mode: dq.approval_mode.clone(),
             thinking_level: console_core::queued_thinking_to_proto(dq.thinking_level),
             attachments: console_core::queued_attachments_to_proto(dq.attachments.clone()),
-            annotations: vec![],
+            annotations: console_core::queued_annotations_to_proto(dq.annotations.clone()),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.add_queued_prompt_for_session(&session_id, queued_item);
 
-        // Clear the composer for the next draft; the queue card is now the source of truth.
         self.composer_for_pane(&pane_id)
             .update(cx, |input, cx| input.clear(cx));
         self.set_attachments_for_pane(&pane_id, Vec::new());
+        self.set_annotations_for_pane(&pane_id, Vec::new());
         self.clear_draft_for_session(Some(&session_id), cx);
         self.revoke_sidebar_draft(&session_id);
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
@@ -198,20 +201,22 @@ impl ConsoleDesktopApp {
         let prompt = queued.prompt.clone();
         let attachments =
             console_core::queued_attachments_from_proto(&queued.attachments).unwrap_or_default();
+        let annotations =
+            console_core::queued_annotations_from_proto(&queued.annotations).unwrap_or_default();
         let context_files = queued.context_files.clone();
-        // Restore into composer for editing, then discard the queue entry.
         self.composer_for_pane(&pane_id).update(cx, |input, cx| {
             input.set_content_with_context_files(prompt.clone(), context_files, cx)
         });
         if !attachments.is_empty() {
             self.set_attachments_for_pane(&pane_id, attachments);
         }
+        if !annotations.is_empty() {
+            self.set_annotations_for_pane(&pane_id, annotations);
+        }
         cx.notify();
         self.sync_server_queue_for_session(&session_id, cx);
     }
 
-    /// Turn the queued card's own choices into the run DTO. Shared by the
-    /// server queue bookkeeping, so a re-staged prompt carries everything.
     fn queued_prompt_to_run_dto(queued: &console_core::QueuedPrompt) -> RunPromptDto {
         RunPromptDto {
             prompt: queued.prompt.clone(),
@@ -223,6 +228,7 @@ impl ConsoleDesktopApp {
                 queued.thinking_level.as_deref(),
             ),
             attachments: console_core::queued_attachments_from_proto(&queued.attachments),
+            annotations: console_core::queued_annotations_from_proto(&queued.annotations),
         }
     }
 
@@ -270,6 +276,8 @@ impl ConsoleDesktopApp {
             PromptStart {
                 prompt: queued.prompt,
                 attachments: console_core::queued_attachments_from_proto(&queued.attachments)
+                    .unwrap_or_default(),
+                annotations: console_core::queued_annotations_from_proto(&queued.annotations)
                     .unwrap_or_default(),
                 context_files: console_core::queued_strings_from_proto(&queued.context_files)
                     .unwrap_or_default(),
@@ -326,6 +334,7 @@ impl ConsoleDesktopApp {
             )
             .or_else(|| self.pane_thinking_level(&pane_id)),
             attachments: console_core::queued_attachments_from_proto(&queued.attachments),
+            annotations: console_core::queued_annotations_from_proto(&queued.annotations),
         };
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -374,18 +383,16 @@ impl ConsoleDesktopApp {
             return;
         }
         if !running {
-            // Idle: behave like Enter — a normal turn, not a queue behind
-            // nothing.
             self.active_pane_id = Some(pane_id.clone());
             self.selected_session_id = self.active_session_for_pane(&pane_id);
             let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-            self.submit_prompt_with_context(prompt, attachments, context_files, cx);
+            let annotations = (*self.annotations_for_pane(&pane_id)).clone();
+            self.submit_prompt_with_context(prompt, attachments, annotations, context_files, cx);
             return;
         }
-        // Running with no staged prompt: behave like a normal queue (POST
-        // /queue, no abort).
         let attachments = (*self.attachments_for_pane(&pane_id)).clone();
-        self.queue_prompt_for_pane(pane_id, prompt, attachments, context_files, cx);
+        let annotations = (*self.annotations_for_pane(&pane_id)).clone();
+        self.queue_prompt_for_pane(pane_id, prompt, attachments, annotations, context_files, cx);
     }
 
     /// Composer submit (Enter): a normal turn. See `start_prompt_run` for
@@ -394,6 +401,7 @@ impl ConsoleDesktopApp {
         &mut self,
         prompt: String,
         attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
         context_files: Vec<String>,
         cx: &mut Context<Self>,
     ) {
@@ -401,6 +409,7 @@ impl ConsoleDesktopApp {
             PromptStart {
                 prompt,
                 attachments,
+                annotations,
                 context_files,
                 model_id: None,
                 provider: None,
@@ -419,6 +428,7 @@ impl ConsoleDesktopApp {
         let PromptStart {
             prompt,
             attachments,
+            annotations,
             context_files,
             model_id: queued_model_id,
             provider: queued_provider,
@@ -430,8 +440,6 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        // Fresh slate for this pane only: its active chat's error, or the
-        // app-level banner if that is what is showing.
         self.clear_error_for_pane(&run_pane_id, cx);
         let active_session = self
             .active_session_for_pane(&run_pane_id)
@@ -443,9 +451,6 @@ impl ConsoleDesktopApp {
             }
             self.composer_for_pane(&run_pane_id)
                 .update(cx, |input, cx| {
-                    // Optimistic: this message has no server id yet, so recalling
-                    // it restores text and mentions but not images. The rebuilt
-                    // history after the run settles carries the real id.
                     input.record_prompt_history(
                         prompt.clone(),
                         context_files.clone(),
@@ -455,8 +460,6 @@ impl ConsoleDesktopApp {
                 });
         }
 
-        // Push the clean prompt and structured paths into the optimistic
-        // transcript. The server receives the same two fields separately.
         let user_msg = AgentMessage::User {
             id: None,
             content: prompt.clone(),
@@ -469,6 +472,11 @@ impl ConsoleDesktopApp {
                 None
             } else {
                 Some(context_files.clone())
+            },
+            annotations: if annotations.is_empty() {
+                None
+            } else {
+                Some(annotations.clone())
             },
             created_at: Some(chrono::Utc::now().timestamp()),
         };
@@ -506,9 +514,8 @@ impl ConsoleDesktopApp {
                 .update(cx, |input, cx| {
                     input.set_content("", cx);
                 });
-            // Clear only this pane's staged attachments; other splits keep
-            // their chips for their own next prompt.
             self.set_attachments_for_pane(&run_pane_id, Vec::new());
+            self.set_annotations_for_pane(&run_pane_id, Vec::new());
         }
         // Capture the run's start time once. Running state is keyed by session
         // id so it stays attached to the owning chat across pane switches. For
@@ -600,6 +607,7 @@ impl ConsoleDesktopApp {
                 approval_mode,
                 thinking_level,
                 attachments: if attachments.is_empty() { None } else { Some(attachments) },
+                annotations: if annotations.is_empty() { None } else { Some(annotations) },
             };
 
             let mut stream = match transport.start_run(&client, &session_id, &run_dto).await {
@@ -1124,6 +1132,9 @@ impl ConsoleDesktopApp {
                             context_files: console_core::queued_strings_from_proto(
                                 &popped.context_files,
                             ),
+                            annotations: console_core::queued_annotations_from_proto(
+                                &popped.annotations,
+                            ),
                             created_at: Some(chrono::Utc::now().timestamp()),
                         };
                         if pane_shows_run {
@@ -1152,6 +1163,9 @@ impl ConsoleDesktopApp {
                                 ),
                                 attachments: console_core::queued_attachments_from_proto(
                                     &next.attachments,
+                                ),
+                                annotations: console_core::queued_annotations_from_proto(
+                                    &next.annotations,
                                 ),
                             };
                             cx.spawn(async move |_, _| {

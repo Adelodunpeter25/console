@@ -224,18 +224,24 @@ The agent is instructed to:
 ### 8.1 Done
 - Inspect toggle in the browser toolbar, plus `⌘⇧C` and `Esc` (exit).
 - `WebviewHost::evaluate_script` calls `WKWebView` directly (wry's queue never flushed because `ConsoleNavigationDelegate` replaces wry's delegate).
-- `inspector.js`: hover highlight that tracks scroll/resize, stays active after a pick, blocks page pointer events while inspecting, and re-creates its overlay if the page removes it.
-- On pick, IPC sends component name, source location, selector, 1KB HTML snippet, URL, title and bounds; `BrowserView` stores it as `active_inspection`.
-- `BrowserElementAnnotation` type exists in `console-core` (not yet used).
+- `inspector.js`: hover highlight that tracks scroll/resize, stays active after a pick, blocks page pointer events while inspecting, and re-creates its overlay if the page removes it. Label includes tag, id, first 3 classes, size, and `<Component />`. Pick payload includes computed styles (24 props), role, accessible name (aria-label/labelledby/labels/alt/text, private-suppressed), component name, source location, selector, 1KB snippet, URL, title, bounds.
+- Shadow DOM: `pickElement` descends open shadow roots; selectors cross roots via `segmentFor` + host chaining. iframes: same-origin frames are walked in `pickElement` with bounds offset back to the top page; selectors prefix the iframe segment. Masking: `isPrivateTree` (self, ancestor, descendant password/`data-private`) + `sanitizeSnippet` clones and strips `value` attrs and masks private subtree text.
+- `inspector.js` pause: `__consoleSetInspectPaused` freezes hover/pick while the popover is open (highlight frozen, page events still swallowed).
+- On pick, IPC sends all fields above; `BrowserView` stores it as `active_inspection`, pauses the inspector, starts the element screenshot, and focuses the popover input.
+- `BrowserElementAnnotation` type exists in `console-core` and is staged, persisted, queued, and rendered.
+- Server (`D`) is fully built: `annotations` on `/run` body, `run.Prompt`, `QueuedPrompt` DB column, `loop.UserMessage`, `materializeUserMessage` → `<browser_annotation>` blocks (clean stored message), token counting (`breakdown.go`, `compaction/tokens.go`), `msgparts` screenshot split, proto `BrowserAnnotation` + `QueuedPrompt.annotations`, tests (`tests/agent/browser_annotation_test.go`, `tests/api/queue_test.go`).
+- Desktop popover (`C`): `BrowserView` renders a floating popover anchored to `inspection.bounds` (thumbnail, `<Component /> • file:line`, `annotation_input`, Esc / Attach). `overlay_open()` includes the popover so the owner's `sync_workspace_webviews`/`workspace_content` occlusion sync hides the webview and shows the frozen snapshot. Two-step Esc: first press closes popover (`cancel_annotation`), second exits inspect. `Enter` (input Submit) attaches.
+- Element screenshot (`B`): `WebviewHost::take_snapshot_cropped` sets `WKSnapshotConfiguration.rect` (Y-flipped to AppKit bottom-left) + `setMaxWidth` cap, PNG-encoded, delivered async (poll ≤2s) as `screenshot_base64`; popover shows placeholder until it arrives.
+- Staging: `annotations: HashMap<pane, Rc<Vec<BrowserElementAnnotation>>>` beside `attachments` (`state/types.rs`, `state/browser_annotations.rs`), `BrowserView::set_annotation_handler` → `stage_browser_annotation` routed via `pane_hosting_browser`. Threaded through drafts (`PersistedDraft.annotations`), history recall (`history_draft_annotations`, `transcript.annotations_for_message`), queue (`RunPromptDto.annotations`, `queued_annotations_to/from_proto`), and run (`PromptStart.annotations`, `AgentMessage::User.annotations` from proto).
+- Chips: composer `ComposerAnnotation` chip (`Component • file:line` + comment tooltip + `✕`) via `composer_annotations_for_pane`; sent `UserMessageBubble` thumbnails + labels; queued card badge. `file_comments.rs` was used as pattern only (see note below).
 
-### 8.2 Not done
-- Hover label lacks class names; pick lacks computed styles and accessibility role/name.
-- No shadow DOM or iframe support; no masking of password / `data-private` values in the snippet.
-- No element screenshot (`bgra_from_bitmap` exists but nothing captures a snapshot).
-- No annotation popover (`annotation_input` is created but never rendered); nothing consumes `active_inspection`.
-- Composer only stages `ImageAttachment`; no annotation chip, drafts, queue or persistence support.
-- Server (`/run`, queue, `UserMessage`) has no annotation field and no `<browser_annotation>` prompt block.
-- Vue/Svelte component names, and the agent `browser` tool (Phase 4), are out of scope for now.
+### 8.2 Not done / open
+- Vue/Svelte component names (React fiber + `data-source-loc` only), and the agent `browser` tool (Phase 4), are out of scope.
+- Cross-origin iframes (no `contentDocument` access) fall back to the top-document hit.
+- Floating (New Chat) composer does not stage annotations (browser tabs live in panes); attachments there pass `Vec::new()`.
+- Draft sync is local-only for annotations (like image attachments; text/mentions/file-comments only sync to server).
+
+> Note on `console-shared/src/composer/file_comments.rs`: its tagged-text codec (`<file_comment>` blocks) is intentionally not reused for browser annotations. Annotations have structured transport end-to-end (server field, proto, DB column, queue), so they travel as typed data; the file-comment code is the lifecycle template (staged chip, draft, send-consume) that the new `state/browser_annotations.rs` mirrors.
 
 ### 8.3 Decisions
 - Comment entry: floating popover anchored to the element.

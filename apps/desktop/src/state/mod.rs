@@ -11,6 +11,7 @@ mod autocomplete;
 mod background_shells;
 mod bootstrap;
 mod browser_actions;
+mod browser_annotations;
 mod chrome_import;
 mod deleted_sessions;
 mod draft_sync;

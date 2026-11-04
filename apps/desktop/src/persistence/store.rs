@@ -41,6 +41,8 @@ pub struct PersistedDraft {
     pub context_files: Vec<String>,
     #[serde(default)]
     pub attachments: Vec<console_core::ImageAttachment>,
+    #[serde(default)]
+    pub annotations: Vec<console_core::BrowserElementAnnotation>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

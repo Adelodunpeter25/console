@@ -14,7 +14,9 @@
   ];
 
   let active = false;
+  let paused = false;
   let hoveredEl = null;
+  let hoveredOffset = { x: 0, y: 0 };
   let lastX = null;
   let lastY = null;
   let frame = 0;
@@ -66,29 +68,156 @@
     return !!el && (el.id === OVERLAY_ID || el.id === LABEL_ID);
   }
 
+  function segmentFor(el) {
+    let selector = el.tagName.toLowerCase();
+    if (el.className && typeof el.className === 'string') {
+      const classes = el.className.trim().split(/\s+/).filter(c => c && !c.startsWith('__console'));
+      if (classes.length > 0) {
+        selector += '.' + classes.slice(0, 2).join('.');
+      }
+    }
+    let sibling = el;
+    let nth = 1;
+    while ((sibling = sibling.previousElementSibling)) {
+      if (sibling.tagName.toLowerCase() === el.tagName.toLowerCase()) nth++;
+    }
+    if (nth > 1) selector += `:nth-of-type(${nth})`;
+    return selector;
+  }
+
   function getSelector(el) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) return '';
     if (el.id) return `#${el.id}`;
     let path = [];
-    while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.documentElement && el !== document.body) {
-      let selector = el.tagName.toLowerCase();
-      if (el.className && typeof el.className === 'string') {
-        const classes = el.className.trim().split(/\s+/).filter(c => c && !c.startsWith('__console'));
-        if (classes.length > 0) {
-          selector += '.' + classes.slice(0, 2).join('.');
+    let cur = el;
+    let guard = 0;
+    while (cur && cur.nodeType === Node.ELEMENT_NODE && guard < 12) {
+      guard++;
+      const doc = cur.ownerDocument || document;
+      if (cur === doc.documentElement || cur === doc.body) break;
+      path.unshift(segmentFor(cur));
+      if (path.length >= 4) break;
+      let parent = cur.parentElement;
+      if (!parent) {
+        const root = cur.getRootNode && cur.getRootNode();
+        if (root && root.host) {
+          parent = root.host;
+          path.unshift(segmentFor(parent));
+          cur = parent.parentElement || parent.getRootNode && parent.getRootNode().host || null;
+          if (!cur || cur === doc.documentElement) break;
+          continue;
+        }
+        break;
+      }
+      cur = parent;
+      if (cur === doc.documentElement || cur === doc.body) break;
+    }
+    let inner = path.join(' > ');
+    // Cross a frame boundary: prefix the innermost iframe's selector.
+    try {
+      const doc = el.ownerDocument || document;
+      if (doc !== document) {
+        const frames = Array.from(document.querySelectorAll('iframe'));
+        for (const f of frames) {
+          try { if (f.contentDocument === doc) { inner = segmentFor(f) + ' > ' + inner; break; } } catch (e) {}
         }
       }
-      let sibling = el;
-      let nth = 1;
-      while ((sibling = sibling.previousElementSibling)) {
-        if (sibling.tagName.toLowerCase() === el.tagName.toLowerCase()) nth++;
-      }
-      if (nth > 1) selector += `:nth-of-type(${nth})`;
-      path.unshift(selector);
-      el = el.parentElement;
-      if (path.length >= 3) break;
+    } catch (e) {}
+    return inner;
+  }
+
+  function shadowDeepest(el) {
+    let cur = el;
+    let guard = 0;
+    while (cur && cur.shadowRoot && guard < 6) {
+      guard++;
+      const inner = cur.shadowRoot.elementFromPoint(lastX, lastY);
+      if (!inner) break;
+      cur = inner;
     }
-    return path.join(' > ');
+    return cur;
+  }
+
+  function pickElement(x, y) {
+    if (x === null || y === null) return null;
+    let best = null;
+    let bestOffset = { x: 0, y: 0 };
+    // Same-origin iframes first: they win over the top document hit.
+    try {
+      const frames = Array.from(document.querySelectorAll('iframe'));
+      for (const f of frames) {
+        let rect;
+        try { rect = f.getBoundingClientRect(); } catch (e) { continue; }
+        if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) continue;
+        let innerDoc;
+        try { innerDoc = f.contentDocument; } catch (e) { continue; }
+        if (!innerDoc) continue;
+        let innerEl = null;
+        try { innerEl = innerDoc.elementFromPoint(x - rect.left, y - rect.top); } catch (e) { continue; }
+        if (!innerEl || isInspectorNode(innerEl)) continue;
+        if (innerEl.shadowRoot) {
+          try {
+            const deep = innerEl.shadowRoot.elementFromPoint(x - rect.left, y - rect.top);
+            if (deep) innerEl = deep;
+          } catch (e) {}
+        }
+        best = innerEl;
+        bestOffset = { x: rect.left, y: rect.top };
+      }
+    } catch (e) {}
+    if (best) return { el: best, offset: bestOffset };
+    let el = null;
+    try { el = document.elementFromPoint(x, y); } catch (e) { return null; }
+    if (!el || isInspectorNode(el)) return null;
+    if (el.shadowRoot) {
+      try {
+        const deep = el.shadowRoot.elementFromPoint(x, y);
+        if (deep) el = deep;
+      } catch (e) {}
+    }
+    return { el, offset: { x: 0, y: 0 } };
+  }
+
+  function isPrivateTree(el) {
+    try {
+      if (!el || !el.matches) return false;
+      if (el.matches('input[type="password"], [data-private]')) return true;
+      if (el.closest && el.closest('input[type="password"], [data-private]')) return true;
+      if (el.querySelector && el.querySelector('input[type="password"], [data-private]')) return true;
+      return passedPrivateAncestor(el);
+    } catch (e) { return false; }
+  }
+
+  function passedPrivateAncestor(el) {
+    try {
+      let cur = el.parentElement;
+      while (cur) {
+        if (cur.matches && cur.matches('[data-private]')) return true;
+        cur = cur.parentElement;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function sanitizeSnippet(el) {
+    if (isPrivateTree(el)) {
+      return `<${el.tagName.toLowerCase()} …private…>`;
+    }
+    try {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll('input[type="password"], [data-private]').forEach(n => {
+        try { n.textContent = '[private]'; n.removeAttribute('value'); } catch (e) {}
+      });
+      clone.querySelectorAll('input, textarea').forEach(n => {
+        try { n.removeAttribute('value'); } catch (e) {}
+      });
+      if (clone.tagName && clone.tagName.toLowerCase() === 'input') {
+        try { clone.removeAttribute('value'); } catch (e) {}
+      }
+      return (clone.outerHTML || '').slice(0, 1000);
+    } catch (e) {
+      return (el.outerHTML ? el.outerHTML.slice(0, 1000) : '');
+    }
   }
 
   function extractComponentMetadata(el) {
@@ -163,12 +292,13 @@
 
   function getAccessibleName(el) {
     const clean = (t) => (t || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const doc = el.ownerDocument || document;
     const aria = el.getAttribute('aria-label');
     if (aria && aria.trim()) return clean(aria);
     const by = el.getAttribute('aria-labelledby');
     if (by) {
       const text = by.split(/\s+/)
-        .map((id) => document.getElementById(id))
+        .map((id) => { try { return doc.getElementById(id); } catch (e) { return null; } })
         .filter(Boolean)
         .map((n) => n.textContent)
         .join(' ');
@@ -180,7 +310,7 @@
     }
     const alt = el.getAttribute('alt');
     if (alt && alt.trim()) return clean(alt);
-    if (isPrivate(el)) return null;
+    if (isPrivate(el) || isPrivateTree(el)) return null;
     const title = el.getAttribute('title');
     const text = clean(el.innerText || el.textContent);
     return text || clean(title) || clean(el.getAttribute('placeholder')) || null;
@@ -196,7 +326,8 @@
   function getComputedStyles(el) {
     const out = {};
     try {
-      const cs = getComputedStyle(el);
+      const win = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+      const cs = win.getComputedStyle(el);
       for (const prop of STYLE_PROPS) {
         const v = cs.getPropertyValue(prop);
         if (!v || v === 'none' || v === 'normal' || v === 'auto' || v === '0px') continue;
@@ -214,14 +345,19 @@
     return classes.length > 3 ? `${shown}…` : shown;
   }
 
-  function updateOverlay(el) {
+  function updateOverlay(el, offset) {
     if (!el || !el.isConnected) {
       hideOverlay();
       return;
     }
+    const off = offset || { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
-    const offscreen = rect.bottom <= 0 || rect.right <= 0
-      || rect.top >= window.innerHeight || rect.left >= window.innerWidth;
+    const top = rect.top + off.y;
+    const left = rect.left + off.x;
+    const bottom = rect.bottom + off.y;
+    const right = rect.right + off.x;
+    const offscreen = bottom <= 0 || right <= 0
+      || top >= window.innerHeight || left >= window.innerWidth;
     if ((rect.width === 0 && rect.height === 0) || offscreen) {
       hideOverlay();
       return;
@@ -229,8 +365,8 @@
 
     const { overlay, label } = getOrCreateOverlay();
     overlay.style.display = 'block';
-    overlay.style.top = `${rect.top}px`;
-    overlay.style.left = `${rect.left}px`;
+    overlay.style.top = `${top}px`;
+    overlay.style.left = `${left}px`;
     overlay.style.width = `${rect.width}px`;
     overlay.style.height = `${rect.height}px`;
 
@@ -244,8 +380,7 @@
       ? `${base} · <${componentName} /> (${dim})`
       : `${base} (${dim})`;
 
-    // Position label inside if close to top edge
-    if (rect.top < 26) {
+    if (top < 26) {
       label.style.top = '2px';
       label.style.left = '2px';
     } else {
@@ -259,12 +394,18 @@
   function refresh() {
     frame = 0;
     if (!active) return;
+    if (paused) return;
     if (lastX !== null && lastY !== null) {
-      const target = document.elementFromPoint(lastX, lastY);
-      if (target && !isInspectorNode(target)) hoveredEl = target;
-      else if (!target) hoveredEl = null;
+      const pick = pickElement(lastX, lastY);
+      if (pick) {
+        hoveredEl = pick.el;
+        hoveredOffset = pick.offset;
+      } else {
+        hoveredEl = null;
+        hoveredOffset = { x: 0, y: 0 };
+      }
     }
-    updateOverlay(hoveredEl);
+    updateOverlay(hoveredEl, hoveredOffset);
   }
 
   function scheduleRefresh() {
@@ -274,11 +415,13 @@
   function onPointerMove(e) {
     lastX = e.clientX;
     lastY = e.clientY;
+    if (paused) return;
     scheduleRefresh();
   }
 
   function onPointerLeave(e) {
     if (e.relatedTarget) return;
+    if (paused) return;
     lastX = lastY = null;
     hoveredEl = null;
     hideOverlay();
@@ -292,13 +435,16 @@
 
   function onBlockedEvent(e) {
     swallow(e);
-    // Pick on click only, and only for the primary button.
+    if (paused) return;
     if (e.type !== 'click' || e.button !== 0) return;
 
-    const el = document.elementFromPoint(e.clientX, e.clientY) || hoveredEl;
+    const pick = pickElement(e.clientX, e.clientY);
+    const el = pick ? pick.el : hoveredEl;
+    const offset = pick ? pick.offset : hoveredOffset;
     if (!el || isInspectorNode(el)) return;
     hoveredEl = el;
-    updateOverlay(el);
+    hoveredOffset = offset;
+    updateOverlay(el, offset);
 
     const rect = el.getBoundingClientRect();
     const { componentName, sourceLocation } = extractComponentMetadata(el);
@@ -307,15 +453,14 @@
       componentName: componentName || null,
       sourceLocation: sourceLocation || null,
       selector: getSelector(el),
-      htmlSnippet: isPrivate(el) ? `<${el.tagName.toLowerCase()} …private…>` : (el.outerHTML ? el.outerHTML.slice(0, 1000) : ''),
+      htmlSnippet: sanitizeSnippet(el),
       role: getRole(el),
       accessibleName: getAccessibleName(el),
       computedStyles: getComputedStyles(el),
       url: window.location.href,
       title: document.title,
-      bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      bounds: { x: rect.x + offset.x, y: rect.y + offset.y, width: rect.width, height: rect.height },
     });
-    // Inspect mode stays on so several elements can be picked in a row.
   }
 
   function onKeyDown(e) {
@@ -343,6 +488,7 @@
     enable = !!enable;
     if (enable === active) return;
     active = enable;
+    if (!enable) paused = false;
     setListeners(enable);
     setCursorStyle(enable);
     if (frame) {
@@ -355,5 +501,16 @@
     }
   }
 
+  function setInspectPaused(enable) {
+    enable = !!enable;
+    if (enable === paused) return;
+    paused = enable;
+    if (paused && frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+  }
+
   window.__consoleSetInspectMode = setInspectActive;
+  window.__consoleSetInspectPaused = setInspectPaused;
 })();

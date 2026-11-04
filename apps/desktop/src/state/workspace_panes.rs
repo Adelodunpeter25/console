@@ -19,12 +19,14 @@ impl ConsoleDesktopApp {
             let mentions = input.mentions().to_vec();
             let context_files = input.context_files().to_vec();
             let attachments = self.attachments_for_pane(pane_id);
+            let annotations = self.annotations_for_pane(pane_id);
             self.commit_draft_to_sidebar_with_context(
                 session_id,
                 &text,
                 &mentions,
                 &context_files,
                 &attachments,
+                &annotations,
                 cx,
             );
         }
@@ -408,13 +410,18 @@ impl ConsoleDesktopApp {
             }
             let draft = self.get_draft_with_mentions(Some(sid));
             let draft_ctx_files = self.get_draft_context_files(Some(sid));
-            // Load attachments from the draft for this session
             let draft_attachments = self
                 .drafts
                 .get(sid)
                 .map(|draft| draft.attachments.clone())
                 .unwrap_or_default();
             self.set_attachments_for_pane(pane_id, draft_attachments);
+            let draft_annotations = self
+                .drafts
+                .get(sid)
+                .map(|draft| draft.annotations.clone())
+                .unwrap_or_default();
+            self.set_annotations_for_pane(pane_id, draft_annotations);
             self.composer_for_pane(pane_id).update(cx, |input, cx| {
                 input.set_prompt_history(Vec::new(), cx);
                 if let Some((draft_text, mentions)) = draft {
