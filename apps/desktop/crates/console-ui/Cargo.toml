@@ -144,3 +144,7 @@ path = "tests/inspector/watch_streams_test.rs"
 [[test]]
 name = "chat_ref_autocomplete_test"
 path = "tests/composer/chat_ref_autocomplete_test.rs"
+
+[[test]]
+name = "hidden_prefix_test"
+path = "tests/composer/hidden_prefix_test.rs"
