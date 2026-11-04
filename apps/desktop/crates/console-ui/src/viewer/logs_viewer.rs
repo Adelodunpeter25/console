@@ -64,7 +64,7 @@ impl RenderOnce for LogsViewer {
             let selection = selection.clone();
             canvas(
                 |_, _, _| (),
-                move |_, _, window, _| render::install_selection_input(window, &selection),
+                move |_, _, window, _| render::install_selection_input(window, &selection, None),
             )
             .absolute()
             .w(px(0.0))

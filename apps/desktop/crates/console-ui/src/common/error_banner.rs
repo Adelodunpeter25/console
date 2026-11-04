@@ -82,7 +82,7 @@ pub fn error_banner(
 fn selection_input(selection: TranscriptSelection) -> impl IntoElement {
     gpui::canvas(
         |_, _, _| {},
-        move |_, _, window, _| markdown::install_selection_input(window, &selection),
+        move |_, _, window, _| markdown::install_selection_input(window, &selection, None),
     )
     .absolute()
     .w(px(0.0))

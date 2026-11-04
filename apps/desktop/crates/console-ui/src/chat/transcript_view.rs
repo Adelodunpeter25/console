@@ -1348,7 +1348,7 @@ impl Render for TranscriptView {
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
                     .into_any_element()
             })
-            .child(selection_input(selection.clone()));
+            .child(selection_input(selection.clone(), cite_origin.clone()));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
@@ -1692,10 +1692,15 @@ fn is_hidden_tool_transport(message: &AgentMessage) -> bool {
     }
 }
 
-fn selection_input(selection: TranscriptSelection) -> impl IntoElement {
+fn selection_input(
+    selection: TranscriptSelection,
+    viewport: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>,
+) -> impl IntoElement {
     canvas(
         |_, _, _| (),
-        move |_, _, window, _| render::install_selection_input(window, &selection),
+        move |_, _, window, _| {
+            render::install_selection_input(window, &selection, Some(viewport.clone()));
+        },
     )
     .absolute()
     .w(px(0.0))

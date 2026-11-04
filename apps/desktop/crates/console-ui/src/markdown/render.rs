@@ -1254,13 +1254,24 @@ fn cite_button_contains(
     })
 }
 
+/// Window-space bounds of a component's visible area, recorded at paint time.
+/// Selection hit-testing uses it to reject geometry laid out beyond the
+/// viewport: a virtualized list paints an overdraw row past the fold whose
+/// registered text bounds extend under whatever sits below (the composer),
+/// and a press there must not begin an off-screen selection.
+pub type SelectionViewport = Rc<RefCell<Option<Bounds<Pixels>>>>;
+
 /// Install the frame's selection mouse listeners.
 ///
 /// These live once per frame at the transcript root rather than once per
 /// painted text element: the registry already holds every element's geometry,
 /// so three closures replace three-per-element and a mouse move costs one
 /// registry scan instead of one dispatch per visible paragraph.
-pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection) {
+pub fn install_selection_input(
+    window: &mut Window,
+    state: &TranscriptSelection,
+    viewport: Option<SelectionViewport>,
+) {
     window.on_mouse_event({
         let state = state.clone();
         move |event: &MouseDownEvent, phase, window, _| {
@@ -1289,11 +1300,22 @@ pub fn install_selection_input(window: &mut Window, state: &TranscriptSelection)
             if action != PressAction::None {
                 return;
             }
+            // Only text inside the visible area can begin a selection. With
+            // no recorded viewport (not painted yet) the whole registry is
+            // fair game, matching the pre-viewport behaviour.
+            let visible = viewport
+                .as_ref()
+                .and_then(|viewport| *viewport.borrow())
+                .is_none_or(|bounds| bounds.contains(&event.position));
             let registry = state.registry.borrow();
-            let hit = registry.entries().iter().enumerate().find(|(_, entry)| {
-                !layout_missing(&entry.geometry)
-                    && entry.geometry.bounds().contains(&event.position)
-            });
+            let hit = if visible {
+                registry.entries().iter().enumerate().find(|(_, entry)| {
+                    !layout_missing(&entry.geometry)
+                        && entry.geometry.bounds().contains(&event.position)
+                })
+            } else {
+                None
+            };
             let mut selection = state.selection.borrow_mut();
             match hit {
                 Some((_, entry)) => {
