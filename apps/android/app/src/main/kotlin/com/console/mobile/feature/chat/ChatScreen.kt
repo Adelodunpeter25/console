@@ -31,7 +31,9 @@ import com.console.mobile.core.chat.reconstructRuns
 import com.console.mobile.core.chat.runningBackgroundShells
 import com.console.mobile.core.util.changeSummary
 import com.console.mobile.data.model.SessionStatus
+import com.console.mobile.data.repo.ScriptsRepository
 import com.console.mobile.data.store.MobileTab
+import com.console.mobile.feature.scripts.ScriptsSheet
 import com.console.mobile.feature.subagents.SubagentDetailsSheet
 import com.console.mobile.ui.components.common.new.ChatLoadingSkeleton
 import com.console.mobile.ui.components.common.new.EmptyView
@@ -62,6 +64,7 @@ fun ChatScreen(
     onOpenTab: (MobileTab) -> Unit,
     onAddProject: () -> Unit,
     onOpenPorts: () -> Unit,
+    onOpenUrl: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val appState by AppContainer.appStateHolder.state.collectAsStateWithLifecycle()
@@ -191,6 +194,19 @@ fun ChatScreen(
     val view = sessionViews[sessionId]
     val cwd = view?.sessionCwd
 
+    // Run scripts: the chat's project (worktree chats keep their own checkout
+    // via cwd). The overflow menu's indicator reads the repository's live runs,
+    // so a script left running is visible without opening the sheet.
+    var scriptsSheet by remember { mutableStateOf(false) }
+    val scriptProject = projectForSession(projectState.projects, view?.projectId, cwd)
+    val scriptRuns by AppContainer.scriptsRepository.runs.collectAsStateWithLifecycle()
+    val scriptsRunning = scriptProject != null && scriptRuns.any { (key, runView) ->
+        key.startsWith(ScriptsRepository.projectPrefix(scriptProject.id, cwd)) && runView.isRunning
+    }
+    LaunchedEffect(scriptProject?.id, cwd) {
+        scriptProject?.let { AppContainer.scriptsRepository.refreshRuns(it.id, cwd) }
+    }
+
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
             val match = projectForSession(projectState.projects, view.projectId, cwd)
@@ -260,6 +276,9 @@ fun ChatScreen(
             onOpenFiles = { jumpToProjectTab(MobileTab.Files) },
             onOpenChanges = { jumpToProjectTab(MobileTab.Changes) },
             onOpenPorts = onOpenPorts,
+            onOpenScripts = { scriptsSheet = true },
+            scriptsAvailable = scriptProject != null,
+            scriptsRunning = scriptsRunning,
             onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
             onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
             modifier = Modifier.align(Alignment.TopCenter),
@@ -352,6 +371,15 @@ fun ChatScreen(
         cwd = cwd,
         onDismiss = { inspectingChange = null },
     )
+
+    if (scriptsSheet && scriptProject != null) {
+        ScriptsSheet(
+            projectId = scriptProject.id,
+            cwd = cwd,
+            onOpenUrl = onOpenUrl,
+            onDismiss = { scriptsSheet = false },
+        )
+    }
 
     @Suppress("UNUSED_EXPRESSION")
     LaunchedEffect(sessionStatuses[sessionId]) { }

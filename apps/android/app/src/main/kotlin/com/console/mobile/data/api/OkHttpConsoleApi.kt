@@ -37,7 +37,9 @@ import console.v1.GitCheckoutRequest
 import console.v1.GitDiffResponse
 import console.v1.GitStatusSummary
 import console.v1.ProjectInfo
+import console.v1.ProjectScriptsResult
 import console.v1.QueuedPrompt
+import console.v1.ScriptRun
 import console.v1.SetFavoriteRequest
 import console.v1.UsageReport
 import com.console.mobile.data.model.OAuthCallbackDto
@@ -120,6 +122,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val forwardedPortAdapter by lazy { wireMoshi.adapter(ForwardedPort::class.java) }
+    private val projectScriptsResultAdapter by lazy { wireMoshi.adapter(ProjectScriptsResult::class.java) }
+    private val scriptRunAdapter by lazy { wireMoshi.adapter(ScriptRun::class.java) }
+    private val stopScriptRunAdapter by lazy { wireMoshi.adapter(console.v1.StopScriptRunResponse::class.java) }
     private val deviceDiagnosticsAdapter by lazy { wireMoshi.adapter(DeviceDiagnostics::class.java) }
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
     private val assistSearchAdapter by lazy { wireMoshi.adapter(AssistFileSearchResponse::class.java) }
@@ -819,6 +824,44 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun unforwardPort(port: Int, projectId: String?) {
         val raw = http.delete("/api/ports/$port", mapOf("projectId" to projectId))
         ensureOk(raw, "unforward port")
+    }
+
+    // --- project run scripts -------------------------------------------------
+
+    override suspend fun getProjectScripts(projectId: String, cwd: String?): ProjectScriptsResult {
+        val raw = http.get("/api/projects/${enc(projectId)}/scripts", mapOf("cwd" to cwd))
+        return http.unwrapOrRawAdapter(raw, projectScriptsResultAdapter, "load run scripts")
+    }
+
+    override suspend fun startScriptRun(projectId: String, scriptId: String, cwd: String?): ScriptRun {
+        val raw = http.post(
+            "/api/projects/${enc(projectId)}/scripts/${enc(scriptId)}/runs" +
+                (cwd?.let { "?cwd=${enc(it)}" } ?: ""),
+        )
+        return http.unwrapOrRawAdapter(raw, scriptRunAdapter, "run script")
+    }
+
+    override suspend fun listScriptRuns(projectId: String, cwd: String?): List<ScriptRun> {
+        val raw = http.get("/api/projects/${enc(projectId)}/scripts/runs", mapOf("cwd" to cwd))
+        val items = http.unwrapOrRaw(raw, JsonArray.serializer(), "load script runs")
+        return items.mapNotNull { scriptRunAdapter.fromJson(it.toString()) }
+    }
+
+    override suspend fun getScriptRun(projectId: String, runId: String, cwd: String?): ScriptRun {
+        val raw = http.get(
+            "/api/projects/${enc(projectId)}/scripts/runs/${enc(runId)}",
+            mapOf("cwd" to cwd),
+        )
+        return http.unwrapOrRawAdapter(raw, scriptRunAdapter, "load script run")
+    }
+
+    override suspend fun stopScriptRun(projectId: String, runId: String, cwd: String?): Boolean {
+        val raw = http.post(
+            "/api/projects/${enc(projectId)}/scripts/runs/${enc(runId)}/stop" +
+                (cwd?.let { "?cwd=${enc(it)}" } ?: ""),
+        )
+        val stopped = http.unwrapOrRawAdapter(raw, stopScriptRunAdapter, "stop script run")
+        return stopped.stopped
     }
 
     private fun ensureOk(raw: String, action: String) {

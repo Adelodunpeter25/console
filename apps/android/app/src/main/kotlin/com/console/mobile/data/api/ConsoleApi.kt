@@ -25,8 +25,10 @@ import console.v1.PutDraftResponse
 import com.console.mobile.data.model.OAuthCallbackDto
 import com.console.mobile.data.model.OAuthLoginUrlDto
 import console.v1.ProjectInfo
+import console.v1.ProjectScriptsResult
 import console.v1.QueuedPrompt
 import console.v1.ProviderCatalogEntry
+import console.v1.ScriptRun
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
@@ -160,5 +162,13 @@ interface ConsoleApi {
     suspend fun getPorts(projectId: String? = null): List<console.v1.ForwardedPort>
     suspend fun forwardPort(port: Int, projectId: String? = null): console.v1.ForwardedPort
     suspend fun unforwardPort(port: Int, projectId: String? = null)
+    // project run scripts (console.toml [scripts]; the sixth shared-schema
+    // domain, reached from the chat overflow menu). `cwd` scopes a worktree
+    // chat to its own checkout, matching the desktop's scripts target.
+    suspend fun getProjectScripts(projectId: String, cwd: String? = null): ProjectScriptsResult
+    suspend fun startScriptRun(projectId: String, scriptId: String, cwd: String? = null): ScriptRun
+    suspend fun listScriptRuns(projectId: String, cwd: String? = null): List<ScriptRun>
+    suspend fun getScriptRun(projectId: String, runId: String, cwd: String? = null): ScriptRun
+    suspend fun stopScriptRun(projectId: String, runId: String, cwd: String? = null): Boolean
 }
 

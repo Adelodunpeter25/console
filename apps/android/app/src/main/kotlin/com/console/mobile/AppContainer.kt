@@ -23,6 +23,7 @@ import com.console.mobile.data.repo.NotificationRepository
 import com.console.mobile.data.repo.ProjectRepository
 import com.console.mobile.data.repo.PortsRepository
 import com.console.mobile.data.repo.ProviderRepository
+import com.console.mobile.data.repo.ScriptsRepository
 import com.console.mobile.data.repo.SessionRepository
 import com.console.mobile.data.repo.TerminalRepository
 import com.console.mobile.data.repo.UsageRepository
@@ -184,6 +185,9 @@ object AppContainer {
     lateinit var portsRepository: PortsRepository
         private set
 
+    lateinit var scriptsRepository: ScriptsRepository
+        private set
+
     /**
      * Teardown that outlives any screen — dropping the port tunnels when the
      * server changes. Screens keep their own scopes for their own work.
@@ -341,6 +345,13 @@ object AppContainer {
             api = consoleApi,
             forwards = localForwardManager,
         )
+        // Run scripts: console.toml [scripts] for the chat's project, with live
+        // run output over the run's SSE stream.
+        scriptsRepository = ScriptsRepository(
+            api = consoleApi,
+            apiClient = consoleApiClient,
+            httpClient = httpClient,
+        )
         environmentsRepository = EnvironmentsRepository(
             preferencesStore = preferencesStore,
             environmentsState = environmentsStateHolder,
@@ -359,6 +370,7 @@ object AppContainer {
                 // they do not survive a switch; the next refresh rebuilds them
                 // for whichever server is active now.
                 backgroundScope.launch { portsRepository.stop() }
+                scriptsRepository.clear()
                 projectRepository.loadProjects()
                 projectRepository.loadSessions()
                 providerRepository.loadProviders()

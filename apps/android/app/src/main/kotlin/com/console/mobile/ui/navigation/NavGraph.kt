@@ -160,6 +160,7 @@ fun AppNavGraph() {
                         },
                         onAddProject = { navController.navigate(RouteAddProject) },
                         onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
+                        onOpenUrl = { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } },
                     )
                 }
             }
