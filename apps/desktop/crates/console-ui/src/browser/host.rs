@@ -513,18 +513,21 @@ mod macos_host {
                 return;
             };
             unsafe {
+                use objc2::runtime::NSObjectProtocol;
                 let config = WKSnapshotConfiguration::new(mtm);
-                // WKWebView rect space is points, origin bottom-left.
-                // inspector bounds are CSS px, origin top-left. Flip Y.
                 let webview_h = self.wk.frame().size.height;
                 let flipped_y = webview_h - y - h;
                 let ns_rect = NSRect {
                     origin: NSPoint { x, y: flipped_y },
                     size: NSSize { width: w, height: h },
                 };
-                let _: () = objc2::msg_send![&config, setRect: ns_rect];
-                let capped_w = w.min(400.0).max(1.0);
-                let _: () = objc2::msg_send![&config, setMaxWidth: capped_w];
+                if config.respondsToSelector(objc2::runtime::Sel::register(c"setRect:")) {
+                    let _: () = objc2::msg_send![&config, setRect: ns_rect];
+                }
+                if config.respondsToSelector(objc2::runtime::Sel::register(c"setMaxWidth:")) {
+                    let capped_w = w.min(400.0).max(1.0);
+                    let _: () = objc2::msg_send![&config, setMaxWidth: capped_w];
+                }
                 self.wk
                     .takeSnapshotWithConfiguration_completionHandler(Some(&config), &handler);
             }
