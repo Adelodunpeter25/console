@@ -193,6 +193,19 @@ func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) 
 	return s.inner.Header(sessionID)
 }
 
+// Cross-chat reference operations (see services/session/reference.go).
+func (s *SessionService) ParseDollarRefs(text string) []string {
+	return session.ParseDollarRefs(text)
+}
+
+func (s *SessionService) ResolveReference(currentSessionID, ref string) (*types.SessionHeader, error) {
+	return s.inner.ResolveReference(currentSessionID, ref)
+}
+
+func (s *SessionService) ReadReferencedChat(currentSessionID, ref string, limit int) (string, string, string, error) {
+	return s.inner.ReadReferencedChat(currentSessionID, ref, limit)
+}
+
 // SoftDelete marks a session deleted (unconditional, idempotent success for
 // known ids). When the session owns a clean
 // worktree, the worktree and its branch are removed immediately as part of

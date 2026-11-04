@@ -407,6 +407,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		projectID = *header.ProjectID
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
+	toolList = append(toolList, tools.NewReadChatTool(sessionID, s.sessions))
 	// writePlan is offered in plan mode only: it is the sole file write a
 	// read-only run may make, and in every other mode write_file does the job.
 	if mode == permissions.PlanMode {
@@ -423,6 +424,14 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// what the user typed.
 	for _, ref := range s.capabilitySetup(sessionID) {
 		setup = strings.TrimSpace(setup + "\n\n" + ref)
+	}
+	// $referenced chats resolve the same way: a named target in setup,
+	// never transcript content, and never for synthetic wake turns whose
+	// text the user did not write.
+	if !dto.Synthetic {
+		if refSetup := s.chatRefSetup(sessionID, dto.Text); refSetup != "" {
+			setup = strings.TrimSpace(setup + "\n\n" + refSetup)
+		}
 	}
 	var registry *tools.Registry
 	toolList = replaceTool(toolList, "subagent", loop.NewSubagentTool(&loop.SubagentContext{
