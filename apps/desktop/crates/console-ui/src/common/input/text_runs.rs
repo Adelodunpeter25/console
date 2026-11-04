@@ -58,6 +58,11 @@ pub fn input_text_runs(
     for mention in mentions {
         boundaries.push(mention.range.start.min(display_len));
         boundaries.push(mention.range.end.min(display_len));
+        // Chat `$` and skill `/` prefixes are payload, not display: they get
+        // their own run so the chip shows just the slug/name.
+        if mention.is_chat() || mention.is_skill() {
+            boundaries.push((mention.range.start + 1).min(display_len));
+        }
     }
     boundaries.sort_unstable();
     boundaries.dedup();
@@ -89,8 +94,15 @@ pub fn input_text_runs(
             let is_in_mention = covering_mention(start, end);
             let is_selected =
                 selected_range.is_some_and(|range| range.start < end && range.end > start);
+            let hidden_prefix = is_in_mention
+                && end == start + 1
+                && mentions.iter().any(|m| {
+                    m.range.start == start && (m.is_chat() || m.is_skill())
+                });
             let color = if is_selected {
                 gpui::white()
+            } else if hidden_prefix {
+                mention_bg_color
             } else if is_in_mention {
                 mention_color
             } else {

@@ -515,14 +515,8 @@ impl RenderOnce for AutocompleteView {
                     })
                     .into_any_element(),
                 AutocompleteItem::Chat(session) => {
-                    let slug = slugify_chat_title(&session.title);
-                    let slug = if slug.is_empty() {
-                        session.id.clone()
-                    } else {
-                        slug
-                    };
-                    // The title is what the user recognises; the slug it
-                    // inserts is secondary.
+                    // Only the title shows; the `$slug` is injected into
+                    // the text but never displayed.
                     row.child(
                         app_icon(IconName::ChatRoundLine, 13.0, theme.text_tertiary)
                             .into_any_element(),
@@ -540,13 +534,6 @@ impl RenderOnce for AutocompleteView {
                                 theme.text_secondary
                             })
                             .child(session.title.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(12.0))
-                            .text_color(theme.text_tertiary)
-                            .flex_none()
-                            .child(format!("${slug}")),
                     )
                     .into_any_element()
                 }

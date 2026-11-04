@@ -99,10 +99,9 @@ fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
     }
 }
 
-/** `$` chat-ref suggestion row — the chat title is what the user recognises, so it leads; the `$slug` it inserts is secondary. */
+/** `$` chat-ref suggestion row — only the chat title shows; the `$slug` is injected but never displayed. */
 @Composable
 fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
-    val slug = com.console.mobile.core.util.slugifyChatTitle(session.title ?: "").ifBlank { session.id }
     val title = session.title?.takeIf { it.isNotBlank() } ?: session.id
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
@@ -115,7 +114,6 @@ fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
             modifier = Modifier.padding(end = 8.dp),
         )
         Text(title, color = NewTheme.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text("\$$slug", color = NewTheme.TextSecondary, fontSize = 11.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
     }
 }
 

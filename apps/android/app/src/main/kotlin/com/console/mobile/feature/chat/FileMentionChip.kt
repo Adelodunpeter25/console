@@ -163,11 +163,13 @@ internal fun buildMentionVisual(
     for (m in fileMentions) {
         items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
     }
+    // The `$`/`/` prefixes are payload, not display: the chip shows just
+    // the slug/name while the underlying text keeps the prefix.
     for (s in skillMentions) {
-        items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+        items += MentionItem(s.range, "/${s.name}", s.name, MentionKind.Skill)
     }
     for (c in chatMentions) {
-        items += MentionItem(c.range, "\$${c.slug}", "\$${c.slug}", MentionKind.Chat)
+        items += MentionItem(c.range, "\$${c.slug}", c.slug, MentionKind.Chat)
     }
     items.sortBy { it.range.first }
     if (items.isEmpty() || original.isEmpty()) {
