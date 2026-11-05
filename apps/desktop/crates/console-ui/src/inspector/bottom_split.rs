@@ -7,6 +7,7 @@ use gpui::{
 use std::rc::Rc;
 
 use crate::primitives::icons::{IconName, app_icon};
+use crate::primitives::tooltip::Tooltip;
 use crate::theme::Theme;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -361,6 +362,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         .on_click(move |_, window, cx| {
                                             (on_new)(window, cx);
                                         })
+                                        .tooltip(Tooltip::text("New terminal"))
                                         .child(app_icon(IconName::Plus, 11.0, theme.text)),
                                 )
                             })
@@ -382,6 +384,7 @@ impl RenderOnce for RightSidebarBottomSplit {
                                             .on_click(move |_, window, cx| {
                                                 (on_refresh)(window, cx);
                                             })
+                                            .tooltip(Tooltip::text("Refresh"))
                                             .child(app_icon(IconName::Refresh, 11.0, theme.text)),
                                     )
                                 },

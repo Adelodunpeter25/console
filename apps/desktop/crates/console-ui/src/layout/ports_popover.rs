@@ -9,6 +9,7 @@ use gpui::{
 };
 
 use crate::primitives::menu::{MenuAlign, popover};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{ContextMenuHandle, IconName, app_icon};
 use crate::theme::Theme;
 
@@ -61,6 +62,7 @@ impl RenderOnce for PortsPopover {
             .cursor_pointer()
             .hover(|s| s.bg(theme.overlay))
             .active(|s| s.bg(theme.overlay_strong))
+            .tooltip(Tooltip::text("Forwarded ports"))
             .child(app_icon(IconName::Port, 14.0, trigger_icon_color));
 
         popover(
