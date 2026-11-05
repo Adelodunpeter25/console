@@ -137,6 +137,14 @@ data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
 // Wire types are decoded through WireJsonAdapterFactory in OkHttpConsoleApi, not
 // kotlinx, so these deliberately stay non-@Serializable.
 
+/** One user prompt from `GET /api/sessions/:id/prompts`; `id` matches the loaded message's id. */
+@Serializable
+data class SessionPrompt(
+    val id: String,
+    val createdAt: Long = 0,
+    val preview: String = "",
+)
+
 // ProjectInfo moved to the shared protobuf schema (console.v1 from
 // proto/console/v1): timestamps now arrive as protojson strings, so the
 // hand-written data class with Long timestamps was deleted.

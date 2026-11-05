@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,6 +14,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +42,6 @@ import com.console.mobile.ui.components.common.new.ScrollThumb
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowNarrowDown
 import io.github.lyxnx.compose.ui.tablericons.outline.Message
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -199,6 +197,16 @@ fun ChatScreen(
     var scriptsSheet by remember { mutableStateOf(false) }
     val scriptProject = projectForSession(projectState.projects, view?.projectId, cwd)
 
+    // Prompt list for the pill's sheet: the server's full list, cached per chat
+    // and refetched only when a new prompt changes the newest user message.
+    var promptsSheet by remember { mutableStateOf(false) }
+    val promptList = AppContainer.sessionRepository.promptLists.collectAsStateWithLifecycle().value[sessionId]
+    val latestUserId = messages.lastOrNull { it is com.console.mobile.data.model.UserMessage }?.id
+    LaunchedEffect(promptsSheet, sessionId, latestUserId) {
+        if (promptsSheet) AppContainer.sessionRepository.ensurePrompts(sessionId, latestUserId)
+    }
+    val latestDisplayMessages by rememberUpdatedState(displayMessages)
+
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
             val match = projectForSession(projectState.projects, view.projectId, cwd)
@@ -222,6 +230,25 @@ fun ChatScreen(
             focusManager.clearFocus()
         },
     )
+
+    // Scroll to a prompt, paging older history in first when it is not loaded.
+    fun jumpToPrompt(messageId: String) {
+        scope.launch {
+            // Pause follow and older-page auto-loading so neither fights the jump.
+            transcriptScroll.stopFollowing()
+            transcriptScroll.blockAutoLoad()
+            if (!AppContainer.sessionRepository.loadUntilLoaded(sessionId, messageId)) return@launch
+            // The loaded messages reach the list a frame or two later.
+            repeat(10) {
+                val index = latestDisplayMessages.indexOfFirst { it.id == messageId }
+                if (index >= 0) {
+                    try { transcriptScroll.listState.scrollToItem(index) } catch (_: Exception) {}
+                    return@launch
+                }
+                withFrameNanos { }
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(NewTheme.Background)) {
         when {
@@ -277,26 +304,18 @@ fun ChatScreen(
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Column {
-                // Above the pills so it can never sit on them; it only shows
-                // while the reader is scrolled away from the latest message.
-                if (transcriptScroll.showScrollToBottom) {
+                // Above the pills so it can never sit on them. The arrow half only
+                // shows while the reader is scrolled away from the latest message.
+                if (hasMessages) {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
                         contentAlignment = Alignment.CenterEnd,
                     ) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                transcriptScroll.scrollToBottom(scope)
-                            },
-                            containerColor = NewTheme.Raised,
-                            contentColor = NewTheme.TextPrimary,
-                        ) {
-                            Icon(
-                                TablerIcons.Outline.ArrowNarrowDown,
-                                contentDescription = "Scroll to bottom",
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                        ChatScrollPill(
+                            showScrollToBottom = transcriptScroll.showScrollToBottom,
+                            onOpenPrompts = { promptsSheet = true },
+                            onScrollToBottom = { transcriptScroll.scrollToBottom(scope) },
+                        )
                     }
                 }
                 if (subagentPanelOpen && subagents.isNotEmpty()) {
@@ -348,6 +367,16 @@ fun ChatScreen(
         }
     }
 
+    if (promptsSheet) {
+        PromptsSheet(
+            prompts = promptList?.prompts,
+            onSelect = { prompt ->
+                promptsSheet = false
+                jumpToPrompt(prompt.id)
+            },
+            onDismiss = { promptsSheet = false },
+        )
+    }
     if (todoSheet) {
         TodoBottomSheet(items = todos, completed = todoDone, total = todoTotal, onDismiss = { todoSheet = false })
     }

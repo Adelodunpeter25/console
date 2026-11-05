@@ -176,6 +176,11 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         )
     }
 
+    override suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt> {
+        val raw = http.get("/api/sessions/${enc(id)}/prompts")
+        return http.unwrap(raw, ListSerializer(com.console.mobile.data.model.SessionPrompt.serializer()), "list session prompts")
+    }
+
     override suspend fun createSession(payload: CreateSessionDto): SessionHeader {
         val raw = http.post("/api/sessions", http.encodeBody(CreateSessionDto.serializer(), payload))
         val element = http.unwrap(raw, JsonElement.serializer(), "create session")

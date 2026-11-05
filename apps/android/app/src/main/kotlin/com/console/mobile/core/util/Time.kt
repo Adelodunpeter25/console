@@ -18,6 +18,22 @@ fun formatMessageTime(dateInput: Any?): String {
     }
 }
 
+/**
+ * Age label for the prompt list, same rules as the desktop's `format_time_ago`:
+ * "just now", then one coarse unit ("5m ago", "3h ago", "2d ago"), and a bare
+ * date like "Oct 29" once older than a week. [timestampMs] is Unix milliseconds.
+ */
+fun formatTimeAgo(timestampMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    val seconds = ((nowMs - timestampMs) / 1000).coerceAtLeast(0)
+    return when {
+        seconds < 60 -> "just now"
+        seconds < 3_600 -> "${seconds / 60}m ago"
+        seconds < 86_400 -> "${seconds / 3_600}h ago"
+        seconds < 604_800 -> "${seconds / 86_400}d ago"
+        else -> SimpleDateFormat("MMM d", Locale.US).format(Date(timestampMs))
+    }
+}
+
 fun formatRelativeTime(dateInput: Any?, nowMs: Long = System.currentTimeMillis()): String {
     if (dateInput == null) return ""
     val ms = when (dateInput) {

@@ -3,6 +3,7 @@ package com.console.mobile.data.repo
 import com.console.mobile.data.api.ConsoleApi
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.SessionDetailResponse
+import com.console.mobile.data.model.SessionPrompt
 import console.v1.SessionHeader
 import com.console.mobile.data.store.ChatStateHolder
 import com.console.mobile.data.store.SessionStateHolder
@@ -13,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -113,6 +116,57 @@ class SessionRepository(
             }
         }
         return true
+    }
+
+    /**
+     * A chat's full prompt list as last fetched, with the newest loaded user
+     * message it was fetched for. The list is refetched only when that message
+     * changes (a new prompt), never just because the popup was reopened.
+     */
+    data class PromptList(val prompts: List<SessionPrompt>, val forLatestUserId: String?)
+
+    private val _promptLists = MutableStateFlow<Map<String, PromptList>>(emptyMap())
+    val promptLists: StateFlow<Map<String, PromptList>> = _promptLists.asStateFlow()
+
+    /** Fetch the prompt list unless the cached one already covers [latestUserId]. Fails soft. */
+    suspend fun ensurePrompts(sessionId: String, latestUserId: String?) {
+        if (_promptLists.value[sessionId]?.forLatestUserId == latestUserId) return
+        try {
+            val prompts = withContext(Dispatchers.IO) { api.getSessionPrompts(sessionId) }
+            _promptLists.update { it + (sessionId to PromptList(prompts, latestUserId)) }
+        } catch (e: Exception) {
+            android.util.Log.w("SessionRepository", "ensurePrompts($sessionId) failed", e)
+        }
+    }
+
+    /**
+     * Page older history in until the message [messageId] is loaded. Returns
+     * false when the start of history is reached or a fetch fails first.
+     */
+    suspend fun loadUntilLoaded(sessionId: String, messageId: String): Boolean {
+        while (true) {
+            val state = chats.get(sessionId)
+            if (state.messages.any { it.id == messageId }) return true
+            val before = state.nextCursor
+            if (!state.hasMoreMessages || before == null) return false
+            // A scroll-triggered page may be in flight; wait for it, then re-check.
+            if (!olderInFlight.add(sessionId)) {
+                delay(50)
+                continue
+            }
+            chatRepo.setLoadingOlder(sessionId, true)
+            try {
+                val detail = withContext(Dispatchers.IO) { api.getSession(sessionId, OLDER_PAGE, before) }
+                chatRepo.prependMessages(sessionId, detail.messages)
+                chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
+            } catch (e: Exception) {
+                android.util.Log.w("SessionRepository", "loadUntilLoaded($sessionId, $messageId) failed", e)
+                return false
+            } finally {
+                olderInFlight.remove(sessionId)
+                chatRepo.setLoadingOlder(sessionId, false)
+            }
+        }
     }
 
     /** Load a session's file changes into state. Empty when none. */

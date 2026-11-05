@@ -47,6 +47,7 @@ interface ConsoleApi {
     // sessions
     suspend fun getSessions(cwd: String? = null, projectId: String? = null, onlyDeleted: Boolean = false): List<SessionHeader>
     suspend fun getSession(id: String, limit: Int? = null, before: Long? = null): SessionDetailResponse
+    suspend fun getSessionPrompts(id: String): List<com.console.mobile.data.model.SessionPrompt>
     suspend fun createSession(payload: CreateSessionDto): SessionHeader
     suspend fun updateSession(id: String, payload: com.console.mobile.data.model.UpdateSessionDto): SessionHeader
     suspend fun deleteSession(id: String)
