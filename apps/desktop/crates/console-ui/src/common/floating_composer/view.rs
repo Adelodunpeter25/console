@@ -578,6 +578,15 @@ impl FloatingComposerView {
                     .border_color(theme.border_strong)
                     .shadow_lg()
                     .overflow_hidden()
+                    .relative()
+                    // The suggestion popup is anchored to the card's bounds
+                    // via a probe, so this element is the positioning parent.
+                    // The popup opens below the card: the card sits near the
+                    // window top, so opening above would run out of room and
+                    // get snapped down over the card.
+                    .when_some(autocomplete_anchor, |el, anchor_bounds| {
+                        el.child(AutocompleteView::bounds_probe(anchor_bounds))
+                    })
                     // Dropping image files stages them as chips; the card
                     // highlights while a drag hovers over it.
                     .drag_over::<ExternalPaths>(move |style, _, _, _| {
@@ -615,13 +624,6 @@ impl FloatingComposerView {
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))
-                            .relative()
-                            // The suggestion popup is anchored to the caret via
-                            // a bounds probe, so it needs this element to be
-                            // the positioning parent.
-                            .when_some(autocomplete_anchor, |el, anchor_bounds| {
-                                el.child(AutocompleteView::bounds_probe(anchor_bounds))
-                            })
                             .when(autocomplete_open, |el| {
                                 el.key_context(crate::common::AUTOCOMPLETE_CONTEXT)
                                     .on_action(move |_: &AutocompleteNext, window, cx| {
@@ -643,8 +645,8 @@ impl FloatingComposerView {
                             })
                             .child(input.clone()),
                     )
-                    // suggestion popup
-                    .when_some(autocomplete, |el, popup| el.child(popup))
+                    // suggestion popup — below the card, never covering it
+                    .when_some(autocomplete, |el, popup| el.child(popup.open_below()))
                     // error — a failed launch keeps the card open with the
                     // prompt intact, so this is the retry affordance.
                     .when_some(error, |el, message| {

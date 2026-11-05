@@ -334,6 +334,11 @@ pub struct AutocompleteView {
     highlighted: usize,
     loading: bool,
     anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    /// Open downward from the anchor's bottom edge instead of upward from its
+    /// top edge. Surfaces near the window top (the floating composer) use
+    /// this: there is no room above, and window snapping would push the popup
+    /// down over the card it belongs to.
+    open_below: bool,
     on_select: Rc<dyn Fn(AutocompleteItem, &mut Window, &mut App) + 'static>,
 }
 
@@ -344,6 +349,7 @@ impl AutocompleteView {
             highlighted,
             loading,
             anchor_bounds: Rc::new(Cell::new(None)),
+            open_below: false,
             on_select: Rc::new(|_, _, _| {}),
         }
     }
@@ -387,6 +393,14 @@ impl AutocompleteView {
 
     pub fn with_anchor_cell(mut self, anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>) -> Self {
         self.anchor_bounds = anchor_bounds;
+        self
+    }
+
+    /// Open the popup below the anchor's bottom edge rather than above its
+    /// top edge. The anchor bounds then describe the whole card, so the popup
+    /// unfolds into the space under the card and never covers it.
+    pub fn open_below(mut self) -> Self {
+        self.open_below = true;
         self
     }
 
@@ -564,9 +578,17 @@ impl RenderOnce for AutocompleteView {
             anchored()
                 .position(point(
                     anchor_bounds.origin.x,
-                    anchor_bounds.origin.y - px(6.0),
+                    if self.open_below {
+                        anchor_bounds.origin.y + anchor_bounds.size.height + px(6.0)
+                    } else {
+                        anchor_bounds.origin.y - px(6.0)
+                    },
                 ))
-                .anchor(Anchor::BottomLeft)
+                .anchor(if self.open_below {
+                    Anchor::TopLeft
+                } else {
+                    Anchor::BottomLeft
+                })
                 .snap_to_window_with_margin(px(8.0))
                 .child(popup),
         )
