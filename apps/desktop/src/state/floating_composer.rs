@@ -508,7 +508,7 @@ impl ConsoleDesktopApp {
         self.set_attachments_for_pane(FLOATING_KEY, Vec::new());
         self.autocomplete_states.remove(FLOATING_AUTOCOMPLETE_KEY);
         let context_files: Vec<String> =
-            console_shared::composer::mentions::context_file_paths(&submit.mentions);
+            console_shared::composer::mentions::submitted_mention_paths(&submit.mentions);
         let mentions = submit.mentions.clone();
         let _ = &mentions;
         // The card's choices, not the pane's: `submit_prompt_with_context`

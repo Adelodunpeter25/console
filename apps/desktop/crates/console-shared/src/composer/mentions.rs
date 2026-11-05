@@ -67,6 +67,29 @@ pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
         .collect()
 }
 
+/// Every mention's path, skills and chat refs included, as sent with a prompt
+/// so the sent message can redraw them as chips. The server keeps the
+/// prefixed entries out of the agent-facing text.
+pub fn submitted_mention_paths(mentions: &[ComposerMention]) -> Vec<String> {
+    mentions.iter().map(|mention| mention.path.clone()).collect()
+}
+
+/// The text a mention path shows as a chip: `/name` for skills, `$slug` for
+/// chat refs, the basename for files.
+pub fn mention_label(path: &str) -> String {
+    if let Some(name) = path.strip_prefix(SKILL_PATH_PREFIX) {
+        format!("/{name}")
+    } else if let Some(slug) = path.strip_prefix(CHAT_PATH_PREFIX) {
+        format!("${slug}")
+    } else {
+        std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(path)
+            .to_string()
+    }
+}
+
 pub fn adjust_mentions(
     mentions: &mut Vec<ComposerMention>,
     edit_range: &Range<usize>,
@@ -114,11 +137,7 @@ pub fn mentions_from_context_files(
     let mut mentions = Vec::new();
     let mut search_from = 0;
     for path in context_files {
-        let label = std::path::Path::new(path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(path)
-            .to_string();
+        let label = mention_label(path);
         let Some(relative_start) = content[search_from..].find(&label) else {
             continue;
         };

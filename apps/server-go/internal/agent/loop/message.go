@@ -129,6 +129,11 @@ func materializeUserMessage(user UserMessage) UserMessage {
 func contextFileRefs(paths []string) []string {
 	refs := make([]string, 0, len(paths))
 	for _, path := range paths {
+		// Skill and chat chips are already in the prompt text; the prefix only
+		// lets clients redraw them.
+		if strings.HasPrefix(path, "skill:") || strings.HasPrefix(path, "chat:") {
+			continue
+		}
 		refs = append(refs, "   "+path+" ")
 	}
 	return refs

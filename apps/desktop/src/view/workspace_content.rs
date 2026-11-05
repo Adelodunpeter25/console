@@ -1198,7 +1198,7 @@ impl ConsoleDesktopApp {
                             let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                             let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                             let annotations = (*this.annotations_for_pane(&pane_id)).clone();
-                            let context_files = console_shared::composer::mentions::context_file_paths(
+                            let context_files = console_shared::composer::mentions::submitted_mention_paths(
                                 this.composer_for_pane(&pane_id).read(cx).mentions(),
                             );
                             if reveal_chat {
@@ -1287,7 +1287,7 @@ impl ConsoleDesktopApp {
                         let prompt = this.prompt_with_staged_comments(&pane_id, &prompt, cx);
                         let attachments = (*this.attachments_for_pane(&pane_id)).clone();
                         let annotations = (*this.annotations_for_pane(&pane_id)).clone();
-                        let context_files = console_shared::composer::mentions::context_file_paths(
+                        let context_files = console_shared::composer::mentions::submitted_mention_paths(
                             this.composer_for_pane(&pane_id).read(cx).mentions(),
                         );
                         if reveal_chat {
