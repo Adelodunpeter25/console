@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,22 @@ const (
 	// Default and maximum wait_for budget, matching the low-level tool.
 	defaultWaitTimeoutMs = 10000
 	maxWaitTimeoutMs     = 60000
+	// maxHandles caps the live locator handles browser.find may keep. A
+	// handle nobody uses again is dropped only by reset, so the cap keeps
+	// the map bounded.
+	maxHandles = 32
+	// Pagination caps: how many pages one browser.paginate call may fetch,
+	// how many items and bytes it may accumulate.
+	maxPaginatePages = 20
+	maxPaginateItems = 500
+	// maxPaginateBytes bounds the accumulated item payload.
+	maxPaginateBytes = 200000
+	// Default and hard-cap page budget for browser.paginate.
+	defaultPaginatePages = 5
+	// Per-page extract budget inside paginate, and how long the driver may
+	// wait for a clicked "next" to change the page.
+	paginatePerPageLimit = 200
+	paginateWaitMs       = 8000
 )
 
 // errOwnedTabCap is thrown when browser.open would exceed the tab cap.
@@ -72,6 +89,22 @@ type JSRuntime struct {
 	trace   []traceEntry
 	actions int
 	active  string
+	// handles are re-resolvable locator handles from browser.find. A handle
+	// stores the locator plus the tab identity it was found on; using it
+	// re-runs the find, so it survives re-renders but not navigation.
+	handles    map[string]handleRec
+	nextHandle int
+}
+
+// handleRec is one browser.find result: the encoded locator the driver
+// resolves, the tab it was found on, and that tab's URL at find time — the
+// generation check. A navigation changes the URL, which makes every handle
+// stale on purpose: silent remapping can act on the wrong element.
+type handleRec struct {
+	selector string
+	tabID    string
+	url      string
+	target   string
 }
 
 // NewJSRuntime builds a runtime with the `browser` object installed.
@@ -92,7 +125,7 @@ func NewJSRuntime(manager *Manager, sessionID string, handler tools.BrowserHandl
 
 // methods is the `browser` API. One object argument each, plain results.
 func (r *JSRuntime) methods() []jskernel.Method {
-	return []jskernel.Method{
+	methods := []jskernel.Method{
 		{Name: "open", Call: r.method(r.open)},
 		{Name: "page", Call: r.method(r.page)},
 		{Name: "tabs", Call: r.method(r.tabs)},
@@ -103,9 +136,50 @@ func (r *JSRuntime) methods() []jskernel.Method {
 		{Name: "click", Call: r.method(r.click)},
 		{Name: "type", Call: r.method(r.typeText)},
 		{Name: "waitFor", Call: r.method(r.waitFor)},
+		{Name: "extract", Call: r.method(r.extract)},
+		{Name: "scroll", Call: r.method(r.scroll)},
+		{Name: "paginate", Call: r.method(r.paginate)},
+		{Name: "find", Call: r.method(r.find)},
 		{Name: "close", Call: r.method(r.close)},
 		{Name: "closeAll", Call: r.method(r.closeAll)},
 	}
+	// Every method refuses keys it does not take, so a typo such as
+	// {projectId: ...} fails with the accepted names instead of being ignored.
+	for i := range methods {
+		allowed, known := methodArgs[methods[i].Name]
+		if !known {
+			continue
+		}
+		call := methods[i].Call
+		methods[i].Call = func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			if err := jskernel.OnlyArgs(args, allowed...); err != nil {
+				return nil, err
+			}
+			return call(ctx, args)
+		}
+	}
+	return methods
+}
+
+// methodArgs lists the arguments each browser method accepts. Every method
+// must be listed; kernel_test pins the coverage.
+var methodArgs = map[string][]string{
+	"open":     {"url"},
+	"page":     {"tabId"},
+	"tabs":     {},
+	"goto":     {"url", "tabId"},
+	"snapshot": {"selector", "tabId"},
+	"content":  {"selector", "tabId"},
+	"query":    {"selector", "tabId"},
+	"click":    {"ref", "selector", "text", "role", "name", "handle", "tabId"},
+	"type":     {"text", "ref", "selector", "role", "name", "handle", "submit", "tabId"},
+	"waitFor":  {"selector", "text", "url", "timeoutMs", "tabId"},
+	"extract":  {"scope", "items", "fields", "limit", "waitForNew", "waitMs", "tabId"},
+	"scroll":   {"direction", "amount", "tabId"},
+	"paginate": {"itemSelector", "next", "maxPages", "extract", "scope", "tabId"},
+	"find":     {"text", "selector", "role", "name", "tabId"},
+	"close":    {"tabId"},
+	"closeAll": {},
 }
 
 // method adapts one API function to the kernel's method signature and counts
@@ -441,25 +515,131 @@ func (r *JSRuntime) click(ctx context.Context, args map[string]any) (any, error)
 
 func (r *JSRuntime) typeText(ctx context.Context, args map[string]any) (any, error) {
 	if _, ok := args["text"]; !ok {
-		return nil, jskernel.Errorf("browser.type needs {text} and a {ref} or {selector} target")
+		return nil, jskernel.Errorf("browser.type needs {text} and a target: {ref}, {selector}, {role, name} or {handle}")
 	}
 	return r.act(ctx, "type", args)
 }
 
-// act is click and type: a ref or selector target, an optional submit for
-// type, and the tab identity read back fresh from the desktop afterwards.
+// actionTarget resolves what a click/type aims at and which tab it runs on.
+// Exactly one target form may be given: a snapshot {ref}, a CSS {selector},
+// a {text} locator (click only — type's text is the content), a
+// {role, name} locator, or a {handle} from browser.find. Text and role
+// locators ride the selector wire field with a text=/role= prefix the driver
+// parses.
+func (r *JSRuntime) actionTarget(ctx context.Context, action string, args map[string]any) (selector, ref, tabID string, err error) {
+	given := make([]string, 0, 5)
+	for _, key := range []string{"ref", "selector", "handle", "role"} {
+		if _, ok := args[key]; ok {
+			given = append(given, key)
+		}
+	}
+	if action == "click" {
+		if _, ok := args["text"]; ok {
+			given = append(given, "text")
+		}
+	}
+	if len(given) > 1 {
+		return "", "", "", jskernel.Errorf("browser.%s takes one target; got %s. Use {ref} from browser.snapshot(), {selector}, {text}, {role, name} or {handle} from browser.find()", action, strings.Join(given, ", "))
+	}
+	if len(given) == 0 {
+		return "", "", "", jskernel.Errorf("browser.%s needs a target: {ref} from browser.snapshot(), {selector}, {text}, {role, name} or {handle} from browser.find()", action)
+	}
+
+	switch given[0] {
+	case "ref":
+		ref = argStringOr(args, "ref", "")
+		if strings.TrimSpace(ref) == "" {
+			return "", "", "", jskernel.Errorf("browser.%s {ref} must be a non-empty string", action)
+		}
+	case "selector":
+		selector = argStringOr(args, "selector", "")
+		if strings.TrimSpace(selector) == "" {
+			return "", "", "", jskernel.Errorf("browser.%s {selector} must be a non-empty string", action)
+		}
+	case "text":
+		text := argStringOr(args, "text", "")
+		if strings.TrimSpace(text) == "" {
+			return "", "", "", jskernel.Errorf("browser.click {text} must be a non-empty string")
+		}
+		selector = encodeTextLocator(text)
+	case "role":
+		role := argStringOr(args, "role", "")
+		selector, err = encodeRoleLocator(role, argStringOr(args, "name", ""))
+		if err != nil {
+			return "", "", "", err
+		}
+	case "handle":
+		selector, tabID, err = r.resolveHandle(ctx, argStringOr(args, "handle", ""))
+		if err != nil {
+			return "", "", "", err
+		}
+	}
+	if tabID == "" {
+		tabID = argStringOr(args, "tabId", "")
+	}
+	return selector, ref, tabID, nil
+}
+
+// encodeTextLocator encodes a find-by-text target for the driver.
+func encodeTextLocator(text string) string {
+	return "text=" + text
+}
+
+// roleRe constrains the ARIA role name in a role= locator; anything else
+// would be a typo the driver could never match.
+var roleRe = regexp.MustCompile(`^[A-Za-z]+$`)
+
+// encodeRoleLocator encodes a find-by-role target for the driver. The name is
+// JSON-quoted so quotes, brackets and newlines survive the round trip.
+func encodeRoleLocator(role, name string) (string, error) {
+	if !roleRe.MatchString(strings.TrimSpace(role)) {
+		return "", jskernel.Errorf("{role} must be an ARIA role name like \"button\" or \"link\", got %q", role)
+	}
+	enc := "role=" + strings.TrimSpace(role)
+	if name != "" {
+		quoted, marshalErr := json.Marshal(name)
+		if marshalErr != nil {
+			return "", jskernel.Errorf("{name} could not be encoded: %v", marshalErr)
+		}
+		enc += "[name=" + string(quoted) + "]"
+	}
+	return enc, nil
+}
+
+// resolveHandle validates a handle id and returns its stored locator and tab.
+// The handle is only usable while its tab still shows the URL it was found
+// on; a navigation makes it stale so a changed page can never be acted on
+// through an old reference.
+func (r *JSRuntime) resolveHandle(ctx context.Context, handle string) (selector, tabID string, err error) {
+	r.mu.Lock()
+	rec, ok := r.handles[handle]
+	r.mu.Unlock()
+	if !ok {
+		return "", "", jskernel.Errorf("unknown handle %q; handles come from browser.find() and are dropped on reset", handle)
+	}
+	row, rowErr := r.resolveTarget(ctx, rec.tabID)
+	if rowErr != nil {
+		return "", "", jskernel.Errorf("handle %s is stale: its tab is gone (%v)", handle, rowErr)
+	}
+	if row.URL != rec.url {
+		return "", "", jskernel.Errorf("handle %s is stale: the page navigated from %s to %s. Call browser.find() again", handle, rec.url, row.URL)
+	}
+	return rec.selector, rec.tabID, nil
+}
+
+// act is click and type: a locator target, an optional submit for type, and
+// the tab identity read back fresh from the desktop afterwards.
 func (r *JSRuntime) act(ctx context.Context, action string, args map[string]any) (any, error) {
-	row, err := r.resolveTarget(ctx, argStringOr(args, "tabId", ""))
+	selector, ref, tabID, err := r.actionTarget(ctx, action, args)
 	if err != nil {
 		return nil, err
 	}
-	target := argStringOr(args, "ref", argStringOr(args, "selector", ""))
-	if target == "" {
-		return nil, jskernel.Errorf("browser.%s needs a {ref} from browser.snapshot() or a {selector}", action)
+	row, err := r.resolveTarget(ctx, tabID)
+	if err != nil {
+		return nil, err
 	}
 	req := tools.BrowserActionRequest{
-		Action: action, TabID: row.ID,
-		Ref: argStringOr(args, "ref", ""), Selector: argStringOr(args, "selector", ""),
+		Action: action, TabID: row.ID, Ref: ref, Selector: selector,
 		Text: argStringOr(args, "text", ""), Submit: argBoolOr(args, "submit", false),
 	}
 	if _, err := r.callAction(ctx, req); err != nil {
@@ -514,6 +694,399 @@ func (r *JSRuntime) waitFor(ctx context.Context, args map[string]any) (any, erro
 	return map[string]any{"ok": true, "tabId": row.ID, "url": row.URL, "title": row.Title}, nil
 }
 
+// extract runs one scoped structured extraction on the tab: items matching
+// `items` inside `scope`, each reduced to `fields`. One host call per page —
+// the driver does the element work in-page, so extracting 30 offers does not
+// cost 30 round-trips.
+func (r *JSRuntime) extract(ctx context.Context, args map[string]any) (any, error) {
+	row, err := r.resolveTarget(ctx, argStringOr(args, "tabId", ""))
+	if err != nil {
+		return nil, err
+	}
+	spec, err := extractSpec(args)
+	if err != nil {
+		return nil, err
+	}
+	return r.extractOn(ctx, row.ID, spec)
+}
+
+// extractSpec validates the extract arguments into the JSON spec the driver
+// runs. Shape errors name the offending key; the driver only sees valid specs.
+func extractSpec(args map[string]any) ([]byte, error) {
+	spec := map[string]any{}
+	if scope := argStringOr(args, "scope", ""); scope != "" {
+		spec["scope"] = scope
+	}
+	if items := argStringOr(args, "items", ""); items != "" {
+		spec["items"] = items
+	}
+	if raw, ok := args["fields"]; ok {
+		fields, err := validateFields(raw)
+		if err != nil {
+			return nil, err
+		}
+		spec["fields"] = fields
+	}
+	if limit := argIntOr(args, "limit", 0); limit > 0 {
+		if limit > maxExtractItems {
+			limit = maxExtractItems
+		}
+		spec["limit"] = limit
+	}
+	if argBoolOr(args, "waitForNew", false) {
+		spec["waitForNew"] = true
+		if waitMs := argIntOr(args, "waitMs", 0); waitMs > 0 {
+			if waitMs > maxExtractWaitMs {
+				waitMs = maxExtractWaitMs
+			}
+			spec["waitMs"] = waitMs
+		}
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return nil, jskernel.Errorf("browser.extract spec could not be encoded: %v", err)
+	}
+	return raw, nil
+}
+
+// extract field-spec limits: how many fields one extract may define, and how
+// long the driver may wait for a page's items to change (waitForNew).
+const (
+	maxExtractItems  = 200
+	maxExtractFields = 16
+	maxExtractWaitMs = 15000
+)
+
+// fieldSpecKeys are the keys a field spec object may take.
+var fieldSpecKeys = []string{"selector", "attribute", "all", "optional", "trim"}
+
+// validateFields checks the `fields` map: every value is a CSS selector
+// string or an object with `selector` (required) plus `attribute`, `all`,
+// `optional`, `trim`. Unknown keys inside a field spec are refused, like
+// method arguments are.
+func validateFields(raw any) (map[string]any, error) {
+	fields, ok := raw.(map[string]any)
+	if !ok {
+		return nil, jskernel.Errorf("browser.extract {fields} must be an object of {name: selector or {selector, attribute, all, optional, trim}}")
+	}
+	if len(fields) > maxExtractFields {
+		return nil, jskernel.Errorf("browser.extract takes at most %d fields, got %d", maxExtractFields, len(fields))
+	}
+	for name, value := range fields {
+		if text, isString := value.(string); isString {
+			if strings.TrimSpace(text) == "" {
+				return nil, jskernel.Errorf("field %q has an empty selector", name)
+			}
+			continue
+		}
+		spec, isMap := value.(map[string]any)
+		if !isMap {
+			return nil, jskernel.Errorf("field %q must be a selector string or an object", name)
+		}
+		for key := range spec {
+			known := false
+			for _, allowed := range fieldSpecKeys {
+				if key == allowed {
+					known = true
+					break
+				}
+			}
+			if !known {
+				return nil, jskernel.Errorf("field %q takes: %s", name, strings.Join(fieldSpecKeys, ", "))
+			}
+		}
+		selector, hasSelector := spec["selector"].(string)
+		if !hasSelector || strings.TrimSpace(selector) == "" {
+			return nil, jskernel.Errorf("field %q needs a {selector}", name)
+		}
+	}
+	return fields, nil
+}
+
+// extractOn sends one extract action and decodes the driver's JSON result.
+// A non-JSON reply is the driver's plain-text failure (no scope match, an
+// invalid selector) and throws with that message.
+func (r *JSRuntime) extractOn(ctx context.Context, tabID string, spec []byte) (map[string]any, error) {
+	res, err := r.callAction(ctx, tools.BrowserActionRequest{Action: "extract", TabID: tabID, Script: string(spec)})
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(strings.TrimSpace(res.Result), "{") {
+		return nil, jskernel.Errorf("browser.extract: %s", res.Result)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(res.Result), &decoded); err != nil {
+		return nil, jskernel.Errorf("browser.extract could not read its result: %v", err)
+	}
+	return decoded, nil
+}
+
+// scroll scrolls the page. Direction is up, down, top or bottom; amount is
+// the pixel distance for up/down (default: most of a viewport).
+func (r *JSRuntime) scroll(ctx context.Context, args map[string]any) (any, error) {
+	row, err := r.resolveTarget(ctx, argStringOr(args, "tabId", ""))
+	if err != nil {
+		return nil, err
+	}
+	direction := argStringOr(args, "direction", "down")
+	switch direction {
+	case "up", "down", "top", "bottom":
+	default:
+		return nil, jskernel.Errorf("browser.scroll {direction} must be up, down, top or bottom, got %q", direction)
+	}
+	spec := map[string]any{"direction": direction}
+	if amount := argIntOr(args, "amount", 0); amount > 0 {
+		if amount > 20000 {
+			amount = 20000
+		}
+		spec["amount"] = amount
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return nil, jskernel.Errorf("browser.scroll spec could not be encoded: %v", err)
+	}
+	res, err := r.callAction(ctx, tools.BrowserActionRequest{Action: "scroll", TabID: row.ID, Script: string(raw)})
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(strings.TrimSpace(res.Result), "{") {
+		return nil, jskernel.Errorf("browser.scroll: %s", res.Result)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(res.Result), &decoded); err != nil {
+		return nil, jskernel.Errorf("browser.scroll could not read its result: %v", err)
+	}
+	decoded["tabId"] = row.ID
+	return decoded, nil
+}
+
+// paginate walks a paginated list: extract each page, click the next
+// control, repeat. Stops on the page budget, a missing/disabled next
+// control, a page that never changes after the click, or the item/byte caps.
+// Items are deduplicated by href when a field of that name exists, else by
+// their full content.
+func (r *JSRuntime) paginate(ctx context.Context, args map[string]any) (any, error) {
+	itemSelector := argStringOr(args, "itemSelector", "")
+	if strings.TrimSpace(itemSelector) == "" {
+		return nil, jskernel.Errorf("browser.paginate needs {itemSelector, next, extract}; next is the next-page control ({text}, {selector} or {role, name}) and extract the per-item fields")
+	}
+	next, ok := args["next"].(map[string]any)
+	if !ok {
+		return nil, jskernel.Errorf("browser.paginate needs {next}: the next-page control as {text}, {selector} or {role, name}")
+	}
+	rawFields, hasFields := args["extract"]
+	if !hasFields {
+		return nil, jskernel.Errorf("browser.paginate needs {extract}: the per-item fields, same shape as browser.extract's {fields}")
+	}
+	fields, err := validateFields(rawFields)
+	if err != nil {
+		return nil, err
+	}
+	for key := range next {
+		switch key {
+		case "text", "selector", "role", "name":
+		default:
+			return nil, jskernel.Errorf("browser.paginate {next} takes: text, selector, role, name")
+		}
+	}
+	maxPages := int(argIntOr(args, "maxPages", defaultPaginatePages))
+	if maxPages < 1 {
+		maxPages = 1
+	}
+	if maxPages > maxPaginatePages {
+		maxPages = maxPaginatePages
+	}
+	scope := argStringOr(args, "scope", "")
+
+	row, err := r.resolveTarget(ctx, argStringOr(args, "tabId", ""))
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		all       []any
+		seen      = map[string]bool{}
+		warnings  []string
+		pages     int
+		truncated bool
+		totalSize int
+	)
+	for page := 1; page <= maxPages && !truncated; page++ {
+		specArgs := map[string]any{"fields": fields, "limit": int64(paginatePerPageLimit)}
+		if scope != "" {
+			specArgs["scope"] = scope
+		}
+		if page > 1 {
+			// After the click: give the new page up to the wait budget to
+			// appear instead of polling with host calls.
+			specArgs["waitForNew"] = true
+			specArgs["waitMs"] = int64(paginateWaitMs)
+		}
+		spec, specErr := extractSpec(specArgs)
+		if specErr != nil {
+			return nil, specErr
+		}
+		result, extractErr := r.extractOn(ctx, row.ID, spec)
+		if extractErr != nil {
+			if page == 1 {
+				return nil, extractErr
+			}
+			warnings = append(warnings, fmt.Sprintf("stopped on page %d: %v", page, extractErr))
+			break
+		}
+		if unchanged, _ := result["unchanged"].(bool); unchanged {
+			warnings = append(warnings, fmt.Sprintf("page %d did not change after clicking next; stopped", page))
+			break
+		}
+		items, _ := result["items"].([]any)
+		fresh := 0
+		for _, item := range items {
+			key := dedupeKey(item)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			itemJSON, marshalErr := json.Marshal(item)
+			if marshalErr != nil {
+				continue
+			}
+			if len(all) >= maxPaginateItems || totalSize+len(itemJSON) > maxPaginateBytes {
+				truncated = true
+				break
+			}
+			all = append(all, item)
+			totalSize += len(itemJSON)
+			fresh++
+		}
+		pages++
+		if truncated {
+			warnings = append(warnings, fmt.Sprintf("stopped at %d items or %d bytes", maxPaginateItems, maxPaginateBytes))
+			break
+		}
+		if page == maxPages {
+			break
+		}
+		if fresh == 0 {
+			// This page repeated the last one exactly: further clicks would
+			// only loop the same content.
+			warnings = append(warnings, fmt.Sprintf("page %d repeated the previous page; stopped", page))
+			break
+		}
+		clickArgs := map[string]any{"tabId": row.ID}
+		for _, key := range []string{"text", "selector", "role", "name"} {
+			if value, ok := next[key]; ok {
+				clickArgs[key] = value
+			}
+		}
+		if _, clickErr := r.act(ctx, "click", clickArgs); clickErr != nil {
+			warnings = append(warnings, fmt.Sprintf("no next control after page %d: %v", page, clickErr))
+			break
+		}
+	}
+	out := map[string]any{"items": all, "pages": pages, "truncated": truncated}
+	if len(warnings) > 0 {
+		out["warnings"] = warnings
+	}
+	return out, nil
+}
+
+// dedupeKey prefers an href field (the same product on two pages is one
+// item), falling back to the item's full content.
+func dedupeKey(item any) string {
+	if obj, ok := item.(map[string]any); ok {
+		if href, ok := obj["href"].(string); ok && href != "" {
+			return "href:" + href
+		}
+	}
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Sprintf("%v", item)
+	}
+	return string(raw)
+}
+
+// find resolves a locator now and returns a handle that can be re-resolved
+// on later calls ({handle: "h1"} in click/type). The handle survives
+// re-renders (the driver re-runs the find) but not navigation: the tab must
+// still show the URL it was found on.
+func (r *JSRuntime) find(ctx context.Context, args map[string]any) (any, error) {
+	selector, err := findLocator(args)
+	if err != nil {
+		return nil, err
+	}
+	row, err := r.resolveTarget(ctx, argStringOr(args, "tabId", ""))
+	if err != nil {
+		return nil, err
+	}
+	target := describeLocator(args, selector)
+
+	r.mu.Lock()
+	if len(r.handles) >= maxHandles {
+		r.mu.Unlock()
+		return nil, jskernel.Errorf("too many live handles (%d); they are dropped on reset", maxHandles)
+	}
+	if r.handles == nil {
+		r.handles = map[string]handleRec{}
+	}
+	r.nextHandle++
+	id := fmt.Sprintf("h%d", r.nextHandle)
+	r.handles[id] = handleRec{selector: selector, tabID: row.ID, url: row.URL, target: target}
+	r.mu.Unlock()
+	return map[string]any{"handle": id, "tabId": row.ID, "url": row.URL, "target": target}, nil
+}
+
+// findLocator encodes a browser.find target: one of {text}, {selector} or
+// {role, name}. Refs are deliberately not findable — they already identify
+// one element, but die at navigation, which is what find exists to fix.
+func findLocator(args map[string]any) (string, error) {
+	text, hasText := args["text"]
+	selector, hasSelector := args["selector"]
+	role, hasRole := args["role"]
+	given := 0
+	for _, ok := range []bool{hasText, hasSelector, hasRole} {
+		if ok {
+			given++
+		}
+	}
+	if given > 1 {
+		return "", jskernel.Errorf("browser.find takes one target: {text}, {selector} or {role, name}")
+	}
+	if hasText {
+		value, isString := text.(string)
+		if !isString || strings.TrimSpace(value) == "" {
+			return "", jskernel.Errorf("browser.find {text} must be a non-empty string")
+		}
+		return encodeTextLocator(value), nil
+	}
+	if hasSelector {
+		value, isString := selector.(string)
+		if !isString || strings.TrimSpace(value) == "" {
+			return "", jskernel.Errorf("browser.find {selector} must be a non-empty string")
+		}
+		return value, nil
+	}
+	if hasRole {
+		value, isString := role.(string)
+		if !isString {
+			return "", jskernel.Errorf("browser.find {role} must be an ARIA role name")
+		}
+		return encodeRoleLocator(value, argStringOr(args, "name", ""))
+	}
+	return "", jskernel.Errorf("browser.find needs a target: {text}, {selector} or {role, name}")
+}
+
+// describeLocator renders what a handle points at, for the find result.
+func describeLocator(args map[string]any, selector string) string {
+	if text, ok := args["text"].(string); ok && text != "" {
+		return fmt.Sprintf("text %q", text)
+	}
+	if role, ok := args["role"].(string); ok && role != "" {
+		name, _ := args["name"].(string)
+		return fmt.Sprintf("%s %q", role, name)
+	}
+	return "selector " + selector
+}
+
 // close closes one kernel-owned tab. A tab the kernel did not open is an
 // error: closing user tabs is what the low-level browser tool is for.
 func (r *JSRuntime) close(ctx context.Context, args map[string]any) (any, error) {
@@ -528,6 +1101,13 @@ func (r *JSRuntime) close(ctx context.Context, args map[string]any) (any, error)
 		return nil, err
 	}
 	r.manager.forgetTab(r.session, tabID)
+	r.mu.Lock()
+	for id, rec := range r.handles {
+		if rec.tabID == tabID {
+			delete(r.handles, id)
+		}
+	}
+	r.mu.Unlock()
 	if r.activeTabID() == tabID {
 		r.setActive("")
 	}
@@ -535,7 +1115,7 @@ func (r *JSRuntime) close(ctx context.Context, args map[string]any) (any, error)
 }
 
 // closeAll closes every kernel-owned tab and keeps the runtime: variables
-// survive, page references do not.
+// survive, page references (handles included) do not.
 func (r *JSRuntime) closeAll(ctx context.Context, args map[string]any) (any, error) {
 	owned := r.manager.ownedTabs(r.session)
 	var warnings []string
@@ -548,6 +1128,9 @@ func (r *JSRuntime) closeAll(ctx context.Context, args map[string]any) (any, err
 		r.manager.forgetTab(r.session, tabID)
 		closed++
 	}
+	r.mu.Lock()
+	r.handles = nil
+	r.mu.Unlock()
 	if r.activeTabID() != "" && !r.manager.isOwned(r.session, r.activeTabID()) {
 		r.setActive("")
 	}

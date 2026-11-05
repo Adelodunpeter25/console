@@ -41,6 +41,9 @@ pub struct Request<'a> {
     pub selector: Option<&'a str>,
     pub script: Option<&'a str>,
     pub url_contains: Option<&'a str>,
+    /// JSON spec for the ops that take one (extract, scroll). The server's
+    /// browser kernel is the only caller; the driver parses it.
+    pub spec: Option<&'a str>,
 }
 
 impl<'a> Request<'a> {
@@ -59,6 +62,7 @@ impl<'a> Request<'a> {
             selector,
             script: None,
             url_contains: None,
+            spec: None,
         }
     }
 
@@ -71,6 +75,7 @@ impl<'a> Request<'a> {
             selector: None,
             script: Some(script),
             url_contains: None,
+            spec: None,
         }
     }
 
@@ -83,6 +88,7 @@ impl<'a> Request<'a> {
             selector,
             script: None,
             url_contains: None,
+            spec: None,
         }
     }
 
@@ -95,6 +101,7 @@ impl<'a> Request<'a> {
             selector: Some(selector),
             script: None,
             url_contains: None,
+            spec: None,
         }
     }
 
@@ -111,6 +118,38 @@ impl<'a> Request<'a> {
             selector,
             script: None,
             url_contains,
+            spec: None,
+        }
+    }
+
+    /// Structured extraction. `spec` is the kernel-validated JSON shape
+    /// {scope, items, fields, limit, waitForNew, waitMs}; the result is a
+    /// JSON payload {count, items, truncated?, unchanged?}.
+    pub fn extract(spec: &'a str) -> Self {
+        Self {
+            op: "extract",
+            element_ref: None,
+            text: None,
+            submit: false,
+            selector: None,
+            script: None,
+            url_contains: None,
+            spec: Some(spec),
+        }
+    }
+
+    /// Page scroll. `spec` is {direction: up|down|top|bottom, amount?: px};
+    /// the result is a JSON payload with scrollY and page bounds.
+    pub fn scroll(spec: &'a str) -> Self {
+        Self {
+            op: "scroll",
+            element_ref: None,
+            text: None,
+            submit: false,
+            selector: None,
+            script: None,
+            url_contains: None,
+            spec: Some(spec),
         }
     }
 }
@@ -132,6 +171,7 @@ pub fn request_script(request_id: &str, request: &Request<'_>) -> String {
         "selector": request.selector.map(str::trim).unwrap_or(""),
         "script": request.script.unwrap_or(""),
         "urlContains": request.url_contains.unwrap_or(""),
+        "spec": request.spec.unwrap_or(""),
     });
     let request_id = serde_json::to_string(request_id).unwrap_or_else(|_| "\"\"".to_string());
     CALL.replace("__REQUEST_ID__", &request_id)

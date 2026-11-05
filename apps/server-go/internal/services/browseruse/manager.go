@@ -2,7 +2,7 @@
 // runtime with a preinstalled `browser` object, plus the set of tabs that
 // kernel opened. The kernel is what /browser-use activates; it lets one
 // bounded call navigate, wait, extract and clean up instead of one low-level
-// `browser` action per step. See docs/plan/browser-use-kernel.md.
+// `browser` action per step. The API is documented in SKILL.md.
 package browseruse
 
 import (
@@ -103,4 +103,15 @@ func (m *Manager) ownedTabs(sessionID string) []string {
 		out = append(out, id)
 	}
 	return out
+}
+
+// DropSession forgets a deleted chat's kernel and owned-tab set. The tabs
+// themselves are closed by the desktop when it gets the session_deleted
+// notification; this only drops the server-side state, so a deleted chat
+// cannot leave a runtime or ownership entries behind.
+func (m *Manager) DropSession(sessionID string) {
+	m.dropRuntime(sessionID)
+	m.mu.Lock()
+	delete(m.owned, sessionID)
+	m.mu.Unlock()
 }

@@ -21,6 +21,7 @@
     refs: new Map(), // ref -> { el: WeakRef, role, name, nth }
     byEl: new WeakMap(), // Element -> ref
     next: 1,
+    lastSig: '', // last extract's page signature, for waitForNew
   };
 
   const norm = (value) => (value || '').replace(/\s+/g, ' ').trim();
@@ -517,6 +518,234 @@
 
   const describe = (el, role, name) => role + (name ? ' ' + quote(name) : '');
 
+  // --- locators ------------------------------------------------------------
+
+  // Text and role targets arrive as prefixed selectors from the server's
+  // browser kernel: `text=Add to cart`, `role=button[name="Search"]`. The
+  // name part is JSON-quoted, so quotes and brackets survive the round trip.
+  const parseLocator = (raw) => {
+    const s = raw.trim();
+    if (s.startsWith('text=')) return { kind: 'text', value: s.slice(5) };
+    if (s.startsWith('role=')) {
+      const m = s.match(/^role=([A-Za-z]+)(?:\[name=([\s\S]*)\])?$/);
+      if (!m) return null;
+      let name = '';
+      if (m[2] !== undefined) {
+        const rawName = m[2].trim();
+        if (rawName.startsWith('"') || rawName.startsWith("'")) {
+          try {
+            name = norm(JSON.parse(rawName));
+          } catch (_) {
+            // Single quotes are not JSON; strip and unescape by hand.
+            name = norm(rawName.slice(1, -1).replace(/\\'/g, "'"));
+          }
+        } else {
+          name = norm(rawName);
+        }
+      }
+      return { kind: 'role', role: m[1], name };
+    }
+    return null;
+  };
+
+  // Find by visible text: first exact match on accessible name or inner text
+  // in document order wins; a substring match is the fallback. Visible and
+  // accessibility-visible elements only, like a snapshot would report.
+  const findByText = (wantedRaw) => {
+    const wanted = norm(wantedRaw);
+    if (!wanted) return null;
+    let substring = null;
+    for (const el of allElements()) {
+      if (isStale(el) || !isVisible(el) || isA11yHiddenDeep(el)) continue;
+      const role = roleOf(el) || '';
+      const name = norm(accessibleName(el, role));
+      const text = norm(textOf(el));
+      if (name === wanted || text === wanted) return el;
+      if (!substring && (name.includes(wanted) || text.includes(wanted))) substring = el;
+    }
+    return substring;
+  };
+
+  // Find by ARIA role and optional name (exact first, then substring).
+  const findByRole = (role, nameRaw) => {
+    const wanted = norm(nameRaw);
+    let substring = null;
+    for (const el of allElements()) {
+      if (isStale(el) || !isVisible(el) || isA11yHiddenDeep(el)) continue;
+      if (roleOf(el) !== role) continue;
+      const name = norm(accessibleName(el, role));
+      if (!wanted) return el;
+      if (name === wanted) return el;
+      if (!substring && name.includes(wanted)) substring = el;
+    }
+    return substring;
+  };
+
+  // Resolve a prefixed locator to an element. Returns {error} when the
+  // locator kind matched but no element did; {el: null} when the string is
+  // not a locator (plain CSS — the caller falls through).
+  const resolveLocator = (raw) => {
+    const loc = parseLocator(raw);
+    if (!loc) return { el: null };
+    if (loc.kind === 'text') {
+      const el = findByText(loc.value);
+      if (!el) return { error: 'No visible match for text: ' + loc.value };
+      const role = roleOf(el) || 'element';
+      return { el, label: describe(el, role, accessibleName(el, role)) + ' (text ' + quote(loc.value) + ')' };
+    }
+    const el = findByRole(loc.role, loc.name);
+    if (!el) {
+      return {
+        error: 'No visible match for role ' + loc.role + (loc.name ? ' named ' + quote(loc.name) : ''),
+      };
+    }
+    return { el, label: describe(el, loc.role, accessibleName(el, loc.role)) + ' (role ' + loc.role + ')' };
+  };
+
+  // --- structured extraction ----------------------------------------------
+
+  const MAX_EXTRACT_ITEMS = 200;
+  const MAX_EXTRACT_FIELDS = 16;
+  const MAX_EXTRACT_CHARS = 200000;
+  // Signature scan bound: counting every card of a 10k-row page would stall
+  // the webview; past this the signature is "many" anyway.
+  const MAX_EXTRACT_SCAN = 2000;
+
+  // The first visible match of the scope selector list. Comma parts are
+  // alternatives tried in order (#buybox, #corePrice_feature_div), not one
+  // result set — a price block should not leak related products in.
+  const scopeRoot = (scope) => {
+    if (!scope || !scope.trim()) return document.body;
+    for (const part of scope.split(',')) {
+      const sel = part.trim();
+      if (!sel) continue;
+      let matches;
+      try {
+        matches = Array.from(document.querySelectorAll(sel));
+      } catch (error) {
+        throw new Error('Invalid scope selector: ' + error.message);
+      }
+      for (const el of matches) {
+        if (isVisible(el) && !isA11yHiddenDeep(el)) return el;
+      }
+    }
+    return null;
+  };
+
+  // Cheap page signature for waitForNew: item count plus the first and last
+  // item's text. Growing or replaced lists change at least one of the three.
+  const pageSig = (spec) => {
+    let root;
+    try {
+      root = scopeRoot(spec.scope);
+    } catch (error) {
+      return error.message;
+    }
+    if (!root) return 'no-scope';
+    if (!spec.items) return 'single';
+    let rows;
+    try {
+      rows = Array.from(root.querySelectorAll(spec.items));
+    } catch (error) {
+      return 'bad-items';
+    }
+    let count = 0;
+    let first = '';
+    let last = '';
+    for (const el of rows) {
+      if (count >= MAX_EXTRACT_SCAN) break;
+      if (!isVisible(el) || isA11yHiddenDeep(el)) continue;
+      if (!count) first = norm(textOf(el));
+      last = norm(textOf(el));
+      count++;
+    }
+    return count + ':' + first + '|' + last;
+  };
+
+  // One extraction pass. Returns {error} text, or {sig, items, truncated}.
+  const extractOnce = (spec) => {
+    const fieldSpecs = spec.fields && typeof spec.fields === 'object' ? Object.entries(spec.fields) : [];
+    if (fieldSpecs.length > MAX_EXTRACT_FIELDS) {
+      return { error: 'Too many fields (max ' + MAX_EXTRACT_FIELDS + ').' };
+    }
+    let root;
+    try {
+      root = scopeRoot(spec.scope);
+    } catch (error) {
+      return { error: error.message };
+    }
+    if (!root) return { error: 'No visible match for scope: ' + spec.scope };
+    let rows;
+    if (spec.items) {
+      try {
+        rows = Array.from(root.querySelectorAll(spec.items));
+      } catch (error) {
+        return { error: 'Invalid items selector: ' + error.message };
+      }
+    } else {
+      rows = [root];
+    }
+    const sig = pageSig(spec);
+
+    const limit = Math.min(Number(spec.limit) > 0 ? Number(spec.limit) : 30, MAX_EXTRACT_ITEMS);
+    const items = [];
+    let size = 0;
+    let truncated = false;
+    let scanned = 0;
+    for (const el of rows) {
+      if (scanned >= MAX_EXTRACT_SCAN || items.length >= limit || truncated) break;
+      if (!isVisible(el) || isA11yHiddenDeep(el)) continue;
+      scanned++;
+      const row = {};
+      for (const [name, rawSpec] of fieldSpecs) {
+        const fs = typeof rawSpec === 'string' ? { selector: rawSpec } : rawSpec;
+        if (!fs || typeof fs !== 'object' || !fs.selector) {
+          row[name] = null;
+          continue;
+        }
+        let nodes;
+        try {
+          nodes = Array.from(el.querySelectorAll(fs.selector));
+        } catch (error) {
+          return { error: 'Invalid selector for field ' + name + ': ' + error.message };
+        }
+        if (fs.all) {
+          const values = [];
+          for (const node of nodes) {
+            const value = fs.attribute ? node.getAttribute(fs.attribute) || '' : queryText(node);
+            if (value !== '') values.push(fs.attribute ? String(value).trim() : value);
+          }
+          row[name] = values;
+          continue;
+        }
+        const node = nodes.find((candidate) => isVisible(candidate)) || nodes[0] || null;
+        if (!node) {
+          row[name] = null;
+          continue;
+        }
+        // An attribute read of null means the attribute is missing: the
+        // field is null, never a fallback to some page-wide selector.
+        let value = null;
+        if (fs.attribute) {
+          const raw = node.getAttribute(fs.attribute);
+          if (raw != null) value = fs.trim === false ? raw : raw.trim();
+        } else {
+          value = queryText(node);
+        }
+        row[name] = value === null || value === '' ? null : value;
+      }
+      const rowJson = JSON.stringify(row);
+      if (size + rowJson.length > MAX_EXTRACT_CHARS) {
+        truncated = true;
+        break;
+      }
+      items.push(row);
+      size += rowJson.length;
+    }
+    return { sig, items, truncated };
+  };
+
+
   // --- hit test -----------------------------------------------------------
 
   const hitAt = (el) => {
@@ -790,6 +1019,61 @@
       return JSON.stringify(payload);
     }
 
+    if (req.op === 'extract') {
+      let spec;
+      try {
+        spec = JSON.parse(req.spec || '{}');
+      } catch (error) {
+        return 'Invalid extract spec: ' + error.message;
+      }
+      if (!spec || typeof spec !== 'object') return 'Invalid extract spec: expected an object';
+      const waitMs = Math.min(Number(spec.waitMs) > 0 ? Number(spec.waitMs) : 8000, 15000);
+      const prevSig = state.lastSig;
+      if (spec.waitForNew) {
+        // In-page poll until the matched items change (or the budget runs
+        // out) — one host call per page instead of polling from the server.
+        const deadline = Date.now() + waitMs;
+        while (Date.now() < deadline) {
+          const current = pageSig(spec);
+          if (current !== prevSig) break;
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+      const out = extractOnce(spec);
+      if (out.error) return out.error;
+      state.lastSig = out.sig;
+      const payload = { count: out.items.length, items: out.items };
+      if (out.truncated) payload.truncated = true;
+      if (spec.waitForNew && out.sig === prevSig) payload.unchanged = true;
+      return JSON.stringify(payload);
+    }
+
+    if (req.op === 'scroll') {
+      let spec;
+      try {
+        spec = JSON.parse(req.spec || '{}');
+      } catch (error) {
+        return 'Invalid scroll spec: ' + error.message;
+      }
+      const scroller = document.scrollingElement || document.documentElement;
+      const viewport = window.innerHeight || 800;
+      const direction = spec.direction || 'down';
+      const amount = Number(spec.amount) > 0 ? Number(spec.amount) : Math.round(viewport * 0.9);
+      if (direction === 'top') window.scrollTo(0, 0);
+      else if (direction === 'bottom') window.scrollTo(0, scroller.scrollHeight);
+      else if (direction === 'up') window.scrollBy(0, -amount);
+      else if (direction === 'down') window.scrollBy(0, amount);
+      else return 'Invalid direction: ' + quote(direction) + ' (use up, down, top or bottom)';
+      const y = window.scrollY || scroller.scrollTop || 0;
+      return JSON.stringify({
+        scrollY: Math.round(y),
+        scrollHeight: scroller.scrollHeight,
+        viewportHeight: viewport,
+        atTop: y <= 0,
+        atBottom: y + viewport >= scroller.scrollHeight - 2,
+      });
+    }
+
     if (req.op === 'wait') {
       const selector = (req.selector || '').trim();
       const urlPart = req.urlContains || '';
@@ -835,21 +1119,29 @@
           + ' is hidden from the accessibility tree. Take a new snapshot and use a visible control.';
       }
     } else {
-      // Selector fallback: no ref, act on the first visible match. Used by
-      // the server's browser kernel, whose scripts address elements without
-      // snapshotting first.
+      // Locator/selector fallback: no ref, act on the first visible match.
+      // Used by the server's browser kernel, whose scripts address elements
+      // without snapshotting first. `text=`/`role=` locators resolve through
+      // the finder; anything else is a CSS selector.
       const selector = (req.selector || '').trim();
       if (!selector) return 'A ref is required. Take a snapshot first.';
-      let elements;
-      try {
-        elements = Array.from(document.querySelectorAll(selector));
-      } catch (error) {
-        return 'Invalid selector: ' + error.message;
+      const located = resolveLocator(selector);
+      if (located.error) return located.error;
+      if (located.el) {
+        el = located.el;
+        label = located.label;
+      } else {
+        let elements;
+        try {
+          elements = Array.from(document.querySelectorAll(selector));
+        } catch (error) {
+          return 'Invalid selector: ' + error.message;
+        }
+        el = elements.find((candidate) => isVisible(candidate)) || null;
+        if (!el) return 'No visible match for selector: ' + selector;
+        const role = roleOf(el) || 'element';
+        label = describe(el, role, accessibleName(el, role)) + ' (selector ' + quote(selector) + ')';
       }
-      el = elements.find((candidate) => isVisible(candidate)) || null;
-      if (!el) return 'No visible match for selector: ' + selector;
-      const role = roleOf(el) || 'element';
-      label = describe(el, role, accessibleName(el, role)) + ' (selector ' + quote(selector) + ')';
       if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
         return 'Element ' + label + ' is disabled.';
       }

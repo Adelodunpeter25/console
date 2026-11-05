@@ -666,10 +666,11 @@ impl BrowserView {
         self.evaluate_script(&wrap_script(request_id, script));
     }
 
-    /// Run one page-driver request (snapshot/click/type/run_js/content/query/wait).
-    /// The driver is installed at document start, so this is a plain call
-    /// rather than an `eval`; strict Content-Security-Policy pages keep
-    /// working for everything except `run_js`, which is the agent's own code.
+    /// Run one page-driver request (snapshot/click/type/run_js/content/query/
+    /// wait/extract/scroll). The driver is installed at document start, so
+    /// this is a plain call rather than an `eval`; strict
+    /// Content-Security-Policy pages keep working for everything except
+    /// `run_js`, which is the agent's own code.
     /// The result arrives under `request_id` like any other script result.
     pub fn run_driver_script(&self, request_id: &str, request: &super::driver::Request<'_>) {
         let script = super::driver::request_script(request_id, request);

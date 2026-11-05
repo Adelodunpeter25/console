@@ -99,3 +99,50 @@ fn driver_keeps_its_result_and_error_contract_strings() {
         assert!(js.contains(needle), "driver lost {needle:?}");
     }
 }
+
+#[test]
+fn extract_and_scroll_requests_carry_their_json_spec() {
+    let extract = request_script("req-9", &Request::extract(r##"{"scope":"#buybox","limit":5}"##));
+    assert!(extract.contains("\"op\":\"extract\""));
+    assert!(extract.contains("\"spec\":\"{\\\"scope\\\":\\\"#buybox\\\",\\\"limit\\\":5}\""));
+
+    let scroll = request_script("req-10", &Request::scroll(r#"{"direction":"down"}"#));
+    assert!(scroll.contains("\"op\":\"scroll\""));
+    assert!(scroll.contains("\"spec\":\"{\\\"direction\\\":\\\"down\\\"}\""));
+
+    // Other ops leave the spec slot empty.
+    let click = request_script("req-11", &Request::action("click", Some("e1"), None, false, None));
+    assert!(click.contains("\"spec\":\"\""));
+}
+
+#[test]
+fn driver_resolves_text_and_role_locators_in_the_action_path() {
+    let js = init_script();
+    // The kernel's {text} and {role, name} targets arrive as prefixed
+    // selectors, resolved before the CSS fallback. No-match and bad-role
+    // messages must stay recognizable.
+    assert!(js.contains("startsWith('text=')"), "text= locator parsing lost");
+    assert!(js.contains("startsWith('role=')"), "role= locator parsing lost");
+    assert!(js.contains("No visible match for text: "), "text no-match message lost");
+    assert!(js.contains("No visible match for role "), "role no-match message lost");
+    // Exact match wins over substring, first in document order.
+    assert!(js.contains("name === wanted || text === wanted"), "exact-first text matching lost");
+    // Locators stay visible/a11y-filtered like a snapshot would be.
+    assert!(js.contains("const resolveLocator"), "locator resolver lost");
+}
+
+#[test]
+fn driver_extract_waits_for_new_content_and_reports_unchanged() {
+    let js = init_script();
+    // waitForNew: in-page poll on the page signature, capped budget, and an
+    // explicit unchanged flag for the paginate loop.
+    assert!(js.contains("lastSig"), "extract signature store lost");
+    assert!(js.contains("waitForNew"), "waitForNew handling lost");
+    assert!(js.contains("payload.unchanged = true"), "unchanged flag lost");
+    // Extraction is bounded like the rest of the driver.
+    assert!(js.contains("MAX_EXTRACT_ITEMS"), "extract item cap lost");
+    assert!(js.contains("MAX_EXTRACT_CHARS"), "extract byte cap lost");
+    // The scope list's comma parts are alternatives, tried in order.
+    assert!(js.contains("Invalid scope selector"), "scope error message lost");
+    assert!(js.contains("No visible match for scope: "), "scope no-match message lost");
+}

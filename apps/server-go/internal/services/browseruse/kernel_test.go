@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +25,14 @@ type fakeDesktop struct {
 	tabs    map[string]*tabRow
 	target  string // the chat's agent target tab
 	actions []tools.BrowserActionRequest
+
+	// Pagination simulation: when pages is set, `extract` serves
+	// pages[page] and a `text=Next` click advances the page. lastExtractJSON
+	// makes waitForNew report unchanged when the page's content did not
+	// change — the same signature idea the real driver uses.
+	pages           [][]map[string]any
+	page            int
+	lastExtractJSON string
 }
 
 func newFakeDesktop() *fakeDesktop {
@@ -86,9 +96,46 @@ func (f *fakeDesktop) handler() tools.BrowserHandler {
 			}
 			return tools.BrowserActionResult{Result: `{"selector": ".r", "count": 1, "items": [{"tag": "div", "text": "Item"}]}`}, nil
 		case "click", "type", "wait_for":
+			if req.Action == "click" && len(f.pages) > 0 && req.Selector == "text=Next" {
+				// Pagination simulation: the next control disappears on the
+				// last page, like a disabled button would.
+				if f.page >= len(f.pages)-1 {
+					return tools.BrowserActionResult{Error: "Could not click text \"Next\": Element is disabled."}, nil
+				}
+				f.page++
+			}
 			row := f.tabs[req.TabID]
 			verb := map[string]string{"click": "Clicked", "type": "Typed into", "wait_for": "Condition met after 1ms"}[req.Action]
 			return tools.BrowserActionResult{Result: fmt.Sprintf("%s\nTab: %s\nTitle: %s\nURL: %s", verb, req.TabID, row.Title, row.URL)}, nil
+		case "extract":
+			var spec struct {
+				Scope      string         `json:"scope"`
+				Items      string         `json:"items"`
+				Limit      int            `json:"limit"`
+				WaitForNew bool           `json:"waitForNew"`
+				WaitMs     int            `json:"waitMs"`
+				Fields     map[string]any `json:"fields"`
+			}
+			if err := json.Unmarshal([]byte(req.Script), &spec); err != nil {
+				return tools.BrowserActionResult{Error: "Invalid extract spec: " + err.Error()}, nil
+			}
+			if len(f.pages) == 0 {
+				// Plain extract: one canned row echoing the requested fields.
+				item := map[string]any{"title": "Item", "href": "https://example.com/item"}
+				raw, _ := json.Marshal(map[string]any{"count": 1, "items": []any{item}})
+				return tools.BrowserActionResult{Result: string(raw)}, nil
+			}
+			current, _ := json.Marshal(f.pages[f.page])
+			unchanged := spec.WaitForNew && string(current) == f.lastExtractJSON
+			f.lastExtractJSON = string(current)
+			payload := map[string]any{"count": len(f.pages[f.page]), "items": f.pages[f.page]}
+			if unchanged {
+				payload["unchanged"] = true
+			}
+			raw, _ := json.Marshal(payload)
+			return tools.BrowserActionResult{Result: string(raw)}, nil
+		case "scroll":
+			return tools.BrowserActionResult{Result: `{"scrollY": 800, "scrollHeight": 4000, "viewportHeight": 800, "atTop": false, "atBottom": false}`}, nil
 		}
 		return tools.BrowserActionResult{Error: "unsupported action " + req.Action}, nil
 	}
@@ -383,5 +430,201 @@ func TestSplitInvocation(t *testing.T) {
 	}
 	if _, ok := SplitInvocation("/browser-use"); !ok {
 		t.Fatal("bare command should activate")
+	}
+}
+
+func TestEveryInstalledMethodIsInTheArgumentTable(t *testing.T) {
+	// The installed-method list comes from the source the same way the
+	// console kernel's test does: a methods() entry not in methodArgs would
+	// escape argument checking by omission.
+	src, err := os.ReadFile("js.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`\{Name: "([a-zA-Z]+)", Call:`)
+	installed := map[string]bool{}
+	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
+		installed[m[1]] = true
+	}
+	if len(installed) < 12 {
+		t.Fatalf("found only %d installed methods; the pattern is out of date", len(installed))
+	}
+	for name := range installed {
+		if _, ok := methodArgs[name]; !ok {
+			t.Errorf("%s is installed but has no entry in methodArgs", name)
+		}
+	}
+	for name := range methodArgs {
+		if !installed[name] {
+			t.Errorf("methodArgs lists %s, which is not an installed method", name)
+		}
+	}
+}
+
+func TestUnknownArgumentIsRefusedWithTheAcceptedList(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	_, err := eval(t, m, "s1", desktop, `browser.click({selector: "#go", text: "Go"})`)
+	if err == nil {
+		t.Fatal("two targets should be refused")
+	}
+	if !strings.Contains(err.Error(), "takes one target") {
+		t.Fatalf("multi-target error should say so, got: %v", err)
+	}
+	_, err = eval(t, m, "s1", desktop, `browser.open({url: "https://example.com", projectId: "x"})`)
+	if err == nil || !strings.Contains(err.Error(), `unknown argument "projectId"`) {
+		t.Fatalf("typo should be refused with the accepted list, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "url") {
+		t.Fatalf("error should name the accepted keys, got: %v", err)
+	}
+}
+
+func TestExtractPassesSpecAndParsesResult(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://example.com"})`)
+	res := evalJSON(t, m, "s1", desktop,
+		`browser.extract({scope: "#buybox", items: ".offer", fields: {title: "h2"}, limit: 5})`)
+	if res["count"].(float64) != 1 {
+		t.Fatalf("extract count = %v", res["count"])
+	}
+	items := res["items"].([]any)
+	title := items[0].(map[string]any)["title"]
+	if title != "Item" {
+		t.Fatalf("extract item title = %v", title)
+	}
+	// The spec must carry the validated fields through to the desktop.
+	for _, req := range desktop.actions {
+		if req.Action != "extract" {
+			continue
+		}
+		if !strings.Contains(req.Script, `"scope":"#buybox"`) || !strings.Contains(req.Script, `"limit":5`) {
+			t.Fatalf("extract spec lost its arguments: %s", req.Script)
+		}
+		return
+	}
+	t.Fatal("no extract action reached the desktop")
+}
+
+func TestExtractRejectsBadFieldSpecs(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://example.com"})`)
+	if _, err := eval(t, m, "s1", desktop, `browser.extract({fields: {price: {selector: ".p", atrribute: "href"}}})`); err == nil || !strings.Contains(err.Error(), "field \"price\" takes") {
+		t.Fatalf("field typo should name the accepted keys, got: %v", err)
+	}
+	if _, err := eval(t, m, "s1", desktop, `browser.extract({fields: {price: {attribute: "href"}}})`); err == nil || !strings.Contains(err.Error(), "needs a {selector}") {
+		t.Fatalf("field without a selector should fail, got: %v", err)
+	}
+}
+
+func TestScrollPassesSpecAndReturnsPosition(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://example.com"})`)
+	res := evalJSON(t, m, "s1", desktop, `browser.scroll({direction: "down", amount: 300})`)
+	if res["scrollY"].(float64) != 800 {
+		t.Fatalf("scroll result = %v", res)
+	}
+	if res["tabId"] == "" {
+		t.Fatal("scroll result lost the tab id")
+	}
+	if _, err := eval(t, m, "s1", desktop, `browser.scroll({direction: "sideways"})`); err == nil || !strings.Contains(err.Error(), "up, down, top or bottom") {
+		t.Fatalf("bad direction should fail, got: %v", err)
+	}
+}
+
+func TestPaginateWalksDedupesAndStops(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://example.com/list"})`)
+	// Two pages where page 2 repeats one href (the same product listed twice
+	// across pages) plus one new item; the next control then disappears.
+	desktop.pages = [][]map[string]any{
+		{{"title": "A", "href": "https://example.com/a"}, {"title": "B", "href": "https://example.com/b"}},
+		{{"title": "B", "href": "https://example.com/b"}, {"title": "C", "href": "https://example.com/c"}},
+	}
+	code := `browser.paginate({
+		itemSelector: ".result",
+		next: {text: "Next"},
+		maxPages: 5,
+		extract: {title: "h2", href: {selector: "a", attribute: "href"}}
+	})`
+	res := evalJSON(t, m, "s1", desktop, code)
+	if res["pages"].(float64) != 2 {
+		t.Fatalf("pages = %v, want 2", res["pages"])
+	}
+	items := res["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("items = %v, want 3 deduped", items)
+	}
+	first := items[0].(map[string]any)["title"]
+	if first != "A" {
+		t.Fatalf("first item = %v, want A (insertion order kept)", first)
+	}
+	if res["truncated"].(bool) {
+		t.Fatal("a two-page walk is not truncated")
+	}
+	warnings, _ := res["warnings"].([]any)
+	if len(warnings) == 0 || !strings.Contains(warnings[0].(string), "next") {
+		t.Fatalf("the missing next control should be a warning, got: %v", res["warnings"])
+	}
+}
+
+func TestPaginateStopsWhenThePageNeverChanges(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://example.com/list"})`)
+	// Every "next" click lands on identical content: the extract comes back
+	// unchanged and the walk stops with a warning instead of looping.
+	page := []map[string]any{{"title": "A", "href": "https://example.com/a"}}
+	desktop.pages = [][]map[string]any{page, page, page, page, page, page}
+	res := evalJSON(t, m, "s1", desktop, `browser.paginate({
+		itemSelector: ".result", next: {text: "Next"}, maxPages: 5,
+		extract: {title: "h2", href: {selector: "a", attribute: "href"}}
+	})`)
+	if res["pages"].(float64) != 1 {
+		t.Fatalf("pages = %v, want 1", res["pages"])
+	}
+	warnings, _ := res["warnings"].([]any)
+	if len(warnings) == 0 || !strings.Contains(warnings[0].(string), "did not change") {
+		t.Fatalf("the unchanged page should be a warning, got: %v", res["warnings"])
+	}
+	if res["truncated"].(bool) {
+		t.Fatal("an unchanged repeat is not truncation")
+	}
+}
+
+func TestFindHandleSurvivesRerendersAndDiesOnNavigation(t *testing.T) {
+	m := NewManager()
+	desktop := newFakeDesktop()
+	mustEval(t, m, "s1", desktop, `browser.open({url: "https://shop.example.com"})`)
+	found := evalJSON(t, m, "s1", desktop, `browser.find({text: "Add to cart"})`)
+	handle := found["handle"].(string)
+	if found["url"] != "https://shop.example.com" {
+		t.Fatalf("find reported url %v", found["url"])
+	}
+	// A re-render (same URL) keeps the handle usable.
+	if res := evalJSON(t, m, "s1", desktop, fmt.Sprintf(`browser.click({handle: %q})`, handle)); res["url"] != "https://shop.example.com" {
+		t.Fatalf("handle click reported %v", res)
+	}
+	// The click must carry the encoded text locator, not the handle.
+	for _, req := range desktop.actions {
+		if req.Action == "click" && req.Selector != "" {
+			if req.Selector != "text=Add to cart" {
+				t.Fatalf("handle click sent selector %q", req.Selector)
+			}
+			break
+		}
+	}
+	// A navigation (the tab's URL changes) makes every handle stale.
+	mustEval(t, m, "s1", desktop, `browser.goto({url: "https://shop.example.com/other"})`)
+	if _, err := eval(t, m, "s1", desktop, fmt.Sprintf(`browser.click({handle: %q})`, handle)); err == nil || !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("stale handle should be refused, got: %v", err)
+	}
+	// Unknown handles error too.
+	if _, err := eval(t, m, "s1", desktop, `browser.click({handle: "h99"})`); err == nil || !strings.Contains(err.Error(), "unknown handle") {
+		t.Fatalf("unknown handle should fail, got: %v", err)
 	}
 }

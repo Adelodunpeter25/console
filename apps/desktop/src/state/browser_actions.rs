@@ -607,7 +607,7 @@ impl ConsoleDesktopApp {
                 .detach();
             }
 
-            "run_js" | "get_content" | "query" => {
+            "run_js" | "get_content" | "query" | "extract" | "scroll" => {
                 let is_js = action == "run_js";
                 let request = if is_js {
                     let js = req.script.as_deref().unwrap_or("");
@@ -635,6 +635,25 @@ impl ConsoleDesktopApp {
                         return;
                     }
                     DriverRequest::query(selector)
+                } else if action == "extract" || action == "scroll" {
+                    // Internal, used by the server's browser kernel: the JSON
+                    // spec rides the script wire field; the driver parses it.
+                    let spec = req.script.as_deref().unwrap_or("");
+                    if spec.trim().is_empty() {
+                        self.resolve_browser_action_result(
+                            &sess_id,
+                            request_id,
+                            None,
+                            Some(format!("Missing spec for {action} action")),
+                            cx,
+                        );
+                        return;
+                    }
+                    if action == "extract" {
+                        DriverRequest::extract(spec)
+                    } else {
+                        DriverRequest::scroll(spec)
+                    }
                 } else {
                     DriverRequest::content(req.selector.as_deref())
                 };
@@ -663,6 +682,10 @@ impl ConsoleDesktopApp {
                 self.agent_browser_tabs.insert(sess_id.clone(), tab_id.clone());
                 let script_id = request_id.clone();
                 view.update(cx, |bv, _| bv.run_driver_script(&script_id, &request));
+                // The kernel reads tab identity itself (tabs_json) and parses
+                // query/extract/scroll results as JSON, so those come back
+                // bare; get_content keeps the header for the model.
+                let with_header = action == "get_content";
                 cx.spawn(async move |this, cx| {
                     let outcome = poll_script_result(&this, cx, &view, &script_id).await;
                     let (result, error) = match outcome {
@@ -672,19 +695,24 @@ impl ConsoleDesktopApp {
                                 (Some(format!("{note}Tab: {tab_id}\n{value}")), None)
                             }
                             Ok(value) => {
-                                let header = this
-                                    .update(cx, |_, cx| {
-                                        format_tab_header(
-                                            &view,
-                                            &tab_id,
-                                            outcome.url.as_deref(),
-                                            outcome.title.as_deref(),
-                                            cx,
-                                        )
-                                    })
-                                    .unwrap_or_default();
                                 let note = note.map(|n| format!("{n}\n")).unwrap_or_default();
-                                (Some(format!("{note}{header}\n\n{value}")), None)
+                                let body = if with_header {
+                                    let header = this
+                                        .update(cx, |_, cx| {
+                                            format_tab_header(
+                                                &view,
+                                                &tab_id,
+                                                outcome.url.as_deref(),
+                                                outcome.title.as_deref(),
+                                                cx,
+                                            )
+                                        })
+                                        .unwrap_or_default();
+                                    format!("{header}\n\n{value}")
+                                } else {
+                                    value
+                                };
+                                (Some(format!("{note}{body}")), None)
                             }
                             Err(err) => (None, Some(format!("[tab {tab_id}] {err}"))),
                         },
