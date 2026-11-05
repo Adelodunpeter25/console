@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package console.v1;
+
+option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1";
+
+// Pull requests (/api/pull-requests/*). GitHub only in v1; the server owns
+// every presentation field — checks rollups, merge readiness, row badge
+// wording — so clients only render (docs/plan/pull-requests.md §2.5).
+//
+// Enum-like values stay plain strings with documented values, the existing
+// proto convention. The list payload is a trimmed summary; the detail (with
+// body, checks, reviews, comments, merge readiness) is fetched only when a
+// PR is opened. Changed files are NOT in the detail: the file list and each
+// file's patch load separately so large PRs stay cheap.
+
+// One row of a pull-request list. Repo owner/name ride on every row because
+// the "mine" and "review requested" scopes span every repo the token can see.
+message PullRequestSummary {
+  uint32 number = 1;
+  string title = 2;
+  // open | closed | merged
+  string state = 3;
+  bool is_draft = 4;
+  string author = 5;
+  // ISO 8601 timestamp.
+  string updated_at = 6;
+  string head_ref_name = 7;
+  string base_ref_name = 8;
+  // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED; empty when no review
+  // decision exists.
+  string review_decision = 9;
+  // passing | failing | pending | none, computed from the head commit's
+  // check rollup.
+  string checks_state = 10;
+  optional uint32 additions = 11;
+  optional uint32 deletions = 12;
+  uint32 changed_files = 13;
+  // Row badge text, computed once on the server ("Draft", "Checks failing",
+  // "Changes requested", "Ready", ...).
+  string status_label = 14;
+  string repo_owner = 15;
+  string repo_name = 16;
+  // The PR's GitHub URL, for "Open on GitHub".
+  string url = 17;
+}
+
+message PullRequestListResponse {
+  repeated PullRequestSummary pull_requests = 1;
+}
+
+message PullRequestCheck {
+  string name = 1;
+  // queued | in_progress | completed (check runs) or
+  // pending | success | failure (status contexts), lower-cased.
+  string status = 2;
+  // success | failure | skipped | neutral | ... ; empty while a run is
+  // still executing.
+  string conclusion = 3;
+  string url = 4;
+}
+
+message PullRequestReview {
+  string author = 1;
+  // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED | PENDING
+  string state = 2;
+  // ISO 8601 timestamp.
+  string submitted_at = 3;
+}
+
+message PullRequestComment {
+  string author = 1;
+  string body = 2;
+  // ISO 8601 timestamp.
+  string created_at = 3;
+}
+
+// One changed file of a PR, without its patch. Patches load one file at a
+// time through PullRequestFileDiffResponse.
+message PullRequestFile {
+  string filename = 1;
+  // added | removed | modified | renamed | changed | copied
+  string status = 2;
+  optional uint32 additions = 3;
+  optional uint32 deletions = 4;
+}
+
+message PullRequestFilesResponse {
+  repeated PullRequestFile files = 1;
+}
+
+message PullRequestFileDiffResponse {
+  string filename = 1;
+  // Unified diff text ready for the existing diff viewers.
+  string diff = 2;
+  // True when GitHub omitted the patch (very large or binary file); the diff
+  // is then empty and clients link to `url` instead.
+  bool too_large = 3;
+  // The PR's GitHub URL for the "view on GitHub" fallback.
+  string url = 4;
+}
+
+message PullRequestDetail {
+  PullRequestSummary summary = 1;
+  string body = 2;
+  // Head commit SHA at read time. A merge must carry exactly this SHA so a
+  // branch that moved since is refused (409) rather than merged unreviewed.
+  string head_ref_oid = 3;
+  // ready | blocked | conflicts | behind | checking | draft — the server's
+  // reading of GitHub's mergeability; clients never interpret GitHub enums.
+  string merge_state = 4;
+  // One-line reason a merge cannot proceed ("2 checks failing",
+  // "Review required"); empty when ready or checking.
+  string merge_blocker = 5;
+  // Merge methods this repository allows (merge | squash | rebase), so a
+  // client never offers one GitHub will 405.
+  repeated string allowed_merge_methods = 6;
+  repeated PullRequestCheck checks = 7;
+  // Latest review per reviewer.
+  repeated PullRequestReview reviews = 8;
+  // Last page of top-level comments (no inline review threads in v1).
+  repeated PullRequestComment comments = 9;
+  // More comments exist past this cursor when has_more is true.
+  string comments_cursor = 10;
+  bool comments_has_more = 11;
+}

@@ -94,6 +94,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// the same cache the usage routes read from.
 	usageSvc := usage.NewService()
 	RegisterUsageRoutes(app, usageSvc)
+	RegisterPullRequestRoutes(app, services.NewPullRequestService(projects))
 	authSvc := auth.NewAuthService()
 	authSvc.Usage = usageSvc
 	RegisterAuthRoutes(app, authSvc)
