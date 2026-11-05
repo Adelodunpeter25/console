@@ -317,6 +317,14 @@ fun ChatScreen(
                     onShells = { shellSheet = true },
                     onChanges = { jumpToProjectTab(MobileTab.Changes) },
                 )
+                chat.queuedPrompt?.let { queued ->
+                    QueuedPromptCard(
+                        queued = queued,
+                        onSendNow = { AppContainer.chatRepository.steerQueuedPrompt(sessionId) },
+                        onEdit = { AppContainer.chatRepository.editQueuedPrompt(sessionId) },
+                        onDelete = { AppContainer.chatRepository.deleteQueuedPrompt(sessionId) },
+                    )
+                }
                 if (hasPending) {
                     InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
                 } else {
