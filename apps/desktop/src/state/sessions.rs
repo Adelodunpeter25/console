@@ -995,7 +995,9 @@ impl ConsoleDesktopApp {
         let mut ids = Vec::new();
         if !self.pinned_collapsed {
             for (index, session) in self.sessions.iter().enumerate() {
-                if is_live_pinned(index) {
+                // Settled chats are hidden from the sidebar, so they take no
+                // slot in the cmd+1-9 mapping either.
+                if is_live_pinned(index) && session.settled_at.is_none() {
                     ids.push(session.id.clone());
                 }
             }
@@ -1009,7 +1011,10 @@ impl ConsoleDesktopApp {
                     }
                     for idx in positions {
                         let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id) && !is_live_pinned(idx) {
+                        if !draft_ids.contains(&session.id)
+                            && !is_live_pinned(idx)
+                            && session.settled_at.is_none()
+                        {
                             ids.push(session.id.clone());
                         }
                     }
@@ -1034,7 +1039,10 @@ impl ConsoleDesktopApp {
                     }
                     for idx in positions {
                         let session = &self.sessions[idx];
-                        if !draft_ids.contains(&session.id) && !is_live_pinned(idx) {
+                        if !draft_ids.contains(&session.id)
+                            && !is_live_pinned(idx)
+                            && session.settled_at.is_none()
+                        {
                             ids.push(session.id.clone());
                         }
                     }
