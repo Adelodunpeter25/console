@@ -177,6 +177,26 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             // a Working run for this prompt. Opening a second one here would leave an
             // empty run in the list, which shifts every later run's activity onto the
             // wrong user message. Mirrors the hasWorking guard in attachServerRun.
+            val prompt = event.prompt
+            val lastUser = session.messages.lastOrNull { it is UserMessage } as? UserMessage
+            if (!prompt.isNullOrBlank() && lastUser?.content != prompt) {
+                // The server drained a queued prompt as the next turn of this run:
+                // nothing on this device appended its bubble or opened its activity,
+                // so do both, closing the previous turn's activity first.
+                val now = System.currentTimeMillis()
+                val settled = commitStreamingBuffer(session)
+                val closed = updateLatestRun(settled) { run ->
+                    if (run.status != RunStatus.Working) run
+                    else run.copy(status = RunStatus.Completed, events = finalizePendingToolCalls(run.events),
+                        elapsedMs = if (run.startedAt != null) now - run.startedAt else run.elapsedMs)
+                }
+                return closed.copy(
+                    messages = closed.messages + UserMessage(id = newMessageId(), createdAt = now, content = prompt),
+                    running = true,
+                    activeToolCalls = emptyList(),
+                    runs = closed.runs + RunActivityState(runId = newMessageId(), startedAt = now, status = RunStatus.Working),
+                )
+            }
             val hasWorking = session.runs.lastOrNull()?.status == RunStatus.Working
             session.copy(
                 running = true,

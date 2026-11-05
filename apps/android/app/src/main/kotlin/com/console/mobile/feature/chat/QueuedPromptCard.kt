@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.QueuedPrompt
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowForwardUp
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 
@@ -46,7 +46,7 @@ fun QueuedPromptCard(
             .padding(bottom = 8.dp)
             .clip(RoundedCornerShape(NewTheme.CardRadius))
             .background(NewTheme.Card)
-            .padding(start = 18.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+            .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -61,14 +61,14 @@ fun QueuedPromptCard(
             Text(
                 text = "Queued",
                 color = NewTheme.TextMuted,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(top = 4.dp),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 1.dp),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-            QueueAction(TablerIcons.Outline.ArrowForwardUp, "Send now", onSendNow)
             QueueAction(TablerIcons.Outline.Edit, "Edit queued prompt", onEdit)
             QueueAction(TablerIcons.Outline.Trash, "Delete queued prompt", onDelete)
+            QueueAction(TablerIcons.Outline.ArrowUp, "Send now", onSendNow)
         }
     }
 }
@@ -76,7 +76,7 @@ fun QueuedPromptCard(
 @Composable
 private fun QueueAction(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(999.dp)).clickable(onClick = onClick),
+        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(999.dp)).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
