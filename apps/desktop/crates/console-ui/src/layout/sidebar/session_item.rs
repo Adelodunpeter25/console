@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon, session_context_menu};
 use crate::theme::Theme;
 use crate::utils::format_time_ago;
@@ -56,10 +57,13 @@ pub struct SidebarSessionItem {
     on_commit_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pin: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_settle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_unsettle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_delete: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
 impl SidebarSessionItem {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         session: SessionHeader,
         project_name: Option<String>,
@@ -74,6 +78,8 @@ impl SidebarSessionItem {
         on_commit_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_cancel_rename: impl Fn(&mut Window, &mut App) + 'static,
         on_toggle_pin: impl Fn(&mut Window, &mut App) + 'static,
+        on_settle: impl Fn(&mut Window, &mut App) + 'static,
+        on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
         on_delete: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
@@ -90,6 +96,8 @@ impl SidebarSessionItem {
             on_commit_rename: Rc::new(on_commit_rename),
             on_cancel_rename: Rc::new(on_cancel_rename),
             on_toggle_pin: Rc::new(on_toggle_pin),
+            on_settle: Rc::new(on_settle),
+            on_unsettle: Rc::new(on_unsettle),
             on_delete: Rc::new(on_delete),
         }
     }
@@ -108,6 +116,7 @@ impl RenderOnce for SidebarSessionItem {
         let on_toggle_pin = self.on_toggle_pin;
         let on_delete = self.on_delete;
         let pinned = session.pinned_at.is_some();
+        let settled = session.settled_at.is_some();
 
         let loading_state = self.loading_state;
         let is_renaming = self.is_renaming;
@@ -139,7 +148,18 @@ impl RenderOnce for SidebarSessionItem {
         );
 
         let group_name = format!("sidebar-session-{}", session.id);
-        let delete_button_action = on_delete.clone();
+        // The hover button settles an active chat and un-settles a settled
+        // one; delete lives in the context menu only.
+        let toggle_settle_action = if settled {
+            self.on_unsettle.clone()
+        } else {
+            self.on_settle.clone()
+        };
+        let (settle_icon, settle_tooltip) = if settled {
+            (IconName::ArrowUp, "Move back to active")
+        } else {
+            (IconName::Check, "Settle chat")
+        };
         let title = if let Some(rename_input) = rename_input {
             let on_commit = on_commit_rename.clone();
             let on_cancel = on_cancel_rename.clone();
@@ -218,6 +238,8 @@ impl RenderOnce for SidebarSessionItem {
             .when(!is_active, |s| {
                 s.hover(|h| h.bg(theme.sidebar_item_background))
             })
+            // Settled chats read as archived: slightly dimmed everywhere.
+            .when(settled, |s| s.opacity(0.7))
             .when(!is_renaming, |element| {
                 element.on_click(move |_, w, cx| {
                     (on_click)(w, cx);
@@ -260,26 +282,24 @@ impl RenderOnce for SidebarSessionItem {
                                 |el, indicator| el.child(indicator),
                             ),
                     )
-                    // Delete Button: hidden until hover, then reveals on
-                    // the right side of the card.
+                    // Settle/Unsettle Button: hidden until hover, then
+                    // reveals on the right side of the card. Replaces the
+                    // old hover delete; Delete lives in the context menu.
                     .child(
                         div()
-                            .id(ElementId::Name(format!("del-{}", session.id).into()))
+                            .id(ElementId::Name(format!("settle-{}", session.id).into()))
                             .p(px(3.0))
                             .rounded(px(4.0))
                             .cursor_default()
                             .invisible()
                             .group_hover(group_name.clone(), |el| el.visible())
-                            .hover(|s| s.bg(theme.danger_soft))
+                            .hover(|s| s.bg(theme.overlay))
+                            .tooltip(Tooltip::text(settle_tooltip))
                             .on_click(move |_, w, cx| {
                                 cx.stop_propagation();
-                                (delete_button_action)(w, cx);
+                                (toggle_settle_action)(w, cx);
                             })
-                            .child(app_icon(
-                                IconName::TrashBinMinimalistic,
-                                11.0,
-                                theme.text_ghost,
-                            )),
+                            .child(app_icon(settle_icon, 11.0, theme.text_ghost)),
                     ),
             )
             // Bottom Row: Folder icon + Working Dir Name + Time
@@ -349,14 +369,18 @@ impl RenderOnce for SidebarSessionItem {
                 move |window, cx| (on_open_in_new_window)(window, cx),
                 move |window, cx| (on_rename)(window, cx),
                 move |window, cx| (on_toggle_pin)(window, cx),
+                move |window, cx| (self.on_settle)(window, cx),
+                move |window, cx| (self.on_unsettle)(window, cx),
                 move |window, cx| (on_delete)(window, cx),
                 pinned,
+                settled,
             )
             .into_any_element()
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_sidebar_session_item(
     session: SessionHeader,
     projects: &[ProjectInfo],
@@ -370,6 +394,8 @@ pub fn render_sidebar_session_item(
     on_commit_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cancel_rename: &Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_toggle_pin: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_settle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_unsettle: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_delete: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     renaming_session_id: Option<&str>,
     rename_input: Option<Entity<ComposerInput>>,
@@ -417,6 +443,16 @@ pub fn render_sidebar_session_item(
             let session_id = session_id.clone();
             let on_toggle_pin = on_toggle_pin.clone();
             move |window, cx| (on_toggle_pin)(session_id.clone(), window, cx)
+        },
+        {
+            let session_id = session_id.clone();
+            let on_settle = on_settle.clone();
+            move |window, cx| (on_settle)(session_id.clone(), window, cx)
+        },
+        {
+            let session_id = session_id.clone();
+            let on_unsettle = on_unsettle.clone();
+            move |window, cx| (on_unsettle)(session_id.clone(), window, cx)
         },
         {
             let on_delete = on_delete.clone();
