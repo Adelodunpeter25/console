@@ -23,6 +23,7 @@ use std::rc::Rc;
 
 use crate::input::ComposerInput;
 use crate::primitives::menu::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::settings::EnvironmentRow;
 use crate::theme::Theme;
@@ -400,6 +401,7 @@ impl RenderOnce for SidebarView {
                                     let on_add = on_add.clone();
                                     move |_, window, cx| (on_add)(window, cx)
                                 })
+                                .tooltip(Tooltip::text("Add project"))
                                 .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
                         ),
                 )
@@ -441,6 +443,7 @@ impl RenderOnce for SidebarView {
                                     let on_add = on_add.clone();
                                     move |_, window, cx| (on_add)(window, cx)
                                 })
+                                .tooltip(Tooltip::text("Add project"))
                                 .child(app_icon(IconName::FolderNew, 15.0, theme.text_ghost)),
                         ),
                 )
@@ -957,6 +960,7 @@ impl RenderOnce for SidebarView {
                                 cx.stop_propagation();
                                 (on_open_settings)(window, cx);
                             })
+                            .tooltip(Tooltip::text("Settings"))
                             .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary))
                     })
                     .child({
@@ -972,6 +976,7 @@ impl RenderOnce for SidebarView {
                             .cursor_pointer()
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
+                            .tooltip(Tooltip::text("Servers"))
                             .child(app_icon(IconName::Server, 14.0, theme.text_tertiary));
 
                         let on_open_server_settings = on_open_server_settings.clone();

@@ -207,6 +207,11 @@ impl RenderOnce for RightSidebarBottomSplit {
                                         .on_click(move |_, window, cx| {
                                             (on_toggle)(window, cx);
                                         })
+                                        .tooltip(Tooltip::text(if is_collapsed {
+                                            "Expand panel"
+                                        } else {
+                                            "Collapse panel"
+                                        }))
                                         .child(app_icon(
                                             if is_collapsed {
                                                 IconName::ChevronUp
