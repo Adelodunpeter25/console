@@ -6,7 +6,7 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, ListAlignment, ListOffset, ListState,
-    Render, SharedString, Window, canvas, div, list, prelude::*, px,
+    Render, SharedString, Window, canvas, div, list, prelude::*, px, uniform_list,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -54,7 +54,9 @@ pub struct TranscriptView {
     list_state: ListState,
     scrollbar_state: std::rc::Rc<ScrollbarState>,
     prompts_open: bool,
-    prompts: Vec<console_core::SessionPrompt>,
+    prompts: Rc<Vec<console_core::SessionPrompt>>,
+    /// The pointer is over the transcript: the floating controls show only then.
+    hovered: bool,
     on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_jump_to_prompt: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
@@ -132,7 +134,8 @@ impl TranscriptView {
             list_state,
             scrollbar_state: ScrollbarState::new(),
             prompts_open: false,
-            prompts: Vec::new(),
+            prompts: Rc::new(Vec::new()),
+            hovered: false,
             on_request_prompts: None,
             on_jump_to_prompt: None,
             focus_handle: cx.focus_handle(),
@@ -410,7 +413,7 @@ impl TranscriptView {
     }
 
     pub fn set_prompts(&mut self, prompts: Vec<console_core::SessionPrompt>, cx: &mut Context<Self>) {
-        self.prompts = prompts;
+        self.prompts = Rc::new(prompts);
         cx.notify();
     }
 
@@ -685,7 +688,7 @@ impl TranscriptView {
     fn render_scroll_controls(&self, theme: Theme, cx: &mut Context<Self>) -> gpui::AnyElement {
         let has_prompts = !self.messages.is_empty();
         let show_down = !self.list_state.is_following_tail();
-        if !has_prompts && !show_down {
+        if (!has_prompts && !show_down) || !(self.hovered || self.prompts_open) {
             return div().into_any_element();
         }
         let button = |id: &'static str, icon: IconName| {
@@ -716,7 +719,7 @@ impl TranscriptView {
                         this.prompts_open = !this.prompts_open;
                         if this.prompts_open {
                             // Stale entries from another chat must not flash.
-                            this.prompts.clear();
+                            this.prompts = Rc::new(Vec::new());
                             if let Some(request) = this.on_request_prompts.clone() {
                                 request(window, cx);
                             }
@@ -737,53 +740,31 @@ impl TranscriptView {
         }
         let mut layer = div().absolute().inset_0();
         if self.prompts_open && has_prompts {
-            let rows = self.prompts.iter().cloned().map(|prompt| {
+            let prompts = self.prompts.clone();
+            let entity = cx.entity().downgrade();
+            let visible_rows = prompts.len().min(PROMPT_POPUP_MAX_ROWS);
+            let body = if prompts.is_empty() {
                 div()
-                    .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.0))
                     .px(px(12.0))
                     .py(px(7.0))
-                    .rounded(px(8.0))
-                    .cursor_pointer()
-                    .hover(|element| element.bg(theme.overlay_strong))
-                    .on_click({
-                        let id = prompt.id.clone();
-                        cx.listener(move |this, _, window, cx| {
-                            this.prompts_open = false;
-                            if let Some(jump) = this.on_jump_to_prompt.clone() {
-                                jump(id.clone(), window, cx);
-                            }
-                            cx.notify();
-                        })
-                    })
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_size(px(13.0))
-                            .text_color(theme.text)
-                            .child(prompt.preview),
-                    )
-                    .when(prompt.created_at > 0, |element| {
-                        // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
-                        let age = crate::utils::format_time_ago(prompt.created_at);
-                        let age = if age.contains(' ') {
-                            age
-                        } else {
-                            format!("{age} ago")
-                        };
-                        element.child(
-                            div()
-                                .flex_none()
-                                .text_size(px(12.0))
-                                .text_color(theme.text_tertiary)
-                                .child(age),
-                        )
-                    })
-            });
+                    .text_size(px(13.0))
+                    .text_color(theme.text_tertiary)
+                    .child("Loading…")
+                    .into_any_element()
+            } else {
+                // Virtualized: only the visible rows are built, however long the chat is.
+                uniform_list(
+                    "transcript-prompts-list",
+                    prompts.len(),
+                    move |range, _window, _cx| {
+                        range
+                            .map(|ix| prompt_row(&prompts[ix], theme, entity.clone()))
+                            .collect::<Vec<_>>()
+                    },
+                )
+                .size_full()
+                .into_any_element()
+            };
             layer = layer
                 // Click-away backdrop.
                 .child(
@@ -804,8 +785,7 @@ impl TranscriptView {
                         .bottom(px(54.0))
                         .w(px(340.0))
                         .max_w_full()
-                        .max_h(px(360.0))
-                        .overflow_y_scroll()
+                        .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
                         .occlude()
                         .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                         .p(px(4.0))
@@ -813,17 +793,7 @@ impl TranscriptView {
                         .border_1()
                         .border_color(theme.border)
                         .bg(theme.raised)
-                        .children(rows)
-                        .when(self.prompts.is_empty(), |popup| {
-                            popup.child(
-                                div()
-                                    .px(px(12.0))
-                                    .py(px(7.0))
-                                    .text_size(px(13.0))
-                                    .text_color(theme.text_tertiary)
-                                    .child("Loading…"),
-                            )
-                        }),
+                        .child(body),
                 );
         }
         layer
@@ -1541,6 +1511,12 @@ impl Render for TranscriptView {
 
         let root = div()
             .id("transcript-view")
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if this.hovered != *hovered {
+                    this.hovered = *hovered;
+                    cx.notify();
+                }
+            }))
             .key_context("TranscriptView")
             .track_focus(&self.focus_handle)
             .relative()
@@ -1692,6 +1668,69 @@ fn popup_pill(id: &'static str, icon: IconName, tooltip: &'static str, theme: Th
         .hover(|element| element.bg(theme.overlay_strong))
         .tooltip(Tooltip::text(tooltip))
         .child(app_icon(icon, 12.0, theme.text_secondary))
+}
+
+/// Fixed row height so the popup virtualizes without measuring, and so its
+/// height is exactly `PROMPT_POPUP_MAX_ROWS` rows when the chat has more.
+const PROMPT_ROW_HEIGHT: f32 = 34.0;
+const PROMPT_POPUP_MAX_ROWS: usize = 7;
+
+fn prompt_row(
+    prompt: &console_core::SessionPrompt,
+    theme: Theme,
+    entity: gpui::WeakEntity<TranscriptView>,
+) -> gpui::AnyElement {
+    let id = prompt.id.clone();
+    div()
+        .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
+        .h(px(PROMPT_ROW_HEIGHT))
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(12.0))
+        .px(px(12.0))
+        .rounded(px(8.0))
+        .cursor_pointer()
+        .hover(|element| element.bg(theme.overlay_strong))
+        .on_click(move |_, window, cx| {
+            let Some(view) = entity.upgrade() else {
+                return;
+            };
+            let jump = view.update(cx, |this, cx| {
+                this.prompts_open = false;
+                cx.notify();
+                this.on_jump_to_prompt.clone()
+            });
+            if let Some(jump) = jump {
+                jump(id.clone(), window, cx);
+            }
+        })
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(px(13.0))
+                .text_color(theme.text)
+                .child(prompt.preview.clone()),
+        )
+        .when(prompt.created_at > 0, |element| {
+            // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
+            let age = crate::utils::format_time_ago(prompt.created_at);
+            let age = if age.contains(' ') {
+                age
+            } else {
+                format!("{age} ago")
+            };
+            element.child(
+                div()
+                    .flex_none()
+                    .text_size(px(12.0))
+                    .text_color(theme.text_tertiary)
+                    .child(age),
+            )
+        })
+        .into_any_element()
 }
 
 fn transcript_row(
