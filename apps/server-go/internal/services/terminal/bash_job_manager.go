@@ -8,10 +8,10 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/sysproc"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
@@ -157,7 +157,7 @@ func (m *BashJobManager) Start(opts StartBashJobOptions) (BashJobSnapshot, error
 	cmd := exec.Command("sh", "-c", opts.Command)
 	cmd.Dir = opts.Cwd
 	cmd.Env = append(append([]string{}, opts.Env...), "CONSOLE_BASH_JOB_ID="+jobID)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	sysproc.OwnGroup(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return BashJobSnapshot{}, err
@@ -621,17 +621,11 @@ func (r *bashJobRecord) snapshotLocked() BashJobSnapshot {
 	return r.BashJobSnapshot
 }
 
-// safeKillGroup signals the whole process group; falls back to the direct
-// pid if the group signal fails (e.g. already reaped).
+// safeKillGroup signals the whole process group; TermTree falls back to the
+// direct pid if the group signal fails (e.g. already reaped).
 func safeKillGroup(pid int) {
-	if pid <= 0 {
-		return
-	}
-	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
-		_ = syscall.Kill(pid, syscall.SIGTERM)
-	}
+	sysproc.TermTree(pid)
 	time.AfterFunc(300*time.Millisecond, func() {
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		sysproc.KillTree(pid)
 	})
 }

@@ -2,8 +2,8 @@
 # one executable) for every platform on each push to main, then uploads them
 # to a rolling GitHub Release tagged `console-server` (latest always wins).
 #
-# Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib} sidecar
-# (fff file-search native lib, dlopened at runtime — same assets as
+# Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib,dll}
+# sidecar (fff file-search native lib, dlopened at runtime — same assets as
 # apps/server-go/scripts/fetch-fff-lib.sh, which only covers the host).
 # `console start` re-executes the same binary with CONSOLE_SERVE=1, so one
 # installed file both manages and IS the daemon.
@@ -26,6 +26,7 @@ jobs:
             runner: ubuntu-latest
             goos: linux
             goarch: amd64
+            bin: console-linux-x64
             fff-asset: c-lib-x86_64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-x64.so
           # Native arm64 runner (free on public repos) instead of a cross
@@ -41,20 +42,35 @@ jobs:
             runner: ubuntu-22.04-arm
             goos: linux
             goarch: arm64
+            bin: console-linux-arm64
             fff-asset: c-lib-aarch64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-arm64.so
           - os-suffix: macos-x64
             runner: macos-15
             goos: darwin
             goarch: amd64
+            bin: console-macos-x64
             fff-asset: c-lib-x86_64-apple-darwin.dylib
             lib-asset: libfff_c-macos-x64.dylib
           - os-suffix: macos-arm64
             runner: macos-15
             goos: darwin
             goarch: arm64
+            bin: console-macos-arm64
             fff-asset: c-lib-aarch64-apple-darwin.dylib
             lib-asset: libfff_c-macos-arm64.dylib
+          # windows-x64 only for now: the sidecars ship an arm64 Windows
+          # build too, but the mingw cgo toolchain on the arm64 Windows
+          # runner is not proven, so x64 ships first. The .exe suffix is
+          # explicit (bin) because Windows will not execute a binary
+          # without it.
+          - os-suffix: windows-x64
+            runner: windows-latest
+            goos: windows
+            goarch: amd64
+            bin: console-windows-x64.exe
+            fff-asset: c-lib-x86_64-pc-windows-msvc.dll
+            lib-asset: libfff_c-windows-x64.dll
     steps:
       - uses: actions/checkout@v4
 
@@ -65,8 +81,9 @@ jobs:
           go-version: "1.26"
           cache-dependency-path: apps/server-go/go.sum
 
-      # server-go uses cgo (fff dlopen bindings).
-      # Flags: -trimpath for reproducible builds; -s -w strips debug info.
+      # server-go uses cgo (fff + cua dlopen bindings). On Windows the
+      # runner's preinstalled mingw-w64 gcc satisfies that; a matching host
+      # keeps it a plain gcc link like the native unix runners.
       - name: Build console binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -74,11 +91,14 @@ jobs:
           CGO_ENABLED: 1
         run: >
           go -C apps/server-go build -trimpath -ldflags="-s -w"
-          -o ../../console-${{ matrix.os-suffix }} ./cmd/console
+          -o ../../${{ matrix.bin }} ./cmd/console
 
       # Fetch the target platform's libfff_c from fff releases
-      # (fetch-fff-lib.sh only covers the runner's own platform).
+      # (fetch-fff-lib.sh only covers the runner's own platform). bash shell
+      # so the step also runs on the Windows runner, where PowerShell would
+      # alias curl to Invoke-WebRequest.
       - name: Stage fff native sidecar
+        shell: bash
         run: |
           curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
             "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
@@ -89,7 +109,7 @@ jobs:
         with:
           name: console-${{ matrix.os-suffix }}
           path: |
-            console-${{ matrix.os-suffix }}
+            ${{ matrix.bin }}
             ${{ matrix.lib-asset }}
           if-no-files-found: error
 
@@ -135,3 +155,5 @@ jobs:
               dist/libfff_c-macos-x64.dylib
               dist/console-macos-arm64
               dist/libfff_c-macos-arm64.dylib
+              dist/console-windows-x64.exe
+              dist/libfff_c-windows-x64.dll

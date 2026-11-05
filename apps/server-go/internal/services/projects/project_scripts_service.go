@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	gitsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	integrationssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/integrations"
 	terminalsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/sysproc"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -270,7 +270,7 @@ func (s *ProjectScriptsService) RunIn(projectID, scriptID, cwd string) (types.Sc
 	cmd.Dir = root
 	cmd.Env = BuildScriptEnv()
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // own process group
+	sysproc.OwnGroup(cmd) // own process group
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return types.ScriptRun{}, err
@@ -420,11 +420,9 @@ func (s *ProjectScriptsService) Stop(projectID, runID string) bool {
 		run.mu.Unlock()
 		return false
 	}
-	// Signal the whole process group; fall back to the direct child.
+	// Signal the whole process group; TermTree falls back to the direct child.
 	if run.process.Process != nil {
-		if err := syscall.Kill(-run.process.Process.Pid, syscall.SIGTERM); err != nil {
-			_ = run.process.Process.Kill()
-		}
+		sysproc.TermTree(run.process.Process.Pid)
 	}
 	sig := "SIGTERM"
 	run.Signal = &sig

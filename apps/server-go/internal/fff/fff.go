@@ -5,8 +5,11 @@
 package fff
 
 /*
-#cgo LDFLAGS: -ldl
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -138,6 +141,22 @@ typedef void (*fff_free_grep_result_t)(struct FffGrepResult *);
 typedef void (*fff_free_string_t)(char *);
 typedef struct FffResult *(*fff_health_check_t)(void *, const char *);
 
+// fff_open_library/fff_symbol wrap the platform loader so the bindings stay
+// dlopen-shaped on every GOOS: LoadLibraryA/GetProcAddress on Windows,
+// dlopen/dlsym elsewhere. Load flags mirror RTLD_NOW|RTLD_LOCAL — resolve
+// every symbol up front, don't pollute the global namespace.
+#ifdef _WIN32
+static void *fff_open_library(const char *path) {
+	return (void *)LoadLibraryA(path);
+}
+static void *fff_symbol(void *dl, const char *name) {
+	return (void *)GetProcAddress((HMODULE)dl, name);
+}
+#else
+static void *fff_open_library(const char *path) { return dlopen(path, RTLD_NOW|RTLD_LOCAL); }
+static void *fff_symbol(void *dl, const char *name) { return dlsym(dl, name); }
+#endif
+
 static fff_create_instance_with_t p_create;
 static fff_destroy_t p_destroy;
 static fff_search_t p_search;
@@ -152,27 +171,27 @@ static fff_health_check_t p_health;
 
 // bind_all resolves every symbol; returns false on the first miss.
 static bool fff_bind_all(void *dl) {
-	p_create = (fff_create_instance_with_t)dlsym(dl, "fff_create_instance_with");
+	p_create = (fff_create_instance_with_t)fff_symbol(dl, "fff_create_instance_with");
 	if (!p_create) return false;
-	p_destroy = (fff_destroy_t)dlsym(dl, "fff_destroy");
+	p_destroy = (fff_destroy_t)fff_symbol(dl, "fff_destroy");
 	if (!p_destroy) return false;
-	p_search = (fff_search_t)dlsym(dl, "fff_search");
+	p_search = (fff_search_t)fff_symbol(dl, "fff_search");
 	if (!p_search) return false;
-	p_glob = (fff_glob_t)dlsym(dl, "fff_glob");
+	p_glob = (fff_glob_t)fff_symbol(dl, "fff_glob");
 	if (!p_glob) return false;
-	p_grep = (fff_live_grep_t)dlsym(dl, "fff_live_grep");
+	p_grep = (fff_live_grep_t)fff_symbol(dl, "fff_live_grep");
 	if (!p_grep) return false;
-	p_wait = (fff_wait_for_scan_t)dlsym(dl, "fff_wait_for_scan");
+	p_wait = (fff_wait_for_scan_t)fff_symbol(dl, "fff_wait_for_scan");
 	if (!p_wait) return false;
-	p_free_result = (fff_free_result_t)dlsym(dl, "fff_free_result");
+	p_free_result = (fff_free_result_t)fff_symbol(dl, "fff_free_result");
 	if (!p_free_result) return false;
-	p_free_search = (fff_free_search_result_t)dlsym(dl, "fff_free_search_result");
+	p_free_search = (fff_free_search_result_t)fff_symbol(dl, "fff_free_search_result");
 	if (!p_free_search) return false;
-	p_free_grep = (fff_free_grep_result_t)dlsym(dl, "fff_free_grep_result");
+	p_free_grep = (fff_free_grep_result_t)fff_symbol(dl, "fff_free_grep_result");
 	if (!p_free_grep) return false;
-	p_free_string = (fff_free_string_t)dlsym(dl, "fff_free_string");
+	p_free_string = (fff_free_string_t)fff_symbol(dl, "fff_free_string");
 	if (!p_free_string) return false;
-	p_health = (fff_health_check_t)dlsym(dl, "fff_health_check");
+	p_health = (fff_health_check_t)fff_symbol(dl, "fff_health_check");
 	return p_health != NULL;
 }
 
@@ -207,6 +226,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -222,9 +242,17 @@ var (
 var errManagerClosed = errors.New("fff manager is closed")
 
 // Load resolves the fff C library at runtime. Search paths:
-// FFF_LIB_PATH env, ./third_party/fff/libfff_c.so, /usr/local/lib/libfff_c.so.
+// FFF_LIB_PATH env, libfff_c.{so,dylib,dll} beside the binary and under
+// third_party/fff, then /usr/local/lib.
 func Load() error {
 	loadOnce.Do(func() {
+		// Per-platform sidecar names, matching what the release stages next
+		// to the binary. Checking both unix spellings everywhere is harmless
+		// (os.Stat just misses), so they stay unconditional.
+		names := []string{"libfff_c.so", "libfff_c.dylib"}
+		if runtime.GOOS == "windows" {
+			names = []string{"libfff_c.dll"}
+		}
 		candidates := []string{}
 		if p := os.Getenv("FFF_LIB_PATH"); p != "" {
 			candidates = append(candidates, p)
@@ -234,26 +262,33 @@ func Load() error {
 		// sidecar directly next to the binary (no third_party nesting).
 		if exe, err := os.Executable(); err == nil {
 			exeDir := filepath.Dir(exe)
+			for _, n := range names {
+				candidates = append(candidates,
+					filepath.Join(exeDir, n),
+					filepath.Join(exeDir, "third_party", "fff", n),
+				)
+			}
+		}
+		for _, n := range names {
 			candidates = append(candidates,
-				filepath.Join(exeDir, "libfff_c.so"),
-				filepath.Join(exeDir, "libfff_c.dylib"),
-				filepath.Join(exeDir, "third_party/fff/libfff_c.so"),
-				filepath.Join(exeDir, "third_party/fff/libfff_c.dylib"),
+				filepath.Join("third_party", "fff", n),
+				filepath.Join("/usr/local/lib", n),
 			)
 		}
-		candidates = append(candidates,
-			"third_party/fff/libfff_c.so",
-			"third_party/fff/libfff_c.dylib",
-			"/usr/local/lib/libfff_c.so",
-			"/usr/local/lib/libfff_c.dylib",
-		)
 		var handle unsafe.Pointer
 		for _, path := range candidates {
 			if _, err := os.Stat(path); err != nil {
 				continue
 			}
+			// Absolute before the loader sees it: LoadLibraryA resolves a
+			// relative path against the process CWD, and a fff library
+			// resolved against ambient state is an attack surface rather
+			// than a convenience (same rule as the cua loader's override).
+			if abs, err := filepath.Abs(path); err == nil {
+				path = abs
+			}
 			cpath := C.CString(path)
-			h := C.dlopen(cpath, C.RTLD_NOW|C.RTLD_LOCAL)
+			h := C.fff_open_library(cpath)
 			C.free(unsafe.Pointer(cpath))
 			if h != nil {
 				handle = h

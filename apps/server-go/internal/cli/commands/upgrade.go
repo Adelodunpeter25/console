@@ -25,6 +25,7 @@ const (
 type upgradeTarget struct {
 	suffix   string
 	binPath  string
+	binAsset string
 	libPath  string
 	libAsset string
 }
@@ -36,8 +37,10 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 		osName = "macos"
 	case "linux":
 		osName = "linux"
+	case "windows":
+		osName = "windows"
 	default:
-		return upgradeTarget{}, fmt.Errorf("unsupported OS: %s (only Linux and macOS are supported)", runtime.GOOS)
+		return upgradeTarget{}, fmt.Errorf("unsupported OS: %s (only Linux, macOS, and Windows are supported)", runtime.GOOS)
 	}
 	var arch string
 	switch runtime.GOARCH {
@@ -50,9 +53,21 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	}
 
 	suffix := osName + "-" + arch
+	// The release asset carries .exe on Windows; the installed file must
+	// too, or Windows refuses to execute it.
+	ext := ""
+	if osName == "windows" {
+		ext = ".exe"
+	}
+	binAsset := "console-" + suffix + ext
+	binName := "console" + ext
 	libAsset := "libfff_c-" + suffix + ".so"
 	libFile := "libfff_c.so"
-	if osName != "linux" {
+	switch osName {
+	case "windows":
+		libAsset = "libfff_c-" + suffix + ".dll"
+		libFile = "libfff_c.dll"
+	case "darwin":
 		libAsset = "libfff_c-" + suffix + ".dylib"
 		libFile = "libfff_c.dylib"
 	}
@@ -62,14 +77,14 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	// dir (overridable via CONSOLE_INSTALL_DIR).
 	if exe, err := os.Executable(); err == nil && !isGoBuildTemp(exe) {
 		dir := filepath.Dir(exe)
-		return upgradeTarget{suffix: suffix, binPath: exe, libPath: filepath.Join(dir, libFile), libAsset: libAsset}, nil
+		return upgradeTarget{suffix: suffix, binPath: exe, binAsset: binAsset, libPath: filepath.Join(dir, libFile), libAsset: libAsset}, nil
 	}
 	prefix := os.Getenv("CONSOLE_INSTALL_DIR")
 	if prefix == "" {
 		home, _ := os.UserHomeDir()
 		prefix = filepath.Join(home, ".local", "bin")
 	}
-	return upgradeTarget{suffix: suffix, binPath: filepath.Join(prefix, "console"), libPath: filepath.Join(prefix, libFile), libAsset: libAsset}, nil
+	return upgradeTarget{suffix: suffix, binPath: filepath.Join(prefix, binName), binAsset: binAsset, libPath: filepath.Join(prefix, libFile), libAsset: libAsset}, nil
 }
 
 // isGoBuildTemp reports whether exe is a `go run`/`go test` temp binary
@@ -131,7 +146,7 @@ func UpgradeDaemon() error {
 	}
 
 	fmt.Printf("Upgrading Console (%s)...\n", target.suffix)
-	if err := downloadTo(upgradeBaseURL+"/console-"+target.suffix, target.binPath, 0o755); err != nil {
+	if err := downloadTo(upgradeBaseURL+"/"+target.binAsset, target.binPath, 0o755); err != nil {
 		return err
 	}
 	if err := downloadTo(upgradeBaseURL+"/"+target.libAsset, target.libPath, 0o644); err != nil {

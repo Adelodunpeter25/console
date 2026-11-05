@@ -3,7 +3,7 @@ module github.com/Adelodunpeter25/console/apps/server-go
 go 1.25.0
 
 require (
-	github.com/Adelodunpeter25/sim-go v0.0.0-20261026112708-265caf92d55b
+	github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73
 	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
 	github.com/dop251/goja v0.0.0-20261006212518-44620e89763c
@@ -60,7 +60,7 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.47.0
 	modernc.org/libc v1.65.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
