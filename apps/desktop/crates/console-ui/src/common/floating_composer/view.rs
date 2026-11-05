@@ -557,8 +557,8 @@ impl FloatingComposerView {
             .flex()
             .justify_center()
             .items_center()
-            // Slightly above true center reads better under the popup.
-            .pb(px(96.0))
+            // Above true center reads better under the popup.
+            .pb(px(160.0))
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 on_dismiss(window, cx);
             })

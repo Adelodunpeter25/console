@@ -697,8 +697,14 @@ impl Render for ConsoleDesktopApp {
                             }
                         },
                         {
-                            let on_new = on_new_chat.clone();
-                            move |window: &mut Window, cx: &mut App| (on_new)(window, cx)
+                            let entity = entity.clone();
+                            move |window: &mut Window, cx: &mut App| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.open_floating_composer(window, cx)
+                                    });
+                                }
+                            }
                         },
                         {
                             // Sidebar search button opens the command palette.
