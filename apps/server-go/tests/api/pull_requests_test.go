@@ -7,6 +7,7 @@ package tests
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -49,7 +50,7 @@ func rateLimitedReply(body string) graphqlReply {
 // REST reads, points the provider package at it, stores a token, registers
 // one project whose origin is github.com/octo/hello, and returns a Fiber
 // app with only the pull-request routes plus the service (for tunables).
-func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, rest func(path string) graphqlReply) (*fiber.App, *services.PullRequestService) {
+func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, rest func(path, body string) graphqlReply) (*fiber.App, *services.PullRequestService) {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +62,8 @@ func newPullRequestEnv(t *testing.T, graphql func(query string) graphqlReply, re
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			reply = graphql(body.Query)
 		} else {
-			reply = rest(r.URL.Path)
+			raw, _ := io.ReadAll(r.Body)
+			reply = rest(r.URL.Path, string(raw))
 		}
 		for k, v := range reply.headers {
 			w.Header().Set(k, v)
@@ -182,7 +184,7 @@ func newFakeGitHub(t *testing.T, detail string) (*fiber.App, *services.PullReque
 			}
 			return graphqlReply{code: http.StatusBadRequest, body: `{"errors":[{"message":"unknown query"}]}`}
 		},
-		func(path string) graphqlReply {
+		func(path, body string) graphqlReply {
 			switch {
 			case strings.HasSuffix(path, "/repos/octo/hello"):
 				return okReply(prRestRepoResponse)
@@ -302,7 +304,7 @@ func TestPullRequestsSearchScopesSpanRepos(t *testing.T) {
 					seen = query
 					return okReply(prSearchResponse)
 				},
-				func(path string) graphqlReply { return okReply(prRestRepoResponse) })
+				func(path, body string) graphqlReply { return okReply(prRestRepoResponse) })
 
 			code, out := do(t, app, "GET", "/api/pull-requests?scope="+scope, "")
 			if code != http.StatusOK || out["success"] != true {
@@ -333,7 +335,7 @@ func TestPullRequestsMergeabilityUnknownRetriesOnce(t *testing.T) {
 			}
 			return okReply(prRestRepoResponse)
 		},
-		func(string) graphqlReply { return okReply(prRestRepoResponse) })
+		func(_, _ string) graphqlReply { return okReply(prRestRepoResponse) })
 
 	code, out := do(t, app, "GET", "/api/pull-requests/octo/hello/12", "")
 	if code != http.StatusOK {
@@ -362,7 +364,7 @@ func TestPullRequestsMergeabilityUnknownRetriesOnce(t *testing.T) {
 			}
 			return okReply(prRestRepoResponse)
 		},
-		func(string) graphqlReply { return okReply(prRestRepoResponse) })
+		func(_, _ string) graphqlReply { return okReply(prRestRepoResponse) })
 	code, out = do(t, app2, "GET", "/api/pull-requests/octo/hello/12", "")
 	if code != http.StatusOK {
 		t.Fatalf("detail: %d %v", code, out)
@@ -415,7 +417,7 @@ func TestPullRequestsErrorMappingIsDistinct(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app, _ := newPullRequestEnv(t,
 				func(string) graphqlReply { return tc.graphql },
-				func(string) graphqlReply { return okReply(prRestRepoResponse) })
+				func(_, _ string) graphqlReply { return okReply(prRestRepoResponse) })
 			code, out := do(t, app, "GET", "/api/pull-requests/octo/hello/12", "")
 			if code != tc.status {
 				t.Fatalf("status: %d, want %d (%v)", code, tc.status, out)
@@ -429,7 +431,7 @@ func TestPullRequestsErrorMappingIsDistinct(t *testing.T) {
 	// REST 422 surfaces GitHub's own validation text.
 	app, _ := newPullRequestEnv(t,
 		func(string) graphqlReply { return okReply(prDetailResponse) },
-		func(path string) graphqlReply {
+		func(path, body string) graphqlReply {
 			if strings.HasSuffix(path, "/pulls/12/files") {
 				return graphqlReply{code: http.StatusUnprocessableEntity, body: `{"message":"Validation Failed"}`}
 			}
@@ -566,5 +568,242 @@ func TestPullRequestsUnknownProjectIsRejected(t *testing.T) {
 	}
 	if msg, _ := out["error"].(string); !strings.Contains(msg, "Unknown project") {
 		t.Fatalf("message: %v", out)
+	}
+}
+
+// --- Write path. ---
+
+// prWriteRecorder records what the fake GitHub received.
+type prWriteRecorder struct {
+	detailReads int
+	createBody  map[string]any
+	mergeBody   map[string]any
+	mergeCalls  int
+	readyCalls  int
+	// Overrides for the canned responses.
+	mergeStatus int
+	mergeBodyFn string
+	detailJSON  string
+}
+
+// newPullRequestWriteEnv extends newPullRequestEnv with write endpoints and
+// a recorder.
+func newPullRequestWriteEnv(t *testing.T, rec *prWriteRecorder) *fiber.App {
+	t.Helper()
+	if rec.detailJSON == "" {
+		rec.detailJSON = prDetailResponse
+	}
+	app, _ := newPullRequestEnv(t,
+		func(query string) graphqlReply {
+			switch {
+			case strings.Contains(query, "pullRequest(number:"):
+				rec.detailReads++
+				return okReply(rec.detailJSON)
+			case strings.Contains(query, "updatePullRequest"):
+				rec.readyCalls++
+				return okReply(`{"data":{"updatePullRequest":{"pullRequest":{"isDraft":false}}}}`)
+			}
+			return graphqlReply{code: http.StatusBadRequest, body: `{"errors":[{"message":"unknown query"}]}`}
+		},
+		func(path, body string) graphqlReply {
+			switch {
+			case strings.HasSuffix(path, "/repos/octo/hello"):
+				return okReply(prRestRepoResponse)
+			case strings.HasSuffix(path, "/pulls/12/files"):
+				return okReply(prRestFilesResponse)
+			case strings.HasSuffix(path, "/pulls/12"):
+				return okReply(`{"number": 12, "state": "closed", "html_url": "https://github.com/octo/hello/pull/12"}`)
+			case strings.HasSuffix(path, "/pulls"):
+				_ = json.Unmarshal([]byte(body), &rec.createBody)
+				return okReply(`{"number": 12, "html_url": "https://github.com/octo/hello/pull/12"}`)
+			case strings.HasSuffix(path, "/merge"):
+				rec.mergeCalls++
+				_ = json.Unmarshal([]byte(body), &rec.mergeBody)
+				if rec.mergeStatus != 0 {
+					return graphqlReply{code: rec.mergeStatus, body: rec.mergeBodyFn}
+				}
+				return okReply(`{"merged": true, "sha": "deadbeef99"}`)
+			case strings.HasSuffix(path, "/comments"):
+				return okReply(`{"user": {"login": "octocat"}, "body": "LGTM", "created_at": "2026-11-03T10:00:00Z"}`)
+			}
+			return graphqlReply{code: http.StatusNotFound, body: `{"message":"Not Found"}`}
+		})
+	return app
+}
+
+func TestPullRequestsCreateDefaultsToDraft(t *testing.T) {
+	rec := &prWriteRecorder{}
+	app := newPullRequestWriteEnv(t, rec)
+
+	// No draft field: the create goes out as a draft.
+	code, out := do(t, app, "POST", "/api/pull-requests", `{"owner":"octo","repo":"hello","title":"Add retry","body":"Please review.","head":"add-retry","base":"main"}`)
+	if code != http.StatusOK || out["success"] != true {
+		t.Fatalf("create: %d %v", code, out)
+	}
+	data := out["data"].(map[string]any)
+	if data["number"] != float64(12) || data["url"] == "" {
+		t.Fatalf("create payload: %v", data)
+	}
+	if got, _ := rec.createBody["draft"].(bool); !got {
+		t.Fatalf("create must default to draft, sent %v", rec.createBody["draft"])
+	}
+
+	// An explicit draft:false opens it ready for review.
+	code, _ = do(t, app, "POST", "/api/pull-requests", `{"owner":"octo","repo":"hello","title":"T","head":"h","base":"m","draft":false}`)
+	if code != http.StatusOK {
+		t.Fatalf("create draft:false: %d", code)
+	}
+	if got, _ := rec.createBody["draft"].(bool); got {
+		t.Fatal("explicit draft:false must reach GitHub as false")
+	}
+
+	// title/head/base are required.
+	code, out = do(t, app, "POST", "/api/pull-requests", `{"owner":"octo","repo":"hello","title":"T","head":"h"}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("missing base: %d %v", code, out)
+	}
+}
+
+func TestPullRequestsMergeSHAGuardAndMethodCheck(t *testing.T) {
+	rec := &prWriteRecorder{}
+	app := newPullRequestWriteEnv(t, rec)
+
+	// A merge without the head SHA it is supposed to land is refused before
+	// anything is sent.
+	code, out := do(t, app, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"squash"}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("merge without expected_head: %d %v", code, out)
+	}
+	if rec.mergeCalls != 0 {
+		t.Fatal("merge without expected_head must not reach GitHub")
+	}
+
+	// A method the repository does not allow is rejected before the request.
+	code, out = do(t, app, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"rebase","expected_head":"abc123def"}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("disallowed method: %d %v", code, out)
+	}
+	if msg, _ := out["error"].(string); !strings.Contains(msg, "rebase") || !strings.Contains(msg, "squash") {
+		t.Fatalf("message should name the disallowed and the allowed methods: %v", out)
+	}
+	if rec.mergeCalls != 0 {
+		t.Fatal("disallowed method must not reach GitHub")
+	}
+
+	// The happy path carries the SHA to GitHub and reports what was merged.
+	code, out = do(t, app, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"squash","expected_head":"abc123def"}`)
+	if code != http.StatusOK || out["success"] != true {
+		t.Fatalf("merge: %d %v", code, out)
+	}
+	if rec.mergeBody["sha"] != "abc123def" || rec.mergeBody["merge_method"] != "squash" {
+		t.Fatalf("merge body = %v", rec.mergeBody)
+	}
+	if out["data"].(map[string]any)["mergedSha"] != "deadbeef99" {
+		t.Fatalf("merge payload: %v", out["data"])
+	}
+
+	// A moved head: GitHub's 409 is a refusal with a reload message.
+	rec2 := &prWriteRecorder{mergeStatus: http.StatusConflict, mergeBodyFn: `{"message":"head was not at expected"}`}
+	app2 := newPullRequestWriteEnv(t, rec2)
+	code, out = do(t, app2, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"merge","expected_head":"abc123def"}`)
+	if code != http.StatusConflict {
+		t.Fatalf("409: %d %v", code, out)
+	}
+	if msg, _ := out["error"].(string); !strings.Contains(msg, "Reload") {
+		t.Fatalf("conflict message: %v", out)
+	}
+
+	// Not mergeable: GitHub's 405 wording surfaces verbatim.
+	rec3 := &prWriteRecorder{mergeStatus: http.StatusMethodNotAllowed, mergeBodyFn: `{"message":"Pull Request is not mergeable"}`}
+	app3 := newPullRequestWriteEnv(t, rec3)
+	code, out = do(t, app3, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"merge","expected_head":"abc123def"}`)
+	if code != http.StatusUnprocessableEntity {
+		t.Fatalf("405: %d %v", code, out)
+	}
+	if msg, _ := out["error"].(string); msg != "Pull Request is not mergeable" {
+		t.Fatalf("GitHub's 405 text should surface verbatim, got %q", msg)
+	}
+}
+
+func TestPullRequestsMergeRefusesDraftEarly(t *testing.T) {
+	draftDetail := strings.ReplaceAll(prDetailResponse, `"isDraft": false`, `"isDraft": true`)
+	rec := &prWriteRecorder{detailJSON: draftDetail}
+	app := newPullRequestWriteEnv(t, rec)
+
+	code, out := do(t, app, "POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"merge","expected_head":"abc123def"}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("draft merge: %d %v", code, out)
+	}
+	if msg, _ := out["error"].(string); !strings.Contains(msg, "mark ready") {
+		t.Fatalf("message: %v", out)
+	}
+	if rec.mergeCalls != 0 {
+		t.Fatal("a draft must be refused before any merge request")
+	}
+}
+
+func TestPullRequestsUpdateAndCommentAndInvalidation(t *testing.T) {
+	rec := &prWriteRecorder{}
+	app := newPullRequestWriteEnv(t, rec)
+
+	// A first detail read warms the cache; the second is served from it.
+	do(t, app, "GET", "/api/pull-requests/octo/hello/12", "")
+	do(t, app, "GET", "/api/pull-requests/octo/hello/12", "")
+	if rec.detailReads != 1 {
+		t.Fatalf("detail should be cached (reads = %d)", rec.detailReads)
+	}
+
+	// Marking ready goes through the draft mutation; the refreshed detail
+	// comes back in the same response.
+	code, out := do(t, app, "PATCH", "/api/pull-requests/octo/hello/12", `{"draft":false}`)
+	if code != http.StatusOK || out["success"] != true {
+		t.Fatalf("ready: %d %v", code, out)
+	}
+	if rec.readyCalls != 1 {
+		t.Fatalf("ready must use the draft mutation, calls = %d", rec.readyCalls)
+	}
+	if out["data"].(map[string]any)["detail"] == nil {
+		t.Fatalf("update must return the refreshed detail: %v", out["data"])
+	}
+
+	// A state change goes through PATCH with only the state field.
+	code, out = do(t, app, "PATCH", "/api/pull-requests/octo/hello/12", `{"state":"closed"}`)
+	if code != http.StatusOK {
+		t.Fatalf("close: %d %v", code, out)
+	}
+
+	// A comment is created and echoed back.
+	code, out = do(t, app, "POST", "/api/pull-requests/octo/hello/12/comments", `{"body":"LGTM"}`)
+	if code != http.StatusOK {
+		t.Fatalf("comment: %d %v", code, out)
+	}
+	comment := out["data"].(map[string]any)["comment"].(map[string]any)
+	if comment["author"] != "octocat" || comment["body"] != "LGTM" {
+		t.Fatalf("comment payload: %v", comment)
+	}
+
+	// Every write invalidated the cache: the next detail read goes upstream
+	// again.
+	if _, err := app.Test(httptest.NewRequest("GET", "/api/pull-requests/octo/hello/12", nil), 10000); err != nil {
+		t.Fatal(err)
+	}
+	if rec.detailReads <= 1 {
+		t.Fatalf("writes must invalidate the cached detail (reads = %d)", rec.detailReads)
+	}
+
+	// The token never appears in a write response.
+	for _, tc := range []struct{ method, path, body string }{
+		{"POST", "/api/pull-requests", `{"owner":"octo","repo":"hello","title":"T","head":"h","base":"m"}`},
+		{"PATCH", "/api/pull-requests/octo/hello/12", `{"state":"open"}`},
+		{"POST", "/api/pull-requests/octo/hello/12/merge", `{"method":"merge","expected_head":"abc123def"}`},
+		{"POST", "/api/pull-requests/octo/hello/12/comments", `{"body":"hi"}`},
+	} {
+		code, out := do(t, app, tc.method, tc.path, tc.body)
+		if code != http.StatusOK {
+			t.Fatalf("%s %s: %d %v", tc.method, tc.path, code, out)
+		}
+		if body := toJSON(out); strings.Contains(body, githubSecret) {
+			t.Fatalf("token leaked in %s %s", tc.method, tc.path)
+		}
 	}
 }

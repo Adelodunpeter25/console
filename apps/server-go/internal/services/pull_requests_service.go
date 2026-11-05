@@ -19,7 +19,7 @@ import (
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
 )
 
-// prCacheTTL is the short server cache for GitHub reads. A write (phase 2)
+// prCacheTTL is the short server cache for GitHub reads. A write
 // invalidates the affected PR and the lists.
 const prCacheTTL = 30 * time.Second
 
@@ -34,8 +34,8 @@ type prCall struct {
 	err   error
 }
 
-// PullRequestService serves pull-request reads to the routes and (phase 3)
-// the console.pr.* agent methods, which call the same service.
+// PullRequestService serves pull-request reads and writes to the HTTP
+// routes and the console.pr.* agent methods, which call the same service.
 type PullRequestService struct {
 	projects *projectssvc.ProjectService
 

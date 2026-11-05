@@ -53,7 +53,10 @@ type CommentData struct {
 // DetailData is a PR's full read: the summary fields plus everything the
 // detail screen draws.
 type DetailData struct {
-	Summary          SummaryData
+	Summary SummaryData
+	// ID is the GraphQL node id, used by the ready/draft mutations (they
+	// take no number, only the node id).
+	ID               string
 	Body             string
 	HeadRefOid       string
 	Mergeable        string // MERGEABLE | CONFLICTING | UNKNOWN

@@ -180,6 +180,7 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 	var out struct {
 		Repository struct {
 			PullRequest *struct {
+				ID               string
 				Number           uint32
 				Title            string
 				State            string
@@ -245,6 +246,7 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 	query := fmt.Sprintf(`query($owner: String!, $name: String!, $number: Int!) {
 		repository(owner: $owner, name: $name) {
 			pullRequest(number: $number) {
+				id
 				%s
 				body
 				headRefOid
@@ -275,6 +277,7 @@ func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32
 	}
 
 	detail := &DetailData{
+		ID:               pr.ID,
 		Body:             pr.Body,
 		HeadRefOid:       pr.HeadRefOid,
 		Mergeable:        pr.Mergeable,

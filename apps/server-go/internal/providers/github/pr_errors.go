@@ -20,6 +20,9 @@ var (
 	// ErrNotFound is 404: no such PR, or no access — GitHub deliberately
 	// conflates the two for private repositories.
 	ErrNotFound = fmt.Errorf("Pull request not found — or the token has no access to it. GitHub reports both the same way.")
+	// ErrConflict is 409 on a merge: the head moved since the caller read
+	// it, and GitHub refused rather than merge unreviewed code.
+	ErrConflict = fmt.Errorf("The branch moved since this pull request was read. Reload and try again.")
 	// ErrUnreachable is pat.go's: GitHub could not be reached at all
 	// (DNS, timeout, 5xx), shared so callers can return 502.
 )
@@ -56,8 +59,12 @@ func mapRESTStatus(resp *http.Response, body []byte) error {
 		return ErrNotFound
 	case http.StatusUnprocessableEntity:
 		return &ValidationError{Detail: restValidationMessage(body)}
+	case http.StatusMethodNotAllowed:
+		// A merge GitHub refuses outright (not mergeable, or a merge method
+		// the repository disallows): its own wording is the useful part.
+		return &ValidationError{Detail: restValidationMessage(body)}
 	case http.StatusConflict:
-		return fmt.Errorf("The branch moved since this pull request was read. Reload and try again.")
+		return ErrConflict
 	default:
 		if resp.StatusCode >= 500 {
 			return fmt.Errorf("%w GitHub is unavailable right now (%d). Try again shortly.", ErrUnreachable, resp.StatusCode)

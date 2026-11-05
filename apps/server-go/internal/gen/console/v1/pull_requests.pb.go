@@ -765,6 +765,556 @@ func (x *PullRequestDetail) GetCommentsHasMore() bool {
 	return false
 }
 
+type CreatePullRequestRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Owner/repo of the target repository. Empty when project_id is given:
+	// the repo then resolves from the project's origin remote.
+	Owner     string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Repo      string `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
+	ProjectId string `protobuf:"bytes,3,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Title     string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Body      string `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	// Branch with the changes (the PR's head).
+	Head string `protobuf:"bytes,6,opt,name=head,proto3" json:"head,omitempty"`
+	// Branch to merge into.
+	Base string `protobuf:"bytes,7,opt,name=base,proto3" json:"base,omitempty"`
+	// Unset means true: pull requests are drafts until marked ready.
+	Draft         *bool `protobuf:"varint,8,opt,name=draft,proto3,oneof" json:"draft,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreatePullRequestRequest) Reset() {
+	*x = CreatePullRequestRequest{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatePullRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatePullRequestRequest) ProtoMessage() {}
+
+func (x *CreatePullRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatePullRequestRequest.ProtoReflect.Descriptor instead.
+func (*CreatePullRequestRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CreatePullRequestRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetHead() string {
+	if x != nil {
+		return x.Head
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetBase() string {
+	if x != nil {
+		return x.Base
+	}
+	return ""
+}
+
+func (x *CreatePullRequestRequest) GetDraft() bool {
+	if x != nil && x.Draft != nil {
+		return *x.Draft
+	}
+	return false
+}
+
+type CreatePullRequestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Number        uint32                 `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreatePullRequestResponse) Reset() {
+	*x = CreatePullRequestResponse{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatePullRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatePullRequestResponse) ProtoMessage() {}
+
+func (x *CreatePullRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatePullRequestResponse.ProtoReflect.Descriptor instead.
+func (*CreatePullRequestResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CreatePullRequestResponse) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *CreatePullRequestResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+type UpdatePullRequestRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Owner  string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Repo   string                 `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
+	Number uint32                 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	Title  *string                `protobuf:"bytes,4,opt,name=title,proto3,oneof" json:"title,omitempty"`
+	Body   *string                `protobuf:"bytes,5,opt,name=body,proto3,oneof" json:"body,omitempty"`
+	Base   *string                `protobuf:"bytes,6,opt,name=base,proto3,oneof" json:"base,omitempty"`
+	// "open" | "closed" to change state; empty leaves it unchanged.
+	State string `protobuf:"bytes,7,opt,name=state,proto3" json:"state,omitempty"`
+	// true marks the PR ready for review, false converts it back to
+	// draft; unset leaves it unchanged.
+	Draft         *bool `protobuf:"varint,8,opt,name=draft,proto3,oneof" json:"draft,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePullRequestRequest) Reset() {
+	*x = UpdatePullRequestRequest{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePullRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePullRequestRequest) ProtoMessage() {}
+
+func (x *UpdatePullRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePullRequestRequest.ProtoReflect.Descriptor instead.
+func (*UpdatePullRequestRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdatePullRequestRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *UpdatePullRequestRequest) GetTitle() string {
+	if x != nil && x.Title != nil {
+		return *x.Title
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetBody() string {
+	if x != nil && x.Body != nil {
+		return *x.Body
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetBase() string {
+	if x != nil && x.Base != nil {
+		return *x.Base
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *UpdatePullRequestRequest) GetDraft() bool {
+	if x != nil && x.Draft != nil {
+		return *x.Draft
+	}
+	return false
+}
+
+// The refreshed detail, so a client re-renders from one response.
+type UpdatePullRequestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Detail        *PullRequestDetail     `protobuf:"bytes,1,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePullRequestResponse) Reset() {
+	*x = UpdatePullRequestResponse{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePullRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePullRequestResponse) ProtoMessage() {}
+
+func (x *UpdatePullRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePullRequestResponse.ProtoReflect.Descriptor instead.
+func (*UpdatePullRequestResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdatePullRequestResponse) GetDetail() *PullRequestDetail {
+	if x != nil {
+		return x.Detail
+	}
+	return nil
+}
+
+type MergePullRequestRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Owner  string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Repo   string                 `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
+	Number uint32                 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	// merge | squash | rebase — one the repository allows.
+	Method string `protobuf:"bytes,4,opt,name=method,proto3" json:"method,omitempty"`
+	// The head SHA from the last read. Required: if the branch moved
+	// since, GitHub refuses with 409 instead of merging unreviewed code.
+	ExpectedHead  string `protobuf:"bytes,5,opt,name=expected_head,json=expectedHead,proto3" json:"expected_head,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergePullRequestRequest) Reset() {
+	*x = MergePullRequestRequest{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergePullRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergePullRequestRequest) ProtoMessage() {}
+
+func (x *MergePullRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergePullRequestRequest.ProtoReflect.Descriptor instead.
+func (*MergePullRequestRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MergePullRequestRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *MergePullRequestRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *MergePullRequestRequest) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *MergePullRequestRequest) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+func (x *MergePullRequestRequest) GetExpectedHead() string {
+	if x != nil {
+		return x.ExpectedHead
+	}
+	return ""
+}
+
+type MergePullRequestResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The SHA GitHub actually merged.
+	MergedSha     string `protobuf:"bytes,1,opt,name=merged_sha,json=mergedSha,proto3" json:"merged_sha,omitempty"`
+	Method        string `protobuf:"bytes,2,opt,name=method,proto3" json:"method,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergePullRequestResponse) Reset() {
+	*x = MergePullRequestResponse{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergePullRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergePullRequestResponse) ProtoMessage() {}
+
+func (x *MergePullRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergePullRequestResponse.ProtoReflect.Descriptor instead.
+func (*MergePullRequestResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MergePullRequestResponse) GetMergedSha() string {
+	if x != nil {
+		return x.MergedSha
+	}
+	return ""
+}
+
+func (x *MergePullRequestResponse) GetMethod() string {
+	if x != nil {
+		return x.Method
+	}
+	return ""
+}
+
+type CreateCommentRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Owner  string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Repo   string                 `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
+	Number uint32                 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	// Top-level comment body (no inline review threads in v1).
+	Body          string `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommentRequest) Reset() {
+	*x = CreateCommentRequest{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommentRequest) ProtoMessage() {}
+
+func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommentRequest.ProtoReflect.Descriptor instead.
+func (*CreateCommentRequest) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CreateCommentRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *CreateCommentRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *CreateCommentRequest) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *CreateCommentRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type CreateCommentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Comment       *PullRequestComment    `protobuf:"bytes,1,opt,name=comment,proto3" json:"comment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommentResponse) Reset() {
+	*x = CreateCommentResponse{}
+	mi := &file_console_v1_pull_requests_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommentResponse) ProtoMessage() {}
+
+func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_pull_requests_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommentResponse.ProtoReflect.Descriptor instead.
+func (*CreateCommentResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_pull_requests_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CreateCommentResponse) GetComment() *PullRequestComment {
+	if x != nil {
+		return x.Comment
+	}
+	return nil
+}
+
 var File_console_v1_pull_requests_proto protoreflect.FileDescriptor
 
 const file_console_v1_pull_requests_proto_rawDesc = "" +
@@ -844,7 +1394,53 @@ const file_console_v1_pull_requests_proto_rawDesc = "" +
 	"\bcomments\x18\t \x03(\v2\x1e.console.v1.PullRequestCommentR\bcomments\x12'\n" +
 	"\x0fcomments_cursor\x18\n" +
 	" \x01(\tR\x0ecommentsCursor\x12*\n" +
-	"\x11comments_has_more\x18\v \x01(\bR\x0fcommentsHasMoreBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
+	"\x11comments_has_more\x18\v \x01(\bR\x0fcommentsHasMore\"\xda\x01\n" +
+	"\x18CreatePullRequestRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x03 \x01(\tR\tprojectId\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\tR\x04body\x12\x12\n" +
+	"\x04head\x18\x06 \x01(\tR\x04head\x12\x12\n" +
+	"\x04base\x18\a \x01(\tR\x04base\x12\x19\n" +
+	"\x05draft\x18\b \x01(\bH\x00R\x05draft\x88\x01\x01B\b\n" +
+	"\x06_draft\"E\n" +
+	"\x19CreatePullRequestResponse\x12\x16\n" +
+	"\x06number\x18\x01 \x01(\rR\x06number\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\x80\x02\n" +
+	"\x18UpdatePullRequestRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\rR\x06number\x12\x19\n" +
+	"\x05title\x18\x04 \x01(\tH\x00R\x05title\x88\x01\x01\x12\x17\n" +
+	"\x04body\x18\x05 \x01(\tH\x01R\x04body\x88\x01\x01\x12\x17\n" +
+	"\x04base\x18\x06 \x01(\tH\x02R\x04base\x88\x01\x01\x12\x14\n" +
+	"\x05state\x18\a \x01(\tR\x05state\x12\x19\n" +
+	"\x05draft\x18\b \x01(\bH\x03R\x05draft\x88\x01\x01B\b\n" +
+	"\x06_titleB\a\n" +
+	"\x05_bodyB\a\n" +
+	"\x05_baseB\b\n" +
+	"\x06_draft\"R\n" +
+	"\x19UpdatePullRequestResponse\x125\n" +
+	"\x06detail\x18\x01 \x01(\v2\x1d.console.v1.PullRequestDetailR\x06detail\"\x98\x01\n" +
+	"\x17MergePullRequestRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\rR\x06number\x12\x16\n" +
+	"\x06method\x18\x04 \x01(\tR\x06method\x12#\n" +
+	"\rexpected_head\x18\x05 \x01(\tR\fexpectedHead\"Q\n" +
+	"\x18MergePullRequestResponse\x12\x1d\n" +
+	"\n" +
+	"merged_sha\x18\x01 \x01(\tR\tmergedSha\x12\x16\n" +
+	"\x06method\x18\x02 \x01(\tR\x06method\"l\n" +
+	"\x14CreateCommentRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\rR\x06number\x12\x12\n" +
+	"\x04body\x18\x04 \x01(\tR\x04body\"Q\n" +
+	"\x15CreateCommentResponse\x128\n" +
+	"\acomment\x18\x01 \x01(\v2\x1e.console.v1.PullRequestCommentR\acommentBUZSgithub.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1;consolev1b\x06proto3"
 
 var (
 	file_console_v1_pull_requests_proto_rawDescOnce sync.Once
@@ -858,7 +1454,7 @@ func file_console_v1_pull_requests_proto_rawDescGZIP() []byte {
 	return file_console_v1_pull_requests_proto_rawDescData
 }
 
-var file_console_v1_pull_requests_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_console_v1_pull_requests_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_console_v1_pull_requests_proto_goTypes = []any{
 	(*PullRequestSummary)(nil),          // 0: console.v1.PullRequestSummary
 	(*PullRequestListResponse)(nil),     // 1: console.v1.PullRequestListResponse
@@ -869,6 +1465,14 @@ var file_console_v1_pull_requests_proto_goTypes = []any{
 	(*PullRequestFilesResponse)(nil),    // 6: console.v1.PullRequestFilesResponse
 	(*PullRequestFileDiffResponse)(nil), // 7: console.v1.PullRequestFileDiffResponse
 	(*PullRequestDetail)(nil),           // 8: console.v1.PullRequestDetail
+	(*CreatePullRequestRequest)(nil),    // 9: console.v1.CreatePullRequestRequest
+	(*CreatePullRequestResponse)(nil),   // 10: console.v1.CreatePullRequestResponse
+	(*UpdatePullRequestRequest)(nil),    // 11: console.v1.UpdatePullRequestRequest
+	(*UpdatePullRequestResponse)(nil),   // 12: console.v1.UpdatePullRequestResponse
+	(*MergePullRequestRequest)(nil),     // 13: console.v1.MergePullRequestRequest
+	(*MergePullRequestResponse)(nil),    // 14: console.v1.MergePullRequestResponse
+	(*CreateCommentRequest)(nil),        // 15: console.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),       // 16: console.v1.CreateCommentResponse
 }
 var file_console_v1_pull_requests_proto_depIdxs = []int32{
 	0, // 0: console.v1.PullRequestListResponse.pull_requests:type_name -> console.v1.PullRequestSummary
@@ -877,11 +1481,13 @@ var file_console_v1_pull_requests_proto_depIdxs = []int32{
 	2, // 3: console.v1.PullRequestDetail.checks:type_name -> console.v1.PullRequestCheck
 	3, // 4: console.v1.PullRequestDetail.reviews:type_name -> console.v1.PullRequestReview
 	4, // 5: console.v1.PullRequestDetail.comments:type_name -> console.v1.PullRequestComment
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	8, // 6: console.v1.UpdatePullRequestResponse.detail:type_name -> console.v1.PullRequestDetail
+	4, // 7: console.v1.CreateCommentResponse.comment:type_name -> console.v1.PullRequestComment
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_console_v1_pull_requests_proto_init() }
@@ -891,13 +1497,15 @@ func file_console_v1_pull_requests_proto_init() {
 	}
 	file_console_v1_pull_requests_proto_msgTypes[0].OneofWrappers = []any{}
 	file_console_v1_pull_requests_proto_msgTypes[5].OneofWrappers = []any{}
+	file_console_v1_pull_requests_proto_msgTypes[9].OneofWrappers = []any{}
+	file_console_v1_pull_requests_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_pull_requests_proto_rawDesc), len(file_console_v1_pull_requests_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

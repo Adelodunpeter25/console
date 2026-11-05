@@ -88,11 +88,31 @@ func graphqlRequest(ctx context.Context, token, query string, variables map[stri
 
 // restGet performs one GET against the REST API and decodes the body.
 func restGet(ctx context.Context, token, path string, query url.Values, out any) error {
+	return restDo(ctx, token, http.MethodGet, path, query, nil, out)
+}
+
+// restWrite performs one POST/PATCH/PUT against the REST API with a JSON
+// body and decodes the response into out (when non-nil).
+func restWrite(ctx context.Context, token, method, path string, body, out any) error {
+	return restDo(ctx, token, method, path, nil, body, out)
+}
+
+// restDo is the shared REST request path: pinned headers, one client,
+// status-to-error mapping, body decode.
+func restDo(ctx context.Context, token, method, path string, query url.Values, body, out any) error {
 	u := APIBase + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	var reader io.Reader
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		reader = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, reader)
 	if err != nil {
 		return err
 	}
@@ -103,9 +123,9 @@ func restGet(ctx context.Context, token, path string, query url.Values, out any)
 		return fmt.Errorf("%w: %s", ErrUnreachable, err)
 	}
 	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 
-	if err := mapRESTStatus(resp, body); err != nil {
+	if err := mapRESTStatus(resp, raw); err != nil {
 		return err
 	}
 	if readErr != nil {
@@ -114,7 +134,7 @@ func restGet(ctx context.Context, token, path string, query url.Values, out any)
 	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(body, out); err != nil {
+	if err := json.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("Could not read the GitHub response: %w", err)
 	}
 	return nil

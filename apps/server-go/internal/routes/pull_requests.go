@@ -1,6 +1,5 @@
-// Pull-request routes (/api/pull-requests/*).
-//
-// Read-only in phase 1: list, detail, changed files, one file's diff. The
+// Pull-request routes (/api/pull-requests/*): list, detail, changed files,
+// one file's diff, and the writes (create, update, merge, comment). The
 // response payloads are the canonical console.v1 pull-request types with
 // the presentation fields the server computed (checks_state, merge_state,
 // status_label); clients only render. Error status codes map the provider's
@@ -16,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/proto"
 
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	prv "github.com/Adelodunpeter25/console/apps/server-go/internal/providers/github"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 )
@@ -82,6 +82,75 @@ func RegisterPullRequestRoutes(app *fiber.App, svc *services.PullRequestService)
 		}
 		return ok(c, diff)
 	})
+
+	// POST /api/pull-requests — create (draft defaults to true when the
+	// body does not say otherwise).
+	app.Post("/api/pull-requests", func(c *fiber.Ctx) error {
+		var req consolev1.CreatePullRequestRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
+			return fail(c, errors.New("Could not read the request body."))
+		}
+		resp, err := svc.Create(c.Context(), &req)
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, resp)
+	})
+
+	// PATCH /api/pull-requests/:owner/:repo/:number — title/body/base,
+	// state, or ready/draft; the refreshed detail comes back.
+	app.Patch("/api/pull-requests/:owner/:repo/:number", func(c *fiber.Ctx) error {
+		number, err := prNumber(c)
+		if err != nil {
+			return fail(c, err)
+		}
+		var req consolev1.UpdatePullRequestRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
+			return fail(c, errors.New("Could not read the request body."))
+		}
+		req.Owner, req.Repo, req.Number = c.Params("owner"), c.Params("repo"), number
+		resp, err := svc.Update(c.Context(), &req)
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, resp)
+	})
+
+	// POST /api/pull-requests/:owner/:repo/:number/merge
+	app.Post("/api/pull-requests/:owner/:repo/:number/merge", func(c *fiber.Ctx) error {
+		number, err := prNumber(c)
+		if err != nil {
+			return fail(c, err)
+		}
+		var req consolev1.MergePullRequestRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
+			return fail(c, errors.New("Could not read the request body."))
+		}
+		req.Owner, req.Repo, req.Number = c.Params("owner"), c.Params("repo"), number
+		resp, err := svc.Merge(c.Context(), &req)
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, resp)
+	})
+
+	// POST /api/pull-requests/:owner/:repo/:number/comments
+	app.Post("/api/pull-requests/:owner/:repo/:number/comments", func(c *fiber.Ctx) error {
+		number, err := prNumber(c)
+		if err != nil {
+			return fail(c, err)
+		}
+		var req consolev1.CreateCommentRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &req); err != nil {
+			return fail(c, errors.New("Could not read the request body."))
+		}
+		req.Owner, req.Repo, req.Number = c.Params("owner"), c.Params("repo"), number
+		resp, err := svc.Comment(c.Context(), &req)
+		if err != nil {
+			return fail(c, err)
+		}
+		return ok(c, resp)
+	})
 }
 
 // prNumber parses the PR route parameter.
@@ -109,6 +178,8 @@ func prStatusFor(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, prv.ErrNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, prv.ErrConflict):
+		return http.StatusConflict
 	case errors.Is(err, prv.ErrNotConnected):
 		return http.StatusBadRequest
 	case errors.Is(err, prv.ErrUnreachable):

@@ -101,26 +101,98 @@ message PullRequestFileDiffResponse {
 }
 
 message PullRequestDetail {
-  PullRequestSummary summary = 1;
-  string body = 2;
-  // Head commit SHA at read time. A merge must carry exactly this SHA so a
-  // branch that moved since is refused (409) rather than merged unreviewed.
-  string head_ref_oid = 3;
-  // ready | blocked | conflicts | behind | checking | draft — the server's
-  // reading of GitHub's mergeability; clients never interpret GitHub enums.
-  string merge_state = 4;
-  // One-line reason a merge cannot proceed ("2 checks failing",
-  // "Review required"); empty when ready or checking.
-  string merge_blocker = 5;
-  // Merge methods this repository allows (merge | squash | rebase), so a
-  // client never offers one GitHub will 405.
-  repeated string allowed_merge_methods = 6;
-  repeated PullRequestCheck checks = 7;
-  // Latest review per reviewer.
-  repeated PullRequestReview reviews = 8;
-  // Last page of top-level comments (no inline review threads in v1).
-  repeated PullRequestComment comments = 9;
-  // More comments exist past this cursor when has_more is true.
-  string comments_cursor = 10;
-  bool comments_has_more = 11;
+	PullRequestSummary summary = 1;
+	string body = 2;
+	// Head commit SHA at read time. A merge must carry exactly this SHA so a
+	// branch that moved since is refused (409) rather than merged unreviewed.
+	string head_ref_oid = 3;
+	// ready | blocked | conflicts | behind | checking | draft — the server's
+	// reading of GitHub's mergeability; clients never interpret GitHub enums.
+	string merge_state = 4;
+	// One-line reason a merge cannot proceed ("2 checks failing",
+	// "Review required"); empty when ready or checking.
+	string merge_blocker = 5;
+	// Merge methods this repository allows (merge | squash | rebase), so a
+	// client never offers one GitHub will 405.
+	repeated string allowed_merge_methods = 6;
+	repeated PullRequestCheck checks = 7;
+	// Latest review per reviewer.
+	repeated PullRequestReview reviews = 8;
+	// Last page of top-level comments (no inline review threads in v1).
+	repeated PullRequestComment comments = 9;
+	// More comments exist past this cursor when has_more is true.
+	string comments_cursor = 10;
+	bool comments_has_more = 11;
+}
+
+// --- Writes (docs decisions: created PRs default to draft; a merge always
+// carries the reviewed head SHA and is never a side effect). ---
+
+message CreatePullRequestRequest {
+	// Owner/repo of the target repository. Empty when project_id is given:
+	// the repo then resolves from the project's origin remote.
+	string owner = 1;
+	string repo = 2;
+	string project_id = 3;
+	string title = 4;
+	string body = 5;
+	// Branch with the changes (the PR's head).
+	string head = 6;
+	// Branch to merge into.
+	string base = 7;
+	// Unset means true: pull requests are drafts until marked ready.
+	optional bool draft = 8;
+}
+
+message CreatePullRequestResponse {
+	uint32 number = 1;
+	string url = 2;
+}
+
+message UpdatePullRequestRequest {
+	string owner = 1;
+	string repo = 2;
+	uint32 number = 3;
+	optional string title = 4;
+	optional string body = 5;
+	optional string base = 6;
+	// "open" | "closed" to change state; empty leaves it unchanged.
+	string state = 7;
+	// true marks the PR ready for review, false converts it back to
+	// draft; unset leaves it unchanged.
+	optional bool draft = 8;
+}
+
+// The refreshed detail, so a client re-renders from one response.
+message UpdatePullRequestResponse {
+	PullRequestDetail detail = 1;
+}
+
+message MergePullRequestRequest {
+	string owner = 1;
+	string repo = 2;
+	uint32 number = 3;
+	// merge | squash | rebase — one the repository allows.
+	string method = 4;
+	// The head SHA from the last read. Required: if the branch moved
+	// since, GitHub refuses with 409 instead of merging unreviewed code.
+	string expected_head = 5;
+}
+
+message MergePullRequestResponse {
+	// The SHA GitHub actually merged.
+	string merged_sha = 1;
+	string method = 2;
+}
+
+message CreateCommentRequest {
+	string owner = 1;
+	string repo = 2;
+	uint32 number = 3;
+	// Top-level comment body (no inline review threads in v1).
+	string body = 4;
+}
+
+message CreateCommentResponse {
+	PullRequestComment comment = 1;
 }
