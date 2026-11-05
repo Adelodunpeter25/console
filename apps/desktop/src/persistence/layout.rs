@@ -29,8 +29,15 @@ pub struct PersistedLayoutState {
 }
 
 impl PersistedLayoutState {
+    /// The persisted tabs that can still be mounted. Subagents and Shells
+    /// moved to popovers on the chat's pill row, so layouts saved while they
+    /// were openable drop them here instead of mounting dead tabs.
     pub fn open_auxiliary_tabs(&self) -> Vec<console_ui::AuxiliaryTab> {
-        self.open_auxiliary_tabs.clone()
+        self.open_auxiliary_tabs
+            .iter()
+            .filter(|tab| matches!(tab, console_ui::AuxiliaryTab::Devices))
+            .copied()
+            .collect()
     }
 
     pub fn sidebar_sort_mode(&self) -> console_ui::utils::SidebarSortMode {

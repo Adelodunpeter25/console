@@ -14,6 +14,7 @@ pub mod input;
 pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;
+pub(crate) mod pill_popovers;
 pub mod project_browse_palette;
 pub mod queued_prompt_card;
 pub mod quick_open_palette;
@@ -31,7 +32,7 @@ pub use autocomplete::{
     AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
-pub use composer_pills::{TasksPill, composer_pills};
+pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;

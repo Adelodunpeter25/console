@@ -5,8 +5,9 @@ use console_core::{
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
     ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
-    QuestionInteractionCard, TasksPill, Theme, WorkspaceFooter, centered_stripe, composer_pills,
-    error_banner, notice_banner, queued_prompts_stack,
+    QuestionInteractionCard, ShellEntry, ShellsPill, SubagentsPill, TasksPill, Theme,
+    WorkspaceFooter, centered_stripe, composer_pills, error_banner, notice_banner,
+    queued_prompts_stack,
 };
 use gpui::{
     App, Context, IntoElement, ParentElement, Styled, Window, div, prelude::FluentBuilder, px,
@@ -656,33 +657,54 @@ impl ConsoleDesktopApp {
             // popover too so it cannot reopen stale on the next run.
             tasks_menu.close(window, cx);
         }
-        let subagents_entity = entity.clone();
-        let on_subagents: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
-            Rc::new(move |_window, cx| {
-                if let Some(app) = subagents_entity.upgrade() {
-                    app.update(cx, |this, cx| this.view_subagent_in_panel("", cx));
-                }
-            });
-        let shells_entity = entity.clone();
-        let on_shells: Rc<dyn Fn(&mut Window, &mut App) + 'static> = Rc::new(move |_window, cx| {
-            if let Some(app) = shells_entity.upgrade() {
-                app.update(cx, |this, cx| this.view_shells_in_panel(None, cx));
-            }
-        });
-        let pills_key = format!("composer-pills-{pane_id}");
+        let subagents_menu = self.pane_subagents_menu(&pane_id);
+        if subagent_count == 0 && subagents_menu.is_open() {
+            subagents_menu.close(window, cx);
+        }
+        let shells_menu = self.pane_shells_menu(&pane_id);
+        if running_shells.is_empty() && shells_menu.is_open() {
+            shells_menu.close(window, cx);
+        }
         let tasks = has_active_todos.then(|| TasksPill {
             completed: todo_completed,
             total: todo_total,
             menu: tasks_menu,
             items: Rc::new(todo_items.clone()),
         });
+        let subagents_pill = (subagent_count > 0).then(|| SubagentsPill {
+            running: subagents_running,
+            menu: subagents_menu,
+            items: subagents.clone(),
+        });
+        let shells_pill = (!running_shells.is_empty()).then(|| {
+            let pane_session_id = pane_session_id.clone();
+            let entity = entity.clone();
+            let on_stop: Rc<dyn Fn(String, &mut Window, &mut App) + 'static> =
+                Rc::new(move |work_id, _window, cx| {
+                    if let (Some(app), Some(sid)) = (entity.upgrade(), pane_session_id.clone()) {
+                        app.update(cx, |this, cx| this.stop_shell(sid, work_id, cx));
+                    }
+                });
+            ShellsPill {
+                menu: shells_menu,
+                shells: Rc::new(
+                    running_shells
+                        .iter()
+                        .map(|work| ShellEntry {
+                            id: work.id.clone(),
+                            command: work.shell_command(),
+                        })
+                        .collect(),
+                ),
+                on_stop,
+            }
+        });
+        let pills_key = format!("composer-pills-{pane_id}");
         let composer_pills_row = composer_pills(
             &pills_key,
             tasks,
-            (subagent_count > 0).then_some((subagent_count, subagents_running)),
-            running_shells.len(),
-            (subagent_count > 0).then_some(on_subagents),
-            (!running_shells.is_empty()).then_some(on_shells),
+            subagents_pill,
+            shells_pill,
             changes_summary.zip(on_open_changes),
             theme,
         );

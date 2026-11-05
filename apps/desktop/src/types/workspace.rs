@@ -76,6 +76,8 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) approval_menu: ContextMenuHandle,
     pub(crate) usage_menu: ContextMenuHandle,
     pub(crate) tasks_menu: ContextMenuHandle,
+    pub(crate) subagents_menu: ContextMenuHandle,
+    pub(crate) shells_menu: ContextMenuHandle,
     pub(crate) selected_project_id: Option<String>,
     pub(crate) branches: Rc<Vec<GitBranchInfo>>,
     pub(crate) branch_loaded: bool,

@@ -167,10 +167,10 @@ pub(crate) fn wire_view_subagent(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
-    transcript.set_on_view_subagent(move |call_id, _window, cx| {
+    transcript.set_on_view_subagent(move |_call_id, window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                this.view_subagent_in_panel(&call_id, cx);
+                this.open_subagents_popover(window, cx);
             });
         }
     });

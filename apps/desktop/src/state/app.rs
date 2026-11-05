@@ -388,6 +388,8 @@ impl ConsoleDesktopApp {
         });
 
         let tasks_menu = ContextMenuHandle::new(cx);
+        let subagents_menu = ContextMenuHandle::new(cx);
+        let shells_menu = ContextMenuHandle::new(cx);
 
         let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
         // All persisted drafts (except new_chat) are already confirmed for sidebar display.
@@ -622,6 +624,8 @@ impl ConsoleDesktopApp {
             approval_menu,
             usage_menu,
             tasks_menu,
+            subagents_menu,
+            shells_menu,
             projects: Rc::new(Vec::new()),
             selected_project_id: initial_selected_project_id,
             branches: Rc::new(Vec::new()),
@@ -697,9 +701,6 @@ impl ConsoleDesktopApp {
             inspector_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),
-            shell_output: None,
-            expanded_subagents: std::collections::HashSet::new(),
-            subagent_markdown_views: Rc::new(RefCell::new(std::collections::HashMap::new())),
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),
@@ -846,6 +847,8 @@ impl ConsoleDesktopApp {
                 approval_menu: app.approval_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
                 tasks_menu: app.tasks_menu.clone(),
+                subagents_menu: app.subagents_menu.clone(),
+                shells_menu: app.shells_menu.clone(),
                 selected_project_id: app.selected_project_id.clone(),
                 branches: app.branches.clone(),
                 branch_loaded: app.branch_loaded,

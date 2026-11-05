@@ -1,10 +1,9 @@
 //! Conductor-style Right Sidebar Inspector Shell.
 
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange, SubagentInfo};
+use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange};
 use gpui::{
     AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
@@ -14,9 +13,6 @@ use gpui::{
 use crate::inspector::bottom_split::RightSidebarBottomSplit;
 use crate::inspector::changes_list::ChangesListView;
 use crate::inspector::file_tree::{FileTreeNode, FileTreeView, GitBadge};
-use crate::inspector::shell_list::ShellListView;
-use crate::inspector::subagent_list::SubagentListView;
-use crate::markdown::render::MarkdownView;
 use crate::primitives::icons::{IconName, app_icon};
 use crate::primitives::{ContextMenuHandle, MenuAlign, MenuItem, dropdown_menu};
 use crate::theme::Theme;
@@ -40,13 +36,15 @@ pub enum AuxiliaryTab {
 impl AuxiliaryTab {
     /// Auxiliary tabs currently available to users in the right sidebar.
     ///
-    /// Device preview is macOS-only, so Windows (the thin client) does not
-    /// offer the tab at all rather than showing a dead one.
+    /// Subagents and Shells moved to popovers on the chat's pill row; only
+    /// the Devices tab remains openable here. Device preview is macOS-only,
+    /// so Windows (the thin client) offers no auxiliary tab at all rather
+    /// than showing a dead one.
     #[cfg(target_os = "windows")]
-    pub const ALL: [Self; 2] = [Self::Subagents, Self::Shells];
+    pub const ALL: [Self; 0] = [];
 
     #[cfg(not(target_os = "windows"))]
-    pub const ALL: [Self; 3] = [Self::Subagents, Self::Shells, Self::Devices];
+    pub const ALL: [Self; 1] = [Self::Devices];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -103,14 +101,10 @@ pub struct RightSidebar {
     session_changes: Rc<Vec<SessionFileChange>>,
     changes_scope: ChangesScope,
     changes_scope_menu: ContextMenuHandle,
-    subagents: Rc<Vec<SubagentInfo>>,
     expanded_folders: HashSet<String>,
-    expanded_subagents: HashSet<String>,
     selected_path: Option<String>,
     bottom_split: Option<RightSidebarBottomSplit>,
-    subagent_markdown_views: Option<Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>>,
     device_view: Option<AnyElement>,
-    shell_view: Option<ShellListView>,
     open_auxiliary_tabs: Vec<AuxiliaryTab>,
     add_tab_menu: ContextMenuHandle,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -120,8 +114,6 @@ pub struct RightSidebar {
     on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_select_changes_scope: Rc<dyn Fn(ChangesScope, &mut Window, &mut App) + 'static>,
     on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-    on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
 }
@@ -137,9 +129,7 @@ impl RightSidebar {
         session_changes: Rc<Vec<SessionFileChange>>,
         changes_scope: ChangesScope,
         changes_scope_menu: ContextMenuHandle,
-        subagents: Rc<Vec<SubagentInfo>>,
         expanded_folders: HashSet<String>,
-        expanded_subagents: HashSet<String>,
         selected_path: Option<String>,
         open_auxiliary_tabs: Vec<AuxiliaryTab>,
         add_tab_menu: ContextMenuHandle,
@@ -150,8 +140,6 @@ impl RightSidebar {
         on_select_file: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_select_changes_scope: Rc<dyn Fn(ChangesScope, &mut Window, &mut App) + 'static>,
         on_view_all_changes: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-        on_toggle_subagent: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
-        on_copy_summary: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
         on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
         on_begin_resize: Rc<dyn Fn(f32, &mut Window, &mut App) + 'static>,
     ) -> Self {
@@ -165,16 +153,12 @@ impl RightSidebar {
             session_changes,
             changes_scope,
             changes_scope_menu,
-            subagents,
             expanded_folders,
-            expanded_subagents,
             selected_path,
             open_auxiliary_tabs,
             add_tab_menu,
             bottom_split: None,
-            subagent_markdown_views: None,
             device_view: None,
-            shell_view: None,
             on_select_tab,
             on_open_auxiliary_tab,
             on_close_auxiliary_tab,
@@ -182,8 +166,6 @@ impl RightSidebar {
             on_select_file,
             on_select_changes_scope,
             on_view_all_changes,
-            on_toggle_subagent,
-            on_copy_summary,
             on_refresh,
             on_begin_resize,
         }
@@ -201,21 +183,8 @@ impl RightSidebar {
         self
     }
 
-    pub fn subagent_markdown_views(
-        mut self,
-        views: Rc<RefCell<HashMap<String, Rc<RefCell<MarkdownView>>>>>,
-    ) -> Self {
-        self.subagent_markdown_views = Some(views);
-        self
-    }
-
     pub fn with_device_view(mut self, device_view: Option<AnyElement>) -> Self {
         self.device_view = device_view;
-        self
-    }
-
-    pub fn with_shell_view(mut self, shell_view: ShellListView) -> Self {
-        self.shell_view = Some(shell_view);
         self
     }
 }
@@ -383,32 +352,36 @@ impl RenderOnce for RightSidebar {
                     };
                     tabs = tabs.child(tab_chip(id, auxiliary.label(), tab, Some(*auxiliary)));
                 }
-                tabs = tabs.child(dropdown_menu(
-                    div()
-                        .id("inspector-add-tab")
-                        .px(px(7.0))
-                        .py(px(3.0))
-                        .rounded(px(4.0))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme.overlay))
-                        .text_color(theme.text_tertiary)
-                        .child("+"),
-                    "inspector-add-tab-menu",
-                    &add_menu,
-                    MenuAlign::BelowLeft,
-                    move |_cx| {
-                        AuxiliaryTab::ALL
-                            .into_iter()
-                            .filter(|tab| !open_auxiliary.contains(tab))
-                            .map(|tab| {
-                                let on_open = on_open.clone();
-                                MenuItem::new(tab.label(), move |window, cx| {
-                                    (on_open)(tab, window, cx)
+                // The + menu offers only tabs that exist on this platform;
+                // hide it entirely when none do (Windows today).
+                if !AuxiliaryTab::ALL.is_empty() {
+                    tabs = tabs.child(dropdown_menu(
+                        div()
+                            .id("inspector-add-tab")
+                            .px(px(7.0))
+                            .py(px(3.0))
+                            .rounded(px(4.0))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(theme.overlay))
+                            .text_color(theme.text_tertiary)
+                            .child("+"),
+                        "inspector-add-tab-menu",
+                        &add_menu,
+                        MenuAlign::BelowLeft,
+                        move |_cx| {
+                            AuxiliaryTab::ALL
+                                .into_iter()
+                                .filter(|tab| !open_auxiliary.contains(tab))
+                                .map(|tab| {
+                                    let on_open = on_open.clone();
+                                    MenuItem::new(tab.label(), move |window, cx| {
+                                        (on_open)(tab, window, cx)
+                                    })
                                 })
-                            })
-                            .collect()
-                    },
-                ));
+                                .collect()
+                        },
+                    ));
+                }
                 div()
                     .h(px(36.0))
                     .w_full()
@@ -463,22 +436,12 @@ impl RenderOnce for RightSidebar {
                             self.on_view_all_changes,
                         )
                         .into_any_element(),
-                        InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => {
-                            let mut list = SubagentListView::new(
-                                self.subagents,
-                                self.expanded_subagents,
-                                self.on_toggle_subagent,
-                                self.on_copy_summary,
-                            );
-                            if let Some(views) = self.subagent_markdown_views {
-                                list = list.markdown_views(views);
-                            }
-                            list.into_any_element()
-                        }
-                        InspectorTab::Auxiliary(AuxiliaryTab::Shells) => match self.shell_view {
-                            Some(view) => view.into_any_element(),
-                            None => div().into_any_element(),
-                        },
+                        // Subagents and Shells moved to popovers on the
+                        // chat's pill row. The variants remain (persisted
+                        // layouts may still name them) but are never opened;
+                        // stale persisted entries are dropped on load.
+                        InspectorTab::Auxiliary(AuxiliaryTab::Subagents)
+                        | InspectorTab::Auxiliary(AuxiliaryTab::Shells) => div().into_any_element(),
                         InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {
                             if let Some(device) = self.device_view {
                                 device

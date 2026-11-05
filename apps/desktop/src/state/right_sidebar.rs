@@ -416,12 +416,10 @@ impl ConsoleDesktopApp {
                 self.fetch_inspector_git_changes(cx);
                 self.fetch_inspector_session_changes(cx);
             }
-            InspectorTab::Auxiliary(AuxiliaryTab::Subagents) => self.fetch_inspector_subagents(cx),
-            InspectorTab::Auxiliary(AuxiliaryTab::Shells) => {
-                if let (Some(session_id), _) = self.active_inspector_target() {
-                    self.load_background_work(session_id, cx);
-                }
-            }
+            // Subagents and Shells live in popovers on the chat's pill row
+            // now; the variants remain only for persisted layouts.
+            InspectorTab::Auxiliary(AuxiliaryTab::Subagents)
+            | InspectorTab::Auxiliary(AuxiliaryTab::Shells) => {}
             InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {}
         }
         cx.notify();
@@ -527,33 +525,23 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    pub fn toggle_subagent_expanded(&mut self, subagent_id: String, cx: &mut Context<Self>) {
-        if !self.expanded_subagents.remove(&subagent_id) {
-            self.expanded_subagents.insert(subagent_id);
-        }
-        cx.notify();
-    }
-
-    pub fn view_subagent_in_panel(&mut self, _call_or_subagent_id: &str, cx: &mut Context<Self>) {
-        self.right_sidebar_visible = true;
-        self.inspector_open_auxiliary_tabs
-            .push(AuxiliaryTab::Subagents);
-        self.inspector_active_tab = InspectorTab::Auxiliary(AuxiliaryTab::Subagents);
-        self.sync_inspector_watchers(cx);
-        self.fetch_inspector_subagents(cx);
-        self.persist_layout();
-        cx.notify();
-    }
-
-    /// Open the Shells tab (from the chat banner), optionally on one shell.
-    pub fn view_shells_in_panel(&mut self, select: Option<String>, cx: &mut Context<Self>) {
-        self.right_sidebar_visible = true;
-        self.open_auxiliary_tab(AuxiliaryTab::Shells, cx);
-        if let (Some(session_id), Some(work_id)) = (self.active_inspector_target().0, select) {
-            self.select_shell(session_id, work_id, cx);
-        }
-        self.sync_inspector_watchers(cx);
-        cx.notify();
+    /// Open the active pane's subagents popover — the same card the
+    /// subagents pill opens — from a transcript subagent-card click.
+    pub fn open_subagents_popover(
+        &self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        console_ui::toggle_popover(
+            &self.pane_subagents_menu(&pane_id),
+            console_ui::MenuAlign::AboveLeft,
+            window,
+            cx,
+        );
     }
 
     #[allow(dead_code)]
@@ -600,7 +588,6 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_fs_tree(cx);
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
-        self.fetch_inspector_subagents(cx);
         self.sync_inspector_watchers(cx);
     }
 
@@ -908,39 +895,6 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.inspector_changes_scope = scope;
-        cx.notify();
-    }
-
-    pub fn fetch_inspector_subagents(&mut self, cx: &mut Context<Self>) {
-        let (session_id, _) = self.active_inspector_target();
-        let Some(session_id) = session_id else {
-            return;
-        };
-
-        // Live subagent state arrives exclusively over the run event stream
-        // (SubagentStart/Activity/End into session_subagents); the endpoint
-        // is no longer polled. Just ensure summary markdown views exist for
-        // whatever the stream has recorded.
-        let list = self
-            .session_subagents
-            .get(&session_id)
-            .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()));
-        for sub in list.iter() {
-            if let Some(ref sum) = sub.summary {
-                let view = self
-                    .subagent_markdown_views
-                    .borrow_mut()
-                    .entry(sub.subagent_id.clone())
-                    .or_insert_with(|| {
-                        Rc::new(RefCell::new(
-                            console_ui::markdown::render::MarkdownView::new(),
-                        ))
-                    })
-                    .clone();
-                view.borrow_mut().set_text(sum, false);
-            }
-        }
         cx.notify();
     }
 }

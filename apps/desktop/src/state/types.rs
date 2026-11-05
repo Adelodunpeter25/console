@@ -120,6 +120,10 @@ pub struct ConsoleDesktopApp {
     pub usage_menu: ContextMenuHandle,
     /// Anchors the floating task list to this pane's tasks pill.
     pub tasks_menu: ContextMenuHandle,
+    /// Anchors the subagents popover to this pane's subagents pill.
+    pub subagents_menu: ContextMenuHandle,
+    /// Anchors the shells popover to this pane's shells pill.
+    pub shells_menu: ContextMenuHandle,
     /// Shared with the sidebar and footer; cloned per frame as a refcount
     /// bump.
     pub projects: Rc<Vec<ProjectInfo>>,
@@ -273,17 +277,6 @@ pub struct ConsoleDesktopApp {
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
         std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
-    /// The shell open in the Shells inspector tab and its polled output.
-    pub shell_output: Option<super::background_shells::ShellOutputState>,
-    pub expanded_subagents: std::collections::HashSet<String>,
-    pub subagent_markdown_views: Rc<
-        RefCell<
-            std::collections::HashMap<
-                String,
-                Rc<RefCell<console_ui::markdown::render::MarkdownView>>,
-            >,
-        >,
-    >,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked
