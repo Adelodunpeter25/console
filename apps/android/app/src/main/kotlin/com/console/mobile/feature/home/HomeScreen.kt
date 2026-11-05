@@ -236,7 +236,7 @@ fun HomeScreen(
                                     isFirst = sIdx == 0,
                                     collapsed = collapsed,
                                     onToggle = { toggleSection(sectionKey) },
-                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectName != "Drafts") {
+                                    onNewChat = if (section.projectId != null && section.projectId != "pinned" && section.projectId != "settled" && section.projectName != "Drafts") {
                                         { startChat(section.projectId) }
                                     } else {
                                         null

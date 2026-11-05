@@ -25,14 +25,16 @@ import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionHeader
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.filled.Pin
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.Pin
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The long-press actions sheet: rename, pin/unpin, delete. */
+/** The long-press actions sheet: rename, pin/unpin, settle/unsettle, delete. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionActionsSheet(
@@ -41,6 +43,7 @@ internal fun SessionActionsSheet(
 ) {
     var renameOpen by remember(session.id) { mutableStateOf(false) }
     val isPinned = (session.pinned_at ?: 0L) > 0
+    val isSettled = (session.settled_at ?: 0L) > 0
     BaseSheet(onDismiss = onDismiss) {
         SectionCard {
             ActionRow(
@@ -64,6 +67,24 @@ internal fun SessionActionsSheet(
             }
             SectionDivider()
             ActionRow(icon = TablerIcons.Outline.Edit, title = "Rename") { renameOpen = true }
+            SectionDivider()
+            ActionRow(
+                icon = if (isSettled) TablerIcons.Outline.Refresh else TablerIcons.Outline.Check,
+                title = if (isSettled) "Move to Active" else "Settle",
+            ) {
+                val target = session
+                val targetSettled = !isSettled
+                onDismiss()
+                AppContainer.actionScope.launch {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            AppContainer.projectRepository.settleSession(target.id, targetSettled)
+                        }
+                    } catch (e: Exception) {
+                        confirmAlert("Failed", e.message ?: "Unable to settle chat.")
+                    }
+                }
+            }
             SectionDivider()
             ActionRow(icon = TablerIcons.Outline.Trash, title = "Delete", tint = NewTheme.Danger) {
                 onDismiss()

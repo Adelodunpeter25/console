@@ -118,13 +118,19 @@ fun buildGroupedProjectSections(
         }
     }
 
+    // Settled chats leave every active section and gather in their own
+    // Settled section at the bottom, most recently settled first.
+    val settledSessions = nonDraftSessions.filter { (it.settled_at ?: 0L) > 0 }
+        .sortedByDescending { it.settled_at }
+    val activeSessions = nonDraftSessions.filter { (it.settled_at ?: 0L) <= 0 }
+
     data class ProjectGroup(val projectId: String?, val projectName: String, val list: MutableList<SessionHeader>)
 
-    val pinnedSessions = nonDraftSessions.filter { (it.pinned_at ?: 0L) > 0 }
+    val pinnedSessions = activeSessions.filter { (it.pinned_at ?: 0L) > 0 }
         .sortedByDescending { it.pinned_at }
 
     val byProject = linkedMapOf<String, ProjectGroup>()
-    for (session in nonDraftSessions) {
+    for (session in activeSessions) {
         if ((session.pinned_at ?: 0L) > 0) continue
         if (session.project_id == null) {
             val group = byProject.getOrPut("general") {
@@ -178,6 +184,17 @@ fun buildGroupedProjectSections(
         }
         if (draftSection != null) add(draftSection)
         addAll(sortedSections)
+        // Settled always last, like desktop, below every active section.
+        if (settledSessions.isNotEmpty()) {
+            add(
+                GroupedProjectSection(
+                    projectId = "settled",
+                    projectName = "Settled",
+                    data = settledSessions,
+                    latestAt = Long.MIN_VALUE,
+                ),
+            )
+        }
     }
     return ordered
 }

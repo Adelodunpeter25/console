@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.chat.GroupedProjectSection
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.FolderOpen
 import io.github.lyxnx.compose.ui.tablericons.outline.Pinned
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
@@ -29,6 +30,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 internal fun sectionCollapseKey(section: GroupedProjectSection): String = when {
     section.projectName == "Pinned" -> "pinned"
     section.projectName == "Drafts" -> "drafts"
+    section.projectName == "Settled" -> "settled"
     section.projectId != null -> section.projectId
     else -> "general"
 }
@@ -44,7 +46,7 @@ internal fun SessionSectionHeader(
     onToggle: () -> Unit,
     onNewChat: (() -> Unit)?,
 ) {
-    val isVirtual = section.projectId == "pinned"
+    val isVirtual = section.projectId == "pinned" || section.projectId == "settled"
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = if (isFirst) 4.dp else 14.dp, bottom = 4.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
@@ -55,7 +57,11 @@ internal fun SessionSectionHeader(
             modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle),
         ) {
             Icon(
-                if (isVirtual) TablerIcons.Outline.Pinned else TablerIcons.Outline.FolderOpen,
+                when {
+                    section.projectId == "pinned" -> TablerIcons.Outline.Pinned
+                    section.projectId == "settled" -> TablerIcons.Outline.Check
+                    else -> TablerIcons.Outline.FolderOpen
+                },
                 contentDescription = null,
                 tint = NewTheme.Accent,
                 modifier = Modifier.size(17.dp),
