@@ -1197,6 +1197,28 @@ impl ConsoleDesktopApp {
                                             });
                                         }
                                     });
+                                    let pane_for_prompts = pane_id.clone();
+                                    let app_for_prompts = app_entity_for_older.clone();
+                                    t.set_on_request_prompts(move |_window, cx| {
+                                        if let Some(app) = app_for_prompts.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.load_prompts_for_pane(pane_for_prompts.clone(), cx);
+                                            });
+                                        }
+                                    });
+                                    let pane_for_jump = pane_id.clone();
+                                    let app_for_jump = app_entity_for_older.clone();
+                                    t.set_on_jump_to_prompt(move |message_id, _window, cx| {
+                                        if let Some(app) = app_for_jump.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.jump_to_prompt_for_pane(
+                                                    pane_for_jump.clone(),
+                                                    message_id,
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    });
                                     if let Some(started_at) = running_started_at {
                                         t.resume_streaming(started_at, cx);
                                     }

@@ -54,6 +54,9 @@ pub struct TranscriptView {
     list_state: ListState,
     scrollbar_state: std::rc::Rc<ScrollbarState>,
     prompts_open: bool,
+    prompts: Vec<console_core::SessionPrompt>,
+    on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_jump_to_prompt: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
     selection: TranscriptSelection,
     is_streaming: bool,
@@ -129,6 +132,9 @@ impl TranscriptView {
             list_state,
             scrollbar_state: ScrollbarState::new(),
             prompts_open: false,
+            prompts: Vec::new(),
+            on_request_prompts: None,
+            on_jump_to_prompt: None,
             focus_handle: cx.focus_handle(),
             selection: TranscriptSelection::default(),
             is_streaming: false,
@@ -390,6 +396,40 @@ impl TranscriptView {
         self.on_load_older = Some(Rc::new(handler));
     }
 
+    /// Fetches the chat's full prompt list when the popup opens.
+    pub fn set_on_request_prompts(&mut self, handler: impl Fn(&mut Window, &mut App) + 'static) {
+        self.on_request_prompts = Some(Rc::new(handler));
+    }
+
+    /// Jumps to a prompt by message id, paging older history in if needed.
+    pub fn set_on_jump_to_prompt(
+        &mut self,
+        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+    ) {
+        self.on_jump_to_prompt = Some(Rc::new(handler));
+    }
+
+    pub fn set_prompts(&mut self, prompts: Vec<console_core::SessionPrompt>, cx: &mut Context<Self>) {
+        self.prompts = prompts;
+        cx.notify();
+    }
+
+    /// Scroll so the loaded message with `id` is at the top of the viewport.
+    /// Returns false when that message is not loaded yet.
+    pub fn jump_to_message(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+        let Some(row) = self
+            .messages
+            .iter()
+            .position(|message| matches!(message, AgentMessage::User { id: Some(m), .. } if m == id))
+        else {
+            return false;
+        };
+        // Re-applied next frame so variable-height rows above are measured first.
+        self.restore_scroll_anchor(row, 0.0, false, cx);
+        cx.notify();
+        true
+    }
+
     pub fn prepend_messages(
         &mut self,
         older: Vec<AgentMessage>,
@@ -640,42 +680,12 @@ impl TranscriptView {
         cx.notify();
     }
 
-    /// Scroll so the user message at `row` is at the top of the viewport.
-    fn jump_to_prompt(&mut self, row: usize, cx: &mut Context<Self>) {
-        self.prompts_open = false;
-        // Re-applied next frame so variable-height rows above are measured first.
-        self.restore_scroll_anchor(row, 0.0, false, cx);
-        cx.notify();
-    }
-
     /// Floating pill at the bottom-right: a prompt list button (opens the jump
     /// popup) and, while scrolled away from the tail, a scroll-to-bottom arrow.
     fn render_scroll_controls(&self, theme: Theme, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let prompts: Vec<(usize, String, Option<i64>)> = self
-            .messages
-            .iter()
-            .enumerate()
-            .filter_map(|(row, message)| match message {
-                AgentMessage::User {
-                    content,
-                    created_at,
-                    ..
-                } => {
-                    let (body, _) =
-                        console_shared::composer::file_comments::split_file_comments(content);
-                    let line = body
-                        .lines()
-                        .map(str::trim)
-                        .find(|line| !line.is_empty())
-                        .unwrap_or("(attachment)")
-                        .to_owned();
-                    Some((row, line, *created_at))
-                }
-                _ => None,
-            })
-            .collect();
+        let has_prompts = !self.messages.is_empty();
         let show_down = !self.list_state.is_following_tail();
-        if prompts.is_empty() && !show_down {
+        if !has_prompts && !show_down {
             return div().into_any_element();
         }
         let button = |id: &'static str, icon: IconName| {
@@ -698,18 +708,25 @@ impl TranscriptView {
             .border_1()
             .border_color(theme.border)
             .bg(theme.raised);
-        if !prompts.is_empty() {
+        if has_prompts {
             pill = pill.child(
                 button("transcript-prompts", IconName::List)
                     .tooltip(Tooltip::text("Jump to prompt"))
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(|this, _, window, cx| {
                         this.prompts_open = !this.prompts_open;
+                        if this.prompts_open {
+                            // Stale entries from another chat must not flash.
+                            this.prompts.clear();
+                            if let Some(request) = this.on_request_prompts.clone() {
+                                request(window, cx);
+                            }
+                        }
                         cx.notify();
                     })),
             );
         }
         if show_down {
-            if !prompts.is_empty() {
+            if has_prompts {
                 pill = pill.child(div().w(px(1.0)).h(px(16.0)).flex_none().bg(theme.border));
             }
             pill = pill.child(
@@ -719,10 +736,10 @@ impl TranscriptView {
             );
         }
         let mut layer = div().absolute().inset_0();
-        if self.prompts_open && !prompts.is_empty() {
-            let rows = prompts.into_iter().map(|(row, line, created_at)| {
+        if self.prompts_open && has_prompts {
+            let rows = self.prompts.iter().cloned().map(|prompt| {
                 div()
-                    .id(gpui::ElementId::Name(format!("prompt-jump-{row}").into()))
+                    .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
                     .flex()
                     .items_center()
                     .gap(px(12.0))
@@ -731,7 +748,16 @@ impl TranscriptView {
                     .rounded(px(8.0))
                     .cursor_pointer()
                     .hover(|element| element.bg(theme.overlay_strong))
-                    .on_click(cx.listener(move |this, _, _, cx| this.jump_to_prompt(row, cx)))
+                    .on_click({
+                        let id = prompt.id.clone();
+                        cx.listener(move |this, _, window, cx| {
+                            this.prompts_open = false;
+                            if let Some(jump) = this.on_jump_to_prompt.clone() {
+                                jump(id.clone(), window, cx);
+                            }
+                            cx.notify();
+                        })
+                    })
                     .child(
                         div()
                             .flex_1()
@@ -739,11 +765,11 @@ impl TranscriptView {
                             .truncate()
                             .text_size(px(13.0))
                             .text_color(theme.text)
-                            .child(line),
+                            .child(prompt.preview),
                     )
-                    .when_some(created_at, |element, created_at| {
+                    .when(prompt.created_at > 0, |element| {
                         // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
-                        let age = crate::utils::format_time_ago(created_at);
+                        let age = crate::utils::format_time_ago(prompt.created_at);
                         let age = if age.contains(' ') {
                             age
                         } else {
@@ -787,7 +813,17 @@ impl TranscriptView {
                         .border_1()
                         .border_color(theme.border)
                         .bg(theme.raised)
-                        .children(rows),
+                        .children(rows)
+                        .when(self.prompts.is_empty(), |popup| {
+                            popup.child(
+                                div()
+                                    .px(px(12.0))
+                                    .py(px(7.0))
+                                    .text_size(px(13.0))
+                                    .text_color(theme.text_tertiary)
+                                    .child("Loading…"),
+                            )
+                        }),
                 );
         }
         layer

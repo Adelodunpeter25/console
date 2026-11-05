@@ -112,6 +112,37 @@ impl SessionService {
         .await
     }
 
+    /// `GET /api/sessions/:id/prompts` — every user prompt of the chat,
+    /// oldest first, including ones not yet paged into the transcript.
+    pub async fn prompts(&self, id: &str) -> Result<Vec<SessionPrompt>> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/prompts", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list session prompts")?;
+
+        let body: ApiResponse<Vec<SessionPrompt>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse session prompts response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to list session prompts".into())
+            ))
+        }
+    }
+
     /// `GET /api/sessions/:id/context` — estimated context-window
     /// occupancy for the footer ring. Served from the server's per-session
     /// cache; use the `contextUpdate` stream frames for live movement.

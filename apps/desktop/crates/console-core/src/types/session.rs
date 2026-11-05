@@ -46,6 +46,16 @@ impl SessionHeaderExt for SessionHeader {
     }
 }
 
+/// One user prompt from `GET /api/sessions/:id/prompts`. `id` matches the
+/// message id on loaded transcript messages.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPrompt {
+    pub id: String,
+    pub created_at: i64,
+    pub preview: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionDetailResponse {
