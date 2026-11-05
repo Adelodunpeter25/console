@@ -164,10 +164,8 @@ pub struct ConsoleDesktopApp {
     /// uncommitted draft again. Keyed by pane; removed once navigation ends.
     pub(crate) history_draft_attachments:
         std::collections::HashMap<String, Rc<Vec<ImageAttachment>>>,
-    pub(crate) history_draft_annotations: std::collections::HashMap<
-        String,
-        Rc<Vec<console_core::BrowserElementAnnotation>>,
-    >,
+    pub(crate) history_draft_annotations:
+        std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
     /// Run-derived interactive and display state. All of these are keyed by
     /// session id (not pane id) so a run's permission prompt, question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
@@ -276,6 +274,13 @@ pub struct ConsoleDesktopApp {
     /// run stream and hydrated from the work list endpoint.
     pub session_background_work:
         std::collections::HashMap<String, Rc<Vec<console_core::BackgroundWork>>>,
+    /// Browser tabs hosted in the right sidebar's Browser tab, by owning
+    /// session id, in open order. Sidebar tabs have no workspace tab entry,
+    /// so this registry is their ownership record (the kernel's session-tab
+    /// list unions it with the workspace-derived ids).
+    pub sidebar_session_browsers: std::collections::HashMap<String, Vec<String>>,
+    /// The browser tab on screen in the right sidebar's Browser tab.
+    pub inspector_browser_tab_id: Option<String>,
     pub preview_tab: Option<(String, std::time::Instant)>,
     pub open_file_contents: std::collections::HashMap<String, String>,
     /// Why a file tab could not load, by path. A path in here is not asked

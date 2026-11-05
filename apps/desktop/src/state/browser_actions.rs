@@ -909,26 +909,35 @@ impl ConsoleDesktopApp {
     }
 
     /// Ids of every browser tab in the same workspace tree as the chat —
-    /// whether the agent or the user opened it. Always the same tree as the
-    /// chat, never another workspace's; browser actions are scoped to this
-    /// set. Falls back to the active tree when the chat isn't rendered in
-    /// any tree. Sorted, deduplicated.
-    fn session_workspace_browser_ids(&self, session_id: &str) -> Vec<String> {
+    /// whether the agent or the user opened it — plus the tabs hosted in the
+    /// right sidebar (they have no workspace tab entry; the sidebar registry
+    /// is their ownership record). Always the same tree as the chat, never
+    /// another workspace's; browser actions are scoped to this set. Falls
+    /// back to the active tree when the chat isn't rendered in any tree.
+    /// Sorted, deduplicated.
+    pub(crate) fn session_workspace_browser_ids(&self, session_id: &str) -> Vec<String> {
         let chat_tab_id = format!("chat:{session_id}");
-        if Self::tree_contains_chat(&self.workspace_root, &chat_tab_id) {
-            return Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(
-                &self.workspace_root,
-            ));
-        }
-        for root in self.project_workspace_roots.values() {
-            if Self::tree_contains_chat(root, &chat_tab_id) {
-                return Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(root));
+        let mut ids = if Self::tree_contains_chat(&self.workspace_root, &chat_tab_id) {
+            console_ui::workspace::ops::browser_ids(&self.workspace_root)
+        } else {
+            let mut found = Vec::new();
+            for root in self.project_workspace_roots.values() {
+                if Self::tree_contains_chat(root, &chat_tab_id) {
+                    found = console_ui::workspace::ops::browser_ids(root);
+                    break;
+                }
             }
+            if found.is_empty() {
+                // Chat rendered nowhere: fall back to the visible workspace.
+                console_ui::workspace::ops::browser_ids(&self.workspace_root)
+            } else {
+                found
+            }
+        };
+        if let Some(sidebar_ids) = self.sidebar_session_browsers.get(session_id) {
+            ids.extend(sidebar_ids.iter().cloned());
         }
-        // Chat rendered nowhere: fall back to the visible workspace.
-        Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(
-            &self.workspace_root,
-        ))
+        Self::sorted_browser_ids(ids)
     }
 
     fn tree_contains_chat(root: &console_core::WorkspaceNode, chat_tab_id: &str) -> bool {
@@ -1002,7 +1011,8 @@ impl ConsoleDesktopApp {
     /// Ids of the browser tabs this chat's agent created, across the active
     /// workspace and every stashed workspace. Used to tell agent-created tabs
     /// apart from the user's (only agent-created tabs can be closed by the
-    /// agent) and to detect the tab a `navigate` opens. Sorted, deduplicated.
+    /// agent) and to detect the tab a `navigate` opens. Sidebar-hosted tabs
+    /// count as agent-created. Sorted, deduplicated.
     fn session_owned_browser_ids(&self, session_id: &str) -> Vec<String> {
         let mut ids = Vec::new();
         let mut record = |tab: &console_core::WorkspaceTabConfig| {
@@ -1028,6 +1038,11 @@ impl ConsoleDesktopApp {
                     record(tab);
                 }
             }
+        }
+        // Tabs hosted in the right sidebar have no workspace tab entry; the
+        // sidebar registry is their ownership record.
+        if let Some(sidebar_ids) = self.sidebar_session_browsers.get(session_id) {
+            ids.extend(sidebar_ids.iter().cloned());
         }
         ids.sort();
         ids.dedup();
@@ -1289,6 +1304,16 @@ impl ConsoleDesktopApp {
             if let Some(view) = self.browser_views.remove(id) {
                 view.update(cx, |bv, cx| bv.close(cx));
             }
+        }
+        // Sidebar-hosted tabs have no workspace entry; drop their registry
+        // rows and the on-screen pointer with them.
+        self.sidebar_session_browsers.remove(session_id);
+        if self
+            .inspector_browser_tab_id
+            .as_ref()
+            .is_some_and(|id| owned.contains(id))
+        {
+            self.inspector_browser_tab_id = None;
         }
         self.agent_browser_tabs.remove(session_id);
         self.persist_workspaces();

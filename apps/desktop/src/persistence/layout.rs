@@ -35,7 +35,12 @@ impl PersistedLayoutState {
     pub fn open_auxiliary_tabs(&self) -> Vec<console_ui::AuxiliaryTab> {
         self.open_auxiliary_tabs
             .iter()
-            .filter(|tab| matches!(tab, console_ui::AuxiliaryTab::Devices))
+            .filter(|tab| {
+                matches!(
+                    tab,
+                    console_ui::AuxiliaryTab::Browser | console_ui::AuxiliaryTab::Devices
+                )
+            })
             .copied()
             .collect()
     }

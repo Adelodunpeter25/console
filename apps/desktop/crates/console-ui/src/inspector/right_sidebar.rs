@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange};
 use gpui::{
-    AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
     prelude::FluentBuilder, px,
 };
 
@@ -28,6 +28,8 @@ pub enum PrimaryTab {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum AuxiliaryTab {
+    /// Embedded browser scoped to the active chat's workspace.
+    Browser,
     Subagents,
     Shells,
     Devices,
@@ -44,10 +46,11 @@ impl AuxiliaryTab {
     pub const ALL: [Self; 0] = [];
 
     #[cfg(not(target_os = "windows"))]
-    pub const ALL: [Self; 1] = [Self::Devices];
+    pub const ALL: [Self; 2] = [Self::Browser, Self::Devices];
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::Browser => "Browser",
             Self::Subagents => "Subagents",
             Self::Shells => "Shells",
             Self::Devices => "Devices",
@@ -105,6 +108,10 @@ pub struct RightSidebar {
     selected_path: Option<String>,
     bottom_split: Option<RightSidebarBottomSplit>,
     device_view: Option<AnyElement>,
+    browser_view: Option<AnyElement>,
+    browser_tabs: Rc<Vec<(String, String)>>,
+    active_browser_tab: Option<String>,
+    on_select_browser_tab: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     open_auxiliary_tabs: Vec<AuxiliaryTab>,
     add_tab_menu: ContextMenuHandle,
     on_select_tab: Rc<dyn Fn(InspectorTab, &mut Window, &mut App) + 'static>,
@@ -159,6 +166,10 @@ impl RightSidebar {
             add_tab_menu,
             bottom_split: None,
             device_view: None,
+            browser_view: None,
+            browser_tabs: Rc::new(Vec::new()),
+            active_browser_tab: None,
+            on_select_browser_tab: Rc::new(|_, _, _| {}),
             on_select_tab,
             on_open_auxiliary_tab,
             on_close_auxiliary_tab,
@@ -185,6 +196,23 @@ impl RightSidebar {
 
     pub fn with_device_view(mut self, device_view: Option<AnyElement>) -> Self {
         self.device_view = device_view;
+        self
+    }
+
+    /// The workspace browser surface: the rendered browser view plus the
+    /// strip of the chat's browser tabs (`id`, `title`), the id of the one
+    /// on screen, and the click that switches.
+    pub fn with_browser_view(
+        mut self,
+        browser_view: Option<AnyElement>,
+        browser_tabs: Rc<Vec<(String, String)>>,
+        active_browser_tab: Option<String>,
+        on_select_browser_tab: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    ) -> Self {
+        self.browser_view = browser_view;
+        self.browser_tabs = browser_tabs;
+        self.active_browser_tab = active_browser_tab;
+        self.on_select_browser_tab = on_select_browser_tab;
         self
     }
 }
@@ -345,6 +373,10 @@ impl RenderOnce for RightSidebar {
                         AuxiliaryTab::Shells => {
                             ("tab-shells", InspectorTab::Auxiliary(AuxiliaryTab::Shells))
                         }
+                        AuxiliaryTab::Browser => (
+                            "tab-browser",
+                            InspectorTab::Auxiliary(AuxiliaryTab::Browser),
+                        ),
                         AuxiliaryTab::Devices => (
                             "tab-devices",
                             InspectorTab::Auxiliary(AuxiliaryTab::Devices),
@@ -442,6 +474,75 @@ impl RenderOnce for RightSidebar {
                         // stale persisted entries are dropped on load.
                         InspectorTab::Auxiliary(AuxiliaryTab::Subagents)
                         | InspectorTab::Auxiliary(AuxiliaryTab::Shells) => div().into_any_element(),
+                        InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {
+                            let select_tab = self.on_select_browser_tab.clone();
+                            div()
+                                .size_full()
+                                .min_h_0()
+                                .flex()
+                                .flex_col()
+                                .when(!self.browser_tabs.is_empty(), |strip| {
+                                    strip.child(
+                                        div()
+                                            .flex_none()
+                                            .w_full()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(2.0))
+                                            .px(px(6.0))
+                                            .py(px(3.0))
+                                            .overflow_hidden()
+                                            .children(self.browser_tabs.iter().map(
+                                                |(tab_id, title)| {
+                                                    let id = tab_id.clone();
+                                                    let select = select_tab.clone();
+                                                    let is_active =
+                                                        self.active_browser_tab.as_deref()
+                                                            == Some(tab_id.as_str());
+                                                    div()
+                                                        .id(ElementId::Name(
+                                                            format!("sidebar-browser-tab-{tab_id}")
+                                                                .into(),
+                                                        ))
+                                                        .flex_none()
+                                                        .max_w(px(140.0))
+                                                        .px(px(7.0))
+                                                        .py(px(3.0))
+                                                        .rounded(px(4.0))
+                                                        .cursor_pointer()
+                                                        .text_size(px(11.0))
+                                                        .truncate()
+                                                        .text_color(if is_active {
+                                                            theme.text
+                                                        } else {
+                                                            theme.text_tertiary
+                                                        })
+                                                        .bg(if is_active {
+                                                            theme.overlay
+                                                        } else {
+                                                            theme.surface
+                                                        })
+                                                        .hover(|s| s.bg(theme.overlay))
+                                                        .on_click(move |_, window, cx| {
+                                                            (select)(id.clone(), window, cx)
+                                                        })
+                                                        .child(title.clone())
+                                                },
+                                            )),
+                                    )
+                                })
+                                .child(self.browser_view.unwrap_or_else(|| {
+                                    div()
+                                        .size_full()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_color(theme.text_tertiary)
+                                        .child("No browser open in this workspace")
+                                        .into_any_element()
+                                }))
+                                .into_any_element()
+                        }
                         InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {
                             if let Some(device) = self.device_view {
                                 device

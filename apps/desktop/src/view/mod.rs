@@ -1398,6 +1398,53 @@ impl Render for ConsoleDesktopApp {
                         .with_new_terminal(on_new_right_sidebar_terminal)
                         .with_toggle_collapsed(on_toggle_right_sidebar_bottom_collapsed);
 
+                        let browser_visible = self.right_sidebar_visible
+                            && self.inspector_active_tab
+                                == console_ui::InspectorTab::Auxiliary(
+                                    console_ui::AuxiliaryTab::Browser,
+                                );
+                        let browser_element = if browser_visible {
+                            self.browser_view_for_inspector(window, cx)
+                        } else {
+                            None
+                        };
+                        // The strip: the active chat's browser tabs with their
+                        // current titles, plus the click that switches them.
+                        let (browser_tabs, active_browser_tab) = if browser_visible {
+                            let tabs = self
+                                .active_inspector_target()
+                                .0
+                                .map(|sid| {
+                                    self.session_workspace_browser_ids(&sid)
+                                        .into_iter()
+                                        .filter_map(|id| {
+                                            let view = self.browser_views.get(&id)?;
+                                            let title = view
+                                                .read(cx)
+                                                .tab_label()
+                                                .unwrap_or_else(|| "New Tab".to_string());
+                                            Some((id, title))
+                                        })
+                                        .collect::<Vec<_>>()
+                                })
+                                .unwrap_or_default();
+                            (Rc::new(tabs), self.inspector_browser_tab_id.clone())
+                        } else {
+                            (Rc::new(Vec::new()), None)
+                        };
+                        let on_select_browser_tab: Rc<
+                            dyn Fn(String, &mut Window, &mut App) + 'static,
+                        > = {
+                            let entity = entity.clone();
+                            Rc::new(move |browser_id, _window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.select_sidebar_browser_tab(browser_id, cx);
+                                    });
+                                }
+                            })
+                        };
+
                         let device_visible = self.right_sidebar_visible
                             && self.inspector_active_tab
                                 == console_ui::InspectorTab::Auxiliary(
@@ -1445,7 +1492,13 @@ impl Render for ConsoleDesktopApp {
                             )
                             .with_git_badges(self.inspector_git_badges.clone())
                             .with_bottom_split(Some(bottom_split))
-                            .with_device_view(device_element),
+                            .with_device_view(device_element)
+                            .with_browser_view(
+                                browser_element,
+                                browser_tabs,
+                                active_browser_tab,
+                                on_select_browser_tab,
+                            ),
                         )
                     }),
             )

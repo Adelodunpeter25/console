@@ -24,6 +24,8 @@ impl ConsoleDesktopApp {
     pub fn toggle_right_sidebar(&mut self, cx: &mut Context<Self>) {
         self.right_sidebar_visible = !self.right_sidebar_visible;
         self.sync_inspector_webviews(cx);
+        // The sidebar Browser tab's webview visibility follows the sidebar.
+        self.sync_workspace_webviews(cx);
         self.persist_layout();
         self.sync_inspector_watchers(cx);
         self.maybe_refresh_inspector(cx);
@@ -37,6 +39,7 @@ impl ConsoleDesktopApp {
         }
         self.right_sidebar_visible = visible;
         self.sync_inspector_webviews(cx);
+        self.sync_workspace_webviews(cx);
         self.persist_layout();
         self.sync_inspector_watchers(cx);
         self.maybe_refresh_inspector(cx);
@@ -408,6 +411,9 @@ impl ConsoleDesktopApp {
         }
         self.inspector_active_tab = tab;
         self.sync_inspector_webviews(cx);
+        // The sidebar Browser tab hosts a webview: entering or leaving the
+        // tab changes which browser surface is visible.
+        self.sync_workspace_webviews(cx);
         self.sync_inspector_watchers(cx);
         match tab {
             InspectorTab::Primary(PrimaryTab::AllFiles) => self.fetch_inspector_fs_tree(cx),
@@ -419,6 +425,9 @@ impl ConsoleDesktopApp {
             // now; the variants remain only for persisted layouts.
             InspectorTab::Auxiliary(AuxiliaryTab::Subagents)
             | InspectorTab::Auxiliary(AuxiliaryTab::Shells) => {}
+            // The browser surface is built at render time (it needs the
+            // window to host a new webview); nothing to fetch here.
+            InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {}
             InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {}
         }
         cx.notify();
@@ -526,11 +535,7 @@ impl ConsoleDesktopApp {
 
     /// Open the active pane's subagents popover — the same card the
     /// subagents pill opens — from a transcript subagent-card click.
-    pub fn open_subagents_popover(
-        &self,
-        window: &mut gpui::Window,
-        cx: &mut gpui::Context<Self>,
-    ) {
+    pub fn open_subagents_popover(&self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
         let pane_id = self
             .active_pane_id
             .clone()
@@ -588,6 +593,46 @@ impl ConsoleDesktopApp {
         self.fetch_inspector_git_changes(cx);
         self.fetch_inspector_session_changes(cx);
         self.sync_inspector_watchers(cx);
+    }
+
+    /// The right sidebar Browser tab's surface: the active chat's browser
+    /// view, creating the chat's first sidebar browser when it has none.
+    /// Render-time only; called from the view builder with the window
+    /// available.
+    pub fn browser_view_for_inspector(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        use gpui::IntoElement as _;
+        let (session_id, _) = self.active_inspector_target();
+        let session_id = session_id?;
+        let ids = self.session_workspace_browser_ids(&session_id);
+        let active = self
+            .inspector_browser_tab_id
+            .clone()
+            .filter(|id| ids.contains(id))
+            .or_else(|| {
+                self.agent_browser_tabs
+                    .get(&session_id)
+                    .cloned()
+                    .filter(|id| ids.contains(id))
+            })
+            .or_else(|| ids.last().cloned());
+        let view = match active {
+            Some(id) => {
+                // A tab opened while the sidebar was closed may still live
+                // in a workspace tree; the sidebar renders it now, so take
+                // it over rather than painting the webview twice. Point at
+                // it first so the close path's webview sync sees it as the
+                // visible sidebar surface.
+                self.inspector_browser_tab_id = Some(id.clone());
+                self.detach_browser_tab_from_workspaces(&id, cx);
+                self.browser_views.get(&id).cloned()
+            }
+            None => self.open_sidebar_browser_tab(&session_id, None, window, cx),
+        };
+        view.map(|view| view.into_any_element())
     }
 
     /// Reconcile the two watch streams with what is on screen: both are

@@ -700,6 +700,8 @@ impl ConsoleDesktopApp {
             inspector_selected_path: None,
             session_subagents: std::collections::HashMap::new(),
             session_background_work: std::collections::HashMap::new(),
+            sidebar_session_browsers: std::collections::HashMap::new(),
+            inspector_browser_tab_id: None,
             preview_tab: None,
             open_file_contents: std::collections::HashMap::new(),
             open_file_errors: std::collections::HashMap::new(),

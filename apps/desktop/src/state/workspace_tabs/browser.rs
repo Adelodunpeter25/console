@@ -110,7 +110,7 @@ impl ConsoleDesktopApp {
     /// Synchronize the visibility and occlusion state of all workspace browser webviews.
     /// Only browser tabs active in currently visible panes stay visible; inactive ones are hidden.
     pub fn sync_workspace_webviews(&self, cx: &mut Context<Self>) {
-        let active_browser_ids: std::collections::HashSet<String> = self
+        let mut active_browser_ids: std::collections::HashSet<String> = self
             .workspace_root
             .leaves()
             .into_iter()
@@ -123,6 +123,17 @@ impl ConsoleDesktopApp {
                 _ => None,
             })
             .collect();
+
+        // The right sidebar's Browser tab hosts a webview too: it is the
+        // visible surface while that tab is open, and hidden otherwise.
+        if self.right_sidebar_visible
+            && self.inspector_active_tab
+                == console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser)
+        {
+            if let Some(id) = &self.inspector_browser_tab_id {
+                active_browser_ids.insert(id.clone());
+            }
+        }
 
         let palettes_open = self.any_palette_open(cx);
 
@@ -158,8 +169,7 @@ impl ConsoleDesktopApp {
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".into());
-        let (browser_id, tab) =
-            self.new_browser_tab(url.clone(), None, None, &pane_id);
+        let (browser_id, tab) = self.new_browser_tab(url.clone(), None, None, &pane_id);
         if focus {
             workspace_ops::open_tab(&mut self.workspace_root, &pane_id, tab);
         } else {
@@ -172,6 +182,93 @@ impl ConsoleDesktopApp {
         if focus {
             // Focus the browser so keyboard input works immediately (address bar via ⌘L, etc.)
             window.focus(&view.read(cx).focus_handle(cx), cx);
+        }
+    }
+
+    /// Whether agent browsing for `session_id` should land in the right
+    /// sidebar's Browser tab: the sidebar is visible, the Browser tab is
+    /// open, and it targets this chat's workspace. When true, agent-opened
+    /// tabs render there instead of opening workspace tabs.
+    pub fn sidebar_browser_targets(&self, session_id: &str) -> bool {
+        self.right_sidebar_visible
+            && self
+                .inspector_open_auxiliary_tabs
+                .contains(&console_ui::AuxiliaryTab::Browser)
+            && self.active_inspector_target().0.as_deref() == Some(session_id)
+    }
+
+    /// Create a browser tab hosted in the right sidebar's Browser tab (no
+    /// workspace tab entry), owned by `session_id`, and make it the one on
+    /// screen. Existing tabs stay in the sidebar's tab strip; a chat with
+    /// none gets its first.
+    pub fn open_sidebar_browser_tab(
+        &mut self,
+        session_id: &str,
+        url: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Entity<BrowserView>> {
+        if cfg!(target_os = "windows") {
+            if let Some(url) = url {
+                cx.open_url(&url);
+            }
+            return None;
+        }
+
+        let browser_id = format!(
+            "browser-{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            self.browser_views.len(),
+        );
+        self.sidebar_session_browsers
+            .entry(session_id.to_string())
+            .or_default()
+            .push(browser_id.clone());
+        self.inspector_browser_tab_id = Some(browser_id.clone());
+        let view = self.get_or_create_browser_view(&browser_id, url, window, cx);
+        // The view renders next frame; create the native browser now so the
+        // page starts loading while the kernel's wait loop is polling.
+        view.update(cx, |view, cx| view.ensure_host(window, cx));
+        cx.notify();
+        Some(view)
+    }
+
+    /// Switch the sidebar browser to one of the chat's tabs (strip click).
+    pub fn select_sidebar_browser_tab(&mut self, browser_id: String, cx: &mut Context<Self>) {
+        self.inspector_browser_tab_id = Some(browser_id);
+        cx.notify();
+    }
+
+    /// Drop a browser tab's workspace entries so it renders only in the
+    /// right sidebar, keeping the view itself alive. A sidebar takeover of
+    /// a tab the agent opened while the sidebar was closed.
+    pub(crate) fn detach_browser_tab_from_workspaces(
+        &mut self,
+        browser_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let key = format!("browser:{browser_id}");
+        let pane_id = self
+            .workspace_root
+            .leaves()
+            .iter()
+            .find(|leaf| leaf.tabs.iter().any(|t| t.id() == key))
+            .map(|leaf| leaf.id.clone());
+        match pane_id {
+            Some(pane_id) => self.close_tab_and_sync_pane(&pane_id, &key, cx),
+            None => {
+                let had_tab = self.project_workspace_roots.values().any(|root| {
+                    root.leaves()
+                        .iter()
+                        .any(|leaf| leaf.tabs.iter().any(|t| t.id() == key))
+                });
+                if had_tab {
+                    for root in self.project_workspace_roots.values_mut() {
+                        console_ui::workspace::ops::close_matching_tabs(root, |t| t.id() == key);
+                    }
+                    self.persist_workspaces();
+                }
+            }
         }
     }
 
@@ -192,6 +289,12 @@ impl ConsoleDesktopApp {
             return None;
         }
 
+        // The sidebar's Browser tab owns agent browsing while it is open on
+        // this chat's workspace: tabs open there, never as workspace tabs.
+        if self.sidebar_browser_targets(session_id) {
+            return self.open_sidebar_browser_tab(session_id, Some(url), window, cx);
+        }
+
         let chat_tab_id = format!("chat:{session_id}");
         // The pane showing this chat in the active (visible) workspace, if any.
         let active_chat_pane = self
@@ -204,8 +307,13 @@ impl ConsoleDesktopApp {
         // Which tree/pane the tab opens in: the chat's own workspace when one
         // can be located, else the active pane as before.
         enum Target {
-            Active { pane_id: String },
-            Stashed { key: Option<String>, pane_id: String },
+            Active {
+                pane_id: String,
+            },
+            Stashed {
+                key: Option<String>,
+                pane_id: String,
+            },
         }
         let target = if let Some(pane_id) = active_chat_pane {
             Target::Active { pane_id }
@@ -234,8 +342,10 @@ impl ConsoleDesktopApp {
                 Some((key, pane_id)) => Target::Stashed { key, pane_id },
                 // Chat rendered nowhere: fall back to the active tree/pane.
                 None => {
-                    let pane_id =
-                        self.active_pane_id.clone().unwrap_or_else(|| "pane-main".into());
+                    let pane_id = self
+                        .active_pane_id
+                        .clone()
+                        .unwrap_or_else(|| "pane-main".into());
                     Target::Active { pane_id }
                 }
             }
