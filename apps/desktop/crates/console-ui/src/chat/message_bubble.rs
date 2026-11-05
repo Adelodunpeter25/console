@@ -216,6 +216,7 @@ pub(crate) fn message_text_with_mentions(
     }
 
     add_chat_ref_mentions(&text, &mut mentions);
+    add_skill_mentions(&text, &mut mentions);
     (text, mentions)
 }
 
@@ -248,6 +249,38 @@ fn add_chat_ref_mentions(text: &str, mentions: &mut Vec<InlineFileMention>) {
                 path: format!(
                     "{}{token}",
                     console_shared::composer::mentions::CHAT_PATH_PREFIX
+                ),
+            });
+        }
+    }
+    mentions.extend(found);
+}
+
+/// Skills (`/name`) are not sent as context files either, and the bubble does
+/// not know the installed skill list, so match the shape: a `/` at the start
+/// or after whitespace, then a single slug-like word ending at whitespace or
+/// the end. Anything with another `/` or punctuation (paths, URLs) is skipped.
+fn add_skill_mentions(text: &str, mentions: &mut Vec<InlineFileMention>) {
+    let mut found = Vec::new();
+    for (i, _) in text.match_indices('/') {
+        let prev_ok = text[..i].chars().next_back().is_none_or(char::is_whitespace);
+        let rest = &text[i + 1..];
+        let len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let name = &rest[..len];
+        let valid = name.starts_with(|c: char| c.is_ascii_alphabetic())
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        let end = i + 1 + len;
+        if prev_ok
+            && valid
+            && mentions.iter().all(|m| m.range.end <= i || m.range.start >= end)
+        {
+            found.push(InlineFileMention {
+                range: i..end,
+                path: format!(
+                    "{}{name}",
+                    console_shared::composer::mentions::SKILL_PATH_PREFIX
                 ),
             });
         }
