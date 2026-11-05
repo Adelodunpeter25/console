@@ -643,11 +643,8 @@ impl TranscriptView {
     /// Scroll so the user message at `row` is at the top of the viewport.
     fn jump_to_prompt(&mut self, row: usize, cx: &mut Context<Self>) {
         self.prompts_open = false;
-        self.list_state.set_follow_mode(FollowMode::Normal);
-        self.list_state.scroll_to(ListOffset {
-            item_ix: row,
-            offset_in_item: px(0.0),
-        });
+        // Re-applied next frame so variable-height rows above are measured first.
+        self.restore_scroll_anchor(row, 0.0, false, cx);
         cx.notify();
     }
 
@@ -773,10 +770,12 @@ impl TranscriptView {
                         .absolute()
                         .right(px(16.0))
                         .bottom(px(54.0))
-                        .w(px(420.0))
+                        .w(px(340.0))
                         .max_w_full()
                         .max_h(px(360.0))
                         .overflow_y_scroll()
+                        .occlude()
+                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
                         .p(px(4.0))
                         .rounded(px(12.0))
                         .border_1()
