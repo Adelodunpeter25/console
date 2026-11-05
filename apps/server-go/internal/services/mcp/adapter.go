@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	callTimeout   = 2 * time.Minute
+	CallTimeout   = 2 * time.Minute
 	maxResultText = 100_000
 	groupPrefix   = "mcp:"
 )
@@ -100,16 +100,56 @@ func (a *adapterTool) Execute(ctx context.Context, arguments json.RawMessage) (a
 			return nil, tools.NewToolError("Invalid arguments for %s: %v", a.name, err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	ctx, cancel := context.WithTimeout(ctx, CallTimeout)
 	defer cancel()
 	res, err := a.caller.Call(ctx, a.serverID, a.remote.Name, args)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, tools.NewToolError("MCP tool %s timed out after %s.", a.remote.Name, callTimeout)
+			return nil, tools.NewToolError("MCP tool %s timed out after %s.", a.remote.Name, CallTimeout)
 		}
 		return nil, tools.NewToolError("MCP tool %s failed: %v", a.remote.Name, err)
 	}
 	return tools.Envelope{Content: renderResult(res), IsError: res.IsError}, nil
+}
+
+// ResultText flattens a tool result into plain text for text-only surfaces
+// such as console.mcp.call, which returns JSON rather than harness content
+// parts. It follows the same text rules as renderResult (structured content
+// as the fallback, the same cap) minus image parts, which have no place in a
+// JSON payload.
+func ResultText(res *sdk.CallToolResult) string {
+	var parts []string
+	for _, c := range res.Content {
+		switch v := c.(type) {
+		case *sdk.TextContent:
+			parts = append(parts, v.Text)
+		case *sdk.ImageContent:
+			parts = append(parts, "[image content omitted]")
+		case *sdk.AudioContent:
+			parts = append(parts, "[audio content omitted]")
+		case *sdk.ResourceLink:
+			parts = append(parts, fmt.Sprintf("[resource %s: %s]", v.Name, v.URI))
+		case *sdk.EmbeddedResource:
+			if v.Resource != nil && v.Resource.Text != "" {
+				parts = append(parts, v.Resource.Text)
+			} else if v.Resource != nil {
+				parts = append(parts, "[embedded resource "+v.Resource.URI+"]")
+			}
+		}
+	}
+	if len(parts) == 0 && res.StructuredContent != nil {
+		if raw, err := json.Marshal(res.StructuredContent); err == nil {
+			parts = append(parts, string(raw))
+		}
+	}
+	text := strings.Join(parts, "\n")
+	if text == "" {
+		text = "(no output)"
+	}
+	if len(text) > maxResultText {
+		text = text[:maxResultText] + "\n… [truncated]"
+	}
+	return text
 }
 
 // maxResultImages caps how many image parts survive one tool result. Screenshots

@@ -32,6 +32,14 @@ console.scripts.list()                    console.scripts.run({ id, wait_ms? })
 console.scripts.status({ run_id? })       console.scripts.output({ run_id, stream?, cursor?, limit? })
 console.scripts.stop({ run_id })
 console.ports.list()   console.ports.forward({ port })   console.ports.unforward({ port })
+
+// MCP servers
+console.mcp.list()                        console.mcp.tools({ id })
+console.mcp.add({ id, transport, url | command, args?, env?, label?, auth?, enabled? })
+console.mcp.update({ id, label?, url?, command?, args?, env?, auth?, tier_overrides?, enabled? })
+console.mcp.remove({ id })
+console.mcp.connect({ id })               console.mcp.disconnect({ id })
+console.mcp.reset_auth({ id })            console.mcp.call({ id, tool, args? })
 ```
 
 Not built: `console.pr.*` (see [`pull-requests.md`](pull-requests.md)), and any UI-driving surface.
@@ -44,6 +52,7 @@ Not built: `console.pr.*` (see [`pull-requests.md`](pull-requests.md)), and any 
 - **`sessions.create`** with a prompt starts it (`started: true`, `status: working`).
 - **`sessions.prompt`** starts an idle session or queues the prompt for a busy one (`queued: true`). One prompt can wait per session and it never replaces one, including the user's own. `sessions.abort` also clears the queue, so an aborted session does not restart itself.
 - **`sessions.wait`** collects results of started work. One id or a list (max 20), `mode: "all"` (default) or `"any"`, at most 60 seconds per call so it fits inside the kernel's 5-minute timeout; on timeout it returns `done: false` and the caller waits again. Each session reports `done`, `status` and `last_reply` (cut at 20,000 characters). It refuses to wait on the calling session.
+- **`console.mcp.*`** manages MCP servers through the same `mcp.Manager` the desktop settings page uses, so what the model changes is what the UI shows. Discovery (`list`, `tools`), connection control (`connect`, `disconnect`, `reset_auth`) and `call` (one remote tool, the same path the `loadTools` adapter tools take) are available to any run that can call `console` at all. `add`, `update` and `remove` change user-level config that affects every session and project — and a stdio server is a command that runs on the machine — so they demand the run's ceiling to be `full-access` and fail closed on an unknown ceiling. `add` never takes a credential: the model passes an auth type, tokens live in Settings, and an OAuth connect returns `needs_auth` with the `auth_url` for the user instead of waiting out the browser sign-in.
 - **`sessions.search`** finds messages containing every word of a query, over what people said (never tool output, thinking, images or injected messages). By default it searches the current project (or directory) and leaves out the running session. It calls `session.Service.Search`, the same function an in-chat Cmd+F will use. See [`message-storage.md`](message-storage.md).
 - **Scripts:** `scripts.output` pages a run's output with absolute-offset cursors that stay valid when the 256 KB buffer drops its head.
 
@@ -90,4 +99,4 @@ File writes are also confined to the session's working directory (`permissions/g
 
 ## Tests
 
-Kernel tests live beside the code in `internal/services/console/`. Capability registry: `internal/run/capabilities_test.go`. Script cursors: `tests/api/scripts_output_cursor_test.go`. Path guard and plan mode: `tests/permissions/`. Sandbox: `tests/tools/plan_sandbox_test.go`. GitHub token: `tests/tools/bash_gh_env_test.go`.
+Kernel tests live beside the code in `internal/services/console/`. Capability registry: `internal/run/capabilities_test.go`. Script cursors: `tests/api/scripts_output_cursor_test.go`. MCP methods: `internal/services/console/mcp_test.go`. Path guard and plan mode: `tests/permissions/`. Sandbox: `tests/tools/plan_sandbox_test.go`. GitHub token: `tests/tools/bash_gh_env_test.go`.

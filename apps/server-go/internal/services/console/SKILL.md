@@ -90,4 +90,29 @@ when a project action requires inspecting or changing a local port forward.
 
 `console.scripts.stop({run_id})` — stop a running script
 
+### MCP servers
+
+Manage the app's MCP server integrations. Configuration methods change
+user-level state that affects every session and project, so `mcp.add`,
+`mcp.update` and `mcp.remove` only run when this run is at `full-access`; the
+read and connection methods work everywhere.
+
+`console.mcp.list()` — list every configured server with its live state: `status` (`disconnected`, `connecting`, `needs_auth`, `connected`, `error`), `toolCount`, and per-server `tools` when connected.
+
+`console.mcp.tools({id})` — one server's tool list and status.
+
+`console.mcp.add({id, transport, url | command, args?, env?, label?, auth?, enabled?})` — register a server. `transport` is `"http"` (needs `url`) or `"stdio"` (needs `command`, plus optional `args` array and `env` object). `auth` is `"none"` (default), `"static"` or `"oauth2"`; the credential itself is never passed here — tokens are managed in Settings → MCP and OAuth sign-in happens in the user's browser. The id must match `[A-Za-z0-9_-]+`.
+
+`console.mcp.update({id, label?, url?, command?, args?, env?, auth?, tier_overrides?, enabled?})` — change an existing server; absent keys keep their stored value. Setting `enabled: false` also disconnects it. `tier_overrides` maps a tool name to `read`, `write` or `exec`.
+
+`console.mcp.remove({id})` — disconnect and delete a server's config.
+
+`console.mcp.connect({id})` — connect a server and wait briefly. A normal server returns `{connected: true, tool_count}` or fails with the reason. An OAuth server returns `{needs_auth: true, auth_url}`: sign-in waits on the user, so ask them to finish it in Settings → MCP and call `connect` again afterwards — do not retry while waiting.
+
+`console.mcp.disconnect({id})` — close a server's live session without touching its config.
+
+`console.mcp.reset_auth({id})` — drop a server's stored credential so the next connect signs in afresh.
+
+`console.mcp.call({id, tool, args?})` — run one tool on a server directly, connecting first if needed. Prefer the server's real tools (available through `loadTools`) for ordinary use; `call` is for batching many remote calls in one turn. Returns `{content, is_error}`.
+
 
