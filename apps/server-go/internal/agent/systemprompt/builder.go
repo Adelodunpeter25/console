@@ -266,12 +266,14 @@ func renderCritical(mode ApprovalMode) string {
 	if mode == PlanMode {
 		return strings.Join([]string{
 			"<critical>",
+			"- Each response MUST advance the task.",
 			"- Default to discussion and questions; do not write files or implement features.",
 			"</critical>",
 		}, "\n")
 	}
 	return strings.Join([]string{
 		"<critical>",
+		"- Each response MUST advance the task.",
 		"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
 		"</critical>",
 	}, "\n")
