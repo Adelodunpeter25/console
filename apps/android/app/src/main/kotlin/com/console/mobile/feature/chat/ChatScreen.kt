@@ -195,17 +195,9 @@ fun ChatScreen(
     val cwd = view?.sessionCwd
 
     // Run scripts: the chat's project (worktree chats keep their own checkout
-    // via cwd). The overflow menu's indicator reads the repository's live runs,
-    // so a script left running is visible without opening the sheet.
+    // via cwd).
     var scriptsSheet by remember { mutableStateOf(false) }
     val scriptProject = projectForSession(projectState.projects, view?.projectId, cwd)
-    val scriptRuns by AppContainer.scriptsRepository.runs.collectAsStateWithLifecycle()
-    val scriptsRunning = scriptProject != null && scriptRuns.any { (key, runView) ->
-        key.startsWith(ScriptsRepository.projectPrefix(scriptProject.id, cwd)) && runView.isRunning
-    }
-    LaunchedEffect(scriptProject?.id, cwd) {
-        scriptProject?.let { AppContainer.scriptsRepository.refreshRuns(it.id, cwd) }
-    }
 
     fun jumpToProjectTab(tab: MobileTab) {
         if (cwd != null) {
@@ -278,7 +270,6 @@ fun ChatScreen(
             onOpenPorts = onOpenPorts,
             onOpenScripts = { scriptsSheet = true },
             scriptsAvailable = scriptProject != null,
-            scriptsRunning = scriptsRunning,
             onOpenDevices = { jumpToProjectTab(MobileTab.Devices) },
             onOpenTerminal = { jumpToProjectTab(MobileTab.Terminal) },
             modifier = Modifier.align(Alignment.TopCenter),
