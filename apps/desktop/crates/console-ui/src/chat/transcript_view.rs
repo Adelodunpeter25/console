@@ -22,6 +22,7 @@ use crate::chat::{
 use crate::markdown::file_links::{is_file_link, is_http_url};
 use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
 use crate::primitives::scrollbar::{self, ScrollbarState};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -1461,13 +1462,18 @@ fn cite_popup(
         .flex()
         .items_center()
         .gap(px(PILL_GAP))
-        .child(popup_pill("copy-popup", IconName::Copy, theme.clone()))
-        .child(popup_pill("cite-popup", IconName::Reply, theme))
+        .child(popup_pill(
+            "copy-popup",
+            IconName::Copy,
+            "Copy",
+            theme.clone(),
+        ))
+        .child(popup_pill("cite-popup", IconName::Reply, "Quote selection", theme))
 }
 
 /// One icon button inside the popup strip. Activation lives in the selection
 /// mouse handlers, so this is styling and hover only.
-fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElement {
+fn popup_pill(id: &'static str, icon: IconName, tooltip: &'static str, theme: Theme) -> impl IntoElement {
     div()
         .id(gpui::ElementId::Name(id.into()))
         .size(px(24.0))
@@ -1477,6 +1483,7 @@ fn popup_pill(id: &'static str, icon: IconName, theme: Theme) -> impl IntoElemen
         .justify_center()
         .cursor_pointer()
         .hover(|element| element.bg(theme.overlay_strong))
+        .tooltip(Tooltip::text(tooltip))
         .child(app_icon(icon, 12.0, theme.text_secondary))
 }
 
