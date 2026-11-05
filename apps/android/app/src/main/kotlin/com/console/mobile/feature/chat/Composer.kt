@@ -304,7 +304,8 @@ fun Composer(
             if (topBanner != null) topBanner()
             // Kept in composition while collapsed (just zero-height) so a sheet it owns
             // and its loaded branch list survive the composer folding up.
-            Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
+            // Project and branch are only chosen before the first message, so the strip is gone after.
+            if (!projectLocked) Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
                 ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
             }
             // Attachments are content, not configuration, so they stay visible collapsed.
