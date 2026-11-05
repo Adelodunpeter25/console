@@ -262,6 +262,55 @@ pub fn pinned_group_header(
         })
 }
 
+/// Collapsible section header for the Settled chats group. Same shape as
+/// [`pinned_group_header`] but with the Settled label; the section always
+/// sits at the bottom of the list, so it never hosts the add button.
+pub fn settled_group_header(
+    theme: Theme,
+    collapsed: bool,
+    on_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+) -> impl IntoElement {
+    let group_name = "sidebar-group-header-settled";
+    let chevron = app_icon(IconName::ChevronDown, 11.0, theme.text_ghost)
+        .when(collapsed, |icon| {
+            icon.with_transformation(gpui::Transformation::rotate(gpui::percentage(0.75)))
+        })
+        .invisible()
+        .group_hover(group_name, |icon| icon.visible());
+    let toggle_on_click = on_toggle.clone();
+    let toggle_on_key = on_toggle;
+
+    div()
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .group(group_name)
+        .child(
+            div()
+                .id("sidebar-group-toggle-settled")
+                .tab_index(0)
+                .h(px(22.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .cursor_default()
+                .hover(|s| s.bg(theme.overlay))
+                .text_size(px(14.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text_tertiary)
+                .child("Settled")
+                .child(chevron)
+                .on_click(move |_, window, cx| (toggle_on_click)(window, cx))
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                        (toggle_on_key)(window, cx);
+                        cx.stop_propagation();
+                    }
+                }),
+        )
+}
+
 pub fn drafts_group_header(
     theme: Theme,
     collapsed: bool,

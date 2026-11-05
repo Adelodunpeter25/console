@@ -674,6 +674,7 @@ impl Render for ConsoleDesktopApp {
                         self.draft_summaries(),
                         self.drafts_collapsed,
                         self.pinned_collapsed,
+                        self.settled_collapsed,
                         self.sidebar_list_state.clone(),
                         self.environment_rows(),
                         self.server_menu.clone(),
@@ -775,6 +776,17 @@ impl Render for ConsoleDesktopApp {
                         },
                         {
                             let entity = entity.clone();
+                            move |_w, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.settled_collapsed = !this.settled_collapsed;
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
                             move |id: String, window, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
@@ -807,6 +819,26 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.toggle_pin_session(id, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |id: String, _window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.settle_session(id, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |id: String, _window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.unsettle_session(id, cx);
                                     });
                                 }
                             }

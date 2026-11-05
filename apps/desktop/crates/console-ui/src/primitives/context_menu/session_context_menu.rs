@@ -14,13 +14,17 @@ use crate::theme::Theme;
 /// presentation and action ordering, so it can remain independent of the app
 /// state and backend client. Open/close, placement, keyboard navigation, and
 /// focus restoration come from `gpui_component::menu`.
+#[allow(clippy::too_many_arguments)]
 pub fn session_context_menu<E>(
     element: E,
     on_open_in_new_window: impl Fn(&mut Window, &mut App) + 'static,
     on_rename: impl Fn(&mut Window, &mut App) + 'static,
     on_toggle_pin: impl Fn(&mut Window, &mut App) + 'static,
+    on_settle: impl Fn(&mut Window, &mut App) + 'static,
+    on_unsettle: impl Fn(&mut Window, &mut App) + 'static,
     on_delete: impl Fn(&mut Window, &mut App) + 'static,
     pinned: bool,
+    settled: bool,
 ) -> ContextMenu<E>
 where
     E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
@@ -28,13 +32,22 @@ where
     let on_open_in_new_window = Rc::new(on_open_in_new_window);
     let on_rename = Rc::new(on_rename);
     let on_toggle_pin = Rc::new(on_toggle_pin);
+    let on_settle = Rc::new(on_settle);
+    let on_unsettle = Rc::new(on_unsettle);
     let on_delete = Rc::new(on_delete);
     element.context_menu(move |menu, _, _| {
         let on_open_in_new_window = on_open_in_new_window.clone();
         let on_rename = on_rename.clone();
         let on_toggle_pin = on_toggle_pin.clone();
+        let on_settle = on_settle.clone();
+        let on_unsettle = on_unsettle.clone();
         let on_delete = on_delete.clone();
         let pin_label: &'static str = if pinned { "Unpin" } else { "Pin" };
+        let (settle_label, settle_icon) = if settled {
+            ("Move to Active", IconName::ArrowUp)
+        } else {
+            ("Settle", IconName::Check)
+        };
         menu.min_w(px(200.0))
             .item(
                 entry("Open in New Window", IconName::WindowRestore, false)
@@ -48,6 +61,16 @@ where
             .item(
                 entry("Rename", IconName::Pencil, false)
                     .on_click(move |_, window, cx| on_rename(window, cx)),
+            )
+            .item(
+                entry(settle_label, settle_icon, false)
+                    .on_click(move |_, window, cx| {
+                        if settled {
+                            on_unsettle(window, cx)
+                        } else {
+                            on_settle(window, cx)
+                        }
+                    }),
             )
             .separator()
             .item(

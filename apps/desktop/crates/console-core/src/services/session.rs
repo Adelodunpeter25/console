@@ -531,6 +531,69 @@ impl SessionService {
         }
     }
 
+    /// `POST /api/sessions/:id/settle` — mark a finished chat settled. The
+    /// server refuses with an error while a run is in flight or a prompt is
+    /// queued; the caller surfaces that as a message, not a crash.
+    pub async fn settle(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/settle", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to settle session")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse settle session response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to settle session".into())
+            ))
+        }
+    }
+
+    /// `POST /api/sessions/:id/unsettle` — bring a settled chat back to
+    /// active. Succeeds for any known id.
+    pub async fn unsettle(&self, id: &str) -> Result<()> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/unsettle", id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to unsettle session")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse unsettle session response")?;
+        if body.success {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to unsettle session".into())
+            ))
+        }
+    }
+
     /// `DELETE /api/sessions/:id/permanent` — irreversibly delete a
     /// soft-deleted chat and its messages.
     pub async fn permanent_delete(&self, id: &str) -> Result<()> {

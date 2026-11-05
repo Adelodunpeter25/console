@@ -147,6 +147,28 @@ impl SidebarSortMode {
 /// display names against the project list; unknown ids fall into `None`.
 pub type ProjectSectionKey = Option<String>;
 
+/// Split item positions `0..len` into active and settled. Active keeps list
+/// order; settled is sorted most recently settled first. Callers keep the
+/// shared item collection and resolve each position on demand, like the
+/// grouping helpers above.
+pub fn partition_settled(
+    len: usize,
+    is_settled: impl Fn(usize) -> bool,
+    settled_at: impl Fn(usize) -> i64,
+) -> (Vec<usize>, Vec<usize>) {
+    let mut active = Vec::new();
+    let mut settled = Vec::new();
+    for index in 0..len {
+        if is_settled(index) {
+            settled.push(index);
+        } else {
+            active.push(index);
+        }
+    }
+    settled.sort_by_key(|&index| std::cmp::Reverse(settled_at(index)));
+    (active, settled)
+}
+
 /// Bucket item *positions* `0..len` by project section, ordered by each
 /// section's most recent activity (newest section first), positions within a
 /// section sorted most recent first. Sections with no positions are omitted.
