@@ -29,7 +29,7 @@ import (
 
 // Limits for one evaluation.
 const (
-	// maxActionsPerEval bounds host round-trips per browser_run call,
+	// maxActionsPerEval bounds host round-trips per browser call,
 	// counting the identity lookups alongside the visible actions.
 	maxActionsPerEval = 100
 	// maxTraceEntries caps the returned trace; the newest entries win.
@@ -180,7 +180,7 @@ func (r *JSRuntime) callAction(ctx context.Context, req tools.BrowserActionReque
 	r.mu.Lock()
 	if r.actions >= maxActionsPerEval {
 		r.mu.Unlock()
-		return tools.BrowserActionResult{}, jskernel.Errorf("browser action limit reached (%d per call); split the work across browser_run calls", maxActionsPerEval)
+		return tools.BrowserActionResult{}, jskernel.Errorf("browser action limit reached (%d per call); split the work across browser calls", maxActionsPerEval)
 	}
 	r.actions++
 	handler := r.handler

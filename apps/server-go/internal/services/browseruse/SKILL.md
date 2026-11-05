@@ -1,12 +1,10 @@
 # Browser use
 
 You drive the app's built-in desktop browser through the `browser` object.
-One `browser_run` call can navigate, wait, extract, and loop; variables
+One `browser` tool call can navigate, wait, extract, and loop; variables
 persist between calls until reset. Use it for research, extraction,
-navigation, search, filtering, and bounded pagination.
-
-For one-off actions on a page the user is already on, the low-level `browser`
-tool is fine too. For anything multi-step, prefer `browser_run`.
+navigation, search, filtering, bounded pagination — and for one-off page
+actions too, since every low-level operation is a method here.
 
 ## Rules
 
@@ -27,8 +25,9 @@ tool is fine too. For anything multi-step, prefer `browser_run`.
 
 Tabs you open with `browser.open` are **kernel-owned**: `browser_reset`
 closes them and nothing else. `browser.page({tabId?})` attaches to an
-existing tab without owning it; `browser.close` refuses to close tabs the
-kernel did not open — use the low-level `browser` tool for those.
+existing tab without owning it. `browser.close` refuses to close tabs the
+kernel did not open — to close one of those, ask the user, since you have no
+tool that closes user tabs.
 
 - `browser.open({url})` → `{tabId, url, title}` — opens a fresh tab and makes it the target of later calls.
 - `browser.page({tabId?})` → `{tabId, url, title, active, owned}` — attaches; no tabId picks the chat's current browser tab.
@@ -68,5 +67,5 @@ when you call the `browser_reset` tool, it closes the tabs the kernel opened.
 Do this automatically at the end of a browsing workflow, before reporting the
 result, and after a workflow the user has abandoned (for example, the task
 changed and the tabs are no longer relevant). A full reset also forgets the
-variables. Only tabs from `browser.open` are ever closed; tabs the user or the
-low-level `browser` tool opened are never touched.
+variables. Only tabs from `browser.open` are ever closed; tabs the user opened
+another way are never touched.

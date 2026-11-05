@@ -561,7 +561,9 @@ func globToRegex(glob string) string {
 	return b.String()
 }
 
-// DefaultTools is the default toolset.
+// DefaultTools is the default toolset. The `browser` tool (the /browser-use
+// kernel) is not here: it loads through the always-loaded browser-use
+// capability, which needs the run's desktop handler.
 func DefaultTools() []Tool {
-	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent, Browser}
+	return []Tool{ReadFile, WriteFile, ListDir, Glob, Grep, EditFile, BatchWrite, ReadSkill, Fetch, WebSearch, Ask, AskMany, Todo, Bash, BashJob, Subagent}
 }

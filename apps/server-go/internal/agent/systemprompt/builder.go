@@ -36,7 +36,7 @@ var DefaultToolNames = []string{
 	"read_file", "readSkill", "list_dir", "glob", "grep",
 	"write_file", "editFile", "batchWrite", "bash", "bashJob", "webSearch", "webFetch",
 	"todo", "subagent", "ask", "askMany", "memory", "console", "console_reset", "browser",
-	"browser_run", "browser_reset",
+	"browser_reset",
 }
 
 // DiscoveredContext is everything discovery found for one build.

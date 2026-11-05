@@ -1,4 +1,4 @@
-// The two harness tools browser use exposes: `browser_run` executes code
+// The two harness tools browser use exposes: `browser` executes code
 // against the session's persistent `browser` object, `browser_reset` cleans
 // up. Like the console kernel, the small schemas stay flat no matter how
 // large the API grows; the methods live in the /browser-use skill.
@@ -13,40 +13,40 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-type browserRunInput struct {
+type browserInput struct {
 	Code      string `json:"code" jsonschema:"description=JavaScript to run with the preinstalled browser object, e.g. browser.open({url: 'https://example.com'}). Variables persist between calls; use print() for narration. The /browser-use instructions in this conversation document the methods."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema:"description=Execution budget in milliseconds. Defaults to 300000 (5 minutes); a stopped script is reported as unknown completion because an action in flight may have taken effect."`
 }
 
-// browserRunTool runs code in the session's kernel. It embeds the declarative
+// browserTool runs code in the session's kernel. It embeds the declarative
 // tool for its name, description and schema, and overrides Execute to bind
-// the call to one session — the same pattern as the computer tool.
-type browserRunTool struct {
+// the call to one session — the same pattern as the console tool.
+type browserTool struct {
 	tools.Tool
 	manager   *Manager
 	sessionID string
 	handler   tools.BrowserHandler
 }
 
-// NewRunTool builds the `browser_run` tool bound to one chat session, so its
+// NewBrowserTool builds the `browser` tool bound to one chat session, so its
 // variables and owned tabs never leak into another session's kernel.
-func NewRunTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
-	inner := tools.NewTool("browser_run",
-		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded yet, read the browser-use skill to load them. When a browsing workflow is done, close the tabs it opened with browser_reset.",
+func NewBrowserTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
+	inner := tools.NewTool("browser",
+		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded yet, read the browser-use skill to load them. When a browsing workflow is done, close the tabs it opened with the browser_reset tool.",
 		tools.TierExec,
-		func(ctx context.Context, in browserRunInput) (any, error) {
-			return nil, tools.NewToolError("browser_run requires call context")
+		func(ctx context.Context, in browserInput) (any, error) {
+			return nil, tools.NewToolError("browser requires call context")
 		})
-	return &browserRunTool{Tool: inner, manager: manager, sessionID: sessionID, handler: handler}
+	return &browserTool{Tool: inner, manager: manager, sessionID: sessionID, handler: handler}
 }
 
 // Execute dispatches to the session's runtime. The handler arrives per run,
 // so a restored kernel binds to the live desktop connection of the run that
 // uses it.
-func (t *browserRunTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
-	var in browserRunInput
+func (t *browserTool) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
+	var in browserInput
 	if err := json.Unmarshal(arguments, &in); err != nil {
-		return nil, tools.NewToolError("Invalid arguments for browser_run: %v", err)
+		return nil, tools.NewToolError("Invalid arguments for browser: %v", err)
 	}
 	runtime, err := t.manager.runtime(t.sessionID, t.handler)
 	if err != nil {
@@ -75,7 +75,7 @@ type browserResetTool struct {
 // itself opened, which is why the tool is read-tier like computer_reset.
 func NewResetTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
 	inner := tools.NewTool("browser_reset",
-		"Clean up browser use: close the tabs the kernel opened (all of them, or one with tabId). A full reset also forgets every browser_run variable. Tabs you or the user opened another way are never closed.",
+		"Clean up browser use: close the tabs the kernel opened (all of them, or one with tabId). A full reset also forgets every browser variable. Tabs you or the user opened another way are never closed.",
 		tools.TierRead,
 		func(ctx context.Context, in browserResetInput) (any, error) {
 			return nil, tools.NewToolError("browser_reset requires call context")
@@ -97,7 +97,7 @@ func (t *browserResetTool) Execute(ctx context.Context, arguments json.RawMessag
 // closeOne is the targeted reset: one owned tab closes, variables stay.
 func (t *browserResetTool) closeOne(ctx context.Context, tabID string) (any, error) {
 	if !t.manager.isOwned(t.sessionID, tabID) {
-		return nil, tools.NewToolError("tab %s was not opened by this kernel; browser_reset only closes tabs from browser_run's browser.open()", tabID)
+		return nil, tools.NewToolError("tab %s was not opened by this kernel; browser_reset only closes tabs from browser's browser.open()", tabID)
 	}
 	if _, err := t.handler(ctx, tools.BrowserActionRequest{Action: "close_tab", TabID: tabID}); err != nil {
 		return nil, tools.NewToolError("could not close tab %s: %v", tabID, err)
@@ -107,7 +107,7 @@ func (t *browserResetTool) closeOne(ctx context.Context, tabID string) (any, err
 }
 
 // closeAllAndDrop is the full reset: every owned tab closes (best-effort), the
-// runtime drops, and the next browser_run starts fresh.
+// runtime drops, and the next browser starts fresh.
 func (t *browserResetTool) closeAllAndDrop(ctx context.Context) (any, error) {
 	owned := t.manager.ownedTabs(t.sessionID)
 	var closed, warnings []string
@@ -157,7 +157,7 @@ func (l *Loader) Loaded() bool {
 // timeout instead of here.
 func (l *Loader) Load(registry *tools.Registry) (int, error) {
 	registry.Add(
-		NewRunTool(l.manager, l.sessionID, l.handler),
+		NewBrowserTool(l.manager, l.sessionID, l.handler),
 		NewResetTool(l.manager, l.sessionID, l.handler),
 	)
 	l.mu.Lock()
