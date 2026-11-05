@@ -58,6 +58,9 @@ pub struct TranscriptView {
     /// The pointer is over the transcript: the floating controls show only then.
     hovered: bool,
     prompts_scroll: UniformListScrollHandle,
+    /// The fetched prompt list no longer matches the chat (new prompt, or a
+    /// different chat); reopening the popup refetches only then.
+    prompts_stale: bool,
     on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_jump_to_prompt: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
@@ -138,6 +141,7 @@ impl TranscriptView {
             prompts: Rc::new(Vec::new()),
             hovered: false,
             prompts_scroll: UniformListScrollHandle::new(),
+            prompts_stale: true,
             on_request_prompts: None,
             on_jump_to_prompt: None,
             focus_handle: cx.focus_handle(),
@@ -725,10 +729,15 @@ impl TranscriptView {
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.prompts_open = !this.prompts_open;
                         if this.prompts_open {
-                            // Stale entries from another chat must not flash.
-                            this.prompts = Rc::new(Vec::new());
-                            if let Some(request) = this.on_request_prompts.clone() {
-                                request(window, cx);
+                            if let Some(last) = this.prompts.len().checked_sub(1) {
+                                this.prompts_scroll
+                                    .scroll_to_item_strict(last, ScrollStrategy::Bottom);
+                            }
+                            if this.prompts_stale || this.prompts.is_empty() {
+                                this.prompts_stale = false;
+                                if let Some(request) = this.on_request_prompts.clone() {
+                                    request(window, cx);
+                                }
                             }
                         }
                         cx.notify();
@@ -874,6 +883,9 @@ impl TranscriptView {
     }
 
     pub fn set_messages(&mut self, messages: Vec<AgentMessage>, cx: &mut Context<Self>) {
+        // A different chat's prompts must not flash when the popup next opens.
+        self.prompts = Rc::new(Vec::new());
+        self.prompts_stale = true;
         // Keep cached views whose message/part identity still exists. When a
         // session is replaced, the next `set_text` compares the new source and
         // safely resets any retained parser state for a reused index.
@@ -1016,6 +1028,9 @@ impl TranscriptView {
     }
 
     pub fn push_message(&mut self, msg: AgentMessage, cx: &mut Context<Self>) {
+        if matches!(msg, AgentMessage::User { .. }) {
+            self.prompts_stale = true;
+        }
         self.messages.push(msg);
         self.content_revisions.push(0);
         // A new prompt means the user wants to see its response: re-engage
