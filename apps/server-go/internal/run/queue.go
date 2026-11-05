@@ -23,6 +23,9 @@ func (s *Service) QueuePrompt(sessionID string, dto Prompt) (*types.QueuedPrompt
 	if loaded == nil {
 		return nil, ErrNoSession
 	}
+	// A queued prompt is a send too: it unsettles (and Steer inherits this
+	// through QueuePrompt).
+	s.unsettleOnSend(sessionID)
 	qp := &types.QueuedPrompt{
 		ID: utils.RandomID(), SessionID: sessionID, Prompt: dto.Text, ContextFiles: dto.ContextFiles,
 		Annotations: dto.Annotations,

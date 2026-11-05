@@ -193,7 +193,7 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
-			thinking_level, pinned_at, created_at, updated_at, message_count, status, deleted_at,
+			thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
 			worktree_path, worktree_branch, worktree_repo
 		FROM sessions WHERE id = ?`, sessionID)
 	if err != nil {

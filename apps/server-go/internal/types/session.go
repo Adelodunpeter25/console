@@ -18,6 +18,9 @@ type SessionHeader struct {
 	Status        string  `json:"status"`
 	DeletedAt     *int64  `json:"deletedAt,omitempty"`
 	PinnedAt      *int64  `json:"pinnedAt,omitempty"`
+	// SettledAt is non-nil when the chat is settled: finished enough to sit
+	// in the collapsed Settled section, but never touched by any purge.
+	SettledAt *int64 `json:"settledAt,omitempty"`
 	// Worktree is non-nil when the session lives in its own git worktree.
 	Worktree *SessionWorktree `json:"worktree,omitempty"`
 }

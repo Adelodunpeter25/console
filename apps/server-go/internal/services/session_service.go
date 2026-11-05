@@ -240,6 +240,24 @@ func (s *SessionService) Restore(sessionID string) (bool, error) {
 	return s.inner.Restore(sessionID)
 }
 
+// SetBusyCheck wires the run service's IsActive probe used by Settle's
+// busy refusal. The run service already depends on this façade, so the
+// probe arrives as a callback rather than an import.
+func (s *SessionService) SetBusyCheck(fn func(id string) bool) {
+	s.inner.SetBusyCheck(fn)
+}
+
+// Settle marks a session settled; refused with session.ErrSessionBusy while
+// a run is in flight or a prompt is queued.
+func (s *SessionService) Settle(sessionID string) (bool, error) {
+	return s.inner.Settle(sessionID)
+}
+
+// Unsettle clears the settled mark. Succeeds for any known id.
+func (s *SessionService) Unsettle(sessionID string) (bool, error) {
+	return s.inner.Unsettle(sessionID)
+}
+
 func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
 	return s.inner.ExpiredDeletedSessions(cutoffMillis)
 }

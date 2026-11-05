@@ -48,6 +48,7 @@ message SessionHeader {
   optional int64 deleted_at = 13;
   SessionWorktree worktree = 14;
   optional int64 pinned_at = 15;
+  optional int64 settled_at = 16;  // unset = active
 }
 
 message SessionDeleteResponse {
@@ -58,6 +59,11 @@ message SessionDeleteResponse {
 message SessionRestoreResponse {
   string id = 1;
   bool restored = 2;
+}
+
+message SessionSettleResponse {
+  string id = 1;
+  bool settled = 2;
 }
 
 message SessionPermanentDeleteResponse {

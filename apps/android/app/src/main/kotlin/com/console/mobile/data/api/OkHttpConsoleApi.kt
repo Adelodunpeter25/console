@@ -8,6 +8,7 @@ import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.AuthStatusResponse
 import console.v1.OAuthLoginUrlResponse
+import console.v1.SessionSettleResponse
 import com.console.mobile.data.model.CreateSessionDto
 import console.v1.DeviceActionRequest
 import console.v1.DeviceDescriptor
@@ -96,6 +97,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val projectAdapter by lazy { wireMoshi.adapter(ProjectInfo::class.java) }
     private val usageReportAdapter by lazy { wireMoshi.adapter(UsageReport::class.java) }
     private val sessionAdapter by lazy { wireMoshi.adapter(SessionHeader::class.java) }
+    private val settleResponseAdapter by lazy { wireMoshi.adapter(SessionSettleResponse::class.java) }
     private val providerCatalogAdapter by lazy { wireMoshi.adapter(ProviderCatalogEntry::class.java) }
     private val providerModelsAdapter by lazy { wireMoshi.adapter(ProviderModelsResponse::class.java) }
     private val sessionChangeAdapter by lazy { wireMoshi.adapter(SessionFileChange::class.java) }
@@ -201,6 +203,20 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun restoreSession(id: String) {
         val raw = http.post("/api/sessions/${enc(id)}/restore")
         ensureOk(raw, "restore session")
+    }
+
+    override suspend fun settleSession(id: String): SessionSettleResponse {
+        val raw = http.post("/api/sessions/${enc(id)}/settle")
+        val element = http.unwrap(raw, JsonElement.serializer(), "settle session")
+        return settleResponseAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to settle session")
+    }
+
+    override suspend fun unsettleSession(id: String): SessionSettleResponse {
+        val raw = http.post("/api/sessions/${enc(id)}/unsettle")
+        val element = http.unwrap(raw, JsonElement.serializer(), "unsettle session")
+        return settleResponseAdapter.fromJson(element.toString())
+            ?: throw ApiException("Failed to unsettle session")
     }
 
     override suspend fun permanentlyDeleteSession(id: String) {

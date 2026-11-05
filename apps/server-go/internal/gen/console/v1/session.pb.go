@@ -172,6 +172,7 @@ type SessionHeader struct {
 	DeletedAt     *int64                 `protobuf:"varint,13,opt,name=deleted_at,json=deletedAt,proto3,oneof" json:"deleted_at,omitempty"`
 	Worktree      *SessionWorktree       `protobuf:"bytes,14,opt,name=worktree,proto3" json:"worktree,omitempty"`
 	PinnedAt      *int64                 `protobuf:"varint,15,opt,name=pinned_at,json=pinnedAt,proto3,oneof" json:"pinned_at,omitempty"`
+	SettledAt     *int64                 `protobuf:"varint,16,opt,name=settled_at,json=settledAt,proto3,oneof" json:"settled_at,omitempty"` // unset = active
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -311,6 +312,13 @@ func (x *SessionHeader) GetPinnedAt() int64 {
 	return 0
 }
 
+func (x *SessionHeader) GetSettledAt() int64 {
+	if x != nil && x.SettledAt != nil {
+		return *x.SettledAt
+	}
+	return 0
+}
+
 type SessionDeleteResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -415,6 +423,58 @@ func (x *SessionRestoreResponse) GetRestored() bool {
 	return false
 }
 
+type SessionSettleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Settled       bool                   `protobuf:"varint,2,opt,name=settled,proto3" json:"settled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionSettleResponse) Reset() {
+	*x = SessionSettleResponse{}
+	mi := &file_console_v1_session_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionSettleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionSettleResponse) ProtoMessage() {}
+
+func (x *SessionSettleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_console_v1_session_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionSettleResponse.ProtoReflect.Descriptor instead.
+func (*SessionSettleResponse) Descriptor() ([]byte, []int) {
+	return file_console_v1_session_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SessionSettleResponse) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SessionSettleResponse) GetSettled() bool {
+	if x != nil {
+		return x.Settled
+	}
+	return false
+}
+
 type SessionPermanentDeleteResponse struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -425,7 +485,7 @@ type SessionPermanentDeleteResponse struct {
 
 func (x *SessionPermanentDeleteResponse) Reset() {
 	*x = SessionPermanentDeleteResponse{}
-	mi := &file_console_v1_session_proto_msgTypes[5]
+	mi := &file_console_v1_session_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +497,7 @@ func (x *SessionPermanentDeleteResponse) String() string {
 func (*SessionPermanentDeleteResponse) ProtoMessage() {}
 
 func (x *SessionPermanentDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[5]
+	mi := &file_console_v1_session_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +510,7 @@ func (x *SessionPermanentDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionPermanentDeleteResponse.ProtoReflect.Descriptor instead.
 func (*SessionPermanentDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{5}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SessionPermanentDeleteResponse) GetId() string {
@@ -490,7 +550,7 @@ type SessionFileChange struct {
 
 func (x *SessionFileChange) Reset() {
 	*x = SessionFileChange{}
-	mi := &file_console_v1_session_proto_msgTypes[6]
+	mi := &file_console_v1_session_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -502,7 +562,7 @@ func (x *SessionFileChange) String() string {
 func (*SessionFileChange) ProtoMessage() {}
 
 func (x *SessionFileChange) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[6]
+	mi := &file_console_v1_session_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -515,7 +575,7 @@ func (x *SessionFileChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionFileChange.ProtoReflect.Descriptor instead.
 func (*SessionFileChange) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{6}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SessionFileChange) GetPath() string {
@@ -590,7 +650,7 @@ type SessionFileChangeDiff struct {
 
 func (x *SessionFileChangeDiff) Reset() {
 	*x = SessionFileChangeDiff{}
-	mi := &file_console_v1_session_proto_msgTypes[7]
+	mi := &file_console_v1_session_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +662,7 @@ func (x *SessionFileChangeDiff) String() string {
 func (*SessionFileChangeDiff) ProtoMessage() {}
 
 func (x *SessionFileChangeDiff) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[7]
+	mi := &file_console_v1_session_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +675,7 @@ func (x *SessionFileChangeDiff) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SessionFileChangeDiff.ProtoReflect.Descriptor instead.
 func (*SessionFileChangeDiff) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{7}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SessionFileChangeDiff) GetDiffText() string {
@@ -647,7 +707,7 @@ type SubagentActivityItem struct {
 
 func (x *SubagentActivityItem) Reset() {
 	*x = SubagentActivityItem{}
-	mi := &file_console_v1_session_proto_msgTypes[8]
+	mi := &file_console_v1_session_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +719,7 @@ func (x *SubagentActivityItem) String() string {
 func (*SubagentActivityItem) ProtoMessage() {}
 
 func (x *SubagentActivityItem) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[8]
+	mi := &file_console_v1_session_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +732,7 @@ func (x *SubagentActivityItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentActivityItem.ProtoReflect.Descriptor instead.
 func (*SubagentActivityItem) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{8}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SubagentActivityItem) GetTurnIndex() int32 {
@@ -745,7 +805,7 @@ type SubagentInfo struct {
 
 func (x *SubagentInfo) Reset() {
 	*x = SubagentInfo{}
-	mi := &file_console_v1_session_proto_msgTypes[9]
+	mi := &file_console_v1_session_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -757,7 +817,7 @@ func (x *SubagentInfo) String() string {
 func (*SubagentInfo) ProtoMessage() {}
 
 func (x *SubagentInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[9]
+	mi := &file_console_v1_session_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,7 +830,7 @@ func (x *SubagentInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentInfo.ProtoReflect.Descriptor instead.
 func (*SubagentInfo) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{9}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SubagentInfo) GetSubagentId() string {
@@ -898,7 +958,7 @@ type QueuedPrompt struct {
 
 func (x *QueuedPrompt) Reset() {
 	*x = QueuedPrompt{}
-	mi := &file_console_v1_session_proto_msgTypes[10]
+	mi := &file_console_v1_session_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -910,7 +970,7 @@ func (x *QueuedPrompt) String() string {
 func (*QueuedPrompt) ProtoMessage() {}
 
 func (x *QueuedPrompt) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[10]
+	mi := &file_console_v1_session_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +983,7 @@ func (x *QueuedPrompt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueuedPrompt.ProtoReflect.Descriptor instead.
 func (*QueuedPrompt) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{10}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *QueuedPrompt) GetId() string {
@@ -1022,7 +1082,7 @@ type SubagentStartEvent struct {
 
 func (x *SubagentStartEvent) Reset() {
 	*x = SubagentStartEvent{}
-	mi := &file_console_v1_session_proto_msgTypes[11]
+	mi := &file_console_v1_session_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1034,7 +1094,7 @@ func (x *SubagentStartEvent) String() string {
 func (*SubagentStartEvent) ProtoMessage() {}
 
 func (x *SubagentStartEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[11]
+	mi := &file_console_v1_session_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1047,7 +1107,7 @@ func (x *SubagentStartEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentStartEvent.ProtoReflect.Descriptor instead.
 func (*SubagentStartEvent) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{11}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SubagentStartEvent) GetSubagentId() string {
@@ -1107,7 +1167,7 @@ type SubagentActivityEvent struct {
 
 func (x *SubagentActivityEvent) Reset() {
 	*x = SubagentActivityEvent{}
-	mi := &file_console_v1_session_proto_msgTypes[12]
+	mi := &file_console_v1_session_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1119,7 +1179,7 @@ func (x *SubagentActivityEvent) String() string {
 func (*SubagentActivityEvent) ProtoMessage() {}
 
 func (x *SubagentActivityEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[12]
+	mi := &file_console_v1_session_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1132,7 +1192,7 @@ func (x *SubagentActivityEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentActivityEvent.ProtoReflect.Descriptor instead.
 func (*SubagentActivityEvent) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{12}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SubagentActivityEvent) GetSubagentId() string {
@@ -1197,7 +1257,7 @@ type SubagentEndEvent struct {
 
 func (x *SubagentEndEvent) Reset() {
 	*x = SubagentEndEvent{}
-	mi := &file_console_v1_session_proto_msgTypes[13]
+	mi := &file_console_v1_session_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1209,7 +1269,7 @@ func (x *SubagentEndEvent) String() string {
 func (*SubagentEndEvent) ProtoMessage() {}
 
 func (x *SubagentEndEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_session_proto_msgTypes[13]
+	mi := &file_console_v1_session_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,7 +1282,7 @@ func (x *SubagentEndEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubagentEndEvent.ProtoReflect.Descriptor instead.
 func (*SubagentEndEvent) Descriptor() ([]byte, []int) {
-	return file_console_v1_session_proto_rawDescGZIP(), []int{13}
+	return file_console_v1_session_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SubagentEndEvent) GetSubagentId() string {
@@ -1273,7 +1333,7 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\x0fSessionWorktree\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x12\n" +
-	"\x04repo\x18\x03 \x01(\tR\x04repo\"\xc3\x04\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\"\xf6\x04\n" +
 	"\rSessionHeader\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
@@ -1294,19 +1354,25 @@ const file_console_v1_session_proto_rawDesc = "" +
 	"\n" +
 	"deleted_at\x18\r \x01(\x03H\x03R\tdeletedAt\x88\x01\x01\x127\n" +
 	"\bworktree\x18\x0e \x01(\v2\x1b.console.v1.SessionWorktreeR\bworktree\x12 \n" +
-	"\tpinned_at\x18\x0f \x01(\x03H\x04R\bpinnedAt\x88\x01\x01B\r\n" +
+	"\tpinned_at\x18\x0f \x01(\x03H\x04R\bpinnedAt\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"settled_at\x18\x10 \x01(\x03H\x05R\tsettledAt\x88\x01\x01B\r\n" +
 	"\v_project_idB\x11\n" +
 	"\x0f_thinking_levelB\x10\n" +
 	"\x0e_message_countB\r\n" +
 	"\v_deleted_atB\f\n" +
 	"\n" +
-	"_pinned_at\"A\n" +
+	"_pinned_atB\r\n" +
+	"\v_settled_at\"A\n" +
 	"\x15SessionDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\adeleted\x18\x02 \x01(\bR\adeleted\"D\n" +
 	"\x16SessionRestoreResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\brestored\x18\x02 \x01(\bR\brestored\"a\n" +
+	"\brestored\x18\x02 \x01(\bR\brestored\"A\n" +
+	"\x15SessionSettleResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
+	"\asettled\x18\x02 \x01(\bR\asettled\"a\n" +
 	"\x1eSessionPermanentDeleteResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
 	"\x13permanently_deleted\x18\x02 \x01(\bR\x12permanentlyDeleted\"\xad\x02\n" +
@@ -1429,30 +1495,31 @@ func file_console_v1_session_proto_rawDescGZIP() []byte {
 	return file_console_v1_session_proto_rawDescData
 }
 
-var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_console_v1_session_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_console_v1_session_proto_goTypes = []any{
 	(*TodoItem)(nil),                       // 0: console.v1.TodoItem
 	(*SessionWorktree)(nil),                // 1: console.v1.SessionWorktree
 	(*SessionHeader)(nil),                  // 2: console.v1.SessionHeader
 	(*SessionDeleteResponse)(nil),          // 3: console.v1.SessionDeleteResponse
 	(*SessionRestoreResponse)(nil),         // 4: console.v1.SessionRestoreResponse
-	(*SessionPermanentDeleteResponse)(nil), // 5: console.v1.SessionPermanentDeleteResponse
-	(*SessionFileChange)(nil),              // 6: console.v1.SessionFileChange
-	(*SessionFileChangeDiff)(nil),          // 7: console.v1.SessionFileChangeDiff
-	(*SubagentActivityItem)(nil),           // 8: console.v1.SubagentActivityItem
-	(*SubagentInfo)(nil),                   // 9: console.v1.SubagentInfo
-	(*QueuedPrompt)(nil),                   // 10: console.v1.QueuedPrompt
-	(*SubagentStartEvent)(nil),             // 11: console.v1.SubagentStartEvent
-	(*SubagentActivityEvent)(nil),          // 12: console.v1.SubagentActivityEvent
-	(*SubagentEndEvent)(nil),               // 13: console.v1.SubagentEndEvent
-	(*ImageAttachment)(nil),                // 14: console.v1.ImageAttachment
-	(*BrowserAnnotation)(nil),              // 15: console.v1.BrowserAnnotation
+	(*SessionSettleResponse)(nil),          // 5: console.v1.SessionSettleResponse
+	(*SessionPermanentDeleteResponse)(nil), // 6: console.v1.SessionPermanentDeleteResponse
+	(*SessionFileChange)(nil),              // 7: console.v1.SessionFileChange
+	(*SessionFileChangeDiff)(nil),          // 8: console.v1.SessionFileChangeDiff
+	(*SubagentActivityItem)(nil),           // 9: console.v1.SubagentActivityItem
+	(*SubagentInfo)(nil),                   // 10: console.v1.SubagentInfo
+	(*QueuedPrompt)(nil),                   // 11: console.v1.QueuedPrompt
+	(*SubagentStartEvent)(nil),             // 12: console.v1.SubagentStartEvent
+	(*SubagentActivityEvent)(nil),          // 13: console.v1.SubagentActivityEvent
+	(*SubagentEndEvent)(nil),               // 14: console.v1.SubagentEndEvent
+	(*ImageAttachment)(nil),                // 15: console.v1.ImageAttachment
+	(*BrowserAnnotation)(nil),              // 16: console.v1.BrowserAnnotation
 }
 var file_console_v1_session_proto_depIdxs = []int32{
 	1,  // 0: console.v1.SessionHeader.worktree:type_name -> console.v1.SessionWorktree
-	8,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
-	14, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
-	15, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
+	9,  // 1: console.v1.SubagentInfo.activities:type_name -> console.v1.SubagentActivityItem
+	15, // 2: console.v1.QueuedPrompt.attachments:type_name -> console.v1.ImageAttachment
+	16, // 3: console.v1.QueuedPrompt.annotations:type_name -> console.v1.BrowserAnnotation
 	4,  // [4:4] is the sub-list for method output_type
 	4,  // [4:4] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -1467,20 +1534,20 @@ func file_console_v1_session_proto_init() {
 	}
 	file_console_v1_message_proto_init()
 	file_console_v1_session_proto_msgTypes[2].OneofWrappers = []any{}
-	file_console_v1_session_proto_msgTypes[6].OneofWrappers = []any{}
-	file_console_v1_session_proto_msgTypes[8].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[7].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[9].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[10].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[11].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[12].OneofWrappers = []any{}
 	file_console_v1_session_proto_msgTypes[13].OneofWrappers = []any{}
+	file_console_v1_session_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_session_proto_rawDesc), len(file_console_v1_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

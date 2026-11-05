@@ -44,6 +44,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
 			thinking_level TEXT,
 			pinned_at INTEGER,
+			settled_at INTEGER,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL,
 			deleted_at INTEGER,
@@ -133,6 +134,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		"thinking_level TEXT",
 		"capabilities TEXT",
 		"pinned_at INTEGER",
+		"settled_at INTEGER",
 	} {
 		name := col[:len(col)-len(" TEXT")]
 		if strings.HasSuffix(col, " INTEGER") {

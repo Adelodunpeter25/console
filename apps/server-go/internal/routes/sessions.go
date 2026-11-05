@@ -96,6 +96,9 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 	if h.PinnedAt != nil {
 		out.PinnedAt = h.PinnedAt
 	}
+	if h.SettledAt != nil {
+		out.SettledAt = h.SettledAt
+	}
 	if h.Worktree != nil {
 		out.Worktree = &consolev1.SessionWorktree{
 			Path: h.Worktree.Path, Branch: h.Worktree.Branch, Repo: h.Worktree.Repo,
@@ -108,6 +111,10 @@ func sessionHeaderToProto(h types.SessionHeader) *consolev1.SessionHeader {
 // response shapes, status codes, and defaults the desktop client expects.
 func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, runs *run.Service) {
 	h := app.Group("/api/sessions")
+
+	// Settling refuses while a run is in flight; the run service owns that
+	// state, so the probe arrives as a callback.
+	sessions.SetBusyCheck(runs.IsActive)
 
 	// sendSessionHeader emits one header through the canonical wire type.
 	sendSessionHeader := func(c *fiber.Ctx, header types.SessionHeader) error {
@@ -410,6 +417,44 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
 		raw, err := protoMarshal.Marshal(&consolev1.SessionRestoreResponse{Id: id, Restored: true})
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+
+	// POST /api/sessions/:id/settle — mark a finished chat settled. Refused
+	// with 409 while a run is in flight or a prompt is queued.
+	h.Post("/:id/settle", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		settled, err := sessions.Settle(id)
+		if errors.Is(err, session.ErrSessionBusy) {
+			return sessionError(c, fiber.StatusConflict, "Finish or stop the run before settling this chat.")
+		}
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !settled {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		raw, err := protoMarshal.Marshal(&consolev1.SessionSettleResponse{Id: id, Settled: true})
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
+	})
+
+	// POST /api/sessions/:id/unsettle — bring a settled chat back to active.
+	h.Post("/:id/unsettle", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		unsettled, err := sessions.Unsettle(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if !unsettled {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		raw, err := protoMarshal.Marshal(&consolev1.SessionSettleResponse{Id: id, Settled: false})
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}

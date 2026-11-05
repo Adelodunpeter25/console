@@ -33,6 +33,7 @@ import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionDetailResponse
 import console.v1.SessionFileChange
 import console.v1.SessionHeader
+import console.v1.SessionSettleResponse
 import console.v1.SubagentInfo
 import console.v1.TodoItem
 import console.v1.UsageReport
@@ -50,6 +51,10 @@ interface ConsoleApi {
     suspend fun updateSession(id: String, payload: com.console.mobile.data.model.UpdateSessionDto): SessionHeader
     suspend fun deleteSession(id: String)
     suspend fun restoreSession(id: String)
+    /** POST /api/sessions/:id/settle — refused while a run is active or a prompt is queued. */
+    suspend fun settleSession(id: String): SessionSettleResponse
+    /** POST /api/sessions/:id/unsettle — bring a settled chat back to active. */
+    suspend fun unsettleSession(id: String): SessionSettleResponse
     suspend fun permanentlyDeleteSession(id: String)
     /** POST /api/sessions/:id/fork — duplicate history through messageId into a new idle session. */
     suspend fun forkSession(id: String, messageId: String): SessionHeader

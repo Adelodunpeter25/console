@@ -71,6 +71,7 @@ func TestSessionHeaderProtoMatchesFixtures(t *testing.T) {
 	}
 	check("delete.json", &consolev1.SessionDeleteResponse{Id: "s1", Deleted: true})
 	check("restore.json", &consolev1.SessionRestoreResponse{Id: "s1", Restored: true})
+	check("settle.json", &consolev1.SessionSettleResponse{Id: "s1", Settled: true})
 	check("permanent.json", &consolev1.SessionPermanentDeleteResponse{Id: "s1", PermanentlyDeleted: true})
 
 	// Fixture stays parseable with unknown-field tolerance.
@@ -81,6 +82,16 @@ func TestSessionHeaderProtoMatchesFixtures(t *testing.T) {
 	}
 	if decoded.GetModelId() != "gpt-5" || decoded.GetMessageCount() != 3 {
 		t.Fatalf("decoded: %+v", &decoded)
+	}
+
+	// The settled header decodes with the field set. (unsettle.json stays a
+	// decode-only fixture: protojson drops default-valued `settled: false`.)
+	var settledHeader consolev1.SessionHeader
+	if err := unmarshal.Unmarshal([]byte(sessionFixture(t, "header_settled.json")), &settledHeader); err != nil {
+		t.Fatal(err)
+	}
+	if settledHeader.SettledAt == nil || *settledHeader.SettledAt != 1700000000005 {
+		t.Fatalf("header_settled decoded wrong: %#v", settledHeader.SettledAt)
 	}
 }
 
