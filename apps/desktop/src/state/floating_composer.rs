@@ -116,13 +116,19 @@ impl ConsoleDesktopApp {
             .selected_project()
             .map(|project| project.path.clone())
             .unwrap_or_default();
+        let chat_scope_project_id = self
+            .floating_composer
+            .selected_project()
+            .map(|project| project.id.clone());
         let autocomplete = self.composer_autocomplete_for_owner(
             FLOATING_AUTOCOMPLETE_KEY,
             input,
             project_root,
             // No session yet — the launch creates it. Slash commands fall back
-            // to the defaults the server lists without a session.
+            // to the defaults the server lists without a session; `$` chat
+            // refs fall back to the card's selected project.
             None,
+            chat_scope_project_id.as_deref(),
             window,
             cx,
         );

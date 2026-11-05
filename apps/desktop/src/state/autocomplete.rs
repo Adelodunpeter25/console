@@ -48,15 +48,18 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) -> Option<AutocompleteView> {
         let composer = self.composer_for_pane(pane_id);
-        let project_root = self
-            .selected_project_for_pane(pane_id)
+        let project = self.selected_project_for_pane(pane_id);
+        let project_root = project
+            .as_ref()
             .map(|project| project.path.clone())
             .unwrap_or_default();
+        let chat_scope_project_id = project.as_ref().map(|project| project.id.clone());
         self.composer_autocomplete_for_owner(
             pane_id,
             composer,
             project_root,
             session_id,
+            chat_scope_project_id.as_deref(),
             window,
             cx,
         )
@@ -65,12 +68,18 @@ impl ConsoleDesktopApp {
     /// Same as [`Self::composer_autocomplete_for_pane`], but for any composer
     /// input rather than a pane's — the floating composer has no pane, and its
     /// project is whatever the card has selected.
+    ///
+    /// `chat_scope_project_id` scopes `$` chat refs when no session exists
+    /// yet (the floating composer, or a fresh pane): the card's or pane's
+    /// selected project stands in for the session's own project.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn composer_autocomplete_for_owner(
         &mut self,
         owner: &str,
         composer: Entity<ComposerInput>,
         project_root: String,
         session_id: Option<&str>,
+        chat_scope_project_id: Option<&str>,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AutocompleteView> {
@@ -100,12 +109,16 @@ impl ConsoleDesktopApp {
         }
 
         let session_key = session_id.unwrap_or_default().to_owned();
+        let scope_key = chat_scope_project_id.unwrap_or_default();
         // `$` chat refs need no backend round trip: the app already holds
         // every session header, so the same-project siblings are a local
-        // filter (mirroring the server's ResolveReference scope).
-        if state.chat_key.as_deref() != Some(session_key.as_str()) {
-            state.chat_key = Some(session_key.clone());
-            state.chats = chat_ref_candidates(&self.sessions, session_id);
+        // filter (mirroring the server's ResolveReference scope). With no
+        // session yet, the selected project scopes the candidates instead.
+        let chat_key = format!("{session_key}\u{0}{scope_key}");
+        if state.chat_key.as_deref() != Some(chat_key.as_str()) {
+            state.chat_key = Some(chat_key);
+            state.chats =
+                chat_ref_candidates(&self.sessions, session_id, chat_scope_project_id);
         }
         let session_for_request = (!session_key.is_empty()).then(|| session_key.clone());
         let command_key = session_key.clone();
@@ -394,10 +407,24 @@ impl ConsoleDesktopApp {
 
 /// Same-project siblings of the current chat, excluding the chat itself —
 /// the exact scope the server resolves `$` refs in (project first, cwd as
-/// the fallback). No current session means no scope, hence no candidates.
-fn chat_ref_candidates(all: &[SessionHeader], current_id: Option<&str>) -> Vec<SessionHeader> {
+/// the fallback). No current session falls back to the scope project's chats.
+fn chat_ref_candidates(
+    all: &[SessionHeader],
+    current_id: Option<&str>,
+    scope_project_id: Option<&str>,
+) -> Vec<SessionHeader> {
     let Some(current) = current_id.and_then(|id| all.iter().find(|s| s.id == id)) else {
-        return Vec::new();
+        // No session yet (floating composer, fresh pane): fall back to the
+        // selected project's chats. Without a project to scope to there is
+        // nothing sensible to suggest.
+        return match scope_project_id {
+            Some(project_id) => all
+                .iter()
+                .filter(|s| s.project_id.as_deref() == Some(project_id))
+                .cloned()
+                .collect(),
+            None => Vec::new(),
+        };
     };
     if let Some(project_id) = current.project_id.as_deref() {
         return all
