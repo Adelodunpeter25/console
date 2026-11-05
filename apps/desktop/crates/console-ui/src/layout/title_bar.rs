@@ -12,6 +12,7 @@ use gpui::{
     Styled, Window, div, prelude::FluentBuilder, px,
 };
 
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::{TITLEBAR_HEIGHT, Theme};
 
@@ -129,6 +130,7 @@ impl RenderOnce for TitleBar {
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
                             .on_click(move |_, window, cx| (on_toggle)(window, cx))
+                            .tooltip(Tooltip::text("Toggle sidebar"))
                             .child(app_icon(IconName::PanelLeft, 14.0, theme.text_tertiary)),
                         LeadingAction::Back(on_back) => div()
                             .id("titlebar-back")
@@ -142,6 +144,7 @@ impl RenderOnce for TitleBar {
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
                             .on_click(move |_, window, cx| (on_back)(window, cx))
+                            .tooltip(Tooltip::text("Back"))
                             .child(app_icon(IconName::ArrowLeft, 14.0, theme.text_tertiary)),
                     }),
             )
@@ -186,6 +189,7 @@ impl RenderOnce for TitleBar {
                                 .hover(|s| s.bg(theme.overlay))
                                 .active(|s| s.bg(theme.overlay_strong))
                                 .on_click(move |_, window, cx| (on_toggle_right)(window, cx))
+                                .tooltip(Tooltip::text("Toggle inspector"))
                                 .child(app_icon(IconName::PanelRight, 14.0, theme.text_tertiary)),
                         )
                     }),

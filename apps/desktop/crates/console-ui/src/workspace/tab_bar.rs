@@ -9,6 +9,7 @@ use gpui::{
 };
 
 use crate::primitives::file_icon;
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::file_icons::file_icon_for_name;
 use crate::primitives::{IconName, app_icon, provider_app_icon};
 use crate::theme::{TABBAR_HEIGHT, Theme};
@@ -379,6 +380,7 @@ impl RenderOnce for WorkspaceTabBar {
                                     cx.stop_propagation();
                                     (on_new)(pane_id.clone(), window, cx);
                                 })
+                                .tooltip(Tooltip::text("New tab"))
                                 .child(app_icon(IconName::Plus, 12.0, theme.text_ghost)),
                         )
                     }),
@@ -398,6 +400,7 @@ impl RenderOnce for WorkspaceTabBar {
                             cx.stop_propagation();
                             (on_close_pane)(pane_id.clone(), window, cx);
                         })
+                        .tooltip(Tooltip::text("Close pane"))
                         .child(app_icon(IconName::X, 13.0, theme.text_ghost)),
                 )
             })

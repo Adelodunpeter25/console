@@ -16,6 +16,7 @@ use crate::common::copy_button;
 use crate::markdown::render::MONO_FAMILY;
 use crate::markdown::render::TranscriptSelection;
 use crate::primitives::icons::{IconName, app_icon};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::scrollbar::ScrollbarState;
 use crate::theme::Theme;
 use crate::viewer::LogsViewer;
@@ -374,6 +375,11 @@ impl RenderOnce for RunPanel {
                                         (on_run)(toggle_id.clone(), window, cx);
                                     }
                                 })
+                                .tooltip(Tooltip::text(if is_running || row.starting {
+                                    "Stop script"
+                                } else {
+                                    "Run script"
+                                }))
                                 .child(app_icon(
                                     if is_running || row.starting {
                                         IconName::StopFilled
