@@ -681,21 +681,20 @@ impl TranscriptView {
         let button = |id: &'static str, icon: IconName| {
             div()
                 .id(id)
-                .size(px(28.0))
-                .rounded(px(14.0))
+                .w(px(32.0))
+                .h(px(32.0))
                 .flex()
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
                 .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 14.0, theme.text_secondary))
+                .child(app_icon(icon, 12.0, theme.text_secondary))
         };
         let mut pill = div()
             .flex()
             .items_center()
-            .gap(px(2.0))
-            .p(px(3.0))
-            .rounded(px(18.0))
+            .overflow_hidden()
+            .rounded(px(17.0))
             .border_1()
             .border_color(theme.border)
             .bg(theme.raised);
@@ -711,7 +710,7 @@ impl TranscriptView {
         }
         if show_down {
             if !prompts.is_empty() {
-                pill = pill.child(div().w(px(1.0)).h(px(16.0)).bg(theme.border));
+                pill = pill.child(div().w(px(1.0)).h(px(16.0)).flex_none().bg(theme.border));
             }
             pill = pill.child(
                 button("transcript-scroll-bottom", IconName::ArrowDown)
@@ -743,12 +742,19 @@ impl TranscriptView {
                             .child(line),
                     )
                     .when_some(created_at, |element, created_at| {
+                        // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
+                        let age = crate::utils::format_time_ago(created_at);
+                        let age = if age.contains(' ') {
+                            age
+                        } else {
+                            format!("{age} ago")
+                        };
                         element.child(
                             div()
                                 .flex_none()
                                 .text_size(px(12.0))
                                 .text_color(theme.text_tertiary)
-                                .child(format!("{} ago", crate::utils::format_time_ago(created_at))),
+                                .child(age),
                         )
                     })
             });
