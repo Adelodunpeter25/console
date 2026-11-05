@@ -1059,12 +1059,6 @@ impl Render for ConsoleDesktopApp {
                     )
                     // Conductor-style Right Sidebar Inspector (All files & Changes & Subagents + Terminal bottom split)
                     .when(self.right_sidebar_visible, |el| {
-                        let subagents = self
-                            .selected_session_id
-                            .as_deref()
-                            .and_then(|id| self.session_subagents.get(id).cloned())
-                            .unwrap_or_else(|| Rc::new(Vec::new()));
-
                         self.ensure_right_sidebar_terminal(window, cx);
                         self.ensure_project_scripts(cx);
 

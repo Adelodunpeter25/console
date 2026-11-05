@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use console_ui::{AuxiliaryTab, InspectorTab, InspectorWatches, PrimaryTab};

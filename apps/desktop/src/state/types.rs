@@ -16,7 +16,6 @@ use console_ui::{
     PickerTab, ProjectBrowsePalette, QuickOpenPalette, TranscriptView,
 };
 use gpui::{Entity, ListState, Subscription};
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::persistence;

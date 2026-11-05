@@ -731,9 +731,9 @@ impl RenderOnce for SidebarView {
                         &list_on_commit_rename,
                         &list_on_cancel_rename,
                         &list_on_toggle_pin,
-                        &list_on_del,
                         &list_on_settle,
                         &list_on_unsettle,
+                        &list_on_del,
                         list_renaming_session_id.as_deref(),
                         list_rename_input.clone(),
                     )
