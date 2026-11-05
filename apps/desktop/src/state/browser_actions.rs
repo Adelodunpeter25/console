@@ -2,8 +2,10 @@
 //!
 //! Handles `AgentSessionEvent::BrowserAction` requests from the backend agent
 //! (`navigate`, `run_js`, `get_content`, `query`, `tabs`, `switch_tab`, `close_tab`) against open workspace browser tabs,
-//! scoped to the requesting chat: only the browser tabs that chat's agent
-//! created are visible, targetable, or listed to it.
+//! scoped to the requesting chat's workspace: every browser tab in the same
+//! workspace as the chat — whether the agent or the user opened it — is
+//! visible and targetable. Only tabs the chat's agent created can be closed,
+//! and each chat keeps its own default target.
 
 use console_core::{BrowserActionRequest, ResolveBrowserActionDto};
 use console_ui::browser::driver::Request as DriverRequest;
@@ -152,11 +154,12 @@ impl ConsoleDesktopApp {
                 }
 
                 // An explicit tabId wins; otherwise reuse a tab already on this
-                // URL/origin; otherwise open a new tab — all within this chat's
-                // own tabs. A `new_tab` request (the server's browser kernel
-                // opening a tab it will own) skips the reuse entirely: reset
-                // later closes what the kernel opened, which must never be a
-                // tab someone already had.
+                // URL/origin; otherwise open a new tab — all within this
+                // chat's workspace (its own or the user's tabs alike). A
+                // `new_tab` request (the server's browser kernel opening a tab
+                // it will own) skips the reuse entirely: reset later closes
+                // what the kernel opened, which must never be a tab someone
+                // already had.
                 let forced_new = req.new_tab.unwrap_or(false);
                 let target = if forced_new {
                     None
@@ -177,7 +180,7 @@ impl ConsoleDesktopApp {
                     }
                 };
                 let known_ids: HashSet<String> =
-                    self.session_browser_ids(&sess_id).into_iter().collect();
+                    self.session_owned_browser_ids(&sess_id).into_iter().collect();
                 let matching_view = target.map(|(_, view)| view);
                 if let Some(view) = &matching_view {
                     // A reused tab may never have been rendered (opened in the
@@ -406,8 +409,8 @@ impl ConsoleDesktopApp {
                     );
                     return;
                 };
-                // Unknown or other-chat ids error out with this chat's tab
-                // listing; never fall back to another tab.
+                // Unknown ids error out with the workspace tab listing; never
+                // fall back to another tab.
                 let (tab_id, view) = match self.pick_browser_view(
                     &sess_id,
                     Some(requested),
@@ -428,6 +431,25 @@ impl ConsoleDesktopApp {
                         return;
                     }
                 };
+                // Any tab in the workspace can be inspected or switched to,
+                // but only tabs this chat's agent created can be closed here.
+                if action == "close_tab"
+                    && !self
+                        .session_owned_browser_ids(&sess_id)
+                        .iter()
+                        .any(|owned| owned == &tab_id)
+                {
+                    self.resolve_browser_action_result(
+                        &sess_id,
+                        request_id,
+                        None,
+                        Some(format!(
+                            "Tab '{tab_id}' was not opened by this chat's agent — it can't be closed from here."
+                        )),
+                        cx,
+                    );
+                    return;
+                }
                 let (title, url) = {
                     let bv = view.read(cx);
                     (
@@ -446,7 +468,7 @@ impl ConsoleDesktopApp {
                     self.close_agent_browser_tab(&tab_id, cx);
                     let pointer = self.agent_browser_tabs.get(&sess_id).cloned();
                     if pointer.as_deref() == Some(tab_id.as_str()) {
-                        match self.most_recent_session_tab(&sess_id) {
+                        match self.most_recent_tab(self.session_workspace_browser_ids(&sess_id)) {
                             Some(next) => {
                                 self.agent_browser_tabs.insert(sess_id.clone(), next);
                             }
@@ -457,7 +479,7 @@ impl ConsoleDesktopApp {
                     }
                     let next = match self.agent_browser_tabs.get(&sess_id) {
                         Some(id) => format!("Agent target is now tab '{id}'."),
-                        None => "No browser tabs are open in this chat.".to_string(),
+                        None => "No browser tabs are open in this workspace.".to_string(),
                     };
                     format!(
                         "Tab: {tab_id}\nClosed: {url}\n{next}\nOpen tabs:\n{}",
@@ -844,7 +866,7 @@ impl ConsoleDesktopApp {
     ) {
         if retries_left == 0 {
             let error = format!(
-                "No active or matching browser tab in this chat. Open tabs:\n{}",
+                "No active or matching browser tab in this workspace. Open tabs:\n{}",
                 self.describe_browser_tabs(session_id, cx)
             );
             self.resolve_browser_action_result(session_id, req.request_id, None, Some(error), cx);
@@ -886,28 +908,57 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// The most recently used open browser tab owned by this chat (by tab
-    /// `last_active_at_ms`), else the lowest owned id; `None` when the chat
-    /// has no browser tabs. Scoped to the chat so a never-owned tab can
-    /// never become the agent's default target.
-    fn most_recent_session_tab(&self, session_id: &str) -> Option<String> {
-        let owned = self.session_browser_ids(session_id);
+    /// Ids of every browser tab in the same workspace tree as the chat —
+    /// whether the agent or the user opened it. Always the same tree as the
+    /// chat, never another workspace's; browser actions are scoped to this
+    /// set. Falls back to the active tree when the chat isn't rendered in
+    /// any tree. Sorted, deduplicated.
+    fn session_workspace_browser_ids(&self, session_id: &str) -> Vec<String> {
+        let chat_tab_id = format!("chat:{session_id}");
+        if Self::tree_contains_chat(&self.workspace_root, &chat_tab_id) {
+            return Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(
+                &self.workspace_root,
+            ));
+        }
+        for root in self.project_workspace_roots.values() {
+            if Self::tree_contains_chat(root, &chat_tab_id) {
+                return Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(root));
+            }
+        }
+        // Chat rendered nowhere: fall back to the visible workspace.
+        Self::sorted_browser_ids(console_ui::workspace::ops::browser_ids(
+            &self.workspace_root,
+        ))
+    }
+
+    fn tree_contains_chat(root: &console_core::WorkspaceNode, chat_tab_id: &str) -> bool {
+        root.leaves()
+            .into_iter()
+            .any(|leaf| leaf.tabs.iter().any(|tab| tab.id() == chat_tab_id))
+    }
+
+    fn sorted_browser_ids(mut ids: Vec<String>) -> Vec<String> {
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    /// The most recently used tab in `ids` with a live view (by tab
+    /// `last_active_at_ms`), else the lowest id with one; `None` when none
+    /// has a view.
+    fn most_recent_tab(&self, ids: Vec<String>) -> Option<String> {
         let mut best: Option<(i64, String)> = None;
-        for id in &owned {
-            let ts = self
-                .browser_tab_last_active_ms(id)
-                .unwrap_or(0);
-            let has_view = self.browser_views.contains_key(id);
-            if !has_view {
+        for id in &ids {
+            if !self.browser_views.contains_key(id) {
                 continue;
             }
+            let ts = self.browser_tab_last_active_ms(id).unwrap_or(0);
             if best.as_ref().map_or(true, |(b, _)| ts > *b) {
                 best = Some((ts, id.clone()));
             }
         }
         best.map(|(_, id)| id).or_else(|| {
-            owned
-                .iter()
+            ids.iter()
                 .find(|id| self.browser_views.contains_key(*id))
                 .cloned()
         })
@@ -949,8 +1000,10 @@ impl ConsoleDesktopApp {
     }
 
     /// Ids of the browser tabs this chat's agent created, across the active
-    /// workspace and every stashed workspace. Sorted, deduplicated.
-    fn session_browser_ids(&self, session_id: &str) -> Vec<String> {
+    /// workspace and every stashed workspace. Used to tell agent-created tabs
+    /// apart from the user's (only agent-created tabs can be closed by the
+    /// agent) and to detect the tab a `navigate` opens. Sorted, deduplicated.
+    fn session_owned_browser_ids(&self, session_id: &str) -> Vec<String> {
         let mut ids = Vec::new();
         let mut record = |tab: &console_core::WorkspaceTabConfig| {
             if let console_core::WorkspaceTabConfig::Browser {
@@ -984,7 +1037,7 @@ impl ConsoleDesktopApp {
     /// The same tab list `describe_browser_tabs` renders, as JSON rows
     /// ({id, url, title, active}) for the server's browser kernel.
     fn browser_tabs_json(&self, session_id: &str, cx: &App) -> String {
-        let ids = self.session_browser_ids(session_id);
+        let ids = self.session_workspace_browser_ids(session_id);
         let target = self.agent_browser_tabs.get(session_id);
         let rows: Vec<serde_json::Value> = ids
             .iter()
@@ -1010,12 +1063,12 @@ impl ConsoleDesktopApp {
         serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_string())
     }
 
-    /// One line per browser tab owned by this chat: id, title, URL, and which
-    /// one is the agent's current target.
+    /// One line per browser tab in this chat's workspace: id, title, URL, and
+    /// which one is the agent's current target.
     fn describe_browser_tabs(&self, session_id: &str, cx: &App) -> String {
-        let ids = self.session_browser_ids(session_id);
+        let ids = self.session_workspace_browser_ids(session_id);
         if ids.is_empty() {
-            return "No browser tabs are open in this chat. Use navigate to open one.".to_string();
+            return "No browser tabs are open in this workspace. Use navigate to open one.".to_string();
         }
         let target = self.agent_browser_tabs.get(session_id);
         ids.iter()
@@ -1046,12 +1099,13 @@ impl ConsoleDesktopApp {
             .join("\n")
     }
 
-    /// Picks the tab an action should run against, from this chat's tabs only.
-    /// - `tab_id` given: exactly that tab if the chat owns it, else an error
-    ///   listing this chat's tabs (owned-but-not-yet-rendered falls through).
+    /// Picks the tab an action should run against. Every tab in the chat's
+    /// workspace is a valid target — the agent's or the user's.
+    /// - `tab_id` given: exactly that tab if it's in this workspace, else an
+    ///   error listing it (a tab that isn't loaded yet falls through).
     /// - otherwise a tab matching `url` (when `allow_url_match`), else the
-    ///   chat's agent target, else the chat's most recent own tab.
-    /// `Ok(None)` means no tab exists yet in this chat.
+    ///   chat's agent target, else this workspace's most recently used tab.
+    /// `Ok(None)` means no tab exists yet in this workspace.
     fn pick_browser_view(
         &self,
         session_id: &str,
@@ -1060,11 +1114,11 @@ impl ConsoleDesktopApp {
         allow_url_match: bool,
         cx: &App,
     ) -> Result<Option<(String, Entity<BrowserView>)>, String> {
-        let owned = self.session_browser_ids(session_id);
+        let visible = self.session_workspace_browser_ids(session_id);
         if let Some(id) = tab_id.map(str::trim).filter(|s| !s.is_empty()) {
-            if !owned.iter().any(|o| o == id) {
+            if !visible.iter().any(|o| o == id) {
                 return Err(format!(
-                    "No browser tab with id '{id}' in this chat. Open tabs:\n{}",
+                    "No browser tab with id '{id}' in this workspace. Open tabs:\n{}",
                     self.describe_browser_tabs(session_id, cx)
                 ));
             }
@@ -1083,27 +1137,27 @@ impl ConsoleDesktopApp {
         // Prefer the tab the agent last worked in: `navigate` opens tabs in the
         // background, so the visible tab is often not the one the agent means.
         if let Some(id) = self.agent_browser_tabs.get(session_id) {
-            if owned.iter().any(|o| o == id) {
+            if visible.iter().any(|o| o == id) {
                 if let Some(view) = self.browser_views.get(id) {
                     return Ok(Some((id.clone(), view.clone())));
                 }
             }
         }
-        // Fall back to the chat's most recent own tab.
+        // Fall back to this workspace's most recent tab.
         Ok(self
-            .most_recent_session_tab(session_id)
+            .most_recent_tab(visible)
             .and_then(|id| self.browser_views.get(&id).cloned().map(|view| (id, view))))
     }
 
-    /// Warning shown when several of the chat's tabs are open and the agent
-    /// named none, so a wrong-tab default is visible at the top of the result.
+    /// Warning shown when several tabs are open and the agent named none, so
+    /// a wrong-tab default is visible at the top of the result.
     fn tab_choice_note(&self, session_id: &str, explicit: bool, chosen: &str, cx: &App) -> Option<String> {
-        let count = self.session_browser_ids(session_id).len();
+        let count = self.session_workspace_browser_ids(session_id).len();
         if explicit || count < 2 {
             return None;
         }
         Some(format!(
-            "Note: {} tabs are open in this chat and no tabId was given, so tab '{}' was used (the tab this chat last navigated or acted on). Pass tabId to target another. Open tabs:\n{}",
+            "Note: {} tabs are open in this workspace and no tabId was given, so tab '{}' was used (the tab this chat last navigated or acted on). Pass tabId to target another. Open tabs:\n{}",
             count,
             chosen,
             self.describe_browser_tabs(session_id, cx)
@@ -1111,8 +1165,8 @@ impl ConsoleDesktopApp {
     }
 
     /// The tab a navigation is acting on: the reused one, or the newly opened
-    /// one — detected as a browser tab owned by this chat that wasn't known
-    /// before the navigation started.
+    /// one — detected as a browser tab this chat's agent created that wasn't
+    /// known before the navigation started.
     fn navigation_view(
         &self,
         session_id: &str,
@@ -1128,7 +1182,7 @@ impl ConsoleDesktopApp {
                 .unwrap_or_default();
             return Some((id, view.clone()));
         }
-        self.session_browser_ids(session_id)
+        self.session_owned_browser_ids(session_id)
             .into_iter()
             .find(|id| !known_ids.contains(id))
             .and_then(|id| self.browser_views.get(&id).cloned().map(|view| (id, view)))
@@ -1164,8 +1218,8 @@ impl ConsoleDesktopApp {
         ))
     }
 
-    /// Finds a chat-owned tab whose URL matches or shares the origin/prefix of
-    /// `target_url`.
+    /// Finds a tab in this chat's workspace whose URL matches or shares the
+    /// origin/prefix of `target_url`.
     fn find_matching_browser_view(
         &self,
         session_id: &str,
@@ -1173,7 +1227,7 @@ impl ConsoleDesktopApp {
         cx: &App,
     ) -> Option<(String, Entity<BrowserView>)> {
         let clean_target = target_url.trim().trim_end_matches('/');
-        for id in self.session_browser_ids(session_id) {
+        for id in self.session_workspace_browser_ids(session_id) {
             let Some(view) = self.browser_views.get(&id) else {
                 continue;
             };
@@ -1194,7 +1248,7 @@ impl ConsoleDesktopApp {
     /// lives (active workspace tree or a stashed workspace tree), dispose the
     /// now-unreferenced webviews, and drop the chat's agent target pointer.
     pub(crate) fn close_session_browser_tabs(&mut self, session_id: &str, cx: &mut Context<Self>) {
-        let owned = self.session_browser_ids(session_id);
+        let owned = self.session_owned_browser_ids(session_id);
         if owned.is_empty() {
             self.agent_browser_tabs.remove(session_id);
             return;
