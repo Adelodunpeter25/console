@@ -266,14 +266,12 @@ func renderCritical(mode ApprovalMode) string {
 	if mode == PlanMode {
 		return strings.Join([]string{
 			"<critical>",
-			"- Each response MUST advance the task.",
 			"- Default to discussion and questions; do not write files or implement features.",
 			"</critical>",
 		}, "\n")
 	}
 	return strings.Join([]string{
 		"<critical>",
-		"- Each response MUST advance the task.",
 		"- Default to informed action; do not ask for confirmation when tools or repo context can answer.",
 		"</critical>",
 	}, "\n")
@@ -304,18 +302,14 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 	case AlwaysAsk:
 		return strings.Join([]string{
 			heading, tag,
-			"You are in Normal mode. Use tools freely, including writes, edits, and command execution.",
-			"Restricted actions trigger an approval dialog for the user automatically; never use the ask tool to request permission and never pause to ask permission yourself.",
-			"Do not claim a restricted action was performed until it is approved.",
-			"If approval is denied, stop and report the denial rather than retrying silently.",
+			"You are in Normal mode. Use tools freely, including writes and commands; restricted actions trigger an approval dialog automatically.",
+			"Never pause or use the ask tool to request permission; don't claim an action ran before it's approved, and if approval is denied, report it and stop.",
 			"</approval-mode-instructions>",
 		}, "\n")
 	case AcceptEdits:
 		return strings.Join([]string{
 			heading, tag,
-			"You are in Accept Edits mode. Read, write, and edit files directly without pausing for each edit.",
-			"Commands and higher-risk operations trigger an automatic approval dialog; never pause to ask permission yourself.",
-			"Proceed efficiently through multi-file edits; do not stop to ask permission for routine file writes.",
+			"You are in Accept Edits mode. Read, write, and edit files directly; commands and higher-risk operations trigger an approval dialog — never pause to ask permission yourself.",
 			"</approval-mode-instructions>",
 		}, "\n")
 	case PlanMode:
