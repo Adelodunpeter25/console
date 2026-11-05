@@ -1683,6 +1683,8 @@ fn prompt_row(
     let id = prompt.id.clone();
     div()
         .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
+        // Full width, or the row sizes to its text and never truncates.
+        .w_full()
         .h(px(PROMPT_ROW_HEIGHT))
         .flex()
         .flex_none()
