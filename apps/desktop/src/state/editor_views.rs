@@ -87,12 +87,12 @@ impl ConsoleDesktopApp {
         let comment_tx = self.file_comment_tx.clone();
         let comment_path = path.to_string();
         let state = cx.new(|cx| {
-            let mut s = editor_ui::EditorState::readonly(content, lang);
+            // Editable mode: typing, caret motion, undo/redo, clipboard. The
+            // comment gutter still works alongside editing.
+            let mut s = editor_ui::EditorState::editable(content, lang);
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
-            // Review comments work in readonly mode; the gutter is opt-in so
-            // only file tabs get the "+" affordance.
             s.set_comment_gutter(true, cx);
             s.set_comment_target_handler(Some(Box::new(move |target| {
                 let _ = comment_tx.send(super::types::FileCommentRequest {
