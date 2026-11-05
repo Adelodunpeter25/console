@@ -4,6 +4,7 @@ package session
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +15,10 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
+// ErrSessionBusy refuses a settle: the session has a run in flight or a
+// queued prompt, so it is not finished work. The routes layer maps it to 409.
+var ErrSessionBusy = errors.New("session has an active run or queued prompt")
+
 type Service struct {
 	manager *db.DB
 	// backfilled remembers sessions whose old messages are all converted, so the
@@ -22,11 +27,19 @@ type Service struct {
 	// verified remembers which messages were already proven to rebuild from
 	// their parts exactly, so each is checked once per process.
 	verified verifiedSet
+	// isBusy reports whether a run is in flight on a session. Wired by the
+	// caller (the run service's IsActive) rather than imported, since run
+	// already depends on this package.
+	isBusy func(id string) bool
 }
 
 func New(manager *db.DB) *Service {
 	return &Service{manager: manager}
 }
+
+// SetBusyCheck wires the run-in-flight probe used by Settle. Called once at
+// startup, after the run service exists; nil (tests) means never busy.
+func (s *Service) SetBusyCheck(fn func(id string) bool) { s.isBusy = fn }
 
 // Fallback model and provider used when Create is not given one.
 const (
@@ -140,7 +153,7 @@ type ListFilter struct {
 }
 
 const sessionColumns = `id, title, cwd, project_id, model_id, provider, approval_mode,
-	thinking_level, pinned_at, created_at, updated_at, message_count, status, deleted_at,
+	thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
 	worktree_path, worktree_branch, worktree_repo`
 
 const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at DESC`
@@ -207,10 +220,11 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		var projectID sql.NullString
 		var thinkingLevel sql.NullString
 		var pinnedAt sql.NullInt64
+		var settledAt sql.NullInt64
 		var deletedAt sql.NullInt64
 		var wtPath, wtBranch, wtRepo sql.NullString
 		if err := rows.Scan(&h.ID, &h.Title, &h.Cwd, &projectID, &h.ModelID, &h.Provider,
-			&h.ApprovalMode, &thinkingLevel, &pinnedAt, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
+			&h.ApprovalMode, &thinkingLevel, &pinnedAt, &settledAt, &h.CreatedAt, &h.UpdatedAt, &h.MessageCount, &h.Status, &deletedAt,
 			&wtPath, &wtBranch, &wtRepo); err != nil {
 			return nil, err
 		}
@@ -229,6 +243,10 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 		if deletedAt.Valid {
 			v := deletedAt.Int64
 			h.DeletedAt = &v
+		}
+		if settledAt.Valid {
+			v := settledAt.Int64
+			h.SettledAt = &v
 		}
 		if wtPath.Valid && wtPath.String != "" {
 			h.Worktree = &types.SessionWorktree{
@@ -351,6 +369,42 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 	res, err := s.manager.Global().Exec(
 		`UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id = ?`,
 		now, now, sessionID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// Settle marks a session settled: finished enough to sit in the collapsed
+// Settled section, but kept. Idempotent — an already-settled session keeps
+// its original settled_at, so its position in the section does not jump — and
+// settling does not touch updated_at, because settling is not activity. A
+// session with a run in flight or a queued prompt is refused with
+// ErrSessionBusy: settling is for finished work.
+func (s *Service) Settle(sessionID string) (bool, error) {
+	if s.isBusy != nil && s.isBusy(sessionID) {
+		return false, ErrSessionBusy
+	}
+	if qp, err := s.GetQueuedPrompt(sessionID); err == nil && qp != nil {
+		return false, ErrSessionBusy
+	}
+	res, err := s.manager.Global().Exec(
+		`UPDATE sessions SET settled_at = COALESCE(settled_at, ?) WHERE id = ?`,
+		utils.NowMillis(), sessionID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// Unsettle clears the settled mark. It succeeds for any known id, even one
+// that was not settled, and has no busy limit: a settled chat is idle by
+// definition.
+func (s *Service) Unsettle(sessionID string) (bool, error) {
+	res, err := s.manager.Global().Exec(
+		`UPDATE sessions SET settled_at = NULL WHERE id = ?`, sessionID)
 	if err != nil {
 		return false, err
 	}

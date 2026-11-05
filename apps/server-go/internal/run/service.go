@@ -290,6 +290,22 @@ func (s *Service) Hub(sessionID string) *Hub {
 	return nil
 }
 
+// unsettleOnSend clears the settled mark when a prompt arrives (decision 3 of
+// settled-chats.md): a conversation you are still using must never sit in the
+// collapsed Settled section. Best-effort — a failure here is logged, never
+// returned, because the chat must still answer even if the mark survives.
+// Steer reaches this through QueuePrompt.
+func (s *Service) unsettleOnSend(sessionID string) {
+	unsettled, err := s.sessions.Unsettle(sessionID)
+	if err != nil {
+		slog.Warn("unsettle on send failed", "session", sessionID, "error", err)
+		return
+	}
+	if unsettled {
+		slog.Info("settled chat unsettled by send", "session", sessionID)
+	}
+}
+
 // StartRun validates the first turn and drives the run chain in the
 // background, returning the hub immediately for streaming. Staged prompts
 // drain as further turns on the same hub (see execute).
@@ -308,6 +324,9 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	if loaded == nil {
 		return nil, ErrNoSession
 	}
+	// The send itself is the un-settle: it happens before the run starts, so
+	// the event stream that follows already reflects the chat as active.
+	s.unsettleOnSend(sessionID)
 	// Fail fast on an unknown provider before streaming starts. The
 	// validated instance is reused for the first turn; later turns
 	// re-resolve only when the staged prompt switches provider.

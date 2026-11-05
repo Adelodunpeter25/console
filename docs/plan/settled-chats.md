@@ -26,9 +26,9 @@ Legend: ✅ done and verified · ◐ done, not verified · ⬜ not done.
 | Phase | State | Notes |
 | :--- | :--- | :--- |
 | 0 — decisions | ✅ | §0 |
-| 1 — storage + service | ⬜ | `settled_at` column, settle/unsettle, tests |
-| 2 — unsettle on send | ⬜ | one hook in the run start path |
-| 3 — API + proto | ⬜ | endpoints, `SessionHeader.settled_at`, fixtures |
+| 1 — storage + service | ✅ | `settled_at` column, settle/unsettle, tests |
+| 2 — unsettle on send | ✅ | StartRun + QueuePrompt (Steer inherits), best-effort hook |
+| 3 — API + proto | ✅ | endpoints, `SessionHeader.settled_at`, fixtures |
 | 4 — desktop client | ⬜ | `console-core` service + state |
 | 5 — desktop sidebar | ⬜ | Settled section, context menu |
 | 6 — Android | ⬜ | Settle action, collapsed Settled group |
