@@ -556,6 +556,8 @@ impl FloatingComposerView {
             .bg(gpui::black().opacity(0.35))
             .flex()
             .justify_center()
+            // Nudged left of center so it clears the eye-line of the sidebar.
+            .pr(px(64.0))
             .items_center()
             // Above true center reads better under the popup.
             .pb(px(160.0))
