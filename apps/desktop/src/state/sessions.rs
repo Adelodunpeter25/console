@@ -1208,12 +1208,12 @@ impl ConsoleDesktopApp {
                                     });
                                     let pane_for_jump = pane_id.clone();
                                     let app_for_jump = app_entity_for_older.clone();
-                                    t.set_on_jump_to_prompt(move |message_id, _window, cx| {
+                                    t.set_on_jump_to_prompt(move |from_end, _window, cx| {
                                         if let Some(app) = app_for_jump.upgrade() {
                                             app.update(cx, |this, cx| {
                                                 this.jump_to_prompt_for_pane(
                                                     pane_for_jump.clone(),
-                                                    message_id,
+                                                    from_end,
                                                     cx,
                                                 );
                                             });

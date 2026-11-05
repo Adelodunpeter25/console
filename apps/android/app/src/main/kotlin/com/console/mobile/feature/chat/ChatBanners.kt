@@ -90,41 +90,49 @@ fun ComposerPills(
     onSubagents: () -> Unit,
     onShells: () -> Unit,
     onChanges: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0) return
+    if (!showTasks && subagents.isEmpty() && shellCount == 0 && changes.files == 0 && trailing == null) return
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 10.dp).padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (changes.files > 0) {
-            ChangesPill(changes = changes, onClick = onChanges)
+        Row(
+            modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (changes.files > 0) {
+                ChangesPill(changes = changes, onClick = onChanges)
+            }
+            if (showTasks) {
+                ContextPill(
+                    icon = TablerIcons.Outline.ListCheck,
+                    text = "$completedTasks/$totalTasks tasks",
+                    running = false,
+                    onClick = onTasks,
+                )
+            }
+            if (subagents.isNotEmpty()) {
+                ContextPill(
+                    icon = TablerIcons.Outline.GridDots,
+                    text = "${subagents.size} ${if (subagents.size == 1) "subagent" else "subagents"}",
+                    running = subagents.any { it.status == "running" },
+                    onClick = onSubagents,
+                )
+            }
+            if (shellCount > 0) {
+                ContextPill(
+                    icon = TablerIcons.Outline.Terminal2,
+                    text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
+                    running = true,
+                    onClick = onShells,
+                )
+            }
         }
-        if (showTasks) {
-            ContextPill(
-                icon = TablerIcons.Outline.ListCheck,
-                text = "$completedTasks/$totalTasks tasks",
-                running = false,
-                onClick = onTasks,
-            )
-        }
-        if (subagents.isNotEmpty()) {
-            ContextPill(
-                icon = TablerIcons.Outline.GridDots,
-                text = "${subagents.size} ${if (subagents.size == 1) "subagent" else "subagents"}",
-                running = subagents.any { it.status == "running" },
-                onClick = onSubagents,
-            )
-        }
-        if (shellCount > 0) {
-            ContextPill(
-                icon = TablerIcons.Outline.Terminal2,
-                text = "$shellCount ${if (shellCount == 1) "shell" else "shells"}",
-                running = true,
-                onClick = onShells,
-            )
-        }
+        // Sits on the same level as the pills, pinned to the right.
+        trailing?.invoke()
     }
 }
 

@@ -172,12 +172,13 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Scroll the transcript to a prompt by message id. A prompt that has not
-    /// been paged in yet is reached by loading older pages until it arrives.
+    /// Scroll the transcript to the prompt `from_end` prompts back from the
+    /// newest (0 = newest). A prompt that has not been paged in yet is reached
+    /// by loading older pages until it arrives.
     pub fn jump_to_prompt_for_pane(
         &mut self,
         pane_id: String,
-        message_id: String,
+        from_end: usize,
         cx: &mut Context<Self>,
     ) {
         let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string())
@@ -185,7 +186,7 @@ impl ConsoleDesktopApp {
             return;
         };
         let transcript = self.transcript_for_pane(&pane_id);
-        if transcript.update(cx, |t, cx| t.jump_to_message(&message_id, cx)) {
+        if transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx)) {
             return;
         }
         let Some(pagination) = self.pagination_for_session(&session_id) else {
@@ -230,7 +231,7 @@ impl ConsoleDesktopApp {
                         });
                         this.set_pagination_for_session(&session_id, state, cx);
                         let found =
-                            transcript.update(cx, |t, cx| t.jump_to_message(&message_id, cx));
+                            transcript.update(cx, |t, cx| t.jump_to_prompt(from_end, cx));
                         // Keep paging only while the prompt is still missing.
                         (!found).then_some(state.next_cursor).flatten()
                     })

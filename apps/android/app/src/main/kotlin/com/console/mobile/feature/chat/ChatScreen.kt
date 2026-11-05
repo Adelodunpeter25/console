@@ -231,17 +231,22 @@ fun ChatScreen(
         },
     )
 
-    // Scroll to a prompt, paging older history in first when it is not loaded.
-    fun jumpToPrompt(messageId: String) {
+    // Scroll to the prompt that is `fromEnd` user messages back from the newest
+    // (0 = newest), paging older history in first when it is not loaded. Counting
+    // from the end needs no message id, which this session's own prompts lack.
+    fun jumpToPrompt(fromEnd: Int) {
         scope.launch {
             // Pause follow and older-page auto-loading so neither fights the jump.
             transcriptScroll.stopFollowing()
             transcriptScroll.blockAutoLoad()
-            if (!AppContainer.sessionRepository.loadUntilLoaded(sessionId, messageId)) return@launch
+            if (!AppContainer.sessionRepository.loadUntilUserMessages(sessionId, fromEnd + 1)) return@launch
             // The loaded messages reach the list a frame or two later.
-            repeat(10) {
-                val index = latestDisplayMessages.indexOfFirst { it.id == messageId }
-                if (index >= 0) {
+            repeat(10) { _ ->
+                val userIndexes = latestDisplayMessages.indices.filter {
+                    latestDisplayMessages[it] is com.console.mobile.data.model.UserMessage
+                }
+                val index = userIndexes.getOrNull(userIndexes.size - 1 - fromEnd) ?: -1
+                if (index >= 0 && userIndexes.size > fromEnd) {
                     try { transcriptScroll.listState.scrollToItem(index) } catch (_: Exception) {}
                     return@launch
                 }
@@ -304,20 +309,6 @@ fun ChatScreen(
 
         Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
             Column {
-                // Above the pills so it can never sit on them. The arrow half only
-                // shows while the reader is scrolled away from the latest message.
-                if (hasMessages) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(end = 16.dp).padding(bottom = 8.dp),
-                        contentAlignment = Alignment.CenterEnd,
-                    ) {
-                        ChatScrollPill(
-                            showScrollToBottom = transcriptScroll.showScrollToBottom,
-                            onOpenPrompts = { promptsSheet = true },
-                            onScrollToBottom = { transcriptScroll.scrollToBottom(scope) },
-                        )
-                    }
-                }
                 if (subagentPanelOpen && subagents.isNotEmpty()) {
                     SubagentFloatingPanel(subagents = subagents, onOpenDetails = { id ->
                         subagentPanelOpen = false
@@ -335,6 +326,17 @@ fun ChatScreen(
                     onSubagents = { subagentPanelOpen = !subagentPanelOpen },
                     onShells = { shellSheet = true },
                     onChanges = { jumpToProjectTab(MobileTab.Changes) },
+                    // The arrow half only shows while the reader is scrolled away
+                    // from the latest message.
+                    trailing = if (hasMessages) {
+                        {
+                            ChatScrollPill(
+                                showScrollToBottom = transcriptScroll.showScrollToBottom,
+                                onOpenPrompts = { promptsSheet = true },
+                                onScrollToBottom = { transcriptScroll.scrollToBottom(scope) },
+                            )
+                        }
+                    } else null,
                 )
                 chat.queuedPrompt?.let { queued ->
                     QueuedPromptCard(
@@ -370,9 +372,9 @@ fun ChatScreen(
     if (promptsSheet) {
         PromptsSheet(
             prompts = promptList?.prompts,
-            onSelect = { prompt ->
+            onSelect = { fromEnd ->
                 promptsSheet = false
-                jumpToPrompt(prompt.id)
+                jumpToPrompt(fromEnd)
             },
             onDismiss = { promptsSheet = false },
         )

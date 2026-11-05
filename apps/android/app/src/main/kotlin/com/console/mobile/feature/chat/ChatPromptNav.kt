@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -48,15 +48,15 @@ internal fun ChatScrollPill(
     onScrollToBottom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(17.dp)
     Row(
-        modifier = modifier.height(40.dp).clip(shape).background(NewTheme.Raised)
+        modifier = modifier.height(34.dp).clip(shape).background(NewTheme.Raised)
             .border(1.dp, Color.White.copy(alpha = 0.1f), shape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PillSection(TablerIcons.Outline.ListIcon, "Jump to prompt", onOpenPrompts)
         if (showScrollToBottom) {
-            Box(modifier = Modifier.width(1.dp).height(18.dp).background(Color.White.copy(alpha = 0.1f)))
+            Box(modifier = Modifier.width(1.dp).height(15.dp).background(Color.White.copy(alpha = 0.1f)))
             PillSection(TablerIcons.Outline.ArrowNarrowDown, "Scroll to bottom", onScrollToBottom)
         }
     }
@@ -65,22 +65,24 @@ internal fun ChatScrollPill(
 @Composable
 private fun PillSection(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        modifier = Modifier.width(46.dp).height(40.dp).clickable(onClick = onClick),
+        modifier = Modifier.width(38.dp).height(34.dp).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = NewTheme.TextSecondary, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = description, tint = NewTheme.TextSecondary, modifier = Modifier.size(15.dp))
     }
 }
 
 /**
  * Every prompt of the chat, oldest first, opening on the newest. The list
  * comes from the server (so it covers history not paged in yet) and is cached
- * by the caller; [prompts] is null until the first fetch lands.
+ * by the caller; [prompts] is null until the first fetch lands. A tap reports
+ * the prompt's position counted from the newest (0 = newest) rather than an id,
+ * because prompts sent this session have no server id on the client yet.
  */
 @Composable
 internal fun PromptsSheet(
     prompts: List<SessionPrompt>?,
-    onSelect: (SessionPrompt) -> Unit,
+    onSelect: (fromEnd: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     BaseSheet(onDismiss = onDismiss, scrollable = false) {
@@ -103,10 +105,10 @@ internal fun PromptsSheet(
             if (prompts.isNotEmpty()) listState.scrollToItem(prompts.size - 1, Int.MAX_VALUE)
         }
         LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false)) {
-            items(prompts, key = { it.id }) { prompt ->
+            itemsIndexed(prompts, key = { _, prompt -> prompt.id }) { index, prompt ->
                 Row(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-                        .clickable { onSelect(prompt) }.padding(horizontal = 4.dp, vertical = 12.dp),
+                        .clickable { onSelect(prompts.size - 1 - index) }.padding(horizontal = 4.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
                     Text(

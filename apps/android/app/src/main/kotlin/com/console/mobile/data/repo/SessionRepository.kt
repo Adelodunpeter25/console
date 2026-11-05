@@ -140,13 +140,15 @@ class SessionRepository(
     }
 
     /**
-     * Page older history in until the message [messageId] is loaded. Returns
-     * false when the start of history is reached or a fetch fails first.
+     * Page older history in until at least [count] user messages are loaded.
+     * Loaded history is always the newest contiguous slice, so the prompt that
+     * is Nth from the newest is loaded exactly when N+1 user messages are.
+     * Returns false when the start of history is reached or a fetch fails first.
      */
-    suspend fun loadUntilLoaded(sessionId: String, messageId: String): Boolean {
+    suspend fun loadUntilUserMessages(sessionId: String, count: Int): Boolean {
         while (true) {
             val state = chats.get(sessionId)
-            if (state.messages.any { it.id == messageId }) return true
+            if (state.messages.count { it is com.console.mobile.data.model.UserMessage } >= count) return true
             val before = state.nextCursor
             if (!state.hasMoreMessages || before == null) return false
             // A scroll-triggered page may be in flight; wait for it, then re-check.
@@ -160,7 +162,7 @@ class SessionRepository(
                 chatRepo.prependMessages(sessionId, detail.messages)
                 chatRepo.setPagination(sessionId, detail.hasMore, detail.nextCursor)
             } catch (e: Exception) {
-                android.util.Log.w("SessionRepository", "loadUntilLoaded($sessionId, $messageId) failed", e)
+                android.util.Log.w("SessionRepository", "loadUntilUserMessages($sessionId, $count) failed", e)
                 return false
             } finally {
                 olderInFlight.remove(sessionId)

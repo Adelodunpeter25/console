@@ -62,7 +62,7 @@ pub struct TranscriptView {
     /// different chat); reopening the popup refetches only then.
     prompts_stale: bool,
     on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-    on_jump_to_prompt: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    on_jump_to_prompt: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
     selection: TranscriptSelection,
     is_streaming: bool,
@@ -410,10 +410,11 @@ impl TranscriptView {
         self.on_request_prompts = Some(Rc::new(handler));
     }
 
-    /// Jumps to a prompt by message id, paging older history in if needed.
+    /// Jumps to a prompt, given as its position counted from the newest (0 =
+    /// newest), paging older history in if needed.
     pub fn set_on_jump_to_prompt(
         &mut self,
-        handler: impl Fn(String, &mut Window, &mut App) + 'static,
+        handler: impl Fn(usize, &mut Window, &mut App) + 'static,
     ) {
         self.on_jump_to_prompt = Some(Rc::new(handler));
     }
@@ -428,13 +429,22 @@ impl TranscriptView {
         cx.notify();
     }
 
-    /// Scroll so the loaded message with `id` is at the top of the viewport.
-    /// Returns false when that message is not loaded yet.
-    pub fn jump_to_message(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
-        let Some(row) = self
+    /// Scroll so the user prompt `from_end` prompts back from the newest (0 =
+    /// newest) is at the top of the viewport. Counting from the end needs no
+    /// message id, which prompts sent this session do not have yet. Returns
+    /// false when that prompt is not loaded.
+    pub fn jump_to_prompt(&mut self, from_end: usize, cx: &mut Context<Self>) -> bool {
+        let user_rows: Vec<usize> = self
             .messages
             .iter()
-            .position(|message| matches!(message, AgentMessage::User { id: Some(m), .. } if m == id))
+            .enumerate()
+            .filter(|(_, message)| matches!(message, AgentMessage::User { .. }))
+            .map(|(row, _)| row)
+            .collect();
+        let Some(row) = user_rows
+            .len()
+            .checked_sub(from_end + 1)
+            .map(|at| user_rows[at])
         else {
             return false;
         };
@@ -758,7 +768,8 @@ impl TranscriptView {
         if self.prompts_open && has_prompts {
             let prompts = self.prompts.clone();
             let entity = cx.entity().downgrade();
-            let visible_rows = prompts.len().min(PROMPT_POPUP_MAX_ROWS);
+            let total = prompts.len();
+            let visible_rows = total.min(PROMPT_POPUP_MAX_ROWS);
             let body = if prompts.is_empty() {
                 div()
                     .px(px(12.0))
@@ -774,7 +785,7 @@ impl TranscriptView {
                     prompts.len(),
                     move |range, _window, _cx| {
                         range
-                            .map(|ix| prompt_row(&prompts[ix], theme, entity.clone()))
+                            .map(|ix| prompt_row(&prompts[ix], total - 1 - ix, theme, entity.clone()))
                             .collect::<Vec<_>>()
                     },
                 )
@@ -1700,10 +1711,10 @@ const PROMPT_POPUP_MAX_ROWS: usize = 7;
 
 fn prompt_row(
     prompt: &console_core::SessionPrompt,
+    from_end: usize,
     theme: Theme,
     entity: gpui::WeakEntity<TranscriptView>,
 ) -> gpui::AnyElement {
-    let id = prompt.id.clone();
     div()
         .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
         // Full width, or the row sizes to its text and never truncates.
@@ -1727,7 +1738,7 @@ fn prompt_row(
                 this.on_jump_to_prompt.clone()
             });
             if let Some(jump) = jump {
-                jump(id.clone(), window, cx);
+                jump(from_end, window, cx);
             }
         })
         .child(
