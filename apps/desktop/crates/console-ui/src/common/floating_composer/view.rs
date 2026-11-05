@@ -556,8 +556,7 @@ impl FloatingComposerView {
             .bg(gpui::black().opacity(0.35))
             .flex()
             .justify_center()
-            .items_end()
-            .pb(px(96.0))
+            .items_center()
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 on_dismiss(window, cx);
             })
