@@ -1726,6 +1726,9 @@ impl Render for BrowserView {
         }
         if self.annotation_focus_pending {
             self.annotation_focus_pending = false;
+            // The pick click leaves the webview as first responder; take
+            // the keyboard back so the composer can type.
+            self.reclaim_native_keyboard(cx);
             let input = self.annotation_input.clone();
             window.on_next_frame(move |window, cx| {
                 window.focus(&input.read(cx).focus(), cx);
