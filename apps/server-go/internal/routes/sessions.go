@@ -517,6 +517,21 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": data})
 	})
 
+	// GET /api/sessions/:id/prompts — every user prompt (id, time, one-line
+	// preview), oldest first, for "jump to prompt" lists. Ids match the loaded
+	// messages', so a client can find the row or page older history to it.
+	h.Get("/:id/prompts", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		prompts, err := sessions.ListPrompts(id)
+		if err != nil {
+			return sessionError(c, fiber.StatusInternalServerError, err.Error())
+		}
+		if prompts == nil {
+			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
+		}
+		return c.JSON(fiber.Map{"success": true, "data": prompts})
+	})
+
 	// GET /api/sessions/:id/changes — session file changes with optional turn filter.
 	h.Get("/:id/changes", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")

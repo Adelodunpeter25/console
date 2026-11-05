@@ -189,6 +189,10 @@ func (s *SessionService) Load(sessionID string, limit int64, before int64) (*typ
 	return loaded, err
 }
 
+func (s *SessionService) ListPrompts(sessionID string) ([]session.PromptEntry, error) {
+	return s.inner.ListPrompts(sessionID)
+}
+
 func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) {
 	return s.inner.Header(sessionID)
 }
