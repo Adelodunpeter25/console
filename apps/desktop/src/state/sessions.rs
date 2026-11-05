@@ -245,6 +245,72 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    /// Settle a chat (optimistic, like the pin toggle). The server refuses
+    /// while a run is in flight or a prompt is queued; the local mark rolls
+    /// back and the server's message shows on the error banner.
+    pub(crate) fn settle_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+        self.set_settled(session_id, true, cx);
+    }
+
+    /// Bring a settled chat back to active. Unsettling has no busy limit.
+    pub(crate) fn unsettle_session(&mut self, session_id: String, cx: &mut Context<Self>) {
+        self.set_settled(session_id, false, cx);
+    }
+
+    fn set_settled(&mut self, session_id: String, settled: bool, cx: &mut Context<Self>) {
+        let Some(previous) = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.settled_at)
+        else {
+            return;
+        };
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|session| session.id == session_id)
+        {
+            session.settled_at = if settled {
+                Some(chrono::Utc::now().timestamp_millis())
+            } else {
+                None
+            };
+        }
+        cx.notify();
+
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_entity, cx| {
+            let outcome = if settled {
+                client.sessions.settle(&session_id).await
+            } else {
+                client.sessions.unsettle(&session_id).await
+            };
+            match outcome {
+                Ok(()) => {}
+                Err(error) => {
+                    let message = format!("Unable to settle: {error}");
+                    cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                // Roll the optimistic mark back before
+                                // showing the server's refusal.
+                                if let Some(session) = Rc::make_mut(&mut this.sessions)
+                                    .iter_mut()
+                                    .find(|session| session.id == session_id)
+                                {
+                                    session.settled_at = previous;
+                                }
+                                this.set_error_for_session(&session_id, message, cx)
+                            });
+                        }
+                    });
+                }
+            }
+        })
+        .detach();
+    }
+
     /// Persist a settings change (model, provider, approval mode) on a pane's
     /// active session. Surfaces failures through the error banner.
     pub fn update_session_settings_for_pane(

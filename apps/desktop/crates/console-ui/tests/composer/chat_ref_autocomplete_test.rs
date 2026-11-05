@@ -21,6 +21,7 @@ fn header(id: &str, title: &str) -> SessionHeader {
         status: "done".to_string(),
         deleted_at: None,
         pinned_at: None,
+        settled_at: None,
         worktree: None,
     }
 }
