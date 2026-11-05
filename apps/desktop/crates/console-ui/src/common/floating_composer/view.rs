@@ -579,11 +579,7 @@ impl FloatingComposerView {
                     .shadow_lg()
                     .overflow_hidden()
                     .relative()
-                    // The suggestion popup is anchored to the card's bounds
-                    // via a probe, so this element is the positioning parent.
-                    // The popup opens below the card: the card sits near the
-                    // window top, so opening above would run out of room and
-                    // get snapped down over the card.
+                    // Probe the card's bounds; the popup opens below the card.
                     .when_some(autocomplete_anchor, |el, anchor_bounds| {
                         el.child(AutocompleteView::bounds_probe(anchor_bounds))
                     })

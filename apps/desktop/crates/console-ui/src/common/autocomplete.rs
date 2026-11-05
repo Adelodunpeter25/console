@@ -334,10 +334,7 @@ pub struct AutocompleteView {
     highlighted: usize,
     loading: bool,
     anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
-    /// Open downward from the anchor's bottom edge instead of upward from its
-    /// top edge. Surfaces near the window top (the floating composer) use
-    /// this: there is no room above, and window snapping would push the popup
-    /// down over the card it belongs to.
+    /// Open downward from the anchor's bottom edge instead of upward.
     open_below: bool,
     on_select: Rc<dyn Fn(AutocompleteItem, &mut Window, &mut App) + 'static>,
 }
