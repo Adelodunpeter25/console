@@ -75,6 +75,10 @@ name = "sidebar_title_test"
 path = "tests/sidebar/title_pending_test.rs"
 
 [[test]]
+name = "partition_settled_test"
+path = "tests/sidebar/partition_settled_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 
