@@ -48,6 +48,11 @@ impl ConsoleDesktopApp {
 
         let bid = browser_id.to_string();
         let sub = cx.observe(&view, move |this, view, cx| {
+            // The annotation popover floats above the native webview in GPUI,
+            // so an open popover (or address context menu) must hide the
+            // webview via the occlusion sync, and closing it must restore
+            // the live surface. The view notifies on every such change.
+            this.sync_workspace_webviews(cx);
             let (new_title, new_url) = {
                 let bv = view.read(cx);
                 let title = bv.tab_label().unwrap_or_else(|| "New Tab".to_string());
@@ -231,12 +236,6 @@ impl ConsoleDesktopApp {
         view.update(cx, |view, cx| view.ensure_host(window, cx));
         cx.notify();
         Some(view)
-    }
-
-    /// Switch the sidebar browser to one of the chat's tabs (strip click).
-    pub fn select_sidebar_browser_tab(&mut self, browser_id: String, cx: &mut Context<Self>) {
-        self.inspector_browser_tab_id = Some(browser_id);
-        cx.notify();
     }
 
     /// Drop a browser tab's workspace entries so it renders only in the

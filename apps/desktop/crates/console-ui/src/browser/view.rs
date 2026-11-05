@@ -969,11 +969,7 @@ impl BrowserView {
                 self.snapshot_pending = false;
                 self.snapshot_epoch += 1;
             }
-        } else if occlusion_started
-            && !self.snapshot_pending
-            && self.snapshot.is_none()
-            && self.active_inspection.is_none()
-        {
+        } else if occlusion_started && !self.snapshot_pending && self.snapshot.is_none() {
             self.snapshot_pending = true;
             let epoch = self.snapshot_epoch;
             let slot = crate::browser::host::SnapshotSlot::default();
