@@ -114,6 +114,25 @@ class ProjectRepository(
         updated
     }
 
+    /**
+     * Settle (or un-settle) a chat. The server refuses settling while a run is
+     * active or a prompt is queued; the exception carries its message and the
+     * local mark is only applied after the call succeeds.
+     */
+    suspend fun settleSession(id: String, settled: Boolean) = withContext(Dispatchers.IO) {
+        if (settled) api.settleSession(id) else api.unsettleSession(id)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.state.value.sessions.firstOrNull { it.id == id }?.let { header ->
+                val patch = if (settled) {
+                    header.copy(settled_at = System.currentTimeMillis())
+                } else {
+                    header.copy(settled_at = null)
+                }
+                projectState.patchSession(id, patch)
+            }
+        }
+    }
+
     suspend fun deleteSession(id: String) = withContext(Dispatchers.IO) {
         try {
             api.deleteSession(id)

@@ -31,7 +31,7 @@ Legend: ✅ done and verified · ◐ done, not verified · ⬜ not done.
 | 3 — API + proto | ✅ | endpoints, `SessionHeader.settled_at`, fixtures |
 | 4 — desktop client | ⬜ | `console-core` service + state |
 | 5 — desktop sidebar | ⬜ | Settled section, context menu |
-| 6 — Android | ⬜ | Settle action, collapsed Settled group |
+| 6 — Android | ✅ | Settle action, collapsed Settled group |
 | 7 — deferred | — | auto-settle, drag between sections, bulk settle |
 
 ---
