@@ -229,16 +229,16 @@ class ChatRepository(
         chats.update(sessionId) { it.copy(subagents = subagents) }
     }
 
+    /** Refresh the server-backed task list whenever a chat is opened. */
     fun loadTodos(sessionId: String) {
-        val current = chats.get(sessionId)
-        if (current.todoItems.isNotEmpty()) return
         scope.launch {
             try {
+                // An in-memory chat state survives navigation, so a non-empty list
+                // is not evidence that it is still current. The server response is
+                // authoritative here, including an empty response after tasks are
+                // completed or removed.
                 val todos = withContext(Dispatchers.IO) { api.getTodos(sessionId) }
-                val fresh = chats.get(sessionId)
-                if (fresh.todoItems.isEmpty()) {
-                    setTodoItems(sessionId, todos)
-                }
+                setTodoItems(sessionId, todos)
             } catch (_: Exception) {
             }
         }

@@ -3,21 +3,18 @@
 #
 # The server dlopens this at runtime (never linked, never committed).
 # Default fetches the host platform into third_party/cua/, which the loader
-# finds with no configuration. --all fetches macOS and Linux (both arches)
-# into per-platform subdirs for release staging, so adding Linux support
-# later needs no new research.
+# finds with no configuration. --all fetches every supported release target
+# into per-platform subdirs for release staging.
 #
 # Sources are the per-platform npm packages published on the driver release:
-# each contains exactly package/libcua_driver_sdk.{dylib,so,dll}. They are
-# smaller than the full CLI tarballs and their contents are confirmed.
-# Windows packages exist too (win32-x64-msvc, win32-arm64-msvc) and slot into
-# the table below when needed.
+# each contains exactly package/libcua_driver_sdk.{dylib,so} or
+# package/cua_driver_sdk.dll. They are smaller than the full CLI archives.
 #
 # Pinned to the driver version the server binds against; the runtime ABI
 # check refuses anything incompatible, so drift fails loudly, not silently.
 set -euo pipefail
 
-VERSION="0.34.0"
+VERSION="0.38.0"
 BASE="https://github.com/trycua/cua/releases/download/cua-driver-rs-v${VERSION}"
 # platform label, release asset, library file
 PLATFORMS=(
@@ -25,6 +22,8 @@ PLATFORMS=(
   "darwin-x64 trycua-cua-driver-darwin-x64-${VERSION}.tgz libcua_driver_sdk.dylib"
   "linux-x64 trycua-cua-driver-linux-x64-gnu-${VERSION}.tgz libcua_driver_sdk.so"
   "linux-arm64 trycua-cua-driver-linux-arm64-gnu-${VERSION}.tgz libcua_driver_sdk.so"
+  "windows-x64 trycua-cua-driver-win32-x64-msvc-${VERSION}.tgz cua_driver_sdk.dll"
+  "windows-arm64 trycua-cua-driver-win32-arm64-msvc-${VERSION}.tgz cua_driver_sdk.dll"
 )
 
 DEST_ROOT="$(cd "$(dirname "$0")/.." && pwd)/third_party/cua"
@@ -61,7 +60,14 @@ host_label() {
         *) echo "unsupported linux arch: $arch" >&2; exit 1 ;;
       esac
       ;;
-    *) echo "unsupported os: $os (macOS and Linux only for now)" >&2; exit 1 ;;
+    MINGW*|MSYS*|CYGWIN*)
+      case "$arch" in
+        x86_64|amd64) printf 'windows-x64' ;;
+        aarch64|arm64) printf 'windows-arm64' ;;
+        *) echo "unsupported windows arch: $arch" >&2; exit 1 ;;
+      esac
+      ;;
+    *) echo "unsupported os: $os (macOS, Linux, and Windows only)" >&2; exit 1 ;;
   esac
 }
 
