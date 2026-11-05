@@ -288,8 +288,8 @@ impl RenderOnce for SidebarSessionItem {
                     .child(
                         div()
                             .id(ElementId::Name(format!("settle-{}", session.id).into()))
-                            .p(px(3.0))
-                            .rounded(px(4.0))
+                            .p(px(4.0))
+                            .rounded(px(5.0))
                             .cursor_default()
                             .invisible()
                             .group_hover(group_name.clone(), |el| el.visible())
@@ -299,7 +299,7 @@ impl RenderOnce for SidebarSessionItem {
                                 cx.stop_propagation();
                                 (toggle_settle_action)(w, cx);
                             })
-                            .child(app_icon(settle_icon, 11.0, theme.text_ghost)),
+                            .child(app_icon(settle_icon, 14.0, theme.text)),
                     ),
             )
             // Bottom Row: Folder icon + Working Dir Name + Time
