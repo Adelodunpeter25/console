@@ -1,5 +1,6 @@
 package com.console.mobile
 
+import com.console.mobile.core.util.mentionPaths
 import com.console.mobile.core.util.parseChatMentions
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -19,5 +20,11 @@ class ChatMentionTest {
     fun ignoresPricesAndMidWordDollars() {
         val mentions = parseChatMentions("costs \$5 and a\$b test")
         assertEquals(0, mentions.size)
+    }
+
+    @Test
+    fun mentionPathsCarrySkillsAndChatRefsButNotSlashPaths() {
+        val paths = mentionPaths("/review \$fix-bug @a.kt see /usr/bin")
+        assertEquals(listOf("a.kt", "skill:review", "chat:fix-bug"), paths)
     }
 }

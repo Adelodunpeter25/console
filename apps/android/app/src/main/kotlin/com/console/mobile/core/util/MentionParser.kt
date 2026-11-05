@@ -30,8 +30,6 @@ fun parseFileMentions(text: String): List<FileMention> {
     return out
 }
 
-/** Distinct mention paths, for the run request's `contextFiles`. */
-fun mentionPaths(text: String): List<String> = parseFileMentions(text).map { it.path }.distinct()
 
 /**
  * `$` chat-ref ranges in composer text, mirroring [parseSkillMentions]: `$`
@@ -84,3 +82,14 @@ fun parseSkillMentions(text: String): List<SkillMention> {
     }
     return out
 }
+
+/**
+ * Distinct mention paths, for the run request's `contextFiles`. Skills and
+ * chat refs ride along as `skill:<name>` / `chat:<slug>` (desktop parity) so
+ * sent messages can redraw them as chips; the server keeps them out of the
+ * agent text. Slash words containing `/` are paths, not skills.
+ */
+fun mentionPaths(text: String): List<String> =
+    (parseFileMentions(text).map { it.path } +
+        parseSkillMentions(text).filter { '/' !in it.name }.map { "skill:${it.name}" } +
+        parseChatMentions(text).map { "chat:${it.slug}" }).distinct()
