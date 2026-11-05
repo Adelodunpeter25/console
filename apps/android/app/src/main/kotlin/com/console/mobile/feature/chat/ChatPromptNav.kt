@@ -54,7 +54,7 @@ internal fun ChatScrollPill(
             .border(1.dp, Color.White.copy(alpha = 0.1f), shape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PillSection(ListIcon, "Jump to prompt", onOpenPrompts)
+        PillSection(TablerIcons.Outline.ListIcon, "Jump to prompt", onOpenPrompts)
         if (showScrollToBottom) {
             Box(modifier = Modifier.width(1.dp).height(18.dp).background(Color.White.copy(alpha = 0.1f)))
             PillSection(TablerIcons.Outline.ArrowNarrowDown, "Scroll to bottom", onScrollToBottom)
