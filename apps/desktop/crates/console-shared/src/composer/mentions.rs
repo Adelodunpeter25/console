@@ -57,6 +57,47 @@ impl ComposerMention {
     }
 }
 
+/// A `$slug` chat reference found in text; `range` covers the `$` and every
+/// ref character after it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatRef {
+    pub range: Range<usize>,
+    pub slug: String,
+}
+
+/// Find `$ref` tokens the way the server's `ParseDollarRefs` does (shared
+/// cases live in `proto/testdata/session/chat_refs.json`): a `$` at the start
+/// or after whitespace or opening punctuation, then ASCII letters, digits,
+/// `-` or `_`. Edge dashes/underscores are trimmed from the slug, and a
+/// digit-led token only counts when it looks like an id (contains `-`, at
+/// least 8 long), so prices stay plain text. Repeats are all returned.
+pub fn parse_chat_refs(text: &str) -> Vec<ChatRef> {
+    let mut refs = Vec::new();
+    for (i, _) in text.match_indices('$') {
+        let boundary = text[..i]
+            .chars()
+            .next_back()
+            .is_none_or(|c| c.is_whitespace() || "([{\"'<".contains(c));
+        if !boundary {
+            continue;
+        }
+        let rest = &text[i + 1..];
+        let len = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            .unwrap_or(rest.len());
+        let slug = rest[..len].trim_matches(['-', '_']);
+        let digit_led = slug.starts_with(|c: char| c.is_ascii_digit());
+        if slug.is_empty() || (digit_led && !(slug.contains('-') && slug.len() >= 8)) {
+            continue;
+        }
+        refs.push(ChatRef {
+            range: i..i + 1 + len,
+            slug: slug.to_string(),
+        });
+    }
+    refs
+}
+
 /// Paths of the file mentions only: skills and chat refs are text the
 /// agent reads, not context files to attach.
 pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
@@ -71,7 +112,10 @@ pub fn context_file_paths(mentions: &[ComposerMention]) -> Vec<String> {
 /// so the sent message can redraw them as chips. The server keeps the
 /// prefixed entries out of the agent-facing text.
 pub fn submitted_mention_paths(mentions: &[ComposerMention]) -> Vec<String> {
-    mentions.iter().map(|mention| mention.path.clone()).collect()
+    mentions
+        .iter()
+        .map(|mention| mention.path.clone())
+        .collect()
 }
 
 /// The text a mention path shows as a chip: `/name` for skills, `$slug` for

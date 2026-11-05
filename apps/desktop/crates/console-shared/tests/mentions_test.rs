@@ -2,7 +2,7 @@
 
 use console_shared::composer::mentions::{
     ComposerMention, SKILL_PATH_PREFIX, adjust_mentions, context_file_paths,
-    mentions_from_context_files, reconcile_mentions,
+    mentions_from_context_files, parse_chat_refs, reconcile_mentions,
 };
 
 fn mention(range: std::ops::Range<usize>, path: &str, label: &str) -> ComposerMention {
@@ -99,4 +99,33 @@ fn a_skill_chip_follows_edits_and_goes_when_its_text_changes() {
     assert_eq!(mentions.len(), 1);
     reconcile_mentions(&mut mentions, "xxxxx/plon");
     assert!(mentions.is_empty());
+}
+
+#[test]
+fn chat_refs_match_the_shared_server_fixture() {
+    let raw = std::fs::read_to_string(
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../proto/testdata/session/chat_refs.json"),
+    )
+    .expect("read chat_refs.json");
+    let cases: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("parse fixture");
+    assert!(!cases.is_empty());
+    for case in cases {
+        let text = case["text"].as_str().unwrap();
+        let want: Vec<&str> = case["refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r.as_str().unwrap())
+            .collect();
+        let got = parse_chat_refs(text);
+        let slugs: Vec<&str> = got.iter().map(|r| r.slug.as_str()).collect();
+        assert_eq!(slugs, want, "{text:?}");
+    }
+}
+
+#[test]
+fn chat_ref_range_covers_the_dollar_and_the_token() {
+    let refs = parse_chat_refs("use $fix-bug now");
+    assert_eq!(refs[0].range, 4..12);
 }

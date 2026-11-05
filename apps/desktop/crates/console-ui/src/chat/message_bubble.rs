@@ -216,38 +216,24 @@ pub(crate) fn message_text_with_mentions(
 }
 
 /// Chat refs sent before they were recorded as context paths have no metadata,
-/// so find them in the text the way the server's `ParseDollarRefs` does: a `$` at the start or after
-/// whitespace/opening punctuation, then a slug token. Digit-led tokens only
-/// count when they look like ids, so prices stay plain text.
+/// so find them in the text with the shared `$ref` rules.
 fn add_chat_ref_mentions(text: &str, mentions: &mut Vec<InlineFileMention>) {
-    let is_ref_char = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '_';
-    let mut found = Vec::new();
-    for (i, _) in text.match_indices('$') {
-        let prev_ok = text[..i]
-            .chars()
-            .next_back()
-            .is_none_or(|c| c.is_whitespace() || "([{\"'<".contains(c));
-        if !prev_ok {
-            continue;
-        }
-        let rest = &text[i + 1..];
-        let len = rest.find(|c: char| !is_ref_char(c)).unwrap_or(rest.len());
-        let token = rest[..len].trim_matches(['-', '_']);
-        let digit_led = token.starts_with(|c: char| c.is_ascii_digit());
-        if token.is_empty() || (digit_led && !(token.contains('-') && token.len() >= 8)) {
-            continue;
-        }
-        let end = i + 1 + len;
-        if mentions.iter().all(|m| m.range.end <= i || m.range.start >= end) {
-            found.push(InlineFileMention {
-                range: i..end,
-                path: format!(
-                    "{}{token}",
-                    console_shared::composer::mentions::CHAT_PATH_PREFIX
-                ),
-            });
-        }
-    }
+    let found: Vec<_> = console_shared::composer::mentions::parse_chat_refs(text)
+        .into_iter()
+        .filter(|found| {
+            mentions
+                .iter()
+                .all(|m| m.range.end <= found.range.start || m.range.start >= found.range.end)
+        })
+        .map(|found| InlineFileMention {
+            range: found.range,
+            path: format!(
+                "{}{}",
+                console_shared::composer::mentions::CHAT_PATH_PREFIX,
+                found.slug
+            ),
+        })
+        .collect();
     mentions.extend(found);
 }
 

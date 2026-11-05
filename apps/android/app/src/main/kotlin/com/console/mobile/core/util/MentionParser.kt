@@ -32,11 +32,16 @@ fun parseFileMentions(text: String): List<FileMention> {
 
 
 /**
- * `$` chat-ref ranges in composer text, mirroring [parseSkillMentions]: `$`
- * at start of text or after whitespace/opening punctuation, running over
- * slug/id characters. Digit-only tokens never match (prices).
+ * `$` chat-ref ranges in composer text, matching the server's
+ * `ParseDollarRefs` (shared cases: proto/testdata/session/chat_refs.json):
+ * `$` at start of text or after whitespace/opening punctuation, then ASCII
+ * letters, digits, `-` or `_`. Edge dashes/underscores are trimmed from the
+ * slug, and a digit-led token only counts when it looks like an id (contains
+ * `-`, at least 8 long), so prices stay plain text.
  */
 data class ChatMention(val range: IntRange, val slug: String)
+
+private fun isRefChar(c: Char) = c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '_' || c == '-'
 
 fun parseChatMentions(text: String): List<ChatMention> {
     val out = mutableListOf<ChatMention>()
@@ -45,9 +50,10 @@ fun parseChatMentions(text: String): List<ChatMention> {
         val boundary = i == 0 || text[i - 1].isWhitespace() || text[i - 1] in "([{<\"'"
         if (text[i] == '$' && boundary) {
             var j = i + 1
-            while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '_' || text[j] == '-')) j++
-            val slug = text.substring(i + 1, j)
-            if (slug.isNotEmpty() && !slug.all(Char::isDigit)) {
+            while (j < text.length && isRefChar(text[j])) j++
+            val slug = text.substring(i + 1, j).trim('-', '_')
+            val digitLed = slug.firstOrNull()?.isDigit() == true
+            if (slug.isNotEmpty() && !(digitLed && !(slug.contains('-') && slug.length >= 8))) {
                 out += ChatMention(i until j, slug)
             }
             i = j
