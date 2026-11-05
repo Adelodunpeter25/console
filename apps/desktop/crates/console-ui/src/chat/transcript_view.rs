@@ -720,7 +720,7 @@ impl TranscriptView {
         }
         let mut layer = div().absolute().inset_0();
         if self.prompts_open && !prompts.is_empty() {
-            let rows = prompts.into_iter().rev().map(|(row, line, created_at)| {
+            let rows = prompts.into_iter().map(|(row, line, created_at)| {
                 div()
                     .id(gpui::ElementId::Name(format!("prompt-jump-{row}").into()))
                     .flex()
