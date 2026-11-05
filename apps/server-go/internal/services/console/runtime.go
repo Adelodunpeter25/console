@@ -16,6 +16,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
@@ -27,6 +28,7 @@ type Runtime struct {
 	scripts   *projectssvc.ProjectScriptsService
 	sessions  *services.SessionService
 	projects  *projectssvc.ProjectService
+	mcp       *mcp.Manager
 	active    func(string) bool
 	abort     func(string) bool
 	prompt    PromptFunc
@@ -39,8 +41,8 @@ type Runtime struct {
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScriptsService, sessions *services.SessionService, projects *projectssvc.ProjectService, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScriptsService, sessions *services.SessionService, projects *projectssvc.ProjectService, mcpManager *mcp.Manager, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, mcp: mcpManager, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -116,6 +118,33 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		}},
 		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsFork(ctx, args)
+		}},
+		{Name: "mcp.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpListImpl(ctx, args)
+		}},
+		{Name: "mcp.tools", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpToolsImpl(ctx, args)
+		}},
+		{Name: "mcp.add", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpAddImpl(ctx, args)
+		}},
+		{Name: "mcp.update", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpUpdateImpl(ctx, args)
+		}},
+		{Name: "mcp.remove", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpRemoveImpl(ctx, args)
+		}},
+		{Name: "mcp.connect", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpConnectImpl(ctx, args)
+		}},
+		{Name: "mcp.disconnect", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpDisconnectImpl(ctx, args)
+		}},
+		{Name: "mcp.reset_auth", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpResetAuthImpl(ctx, args)
+		}},
+		{Name: "mcp.call", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.mcpCallImpl(ctx, args)
 		}},
 	}
 	// Every method refuses keys it does not take, so a typo such as
@@ -614,4 +643,13 @@ var methodArgs = map[string][]string{
 	"sessions.fork":         {"session_id", "message_id"},
 	"sessions.search":       {"query", "session_id", "project_id", "cwd", "all_projects", "roles", "limit", "per_session"},
 	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms"},
+	"mcp.list":              {},
+	"mcp.tools":             {"id"},
+	"mcp.add":               {"id", "transport", "url", "command", "args", "env", "label", "auth", "enabled"},
+	"mcp.update":            {"id", "label", "url", "command", "args", "env", "auth", "tier_overrides", "enabled"},
+	"mcp.remove":            {"id"},
+	"mcp.connect":           {"id"},
+	"mcp.disconnect":        {"id"},
+	"mcp.reset_auth":        {"id"},
+	"mcp.call":              {"id", "tool", "args"},
 }

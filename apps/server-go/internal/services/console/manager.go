@@ -11,6 +11,7 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
 
 // Manager hands out per-session console kernels.
@@ -22,6 +23,7 @@ type Manager struct {
 	scripts  *projectssvc.ProjectScriptsService
 	sessions *services.SessionService
 	projects *projectssvc.ProjectService
+	mcp      *mcp.Manager
 	active   func(string) bool
 	start    func(string, string, string, string, string, string) error
 	abort    func(string) bool
@@ -63,6 +65,19 @@ func (m *Manager) scriptService() *projectssvc.ProjectScriptsService {
 	return m.scripts
 }
 
+// SetMCP attaches the MCP manager used by console.mcp.
+func (m *Manager) SetMCP(manager *mcp.Manager) {
+	m.mu.Lock()
+	m.mcp = manager
+	m.mu.Unlock()
+}
+
+func (m *Manager) mcpManager() *mcp.Manager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mcp
+}
+
 // SetSessions attaches session and project services plus run hooks used by the
 // console session control surface.
 func (m *Manager) SetSessions(sessions *services.SessionService, projects *projectssvc.ProjectService, active func(string) bool, abort func(string) bool, start func(string, string, string, string, string, string) error, prompt PromptFunc, queue QueueControl) {
@@ -82,8 +97,9 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 	return m.js.Get(sessionID, func() (*Runtime, error) {
 		ports := m.portRegistry()
 		scripts := m.scriptService()
+		mcpManager := m.mcpManager()
 		sessions, projects, active, abort, start, prompt, queue := m.sessionConfig()
-		runtime, err := NewRuntime(ports, scripts, sessions, projects, active, start, abort, prompt, queue, projectID, cwd)
+		runtime, err := NewRuntime(ports, scripts, sessions, projects, mcpManager, active, start, abort, prompt, queue, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}

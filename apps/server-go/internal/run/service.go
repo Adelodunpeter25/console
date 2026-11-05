@@ -238,11 +238,16 @@ func (s *Service) startConsoleSession(sessionID, text, modelID, provider, approv
 	return err
 }
 
-// SetMCP attaches the MCP manager backing the per-run loadTools tool.
+// SetMCP attaches the MCP manager backing the per-run loadTools tool and the
+// console kernel's mcp methods.
 func (s *Service) SetMCP(m *mcp.Manager) {
 	s.mu.Lock()
 	s.mcp = m
+	manager := s.consoleManager
 	s.mu.Unlock()
+	if manager != nil {
+		manager.SetMCP(m)
+	}
 }
 
 func (s *Service) mcpManager() *mcp.Manager {
