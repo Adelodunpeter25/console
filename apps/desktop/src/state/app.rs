@@ -16,7 +16,6 @@ use console_ui::{
     TranscriptView,
 };
 use gpui::{AppContext, Context, ListAlignment, ListState, Window, px};
-use std::cell::RefCell;
 use std::rc::Rc;
 
 /// User prompts in a session, used to populate the composer's up-arrow

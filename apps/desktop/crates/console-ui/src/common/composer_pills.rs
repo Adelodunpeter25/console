@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use console_core::{SubagentInfo, TodoItem};
 use gpui::{
-    AnyElement, App, Div, ElementId, FontWeight, ParentElement, Stateful,
+    App, Div, ElementId, FontWeight, ParentElement, Stateful,
     StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
 

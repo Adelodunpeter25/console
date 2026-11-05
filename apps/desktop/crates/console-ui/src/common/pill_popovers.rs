@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use console_core::{SubagentInfo, TodoItem};
-use gpui::{AnyElement, App, ElementId, FontWeight, Window, div, prelude::*, px};
+use gpui::{AnyElement, ElementId, FontWeight, div, prelude::*, px};
 
 use crate::common::composer_pills::{ShellEntry, StopHandler};
 use crate::primitives::{IconName, app_icon};
