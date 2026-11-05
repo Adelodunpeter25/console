@@ -3,7 +3,6 @@ package console
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/roles"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
@@ -277,7 +276,7 @@ type QueueControl struct {
 
 // sessionsQueue shows the prompt waiting to run on a session, if any.
 func (r *Runtime) sessionsQueue(_ context.Context, args map[string]any) (*jskernel.Result, error) {
-	if err := onlyArgs(args, "session_id"); err != nil {
+	if err := jskernel.OnlyArgs(args, "session_id"); err != nil {
 		return nil, err
 	}
 	id, err := stringArg(args, "session_id")
@@ -300,7 +299,7 @@ func (r *Runtime) sessionsQueue(_ context.Context, args map[string]any) (*jskern
 // sessionsClearQueue discards the waiting prompt, which is what a refused
 // sessions.prompt asks the caller to do.
 func (r *Runtime) sessionsClearQueue(_ context.Context, args map[string]any) (*jskernel.Result, error) {
-	if err := onlyArgs(args, "session_id"); err != nil {
+	if err := jskernel.OnlyArgs(args, "session_id"); err != nil {
 		return nil, err
 	}
 	id, err := stringArg(args, "session_id")
@@ -315,24 +314,6 @@ func (r *Runtime) sessionsClearQueue(_ context.Context, args map[string]any) (*j
 		return nil, err
 	}
 	return marshalResult(map[string]any{"session_id": id, "cleared": cleared})
-}
-
-// onlyArgs refuses arguments a method does not take. Silently ignoring an
-// unknown key hides typos (`{projectId: ...}` instead of `{project_id: ...}`).
-func onlyArgs(args map[string]any, allowed ...string) error {
-	for key := range args {
-		known := false
-		for _, name := range allowed {
-			if key == name {
-				known = true
-				break
-			}
-		}
-		if !known {
-			return fmt.Errorf("unknown argument %q; this method takes: %s", key, strings.Join(allowed, ", "))
-		}
-	}
-	return nil
 }
 
 // optionalString reads a string argument. A value of any other type is an

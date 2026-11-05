@@ -127,7 +127,7 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		}
 		call := methods[i].Call
 		methods[i].Call = func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
-			if err := onlyArgs(args, allowed...); err != nil {
+			if err := jskernel.OnlyArgs(args, allowed...); err != nil {
 				return nil, err
 			}
 			return call(ctx, args)
@@ -352,7 +352,7 @@ func (r *Runtime) sessionsList(_ context.Context, args map[string]any) (*jskerne
 	if r.sessions == nil {
 		return nil, fmt.Errorf("session service is unavailable")
 	}
-	if err := onlyArgs(args, "project_id", "cwd"); err != nil {
+	if err := jskernel.OnlyArgs(args, "project_id", "cwd"); err != nil {
 		return nil, err
 	}
 	filter := session.ListFilter{}

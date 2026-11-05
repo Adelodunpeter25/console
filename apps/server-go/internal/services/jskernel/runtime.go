@@ -60,6 +60,25 @@ type Method struct {
 	Call func(ctx context.Context, args map[string]any) (*Result, error)
 }
 
+// OnlyArgs refuses arguments a method does not take. Silently ignoring an
+// unknown key hides typos ({projectId: ...}); naming the accepted keys turns
+// the mistake into a one-shot fix.
+func OnlyArgs(args map[string]any, allowed ...string) error {
+	for key := range args {
+		known := false
+		for _, name := range allowed {
+			if key == name {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return Errorf("unknown argument %q; this method takes: %s", key, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
+}
+
 // Options configures one runtime's limits and wording. Zero values select the
 // defaults below, so a caller only sets what it needs to change.
 type Options struct {
