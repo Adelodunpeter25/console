@@ -276,6 +276,11 @@ impl ConsoleDesktopApp {
                 None
             };
         }
+        // Settling a chat closes its tab(s), active or not. The optimistic
+        // mark lands first so the pane sync below sees the settled session.
+        if settled {
+            self.close_session_chat_tabs(&session_id, cx);
+        }
         cx.notify();
 
         let client = self.client.clone();

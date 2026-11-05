@@ -86,6 +86,36 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    /// Close every chat tab for a session (e.g. when it is settled), wherever
+    /// it lives. Active-workspace closes use the normal close path so pane
+    /// selection, drafts, and transcripts stay in sync.
+    pub fn close_session_chat_tabs(&mut self, session_id: &str, cx: &mut Context<Self>) {
+        let tab_id = format!("chat:{session_id}");
+        // Cloned first: closing mutates the tree.
+        let mut active_closes: Vec<String> = Vec::new();
+        for leaf in self.workspace_root.leaves() {
+            for tab in &leaf.tabs {
+                if matches!(
+                    tab,
+                    WorkspaceTabConfig::Chat {
+                        session_id: owner, ..
+                    } if owner == session_id
+                ) {
+                    active_closes.push(leaf.id.clone());
+                }
+            }
+        }
+        for pane_id in active_closes {
+            self.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
+        }
+        // Stashed workspace trees: drop the tab there too.
+        for root in self.project_workspace_roots.values_mut() {
+            console_ui::workspace::ops::close_matching_tabs(root, |tab| tab.id() == tab_id);
+        }
+        self.persist_workspaces();
+        cx.notify();
+    }
+
     /// Close a tab in a pane. Returns the newly active tab id, if any.
     pub fn close_workspace_tab(
         &mut self,
