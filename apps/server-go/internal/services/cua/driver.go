@@ -1,5 +1,5 @@
 // CGo bindings to the Cua Driver C ABI (trycua/cua, libs/cua-driver, MIT).
-// The shared library is loaded at runtime via dlopen from CUA_DRIVER_LIB_PATH or
+// The shared library is loaded at runtime from CUA_DRIVER_LIB_PATH or
 // next to the server binary — the build does not need the library, and callers
 // fall back when it is absent.
 //
@@ -8,7 +8,11 @@ package cua
 
 /*
 #cgo linux LDFLAGS: -ldl
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -74,30 +78,38 @@ static cua_operation_release_v1_t p_operation_release;
 
 // cua_bind_all resolves every symbol; returns false on the first miss. A
 // library missing a single entry point is rejected rather than half-used.
+#ifdef _WIN32
+static void *cua_open_library(const char *path) { return (void *)LoadLibraryA(path); }
+static void *cua_symbol(void *dl, const char *name) { return (void *)GetProcAddress((HMODULE)dl, name); }
+#else
+static void *cua_open_library(const char *path) { return dlopen(path, RTLD_NOW|RTLD_LOCAL); }
+static void *cua_symbol(void *dl, const char *name) { return dlsym(dl, name); }
+#endif
+
 static bool cua_bind_all(void *dl) {
-	p_abi_version = (cua_abi_version_v1_t)dlsym(dl, "cua_driver_abi_version_v1");
+	p_abi_version = (cua_abi_version_v1_t)cua_symbol(dl, "cua_driver_abi_version_v1");
 	if (!p_abi_version) return false;
-	p_abi_compatible = (cua_abi_compatible_v1_t)dlsym(dl, "cua_driver_abi_is_compatible_v1");
+	p_abi_compatible = (cua_abi_compatible_v1_t)cua_symbol(dl, "cua_driver_abi_is_compatible_v1");
 	if (!p_abi_compatible) return false;
-	p_buffer_free = (cua_buffer_free_v1_t)dlsym(dl, "cua_driver_buffer_free_v1");
+	p_buffer_free = (cua_buffer_free_v1_t)cua_symbol(dl, "cua_driver_buffer_free_v1");
 	if (!p_buffer_free) return false;
-	p_create = (cua_create_v1_t)dlsym(dl, "cua_driver_create_v1");
+	p_create = (cua_create_v1_t)cua_symbol(dl, "cua_driver_create_v1");
 	if (!p_create) return false;
-	p_destroy = (cua_destroy_v1_t)dlsym(dl, "cua_driver_destroy_v1");
+	p_destroy = (cua_destroy_v1_t)cua_symbol(dl, "cua_driver_destroy_v1");
 	if (!p_destroy) return false;
-	p_is_available = (cua_is_available_v1_t)dlsym(dl, "cua_driver_is_available_v1");
+	p_is_available = (cua_is_available_v1_t)cua_symbol(dl, "cua_driver_is_available_v1");
 	if (!p_is_available) return false;
-	p_metadata_json = (cua_metadata_json_v1_t)dlsym(dl, "cua_driver_metadata_json_v1");
+	p_metadata_json = (cua_metadata_json_v1_t)cua_symbol(dl, "cua_driver_metadata_json_v1");
 	if (!p_metadata_json) return false;
-	p_list_tools_json = (cua_list_tools_json_v1_t)dlsym(dl, "cua_driver_list_tools_json_v1");
+	p_list_tools_json = (cua_list_tools_json_v1_t)cua_symbol(dl, "cua_driver_list_tools_json_v1");
 	if (!p_list_tools_json) return false;
-	p_invoke = (cua_invoke_v1_t)dlsym(dl, "cua_driver_invoke_v1");
+	p_invoke = (cua_invoke_v1_t)cua_symbol(dl, "cua_driver_invoke_v1");
 	if (!p_invoke) return false;
-	p_shutdown = (cua_shutdown_v1_t)dlsym(dl, "cua_driver_shutdown_v1");
+	p_shutdown = (cua_shutdown_v1_t)cua_symbol(dl, "cua_driver_shutdown_v1");
 	if (!p_shutdown) return false;
-	p_operation_cancel = (cua_operation_cancel_v1_t)dlsym(dl, "cua_driver_operation_cancel_v1");
+	p_operation_cancel = (cua_operation_cancel_v1_t)cua_symbol(dl, "cua_driver_operation_cancel_v1");
 	if (!p_operation_cancel) return false;
-	p_operation_release = (cua_operation_release_v1_t)dlsym(dl, "cua_driver_operation_release_v1");
+	p_operation_release = (cua_operation_release_v1_t)cua_symbol(dl, "cua_driver_operation_release_v1");
 	if (!p_operation_release) return false;
 	return true;
 }
@@ -411,7 +423,7 @@ func Load() error {
 				continue
 			}
 			cpath := C.CString(path)
-			h := C.dlopen(cpath, C.RTLD_NOW|C.RTLD_LOCAL)
+			h := C.cua_open_library(cpath)
 			C.free(unsafe.Pointer(cpath))
 			if h != nil {
 				handle = h
