@@ -625,7 +625,9 @@ private fun SendStopButton(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (running) {
+    // While a run is active, typed text sends (it queues for the next turn);
+    // Stop shows only when there is nothing to send.
+    if (running && !canSend) {
         // Same footprint as the send button so the composer doesn't resize
         // mid-send, and destructive red so the control's meaning is readable at
         // a glance rather than only from a tiny glyph.
