@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/cua"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/visualize"
@@ -35,6 +36,10 @@ type Capability struct {
 // loadContext is what a Load needs to know about the run.
 type loadContext struct {
 	sessionID, projectID, cwd, mode string
+	// browserHandler is the run's bridge to the desktop's browser, bound at
+	// the same place as the low-level browser tool. The browser-use kernel
+	// rides it instead of keeping its own connection.
+	browserHandler tools.BrowserHandler
 }
 
 // Capabilities lists every built-in capability, in popup order.
@@ -46,6 +51,18 @@ var Capabilities = []Capability{
 		Split:       cua.SplitInvocation,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
+			return err
+		},
+	},
+	{
+		Name:           "browser-use",
+		Description:    "Drive the built-in browser: navigate, observe, extract, and clean up through one JavaScript kernel",
+		Text:           browseruse.SkillText,
+		Split:          browseruse.SplitInvocation,
+		AgentMayEnable: true,
+		AlwaysLoaded:   true,
+		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
+			_, err := browseruse.NewLoader(s.browseruseManager, c.sessionID, c.browserHandler).Load(registry)
 			return err
 		},
 	},

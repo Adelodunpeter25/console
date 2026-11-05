@@ -129,6 +129,15 @@ impl ConsoleDesktopApp {
                 self.resolve_browser_action_result(&sess_id, request_id, Some(listing), None, cx);
             }
 
+            // Internal, used by the server's /browser-use kernel: the same
+            // tab list as `tabs` but as JSON rows, so the kernel reads
+            // structured tab identity instead of parsing the display text.
+            // Not part of the low-level tool's schema.
+            "tabs_json" => {
+                let listing = self.browser_tabs_json(&sess_id, cx);
+                self.resolve_browser_action_result(&sess_id, request_id, Some(listing), None, cx);
+            }
+
             "navigate" => {
                 let url = req.url.clone().unwrap_or_default();
                 if url.is_empty() {
@@ -144,8 +153,14 @@ impl ConsoleDesktopApp {
 
                 // An explicit tabId wins; otherwise reuse a tab already on this
                 // URL/origin; otherwise open a new tab — all within this chat's
-                // own tabs.
-                let target =
+                // own tabs. A `new_tab` request (the server's browser kernel
+                // opening a tab it will own) skips the reuse entirely: reset
+                // later closes what the kernel opened, which must never be a
+                // tab someone already had.
+                let forced_new = req.new_tab.unwrap_or(false);
+                let target = if forced_new {
+                    None
+                } else {
                     match self.pick_browser_view(&sess_id, req.tab_id.as_deref(), None, false, cx) {
                         Ok(Some(entry)) if req.tab_id.is_some() => Some(entry),
                         Ok(_) => self.find_matching_browser_view(&sess_id, &url, cx),
@@ -159,7 +174,8 @@ impl ConsoleDesktopApp {
                             );
                             return;
                         }
-                    };
+                    }
+                };
                 let known_ids: HashSet<String> =
                     self.session_browser_ids(&sess_id).into_iter().collect();
                 let matching_view = target.map(|(_, view)| view);
@@ -275,12 +291,20 @@ impl ConsoleDesktopApp {
 
             "snapshot" | "click" | "type" => {
                 let element_ref = req.element_ref.clone().filter(|s| !s.trim().is_empty());
-                if action != "snapshot" && element_ref.is_none() {
+                // A CSS selector is a fallback target for click/type: the
+                // driver resolves the first visible match when no ref is
+                // given (used by the server's browser kernel, whose scripts
+                // address elements without snapshotting first).
+                let has_selector = req
+                    .selector
+                    .as_deref()
+                    .is_some_and(|s| !s.trim().is_empty());
+                if action != "snapshot" && element_ref.is_none() && !has_selector {
                     self.resolve_browser_action_result(
                         &sess_id,
                         request_id,
                         None,
-                        Some(format!("'{action}' needs a ref from a snapshot")),
+                        Some(format!("'{action}' needs a ref from a snapshot or a selector")),
                         cx,
                     );
                     return;
@@ -927,6 +951,35 @@ impl ConsoleDesktopApp {
         ids.sort();
         ids.dedup();
         ids
+    }
+
+    /// The same tab list `describe_browser_tabs` renders, as JSON rows
+    /// ({id, url, title, active}) for the server's browser kernel.
+    fn browser_tabs_json(&self, session_id: &str, cx: &App) -> String {
+        let ids = self.session_browser_ids(session_id);
+        let target = self.agent_browser_tabs.get(session_id);
+        let rows: Vec<serde_json::Value> = ids
+            .iter()
+            .map(|id| {
+                let (title, url) = match self.browser_views.get(id) {
+                    Some(view) => {
+                        let bv = view.read(cx);
+                        (
+                            bv.tab_label().unwrap_or_default(),
+                            bv.current_url().unwrap_or("(blank)").to_string(),
+                        )
+                    }
+                    None => ("New Tab".to_string(), "(blank)".to_string()),
+                };
+                serde_json::json!({
+                    "id": id,
+                    "url": url,
+                    "title": title,
+                    "active": target.is_some_and(|t| t == id),
+                })
+            })
+            .collect();
+        serde_json::to_string(&rows).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// One line per browser tab owned by this chat: id, title, URL, and which

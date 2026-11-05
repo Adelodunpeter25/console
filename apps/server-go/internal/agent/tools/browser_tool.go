@@ -23,6 +23,10 @@ type BrowserActionRequest struct {
 	// Element refs from 'snapshot', used by click/type.
 	Ref    string `json:"ref,omitempty"`
 	Submit bool   `json:"submit,omitempty"`
+	// NewTab forces navigate to open a fresh tab instead of reusing one
+	// already on the URL. The kernel's browser.open uses it so the tab it
+	// opens is unambiguously its own, and reset closes only those.
+	NewTab bool `json:"newTab,omitempty"`
 }
 
 // BrowserActionResult is the result received from the desktop client.

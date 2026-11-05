@@ -446,6 +446,11 @@ pub struct BrowserActionRequest {
     pub element_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submit: Option<bool>,
+    /// Kernel only: navigate must open a fresh tab instead of reusing one
+    /// already on the URL, so the server's browser kernel can own and later
+    /// close what it opened.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_tab: Option<bool>,
 }
 
 impl BrowserActionRequest {
@@ -465,6 +470,7 @@ impl BrowserActionRequest {
             timeout_ms: none_if_zero(msg.timeout_ms),
             element_ref: msg.r#ref.clone(),
             submit: if msg.submit { Some(true) } else { None },
+            new_tab: msg.new_tab.filter(|v| *v),
         }
     }
 }

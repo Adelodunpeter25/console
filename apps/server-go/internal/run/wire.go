@@ -213,6 +213,9 @@ func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionReques
 	if b.Submit {
 		out.Submit = true
 	}
+	if b.NewTab {
+		out.NewTab = &b.NewTab
+	}
 	return out
 }
 

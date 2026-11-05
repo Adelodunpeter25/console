@@ -66,6 +66,19 @@ fn eval_content_and_wait_requests_carry_their_payloads() {
 }
 
 #[test]
+fn driver_resolves_click_type_targets_without_a_ref() {
+    let js = init_script();
+    // The selector fallback for click/type (used by the server's browser
+    // kernel): first visible match, invalid and no-match messages.
+    assert!(js.contains("elements.find((candidate) => isVisible(candidate))"));
+    assert!(js.contains("No visible match for selector: "));
+    let request = Request::action("click", None, None, false, Some("#go"));
+    let payload = request_script("req-8", &request);
+    assert!(payload.contains("\"op\":\"click\""));
+    assert!(payload.contains("\"selector\":\"#go\""));
+}
+
+#[test]
 fn driver_keeps_its_result_and_error_contract_strings() {
     let js = init_script();
     for needle in [

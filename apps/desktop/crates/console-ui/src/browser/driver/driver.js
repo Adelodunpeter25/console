@@ -817,21 +817,42 @@
     }
 
     const ref = norm(req.ref);
-    if (!ref) return 'A ref is required. Take a snapshot first.';
-    const resolved = resolve(ref);
-    if (!resolved.el) {
-      return 'Ref ' + quote(ref) + ' is stale or unknown. Take a new snapshot and use a fresh ref.';
-    }
-    const el = resolved.el;
-    const entry = resolved.entry || {};
-    const role = roleOf(el) || entry.role || 'element';
-    const label = describe(el, role, accessibleName(el, role));
-    if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
-      return 'Element ' + label + ' is disabled.';
-    }
-    if (isA11yHiddenDeep(el)) {
-      return 'Element ' + label
-        + ' is hidden from the accessibility tree. Take a new snapshot and use a visible control.';
+    let el, label;
+    if (ref) {
+      const resolved = resolve(ref);
+      if (!resolved.el) {
+        return 'Ref ' + quote(ref) + ' is stale or unknown. Take a new snapshot and use a fresh ref.';
+      }
+      el = resolved.el;
+      const entry = resolved.entry || {};
+      const role = roleOf(el) || entry.role || 'element';
+      label = describe(el, role, accessibleName(el, role));
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
+        return 'Element ' + label + ' is disabled.';
+      }
+      if (isA11yHiddenDeep(el)) {
+        return 'Element ' + label
+          + ' is hidden from the accessibility tree. Take a new snapshot and use a visible control.';
+      }
+    } else {
+      // Selector fallback: no ref, act on the first visible match. Used by
+      // the server's browser kernel, whose scripts address elements without
+      // snapshotting first.
+      const selector = (req.selector || '').trim();
+      if (!selector) return 'A ref is required. Take a snapshot first.';
+      let elements;
+      try {
+        elements = Array.from(document.querySelectorAll(selector));
+      } catch (error) {
+        return 'Invalid selector: ' + error.message;
+      }
+      el = elements.find((candidate) => isVisible(candidate)) || null;
+      if (!el) return 'No visible match for selector: ' + selector;
+      const role = roleOf(el) || 'element';
+      label = describe(el, role, accessibleName(el, role)) + ' (selector ' + quote(selector) + ')';
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
+        return 'Element ' + label + ' is disabled.';
+      }
     }
 
     const op = req.op;

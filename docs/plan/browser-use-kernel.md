@@ -1,6 +1,10 @@
 # Browser JS kernel — `/browser-use`
 
-Status: design draft. No kernel code yet.
+Status: Phase 1 implemented (`internal/services/browseruse/`), always loaded —
+the tools need no `/browser-use` to appear. The kernel API is the console
+kernel's shape: flat `browser.*` methods, one object argument each, plain
+results (the draft's page-object sketch below predates that shape and is not
+what landed). The draft below remains the reference for phases 2 and 3.
 
 The browser tool is already functional. This is an orchestration layer, not a
 replacement for the driver: one JavaScript runtime per chat session that can

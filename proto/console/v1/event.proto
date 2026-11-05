@@ -81,6 +81,9 @@ message BrowserActionRequest {
   int32 timeout_ms = 9;
   optional string ref = 10;
   bool submit = 11;
+  // Kernel only: navigate must open a fresh tab instead of reusing one
+  // already on the URL, so the kernel can own and later close what it opened.
+  optional bool new_tab = 12;
 }
 
 // The error frame carries one string; data was never populated server-side.

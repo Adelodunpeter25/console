@@ -50,6 +50,8 @@ fn decodes_golden_browser_frame() {
     assert_eq!(req.timeout_ms, 5000);
     assert_eq!(req.r#ref, None);
     assert!(!req.submit);
+    // The kernel's open flag: absent stays None, true arrives as Some.
+    assert_eq!(req.new_tab, None);
 }
 
 fn error_of(name: &str) -> ErrorPayload {

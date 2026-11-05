@@ -486,7 +486,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// Capabilities that are on restore here, appended after everything else so
 	// the provider's cached tool prefix stays stable. A failed load is
 	// reported to the model so it says so instead of calling into the void.
-	loadCtx := &loadContext{sessionID: sessionID, projectID: projectID, cwd: header.Cwd, mode: string(mode)}
+	loadCtx := &loadContext{sessionID: sessionID, projectID: projectID, cwd: header.Cwd, mode: string(mode), browserHandler: s.decisions.BrowserHandlerFor(sessionID, hub)}
 	for _, failure := range s.loadCapabilities(loadCtx, registry) {
 		user.Content += "\n\n" + failure
 	}
