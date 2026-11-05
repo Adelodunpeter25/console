@@ -1,6 +1,5 @@
-// Pull-request read errors and their HTTP-to-vocabulary mapping
-// (docs/plan/pull-requests.md §2.1). The strings are the user-facing
-// messages themselves. ErrUnreachable comes from pat.go, which verifies
+// Pull-request read errors. The strings are the user-facing messages
+// themselves. ErrUnreachable comes from pat.go, which verifies
 // tokens against the same host.
 package github
 

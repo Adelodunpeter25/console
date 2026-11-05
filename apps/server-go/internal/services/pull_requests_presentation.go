@@ -1,5 +1,5 @@
-// Presentation fields for pull requests, computed once on the server
-// (docs/plan/pull-requests.md §2.5): checks_state, merge_state,
+// Presentation fields for pull requests, computed once on the server:
+// checks_state, merge_state,
 // merge_blocker, status_label. No client or agent re-derives any of it —
 // the apps only render, and the agent is told *why* a merge cannot proceed
 // rather than retrying.

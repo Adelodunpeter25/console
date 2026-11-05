@@ -1,5 +1,5 @@
-// GraphQL reads for pull requests: one request for a list, one for a detail
-// (docs/plan/pull-requests.md §2.2). "Mine" and "review requested" span
+// GraphQL reads for pull requests: one request for a list, one for a
+// detail. "Mine" and "review requested" span
 // every repo, so they run through GitHub search; a repo's list is a single
 // repository.pullRequests query. Selections are trimmed to what screens
 // draw — no bodies, no files, no comments in the list.
@@ -175,7 +175,7 @@ func ListRepo(ctx context.Context, token, owner, repo, state, draft string) ([]S
 
 // FetchPRDetail reads one PR's full detail: the summary fields plus body,
 // mergeability, check runs, the latest review per reviewer, and the last
-// page of top-level comments. Files are NOT here (§2.4).
+// page of top-level comments. Files are fetched by pr_rest.go instead.
 func FetchPRDetail(ctx context.Context, token, owner, repo string, number uint32) (*DetailData, error) {
 	var out struct {
 		Repository struct {

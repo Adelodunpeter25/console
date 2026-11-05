@@ -1,5 +1,5 @@
-// Pull-request read-path coverage (docs/plan/pull-requests.md §7 phase 1):
-// list/detail mapping against an httptest GitHub (APIBase + GraphQLBase
+// Pull-request read-path coverage: list/detail mapping against an
+// httptest GitHub (APIBase + GraphQLBase
 // swap), the UNKNOWN-mergeability retry, error mapping with distinct
 // messages, token safety, and golden-fixture equality with the shared
 // proto/testdata/pull_requests fixtures the other clients decode.

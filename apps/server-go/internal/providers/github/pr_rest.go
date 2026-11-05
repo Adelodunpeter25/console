@@ -1,6 +1,6 @@
-// REST reads for pull requests: changed files (§2.4) and the repository
-// settings that say which merge methods are allowed (§2.3). Simple calls
-// where REST has the clearest shapes.
+// REST reads for pull requests: changed files (paths, patches) and the
+// repository settings that say which merge methods are allowed. Simple
+// calls where REST has the clearest shapes.
 package github
 
 import (

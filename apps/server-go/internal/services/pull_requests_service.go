@@ -1,4 +1,4 @@
-// Pull-request service (docs/plan/pull-requests.md §2). GitHub only in v1.
+// Pull-request service. GitHub only in v1.
 // Owns the token (loaded per call, never cached, never returned), one 30s
 // response cache with in-flight de-duplication shaped like
 // providers/usage/service.go, and the UNKNOWN-mergeability retry. The

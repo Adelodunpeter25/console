@@ -3,7 +3,7 @@
 // the presentation fields.
 package github
 
-// SummaryData is one trimmed list row (docs/plan/pull-requests.md §2.2).
+// SummaryData is one trimmed list row.
 type SummaryData struct {
 	Owner          string
 	Repo           string

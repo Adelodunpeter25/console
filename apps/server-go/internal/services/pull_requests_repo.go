@@ -1,6 +1,6 @@
 // Repo resolution for pull requests: a project's PR repo is its origin
-// remote, parsed to owner/repo (docs/plan/pull-requests.md §8, decided).
-// origin only, no base_repo argument — the author does not work from forks.
+// remote, parsed to owner/repo. Origin only, no base_repo argument —
+// the author does not work from forks.
 package services
 
 import (

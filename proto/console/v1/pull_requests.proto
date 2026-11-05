@@ -6,7 +6,7 @@ option go_package = "github.com/Adelodunpeter25/console/apps/server-go/internal/
 
 // Pull requests (/api/pull-requests/*). GitHub only in v1; the server owns
 // every presentation field — checks rollups, merge readiness, row badge
-// wording — so clients only render (docs/plan/pull-requests.md §2.5).
+// wording — so clients only render.
 //
 // Enum-like values stay plain strings with documented values, the existing
 // proto convention. The list payload is a trimmed summary; the detail (with
