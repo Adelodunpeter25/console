@@ -53,6 +53,7 @@ pub struct TranscriptView {
     content_revisions: Vec<u64>,
     list_state: ListState,
     scrollbar_state: std::rc::Rc<ScrollbarState>,
+    prompts_open: bool,
     focus_handle: FocusHandle,
     selection: TranscriptSelection,
     is_streaming: bool,
@@ -127,6 +128,7 @@ impl TranscriptView {
             content_revisions: Vec::new(),
             list_state,
             scrollbar_state: ScrollbarState::new(),
+            prompts_open: false,
             focus_handle: cx.focus_handle(),
             selection: TranscriptSelection::default(),
             is_streaming: false,
@@ -629,6 +631,169 @@ impl TranscriptView {
             item_ix: row_index,
             offset_in_item: px(offset_in_row),
         });
+    }
+
+    /// Jump to the newest message and resume following the run.
+    fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
+        self.list_state.set_follow_mode(FollowMode::Tail);
+        self.list_state.scroll_to_end();
+        cx.notify();
+    }
+
+    /// Scroll so the user message at `row` is at the top of the viewport.
+    fn jump_to_prompt(&mut self, row: usize, cx: &mut Context<Self>) {
+        self.prompts_open = false;
+        self.list_state.set_follow_mode(FollowMode::Normal);
+        self.list_state.scroll_to(ListOffset {
+            item_ix: row,
+            offset_in_item: px(0.0),
+        });
+        cx.notify();
+    }
+
+    /// Floating pill at the bottom-right: a prompt list button (opens the jump
+    /// popup) and, while scrolled away from the tail, a scroll-to-bottom arrow.
+    fn render_scroll_controls(&self, theme: Theme, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let prompts: Vec<(usize, String, Option<i64>)> = self
+            .messages
+            .iter()
+            .enumerate()
+            .filter_map(|(row, message)| match message {
+                AgentMessage::User {
+                    content,
+                    created_at,
+                    ..
+                } => {
+                    let (body, _) =
+                        console_shared::composer::file_comments::split_file_comments(content);
+                    let line = body
+                        .lines()
+                        .map(str::trim)
+                        .find(|line| !line.is_empty())
+                        .unwrap_or("(attachment)")
+                        .to_owned();
+                    Some((row, line, *created_at))
+                }
+                _ => None,
+            })
+            .collect();
+        let show_down = !self.list_state.is_following_tail();
+        if prompts.is_empty() && !show_down {
+            return div().into_any_element();
+        }
+        let button = |id: &'static str, icon: IconName| {
+            div()
+                .id(id)
+                .size(px(28.0))
+                .rounded(px(14.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .cursor_pointer()
+                .hover(|element| element.bg(theme.overlay_strong))
+                .child(app_icon(icon, 14.0, theme.text_secondary))
+        };
+        let mut pill = div()
+            .flex()
+            .items_center()
+            .gap(px(2.0))
+            .p(px(3.0))
+            .rounded(px(18.0))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.raised);
+        if !prompts.is_empty() {
+            pill = pill.child(
+                button("transcript-prompts", IconName::List)
+                    .tooltip(Tooltip::text("Jump to prompt"))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.prompts_open = !this.prompts_open;
+                        cx.notify();
+                    })),
+            );
+        }
+        if show_down {
+            if !prompts.is_empty() {
+                pill = pill.child(div().w(px(1.0)).h(px(16.0)).bg(theme.border));
+            }
+            pill = pill.child(
+                button("transcript-scroll-bottom", IconName::ArrowDown)
+                    .tooltip(Tooltip::text("Scroll to bottom"))
+                    .on_click(cx.listener(|this, _, _, cx| this.scroll_to_bottom(cx))),
+            );
+        }
+        let mut layer = div().absolute().inset_0();
+        if self.prompts_open && !prompts.is_empty() {
+            let rows = prompts.into_iter().rev().map(|(row, line, created_at)| {
+                div()
+                    .id(gpui::ElementId::Name(format!("prompt-jump-{row}").into()))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.0))
+                    .px(px(12.0))
+                    .py(px(7.0))
+                    .rounded(px(8.0))
+                    .cursor_pointer()
+                    .hover(|element| element.bg(theme.overlay_strong))
+                    .on_click(cx.listener(move |this, _, _, cx| this.jump_to_prompt(row, cx)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(13.0))
+                            .text_color(theme.text)
+                            .child(line),
+                    )
+                    .when_some(created_at, |element, created_at| {
+                        element.child(
+                            div()
+                                .flex_none()
+                                .text_size(px(12.0))
+                                .text_color(theme.text_tertiary)
+                                .child(format!("{} ago", crate::utils::format_time_ago(created_at))),
+                        )
+                    })
+            });
+            layer = layer
+                // Click-away backdrop.
+                .child(
+                    div()
+                        .id("transcript-prompts-backdrop")
+                        .absolute()
+                        .inset_0()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.prompts_open = false;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    div()
+                        .id("transcript-prompts-popup")
+                        .absolute()
+                        .right(px(16.0))
+                        .bottom(px(54.0))
+                        .w(px(420.0))
+                        .max_w_full()
+                        .max_h(px(360.0))
+                        .overflow_y_scroll()
+                        .p(px(4.0))
+                        .rounded(px(12.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.raised)
+                        .children(rows),
+                );
+        }
+        layer
+            .child(
+                div()
+                    .absolute()
+                    .right(px(16.0))
+                    .bottom(px(10.0))
+                    .child(pill),
+            )
+            .into_any_element()
     }
 
     /// The currently selected transcript text, if the user has a selection.
@@ -1363,7 +1528,8 @@ impl Render for TranscriptView {
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
                     .into_any_element()
             })
-            .child(selection_input(selection.clone(), cite_origin.clone()));
+            .child(selection_input(selection.clone(), cite_origin.clone()))
+            .child(self.render_scroll_controls(theme.clone(), cx));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
