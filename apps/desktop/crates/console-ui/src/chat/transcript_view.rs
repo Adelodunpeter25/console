@@ -6,7 +6,7 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, ListAlignment, ListOffset, ListState,
-    Render, SharedString, Window, canvas, div, list, prelude::*, px, uniform_list,
+    Render, SharedString, Window, ScrollStrategy, UniformListScrollHandle, canvas, div, list, prelude::*, px, uniform_list,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -57,6 +57,7 @@ pub struct TranscriptView {
     prompts: Rc<Vec<console_core::SessionPrompt>>,
     /// The pointer is over the transcript: the floating controls show only then.
     hovered: bool,
+    prompts_scroll: UniformListScrollHandle,
     on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_jump_to_prompt: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
@@ -136,6 +137,7 @@ impl TranscriptView {
             prompts_open: false,
             prompts: Rc::new(Vec::new()),
             hovered: false,
+            prompts_scroll: UniformListScrollHandle::new(),
             on_request_prompts: None,
             on_jump_to_prompt: None,
             focus_handle: cx.focus_handle(),
@@ -413,6 +415,11 @@ impl TranscriptView {
     }
 
     pub fn set_prompts(&mut self, prompts: Vec<console_core::SessionPrompt>, cx: &mut Context<Self>) {
+        // Open at the newest prompts, which are the ones most likely wanted.
+        if let Some(last) = prompts.len().checked_sub(1) {
+            self.prompts_scroll
+                .scroll_to_item_strict(last, ScrollStrategy::Bottom);
+        }
         self.prompts = Rc::new(prompts);
         cx.notify();
     }
@@ -762,6 +769,7 @@ impl TranscriptView {
                             .collect::<Vec<_>>()
                     },
                 )
+                .track_scroll(&self.prompts_scroll)
                 .size_full()
                 .into_any_element()
             };
