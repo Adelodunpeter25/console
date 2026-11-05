@@ -39,6 +39,9 @@ func (s *Service) PurgeExpiredDeletedSessions() []string {
 			if ok, err := s.sessions.PermanentDelete(id); err != nil {
 				slog.Error("deleted-chat sweep failed", "session", id, "error", err)
 			} else if ok {
+				// Clients close the chat's browser tabs on this signal; the
+				// session is gone either way.
+				s.NotifySessionDeleted(id)
 				purged = append(purged, id)
 			}
 		}()

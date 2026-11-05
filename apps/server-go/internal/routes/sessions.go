@@ -389,6 +389,9 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if !deleted {
 			return sessionError(c, fiber.StatusNotFound, "Session '"+id+"' not found.")
 		}
+		// Clients (including ones not looking at this chat) close the chat's
+		// browser tabs and drop its kernel state on this signal.
+		runs.NotifySessionDeleted(id)
 		raw, err := protoMarshal.Marshal(&consolev1.SessionDeleteResponse{Id: id, Deleted: true})
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
@@ -425,6 +428,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if !deleted {
 			return sessionError(c, fiber.StatusNotFound, "Deleted session '"+id+"' not found.")
 		}
+		runs.NotifySessionDeleted(id)
 		raw, err := protoMarshal.Marshal(&consolev1.SessionPermanentDeleteResponse{Id: id, PermanentlyDeleted: true})
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")

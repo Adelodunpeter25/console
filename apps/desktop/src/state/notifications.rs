@@ -58,6 +58,22 @@ impl ConsoleDesktopApp {
                                     });
                                     continue;
                                 }
+                                if event.kind == "session_deleted" {
+                                    // Silent signal: the chat was deleted (here or on
+                                    // another device or by the retention sweep). Its
+                                    // agent browser tabs go with it; the notification
+                                    // is a no-op when none are open.
+                                    if !session_id.is_empty() {
+                                        let _ = cx.update(|cx| {
+                                            if let Some(app) = entity.upgrade() {
+                                                app.update(cx, |this, cx| {
+                                                    this.close_session_browser_tabs(&session_id, cx);
+                                                });
+                                            }
+                                        });
+                                    }
+                                    continue;
+                                }
                                 let title = normalize_notification_title(&event.title);
                                 let subtitle = event.subtitle.clone();
                                 let body = event.body.clone();

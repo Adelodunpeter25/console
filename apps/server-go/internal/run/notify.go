@@ -99,6 +99,27 @@ func ResumedNotification(sessionID, message string) *consolev1.NotificationEvent
 	}
 }
 
+// SessionDeletedNotification tells connected clients a chat was deleted, so
+// they can drop its state — the agent browser tabs above all, which only the
+// client holds. Silent signal, like the resume signal: no banner.
+func SessionDeletedNotification(sessionID string) *consolev1.NotificationEvent {
+	return &consolev1.NotificationEvent{
+		Type: "notification", Kind: "session_deleted", SessionId: sessionID,
+	}
+}
+
+// NotifySessionDeleted pushes the deletion signal and drops the session's
+// browser kernel state (runtime, owned-tab set). Best-effort by nature: the
+// signal reaches connected clients over the notification stream; tabs a
+// client had open while offline are closed when it processes the event or
+// never, depending on whether it was connected.
+func (s *Service) NotifySessionDeleted(sessionID string) {
+	s.browseruseManager.DropSession(sessionID)
+	if bus := s.notifier(); bus != nil {
+		bus.Push(SessionDeletedNotification(sessionID))
+	}
+}
+
 // notifyResumed pushes the silent resume signal for a wake turn.
 func (s *Service) notifyResumed(sessionID, message string) {
 	if bus := s.notifier(); bus != nil {
