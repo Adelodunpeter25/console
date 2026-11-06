@@ -2,6 +2,7 @@
 import { expect, open, test } from "nsh/test";
 import { Console } from "console-nsh/native";
 import { groupSessions } from "./src/layout/session_groups";
+import { formatTimeAgo } from "./src/utils/time";
 
 test("renders the shell's sections", async () => {
   const app = await open("./App.tsx");
@@ -31,7 +32,7 @@ test("groups sessions by pin and recency", () => {
       updatedAt: now - 30 * day,
     },
   ];
-  const groups = groupSessions(sessions, now);
+  const groups = groupSessions(sessions, new Date(now));
   expect(groups.map((g) => g.label)).toEqual([
     "Pinned",
     "Today",
@@ -39,6 +40,14 @@ test("groups sessions by pin and recency", () => {
     "Older",
   ]);
   expect(groups[1].sessions[0].title).toBe("Today's chat");
+});
+
+test("formats time ago from seconds or milliseconds", () => {
+  const now = 1_700_000_000; // seconds
+  expect(formatTimeAgo(now - 30, now)).toBe("just now");
+  expect(formatTimeAgo((now - 300) * 1000, now)).toBe("5m");
+  expect(formatTimeAgo(now - 7200, now)).toBe("2h");
+  expect(formatTimeAgo(now - 3 * 86_400, now)).toBe("3d");
 });
 
 test("Console.health resolves through console-core", async () => {

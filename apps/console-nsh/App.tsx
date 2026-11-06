@@ -10,6 +10,9 @@ import {
 } from "console-nsh/native";
 import { Sidebar } from "./src/layout/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
+import { EmptyChatState } from "./src/common/empty_state";
+import type { SortMode } from "./src/layout/group_header";
+import type { DraftSummary } from "./src/layout/draft_item";
 
 // The Go dev server's default port; the desktop app defaults the same way.
 const backendUrl = "http://localhost:2003";
@@ -20,6 +23,9 @@ const selectedProjectId = signal<string | null>(null);
 const sessionsLoading = signal(false);
 const sessions = signal<SessionSummary[]>([]);
 const selectedSessionId = signal<string | null>(null);
+const sortMode = signal<SortMode>("date");
+// Frontend-only until the drafts service moves over (Rust pass).
+const drafts = signal<DraftSummary[]>([]);
 
 async function loadProjects() {
   loading.set(true);
@@ -50,13 +56,16 @@ function App() {
           selectedProjectId={selectedProjectId()}
           sessions={sessions()}
           sessionsLoading={sessionsLoading()}
+          drafts={drafts()}
+          activeSessionId={selectedSessionId()}
+          sortMode={sortMode()}
           onProject={selectProject}
           onSession={(id) => selectedSessionId.set(id)}
+          onSortMode={(mode) => sortMode.set(mode)}
+          onNewChat={() => selectedSessionId.set(null)}
         />
-        <View class="flex flex-1 flex-col items-center justify-center p-6">
-          <Text class="text-sm text-muted-foreground">
-            Placeholder — panes arrive in subphase 2.3.
-          </Text>
+        <View class="flex flex-1 flex-col">
+          <EmptyChatState onNewChat={() => selectedSessionId.set(null)} />
         </View>
       </View>
     </View>

@@ -1,37 +1,68 @@
-// Grouping for the sidebar's chat list, the shape of console-ui's
-// `utils/session_groups.rs`: pinned first, then recency buckets.
+// Sidebar grouping, ported from console-ui's `utils/session_groups.rs`:
+// calendar buckets in display order, most recent first, empty buckets
+// omitted. Pinned sessions surface above the buckets (the GPUI app renders
+// them via the pin path in `sidebar/mod.rs`).
 
 import type { SessionSummary } from "console-nsh/native";
 
 export type SessionGroup = { label: string; sessions: SessionSummary[] };
 
-const DAY = 24 * 60 * 60 * 1000;
+const LABELS = [
+  "Today",
+  "Yesterday",
+  "This week",
+  "This month",
+  "Older",
+] as const;
+
+function bucket(updatedAtMs: number, today: Date): number {
+  const sessionDate = new Date(updatedAtMs);
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const sessionDay = startOfDay(sessionDate);
+  if (sessionDay >= startOfDay(today)) return 0;
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (sessionDay >= startOfDay(yesterday)) return 1;
+
+  const weekStart = new Date(today);
+  // Monday-start week, as `weekday().num_days_from_monday()` does.
+  weekStart.setDate(weekStart.getDate() - ((today.getDay() + 6) % 7));
+  if (sessionDay >= startOfDay(weekStart)) return 2;
+
+  if (
+    sessionDate.getFullYear() === today.getFullYear() &&
+    sessionDate.getMonth() === today.getMonth()
+  ) {
+    return 3;
+  }
+  return 4;
+}
 
 export function groupSessions(
   sessions: SessionSummary[],
-  now: number = Date.now(),
+  now: Date = new Date(),
 ): SessionGroup[] {
-  const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
-  const groups: SessionGroup[] = [
-    { label: "Pinned", sessions: [] },
-    { label: "Today", sessions: [] },
-    { label: "Yesterday", sessions: [] },
-    { label: "This week", sessions: [] },
-    { label: "Older", sessions: [] },
-  ];
-  for (const session of sorted) {
-    const age = now - session.updatedAt;
+  const pinned: SessionSummary[] = [];
+  const buckets: SessionSummary[][] = LABELS.map(() => []);
+  for (const session of sessions) {
     if (session.status === "pinned") {
-      groups[0].sessions.push(session);
-    } else if (age < DAY) {
-      groups[1].sessions.push(session);
-    } else if (age < 2 * DAY) {
-      groups[2].sessions.push(session);
-    } else if (age < 7 * DAY) {
-      groups[3].sessions.push(session);
-    } else {
-      groups[4].sessions.push(session);
+      pinned.push(session);
+      continue;
     }
+    buckets[bucket(session.updatedAt, now)].push(session);
   }
-  return groups.filter((g) => g.sessions.length > 0);
+
+  const groups: SessionGroup[] = [];
+  if (pinned.length > 0) {
+    pinned.sort((a, b) => b.updatedAt - a.updatedAt);
+    groups.push({ label: "Pinned", sessions: pinned });
+  }
+  buckets.forEach((items, index) => {
+    if (items.length === 0) return;
+    items.sort((a, b) => b.updatedAt - a.updatedAt);
+    groups.push({ label: LABELS[index], sessions: items });
+  });
+  return groups;
 }
