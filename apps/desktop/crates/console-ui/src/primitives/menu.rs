@@ -29,8 +29,9 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, Bounds, Display, Element, ElementId, FocusHandle, FontWeight, GlobalElementId,
     InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent, LayoutId, MouseButton,
-    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, SharedString, Size, Style,
-    Styled, Window, actions, anchored, canvas, deferred, div, prelude::FluentBuilder, px,
+    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, SharedString, Size,
+    StatefulInteractiveElement, Style, Styled, Window, actions, anchored, canvas, deferred, div,
+    prelude::FluentBuilder, px,
 };
 
 actions!(
@@ -936,7 +937,7 @@ impl RenderOnce for MenuCard {
         let highlighted = self.handle.state.borrow().highlighted;
         let context_style = self.context_style;
 
-        let mut card = div()
+        let card = div()
             .id(self.id)
             .occlude()
             .track_focus(&self.handle.focus)
@@ -975,8 +976,19 @@ impl RenderOnce for MenuCard {
                 }
             });
 
+        // The rows scroll once they outgrow roughly seven entries — a long
+        // repo or branch list used to overflow the window edge instead.
+        // One card renders at a time, so a fixed id is enough for the
+        // stateful scroll div.
+        let mut list = div()
+            .id("menu-scroll-list")
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .max_h(px(if context_style { 232.0 } else { 190.0 }));
+
         for (index, item) in items.into_iter().enumerate() {
-            card = card.child(match item {
+            list = list.child(match item {
                 MenuItem::Separator => div()
                     .my(px(if context_style { 6.0 } else { 4.0 }))
                     .mx(px(if context_style { 0.0 } else { 6.0 }))
@@ -1059,7 +1071,7 @@ impl RenderOnce for MenuCard {
                 }
             });
         }
-        card
+        card.child(list)
     }
 }
 

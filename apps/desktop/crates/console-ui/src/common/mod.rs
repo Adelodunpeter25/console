@@ -8,13 +8,14 @@ pub mod error_banner;
 pub mod file_browser;
 pub mod file_mention_chip;
 pub mod floating_composer;
-pub mod global_search_panel;
 pub mod github_menu;
+pub mod global_search_panel;
 pub mod image_viewer;
 pub mod input;
 pub mod model_picker;
 pub mod notice_banner;
 pub mod palette;
+pub mod picker_menus;
 pub(crate) mod pill_popovers;
 pub mod project_browse_palette;
 pub mod queued_prompt_card;
@@ -58,6 +59,9 @@ pub use model_picker::{
 };
 pub use notice_banner::notice_banner;
 pub use palette::{CommandPalette, CommandPaletteModal, PaletteEntry};
+pub use picker_menus::{
+    BranchModeRow, ProjectMenuExtras, branch_menu_section, project_menu_section,
+};
 pub use project_browse_palette::ProjectBrowsePalette;
 pub use queued_prompt_card::{queued_prompt_card, queued_prompt_row, queued_prompts_stack};
 pub use quick_open_palette::QuickOpenPalette;

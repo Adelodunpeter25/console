@@ -15,12 +15,11 @@ use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
 
-use crate::primitives::{
-    ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, dropdown_menu,
-};
+use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, dropdown_menu};
 use crate::theme::Theme;
 
 use super::github_menu::github_menu_section;
+use super::picker_menus::{ProjectMenuExtras, branch_menu_section, project_menu_section};
 
 #[derive(IntoElement)]
 pub struct WorkspaceFooter {
@@ -196,35 +195,16 @@ impl RenderOnce for WorkspaceFooter {
                     &self.project_menu,
                     MenuAlign::AboveLeft,
                     move |_| {
-                        let mut items = projects
-                            .iter()
-                            .map(|project| {
-                                let project_id = project.id.clone();
-                                let on_select_project = on_select_project.clone();
-                                let selected = Some(project.id.as_str()) == selected_id.as_deref();
-                                MenuItem::new(project.name.clone(), move |window, cx| {
-                                    (on_select_project)(project_id.clone(), window, cx);
-                                })
-                                .selected(selected)
-                            })
-                            .collect::<Vec<_>>();
-                        if !items.is_empty() {
-                            items.push(MenuItem::Separator);
-                        }
-                        let on_new_project = on_new_project.clone();
-                        let on_no_project = on_no_project.clone();
-                        items.push(
-                            MenuItem::new("New project…", move |window, cx| {
-                                (on_new_project)(window, cx);
-                            })
-                            .icon(IconName::FolderNew.path()),
-                        );
-                        items.push(
-                            MenuItem::new("No project", move |window, cx| {
-                                (on_no_project)(window, cx);
-                            })
-                            .icon(IconName::X.path())
-                            .selected(selected_id.is_none()),
+                        let mut items = project_menu_section(
+                            projects.clone(),
+                            selected_id.clone(),
+                            false,
+                            &on_select_project,
+                            Some(&ProjectMenuExtras {
+                                on_new_project: on_new_project.clone(),
+                                on_no_project: on_no_project.clone(),
+                                none_selected: selected_id.is_none(),
+                            }),
                         );
                         let github_repos = self.github_repos.clone();
                         let github_repos_loading = self.github_repos_loading;
@@ -283,33 +263,19 @@ impl RenderOnce for WorkspaceFooter {
                 &self.branch_menu,
                 MenuAlign::AboveLeft,
                 move |_| {
-                    let mut items = branches
-                        .iter()
-                        .map(|branch| {
-                            let branch_name = branch.name.clone();
-                            let on_select_branch = on_select_branch.clone();
-                            MenuItem::new(branch.name.clone(), move |window, cx| {
-                                (on_select_branch)(branch_name.clone(), window, cx);
-                            })
-                            .selected(branch.current)
-                        })
-                        .collect::<Vec<_>>();
-                    if items.is_empty() {
-                        items.push(MenuItem::new("No branches", |_, _| {}).disabled(true));
-                    } else {
-                        // New worktree spawns a session rooted in a fresh
-                        // worktree (server auto-names the branch) and opens
-                        // it — it never re-roots the current session.
-                        items.push(MenuItem::Separator);
-                        let on_new_worktree = on_new_worktree.clone();
-                        items.push(
-                            MenuItem::new("New worktree…", move |window, cx| {
-                                (on_new_worktree)(window, cx);
-                            })
-                            .icon(IconName::GitBranch.path()),
-                        );
-                    }
-                    items
+                    let is_current: Rc<dyn Fn(&GitBranchInfo) -> bool> =
+                        Rc::new(|branch: &GitBranchInfo| branch.current);
+                    // New worktree spawns a session rooted in a fresh worktree
+                    // (server auto-names the branch) and opens it — it never
+                    // re-roots the current session.
+                    branch_menu_section(
+                        branches.clone(),
+                        &is_current,
+                        &on_select_branch,
+                        false,
+                        &[],
+                        Some((&on_new_worktree, "New worktree…")),
+                    )
                 },
             )
         } else {

@@ -31,6 +31,7 @@ use crate::primitives::{
 use crate::theme::Theme;
 
 use super::super::github_menu::github_menu_section;
+use super::super::picker_menus::{BranchModeRow, branch_menu_section, project_menu_section};
 
 /// One frame of state to paint.
 pub struct Data {
@@ -324,28 +325,16 @@ impl FloatingComposerView {
             &self.project_menu,
             MenuAlign::AboveLeft,
             move |_| {
-                let projects = data.projects.clone();
-                let selected = selected_project_id.clone();
-                let on_choose_project = on_choose_project.clone();
-                let mut items: Vec<MenuItem> = projects
-                    .iter()
-                    .map(|project| {
-                        let id = project.id.clone();
-                        let name = project.name.clone();
-                        let on_choose_project = on_choose_project.clone();
-                        MenuItem::new(name, move |window, cx| {
-                            on_choose_project(id.clone(), window, cx);
-                        })
-                        .icon(IconName::Folder.path())
-                        .selected(selected.as_deref() == Some(project.id.as_str()))
-                    })
-                    .collect();
                 // The GitHub section needs no local projects to make sense —
                 // cloning from GitHub is how the list grows in the first
                 // place — so the menu always offers it.
-                if !items.is_empty() {
-                    items.push(MenuItem::Separator);
-                }
+                let mut items = project_menu_section(
+                    data.projects.clone(),
+                    selected_project_id.clone(),
+                    true,
+                    &on_choose_project,
+                    None,
+                );
                 let github_repos = data.github_repos.clone();
                 let github_repos_loading = data.github_repos_loading;
                 let github_repos_error = data.github_repos_error.clone();
@@ -372,49 +361,53 @@ impl FloatingComposerView {
             // branch name is capped rather than pushing the card wider.
             .max_w(px(220.0));
         let on_choose_branch = self.on_choose_branch.clone();
-        let branches = data.branches.clone();
-        let current = data.branch.clone();
         let branch_control = dropdown_menu(
             branch_trigger,
             "floating-branch-menu",
             &self.branch_menu,
             MenuAlign::AboveLeft,
             move |_| {
-                let mut items = vec![
-                    MenuItem::new("Project branch", {
-                        let on_choose_branch = on_choose_branch.clone();
-                        move |window, cx| {
-                            on_choose_branch(BranchChoice::Project, window, cx);
-                        }
+                let current = data.branch.clone();
+                let current_for_check = current.clone();
+                let is_choice: Rc<dyn Fn(&GitBranchInfo) -> bool> =
+                    Rc::new(move |info: &GitBranchInfo| {
+                        current_for_check == BranchChoice::FromBranch(info.name.clone())
+                    });
+                let on_pick_branch: Rc<dyn Fn(String, &mut Window, &mut App)> = {
+                    let on_choose_branch = on_choose_branch.clone();
+                    Rc::new(move |name, window, cx| {
+                        on_choose_branch(BranchChoice::FromBranch(name), window, cx);
                     })
-                    .selected(current == BranchChoice::Project),
-                    MenuItem::new("New worktree", {
-                        let on_choose_branch = on_choose_branch.clone();
-                        move |window, cx| {
-                            on_choose_branch(BranchChoice::NewWorktree, window, cx);
-                        }
-                    })
-                    .selected(current == BranchChoice::NewWorktree),
-                ];
-                if !branches.is_empty() {
-                    items.push(MenuItem::Separator);
-                    for info in branches.iter() {
-                        let name = info.name.clone();
-                        let on_choose_branch = on_choose_branch.clone();
-                        // Two clones: one for the click handler, one for the
-                        // selected-check below the move.
-                        let choice = BranchChoice::FromBranch(name.clone());
-                        let chosen = choice.clone();
-                        items.push(
-                            MenuItem::new(name, move |window, cx| {
-                                on_choose_branch(choice.clone(), window, cx);
-                            })
-                            .selected(current == chosen)
-                            .icon(IconName::GitBranch.path()),
-                        );
+                };
+                let mode = |label: &'static str, choice: BranchChoice, selected: bool| {
+                    let on_choose_branch = on_choose_branch.clone();
+                    BranchModeRow {
+                        label,
+                        selected,
+                        on_choose: Rc::new(move |window, cx| {
+                            on_choose_branch(choice.clone(), window, cx);
+                        }),
                     }
-                }
-                items
+                };
+                branch_menu_section(
+                    data.branches.clone(),
+                    &is_choice,
+                    &on_pick_branch,
+                    true,
+                    &[
+                        mode(
+                            "Project branch",
+                            BranchChoice::Project,
+                            current == BranchChoice::Project,
+                        ),
+                        mode(
+                            "New worktree",
+                            BranchChoice::NewWorktree,
+                            current == BranchChoice::NewWorktree,
+                        ),
+                    ],
+                    None,
+                )
             },
         );
 
