@@ -32,10 +32,11 @@ type browserTool struct {
 // variables and owned tabs never leak into another session's kernel.
 func NewBrowserTool(manager *Manager, sessionID string, handler tools.BrowserHandler) tools.Tool {
 	inner := tools.NewTool("browser",
-		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded yet, read the browser-use skill to load them. When a browsing workflow is done, close the tabs it opened with the browser_reset tool.",
-		// Exec-tier: the kernel clicks and submits on live pages, so plan
-		// mode denies it and other modes ask.
-		tools.TierExec,
+		"Drive the built-in desktop browser with the preinstalled browser object (browser.open, browser.click, browser.query, ...). One call can navigate, wait, extract and loop; variables persist until reset. The /browser-use instructions in this conversation document the methods; when they are not loaded, always read the browser-use skill to load them. Always close the tabs you opened with the browser_reset tool when the browser workflow is done.",
+		// Read-tier, like the low-level tool it replaced: browsing is
+		// observation, and plan mode may read pages. A click on a page is
+		// gated by the skill's risk rules, not the approval table.
+		tools.TierRead,
 		func(ctx context.Context, in browserInput) (any, error) {
 			return nil, tools.NewToolError("browser requires call context")
 		})

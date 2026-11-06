@@ -72,7 +72,7 @@ var Capabilities = []Capability{
 		Split:          browseruse.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
-		Tier:           tools.TierExec,
+		Tier:           tools.TierRead,
 		GatedTools:     []string{"browser"},
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := browseruse.NewLoader(s.browseruseManager, c.sessionID, c.browserHandler).Load(registry)
