@@ -1,0 +1,7 @@
+{
+  "name": "nsh-chat",
+  "id": "com.example.nshchat",
+  "version": "1.0.0",
+  "build": 1,
+  "rust": "."
+}

@@ -1,0 +1,11 @@
+[package]
+name = "nsh-app-nsh-chat"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+nsh-core = { path = "/home/user/.nsh/source/crates/nsh-core" }
+nsh-base = { path = "/home/user/.nsh/source/crates/nsh-base" }
