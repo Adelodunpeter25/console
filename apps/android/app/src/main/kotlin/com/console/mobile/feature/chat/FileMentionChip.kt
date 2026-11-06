@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.console.mobile.core.util.FileMention
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
@@ -69,10 +71,12 @@ fun mentionAnnotatedString(
     content: String,
     fileMentions: List<FileMention>,
     skillMentions: List<com.console.mobile.core.util.SkillMention> = emptyList(),
+    chatMentions: List<com.console.mobile.core.util.ChatMention> = emptyList(),
 ): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val items = mutableListOf<MentionItem>()
     for (m in fileMentions) items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
     for (s in skillMentions) items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+    for (c in chatMentions) items += MentionItem(c.range, "\$${c.slug}", c.slug, MentionKind.Chat)
     items.sortBy { it.range.first }
 
     val inlineContent = items.mapIndexed { index, item ->
@@ -82,6 +86,13 @@ fun mentionAnnotatedString(
         ) {
             if (item.kind == MentionKind.Skill) {
                 com.console.mobile.ui.components.SkillIcon(sizeDp = 12, modifier = Modifier.size(12.dp))
+            } else if (item.kind == MentionKind.Chat) {
+                androidx.compose.material3.Icon(
+                    TablerIcons.Outline.MessageChatbot,
+                    contentDescription = null,
+                    tint = MentionAccent,
+                    modifier = Modifier.size(12.dp),
+                )
             } else {
                 FileIcon(filename = item.displayText, sizeDp = 12, modifier = Modifier.size(12.dp))
             }

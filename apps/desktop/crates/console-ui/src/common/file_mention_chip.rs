@@ -202,7 +202,12 @@ impl Element for InlineFileMentionText {
             let spacer_start = display_text.len();
             display_text.push_str(FILE_MENTION_SPACER);
             let spacer_end = display_text.len();
-            display_text.push_str(&self.text[mention.range.clone()]);
+            // A chat chip shows just the slug; the `$` stays in the text sent.
+            let is_chat = mention
+                .path
+                .starts_with(console_shared::composer::mentions::CHAT_PATH_PREFIX);
+            let shown_start = mention.range.start + usize::from(is_chat);
+            display_text.push_str(&self.text[shown_start..mention.range.end]);
             let chip_end = display_text.len();
             last_idx = mention.range.end;
 

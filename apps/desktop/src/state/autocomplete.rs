@@ -364,8 +364,7 @@ impl ConsoleDesktopApp {
                     };
                     input.insert_file_mention(range, path, cx);
                 }
-                // Skills become chips; built-in commands stay plain text.
-                AutocompleteItem::Command(command) if !command.builtin => {
+                AutocompleteItem::Command(command) => {
                     input.insert_skill_mention(range, &command.name, cx);
                 }
                 // `$` chat refs become chips (like file mentions); the
