@@ -92,13 +92,3 @@ existing Android app already plays this page, so this is proven in practice).
 - Desktop menus/tray/global-shortcut API surface still needs a detailed check (`nsh/desktop`
   covers window chrome, app menu, context menus; tray/notifications unverified).
 - No third-party component ecosystem; `nsh/base` + own components are the library.
-
-## Demo
-
-A TSX notes app lives at `~/apps/notes` in the orb (created with `nsh init --template ts`,
-nsh 0.4.0 built from source): a sidebar of notes, an editor, and `mod+n` bound via `keymap` to
-"New note". Verified in the orb: `nsh test` passes headless (including the `mod+n` shortcut
-test), and the web build runs at `nsh run --target web` (port 8790, supervised as the `notes`
-service, exposed through the portal) where clicks and real Ctrl+N presses were exercised in a
-browser. On a machine with GTK 4.14+, `nsh run` in that directory opens the same app in a native
-window.

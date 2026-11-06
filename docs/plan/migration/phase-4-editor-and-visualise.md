@@ -19,11 +19,16 @@ and the weakest GPUI result (`/visualise` is not interactive).
 
 ## Terminal tab
 
-- Keep the server-side terminal as-is; the tab surface starts as read-out text in TSX. A full
-  terminal emulator in NSH is its own project — decide after phases 2–3 whether to keep using
-  the GPUI app's terminal, embed a webview-based one, or scope it down.
+- The plan is to adopt the **upstream NSH terminal component**: the NSH creator has demoed a
+  terminal built on NSH (see his Twitter), and it is expected to land in the framework. We use
+  that when it ships — no custom terminal emulator of our own.
+- Until it lands upstream, the terminal tab stays on the GPUI app, or the NSH app shows the
+  terminal as read-out text behind a flag; track the upstream component and wire it in phase 3/4
+  order as availability allows. The server-side terminal machinery is unchanged either way.
 
 ## Done when
 
 - File-and-diff tab and `/visualise` render from the NSH app with tests.
 - The `gpui-editor` dependency is used by nothing but the legacy GPUI app.
+- The terminal tab runs on the upstream NSH terminal component once released (or the tab is the
+  only remaining GPUI-side surface, tracked explicitly here).
