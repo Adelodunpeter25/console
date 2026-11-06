@@ -28,7 +28,7 @@ export function Sidebar(props: {
   const groups =
     props.sortMode === "project"
       ? groupSessionsByProject(props.sessions, (id) =>
-          id === null ? null : (projectNameById.get(id) ?? null),
+          projectNameById.get(id) ?? null,
         )
       : groupSessions(props.sessions);
   return (

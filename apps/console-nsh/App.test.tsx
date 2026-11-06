@@ -66,8 +66,21 @@ test("groups sessions by project, none last", () => {
   const groups = groupSessionsByProject(sessions, (id) =>
     id === "p1" ? "Repo One" : id === "p2" ? "Repo Two" : null,
   );
-  expect(groups.map((g) => g.label)).toEqual(["Repo One", "Repo Two", "None"]);
-  expect(groups[0].sessions.map((s) => s.id)).toEqual(["a", "c"]);
+  expect(groups.map((g) => g.label)).toEqual([
+    "Repo Two",
+    "Repo One",
+    "No Project",
+  ]);
+  const repoOne = groups.find((g) => g.label === "Repo One");
+  expect(repoOne?.sessions.map((s) => s.id)).toEqual(["a", "c"]);
+});
+
+test("folds unknown project ids into No Project", () => {
+  const sessions = [
+    { id: "a", title: "A", status: "active", updatedAt: 3, projectId: "ghost" },
+  ];
+  const groups = groupSessionsByProject(sessions, () => null);
+  expect(groups.map((g) => g.label)).toEqual(["No Project"]);
 });
 
 test("Console.health resolves through console-core", async () => {

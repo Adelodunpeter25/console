@@ -9,7 +9,11 @@ export function EmptyChatState(props: { onNewChat: () => void }) {
   return (
     <View class="flex w-full flex-1 flex-col items-center justify-center gap-1.5 bg-background">
       <View class="h-11 w-11 items-center justify-center rounded-xl border border-border bg-card">
-        <Icon name="chat-round-line" size={22} color={token("muted-foreground")} />
+        <Icon
+          name="ChatRoundLine"
+          size={22}
+          color={token("muted-foreground")}
+        />
       </View>
       <Text class="mt-3.5 text-xl font-medium text-foreground">
         No chat open

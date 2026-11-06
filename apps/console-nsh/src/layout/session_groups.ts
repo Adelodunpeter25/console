@@ -68,35 +68,48 @@ export function groupSessions(
 }
 
 /// Group chats by project, in the shape of console-ui's
-/// `group_indices_by_project`: one bucket per project id, "none" last, each
-/// sorted most recent first. `projectName` resolves a bucket's label; the
-/// GPUI app falls back to the working-directory name, which the summary
-/// does not carry yet, so unknown projects group as "Other".
+/// `group_indices_by_project`: one bucket per project id, sections ordered by
+/// their most recent activity (newest first), and chats without a project —
+/// or whose project is unknown, per `ProjectSectionKey` — always last, under
+/// "No Project" (`sidebar/mod.rs`'s `NO_PROJECT_KEY` / `"No Project"`).
+/// `projectName` resolves a bucket's label from the project list; unknown
+/// ids fold into the no-project section, like the GPUI app.
 export function groupSessionsByProject(
   sessions: SessionSummary[],
-  projectName: (projectId: string | null) => string | null,
+  projectName: (projectId: string) => string | null,
 ): SessionGroup[] {
+  const noProjectKey = "none";
   const byProject = new Map<string, SessionSummary[]>();
   for (const session of sessions) {
-    const key = session.projectId ?? "none";
+    // Unknown project ids fall into the no-project section.
+    const raw = session.projectId;
+    const key =
+      raw !== null && raw !== undefined && projectName(raw) !== null
+        ? raw
+        : noProjectKey;
     const list = byProject.get(key) ?? [];
     list.push(session);
     byProject.set(key, list);
   }
 
-  const groups: SessionGroup[] = [];
-  const none = byProject.get("none");
-  if (none !== undefined) byProject.delete("none");
+  const groups: { group: SessionGroup; latest: number; isNoProject: boolean }[] = [];
   for (const [projectId, items] of byProject) {
     items.sort((a, b) => b.updatedAt - a.updatedAt);
     groups.push({
-      label: projectName(projectId === "none" ? null : projectId) ?? "Other",
-      sessions: items,
+      group: {
+        label:
+          projectId === noProjectKey
+            ? "No Project"
+            : (projectName(projectId) ?? "No Project"),
+        sessions: items,
+      },
+      latest: items[0]?.updatedAt ?? 0,
+      isNoProject: projectId === noProjectKey,
     });
   }
-  if (none !== undefined) {
-    none.sort((a, b) => b.updatedAt - a.updatedAt);
-    groups.push({ label: "None", sessions: none });
-  }
-  return groups;
+  groups.sort((a, b) => {
+    if (a.isNoProject !== b.isNoProject) return a.isNoProject ? 1 : -1;
+    return b.latest - a.latest;
+  });
+  return groups.map((g) => g.group);
 }
