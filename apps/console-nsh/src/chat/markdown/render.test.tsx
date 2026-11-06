@@ -32,7 +32,6 @@ test("the fixture document renders every construct", async () => {
     "Section",
     "First",
     "Task",
-    "let x = 1; // done",
     "Quoted",
     "Name",
     "alpha",
@@ -40,6 +39,9 @@ test("the fixture document renders every construct", async () => {
   ]) {
     expect(texts).toContain(piece);
   }
+  // Code blocks render through the highlighted read-only editor, not a
+  // text row: the block is there under its accessibility label.
+  expect(app.count("label:Code block (rust)")).toBeGreaterThan(0);
 });
 
 test("the scale prop switches metrics", async () => {
