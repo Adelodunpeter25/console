@@ -18,10 +18,11 @@ build deploys as a static site and talks to the Go server.
 
 ## The preservation rule
 
-The NSH app must preserve **every single functionality** of the current desktop app — including
-the ones that look like bugs, the bad UX, and the current behavior users already know. Behavior
-is ported as it is today and only changed afterward, as deliberate, separately reviewed changes.
-A port that silently "fixes" something is wrong.
+The NSH app must preserve **every single functionality** of the current desktop app, and its
+UX as users know it today. What it must *not* inherit are the known bugs and bad UX: those are
+fixed deliberately as part of the migration (each one noted when it's ported), not carried over
+and not silently "improved". A port that quietly changes how a feature behaves is wrong; a port
+that knowingly ships a bug it could have fixed is also wrong.
 
 The bar is set highest at the workspace model, which is the spine of the app:
 

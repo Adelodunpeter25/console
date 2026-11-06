@@ -19,7 +19,7 @@ each screen is hot-reloadable and independently testable.
 ## The workspace model, ported exactly
 
 This is the phase where the preservation rule from [overview.md](overview.md) bites. The NSH
-app reproduces the current model 1:1, quirks included:
+app reproduces the current model 1:1, with the same functionality and UX:
 
 - A workspace belongs to a project and holds that project's chats, browser tabs, terminals and
   file/diff tabs together. Tab kinds (`Chat`, `Browser`, `Terminal`, `FileAndDiff`), pane trees,
@@ -28,7 +28,9 @@ app reproduces the current model 1:1, quirks included:
 - Separate worktrees of the same project are separate workspaces, each with its own tabs and
   state, exactly as the GPUI app treats them today (`state/projects.rs`, `types/workspace.rs`).
 - The persisted layout moves as it is: same file, same semantics, same migration of old files
-  (or lack thereof). No "improvements" to defaults, ordering, or close behavior during the port.
+  (or lack thereof). Defaults, ordering and close behavior stay as users know them.
+- Known bugs and UX papercuts in this surface are fixed here deliberately, each noted — not
+  silently changed and not carried over.
 
 ## Approach
 
@@ -38,6 +40,6 @@ app reproduces the current model 1:1, quirks included:
 
 ## Done when
 
-- Daily use (chat, panes, palette, settings) is possible in the NSH app on desktop, with the
-  workspace model indistinguishable from the GPUI app's — including its current bugs and UX.
+- Daily use (chat, panes, palette, settings) is possible in the NSH app on desktop, with every
+  functionality and the UX of the GPUI app intact, minus its known bugs.
 - Headless tests cover each screen's core interactions and the workspace behaviors above.
