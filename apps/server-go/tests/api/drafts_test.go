@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -97,5 +99,19 @@ func TestDraftsLastWriteWinsAndClear(t *testing.T) {
 	late := draftCall(t, app, "PUT", `{"text":"from phone","updatedAt":"250"}`)
 	if late.Data.Applied {
 		t.Fatal("a write older than the clear must lose")
+	}
+}
+
+// A device with a fast clock must not stamp a draft that nothing else can
+// overwrite: a far-future updatedAt is pulled back to the server's now.
+func TestDraftsFutureTimestampIsClamped(t *testing.T) {
+	app := draftApp(t)
+	future := time.Now().Add(24 * time.Hour).UnixMilli()
+	draftCall(t, app, "PUT", `{"text":"fast clock","updatedAt":"`+strconv.FormatInt(future, 10)+`"}`)
+
+	next := time.Now().Add(time.Second).UnixMilli()
+	env := draftCall(t, app, "PUT", `{"text":"normal clock","updatedAt":"`+strconv.FormatInt(next, 10)+`"}`)
+	if !env.Data.Applied {
+		t.Fatal("a normal-clock write after a clamped future one must apply")
 	}
 }

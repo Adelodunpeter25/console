@@ -165,7 +165,8 @@ class ChatRepository(
     }
 
     private suspend fun pushDraft(sessionId: String) {
-        val text = chats.get(sessionId).input
+        val state = chats.get(sessionId)
+        val text = state.input
         val held = serverDrafts[sessionId]
         val draft = console.v1.ChatDraft(
             session_id = sessionId,
@@ -173,7 +174,9 @@ class ChatRepository(
             // Chips keep their ranges only while the text they point into is unchanged.
             mentions = if (held?.text == text) held.mentions else emptyList(),
             comments = held?.comments ?: emptyList(),
-            updated_at = System.currentTimeMillis(),
+            // Stamp when the text was last edited, not when the push happens, so a
+            // push delayed by being offline cannot overwrite a newer edit elsewhere.
+            updated_at = state.draftUpdatedAt ?: System.currentTimeMillis(),
         )
         try {
             val result = withContext(Dispatchers.IO) { api.putDraft(draft) }
