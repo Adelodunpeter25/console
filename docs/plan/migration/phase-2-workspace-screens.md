@@ -3,6 +3,43 @@
 **Goal**: the screens people live in, in TSX. Order within the phase is by iteration cost:
 each screen is hot-reloadable and independently testable.
 
+## Subphases
+
+One screen (or component family) at a time, in dependency order, mirroring how the GPUI app
+separates its components (`console-ui/src/…`). Each subphase lands alone: hot-reloadable,
+independently testable, and usable in the shell when done. The NSH app's `src/` tree grows the
+same folders, so like lives next to like.
+
+- **2.1 App shell and layout** (`layout/`, `layout/sidebar/`) — title bar, window chrome, the
+  project/session sidebar with groups, drafts and loading states. The nav placeholder from
+  phase 1 becomes this.
+- **2.2 Primitives** (`primitives/`, `common/` small pieces) — context menu, menu, tooltip,
+  scrollbar, text field, icons and file icons, motion, palettes and picker menus. Everything
+  later subphases compose; ported just ahead of the first screen that needs each piece.
+- **2.3 Workspace panes and tabs** (`workspace/`, `state/workspace_panes.rs`,
+  `state/workspace_tabs/`, `persistence/`) — pane tree, tab strip, split/drag/close, empty
+  state; the persisted layout moves into the core crate. Tab kinds other than chat are stubs
+  until 2.5–2.7 and phase 3.
+- **2.4 Chat tab** (`chat/`, `common/composer_view.rs`, `common/input/`, `markdown/`) — the
+  phase-0 spike productionized: transcript, message bubbles, composer with attachments and
+  autocomplete, tool calls, thinking blocks, streaming markdown with highlighting, the visual
+  components (table, chart, metric, select).
+- **2.5 Viewer tabs** (`viewer/`) — file, diff and code viewers, changes review, image preview,
+  logs, file comments, blocked panel.
+- **2.6 Inspector, right sidebar and run** (`inspector/`, `run/`) — bottom split, changes list,
+  file tree, right sidebar, run panel and script log.
+- **2.7 Terminal tab** (`terminal/`) — the terminal view over a PTY from the core; the heaviest
+  single tab, so it follows the viewers.
+- **2.8 Settings and onboarding** (`settings/`, `onboarding/`, `state/settings.rs`) — pages and
+  modals driven by the Rust settings state; keybindings become data in the core, rendered
+  through `keymap` and shown in the palette.
+- **2.9 Command palette and global search** (`common/global_search_panel.rs`,
+  `common/quick_open_palette.rs`) — `mod+k` palette with `NotEditing` semantics, global search,
+  project browse.
+
+Browser and device tabs stay out of phase 2 — they are phase 3
+([phase-3-browser-and-devices.md](phase-3-browser-and-devices.md)).
+
 ## Screens
 
 - **Chat / transcript** — the phase-0 spike screen, productionized against real sessions

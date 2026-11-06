@@ -1,0 +1,45 @@
+# Checks the NSH app (apps/console-nsh) on each pull request that touches it:
+# cargo check of the crate, type checks of the TSX against the generated
+# declarations (nsh check), then the headless test suite (nsh test).
+#
+# Push-to-main packaging stays with the existing workflows for now; the NSH
+# app is not shippable yet (web target blocked, see
+# docs/plan/migration/implementation-notes.md, finding 5).
+name: Check console-nsh
+
+on:
+  pull_request:
+    paths:
+      - "apps/console-nsh/**"
+      - "apps/desktop/crates/console-core/**"
+      - ".github/workflows/console-nsh.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Must match rust-toolchain.toml (source of truth).
+          toolchain: 1.97.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/console-nsh
+
+      - name: Install nsh
+        run: curl -fsSL https://nsh.dev/install.sh | sh -s -- && echo "$HOME/.nsh/bin" >> "$GITHUB_PATH"
+
+      - name: Check (crate + TSX)
+        working-directory: apps/console-nsh
+        run: nsh check
+
+      - name: Test (headless)
+        working-directory: apps/console-nsh
+        run: nsh test
