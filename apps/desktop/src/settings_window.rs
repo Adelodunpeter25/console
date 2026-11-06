@@ -3,7 +3,7 @@ use console_ui::input::ComposerInput;
 use console_ui::settings::{
     BrowserPage, BrowserProfileRow, DeletedChatsPage, IntegrationsPage, KeybindingsPage,
     ModelsPage, ProbeState, ProjectsPage, ProvidersPage, ServersPage, SettingsShell, SettingsTab,
-    UsagePage,
+    UpdatesPage, UsagePage,
 };
 use gpui::prelude::FluentBuilder;
 use gpui::{
@@ -1159,6 +1159,29 @@ impl Render for SettingsWindow {
                 search_input: Some(self.keybindings_search.clone()),
             }
             .into_any_element(),
+            SettingsTab::Updates => {
+                let app_handle = self.app.clone();
+                let on_check: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.check_for_update(cx));
+                        }
+                    });
+                let app_handle = self.app.clone();
+                let on_install: Rc<dyn Fn(&mut Window, &mut App) + 'static> =
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.install_update(cx));
+                        }
+                    });
+                UpdatesPage {
+                    installed_build: crate::state::updates::installed_build(),
+                    status: app.update_status.clone(),
+                    on_check,
+                    on_install,
+                }
+                .into_any_element()
+            }
             SettingsTab::Browser => {
                 let app_handle = self.app.clone();
                 let on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static> =

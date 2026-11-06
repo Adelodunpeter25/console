@@ -528,6 +528,7 @@ pub struct ConsoleDesktopApp {
     pub chrome_profiles_loading: bool,
     pub chrome_importing: bool,
     pub chrome_status: Option<String>,
+    pub update_status: console_ui::settings::UpdateStatus,
     pub drafts: std::collections::HashMap<String, crate::persistence::store::PersistedDraft>,
     /// Session IDs whose draft is confirmed for sidebar display.
     /// Only updated when a tab closes (or submit). Typing never touches this —

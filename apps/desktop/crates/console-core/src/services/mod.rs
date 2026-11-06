@@ -20,6 +20,7 @@ pub mod session;
 pub mod settings;
 pub mod terminal;
 pub mod transport;
+pub mod update;
 pub mod usage;
 
 pub use assist::AssistService;

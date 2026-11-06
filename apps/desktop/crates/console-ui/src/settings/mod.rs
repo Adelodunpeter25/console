@@ -15,6 +15,7 @@ pub mod providers_page;
 pub mod server_modal;
 pub mod servers_page;
 pub mod settings_shell;
+pub mod updates_page;
 pub mod usage_page;
 
 pub use api_key_section::*;
@@ -32,6 +33,7 @@ pub use providers_page::*;
 pub use server_modal::*;
 pub use servers_page::*;
 pub use settings_shell::*;
+pub use updates_page::*;
 pub use usage_page::*;
 
 use serde::{Deserialize, Serialize};
@@ -50,6 +52,7 @@ pub enum SettingsTab {
     DeletedChats,
     Keybindings,
     Browser,
+    Updates,
 }
 
 impl SettingsTab {
@@ -69,6 +72,7 @@ impl SettingsTab {
             Self::DeletedChats => "Deleted Chats",
             Self::Keybindings => "Keyboard Shortcuts",
             Self::Browser => "Browser",
+            Self::Updates => "Updates",
         }
     }
 
@@ -84,6 +88,7 @@ impl SettingsTab {
             Self::DeletedChats => "deleted-chats",
             Self::Keybindings => "keybindings",
             Self::Browser => "browser",
+            Self::Updates => "updates",
         }
     }
 
@@ -99,6 +104,7 @@ impl SettingsTab {
             "deleted-chats" | "deletedChats" => Some(Self::DeletedChats),
             "keybindings" => Some(Self::Keybindings),
             "browser" => Some(Self::Browser),
+            "updates" => Some(Self::Updates),
             _ => None,
         }
     }

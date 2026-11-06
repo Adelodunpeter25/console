@@ -12,6 +12,7 @@
 
 fn main() {
     emit_git_sha();
+    emit_build_number();
 
     #[cfg(windows)]
     {
@@ -51,5 +52,14 @@ fn emit_git_sha() {
     let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !sha.is_empty() {
         println!("cargo:rustc-env=CONSOLE_GIT_SHA={sha}");
+    }
+}
+
+/// CI's run number, which the in-app updater compares with the published
+/// `latest.json`. Unset for local builds, which then skip update checks.
+fn emit_build_number() {
+    println!("cargo:rerun-if-env-changed=CONSOLE_BUILD_NUMBER");
+    if let Ok(number) = std::env::var("CONSOLE_BUILD_NUMBER") {
+        println!("cargo:rustc-env=CONSOLE_BUILD_NUMBER={number}");
     }
 }

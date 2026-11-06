@@ -51,6 +51,7 @@ const SETTINGS_GROUPS: &[SettingsGroup] = &[
         tabs: &[
             (SettingsTab::Browser, IconName::Globe, "Browser"),
             (SettingsTab::Keybindings, IconName::Keyboard, "Shortcuts"),
+            (SettingsTab::Updates, IconName::Download, "Updates"),
         ],
     },
 ];

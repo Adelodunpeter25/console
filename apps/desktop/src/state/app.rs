@@ -781,6 +781,7 @@ impl ConsoleDesktopApp {
             chrome_profiles_loading: false,
             chrome_importing: false,
             chrome_status: None,
+            update_status: Default::default(),
             usage_last_fetched: None,
             context_usage: std::collections::HashMap::new(),
             environments: Vec::new(),
