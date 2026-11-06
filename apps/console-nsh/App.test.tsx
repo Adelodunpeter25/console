@@ -15,5 +15,11 @@ test("renders the shell's sections", async () => {
 test("Console.health rejects when the backend is unreachable", async () => {
   // Nothing listens here on purpose: the module must reject with the
   // reason, not resolve with a human string or hang.
-  await expect(Console.health("http://localhost:59999")).rejects.toContain("unreachable");
+  let message = "";
+  try {
+    await Console.health("http://localhost:59999");
+  } catch (err) {
+    message = err instanceof Error ? err.message : String(err);
+  }
+  expect(message).toContain("unreachable");
 });
