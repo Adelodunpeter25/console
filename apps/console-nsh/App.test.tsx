@@ -1,7 +1,7 @@
 // `nsh test` runs this file in a headless runner it builds with the crate.
 import { expect, open, test } from "nsh/test";
 import { Console } from "console-nsh/native";
-import { groupSessions } from "./src/layout/session_groups";
+import { groupSessions, groupSessionsByProject } from "./src/layout/session_groups";
 import { formatTimeAgo } from "./src/utils/time";
 
 test("renders the shell's sections", async () => {
@@ -48,6 +48,26 @@ test("formats time ago from seconds or milliseconds", () => {
   expect(formatTimeAgo((now - 300) * 1000, now)).toBe("5m");
   expect(formatTimeAgo(now - 7200, now)).toBe("2h");
   expect(formatTimeAgo(now - 3 * 86_400, now)).toBe("3d");
+});
+
+test("groups sessions by project, none last", () => {
+  const sessions = [
+    { id: "a", title: "A", status: "active", updatedAt: 3, projectId: "p1" },
+    { id: "b", title: "B", status: "active", updatedAt: 2, projectId: null },
+    { id: "c", title: "C", status: "active", updatedAt: 1, projectId: "p1" },
+    {
+      id: "d",
+      title: "D",
+      status: "active",
+      updatedAt: 5,
+      projectId: "p2",
+    },
+  ];
+  const groups = groupSessionsByProject(sessions, (id) =>
+    id === "p1" ? "Repo One" : id === "p2" ? "Repo Two" : null,
+  );
+  expect(groups.map((g) => g.label)).toEqual(["Repo One", "Repo Two", "None"]);
+  expect(groups[0].sessions.map((s) => s.id)).toEqual(["a", "c"]);
 });
 
 test("Console.health resolves through console-core", async () => {

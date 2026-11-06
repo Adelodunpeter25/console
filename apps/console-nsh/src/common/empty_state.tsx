@@ -2,14 +2,14 @@
 // `workspace/empty_state.rs`: shown in a pane's content area when no chat
 // tab is open. A quiet, centered welcome with a single "New Chat" action.
 
-import { Text, View } from "nsh";
+import { Text, View, token } from "nsh";
+import { Icon } from "./icons";
 
 export function EmptyChatState(props: { onNewChat: () => void }) {
   return (
     <View class="flex w-full flex-1 flex-col items-center justify-center gap-1.5 bg-background">
       <View class="h-11 w-11 items-center justify-center rounded-xl border border-border bg-card">
-        {/* The chat icon arrives with the primitives pass (2.2 icons). */}
-        <Text class="text-lg text-muted-foreground">💬</Text>
+        <Icon name="chat-round-line" size={22} color={token("muted-foreground")} />
       </View>
       <Text class="mt-3.5 text-xl font-medium text-foreground">
         No chat open

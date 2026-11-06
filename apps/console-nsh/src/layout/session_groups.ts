@@ -66,3 +66,37 @@ export function groupSessions(
   });
   return groups;
 }
+
+/// Group chats by project, in the shape of console-ui's
+/// `group_indices_by_project`: one bucket per project id, "none" last, each
+/// sorted most recent first. `projectName` resolves a bucket's label; the
+/// GPUI app falls back to the working-directory name, which the summary
+/// does not carry yet, so unknown projects group as "Other".
+export function groupSessionsByProject(
+  sessions: SessionSummary[],
+  projectName: (projectId: string | null) => string | null,
+): SessionGroup[] {
+  const byProject = new Map<string, SessionSummary[]>();
+  for (const session of sessions) {
+    const key = session.projectId ?? "none";
+    const list = byProject.get(key) ?? [];
+    list.push(session);
+    byProject.set(key, list);
+  }
+
+  const groups: SessionGroup[] = [];
+  const none = byProject.get("none");
+  if (none !== undefined) byProject.delete("none");
+  for (const [projectId, items] of byProject) {
+    items.sort((a, b) => b.updatedAt - a.updatedAt);
+    groups.push({
+      label: projectName(projectId === "none" ? null : projectId) ?? "Other",
+      sessions: items,
+    });
+  }
+  if (none !== undefined) {
+    none.sort((a, b) => b.updatedAt - a.updatedAt);
+    groups.push({ label: "None", sessions: none });
+  }
+  return groups;
+}

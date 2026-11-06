@@ -19,4 +19,6 @@ pub struct SessionSummary {
     pub status: String,
     /// Unix millis.
     pub updated_at: i64,
+    /// The project the chat belongs to, when the app knows it.
+    pub project_id: Option<String>,
 }

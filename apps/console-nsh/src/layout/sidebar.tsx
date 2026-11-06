@@ -8,7 +8,7 @@ import type { ProjectSummary, SessionSummary } from "console-nsh/native";
 import { DraftItem, type DraftSummary } from "./draft_item";
 import { GroupHeader, SortModeToggle, type SortMode } from "./group_header";
 import { SessionItem } from "./session_item";
-import { groupSessions } from "./session_groups";
+import { groupSessions, groupSessionsByProject } from "./session_groups";
 
 export function Sidebar(props: {
   loading: boolean;
@@ -24,7 +24,13 @@ export function Sidebar(props: {
   onSortMode: (mode: SortMode) => void;
   onNewChat?: () => void;
 }) {
-  const groups = groupSessions(props.sessions);
+  const projectNameById = new Map(props.projects.map((p) => [p.id, p.name]));
+  const groups =
+    props.sortMode === "project"
+      ? groupSessionsByProject(props.sessions, (id) =>
+          id === null ? null : (projectNameById.get(id) ?? null),
+        )
+      : groupSessions(props.sessions);
   return (
     <View class="flex w-56 shrink-0 flex-col border-r border-border bg-card">
       <View class="flex h-12 shrink-0 items-center justify-between px-4">

@@ -36,6 +36,7 @@ impl Sessions {
                 title: s.title,
                 status: s.status,
                 updated_at: s.updated_at,
+                project_id: s.project_id,
             })
             .collect()
     }
