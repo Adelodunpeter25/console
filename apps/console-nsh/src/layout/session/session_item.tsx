@@ -1,13 +1,13 @@
 // One chat card of the sidebar, ported from console-ui's
 // `layout/sidebar/session_item.rs`: the title with its draft marker, the
-// hover-revealed settle button, and the folder + time-ago footer. The
-// context menu (pin, rename, open in new window, delete) and the drag
-// preview arrive with the primitives pass.
+// hover-revealed settle button, and the folder + time-ago footer. A
+// right-click (or held finger) opens the row's context menu.
 
 import { Text, View, token } from "nsh";
 import { Icon } from "../../common/icons";
 import { Hint } from "../../common/tooltip";
 import { formatTimeAgo } from "../../utils/time";
+import { SessionContextMenu } from "./session_context_menu";
 
 export function SessionItem(props: {
   title: string;
@@ -22,9 +22,13 @@ export function SessionItem(props: {
   projectName?: string | null;
   onPress?: () => void;
   onToggleSettle?: () => void;
+  onOpenInNewWindow?: () => void;
+  onTogglePin?: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
 }) {
   const settled = () => props.settled ?? false;
-  return (
+  const row = (
     <View
       class={
         "group flex-col justify-between gap-1.5 rounded-md px-3 py-1.5 " +
@@ -87,5 +91,25 @@ export function SessionItem(props: {
         </Text>
       </View>
     </View>
+  );
+  const hasMenu = (): boolean =>
+    props.onDelete != null ||
+    props.onRename != null ||
+    props.onTogglePin != null ||
+    props.onOpenInNewWindow != null;
+  return hasMenu() ? (
+    <SessionContextMenu
+      settled={settled()}
+      onOpenInNewWindow={props.onOpenInNewWindow}
+      onTogglePin={props.onTogglePin}
+      onRename={props.onRename}
+      onSettle={props.onToggleSettle}
+      onUnsettle={props.onToggleSettle}
+      onDelete={props.onDelete}
+    >
+      {row}
+    </SessionContextMenu>
+  ) : (
+    row
   );
 }

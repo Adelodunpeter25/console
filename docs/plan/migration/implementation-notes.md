@@ -107,3 +107,15 @@ show the Copy/Cite pill near the selection, and hand Cite to the composer like t
 (`install.sh --source`) works sooner but pins CI and dev machines to a moving target.
 Known upstream caveats: Android doesn't report the selection's offset yet, and selection
 inside nested selectable views is held by the outer one.
+
+## 6. Primitives 2.2: what nsh already covers
+
+Of the desktop's `primitives/`, several need no port: `tooltip.rs` was ported as
+`common/tooltip.tsx` earlier; `scrollbar.rs` and `text_field.rs` are nsh built-ins
+(`Scrollbar`, scroll indicators, `Input`/`Editor`); the generic `menu.rs` dropdown machinery
+is nsh `Menu`/`Popover`, which the composer's picker menus already use; `motion.rs` is a
+GPUI-specific pulse clock that nsh's native animation (and `motion-reduce:`) replaces.
+`icons.rs`/`file_icons.rs` are the generated `icons.generated.ts` plus
+`fileTypeIconName` (same table as `console_shared::icons`). Ported in this pass:
+`session_context_menu.tsx` (nsh `ContextMenu`, session + draft rows) and the transparency
+checkerboard for image previews.
