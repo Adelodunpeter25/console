@@ -31,7 +31,17 @@ export type {
   PickerTab,
   SelectedModel,
 } from "./model_picker";
-import { signal } from "nsh";
+import { keymap, signal } from "nsh";
+import { ComposerAutocompleteRow } from "./composer_autocomplete_row";
+import {
+  detectTrigger,
+  filterItems,
+  itemInsertText,
+  type SlashCommand,
+  type SuggestionChat,
+  type SuggestionFile,
+  type AutocompleteItem,
+} from "./composer_autocomplete";
 
 /// A staged file comment chip above the composer's text field
 /// (`composer_view.rs` `ComposerComment`).
@@ -92,6 +102,39 @@ export function thinkingLevelLabel(level: ThinkingLevel): string {
   return level === "None" ? "No thinking" : `Thinking: ${level.toLowerCase()}`;
 }
 
+/// Keyboard bindings owned by the open autocomplete popup: Up / Down move
+/// the highlight, Enter / Tab confirm, Escape dismisses. A binding made
+/// while a component renders is removed with the component, so these live
+/// only while the popup shows — the platform consumes them before the
+/// input's Return-to-submit (the desktop's `AUTOCOMPLETE_CONTEXT` bindings).
+function AutocompleteKeys(props: {
+  onMove: (by: number) => void;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  keymap.bind({
+    up: () => props.onMove(-1),
+    down: () => props.onMove(1),
+    enter: () => props.onConfirm(),
+    tab: () => props.onConfirm(),
+    escape: () => props.onDismiss(),
+  });
+  return null;
+}
+
+/// History-recall bindings, mounted only while the input is empty and a
+/// history exists: Up recalls the previous prompt, Down the next (the
+/// desktop's composer does the same with an empty field).
+function HistoryKeys(props: {
+  onRecall: (by: number) => void;
+}) {
+  keymap.bind({
+    up: () => props.onRecall(-1),
+    down: () => props.onRecall(1),
+  });
+  return null;
+}
+
 export function Composer(props: {
   value: string;
   onChange: (text: string) => void;
@@ -113,6 +156,13 @@ export function Composer(props: {
   onRemoveAttachment?: (index: number) => void;
   comments?: ComposerComment[];
   annotations?: ComposerAnnotation[];
+  /// Slash commands, workspace files and chat titles the autocomplete
+  /// filters (the desktop's backend fetches stay with the host).
+  commands?: SlashCommand[];
+  files?: SuggestionFile[];
+  chats?: SuggestionChat[];
+  /// Past prompts, oldest first. With an empty input, Up recalls them.
+  promptHistory?: string[];
   placeholder?: string;
   testID?: string;
 }) {
@@ -121,6 +171,82 @@ export function Composer(props: {
   const attachments = () => props.attachments ?? [];
   const comments = () => props.comments ?? [];
   const annotations = () => props.annotations ?? [];
+  const commands = () => props.commands ?? [];
+  const files = () => props.files ?? [];
+  const chats = () => props.chats ?? [];
+  const history = () => props.promptHistory ?? [];
+
+  // The composer caret, tracked so autocomplete triggers detect against it
+  // (the desktop reads the input entity's caret).
+  const selection = signal({ start: 0, end: 0 });
+  // The highlighted suggestion row; reset whenever the open set changes.
+  const highlighted = signal(0);
+  // Where the input's caret goes after a completion inserts text
+  // (`selectedRange` controls it for that one render; typing clears it).
+  const pinnedSelection = signal<{ start: number; end?: number } | null>(null);
+  // The prompt-history position: null is the live draft, 0 the newest.
+  const historyAt = signal<number | null>(null);
+  const historyDraft = signal("");
+
+  // The open suggestion set: derived from the value and caret in JSX so it
+  // re-evaluates as typing moves the trigger (the desktop's
+  // `AutocompleteView` items).
+  const suggestions = (): AutocompleteItem[] => {
+    const trigger = detectTrigger(props.value, selection().start);
+    if (!trigger) return [];
+    return filterItems(commands(), files(), chats(), trigger);
+  };
+
+  const confirmSuggestion = (item: AutocompleteItem) => {
+    const trigger = detectTrigger(props.value, selection().start);
+    if (!trigger) return;
+    const text = itemInsertText(item);
+    const value =
+      props.value.slice(0, trigger.range.start) +
+      text +
+      props.value.slice(trigger.range.end);
+    pinnedSelection.set({
+      start: trigger.range.start + text.length,
+    });
+    highlighted.set(0);
+    props.onChange(value);
+  };
+
+  const moveHighlight = (by: number) => {
+    const items = suggestions();
+    if (items.length === 0) return;
+    highlighted.set(
+      (highlighted() + by + items.length) % items.length,
+    );
+  };
+
+  /// Prompt-history recall with an empty input: Up walks to older prompts,
+  /// Down back to the draft. The desktop recalls the same way.
+  const recallHistory = (by: number) => {
+    const past = history();
+    if (past.length === 0) return;
+    const current = historyAt();
+    let next =
+      current == null
+        ? by < 0
+          ? past.length - 1
+          : null
+        : current + by;
+    // Down past the oldest entry returns to the live draft.
+    if (next != null && next >= past.length) next = null;
+    if (next == null) {
+      historyAt.set(null);
+      props.onChange(historyDraft());
+      pinnedSelection.set({ start: historyDraft().length });
+      return;
+    }
+    if (next < 0) return;
+    if (current == null) historyDraft.set(props.value);
+    historyAt.set(next);
+    const text = past[next];
+    pinnedSelection.set({ start: text.length });
+    props.onChange(text);
+  };
   const hasDraft = () =>
     props.value.trim() !== "" ||
     attachments().length > 0 ||
@@ -204,16 +330,76 @@ export function Composer(props: {
         </View>
       ) : null}
 
+      {(() => {
+        const items = suggestions();
+        if (items.length === 0) return null;
+        const at = Math.min(highlighted(), items.length - 1);
+        return (
+          <View
+            class="flex-col gap-0.5 border-b border-border p-1.5"
+            testID="composer-autocomplete"
+          >
+            {items.slice(0, 10).map((item, index) => (
+              <ComposerAutocompleteRow
+                item={item}
+                selected={index === at}
+                onConfirm={confirmSuggestion}
+              />
+            ))}
+            {items.length > 10 ? (
+              <Text class="px-2 text-[10px] text-muted-foreground">
+                {`${items.length} matches`}
+              </Text>
+            ) : null}
+          </View>
+        );
+      })()}
+
       <Input
         multiline
         submitBehavior="submit"
         class="px-3.5 py-3 text-sm text-foreground"
         placeholder={props.placeholder ?? "Ask Console anything…"}
         value={props.value}
-        onChange={(e: { value: string }) => props.onChange(e.value)}
+        selectedRange={pinnedSelection() ?? undefined}
+        onChange={(e: { value: string }) => {
+          pinnedSelection.set(null);
+          highlighted.set(0);
+          historyAt.set(null);
+          props.onChange(e.value);
+        }}
+        onSelectionChange={(e: { start: number; end: number }) =>
+          selection.set(e)
+        }
         onSubmit={send}
         testID="composer-input"
       />
+
+      {(() => {
+        const items = suggestions();
+        if (items.length > 0) {
+          return (
+            <AutocompleteKeys
+              onMove={moveHighlight}
+              onConfirm={() => {
+                const list = items;
+                confirmSuggestion(list[Math.min(highlighted(), list.length - 1)]);
+              }}
+              onDismiss={() => selection.set({ start: 0, end: 0 })}
+            />
+          );
+        }
+        // History recall binds Up / Down while the field is empty or a
+        // recall is in progress, so the keys keep scrolling the transcript
+        // otherwise.
+        if (
+          (props.value === "" || historyAt() != null) &&
+          history().length > 0
+        ) {
+          return <HistoryKeys onRecall={recallHistory} />;
+        }
+        return null;
+      })()}
 
       <View class="flex-row items-center gap-2 px-3 pb-3">
         <Popover
@@ -331,6 +517,48 @@ export function Composer(props: {
           />
         </View>
       </View>
+    </View>
+  );
+}
+
+/// The floating compact composer (console-ui's `floating_composer/`, first
+/// cut): a collapsed pill that expands into the full `Composer` and
+/// collapses again with Escape over an empty draft — the desktop's
+/// open/collapse behaviour. Its launcher-card extras (project, branch and
+/// GitHub menus) land with the workspace panes they launch into.
+export function FloatingComposer(props: Parameters<typeof Composer>[0]) {
+  const open = signal(false);
+
+  /// Escape over an empty draft collapses the card back to the pill; a
+  /// draft keeps the focus (and the escape for the autocomplete).
+  function EscapeCollapses() {
+    keymap.bind("escape", () => {
+      if (props.value === "") open.set(false);
+    });
+    return null;
+  }
+
+  return (
+    <View class="w-full">
+      {open() ? (
+        <View class="flex-col">
+          <EscapeCollapses />
+          <Composer {...props} />
+        </View>
+      ) : (
+        <View
+          class="flex-row items-center gap-2 rounded-full border border-border bg-card px-4 py-2.5"
+          role="button"
+          accessibilityLabel="Ask Console anything"
+          onPress={() => open.set(true)}
+        >
+          <Icon name="Compose" size={14} color={token("muted-foreground")} />
+          <Text class="flex-1 text-sm text-muted-foreground">
+            Ask Console anything…
+          </Text>
+          <Icon name="Paperclip" size={14} color={token("muted-foreground")} />
+        </View>
+      )}
     </View>
   );
 }

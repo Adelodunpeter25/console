@@ -53,3 +53,46 @@ test("the model chip opens the picker: search, tabs and favourites", async () =>
   await app.press("text:Gpt 6");
   expect(app.texts()).toContain("Selected: openai:gpt-6");
 });
+
+test("typing @ opens the file autocomplete and a press inserts the path", async () => {
+  const app = await open("./composer.fixture.tsx");
+  await app.type("id:composer-input", "@over");
+  // The popup filters to the matching file.
+  expect(app.texts()).toContain("overview.md");
+  await app.press("label:Autocomplete overview.md");
+  expect(app.texts()).toContain("Draft: docs/overview.md ");
+});
+
+test("slash commands autocomplete from the popup", async () => {
+  const app = await open("./composer.fixture.tsx");
+  await app.type("id:composer-input", "/");
+  expect(app.texts()).toContain("Plan before acting");
+  await app.press("label:Autocomplete /plan");
+  expect(app.texts()).toContain("Draft: /plan ");
+});
+
+test("an empty input recalls prompt history with Up and Down", async () => {
+  const app = await open("./composer.fixture.tsx");
+  // Up with an empty field recalls the newest prompt...
+  await app.keyboard.press("up");
+  expect(app.texts()).toContain("Draft: Second prompt");
+  // ...and again walks to the older one while the field is filled.
+  await app.keyboard.press("up");
+  expect(app.texts()).toContain("Draft: First prompt");
+  // Down walks back and restores the (empty) draft.
+  await app.keyboard.press("down");
+  await app.keyboard.press("down");
+  expect(app.texts()).toContain("Draft: empty");
+});
+
+test("the floating composer starts as a pill and expands", async () => {
+  const app = await open("./composer.fixture.tsx");
+  expect(app.texts()).toContain("Floating: empty");
+  // Only the standalone composer's card is open while the pill is collapsed.
+  expect(app.count("label:Select model")).toBe(1);
+  await app.press("label:Ask Console anything");
+  expect(app.count("label:Select model")).toBe(2);
+  // Escape over an empty draft collapses back to the pill.
+  await app.keyboard.press("escape");
+  expect(app.count("label:Select model")).toBe(1);
+});
