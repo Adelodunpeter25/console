@@ -425,6 +425,22 @@ func (s *SessionService) SaveQueuedPrompt(sessionID string, qp types.QueuedPromp
 	return s.inner.SaveQueuedPrompt(sessionID, qp)
 }
 
+func (s *SessionService) SaveQueuedPromptFirst(sessionID string, qp types.QueuedPrompt) error {
+	return s.inner.SaveQueuedPromptFirst(sessionID, qp)
+}
+
+func (s *SessionService) ListQueuedPrompts(sessionID string) ([]types.QueuedPrompt, error) {
+	return s.inner.ListQueuedPrompts(sessionID)
+}
+
+func (s *SessionService) PopQueuedPrompt(sessionID string) (*types.QueuedPrompt, error) {
+	return s.inner.PopQueuedPrompt(sessionID)
+}
+
+func (s *SessionService) DeleteQueuedPrompt(sessionID, queueID string) (bool, error) {
+	return s.inner.DeleteQueuedPrompt(sessionID, queueID)
+}
+
 func (s *SessionService) GetQueuedPrompt(sessionID string) (*types.QueuedPrompt, error) {
 	return s.inner.GetQueuedPrompt(sessionID)
 }

@@ -71,26 +71,27 @@ func TestPromptSessionQueuesWhileBusyAndDrains(t *testing.T) {
 	}
 }
 
-func TestPromptSessionRefusesToReplaceAQueuedPrompt(t *testing.T) {
+func TestPromptSessionQueuesBehindAQueuedPrompt(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
-	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("first", "second"), nil }
+	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("first", "second", "third"), nil }
 	header := helpers.CreateRunSession(t, sessions)
 
 	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "one", Provider: "mock", ModelID: "m"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The user's own staged prompt must survive an agent prompting the session.
+	// An agent prompting the session must queue behind the user's own prompt,
+	// not replace it.
 	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "users own"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.PromptSession(header.ID, "agent", "", "", "always-ask", "")
-	if err == nil || !strings.Contains(err.Error(), "already has a queued prompt") {
-		t.Fatalf("err = %v, want a refusal that names the queued prompt", err)
+	if queued, err := svc.PromptSession(header.ID, "agent", "", "", "always-ask", ""); err != nil || !queued {
+		t.Fatalf("queued = %v, err = %v", queued, err)
 	}
-	if qp, _ := svc.QueuedPrompt(header.ID); qp == nil || qp.Prompt != "users own" {
-		t.Fatalf("user's queued prompt was disturbed: %+v", qp)
+	queue, err := svc.QueuedPrompts(header.ID)
+	if err != nil || len(queue) != 2 || queue[0].Prompt != "users own" || queue[1].Prompt != "agent" {
+		t.Fatalf("queue = %+v, err = %v", queue, err)
 	}
 	helpers.WaitSettled(t, hub)
 }
