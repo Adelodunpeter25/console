@@ -33,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,11 +52,17 @@ import console.v1.FsTreeEntry
 import com.console.mobile.data.model.getFilePreviewBlock
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.data.model.isMarkdownPath
+import com.console.mobile.data.model.filePreviewKind
+import com.console.mobile.data.model.FilePreviewKind
 import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.code.CodeViewer
 import com.console.mobile.ui.code.languageForPath
 import com.console.mobile.ui.components.FileIcon
+import com.console.mobile.ui.components.ImagePreviewDialog
 import com.console.mobile.ui.theme.ConsoleMonoFamily
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.svg.SvgDecoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelChildren
@@ -109,8 +117,11 @@ fun FilesScreen(onBack: () -> Unit) {
     }
     var selectedSize by remember { mutableStateOf<Long?>(null) }
     var fileContent by remember { mutableStateOf<String?>(null) }
+    var imageBytes by remember { mutableStateOf<ByteArray?>(null) }
     var fileLoading by remember { mutableStateOf(false) }
     var fileError by remember { mutableStateOf<String?>(null) }
+    // Tapping a previewed image opens the fullscreen zoom dialog.
+    var zoomImage by remember { mutableStateOf<ByteArray?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(projectRoot) {
@@ -176,13 +187,21 @@ fun FilesScreen(onBack: () -> Unit) {
         selectedPath = path
         selectedSize = size
         fileContent = null
+        imageBytes = null
         fileError = null
+        // Images come from the raw-bytes endpoint; everything else is text.
+        val asImage = filePreviewKind(path.split("/").lastOrNull() ?: path) == FilePreviewKind.IMAGE
         // Prefetch in background.
         scope.launch {
             fileLoading = true
             try {
-                val file = withContext(Dispatchers.IO) { AppContainer.fsRepository.readFile(path) }
-                if (selectedPath == path) fileContent = file.content
+                if (asImage) {
+                    val bytes = withContext(Dispatchers.IO) { AppContainer.fsRepository.readFileRaw(path) }
+                    if (selectedPath == path) imageBytes = bytes
+                } else {
+                    val file = withContext(Dispatchers.IO) { AppContainer.fsRepository.readFile(path) }
+                    if (selectedPath == path) fileContent = file.content
+                }
             } catch (e: Exception) {
                 if (selectedPath == path) fileError = e.message ?: "Failed to load file."
             } finally {
@@ -203,7 +222,8 @@ fun FilesScreen(onBack: () -> Unit) {
     val sel = selectedPath
     if (sel != null) {
         val fileName = sel.split("/").lastOrNull() ?: sel
-        val block = getFilePreviewBlock(fileName, selectedSize)
+        val kind = filePreviewKind(fileName)
+        val block = if (kind == FilePreviewKind.BLOCKED) getFilePreviewBlock(fileName, selectedSize) else null
         val relativePath = projectRoot?.let { root ->
             val normalizedRoot = root.trimEnd('/')
             if (sel.startsWith("$normalizedRoot/")) sel.removePrefix("$normalizedRoot/") else sel
@@ -227,6 +247,30 @@ fun FilesScreen(onBack: () -> Unit) {
                     ) {
                         Text(block.title, color = NewTheme.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(block.message, color = NewTheme.TextSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    kind == FilePreviewKind.IMAGE -> when {
+                        fileLoading && imageBytes == null -> LoadingState("Loading image…", Modifier.fillMaxSize())
+                        fileError != null && imageBytes == null -> EmptyView(title = "Failed to load image", description = fileError, icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
+                        else -> Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = PageHeaderHeight)
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            imageBytes?.let { bytes ->
+                                val context = LocalContext.current
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(bytes)
+                                        .decoderFactory(SvgDecoder.Factory())
+                                        .build(),
+                                    contentDescription = fileName,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize().clickable { zoomImage = bytes },
+                                )
+                            }
+                        }
                     }
                     fileLoading && fileContent == null -> LoadingState("Loading file…", Modifier.fillMaxSize())
                     fileError != null && fileContent == null -> EmptyView(title = "Failed to load file", description = fileError, icon = TablerIcons.Outline.AlertTriangle, iconTint = NewTheme.Danger, modifier = Modifier.fillMaxSize())
@@ -265,6 +309,9 @@ fun FilesScreen(onBack: () -> Unit) {
                 onBack = { openedFromLink = false; selectedPath = null },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
+            zoomImage?.let { bytes ->
+                ImagePreviewDialog(image = bytes, onDismiss = { zoomImage = null })
+            }
         }
         return
     }

@@ -86,6 +86,7 @@ interface ConsoleApi {
     suspend fun getFsEntries(path: String, depth: Int = 1): List<FsTreeEntry>
     suspend fun searchFiles(root: String, query: String, limit: Int = 20, includeDirs: Boolean = true): List<FileSearchResult>
     suspend fun readFile(path: String): FsFileContent
+    suspend fun readFileRaw(path: String): ByteArray
     suspend fun writeFile(path: String, content: String)
     suspend fun deleteFile(path: String)
     suspend fun createDir(path: String)

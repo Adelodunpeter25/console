@@ -52,6 +52,17 @@ class HttpTransport(
         }
     }
 
+    /** GET that returns the response body as raw bytes (image/SVG preview). */
+    fun getBytes(path: String, params: Map<String, String?> = emptyMap()): ByteArray {
+        callClient.newCall(requestBuilder(url(path, params)).get().build()).execute().use { res ->
+            if (!res.isSuccessful) {
+                val raw = try { res.body?.string().orEmpty() } catch (_: Exception) { "" }
+                throw ApiException(extractError(raw) ?: "Request failed with status ${res.code}", code = res.code.toString())
+            }
+            return res.body?.bytes() ?: ByteArray(0)
+        }
+    }
+
     private fun extractError(raw: String): String? {
         if (raw.isBlank()) return null
         return try {

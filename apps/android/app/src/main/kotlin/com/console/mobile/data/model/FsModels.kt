@@ -53,6 +53,15 @@ fun isBinaryFileName(fileName: String): Boolean = BINARY_FILE_EXTENSIONS.contain
 fun isPreviewableImageName(fileName: String): Boolean = IMAGE_PREVIEW_EXTENSIONS.contains(extensionOf(fileName))
 fun isSvgFileName(fileName: String): Boolean = extensionOf(fileName) == SVG_EXTENSION
 
+/** How the file viewer renders a file: fetched image bytes, a block card, or text. */
+enum class FilePreviewKind { IMAGE, BLOCKED, TEXT }
+
+fun filePreviewKind(fileName: String): FilePreviewKind = when {
+    isPreviewableImageName(fileName) || isSvgFileName(fileName) -> FilePreviewKind.IMAGE
+    getFilePreviewBlock(fileName) != null -> FilePreviewKind.BLOCKED
+    else -> FilePreviewKind.TEXT
+}
+
 fun formatBytes(bytes: Long): String = when {
     bytes < 1024 -> "$bytes B"
     bytes < 1024 * 1024 -> "${bytes / 1024} KB"

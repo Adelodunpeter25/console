@@ -1,6 +1,8 @@
 package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
 import com.console.mobile.data.model.ApproveToolPermissionDto
@@ -439,6 +441,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return fsFileContentAdapter.fromJson(data.toString())
             ?: throw ApiException("Failed to read file")
     }
+
+    override suspend fun readFileRaw(path: String): ByteArray =
+        withContext(Dispatchers.IO) { http.getBytes("/api/fs/file/raw", mapOf("path" to path)) }
 
     override suspend fun writeFile(path: String, content: String) {
         // Same bytes as the old hand-built object: path, content.

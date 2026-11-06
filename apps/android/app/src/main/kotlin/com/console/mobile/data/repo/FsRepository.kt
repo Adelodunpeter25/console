@@ -49,6 +49,10 @@ class FsRepository(
         file
     }
 
+    suspend fun readFileRaw(path: String): ByteArray = withContext(Dispatchers.IO) {
+        api.readFileRaw(path)
+    }
+
     suspend fun writeFile(path: String, content: String) = withContext(Dispatchers.IO) {
         fsState.markBusy(path)
         try {
