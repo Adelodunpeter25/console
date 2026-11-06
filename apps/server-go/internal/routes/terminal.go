@@ -56,6 +56,7 @@ func RegisterTerminalRoutes(app *fiber.App, ptyManager *terminalsvc.PtyManager) 
 		if perr != nil {
 			return fiber.NewError(fiber.StatusBadRequest, perr.Error())
 		}
+		params.SessionID = c.Query("session")
 		// Upgrade hijacks the connection; the handler owns it afterwards.
 		err := upgrader.Upgrade(c.Context(), func(conn *websocket.Conn) {
 			handleTerminalConn(conn, ptyManager, params)
@@ -136,24 +137,45 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *terminalsvc.PtyManager
 		terminalFramePool.Put(bufPtr)
 	}
 
-	session, err := ptyManager.Spawn(params)
-	if err != nil {
-		sendError(err.Error())
-		_ = conn.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(4000, "Spawn failed"))
-		return
+	var session *terminalsvc.PtySession
+	if params.SessionID != "" {
+		// Reattach after a dropped socket; the shell outlives it for a grace period.
+		session = ptyManager.Get(params.SessionID)
+		if session == nil {
+			sendError("Terminal session expired.")
+			_ = conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(4001, "Session expired"))
+			return
+		}
+	} else {
+		var err error
+		session, err = ptyManager.Spawn(params)
+		if err != nil {
+			sendError(err.Error())
+			_ = conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(4000, "Spawn failed"))
+			return
+		}
 	}
-	defer ptyManager.Kill(session.ID)
 
 	// JSON compat: stream-decode PTY bytes to text so multibyte sequences
 	// split across coalesced frames survive (mirrors Bun's TextDecoder
 	// stream mode). Binary clients skip decoding entirely.
 	// Backpressure: WS writes are synchronous, so a slow client throttles
 	// flushes directly; the session queue itself is bounded at 8MB with
-	// oldest-drop, and Pause/Resume remain available for explicit control.
+	// oldest-drop.
 	decoder := terminalsvc.NewUTF8Decoder()
 
-	session.SetCallbacks(func(chunk []byte) {
+	var attachGen uint64
+	defer func() { session.Detach(attachGen) }()
+	// Spawned goes out before any held output is replayed.
+	sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Spawned{
+		Spawned: &consolev1.TerminalSpawned{
+			Id: session.ID, Pid: int32(session.Pid()), Cwd: params.Cwd, Shell: params.Shell,
+			Cols: int32(params.Cols), Rows: int32(params.Rows),
+		},
+	}})
+	attachGen = session.Attach(func(chunk []byte) {
 		if params.Binary {
 			sendBinary(chunk)
 		} else {
@@ -170,12 +192,6 @@ func handleTerminalConn(conn *websocket.Conn, ptyManager *terminalsvc.PtyManager
 			Exit: &consolev1.TerminalExit{Code: &code32},
 		}})
 	})
-	sendProto(&consolev1.TerminalServerMessage{Event: &consolev1.TerminalServerMessage_Spawned{
-		Spawned: &consolev1.TerminalSpawned{
-			Id: session.ID, Pid: int32(session.Pid()), Cwd: params.Cwd, Shell: params.Shell,
-			Cols: int32(params.Cols), Rows: int32(params.Rows),
-		},
-	}})
 
 	for {
 		msgType, data, err := conn.ReadMessage()

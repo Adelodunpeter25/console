@@ -2,7 +2,7 @@
 package types
 
 // TerminalSpawnParams arrive as query params on the upgrade request:
-// /api/terminals?cwd=...&cols=...&rows=...&shell=...&label=...&proto=binary
+// /api/terminals?cwd=...&cols=...&rows=...&shell=...&label=...&proto=binary[&session=<id>]
 type TerminalSpawnParams struct {
 	Cwd    string
 	Shell  string
@@ -10,6 +10,8 @@ type TerminalSpawnParams struct {
 	Rows   int
 	Label  string
 	Binary bool
+	// SessionID, when set, reattaches to a live shell instead of spawning.
+	SessionID string
 }
 
 // TerminalClientMessage frames (JSON text or binary [tag, ...payload]).

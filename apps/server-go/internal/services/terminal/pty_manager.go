@@ -36,6 +36,9 @@ const (
 // Cap for buffered output so a flooding program can't balloon memory.
 const pausedBufferLimitBytes = 8 * 1024 * 1024
 
+// How long a shell survives without a connected socket before it is killed.
+const detachGrace = 60 * time.Second
+
 // Max input bytes per Write (mirrors Bun's 256KB guard).
 const maxTerminalInputBytes = 256 * 1024
 
@@ -115,25 +118,60 @@ type PtySession struct {
 	pausedBytes  int
 	pending      [][]byte
 	pendingCount int
+
+	attachGen  uint64
+	graceTimer *time.Timer
 }
 
-// SetCallbacks attaches the WS pump and flushes early output that arrived
-// between spawn and attach (e.g. the shell prompt).
-func (s *PtySession) SetCallbacks(onData func([]byte), onExit func(int)) {
-	var toFlush [][]byte
+// Attach connects a WS pump and delivers output held while nothing was
+// attached (spawn gap or a dropped socket). It returns a token for Detach so
+// a stale socket can't detach the one that replaced it.
+func (s *PtySession) Attach(onData func([]byte), onExit func(int)) uint64 {
 	s.outputMu.Lock()
+	s.attachGen++
+	gen := s.attachGen
+	if s.graceTimer != nil {
+		s.graceTimer.Stop()
+		s.graceTimer = nil
+	}
 	s.onData = onData
 	s.onExit = onExit
-	if len(s.pending) > 0 {
-		toFlush = s.pending
-		s.pending = nil
-		s.pendingCount = 0
-	}
+	toFlush := append(s.pending, s.pausedBuffer...)
+	s.pending = nil
+	s.pendingCount = 0
+	s.pausedBuffer = nil
+	s.pausedBytes = 0
+	s.paused = false
 	s.outputMu.Unlock()
 
 	for _, chunk := range toFlush {
 		onData(chunk)
 	}
+	return gen
+}
+
+// Detach holds output for a later Attach and kills the shell if none arrives
+// within detachGrace. It is a no-op when a newer Attach has superseded gen.
+func (s *PtySession) Detach(gen uint64) {
+	s.outputMu.Lock()
+	defer s.outputMu.Unlock()
+	if gen != s.attachGen || s.killed.Load() {
+		return
+	}
+	s.onData = nil
+	s.onExit = nil
+	s.paused = true
+	if s.graceTimer != nil {
+		s.graceTimer.Stop()
+	}
+	s.graceTimer = time.AfterFunc(detachGrace, func() {
+		s.outputMu.Lock()
+		attached := s.onData != nil
+		s.outputMu.Unlock()
+		if !attached && s.manager != nil {
+			s.manager.Kill(s.ID)
+		}
+	})
 }
 
 func (s *PtySession) Write(data []byte) error {
@@ -195,6 +233,10 @@ func (s *PtySession) Kill() {
 	s.pausedBuffer = nil
 	s.pausedBytes = 0
 	s.pending = nil
+	if s.graceTimer != nil {
+		s.graceTimer.Stop()
+		s.graceTimer = nil
+	}
 	s.outputMu.Unlock()
 
 	if s.cmd.Process != nil {
