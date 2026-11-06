@@ -20,19 +20,19 @@ pub struct Console;
 #[module]
 impl Console {
     /// Fetches `{base_url}/health` through console-core and returns the
-    /// response body, or an error message if the server is unreachable.
-    pub async fn health(base_url: String) -> String {
+    /// response body; rejects when the server is unreachable.
+    pub async fn health(base_url: String) -> Result<String, String> {
         http::health(&base_url).await
     }
 
     /// The registered projects, newest activity first.
-    pub async fn projects(base_url: String) -> Vec<ProjectSummary> {
+    pub async fn projects(base_url: String) -> Result<Vec<ProjectSummary>, String> {
         Projects::new(&base_url).list().await
     }
 
     /// The chats of one project (or all projects, when `project_id` is
     /// empty), newest first.
-    pub async fn sessions(base_url: String, project_id: String) -> Vec<SessionSummary> {
+    pub async fn sessions(base_url: String, project_id: String) -> Result<Vec<SessionSummary>, String> {
         Sessions::new(&base_url).list(&project_id).await
     }
 }

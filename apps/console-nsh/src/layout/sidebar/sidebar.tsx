@@ -1,11 +1,11 @@
 // The project/session sidebar, composed from the ported pieces:
-// `session_item`, `draft_item`, `group_header`, `sidebar_loading` (the GPUI
-// originals live in `console-ui/src/layout/sidebar/`). Drafts are a
-// frontend-only signal for now; their service moves over with the Rust pass.
+// `session_item`, `group_header`, `sidebar_loading` (the GPUI originals
+// live in `console-ui/src/layout/sidebar/`). Backend failures surface as
+// error text instead of the empty state, so "unreachable" reads
+// differently from "nothing here yet".
 
 import { Text, View } from "nsh";
 import type { ProjectSummary, SessionSummary } from "console-nsh/native";
-import { DraftItem, type DraftSummary } from "./draft_item";
 import { GroupHeader, SortModeToggle, type SortMode } from "./group_header";
 import { SessionItem } from "../session/session_item";
 import { groupSessions, groupSessionsByProject } from "../session/session_groups";
@@ -13,10 +13,11 @@ import { groupSessions, groupSessionsByProject } from "../session/session_groups
 export function Sidebar(props: {
   loading: boolean;
   projects: ProjectSummary[];
+  projectsError?: string | null;
   selectedProjectId: string | null;
   sessions: SessionSummary[];
   sessionsLoading: boolean;
-  drafts: DraftSummary[];
+  sessionsError?: string | null;
   activeSessionId: string | null;
   sortMode: SortMode;
   onProject: (id: string) => void;
@@ -51,6 +52,10 @@ export function Sidebar(props: {
         {props.loading ? (
           <Text class="px-3 py-1.5 text-sm text-muted-foreground">
             Loading…
+          </Text>
+        ) : props.projectsError ? (
+          <Text class="px-3 py-1.5 text-sm text-destructive">
+            Couldn’t load projects
           </Text>
         ) : props.projects.length === 0 ? (
           <Text class="px-3 py-1.5 text-sm text-muted-foreground">
@@ -91,6 +96,10 @@ export function Sidebar(props: {
           <Text class="px-3 py-1.5 text-sm text-muted-foreground">
             Loading…
           </Text>
+        ) : props.sessionsError ? (
+          <Text class="px-3 py-1.5 text-sm text-destructive">
+            Couldn’t load chats
+          </Text>
         ) : props.sessions.length === 0 ? (
           <Text class="px-3 py-1.5 text-sm text-muted-foreground">
             No chats yet
@@ -112,22 +121,6 @@ export function Sidebar(props: {
             </View>
           ))
         )}
-
-        {props.drafts.length > 0 ? (
-          <View class="mt-3 flex flex-col">
-            <GroupHeader label="Drafts" count={props.drafts.length} />
-            {props.drafts.map((d) => (
-              <DraftItem
-                draft={d}
-                active={
-                  d.sessionId !== null && props.activeSessionId === d.sessionId
-                }
-                onSelect={props.onSession}
-                onNewChat={props.onNewChat}
-              />
-            ))}
-          </View>
-        ) : null}
       </View>
     </View>
   );

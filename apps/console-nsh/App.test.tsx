@@ -7,14 +7,13 @@ test("renders the shell's sections", async () => {
   const app = await open("./App.tsx");
   expect(app.texts()).toContain("PROJECTS");
   expect(app.texts()).toContain("CHATS");
-  // Nothing listens on the backend URL in the runner: the sidebar shows its
-  // empty state instead of hanging.
-  expect(app.texts()).toContain("No projects yet");
+  // Nothing listens on the backend URL in the runner: the sidebar shows
+  // the load failure instead of hanging or pretending it is empty.
+  expect(app.texts()).toContain("Couldn’t load projects");
 });
 
-test("Console.health resolves through console-core", async () => {
-  // Nothing listens here on purpose: the module must resolve with an error
-  // message, not reject or hang.
-  const body = await Console.health("http://localhost:59999");
-  expect(body).toContain("unreachable");
+test("Console.health rejects when the backend is unreachable", async () => {
+  // Nothing listens here on purpose: the module must reject with the
+  // reason, not resolve with a human string or hang.
+  await expect(Console.health("http://localhost:59999")).rejects.toContain("unreachable");
 });

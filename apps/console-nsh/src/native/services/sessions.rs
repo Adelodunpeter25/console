@@ -17,9 +17,11 @@ impl Sessions {
     }
 
     /// The chats of one project, or of all projects when `project_id` is
-    /// empty, newest first.
-    pub async fn list(&self, project_id: &str) -> Vec<SessionSummary> {
-        self.service
+    /// empty, newest first. Rejects when the backend fails, so the UI can
+    /// tell "none" apart from "down".
+    pub async fn list(&self, project_id: &str) -> Result<Vec<SessionSummary>, String> {
+        Ok(self
+            .service
             .list(
                 None,
                 if project_id.is_empty() {
@@ -29,7 +31,7 @@ impl Sessions {
                 },
             )
             .await
-            .unwrap_or_default()
+            .map_err(|err| err.to_string())?
             .into_iter()
             .map(|s| SessionSummary {
                 id: s.id,
@@ -38,6 +40,6 @@ impl Sessions {
                 updated_at: s.updated_at,
                 project_id: s.project_id,
             })
-            .collect()
+            .collect())
     }
 }
