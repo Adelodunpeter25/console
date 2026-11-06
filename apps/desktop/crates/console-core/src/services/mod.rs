@@ -37,7 +37,7 @@ pub use notification::NotificationService;
 pub use port::PortService;
 pub use project::{
     GithubNotConnected, ProjectService, clone_project_body, init_project_body,
-    is_github_not_connected,
+    is_github_not_connected, repo_task_body,
 };
 pub use project_scripts::ProjectScriptsService;
 pub use provider::ProviderService;

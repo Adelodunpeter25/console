@@ -113,6 +113,22 @@ data class OAuthLoginUrlDto(val provider: String)
 data class GitHubTokenDto(val token: String)
 
 /**
+ * One repository from GET /api/github/repos — the connected account's repos,
+ * shown in the project pickers' GitHub section. `cloneUrl` is what
+ * POST /api/projects/clone takes as its url.
+ */
+@Serializable
+data class GithubRepo(
+    val fullName: String,
+    val name: String,
+    val private: Boolean,
+    val description: String? = null,
+    val htmlUrl: String,
+    val cloneUrl: String,
+    val pushedAt: String? = null,
+)
+
+/**
  * Body for PUT /api/providers/:id/credential.
  *
  * camelCase `apiKey` to match the server's protojson field name — this is the

@@ -36,6 +36,7 @@ mod port_forward;
 mod project_scripts;
 mod projects;
 mod providers;
+mod repo_tasks;
 mod right_sidebar;
 mod run;
 mod server_auth;

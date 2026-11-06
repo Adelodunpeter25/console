@@ -117,6 +117,24 @@ func WorktreesDir() string {
 	return filepath.Join(home, folder, "worktrees")
 }
 
+// ProjectsDir is the default root for GitHub clones made without an
+// explicit parent folder (the mobile/desktop repo picker).
+// CONSOLE_PROJECTS_DIR wins when set, otherwise ~/console-dev/projects in
+// dev mode, ~/console/projects in production — the same split WorktreesDir
+// uses. Unlike worktrees these are permanent user repos: nothing here is
+// ever cleaned up.
+func ProjectsDir() string {
+	if override := os.Getenv("CONSOLE_PROJECTS_DIR"); override != "" {
+		return override
+	}
+	home, _ := os.UserHomeDir()
+	folder := "console"
+	if ConsoleMode() == "dev" {
+		folder = "console-dev"
+	}
+	return filepath.Join(home, folder, "projects")
+}
+
 // PastesDir is the root for large pasted-text attachments
 // (<storage>/pastes/<sessionID>/*.log|txt). Each paste is a 0600 file in a
 // 0700 per-session directory; the path is handed to the agent as a context

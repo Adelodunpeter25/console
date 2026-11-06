@@ -9,6 +9,7 @@ pub mod file_browser;
 pub mod file_mention_chip;
 pub mod floating_composer;
 pub mod global_search_panel;
+pub mod github_menu;
 pub mod image_viewer;
 pub mod input;
 pub mod model_picker;
@@ -48,6 +49,7 @@ pub use floating_composer::{
     BranchChoice, FloatingComposerData, FloatingComposerState, FloatingComposerView,
     FloatingSnapshot, FloatingSubmit,
 };
+pub use github_menu::github_menu_section;
 pub use global_search_panel::GlobalSearchPanel;
 pub use image_viewer::ImageViewerModal;
 pub use input::*;

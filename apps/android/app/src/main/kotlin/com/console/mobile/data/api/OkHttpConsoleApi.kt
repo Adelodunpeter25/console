@@ -609,6 +609,25 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         http.unwrapOrRaw(raw, JsonElement.serializer(), "disconnect GitHub")
     }
 
+    override suspend fun getGithubRepos(): List<com.console.mobile.data.model.GithubRepo> {
+        val raw = http.get("/api/github/repos")
+        return http.unwrapOrRaw(
+            raw,
+            ListSerializer(com.console.mobile.data.model.GithubRepo.serializer()),
+            "list GitHub repos",
+        )
+    }
+
+    override suspend fun cloneProject(url: String, parentDir: String, name: String?): ProjectInfo {
+        val body = buildJsonObject {
+            put("url", url)
+            put("parentDir", parentDir)
+            if (name != null) put("name", name)
+        }.toString()
+        val raw = http.post("/api/projects/clone", body)
+        return http.unwrapOrRawAdapter(raw, projectAdapter, "clone project")
+    }
+
     override suspend fun getProviderCredentials(): Map<String, ProviderCredentialStatus> {
         val raw = http.get("/api/providers/credentials")
         val statuses = http.unwrapOrRawAdapter(raw, providerCredentialsAdapter, "get provider credentials")

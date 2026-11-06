@@ -57,6 +57,9 @@ impl ConsoleDesktopApp {
         let snapshot = FloatingSnapshot {
             projects: self.projects.clone(),
             selected_project_id: project_id,
+            github_repos: self.github_repos.clone(),
+            github_repos_loading: self.github_repos_loading,
+            github_repos_error: self.github_repos_error.clone(),
             branches: self.branches.clone(),
             providers: self.providers.clone(),
             models_by_provider: self.models_by_provider.clone(),
@@ -180,6 +183,11 @@ impl ConsoleDesktopApp {
 
     /// Submit the card: create the session it described and run the prompt.
     pub fn submit_floating_composer(&mut self, text: String, cx: &mut Context<Self>) -> bool {
+        // A repo clone in flight selects its project when it lands; launching
+        // before that would silently use the previous selection.
+        if self.repo_task_cloning.is_some() {
+            return false;
+        }
         let Some(submit) = self.floating_composer.submit(text, cx) else {
             return false;
         };
@@ -249,7 +257,10 @@ impl ConsoleDesktopApp {
             .read(cx)
             .content()
             .to_string();
-        let data = self.floating_composer.view_data(query);
+        let mut data = self.floating_composer.view_data(query);
+        // The clone runs in app state, not the card's, so feed the name in
+        // each frame — the card's "Cloning <name>…" line then tracks it live.
+        data.repo_cloning = self.repo_task_cloning.clone();
         let entity = cx.entity().downgrade();
         let card = &self.floating_composer;
         let model_menu = ModelDropdownMenu::new(
@@ -328,6 +339,42 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| {
                         this.floating_composer.project_menu.close(window, cx);
                         this.floating_project_changed(id, cx);
+                    });
+                }
+            }
+        })
+        .on_choose_github_repo({
+            let entity = entity.clone();
+            move |repo: console_core::GithubRepo, window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.floating_composer.project_menu.close(window, cx);
+                        this.floating_clone_repo(repo, cx);
+                    });
+                }
+            }
+        })
+        .on_refresh_github_repos({
+            let entity = entity.clone();
+            move |_window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.refresh_github_repos(cx));
+                }
+            }
+        })
+        .on_connect_github({
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Not open_settings: it toggles, and closing the
+                        // settings the user already had open would be a
+                        // surprise coming from a menu row.
+                        this.open_settings_tab(
+                            console_ui::settings::SettingsTab::Providers,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }

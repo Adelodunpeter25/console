@@ -990,6 +990,44 @@ impl ConsoleDesktopApp {
                     },
                     {
                         let entity = entity.clone();
+                        move |repo: console_core::GithubRepo, _w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.open_repo_task(repo, cx)
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let entity = entity.clone();
+                        move |_w, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.refresh_github_repos(cx)
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let entity = entity.clone();
+                        move |window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    // Not open_settings: it toggles, and
+                                    // closing settings the user already had
+                                    // open would be a surprise from a menu
+                                    // row.
+                                    this.open_settings_tab(
+                                        console_ui::settings::SettingsTab::Providers,
+                                        window,
+                                        cx,
+                                    );
+                                });
+                            }
+                        }
+                    },
+                    {
+                        let entity = entity.clone();
                         move |name: String, _w, cx| {
                             if let Some(app) = entity.upgrade() {
                                 let pane_id = branch_pane_id.clone();
@@ -1011,7 +1049,13 @@ impl ConsoleDesktopApp {
                         }
                     },
                 )
-                .project_locked(self.session_has_messages(&pane_id));
+                .project_locked(self.session_has_messages(&pane_id))
+                .github_section(
+                    self.github_repos.clone(),
+                    self.github_repos_loading,
+                    self.github_repos_error.clone(),
+                )
+                .repo_cloning(self.repo_task_cloning.clone());
 
                 div()
                     .relative()

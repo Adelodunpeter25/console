@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
  * repo rather than showing a control that can't do anything.
  */
 @Composable
-fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean, onAddProject: () -> Unit) {
+fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean, onAddProject: () -> Unit, onConnectGithub: () -> Unit = {}) {
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -122,6 +122,10 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
             onAddProject = {
                 projectSheet = false
                 onAddProject()
+            },
+            onConnectGithub = {
+                projectSheet = false
+                onConnectGithub()
             },
         )
     }

@@ -18,4 +18,7 @@ import kotlinx.serialization.Serializable
 @Serializable data class RouteBrowser(val url: String)
 @Serializable object RouteSettings
 @Serializable object RouteSettingsFromSetup
+// Settings, opened straight on Providers — where the GitHub token row lives.
+// The project pickers' "Connect GitHub…" hands off here.
+@Serializable object RouteSettingsProviders
 @Serializable object RouteAddProject

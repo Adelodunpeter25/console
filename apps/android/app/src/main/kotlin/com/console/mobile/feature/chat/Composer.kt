@@ -87,6 +87,7 @@ fun Composer(
     running: Boolean,
     projectLocked: Boolean,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit = {},
     topBanner: (@Composable () -> Unit)? = null,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -306,7 +307,7 @@ fun Composer(
             // and its loaded branch list survive the composer folding up.
             // Project and branch are only chosen before the first message, so the strip is gone after.
             if (!projectLocked) Collapsible(progress = expansion, anchorBottom = true, modifier = Modifier.fillMaxWidth()) {
-                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject)
+                ComposerTopStrip(sessionId = sessionId, running = running, projectLocked = projectLocked, onAddProject = onAddProject, onConnectGithub = onConnectGithub)
             }
             // Attachments are content, not configuration, so they stay visible collapsed.
             if (attachments.isNotEmpty()) {

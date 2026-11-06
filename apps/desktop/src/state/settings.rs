@@ -20,6 +20,9 @@ impl ConsoleDesktopApp {
         self.load_sessions(cx);
         self.load_providers(cx);
         self.fetch_usage(cx);
+        // The project menu's GitHub section reads this list; fetching here
+        // means it is ready the first time the menu opens.
+        self.refresh_github_repos(cx);
 
         let client = self.client.clone();
         cx.spawn(async move |this, cx| {
