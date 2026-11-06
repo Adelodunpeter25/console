@@ -86,7 +86,8 @@ fun HomeScreen(
     // Section keys whose sessions are hidden (Pinned/Drafts/project ids).
     // Survives navigating into a chat and back; resets on process death,
     // like the rest of Home's transient UI state.
-    var collapsedSections by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    // Settled starts collapsed on every entry; expanding it lasts for the session.
+    var collapsedSections by rememberSaveable { mutableStateOf(setOf("settled")) }
     val toggleSection: (String) -> Unit = { key ->
         collapsedSections = if (key in collapsedSections) collapsedSections - key else collapsedSections + key
     }
