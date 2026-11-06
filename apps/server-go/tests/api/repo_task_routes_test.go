@@ -16,8 +16,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
@@ -133,6 +133,25 @@ func TestFromRepoClonesRegistersCreatesSession(t *testing.T) {
 	}
 }
 
+// A scheme URL must name the project after the repo, not the scheme —
+// "https://github.com/o/r" once registered a project literally called
+// "https". file:// clones locally, so this exercises the scheme-cut path
+// without touching the network.
+func TestFromRepoNamesProjectFromSchemeURL(t *testing.T) {
+	app := repoTaskApp(t)
+	origin := repoTaskOriginRepo(t)
+
+	code, raw := repoTaskPost(t, app, `{"url":`+jsonStr("file://"+origin)+`}`)
+	if code != 200 {
+		t.Fatalf("from-repo: %d %s", code, raw)
+	}
+	proj, _ := decodeRepoTask(t, raw)
+
+	if want := filepath.Base(origin); proj.GetName() != want {
+		t.Fatalf("project name = %q, want %q", proj.GetName(), want)
+	}
+}
+
 // Tapping the same repo twice must reuse the registered project, not clone a
 // second copy (which would refuse with target-not-empty, failing the tap).
 func TestFromRepoReusesRegisteredProject(t *testing.T) {
@@ -180,8 +199,8 @@ func TestFromRepoValidatesBody(t *testing.T) {
 	app := repoTaskApp(t)
 
 	for name, body := range map[string]string{
-		"missing url":  `{}`,
-		"invalid url":  `{"url":"nonsense"}`,
+		"missing url":       `{}`,
+		"invalid url":       `{"url":"nonsense"}`,
 		"traversal as name": `{"url":` + jsonStr(repoTaskOriginRepo(t)) + `,"name":"../escape"}`,
 	} {
 		code, raw := repoTaskPost(t, app, body)

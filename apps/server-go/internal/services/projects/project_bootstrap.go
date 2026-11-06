@@ -189,8 +189,11 @@ func normalizeHost(host string) string {
 // A trailing ".git" is dropped, since nobody wants a folder called "repo.git".
 func repoNameFromURL(url string) (string, error) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(url), "/")
-	if h, _, found := strings.Cut(trimmed, "://"); found {
-		trimmed = h
+	// Cut returns (before, after, found): the name comes from the part
+	// AFTER the scheme, not the scheme itself — keeping `before` named
+	// every https:// clone "https".
+	if _, after, found := strings.Cut(trimmed, "://"); found {
+		trimmed = after
 	}
 	if rest, found := strings.CutPrefix(trimmed, "git@"); found {
 		// scp-style: everything after the colon is the path.
