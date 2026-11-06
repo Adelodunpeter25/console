@@ -5,4 +5,3 @@ lint:
 breaking:
   use:
     - FILE
-  up_against: '.git#branch=main'
