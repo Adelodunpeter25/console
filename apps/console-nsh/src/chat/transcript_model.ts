@@ -73,6 +73,11 @@ export function isHiddenToolTransport(message: AgentMessage): boolean {
   return false;
 }
 
+/// The message's server-assigned id, when its kind carries one.
+export function messageId(message: AgentMessage): string | null {
+  return message.type === "toolResult" ? null : message.id ?? null;
+}
+
 // ─── Run activity (`tool_activity_for_user`) ────────────────────────────────
 
 export interface RunActivity {

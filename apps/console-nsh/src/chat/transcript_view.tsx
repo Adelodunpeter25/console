@@ -8,20 +8,20 @@
 // `prompt_jump.tsx`.
 //
 // Deviations from the Rust source, until their dependencies are ported:
-// - No virtualized list and no scroll API in nsh yet: every visible row
-//   renders, the follow-tail / scroll-anchor / scroll-restore logic has
-//   nothing to attach to, and the scroll-to-bottom arrow is dropped. The
-//   auto-load-older trigger (fired when scrolled near the top) has no scroll
-//   events to watch either — the host still drives pagination through
-//   `setPagination` / `onLoadOlder` once a scroll surface exists.
+// - The rows render through nsh's virtualized `List`: only rows near the
+//   viewport exist, cells recycle, tail-following streams into view via
+//   `maintainVisibleContentPosition`, and `onLoadMoreAtStart` fires the
+//   host's `onLoadOlder` when the list approaches its start. The desktop's
+//   scroll-to-bottom arrow is back as a floating pill shown when scrolled
+//   away from the end.
 // - The selection machinery (selectable text, the Copy/Cite popup over a
 //   selection) is a GPUI render-layer concern and is dropped.
 // - The markdown-view and presentation caches are dropped: nsh re-renders
-//   only what a signal change touches, and there is no virtualization to
-//   remount rows against.
+//   only what a signal change touches, and list recycling replaces the
+//   virtualization the caches served.
 
-import { Text, View, token } from "nsh";
-import type { JSX } from "nsh";
+import { List, Text, View, token, signal } from "nsh";
+import type { JSX, ListRef } from "nsh";
 import { Icon } from "../common/icons";
 import { WorkingIndicator } from "./working_indicator";
 import { UserMessageBubble } from "./message_user";
@@ -33,6 +33,7 @@ import { PromptJump } from "./prompt_jump";
 import {
   groupTurnChanges,
   isHiddenToolTransport,
+  messageId,
   toolActivityForUser,
   turnChangesForAssistant,
   type AgentMessage,
@@ -60,8 +61,16 @@ export function TranscriptView(props: {
   /// Jumps to a prompt, given as its position counted from the newest
   /// (0 = newest).
   onJumpToPrompt?: (fromEnd: number) => void;
+  /// Fetches the page of messages before the first one (the list reached
+  /// its start and `state.hasMore()` is set).
+  onLoadOlder?: () => void;
 }) {
   const state = props.state;
+
+  let listRef: ListRef | undefined;
+  // Whether the list rests at (or within a viewport of) the end: the
+  // scroll-to-bottom pill only shows while scrolled away from it.
+  const atEnd = signal(true);
 
   // Whether the last user's run contains any tool call: while it does, the
   // run's activity block is the live element and no trailing working
@@ -80,6 +89,14 @@ export function TranscriptView(props: {
   };
 
   const turns = () => groupTurnChanges(state.sessionChanges());
+
+  const visibleMessages = (): { message: AgentMessage; index: number }[] => {
+    const out: { message: AgentMessage; index: number }[] = [];
+    state.messages().forEach((message, index) => {
+      if (!isHiddenToolTransport(message)) out.push({ message, index });
+    });
+    return out;
+  };
 
   const userRow = (message: UserMessage, index: number): JSX.Element => {
     const expandKey = message.id ?? `message-${index}`;
@@ -164,61 +181,90 @@ export function TranscriptView(props: {
     );
   };
 
-  const rows = (): JSX.Element[] => {
-    const out: JSX.Element[] = [];
-    state.messages().forEach((message, index) => {
-      if (isHiddenToolTransport(message)) return;
-      out.push(
-        <View class="w-full flex justify-center px-5 py-1">
-          <View class="w-full max-w-[768px]">
-            {message.type === "user"
-              ? userRow(message, index)
-              : message.type === "assistant"
-                ? assistantRow(message, index)
-                : null}
-          </View>
-        </View>,
-      );
-    });
-    return out;
-  };
-
-  const workingRow = (): JSX.Element | null => {
-    if (!state.isStreaming() || hasActiveToolActivity()) return null;
-    const startedAt =
-      state.streamingStartedAt() ?? Math.floor(Date.now() / 1000);
-    return (
-      <View class="w-full flex justify-center px-5 py-1">
-        <View class="w-full max-w-[768px]">
-          <WorkingIndicator startedAt={startedAt} />
-        </View>
+  const row = (message: AgentMessage, index: number): JSX.Element => (
+    <View class="w-full flex justify-center px-5 py-1">
+      <View class="w-full max-w-[768px]">
+        {message.type === "user"
+          ? userRow(message, index)
+          : message.type === "assistant"
+            ? assistantRow(message, index)
+            : null}
       </View>
-    );
+    </View>
+  );
+
+  const messageKey = (item: { message: AgentMessage; index: number }): string =>
+    messageId(item.message) ?? `idx-${item.index}`;
+
+  const loadOlder = () => {
+    if (!state.hasMore() || state.loadingOlder()) return;
+    state.setLoadingOlder(true);
+    props.onLoadOlder?.();
   };
 
   // The branch reads the signals inside JSX so it re-evaluates when the
   // first message arrives or streaming starts (the component itself runs
   // once).
   return (
-    <View class="h-full w-full">
-      {state.messages().length === 0 && !state.isStreaming() ? (
-        <View class="h-full w-full flex-col items-center justify-center gap-2">
-          <Icon name="Bot" size={32} color={token("muted-foreground")} />
-          <Text class="text-[14px] text-muted-foreground">
-            Start a conversation
-          </Text>
-        </View>
-      ) : (
-        <View class="group relative h-full w-full flex-col">
-          <View class="h-full w-full flex-col pb-11">{rows()}</View>
-          {workingRow()}
-          <PromptJump
-            state={state}
-            onRequestPrompts={props.onRequestPrompts}
-            onJumpToPrompt={props.onJumpToPrompt}
-          />
-        </View>
-      )}
+    <View class="group relative h-full w-full">
+      <List
+        ref={(ref) => {
+          listRef = ref;
+        }}
+        class="h-full w-full"
+        contentClass="pb-11"
+        each={visibleMessages()}
+        keyExtractor={messageKey}
+        maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 120 }}
+        onScroll={(e) =>
+          atEnd.set(e.offset.y + e.size.height >= e.contentSize.height - 80)
+        }
+        onLoadMoreAtStart={loadOlder}
+        empty={
+          <View class="h-full w-full flex-col items-center justify-center gap-2">
+            <Icon name="Bot" size={32} color={token("muted-foreground")} />
+            <Text class="text-[14px] text-muted-foreground">
+              Start a conversation
+            </Text>
+          </View>
+        }
+        footer={
+          state.isStreaming() && !hasActiveToolActivity() ? (
+            <View class="w-full flex justify-center px-5 py-1">
+              <View class="w-full max-w-[768px]">
+                <WorkingIndicator
+                  startedAt={
+                    state.streamingStartedAt() ?? Math.floor(Date.now() / 1000)
+                  }
+                />
+              </View>
+            </View>
+          ) : null
+        }
+      >
+        {(item, index) => row(item().message, item().index)}
+      </List>
+      {(() => {
+        if (atEnd() || state.messages().length === 0) return null;
+        return (
+          <View
+            class="absolute bottom-3 left-4 flex-row items-center justify-center rounded-full border border-border bg-popover"
+            role="button"
+            accessibilityLabel="Scroll to bottom"
+            onPress={() => {
+              atEnd.set(true);
+              listRef?.scrollToEnd({ animated: true });
+            }}
+          >
+            <Icon name="ChevronDown" size={14} color={token("muted-foreground")} />
+          </View>
+        );
+      })()}
+      <PromptJump
+        state={state}
+        onRequestPrompts={props.onRequestPrompts}
+        onJumpToPrompt={props.onJumpToPrompt}
+      />
     </View>
   );
 }

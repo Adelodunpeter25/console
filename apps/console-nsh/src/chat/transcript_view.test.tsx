@@ -128,6 +128,8 @@ test("the jump-to-prompt popup lists prompts and jumps", async () => {
   const app = await open("./transcript_view.fixture.tsx", { platform: "linux" });
   await app.press("label:Add user message");
   await app.press("label:Set prompts");
+  // The pill is hover-revealed, like the sidebar's settle button.
+  await app.hover("text:What is this repo?");
   await app.press("label:Jump to prompt");
   expect(app.texts()).toContain("Newest prompt");
   await app.press("label:Jump to prompt p1");

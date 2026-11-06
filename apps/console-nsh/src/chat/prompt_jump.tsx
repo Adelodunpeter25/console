@@ -59,10 +59,14 @@ export function PromptJump(props: {
       ));
   };
 
-  const hasPrompts = state.messages().length > 0;
-  if (!hasPrompts) return null;
+  const hasPrompts = () => state.messages().length > 0;
+  // The pill shows when the chat has messages; the guard reads inside JSX
+  // so the pill appears when the first message arrives (the component runs
+  // once).
   return (
-    <View class="absolute bottom-3 right-4 flex-row items-center overflow-hidden rounded-[17px] border border-border bg-popover opacity-0 group-hover:opacity-100">
+    <View class="pointer-events-none absolute inset-0">
+      {hasPrompts() ? (
+        <View class="pointer-events-auto absolute bottom-3 right-4 flex-row items-center overflow-hidden rounded-[17px] border border-border bg-popover opacity-0 group-hover:opacity-100">
       <Popover
         placement="top"
         align="end"
@@ -81,7 +85,9 @@ export function PromptJump(props: {
         }
       >
         <View class="flex-col">{promptRows()}</View>
-      </Popover>
+        </Popover>
+        </View>
+      ) : null}
     </View>
   );
 }
