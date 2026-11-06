@@ -61,6 +61,24 @@ fi
 curl -fSL "${BASE_URL}/${LIB_ASSET}" -o "${PREFIX}/${LIB_FILE}"
 chmod 644 "${PREFIX}/${LIB_FILE}"
 
+# cua native sidecar (libcua_driver_sdk): backs the computer-use capability.
+# Best-effort — the server runs without it, /computer-use just stays
+# unavailable until scripts/fetch-cua-lib.sh provides the library.
+if [ "$os" = "linux" ]; then
+  CUA_ASSET="libcua_driver_sdk-${SUFFIX}.so"
+  CUA_FILE="libcua_driver_sdk.so"
+else
+  CUA_ASSET="libcua_driver_sdk-${SUFFIX}.dylib"
+  CUA_FILE="libcua_driver_sdk.dylib"
+fi
+
+if curl -fsSL "${BASE_URL}/${CUA_ASSET}" -o "${PREFIX}/${CUA_FILE}"; then
+  chmod 644 "${PREFIX}/${CUA_FILE}"
+else
+  echo "NOTE: computer-use driver not installed (${CUA_ASSET} unavailable); /computer-use will be disabled." >&2
+  rm -f "${PREFIX}/${CUA_FILE}"
+fi
+
 case ":$PATH:" in
   *":${PREFIX}:"*) ;;
   *)

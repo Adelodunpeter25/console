@@ -3,8 +3,9 @@
 # to a rolling GitHub Release tagged `console-server` (latest always wins).
 #
 # Assets per platform: console-<suffix> + libfff_c-<suffix>.{so,dylib,dll}
-# sidecar (fff file-search native lib, dlopened at runtime — same assets as
-# apps/server-go/scripts/fetch-fff-lib.sh, which only covers the host).
+# (fff file-search native lib) + libcua_driver_sdk-<suffix>.{so,dylib,dll}
+# (cua computer-use driver) — both dlopened at runtime, same assets as
+# apps/server-go/scripts/fetch-{fff,cua}-lib.sh, which only cover the host.
 # `console start` re-executes the same binary with CONSOLE_SERVE=1, so one
 # installed file both manages and IS the daemon.
 name: Build console
@@ -29,6 +30,9 @@ jobs:
             bin: console-linux-x64
             fff-asset: c-lib-x86_64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-x64.so
+            cua-driver: linux-x64-gnu
+            cua-lib: libcua_driver_sdk.so
+            cua-asset: libcua_driver_sdk-linux-x64.so
           # Native arm64 runner (free on public repos) instead of a cross
           # toolchain: the build is cgo for the fff dlopen bindings, and a
           # matching host keeps that a plain gcc link.
@@ -45,6 +49,9 @@ jobs:
             bin: console-linux-arm64
             fff-asset: c-lib-aarch64-unknown-linux-gnu.so
             lib-asset: libfff_c-linux-arm64.so
+            cua-driver: linux-arm64-gnu
+            cua-lib: libcua_driver_sdk.so
+            cua-asset: libcua_driver_sdk-linux-arm64.so
           - os-suffix: macos-x64
             runner: macos-15
             goos: darwin
@@ -52,6 +59,9 @@ jobs:
             bin: console-macos-x64
             fff-asset: c-lib-x86_64-apple-darwin.dylib
             lib-asset: libfff_c-macos-x64.dylib
+            cua-driver: darwin-x64
+            cua-lib: libcua_driver_sdk.dylib
+            cua-asset: libcua_driver_sdk-macos-x64.dylib
           - os-suffix: macos-arm64
             runner: macos-15
             goos: darwin
@@ -59,6 +69,9 @@ jobs:
             bin: console-macos-arm64
             fff-asset: c-lib-aarch64-apple-darwin.dylib
             lib-asset: libfff_c-macos-arm64.dylib
+            cua-driver: darwin-arm64
+            cua-lib: libcua_driver_sdk.dylib
+            cua-asset: libcua_driver_sdk-macos-arm64.dylib
           # windows-x64 only for now: the sidecars ship an arm64 Windows
           # build too, but the mingw cgo toolchain on the arm64 Windows
           # runner is not proven, so x64 ships first. The .exe suffix is
@@ -71,6 +84,9 @@ jobs:
             bin: console-windows-x64.exe
             fff-asset: c-lib-x86_64-pc-windows-msvc.dll
             lib-asset: libfff_c-windows-x64.dll
+            cua-driver: win32-x64-msvc
+            cua-lib: cua_driver_sdk.dll
+            cua-asset: cua_driver_sdk-windows-x64.dll
     steps:
       - uses: actions/checkout@v4
 
@@ -93,16 +109,28 @@ jobs:
           go -C apps/server-go build -trimpath -ldflags="-s -w"
           -o ../../${{ matrix.bin }} ./cmd/console
 
-      # Fetch the target platform's libfff_c from fff releases
-      # (fetch-fff-lib.sh only covers the runner's own platform). bash shell
-      # so the step also runs on the Windows runner, where PowerShell would
-      # alias curl to Invoke-WebRequest.
-      - name: Stage fff native sidecar
+      # Stage the native sidecars dlopened at runtime: fff (file search)
+      # ships as a raw file, the cua driver (computer-use) inside a .tgz.
+      # The fetch scripts only cover the runner's own platform, so both are
+      # fetched for the target platform here. bash shell so the step also
+      # runs on the Windows runner, where PowerShell would alias curl to
+      # Invoke-WebRequest.
+      - name: Stage native sidecars
         shell: bash
+        env:
+          # Must match fetch-cua-lib.sh VERSION and the runtime ABI check.
+          CUA_VERSION: "0.38.0"
         run: |
           curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
             "https://github.com/dmtrKovalenko/fff/releases/latest/download/${{ matrix.fff-asset }}" \
             -o "${{ matrix.lib-asset }}"
+          cua_tmp="$(mktemp -d)"
+          curl -fL --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/trycua/cua/releases/download/cua-driver-rs-v${CUA_VERSION}/trycua-cua-driver-${{ matrix.cua-driver }}-${CUA_VERSION}.tgz" \
+            -o "$cua_tmp/driver.tgz"
+          tar -xzf "$cua_tmp/driver.tgz" -C "$cua_tmp" "package/${{ matrix.cua-lib }}"
+          mv "$cua_tmp/package/${{ matrix.cua-lib }}" "${{ matrix.cua-asset }}"
+          rm -rf "$cua_tmp"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -111,6 +139,7 @@ jobs:
           path: |
             ${{ matrix.bin }}
             ${{ matrix.lib-asset }}
+            ${{ matrix.cua-asset }}
           if-no-files-found: error
 
   # Single publisher: the matrix jobs previously uploaded to the same
@@ -149,11 +178,16 @@ jobs:
             files: |
               dist/console-linux-x64
               dist/libfff_c-linux-x64.so
+              dist/libcua_driver_sdk-linux-x64.so
               dist/console-linux-arm64
               dist/libfff_c-linux-arm64.so
+              dist/libcua_driver_sdk-linux-arm64.so
               dist/console-macos-x64
               dist/libfff_c-macos-x64.dylib
+              dist/libcua_driver_sdk-macos-x64.dylib
               dist/console-macos-arm64
               dist/libfff_c-macos-arm64.dylib
+              dist/libcua_driver_sdk-macos-arm64.dylib
               dist/console-windows-x64.exe
               dist/libfff_c-windows-x64.dll
+              dist/cua_driver_sdk-windows-x64.dll

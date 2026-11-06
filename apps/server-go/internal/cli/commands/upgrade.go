@@ -28,6 +28,8 @@ type upgradeTarget struct {
 	binAsset string
 	libPath  string
 	libAsset string
+	cuaPath  string
+	cuaAsset string
 }
 
 func resolveUpgradeTarget() (upgradeTarget, error) {
@@ -63,13 +65,21 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	binName := "console" + ext
 	libAsset := "libfff_c-" + suffix + ".so"
 	libFile := "libfff_c.so"
+	// The cua driver's file name differs on Windows (no lib prefix), matching
+	// the loader's per-GOOS libraryNames().
+	cuaAsset := "libcua_driver_sdk-" + suffix + ".so"
+	cuaFile := "libcua_driver_sdk.so"
 	switch osName {
 	case "windows":
 		libAsset = "libfff_c-" + suffix + ".dll"
 		libFile = "libfff_c.dll"
+		cuaAsset = "cua_driver_sdk-" + suffix + ".dll"
+		cuaFile = "cua_driver_sdk.dll"
 	case "darwin":
 		libAsset = "libfff_c-" + suffix + ".dylib"
 		libFile = "libfff_c.dylib"
+		cuaAsset = "libcua_driver_sdk-" + suffix + ".dylib"
+		cuaFile = "libcua_driver_sdk.dylib"
 	}
 
 	// A Go binary is always compiled, so the binary swaps itself in place —
@@ -77,14 +87,22 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 	// dir (overridable via CONSOLE_INSTALL_DIR).
 	if exe, err := os.Executable(); err == nil && !isGoBuildTemp(exe) {
 		dir := filepath.Dir(exe)
-		return upgradeTarget{suffix: suffix, binPath: exe, binAsset: binAsset, libPath: filepath.Join(dir, libFile), libAsset: libAsset}, nil
+		return upgradeTarget{
+			suffix: suffix, binPath: exe, binAsset: binAsset,
+			libPath: filepath.Join(dir, libFile), libAsset: libAsset,
+			cuaPath: filepath.Join(dir, cuaFile), cuaAsset: cuaAsset,
+		}, nil
 	}
 	prefix := os.Getenv("CONSOLE_INSTALL_DIR")
 	if prefix == "" {
 		home, _ := os.UserHomeDir()
 		prefix = filepath.Join(home, ".local", "bin")
 	}
-	return upgradeTarget{suffix: suffix, binPath: filepath.Join(prefix, binName), binAsset: binAsset, libPath: filepath.Join(prefix, libFile), libAsset: libAsset}, nil
+	return upgradeTarget{
+		suffix: suffix, binPath: filepath.Join(prefix, binName), binAsset: binAsset,
+		libPath: filepath.Join(prefix, libFile), libAsset: libAsset,
+		cuaPath: filepath.Join(prefix, cuaFile), cuaAsset: cuaAsset,
+	}, nil
 }
 
 // isGoBuildTemp reports whether exe is a `go run`/`go test` temp binary
@@ -150,6 +168,9 @@ func UpgradeDaemon() error {
 		return err
 	}
 	if err := downloadTo(upgradeBaseURL+"/"+target.libAsset, target.libPath, 0o644); err != nil {
+		return err
+	}
+	if err := downloadTo(upgradeBaseURL+"/"+target.cuaAsset, target.cuaPath, 0o644); err != nil {
 		return err
 	}
 	fmt.Println("Binary swapped.")
