@@ -28,7 +28,9 @@ android {
         applicationId = "com.console.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
+        // CI passes the workflow run number so every published APK is newer
+        // than the last; the in-app updater compares this with latest.json.
+        versionCode = (project.findProperty("buildNumber") as String?)?.toInt() ?: 3
         versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

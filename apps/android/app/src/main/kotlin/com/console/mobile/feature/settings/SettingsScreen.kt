@@ -123,6 +123,7 @@ private fun SettingsLanding(onBack: () -> Unit, onOpen: (SettingsSection) -> Uni
                 NavRow(icon = TablerIcons.Outline.Folder, title = "Projects") { onOpen(SettingsSection.Projects) }
                 NavRow(icon = TablerIcons.Outline.Trash, title = "Deleted Chats") { onOpen(SettingsSection.DeletedChats) }
             }
+            AppUpdateSection()
         }
         PageHeader(
             title = "Settings",
