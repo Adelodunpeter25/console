@@ -10,7 +10,7 @@
 // bubble is hovered (group hover).
 
 import { Image, Text, View } from "nsh";
-import { CopyButton, CiteButton } from "../common/copy_button";
+import { CopyButton } from "../common/copy_button";
 import { Icon, type IconName } from "../common/icons";
 import { baseName, mentionLabel } from "../utils/mentions";
 import { fileTypeIconName } from "./change_chips";
@@ -130,9 +130,6 @@ export function UserMessageBubble(props: {
   expanded?: boolean | (() => boolean);
   onToggleExpand?: () => void;
   onPreviewImage?: (uri: string) => void;
-  /// Quotes this message into the composer (the desktop's "Quote selection"
-  /// pill, reduced to a per-message affordance — see CiteButton).
-  onCite?: (text: string) => void;
 }) {
   const content = () =>
     typeof props.content === "function" ? props.content() : props.content;
@@ -279,9 +276,6 @@ export function UserMessageBubble(props: {
           ) : null;
         })()}
         <CopyButton id="copy-user-message" content={content()} />
-        {props.onCite != null ? (
-          <CiteButton onCite={() => props.onCite!(content())} />
-        ) : null}
       </View>
     </View>
   );

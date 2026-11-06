@@ -135,12 +135,3 @@ test("the jump-to-prompt popup lists prompts and jumps", async () => {
   await app.press("label:Jump to prompt p1");
   expect(app.texts()).toContain("Jumped: 1");
 });
-
-test("a message's cite button quotes it into the host", async () => {
-  const app = await open("./transcript_view.fixture.tsx", { platform: "linux" });
-  await app.press("label:Load session");
-  // The cite affordance is hover-revealed like the rest of the footer.
-  await app.hover("text:First question");
-  await app.press("label:Quote message >> nth=0");
-  expect(app.texts()).toContain("Cited: First question");
-});

@@ -56,21 +56,3 @@ export function CopyButton(props: {
     </View>
   );
 }
-
-/// The cite button beside it (console-ui's selection popup's "Quote
-/// selection" pill, which uses the same reply glyph): presses invoke
-/// `onCite` with the message's text for the host to quote into the
-/// composer. The desktop's drag-selection popup itself is a platform drop —
-/// nsh has no cross-view selection — so this cites the whole message.
-export function CiteButton(props: { onCite: () => void }) {
-  return (
-    <View
-      class="h-[27px] w-[27px] flex-row items-center justify-center rounded-lg hover:bg-accent"
-      role="button"
-      accessibilityLabel="Quote message"
-      onPress={props.onCite}
-    >
-      <Icon name="Reply" size={14} color={token("muted-foreground")} />
-    </View>
-  );
-}
