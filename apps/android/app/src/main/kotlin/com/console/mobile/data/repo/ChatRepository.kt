@@ -170,7 +170,8 @@ class ChatRepository(
         val draft = console.v1.ChatDraft(
             session_id = sessionId,
             text = text,
-            mentions = emptyList(),
+            // Chips keep their ranges only while the text they point into is unchanged.
+            mentions = if (held?.text == text) held.mentions else emptyList(),
             comments = held?.comments ?: emptyList(),
             updated_at = System.currentTimeMillis(),
         )
@@ -515,8 +516,10 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
-        // The staged prompt lives server-side now; drop the local draft copy.
+        // The staged prompt lives server-side now; drop the local draft copy
+        // and the synced one so other devices stop offering the queued text.
         persistence?.removeSession(sessionId)
+        flushDraft(sessionId)
 
         val body = RunPromptDto(
             prompt = prompt,
