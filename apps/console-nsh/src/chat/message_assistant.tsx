@@ -16,7 +16,7 @@ import { TurnChangeChips, type TurnChanges } from "./change_chips";
 import { ThinkingBlock } from "./thinking_block";
 import { MarkdownBlocks, METRICS } from "./markdown/render";
 import { dataUri, type ImageAttachment } from "./message_user";
-import type { ToolCall } from "./toolcalls";
+import type { ToolCall } from "./toolcalls/model";
 import { formatMessageTime, formatTokensPerSecond } from "../utils/time";
 
 export type AssistantContentPart =

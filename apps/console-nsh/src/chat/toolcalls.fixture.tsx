@@ -6,7 +6,7 @@ import {
   ToolCalls,
   type ActivityEvent,
   type ToolCallEntry,
-} from "./toolcalls";
+} from "./toolcalls/toolcalls";
 
 const working = signal(false);
 
