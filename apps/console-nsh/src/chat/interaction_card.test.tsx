@@ -6,7 +6,7 @@ import { expect, open, test } from "nsh/test";
 test("the permission card shows the tool and runs allow / deny", async () => {
   const app = await open("./interaction_card.fixture.tsx", { platform: "linux" });
   expect(app.texts()).toContain("Permission required: editFile");
-  expect(app.texts()).toContain("Needs to **edit** a file");
+  expect(app.texts()).toContain("Needs to edit a file");
 
   await app.press("label:Deny");
   expect(app.texts()).toContain("Approved: deny");

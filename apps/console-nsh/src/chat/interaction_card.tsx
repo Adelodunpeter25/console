@@ -10,7 +10,6 @@ import { Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Icon } from "../common/icons";
 import { MarkdownBlocks, METRICS } from "./markdown/render";
-import { parseMarkdown } from "./markdown/parser";
 
 /// console-core's `PermissionRequest` wire shape.
 export interface PermissionRequest {
@@ -51,7 +50,7 @@ export function PermissionInteractionCard(props: {
       {/* Optional reason */}
       {req.reason ? (
         <View class="pl-6">
-          <MarkdownBlocks tree={parseMarkdown(req.reason)} metrics={METRICS.BODY} />
+          <MarkdownBlocks source={req.reason} metrics={METRICS.BODY} />
         </View>
       ) : null}
       {/* Tool args JSON preview */}
@@ -138,10 +137,7 @@ export function QuestionInteractionCard(props: {
           <Icon name="Bot" size={14} color={token("primary")} />
         </View>
         <View class="min-w-0 flex-1">
-          <MarkdownBlocks
-            tree={parseMarkdown(props.request.question)}
-            metrics={METRICS.BODY}
-          />
+          <MarkdownBlocks source={props.request.question} metrics={METRICS.BODY} />
         </View>
       </View>
       {/* Options */}
@@ -175,7 +171,7 @@ export function QuestionInteractionCard(props: {
                   ) : null}
                 </View>
                 <View class="min-w-0 flex-1">
-                  <MarkdownBlocks tree={parseMarkdown(opt)} metrics={METRICS.BODY} />
+                  <MarkdownBlocks source={opt} metrics={METRICS.BODY} />
                 </View>
               </View>
             );

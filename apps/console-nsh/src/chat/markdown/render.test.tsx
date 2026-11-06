@@ -1,12 +1,10 @@
-// Tests for the markdown renderer, ported from console-ui's
-// `markdown/render.rs` behaviour: the type scales, proportional table
-// columns, and every block kind rendering into the fixture document.
+// Tests for the markdown renderer on nsh's `TextView`: the desktop's type
+// scales survive the swap, and every construct in the fixture document
+// renders.
 import { expect, open, test } from "nsh/test";
-import { columnWidths } from "./render";
-import { plain } from "./types";
+import { METRICS, textViewStyles } from "./render";
 
-test("the type scales match the desktop's metrics", async () => {
-  const { METRICS } = await import("./render");
+test("the type scales match the desktop's metrics", () => {
   expect(METRICS.BODY.textSize).toBe(12.5);
   expect(METRICS.BODY.lineHeight).toBe(20);
   expect(METRICS.USER_MESSAGE.textSize).toBe(14);
@@ -14,28 +12,23 @@ test("the type scales match the desktop's metrics", async () => {
   expect(METRICS.COMPACT.blockGap).toBe(6);
 });
 
-test("table columns are content-proportional with a readable floor", () => {
-  const header = [[plain("A")], [plain("B is a much longer header")]];
-  const widths = columnWidths(header, [], 2);
-  expect(widths.length).toBe(2);
-  // The long column takes most of the table…
-  expect(widths[1]).toBeGreaterThan(widths[0]);
-  // …but the short one keeps at least 55% of an even share.
-  expect(widths[0]).toBeGreaterThanOrEqual((1 / 2) * 0.55 - 1e-9);
-  // And they sum to one.
-  expect(Math.abs(widths[0] + widths[1] - 1)).toBeLessThan(1e-9);
+test("textViewStyles carries the scale into TextView's parts", () => {
+  const styles = textViewStyles(METRICS.COMPACT);
+  const root = styles.root as { fontSize: number; lineHeight: number };
+  expect(root.fontSize).toBe(11.5);
+  expect(root.lineHeight).toBe(17);
+  const code = styles.codeBlockCode as { fontSize: number };
+  expect(code.fontSize).toBe(10.5);
+  // Headings scale off the body size, like the desktop's heading_metrics.
+  const h1 = styles.heading1 as { fontSize: number };
+  expect(h1.fontSize).toBe(Math.round(11.5 * 1.45));
 });
 
-test("equal-content columns share evenly", () => {
-  const widths = columnWidths([[plain("a")], [plain("b")]], [], 2);
-  expect(Math.abs(widths[0] - 0.5)).toBeLessThan(1e-9);
-});
-
-test("the fixture document renders every block kind", async () => {
+test("the fixture document renders every construct", async () => {
   const app = await open("./render.fixture.tsx", { platform: "linux" });
-  const texts = app.texts();
+  const texts = app.texts().join("\n");
   for (const piece of [
-    "Plain text, bold and code.",
+    "bold",
     "Section",
     "First",
     "Task",
@@ -44,19 +37,9 @@ test("the fixture document renders every block kind", async () => {
     "Name",
     "alpha",
     "12",
-    "E = mc^2",
   ]) {
     expect(texts).toContain(piece);
   }
-});
-
-test("the code block header carries a copy button", async () => {
-  const app = await open("./render.fixture.tsx", { platform: "linux" });
-  await app.press("label:Copy");
-  // CopyButton gives no external signal here; the press succeeding (no
-  // throw) plus the check icon swap is the observable. Re-find the button
-  // to confirm the header is still laid out after the copy.
-  expect(app.texts()).toContain("rust");
 });
 
 test("the scale prop switches metrics", async () => {

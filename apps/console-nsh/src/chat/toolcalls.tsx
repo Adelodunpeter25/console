@@ -17,7 +17,6 @@ import { Text, View, token, signal } from "nsh";
 import type { JSX } from "nsh";
 import { Icon, type IconName } from "../common/icons";
 import { MarkdownBlocks, METRICS } from "./markdown/render";
-import { parseMarkdown } from "./markdown/parser";
 import { formatWorkingElapsed } from "../utils/time";
 import { WorkingIndicator } from "./working_indicator";
 import { ThinkingBlock } from "./thinking_block";
@@ -549,7 +548,7 @@ export function ToolCalls(props: {
 
   const textRow = (_id: string, text: string): JSX.Element => (
     <View class="py-1.5">
-      <MarkdownBlocks tree={parseMarkdown(text)} metrics={METRICS.BODY} />
+      <MarkdownBlocks source={text} metrics={METRICS.BODY} />
     </View>
   );
 

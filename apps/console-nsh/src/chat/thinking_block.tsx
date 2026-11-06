@@ -12,8 +12,6 @@ import { Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Icon } from "../common/icons";
 import { MarkdownBlocks, METRICS } from "./markdown/render";
-import { parseMarkdown } from "./markdown/parser";
-import type { Block, BlockTree } from "./markdown/types";
 
 export function thinkingWordCount(text: string): number {
   return text.trim().split(/\s+/).filter((word) => word.length > 0).length;
@@ -25,8 +23,6 @@ export function ThinkingBlock(props: {
   text: string | (() => string);
   /// Whether the section is collapsed. Pass a thunk when it can change.
   collapsed: boolean | (() => boolean);
-  /// Pre-parsed markdown; parsed from `text` when omitted.
-  tree?: Block[] | BlockTree;
   /// Reports the expanded state the header asks for: the current `collapsed`
   /// flag, which is exactly the next value for `expanded` (the desktop's
   /// `on_toggle(collapsed, ..)`).
@@ -66,13 +62,8 @@ export function ThinkingBlock(props: {
     </View>
   );
 
-  const content: JSX.Element = props.tree ? (
-    <MarkdownBlocks tree={props.tree} metrics={METRICS.COMPACT} />
-  ) : (
-    <MarkdownBlocks
-      tree={parseMarkdown(text())}
-      metrics={METRICS.COMPACT}
-    />
+  const content: JSX.Element = (
+    <MarkdownBlocks source={text()} metrics={METRICS.COMPACT} />
   );
 
   return (

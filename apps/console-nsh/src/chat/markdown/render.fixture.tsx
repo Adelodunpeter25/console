@@ -1,35 +1,30 @@
-// The markdown renderer test fixture: one document exercising every block
-// kind over `METRICS.BODY`, with a scenario button to switch to the compact
-// scale so tests can observe the scale prop.
+// The markdown renderer test fixture: one markdown document exercising
+// every construct, rendered through nsh's `TextView` at the desktop's body
+// scale, with a scenario button to switch to the compact scale so tests can
+// observe the metrics prop.
 import { signal } from "nsh";
 import { Text, View, mount } from "nsh";
 import { MarkdownBlocks, METRICS } from "./render";
-import type { Block } from "./types";
-import { plain, run } from "./types";
 
 export const compact = signal(false);
 
-const doc: Block[] = [
-  { kind: "paragraph", runs: [plain("Plain text, "), run("bold", { bold: true }), plain(" and "), run("code", { code: true }), plain(".")] },
-  { kind: "heading", level: 2, runs: [plain("Section")] },
-  {
-    kind: "list",
-    items: [
-      { blocks: [{ kind: "paragraph", runs: [plain("First")] }] },
-      { task: true, blocks: [{ kind: "paragraph", runs: [plain("Task")] }] },
-    ],
-  },
-  { kind: "codeBlock", language: "Rust", code: "let x = 1; // done" },
-  { kind: "blockQuote", children: [{ kind: "paragraph", runs: [plain("Quoted")] }] },
-  {
-    kind: "table",
-    header: [[plain("Name")], [plain("Count")]],
-    rows: [[[plain("alpha")], [plain("12")]]],
-    align: ["left", "right"],
-  },
-  { kind: "rule" },
-  { kind: "math", latex: "E = mc^2" },
-];
+const doc = [
+  "Plain text, **bold** and `code`.",
+  "## Section",
+  "- First",
+  "- [x] Task",
+  "",
+  "```rust",
+  "let x = 1; // done",
+  "```",
+  "> Quoted",
+  "",
+  "| Name | Count |",
+  "| --- | ---: |",
+  "| alpha | 12 |",
+  "---",
+  "$$E = mc^2$$",
+].join("\n");
 
 function Fixture() {
   return (
@@ -43,7 +38,7 @@ function Fixture() {
         <Text>{compact() ? "scale: compact" : "scale: body"}</Text>
       </View>
       <MarkdownBlocks
-        tree={[...doc]}
+        source={doc}
         metrics={compact() ? METRICS.COMPACT : METRICS.BODY}
       />
     </View>
