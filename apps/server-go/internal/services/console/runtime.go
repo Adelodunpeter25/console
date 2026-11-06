@@ -420,11 +420,29 @@ func (r *Runtime) sessionsRead(_ context.Context, args map[string]any) (*jskerne
 	if limit < 0 || before < 0 {
 		return nil, fmt.Errorf("limit and before must not be negative")
 	}
-	loaded, err := r.sessions.Load(id, int64(limit), int64(before))
+	includeDeleted := false
+	if raw, present := args["include_deleted"]; present {
+		b, ok := raw.(bool)
+		if !ok {
+			return nil, fmt.Errorf("include_deleted must be true or false, got %v", raw)
+		}
+		includeDeleted = b
+	}
+	var loaded *types.LoadedSession
+	if includeDeleted {
+		loaded, err = r.sessions.LoadIncludingDeleted(id, int64(limit), int64(before))
+	} else {
+		loaded, err = r.sessions.Load(id, int64(limit), int64(before))
+	}
 	if err != nil {
 		return nil, err
 	}
 	if loaded == nil {
+		if h, herr := r.sessions.HeaderIncludingDeleted(id); herr == nil && h != nil && h.DeletedAt != nil {
+			if deleted, _ := args["include_deleted"].(bool); !deleted {
+				return nil, fmt.Errorf("session %q is deleted; pass include_deleted: true to read it", id)
+			}
+		}
 		return nil, fmt.Errorf("session %q not found", id)
 	}
 	return marshalResult(loaded)
@@ -631,7 +649,7 @@ var methodArgs = map[string][]string{
 	"projects.list":         {},
 	"projects.add":          {"directory", "name"},
 	"sessions.list":         {"project_id", "cwd"},
-	"sessions.read":         {"session_id", "limit", "before"},
+	"sessions.read":         {"session_id", "limit", "before", "include_deleted"},
 	"sessions.create":       {"prompt", "project_id", "cwd", "model", "provider", "thinking_level", "approval_mode", "worktree"},
 	"sessions.delete":       {"session_id"},
 	"sessions.abort":        {"session_id"},
@@ -641,7 +659,7 @@ var methodArgs = map[string][]string{
 	"sessions.queue":        {"session_id"},
 	"sessions.clear_queue":  {"session_id"},
 	"sessions.fork":         {"session_id", "message_id"},
-	"sessions.search":       {"query", "session_id", "project_id", "cwd", "all_projects", "roles", "limit", "per_session"},
+	"sessions.search":       {"query", "session_id", "project_id", "cwd", "all_projects", "roles", "limit", "per_session", "include_deleted"},
 	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms"},
 	"mcp.list":              {},
 	"mcp.tools":             {"id"},

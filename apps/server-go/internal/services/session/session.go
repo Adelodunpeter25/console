@@ -162,6 +162,9 @@ type ListFilter struct {
 	Cwd         string
 	ProjectID   string
 	OnlyDeleted bool
+	// IncludeDeleted drops the deleted filter entirely, listing live and
+	// trashed sessions together. Ignored when OnlyDeleted is set.
+	IncludeDeleted bool
 }
 
 const sessionColumns = `id, title, cwd, project_id, model_id, provider, approval_mode,
@@ -176,8 +179,14 @@ const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at
 func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	const limit = 100
 	deletedCondition := "deleted_at IS NULL"
-	if f.OnlyDeleted {
+	switch {
+	case f.OnlyDeleted:
 		deletedCondition = "deleted_at IS NOT NULL"
+	case f.IncludeDeleted:
+		deletedCondition = ""
+	}
+	if deletedCondition != "" {
+		deletedCondition = " AND " + deletedCondition
 	}
 	var rows *sql.Rows
 	var err error
@@ -185,15 +194,15 @@ func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	case f.Cwd != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT `+sessionColumns+`
-			FROM sessions WHERE cwd = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.Cwd, limit)
+			FROM sessions WHERE cwd = ?`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.Cwd, limit)
 	case f.ProjectID != "":
 		rows, err = s.manager.Global().Query(`
 			SELECT `+sessionColumns+`
-			FROM sessions WHERE project_id = ? AND `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.ProjectID, limit)
+			FROM sessions WHERE project_id = ?`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.ProjectID, limit)
 	default:
 		rows, err = s.manager.Global().Query(`
 			SELECT `+sessionColumns+`
-			FROM sessions WHERE `+deletedCondition+` `+sessionListOrder+` LIMIT ?`, limit)
+			FROM sessions WHERE 1=1`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, limit)
 	}
 	if err != nil {
 		return nil, err
@@ -277,6 +286,17 @@ func scanSessionRows(rows *sql.Rows) ([]types.SessionHeader, error) {
 // newest page first, limit <= 0 means all messages. Messages are the stored
 // content JSON with createdAt injected, exactly as the desktop parses them.
 func (s *Service) Load(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.load(sessionID, limit, before, false)
+}
+
+// LoadIncludingDeleted is Load for soft-deleted (trashed) sessions too:
+// sessions.read uses it to open a chat that search found in the trash.
+// Unknown ids still return nil.
+func (s *Service) LoadIncludingDeleted(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.load(sessionID, limit, before, true)
+}
+
+func (s *Service) load(sessionID string, limit int64, before int64, includeDeleted bool) (*types.LoadedSession, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT `+sessionColumns+`
 		FROM sessions WHERE id = ?`, sessionID)
@@ -288,7 +308,7 @@ func (s *Service) Load(sessionID string, limit int64, before int64) (*types.Load
 	if err != nil {
 		return nil, err
 	}
-	if len(headers) == 0 || headers[0].DeletedAt != nil {
+	if len(headers) == 0 || (!includeDeleted && headers[0].DeletedAt != nil) {
 		return nil, nil
 	}
 

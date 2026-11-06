@@ -44,6 +44,8 @@ type SearchScope struct {
 	Cwd       string
 	// Exclude lists sessions to skip, such as the one the caller is running in.
 	Exclude []string
+	// IncludeDeleted also searches soft-deleted (trashed) sessions.
+	IncludeDeleted bool
 }
 
 // SearchOptions tunes a search.
@@ -70,6 +72,10 @@ type SearchHit struct {
 	Role         string `json:"role"`
 	CreatedAt    int64  `json:"created_at"`
 	Snippet      string `json:"snippet"`
+	// SessionDeleted is true when the session the hit came from is
+	// soft-deleted (in the trash); such a session is only readable
+	// through a reader that includes deleted sessions.
+	SessionDeleted bool `json:"session_deleted,omitempty"`
 	// Matches are the occurrences within the message's full searchable text.
 	Matches []Match `json:"matches"`
 	// SnippetStart is where the snippet begins within that text, in characters,
@@ -161,6 +167,7 @@ func (s *Service) Search(scope SearchScope, query string, opts SearchOptions) (*
 		}
 		res.SessionsSearched++
 		for _, hit := range hits {
+			hit.SessionDeleted = h.DeletedAt != nil
 			if len(res.Hits) >= limit {
 				res.Truncated = true
 				res.Note = "stopped at the result limit; narrow the query or raise limit to see more"
@@ -195,16 +202,16 @@ func normalizeRoles(roles []string) ([]string, error) {
 
 func (s *Service) searchScope(scope SearchScope) ([]types.SessionHeader, error) {
 	if scope.SessionID != "" {
-		h, err := s.Header(scope.SessionID)
+		h, err := s.HeaderIncludingDeleted(scope.SessionID)
 		if err != nil {
 			return nil, err
 		}
-		if h == nil || h.DeletedAt != nil {
+		if h == nil || (h.DeletedAt != nil && !scope.IncludeDeleted) {
 			return nil, fmt.Errorf("session %q not found", scope.SessionID)
 		}
 		return []types.SessionHeader{*h}, nil
 	}
-	return s.ListFiltered(ListFilter{Cwd: scope.Cwd, ProjectID: scope.ProjectID})
+	return s.ListFiltered(ListFilter{Cwd: scope.Cwd, ProjectID: scope.ProjectID, IncludeDeleted: scope.IncludeDeleted})
 }
 
 // searchSession finds up to perSession hits in one session, newest first.

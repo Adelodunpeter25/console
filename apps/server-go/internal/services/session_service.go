@@ -197,6 +197,14 @@ func (s *SessionService) Header(sessionID string) (*types.SessionHeader, error) 
 	return s.inner.Header(sessionID)
 }
 
+func (s *SessionService) HeaderIncludingDeleted(sessionID string) (*types.SessionHeader, error) {
+	return s.inner.HeaderIncludingDeleted(sessionID)
+}
+
+func (s *SessionService) LoadIncludingDeleted(sessionID string, limit int64, before int64) (*types.LoadedSession, error) {
+	return s.inner.LoadIncludingDeleted(sessionID, limit, before)
+}
+
 // Cross-chat reference operations (see services/session/reference.go).
 func (s *SessionService) ParseDollarRefs(text string) []string {
 	return session.ParseDollarRefs(text)

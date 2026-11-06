@@ -271,6 +271,13 @@ func (r *Runtime) sessionsSearch(_ context.Context, args map[string]any) (*jsker
 			return nil, fmt.Errorf("all_projects must be true or false, got %v", raw)
 		}
 	}
+	if raw, present := args["include_deleted"]; present {
+		b, ok := raw.(bool)
+		if !ok {
+			return nil, fmt.Errorf("include_deleted must be true or false, got %v", raw)
+		}
+		scope.IncludeDeleted = b
+	}
 
 	scoped := 0
 	for _, set := range []bool{sessionID != "", projectID != "", cwd != "", allProjects} {

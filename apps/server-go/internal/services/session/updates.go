@@ -192,6 +192,16 @@ func (s *Service) WorktreeOf(sessionID string) (*types.SessionWorktree, error) {
 
 // Header returns the indexed header, or nil for unknown/deleted sessions.
 func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
+	h, err := s.HeaderIncludingDeleted(sessionID)
+	if err != nil || h == nil || h.DeletedAt != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// HeaderIncludingDeleted returns the indexed header even for a
+// soft-deleted (trashed) session; nil for an unknown id.
+func (s *Service) HeaderIncludingDeleted(sessionID string) (*types.SessionHeader, error) {
 	rows, err := s.manager.Global().Query(`
 		SELECT id, title, cwd, project_id, model_id, provider, approval_mode,
 			thinking_level, pinned_at, settled_at, created_at, updated_at, message_count, status, deleted_at,
@@ -205,7 +215,7 @@ func (s *Service) Header(sessionID string) (*types.SessionHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(headers) == 0 || headers[0].DeletedAt != nil {
+	if len(headers) == 0 {
 		return nil, nil
 	}
 	return &headers[0], nil
