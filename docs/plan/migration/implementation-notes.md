@@ -89,3 +89,21 @@ miss. Our desktop habit from GPUI is the same shape, so this is just a note.
 positional. For a transcript where messages are append-only this is fine; if we ever reorder or
 splice lists mid-stream, watch for stateful children (focused inputs, expanded rows) losing
 themselves. `List` may take keys — re-check when building the transcript for real.
+
+## 5. The Copy/Cite selection popup waits on an nsh release with #1045
+
+The desktop's transcript shows a floating Copy / "Quote selection" pill over a drag-selection
+across messages (`transcript_view.rs` `cite_popup`, `visual/select.rs` for visual cards). The
+NSH port can't reproduce it yet: `TextView selectable` gives native per-block select-and-copy,
+but 0.4.0 exposes no selection events or selected-text read on a TextView, so the app can't
+see the selection. A per-message cite button was tried in the footers and removed — the
+footers stay exactly the desktop's (user: time + copy; assistant: time + tps + fork + copy).
+
+Upstream [PR #1045](https://github.com/longbridge/nsh/pull/1045) (merged 2026-11-06, after
+0.4.0) adds `onSelectionChange` on `View`/`TextView` and `ref.selectedText({ format })` with
+plain/markdown/html — enough to port the real popup: track the selected text per message row,
+show the Copy/Cite pill near the selection, and hand Cite to the composer like the desktop's
+`set_on_cite`. **Port it when the next nsh release (0.5.x) ships**; building nsh from main
+(`install.sh --source`) works sooner but pins CI and dev machines to a moving target.
+Known upstream caveats: Android doesn't report the selection's offset yet, and selection
+inside nested selectable views is held by the outer one.
