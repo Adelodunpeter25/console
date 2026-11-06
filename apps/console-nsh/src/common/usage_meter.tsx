@@ -1,20 +1,23 @@
 // The usage meter, ported from console-ui's `common/usage_meter.rs`: a small
 // circular gauge in the workspace footer showing the active provider's
 // rate-limit occupancy — context-window usage when known, the primary quota
-// limit otherwise.
-//
-// Fidelity gap: on the desktop the trigger opens a popover with the detailed
-// limit breakdown (`UsagePanel`), which is its own component and comes in a
-// later pass; here the gauge and its percent resolution are the port.
+// limit otherwise. Pressing it opens the detailed usage panel
+// (`usage_panel.tsx`), as the desktop's does.
 
 import { Canvas, View, token } from "nsh";
 import type { CanvasRenderingContext2D } from "nsh";
+import { Popover } from "nsh/base";
+import { UsagePanel } from "./usage_panel";
+import { Hint } from "./tooltip";
 
 /// The shapes the meter reads, mirroring console-core's `ContextSnapshot`
 /// (`percentUsed`) and `UsageReport`/`UsageLimit`/`Amount`. The Rust side
 /// serializes them; these are the wire values.
 export interface ContextSnapshot {
+  usedTokens: number;
+  contextWindow: number;
   percentUsed: number;
+  thresholdRatio: number;
 }
 
 export interface UsageAmount {
@@ -26,7 +29,10 @@ export interface UsageAmount {
 }
 
 export interface UsageLimit {
+  label: string;
+  status?: string;
   amount?: UsageAmount | null;
+  window?: { resetLabel?: string } | null;
 }
 
 export interface UsageReport {
@@ -112,6 +118,7 @@ function drawGauge(
 export function UsageMeter(props: {
   usageReport: UsageReport | null | (() => UsageReport | null);
   contextSnapshot: ContextSnapshot | null | (() => ContextSnapshot | null);
+  isLoading?: boolean | (() => boolean);
 }) {
   const report = () =>
     typeof props.usageReport === "function"
@@ -121,26 +128,42 @@ export function UsageMeter(props: {
     typeof props.contextSnapshot === "function"
       ? props.contextSnapshot()
       : props.contextSnapshot;
+  const isLoading = () =>
+    typeof props.isLoading === "function" ? props.isLoading() : !!props.isLoading;
 
   const percent = () => usagePercent(report(), snapshot());
 
   return (
-    <View
-      class="h-[22px] flex-row items-center justify-center rounded px-1.5 hover:bg-accent"
-      accessibilityLabel="Usage"
+    <Popover
+      placement="top"
+      align="end"
+      popupClass="rounded-xl"
+      trigger={
+        <View
+          class="h-[22px] flex-row items-center justify-center rounded px-1.5 hover:bg-accent"
+          accessibilityLabel="Usage"
+          tooltip={<Hint>Usage</Hint>}
+        >
+          <Canvas
+            class="h-[13px] w-[13px]"
+            draw={(cx, size) =>
+              drawGauge(
+                cx,
+                size,
+                percent(),
+                token("border"),
+                token(gaugeFillColor(percent())),
+              )
+            }
+          />
+        </View>
+      }
     >
-      <Canvas
-        class="h-[13px] w-[13px]"
-        draw={(cx, size) =>
-          drawGauge(
-            cx,
-            size,
-            percent(),
-            token("border"),
-            token(gaugeFillColor(percent())),
-          )
-        }
+      <UsagePanel
+        usageReport={report}
+        contextSnapshot={snapshot}
+        isLoading={isLoading}
       />
-    </View>
+    </Popover>
   );
 }

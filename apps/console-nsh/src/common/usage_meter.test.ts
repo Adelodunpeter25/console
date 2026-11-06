@@ -11,32 +11,40 @@ import {
 
 test("resolveUsedPercent prefers the explicit used fraction", () => {
   const limit: UsageLimit = {
+    label: "w",
     amount: { usedFraction: 0.42, used: 1, limit: 1 },
   };
   expect(resolveUsedPercent(limit)).toBe(42);
 });
 
 test("resolveUsedPercent falls back to used over limit", () => {
-  const limit: UsageLimit = { amount: { used: 30, limit: 200 } };
+  const limit: UsageLimit = { label: "w", amount: { used: 30, limit: 200 } };
   expect(resolveUsedPercent(limit)).toBe(15);
 });
 
 test("resolveUsedPercent reads a percent unit and inverts remaining", () => {
-  expect(resolveUsedPercent({ amount: { unit: "percent", used: 66.5 } })).toBe(
+  expect(resolveUsedPercent({ label: "w", amount: { unit: "percent", used: 66.5 } })).toBe(
     66.5,
   );
-  expect(resolveUsedPercent({ amount: { remainingFraction: 0.25 } })).toBe(75);
+  expect(resolveUsedPercent({ label: "w", amount: { remainingFraction: 0.25 } })).toBe(75);
 });
 
 test("resolveUsedPercent returns zero without a usable amount", () => {
-  expect(resolveUsedPercent({})).toBe(0);
-  expect(resolveUsedPercent({ amount: null })).toBe(0);
-  expect(resolveUsedPercent({ amount: {} })).toBe(0);
+  expect(resolveUsedPercent({ label: "w" })).toBe(0);
+  expect(resolveUsedPercent({ label: "w", amount: null })).toBe(0);
+  expect(resolveUsedPercent({ label: "w", amount: {} })).toBe(0);
 });
 
 test("usagePercent prefers the context snapshot and falls back to the first limit", () => {
-  const report = { limits: [{ amount: { used: 1, limit: 2 } }] };
-  expect(usagePercent(report, { percentUsed: 99.9 })).toBe(99.9);
+  const report = { limits: [{ label: "w", amount: { used: 1, limit: 2 } }] };
+  expect(
+    usagePercent(report, {
+      usedTokens: 1,
+      contextWindow: 1,
+      percentUsed: 99.9,
+      thresholdRatio: 0.9,
+    }),
+  ).toBe(99.9);
   expect(usagePercent(report, null)).toBe(50);
   expect(usagePercent(null, null)).toBe(null);
 });
