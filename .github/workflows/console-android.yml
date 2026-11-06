@@ -3,7 +3,8 @@
 # `console-android` (latest always wins), mirroring console-server.yml /
 # console-desktop.yml.
 #
-# Assets: app-release.apk (com.console.mobile)
+# Assets: app-release.apk (com.console.mobile), latest.json (version the
+# in-app updater compares against)
 #
 # Release only. The debug APK was a second artifact on the same job, and it
 # doubled the build for a variant nobody installs from a release tag — the
@@ -122,7 +123,7 @@ jobs:
 
       - name: Build the release APK
         working-directory: apps/android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }}
 
       # The app runs without the library (every shared function goes inert), so
       # a packaging mistake here is invisible on the device — only pairing,
@@ -138,6 +139,10 @@ jobs:
       - name: Collect the APK
         run: |
           cp apps/android/app/build/outputs/apk/release/app-release.apk app-release.apk
+          # Read by the in-app updater (Settings > App). versionCode matches
+          # the -PbuildNumber the APK was built with.
+          name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' apps/android/app/build.gradle.kts)
+          printf '{"versionCode":%s,"versionName":"%s"}\n' "${{ github.run_number }}" "$name" > latest.json
 
       # Retried: the upload itself usually succeeds but the action's final
       # release API call occasionally times out (Headers Timeout Error).
@@ -156,3 +161,4 @@ jobs:
             make_latest: false
             files: |
               app-release.apk
+              latest.json
