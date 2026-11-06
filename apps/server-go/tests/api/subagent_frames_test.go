@@ -89,9 +89,10 @@ func TestTodoUpdateFrameMatchesFixture(t *testing.T) {
 
 func TestSubagentFramesMatchFixtures(t *testing.T) {
 	parent := "c1"
+	model := "codex-gpt"
 	start := &consolev1.SubagentStartEvent{
 		SubagentId: "s1", ParentToolCallId: &parent, Name: "w",
-		Role: "tester", Prompt: "do it", MaxTurns: 10,
+		Role: "tester", Prompt: "do it", Model: &model,
 	}
 	if got := flatten(t, "subagentStart", start); got != frameFixture(t, "subagent_start.json") {
 		t.Fatalf("subagentStart drifted:\n got %s\nwant %s", got, frameFixture(t, "subagent_start.json"))
@@ -118,7 +119,7 @@ func TestSubagentFramesMatchFixtures(t *testing.T) {
 // TestSubagentFrameRouting pins which loop payload maps to which schema
 // message, and that unknown payload types drop instead of emitting junk.
 func TestSubagentFrameRouting(t *testing.T) {
-	start := loop.SubagentStartInfo{SubagentID: "s1", Name: "w", Role: "r", Prompt: "p", MaxTurns: 10}
+	start := loop.SubagentStartInfo{SubagentID: "s1", Name: "w", Role: "r", Prompt: "p", Model: "codex-gpt"}
 	_, body, drop := run.SubagentFrame(loop.Event{
 		Kind: loop.EventSubagentStart, Subagent: start,
 	})

@@ -245,7 +245,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                             name = event.name ?: s.name,
                             role = event.role ?: s.role,
                             prompt = event.prompt ?: s.prompt,
-                            max_turns = event.maxTurns ?: s.max_turns,
                             status = "running",
                         )
                     } else s
@@ -257,7 +256,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
                     name = event.name ?: "",
                     role = event.role ?: "",
                     prompt = event.prompt ?: "",
-                    max_turns = event.maxTurns ?: 0,
                     current_turn = 1,
                     status = "running",
                     activities = emptyList(),

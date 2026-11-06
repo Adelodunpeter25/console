@@ -84,7 +84,7 @@ private fun SubagentDetailsBody(subagent: SubagentInfo, modifier: Modifier = Mod
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(tint))
                 Text(subagent.status.replaceFirstChar { it.uppercaseChar() }, color = NewTheme.TextPrimary, fontSize = 17.sp, modifier = Modifier.weight(1f).padding(start = 14.dp))
-                Text("Turn ${maxOf(1, subagent.current_turn)}/${subagent.max_turns}", color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
+                Text("Turn ${maxOf(1, subagent.current_turn)}", color = NewTheme.TextSecondary, fontSize = 13.sp, fontFamily = ConsoleMonoFamily)
             }
         }
         // Prompt.

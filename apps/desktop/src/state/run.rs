@@ -926,7 +926,10 @@ impl ConsoleDesktopApp {
                     name,
                     role,
                     prompt,
-                    max_turns,
+                    // The per-call model override rides the start event; the
+                    // session row below (the GET snapshot shape) has no
+                    // model column, so it is not carried further here.
+                    model: _,
                 } = event.clone();
                 // Wire optionals are absent when the server omits them; the
                 // session rows below use plain strings.
@@ -940,7 +943,6 @@ impl ConsoleDesktopApp {
                     existing.name = name;
                     existing.role = role;
                     existing.prompt = prompt;
-                    existing.max_turns = max_turns as i32;
                     existing.status = "running".to_string();
                 } else {
                     list_mut.push(console_core::types::SubagentInfo {
@@ -949,7 +951,6 @@ impl ConsoleDesktopApp {
                         name,
                         role,
                         prompt,
-                        max_turns: max_turns as i32,
                         current_turn: 1,
                         status: "running".to_string(),
                         summary: None,

@@ -116,7 +116,8 @@ message SubagentInfo {
   string name = 3;
   string role = 4;
   string prompt = 5;
-  int32 max_turns = 6;
+  reserved 6;
+  reserved "max_turns";
   int32 current_turn = 7;
   string status = 8;
   optional string summary = 9;
@@ -166,7 +167,11 @@ message SubagentStartEvent {
   string name = 3;
   string role = 4;
   string prompt = 5;
-  int32 max_turns = 6;
+  reserved 6;
+  reserved "max_turns";
+  // Model the subagent runs on, when the caller overrode the parent's;
+  // absent means the parent's model. Same provider as the parent run.
+  optional string model = 7;
 }
 
 message SubagentActivityEvent {

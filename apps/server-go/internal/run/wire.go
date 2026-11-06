@@ -226,7 +226,10 @@ func browserToProto(b tools.BrowserActionRequest) *consolev1.BrowserActionReques
 func subagentStartToProto(v loop.SubagentStartInfo) *consolev1.SubagentStartEvent {
 	out := &consolev1.SubagentStartEvent{
 		SubagentId: v.SubagentID, Name: v.Name, Role: v.Role,
-		Prompt: v.Prompt, MaxTurns: int32(v.MaxTurns),
+		Prompt: v.Prompt,
+	}
+	if v.Model != "" {
+		out.Model = &v.Model
 	}
 	if v.ParentToolCall != "" {
 		out.ParentToolCallId = &v.ParentToolCall

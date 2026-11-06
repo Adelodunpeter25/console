@@ -88,7 +88,6 @@ type SubagentInfo struct {
 	Name             string                 `json:"name"`
 	Role             string                 `json:"role"`
 	Prompt           string                 `json:"prompt"`
-	MaxTurns         int                    `json:"maxTurns"`
 	CurrentTurn      int                    `json:"currentTurn"`
 	Status           string                 `json:"status"`
 	Summary          *string                `json:"summary,omitempty"`

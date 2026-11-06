@@ -23,8 +23,8 @@ func subagentToProto(s types.SubagentInfo) *consolev1.SubagentInfo {
 	out := &consolev1.SubagentInfo{
 		SubagentId: s.SubagentID, ParentToolCallId: s.ParentToolCallID,
 		Name: s.Name, Role: s.Role, Prompt: s.Prompt,
-		MaxTurns: int32(s.MaxTurns), CurrentTurn: int32(s.CurrentTurn),
-		Status: s.Status, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+		CurrentTurn: int32(s.CurrentTurn),
+		Status:      s.Status, CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 	if s.Summary != nil {
 		out.Summary = s.Summary

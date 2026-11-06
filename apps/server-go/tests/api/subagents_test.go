@@ -34,7 +34,7 @@ func TestSubagentProtoMatchesFixture(t *testing.T) {
 	msg := &consolev1.SubagentInfo{
 		SubagentId: "sub1", ParentToolCallId: "call1", Name: "Explore",
 		Role: "explorer", Prompt: "find things",
-		MaxTurns: 5, CurrentTurn: 2, Status: "running",
+		CurrentTurn: 2, Status: "running",
 		Summary: strptr("looking"),
 		Activities: []*consolev1.SubagentActivityItem{{
 			TurnIndex: 2, ToolCallId: "c9", ToolName: "read",
@@ -59,7 +59,7 @@ func TestSubagentProtoMatchesFixture(t *testing.T) {
 	if err := unmarshal.Unmarshal([]byte(subagentFixture(t, "subagents.json")[1:len(subagentFixture(t, "subagents.json"))-1]), &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.GetMaxTurns() != 5 || len(decoded.GetActivities()) != 1 {
+	if decoded.GetCurrentTurn() != 2 || len(decoded.GetActivities()) != 1 {
 		t.Fatalf("decoded: %+v", &decoded)
 	}
 }

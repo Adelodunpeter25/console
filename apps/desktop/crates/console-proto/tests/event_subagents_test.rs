@@ -41,7 +41,7 @@ fn decodes_golden_subagent_start_frame() {
     assert_eq!(start.name, "w");
     assert_eq!(start.role, "tester");
     assert_eq!(start.prompt, "do it");
-    assert_eq!(start.max_turns, 10);
+    assert_eq!(start.model.as_deref(), Some("codex-gpt"));
 }
 
 #[test]
@@ -75,6 +75,6 @@ fn decodes_golden_subagent_end_frame() {
 #[test]
 fn subagent_row_shape_unchanged() {
     let row = SubagentInfo::default();
-    assert_eq!(row.max_turns, 0);
+    assert_eq!(row.current_turn, 0);
     assert_eq!(row.subagent_id, "");
 }
