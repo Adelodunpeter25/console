@@ -125,7 +125,6 @@ data class AgentSessionEvent(
     val parentToolCallId: String? = null,
     val name: String? = null,
     val role: String? = null,
-    // Per-call model override; absent means the parent run's model.
     val model: String? = null,
     val turnIndex: Int? = null,
     val toolCallId: String? = null,

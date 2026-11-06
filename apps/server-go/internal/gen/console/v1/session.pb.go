@@ -1067,11 +1067,9 @@ type SubagentStartEvent struct {
 	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Role             string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
 	Prompt           string                 `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	// Model the subagent runs on, when the caller overrode the parent's;
-	// absent means the parent's model. Same provider as the parent run.
-	Model         *string `protobuf:"bytes,7,opt,name=model,proto3,oneof" json:"model,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Model            *string                `protobuf:"bytes,7,opt,name=model,proto3,oneof" json:"model,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SubagentStartEvent) Reset() {

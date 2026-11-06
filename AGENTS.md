@@ -24,6 +24,9 @@
 ## Scope
 - Don't over-engineer. Make the minimal change that satisfies the task.
 - Follow existing code patterns and conventions.
+- **Comments only when needed.** The code should explain itself; add a comment
+  only for a non-obvious *why* (a trap, an invariant, an external constraint),
+  never to narrate what the line does or to restate the field/function name.
 
 ## Working Tree & User Changes
 - **Never discard, checkout, or reset uncommitted user changes** (`git checkout <file>`, `git restore`, `git reset`, etc.).

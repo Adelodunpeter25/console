@@ -926,9 +926,6 @@ impl ConsoleDesktopApp {
                     name,
                     role,
                     prompt,
-                    // The per-call model override rides the start event; the
-                    // session row below (the GET snapshot shape) has no
-                    // model column, so it is not carried further here.
                     model: _,
                 } = event.clone();
                 // Wire optionals are absent when the server omits them; the
