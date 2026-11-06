@@ -60,9 +60,12 @@ fun parsePairingUrl(raw: String): Result<PairingUrl> =
  */
 fun splitHostAndCode(text: String): Pair<String, String> = SharedNative.splitPairing(text)
 
-/** The host of a pairing URL, in the "host:port" form the host field takes. */
+/**
+ * The address of a pairing URL, as the host field takes it. Keeps a relay's
+ * path prefix ("relay.example/rapid-fox-82"), which the server lives under.
+ */
 fun pairingHost(raw: String): String? =
-    parsePairingUrl(raw).getOrNull()?.baseUrl?.let { SharedNative.displayHost(it) }
+    parsePairingUrl(raw).getOrNull()?.let { splitHostAndCode(raw).first }
 
 /** The pairing code of a pairing URL. */
 fun pairingCode(raw: String): String? = parsePairingUrl(raw).getOrNull()?.code
