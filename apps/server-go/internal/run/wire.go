@@ -352,7 +352,15 @@ func WireFrame(e loop.Event) (string, any, bool) {
 		if err != nil {
 			return "", nil, true
 		}
-		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data}, false
+		all := make([]any, 0, len(e.QueuedAll))
+		for i := range e.QueuedAll {
+			item, err := QueuedPromptData(&e.QueuedAll[i])
+			if err != nil {
+				return "", nil, true
+			}
+			all = append(all, item)
+		}
+		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data, "queuedPrompts": all, "drained": e.Drained}, false
 	case loop.EventAskQuestion:
 		if e.Ask == nil {
 			return "", nil, true

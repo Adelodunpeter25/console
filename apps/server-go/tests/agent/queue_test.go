@@ -208,3 +208,82 @@ func TestSteerAbortsAndDrains(t *testing.T) {
 		t.Fatalf("queue must drain: %+v", qp)
 	}
 }
+
+// The queue is a FIFO: queuing appends, a single prompt can be removed by id,
+// and clearing drops every one.
+func TestQueueHoldsSeveralPromptsInOrder(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	header := helpers.CreateRunSession(t, sessions)
+
+	first, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "c"}); err != nil {
+		t.Fatal(err)
+	}
+	queue, err := svc.QueuedPrompts(header.ID)
+	if err != nil || len(queue) != 3 || queue[0].ID != first.ID || queue[1].ID != second.ID || queue[2].Prompt != "c" {
+		t.Fatalf("queue order: %+v %v", queue, err)
+	}
+	if next, _ := svc.QueuedPrompt(header.ID); next == nil || next.ID != first.ID {
+		t.Fatalf("the oldest prompt runs next: %+v", next)
+	}
+	if removed, err := svc.RemoveQueuedPrompt(header.ID, first.ID); err != nil || !removed {
+		t.Fatalf("remove: %v %v", removed, err)
+	}
+	if removed, _ := svc.RemoveQueuedPrompt(header.ID, first.ID); removed {
+		t.Fatal("removing twice must report nothing removed")
+	}
+	if next, _ := svc.QueuedPrompt(header.ID); next == nil || next.ID != second.ID {
+		t.Fatalf("after removing the first, b runs next: %+v", next)
+	}
+	if had, err := svc.ClearQueuedPrompt(header.ID); err != nil || !had {
+		t.Fatalf("clear: %v %v", had, err)
+	}
+	if queue, _ := svc.QueuedPrompts(header.ID); len(queue) != 0 {
+		t.Fatalf("queue must be empty: %+v", queue)
+	}
+}
+
+// Every queued prompt runs, in the order it was queued, as turns settle.
+func TestQueueDrainsEveryPromptInOrder(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	svc := run.NewService(sessions)
+	svc.Lookup = func(id string) (loop.Provider, error) {
+		return queueMock("first", "second", "third"), nil
+	}
+	header := helpers.CreateRunSession(t, sessions)
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "one", Provider: "mock", ModelID: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	subID, subCh, _ := hub.Subscribe(nil)
+	defer hub.Unsubscribe(subID)
+	for _, text := range []string{"two", "three"} {
+		if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: text}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	helpers.WaitSettled(t, hub)
+	var texts []string
+	for f := range subCh {
+		if f.Event.Kind != loop.EventModelStreamPart {
+			continue
+		}
+		if part, ok := f.Event.Part.(*consolev1.ModelStreamPart); ok && part.GetText() != "" {
+			texts = append(texts, part.GetText())
+		}
+	}
+	if !reflect.DeepEqual(texts, []string{"first", "second", "third"}) {
+		t.Fatalf("turn order: %v", texts)
+	}
+	if queue, _ := svc.QueuedPrompts(header.ID); len(queue) != 0 {
+		t.Fatalf("queue must drain: %+v", queue)
+	}
+}

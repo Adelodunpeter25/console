@@ -74,7 +74,7 @@ const (
 	EventBrowserAction EventKind = "browserAction"
 	// EventPermissionRequest carries a permission Request awaiting approval.
 	EventPermissionRequest EventKind = "permissionRequest"
-	// EventQueueUpdated carries the staged QueuedPrompt (or null).
+	// EventQueueUpdated carries the queued prompts, next to run first.
 	EventQueueUpdated EventKind = "queueUpdated"
 	// EventSessionTitleUpdated carries a freshly generated title.
 	EventSessionTitleUpdated EventKind = "sessionTitleUpdated"
@@ -133,6 +133,11 @@ type Event struct {
 	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
 	Permission *permissions.Request        `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt         `json:"queuedPrompt,omitempty"`
+	// Drained marks an EventQueueUpdated with no Queued as "the staged prompt
+	// just started running", as opposed to it being cleared.
+	Drained bool `json:"drained,omitempty"`
+	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
+	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
 	Title      string                      `json:"title,omitempty"`
 	Subagent   any                         `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.

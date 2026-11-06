@@ -285,10 +285,15 @@ pub enum AgentSessionEvent {
     Error {
         error: console_proto::ErrorPayload,
     },
-    /// The session's queued next-turn prompt changed (queued, replaced, or cleared).
+    /// The session's queue of next-turn prompts changed (queued, edited, removed, or cleared).
     QueueUpdated {
         #[serde(rename = "queuedPrompt")]
         queued_prompt: Option<QueuedPrompt>,
+        #[serde(default, rename = "queuedPrompts")]
+        queued_prompts: Option<Vec<QueuedPrompt>>,
+        /// Set when the queued prompt started running, not when it was cleared.
+        #[serde(default)]
+        drained: bool,
     },
     /// Estimated context-window occupancy after a turn.
     ContextUpdate {

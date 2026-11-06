@@ -277,6 +277,30 @@ func InitSessionDB(db *sql.DB, path string) error {
 		}
 	}
 
+	// The queue holds any number of prompts, oldest first by seq. The old
+	// single-row table is only a source for rows staged before the upgrade.
+	if _, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS session_queue (
+			seq INTEGER PRIMARY KEY AUTOINCREMENT,
+			queue_id TEXT NOT NULL UNIQUE,
+			prompt TEXT NOT NULL,
+			context_files TEXT,
+			attachments TEXT,
+			annotations TEXT,
+			model_id TEXT,
+			provider TEXT,
+			approval_mode TEXT,
+			created_at INTEGER NOT NULL
+		);
+		INSERT OR IGNORE INTO session_queue
+			(queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, created_at)
+			SELECT queue_id, prompt, context_files, attachments, annotations, model_id, provider, approval_mode, created_at
+			FROM session_queued_prompt;
+		DELETE FROM session_queued_prompt;
+	`); err != nil {
+		return err
+	}
+
 	// Additive migration for session DBs created before per-file review
 	// tracking: add the reviewed column when missing.
 	var reviewedCount int

@@ -339,6 +339,12 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         return (element as? JsonObject)?.get("deleted")?.jsonPrimitive?.booleanOrNull ?: false
     }
 
+    override suspend fun deleteQueuedPrompt(id: String, queueId: String): Boolean {
+        val raw = http.delete("/api/sessions/${enc(id)}/queue/${enc(queueId)}")
+        val element = http.unwrap(raw, JsonElement.serializer(), "delete queued prompt")
+        return (element as? JsonObject)?.get("deleted")?.jsonPrimitive?.booleanOrNull ?: false
+    }
+
     override suspend fun steerRun(id: String, payload: RunPromptDto) {
         val raw = http.post("/api/sessions/${enc(id)}/steer", http.encodeBody(RunPromptDto.serializer(), payload))
         ensureOk(raw, "steer run")

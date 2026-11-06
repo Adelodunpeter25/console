@@ -117,6 +117,8 @@ data class AgentSessionEvent(
     // schemas the frames); the payload is console.v1.QueuedPrompt, decoded
     // with Moshi where the queue screen needs it (see SessionQueueFixtureTest).
     val queuedPrompt: JsonElement? = null,
+    // The whole queue, next to run first; the first entry is what the chat shows.
+    val queuedPrompts: List<JsonElement>? = null,
     val reason: String? = null,
     // Background work lifecycle events use a stable nested work record.
     val work: BackgroundWork? = null,

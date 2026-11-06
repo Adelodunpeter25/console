@@ -5,12 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 )
+
+// maxDraftClockSkew bounds how far ahead of the server a client's updatedAt
+// may be. A device with a fast clock would otherwise stamp a draft no other
+// device could overwrite until their clocks caught up.
+const maxDraftClockSkew = time.Minute
 
 type DraftService struct {
 	manager *db.DB
@@ -46,6 +52,9 @@ func (s *DraftService) Get(sessionID string) (*consolev1.ChatDraft, error) {
 func (s *DraftService) Put(draft *consolev1.ChatDraft) (bool, *consolev1.ChatDraft, error) {
 	if draft.SessionId == "" {
 		return false, nil, fmt.Errorf("sessionId is required.")
+	}
+	if latest := time.Now().Add(maxDraftClockSkew).UnixMilli(); draft.UpdatedAt > latest {
+		draft.UpdatedAt = time.Now().UnixMilli()
 	}
 	tx, err := s.manager.Global().Begin()
 	if err != nil {

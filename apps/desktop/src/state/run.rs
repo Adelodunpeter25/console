@@ -62,7 +62,7 @@ impl ConsoleDesktopApp {
     }
 
     /// Stage `prompt` to run right after the active turn settles (POST /queue).
-    /// Replaces any existing queued prompt for the session.
+    /// Queued prompts stack: each runs after the one before it.
     pub fn queue_prompt_for_pane(
         &mut self,
         pane_id: String,
@@ -138,37 +138,34 @@ impl ConsoleDesktopApp {
                 cx,
             );
         });
-        let is_first = self.queued_prompts_for_session(&session_id).len() == 1;
-        if is_first {
-            let client = self.client.clone();
-            let entity = cx.entity().downgrade();
-            cx.spawn(
-                async move |_, cx| match client.runs.queue_prompt(&session_id, dq).await {
-                    Ok(queued) => {
-                        let sid = queued.session_id.clone();
-                        let _ = cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.add_queued_prompt_for_session(&sid, queued);
-                                    cx.notify();
-                                });
-                            }
-                        });
-                    }
-                    Err(err) => {
-                        let msg = format!("Unable to queue prompt: {err}");
-                        let _ = cx.update(|cx| {
-                            if let Some(app) = entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    this.set_error_for_session(&session_id, msg, cx);
-                                });
-                            }
-                        });
-                    }
-                },
-            )
-            .detach();
-        }
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(
+            async move |_, cx| match client.runs.queue_prompt(&session_id, dq).await {
+                Ok(queued) => {
+                    let sid = queued.session_id.clone();
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.add_queued_prompt_for_session(&sid, queued);
+                                cx.notify();
+                            });
+                        }
+                    });
+                }
+                Err(err) => {
+                    let msg = format!("Unable to queue prompt: {err}");
+                    let _ = cx.update(|cx| {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.set_error_for_session(&session_id, msg, cx);
+                            });
+                        }
+                    });
+                }
+            },
+        )
+        .detach();
         cx.notify();
     }
 
@@ -183,7 +180,7 @@ impl ConsoleDesktopApp {
         };
         self.remove_queued_prompt_for_session(&session_id, &prompt_id);
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
     }
 
     pub fn edit_queued_prompt_for_pane(
@@ -214,7 +211,7 @@ impl ConsoleDesktopApp {
             self.set_annotations_for_pane(&pane_id, annotations);
         }
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
     }
 
     fn queued_prompt_to_run_dto(queued: &console_core::QueuedPrompt) -> RunPromptDto {
@@ -232,24 +229,20 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Mirror the local queue onto the server's single staged prompt: when no
-    /// card remains, discard the staged copy; otherwise stage the next card.
-    fn sync_server_queue_for_session(&mut self, session_id: &str, cx: &mut Context<Self>) {
+    /// Drop one card from the server's queue so it does not run later too.
+    fn delete_server_queued_prompt(
+        &mut self,
+        session_id: &str,
+        prompt_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         let client = self.client.clone();
         let session_id = session_id.to_string();
-        let remaining = self.queued_prompts_for_session(&session_id);
-        if remaining.is_empty() {
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.clear_queued_prompt(&session_id).await;
-            })
-            .detach();
-        } else {
-            let next = Self::queued_prompt_to_run_dto(&remaining[0]);
-            cx.spawn(async move |_, _| {
-                let _ = client.runs.queue_prompt(&session_id, next).await;
-            })
-            .detach();
-        }
+        let prompt_id = prompt_id.to_string();
+        cx.spawn(async move |_, _| {
+            let _ = client.runs.delete_queued_prompt(&session_id, &prompt_id).await;
+        })
+        .detach();
     }
 
     /// Send a queued prompt immediately as a fresh run (the send path for an
@@ -269,7 +262,7 @@ impl ConsoleDesktopApp {
             return;
         };
         cx.notify();
-        self.sync_server_queue_for_session(&session_id, cx);
+        self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
         self.active_pane_id = Some(pane_id.clone());
         self.selected_session_id = Some(session_id.clone());
         self.start_prompt_run(
@@ -338,8 +331,14 @@ impl ConsoleDesktopApp {
         };
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
+        let queued_id = queued.id.clone();
         cx.spawn(async move |_, cx| {
+            // The server still holds this card; take it out first, or it would
+            // run again after the steered prompt.
+            let _ = client.runs.delete_queued_prompt(&session_id, &queued_id).await;
+            let requeue = dto.clone();
             if let Err(err) = client.runs.steer(&session_id, dto).await {
+                let _ = client.runs.queue_prompt(&session_id, requeue).await;
                 let msg = format!("Unable to steer run: {err}");
                 let _ = cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
@@ -1111,16 +1110,24 @@ impl ConsoleDesktopApp {
                 }
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
-            AgentSessionEvent::QueueUpdated { queued_prompt } => {
-                if let Some(q) = queued_prompt {
-                    self.add_queued_prompt_for_session(run_session_id, q);
+            AgentSessionEvent::QueueUpdated {
+                queued_prompts,
+                drained,
+                ..
+            } => {
+                let remote = queued_prompts.unwrap_or_default();
+                if !drained {
+                    // Queued, edited, deleted here or elsewhere, or cleared by
+                    // a stop: the server's list is the queue, and no turn began.
+                    self.set_queue_from_server(run_session_id, remote);
                 } else {
                     let list = self.queued_prompts_for_session(run_session_id);
                     if !list.is_empty() {
                         // Optimistic fast path: pop the card, paint the user
                         // bubble, and re-engage streaming for the next turn.
-                        let mut list = list;
-                        let popped = list.remove(0);
+                        let popped = list[0].clone();
+                        self.remove_queued_prompt_for_session(run_session_id, &popped.id);
+                        self.set_queue_from_server(run_session_id, remote);
                         let user_msg = console_core::AgentMessage::User {
                             id: None,
                             content: popped.prompt,
@@ -1141,37 +1148,8 @@ impl ConsoleDesktopApp {
                                 t.begin_streaming(cx);
                             });
                         }
-                        if list.is_empty() {
-                            self.set_queued_prompt_for_session(run_session_id, None);
-                        } else {
-                            let next = list[0].clone();
-                            self.queued_prompts.insert(run_session_id.to_string(), list);
-                            let client = self.client.clone();
-                            let sid = run_session_id.to_string();
-                            let dq = console_core::RunPromptDto {
-                                prompt: next.prompt,
-                                context_files: console_core::queued_strings_from_proto(
-                                    &next.context_files,
-                                ),
-                                model_id: next.model_id,
-                                provider: next.provider,
-                                approval_mode: next.approval_mode,
-                                thinking_level: console_core::queued_thinking_from_proto(
-                                    next.thinking_level.as_deref(),
-                                ),
-                                attachments: console_core::queued_attachments_from_proto(
-                                    &next.attachments,
-                                ),
-                                annotations: console_core::queued_annotations_from_proto(
-                                    &next.annotations,
-                                ),
-                            };
-                            cx.spawn(async move |_, _| {
-                                let _ = client.runs.queue_prompt(&sid, dq).await;
-                            })
-                            .detach();
-                        }
                     } else {
+                        self.set_queue_from_server(run_session_id, remote);
                         // The server auto-sent a queued turn we hold no local
                         // record of (e.g. the optimistic entry was replaced by
                         // id). Stay marked running and refresh from canonical

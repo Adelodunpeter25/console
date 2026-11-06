@@ -280,23 +280,27 @@ impl ConsoleDesktopApp {
             .and_then(|v| v.first().cloned())
     }
 
-    pub(crate) fn set_queued_prompt_for_session(
+    /// Make the local cards match the server's queue. Cards this device just
+    /// queued and the server has not confirmed yet (local ids, no matching
+    /// prompt in `remote`) stay at the end so they do not blink out.
+    pub(crate) fn set_queue_from_server(
         &mut self,
         session_id: &str,
-        queued: Option<console_core::QueuedPrompt>,
+        remote: Vec<console_core::QueuedPrompt>,
     ) {
-        if let Some(q) = queued {
-            let list = self
-                .queued_prompts
-                .entry(session_id.to_string())
-                .or_default();
-            if let Some(existing) = list.iter_mut().find(|p| p.id == q.id) {
-                *existing = q;
-            } else if list.is_empty() {
-                list.push(q);
-            }
-        } else {
+        let unconfirmed: Vec<_> = self
+            .queued_prompts_for_session(session_id)
+            .into_iter()
+            .filter(|local| {
+                local.id.starts_with("queued-") && !remote.iter().any(|r| r.prompt == local.prompt)
+            })
+            .collect();
+        let mut list = remote;
+        list.extend(unconfirmed);
+        if list.is_empty() {
             self.queued_prompts.remove(session_id);
+        } else {
+            self.queued_prompts.insert(session_id.to_string(), list);
         }
     }
 

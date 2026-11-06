@@ -165,14 +165,18 @@ class ChatRepository(
     }
 
     private suspend fun pushDraft(sessionId: String) {
-        val text = chats.get(sessionId).input
+        val state = chats.get(sessionId)
+        val text = state.input
         val held = serverDrafts[sessionId]
         val draft = console.v1.ChatDraft(
             session_id = sessionId,
             text = text,
-            mentions = emptyList(),
+            // Chips keep their ranges only while the text they point into is unchanged.
+            mentions = if (held?.text == text) held.mentions else emptyList(),
             comments = held?.comments ?: emptyList(),
-            updated_at = System.currentTimeMillis(),
+            // Stamp when the text was last edited, not when the push happens, so a
+            // push delayed by being offline cannot overwrite a newer edit elsewhere.
+            updated_at = state.draftUpdatedAt ?: System.currentTimeMillis(),
         )
         try {
             val result = withContext(Dispatchers.IO) { api.putDraft(draft) }
@@ -515,8 +519,10 @@ class ChatRepository(
                 attachments = emptyList(),
             )
         }
-        // The staged prompt lives server-side now; drop the local draft copy.
+        // The staged prompt lives server-side now; drop the local draft copy
+        // and the synced one so other devices stop offering the queued text.
         persistence?.removeSession(sessionId)
+        flushDraft(sessionId)
 
         val body = RunPromptDto(
             prompt = prompt,
@@ -530,7 +536,7 @@ class ChatRepository(
         scope.launch {
             try {
                 val queued = withContext(Dispatchers.IO) { api.queuePrompt(sessionId, body) }
-                chats.update(sessionId) { it.copy(queuedPrompt = queued) }
+                chats.update(sessionId) { it.copy(queuedPrompt = it.queuedPrompt ?: queued) }
             } catch (e: Exception) {
                 // Restore draft on failure
                 chats.update(sessionId) {
@@ -545,10 +551,12 @@ class ChatRepository(
 
     /** Discard staged prompt from server (DELETE /api/sessions/:id/queue). */
     fun deleteQueuedPrompt(sessionId: String) {
+        val q = chats.get(sessionId).queuedPrompt ?: return
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+                withContext(Dispatchers.IO) { api.deleteQueuedPrompt(sessionId, q.id) }
                 chats.update(sessionId) { it.copy(queuedPrompt = null) }
+                loadQueuedPrompt(sessionId)
             } catch (_: Exception) {}
         }
     }
@@ -559,8 +567,9 @@ class ChatRepository(
         val q = session.queuedPrompt ?: return
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+                withContext(Dispatchers.IO) { api.deleteQueuedPrompt(sessionId, q.id) }
             } catch (_: Exception) {}
+            loadQueuedPrompt(sessionId)
             chats.update(sessionId) { current ->
                 val attachments = q.attachments.map {
                     ImageAttachment(
@@ -599,7 +608,7 @@ class ChatRepository(
             }
             scope.launch {
                 try {
-                    withContext(Dispatchers.IO) { api.clearQueuedPrompt(sessionId) }
+                    withContext(Dispatchers.IO) { api.deleteQueuedPrompt(sessionId, q.id) }
                 } catch (_: Exception) {}
                 startRun(sessionId, q.prompt, attachments, contextFiles = q.context_files, clearComposer = false)
             }
@@ -624,8 +633,18 @@ class ChatRepository(
         )
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { api.steerRun(sessionId, body) }
+                // The server still holds this card; take it out first, or it
+                // would run again after the steered prompt.
+                withContext(Dispatchers.IO) { api.deleteQueuedPrompt(sessionId, q.id) }
+                try {
+                    withContext(Dispatchers.IO) { api.steerRun(sessionId, body) }
+                } catch (e: Exception) {
+                    // The run may have ended mid-flight: put the card back.
+                    withContext(Dispatchers.IO) { api.queuePrompt(sessionId, body) }
+                    throw e
+                }
                 chats.update(sessionId) { it.copy(queuedPrompt = null) }
+                loadQueuedPrompt(sessionId)
             } catch (_: Exception) {}
         }
     }
