@@ -247,7 +247,6 @@ import asset_providers_antigravity from "../../assets/icons/providers/antigravit
 import asset_providers_openai from "../../assets/icons/providers/openai.svg";
 import asset_providers_opencode from "../../assets/icons/providers/opencode.svg";
 import asset_queue from "../../assets/icons/queue.svg";
-import asset_quote_square_linear from "../../assets/icons/quote-square-linear.svg";
 import asset_redo_2 from "../../assets/icons/redo-2.svg";
 import asset_redo from "../../assets/icons/redo.svg";
 import asset_refresh from "../../assets/icons/refresh.svg";
@@ -552,7 +551,6 @@ export const ICON_ASSETS = {
   "provider/Openai": asset_providers_openai,
   "provider/Opencode": asset_providers_opencode,
   "Queue": asset_queue,
-  "QuoteSquareLinear": asset_quote_square_linear,
   "Redo2": asset_redo_2,
   "Redo": asset_redo,
   "Refresh": asset_refresh,
