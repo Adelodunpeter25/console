@@ -72,6 +72,7 @@ interface ConsoleApi {
     suspend fun queuePrompt(id: String, payload: RunPromptDto): QueuedPrompt
     suspend fun editQueuedPrompt(id: String, payload: RunPromptDto): QueuedPrompt
     suspend fun clearQueuedPrompt(id: String): Boolean
+    suspend fun deleteQueuedPrompt(id: String, queueId: String): Boolean
     suspend fun steerRun(id: String, payload: RunPromptDto)
     // run
     suspend fun abortRun(sessionId: String)

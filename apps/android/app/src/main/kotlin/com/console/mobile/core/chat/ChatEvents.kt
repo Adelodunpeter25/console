@@ -232,7 +232,7 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             if (snap == null) session else session.copy(context = snap)
         }
         "queueUpdated" -> {
-            val queued = event.queuedPrompt?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
+            val queued = (event.queuedPrompts?.firstOrNull() ?: event.queuedPrompt)?.let { runCatching { queuedPromptJson.fromJson(it.toString()) }.getOrNull() }
             session.copy(queuedPrompt = queued)
         }
         "subagentStart" -> {
