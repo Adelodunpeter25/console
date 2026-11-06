@@ -289,7 +289,6 @@ pub enum AgentSessionEvent {
     QueueUpdated {
         #[serde(rename = "queuedPrompt")]
         queued_prompt: Option<QueuedPrompt>,
-        /// The whole queue, next to run first.
         #[serde(default, rename = "queuedPrompts")]
         queued_prompts: Option<Vec<QueuedPrompt>>,
         /// Set when the queued prompt started running, not when it was cleared.
