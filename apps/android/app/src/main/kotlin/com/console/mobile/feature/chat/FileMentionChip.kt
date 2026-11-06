@@ -75,7 +75,7 @@ fun mentionAnnotatedString(
 ): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val items = mutableListOf<MentionItem>()
     for (m in fileMentions) items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
-    for (s in skillMentions) items += MentionItem(s.range, "/${s.name}", "/${s.name}", MentionKind.Skill)
+    for (s in skillMentions) items += MentionItem(s.range, "/${s.name}", s.name, MentionKind.Skill)
     for (c in chatMentions) items += MentionItem(c.range, "\$${c.slug}", c.slug, MentionKind.Chat)
     items.sortBy { it.range.first }
 

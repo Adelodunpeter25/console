@@ -202,11 +202,15 @@ impl Element for InlineFileMentionText {
             let spacer_start = display_text.len();
             display_text.push_str(FILE_MENTION_SPACER);
             let spacer_end = display_text.len();
-            // A chat chip shows just the slug; the `$` stays in the text sent.
-            let is_chat = mention
-                .path
-                .starts_with(console_shared::composer::mentions::CHAT_PATH_PREFIX);
-            let shown_start = mention.range.start + usize::from(is_chat);
+            // Chat and skill chips show just the slug/name; the `$` or `/`
+            // stays in the text sent.
+            let has_prefix = [
+                console_shared::composer::mentions::CHAT_PATH_PREFIX,
+                console_shared::composer::mentions::SKILL_PATH_PREFIX,
+            ]
+            .iter()
+            .any(|prefix| mention.path.starts_with(prefix));
+            let shown_start = mention.range.start + usize::from(has_prefix);
             display_text.push_str(&self.text[shown_start..mention.range.end]);
             let chip_end = display_text.len();
             last_idx = mention.range.end;
