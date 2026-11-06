@@ -23,6 +23,7 @@ export function Sidebar(props: {
   onSession: (id: string) => void;
   onSortMode: (mode: SortMode) => void;
   onNewChat?: () => void;
+  onToggleSettle?: (id: string) => void;
 }) {
   // Read lazily: nsh tracks prop reads in JSX, not body-level consts.
   const projectNameById = () =>
@@ -103,6 +104,8 @@ export function Sidebar(props: {
                   title={s.title}
                   updatedAt={s.updatedAt}
                   active={props.activeSessionId === s.id}
+                  projectName={s.projectId ? projectNameById().get(s.projectId) ?? null : null}
+                  onToggleSettle={props.onToggleSettle ? () => props.onToggleSettle?.(s.id) : undefined}
                   onPress={() => props.onSession(s.id)}
                 />
               ))}
