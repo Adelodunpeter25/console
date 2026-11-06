@@ -1111,9 +1111,16 @@ impl ConsoleDesktopApp {
                 }
                 self.update_session_title_in_panes(run_session_id, &title, cx);
             }
-            AgentSessionEvent::QueueUpdated { queued_prompt } => {
+            AgentSessionEvent::QueueUpdated {
+                queued_prompt,
+                drained,
+            } => {
                 if let Some(q) = queued_prompt {
                     self.add_queued_prompt_for_session(run_session_id, q);
+                } else if !drained {
+                    // Cleared (deleted here or elsewhere, or the run was
+                    // stopped): nothing started, so no turn begins.
+                    self.set_queued_prompt_for_session(run_session_id, None);
                 } else {
                     let list = self.queued_prompts_for_session(run_session_id);
                     if !list.is_empty() {

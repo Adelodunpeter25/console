@@ -289,6 +289,9 @@ pub enum AgentSessionEvent {
     QueueUpdated {
         #[serde(rename = "queuedPrompt")]
         queued_prompt: Option<QueuedPrompt>,
+        /// Set when the queued prompt started running, not when it was cleared.
+        #[serde(default)]
+        drained: bool,
     },
     /// Estimated context-window occupancy after a turn.
     ContextUpdate {

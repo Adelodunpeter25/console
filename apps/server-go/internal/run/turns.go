@@ -150,7 +150,7 @@ func (s *Service) nextTurn(ctx context.Context, turnErr error, sessionID string,
 		}
 		return Prompt{}, false
 	}
-	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated})
+	hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated, Drained: true})
 	return staged, true
 }
 

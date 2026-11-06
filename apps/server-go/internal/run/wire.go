@@ -352,7 +352,7 @@ func WireFrame(e loop.Event) (string, any, bool) {
 		if err != nil {
 			return "", nil, true
 		}
-		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data}, false
+		return "queueUpdated", map[string]any{"type": "queueUpdated", "queuedPrompt": data, "drained": e.Drained}, false
 	case loop.EventAskQuestion:
 		if e.Ask == nil {
 			return "", nil, true

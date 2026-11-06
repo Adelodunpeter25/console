@@ -133,6 +133,9 @@ type Event struct {
 	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
 	Permission *permissions.Request        `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt         `json:"queuedPrompt,omitempty"`
+	// Drained marks an EventQueueUpdated with no Queued as "the staged prompt
+	// just started running", as opposed to it being cleared.
+	Drained bool `json:"drained,omitempty"`
 	Title      string                      `json:"title,omitempty"`
 	Subagent   any                         `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
