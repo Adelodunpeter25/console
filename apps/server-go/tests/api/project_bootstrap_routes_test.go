@@ -171,6 +171,28 @@ func TestCloneRouteHonorsExplicitName(t *testing.T) {
 	}
 }
 
+// Omitting parentDir is the picker flow: the server chooses the projects
+// root itself (CONSOLE_PROJECTS_DIR stands in for ~/console/projects here).
+func TestCloneRouteDefaultsParentToProjectsDir(t *testing.T) {
+	app := bootstrapRouteApp(t)
+	origin := routeOriginRepo(t)
+	root := t.TempDir()
+	t.Setenv("CONSOLE_PROJECTS_DIR", root)
+
+	code, raw := doPost(t, app, "/api/projects/clone", `{"url":`+jsonStr(origin)+`}`)
+	if code != 200 {
+		t.Fatalf("clone: %d %s", code, raw)
+	}
+	info := decodeProject(t, raw)
+	want := filepath.Join(root, filepath.Base(origin))
+	if info.GetPath() != want {
+		t.Fatalf("path = %q, want %q", info.GetPath(), want)
+	}
+	if !bootstrapGitOK(t, info.GetPath(), "rev-parse", "--is-inside-work-tree") {
+		t.Fatalf("cloned project is not a git repo")
+	}
+}
+
 // The 409 is the contract with the dialog: it is what makes the client offer
 // "connect in Accounts" rather than treating this as a bad URL.
 func TestCloneRouteUnconnectedGitHubIsConflict(t *testing.T) {
@@ -200,10 +222,12 @@ func TestCloneRouteValidatesBody(t *testing.T) {
 	app := bootstrapRouteApp(t)
 
 	for name, body := range map[string]string{
-		"missing url":        `{"parentDir":"/tmp"}`,
-		"missing parentDir":  `{"url":"https://github.com/a/b.git"}`,
-		"invalid url":        `{"url":"nonsense","parentDir":"/tmp"}`,
-		"missing parent dir": `{"url":"https://github.com/a/b.git","parentDir":"/no/such/dir"}`,
+		"missing url": `{"parentDir":"/tmp"}`,
+		"invalid url": `{"url":"nonsense","parentDir":"/tmp"}`,
+		// parentDir is optional now (repo pickers omit it); a bad URL is
+		// still a client error.
+		"invalid url no parentDir": `{"url":"nonsense"}`,
+		"missing parent dir":       `{"url":"https://github.com/a/b.git","parentDir":"/no/such/dir"}`,
 	} {
 		code, raw := doPost(t, app, "/api/projects/clone", body)
 		if code != 400 {

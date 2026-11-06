@@ -129,6 +129,9 @@ func RegisterProjectRoutes(app *fiber.App, projects *projectssvc.ProjectService,
 	// Synchronous by design (see docs/plan/new-project-dialog-plan.md): there
 	// is no job handle to stream progress or cancel against, so the dialog
 	// shows a busy state for the duration of the request.
+	//
+	// parentDir is optional: the repo pickers (mobile, desktop) clone without
+	// a folder picker, and the server then chooses utils.ProjectsDir().
 	app.Post("/api/projects/clone", func(c *fiber.Ctx) error {
 		var body consolev1.CloneProjectRequest
 		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil {
@@ -136,9 +139,6 @@ func RegisterProjectRoutes(app *fiber.App, projects *projectssvc.ProjectService,
 		}
 		if strings.TrimSpace(body.Url) == "" {
 			return fail400(c, fmt.Errorf("Field 'url' is required."))
-		}
-		if strings.TrimSpace(body.ParentDir) == "" {
-			return fail400(c, fmt.Errorf("Field 'parentDir' is required."))
 		}
 		dir, err := bootstrap.Clone(body.Url, body.ParentDir, body.GetName())
 		if err != nil {
