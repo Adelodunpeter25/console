@@ -129,27 +129,6 @@ func (e backfillError) Error() string { return string(e) }
 
 const errRebuildDiffers = backfillError("the split did not rebuild to the original message")
 
-// ensureBackfilled converts a session's old messages the first time the session
-// is loaded in this process. A failure is logged and not fatal: the original
-// content is complete, so the session keeps working and the next load retries.
-func (s *Service) ensureBackfilled(sessionID, projectID string, conn *sql.DB) {
-	if _, done := s.backfilled.Load(sessionID); done {
-		return
-	}
-	stats, err := backfillSession(conn, s.imagesFor(sessionID, projectID))
-	if err != nil {
-		slog.Warn("backfill: will retry on the next load", "session", sessionID, "error", err)
-		return
-	}
-	if stats.Remaining == 0 {
-		s.backfilled.Store(sessionID, struct{}{})
-	}
-	if stats.Split+stats.Unsplittable > 0 {
-		slog.Info("backfill: converted old messages", "session", sessionID,
-			"split", stats.Split, "left_as_is", stats.Unsplittable)
-	}
-}
-
 // BackfillAll converts every pending message of one session database and returns
 // how many were left as-is. Exported for tests that run it on a database copy.
 func BackfillAll(conn *sql.DB) (leftAsIs int, err error) {

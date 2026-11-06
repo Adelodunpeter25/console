@@ -101,11 +101,12 @@ func TestImageBodyGoesToAFileAndLeavesTheDatabase(t *testing.T) {
 	if len(body) != 0 || !strings.Contains(meta, files[0]) {
 		t.Fatalf("the part should hold only the reference: body=%d bytes, meta=%s", len(body), meta)
 	}
-	// content is still complete, so nothing depends on the file yet.
+	// Until the stage-6 migration runs (at the first load), the `content`
+	// column still carries the original copy, image included.
 	var content string
 	_ = c.QueryRow(`SELECT content FROM messages WHERE id = 'u1'`).Scan(&content)
 	if !strings.Contains(content, base64.StdEncoding.EncodeToString(pngBytes)) {
-		t.Fatal("content must still carry the image during the transition")
+		t.Fatal("content must carry the image until the drop migration")
 	}
 }
 
@@ -116,7 +117,6 @@ func TestLoadServesTheImageBackFromTheFile(t *testing.T) {
 	if err := s.AppendMessages(h.ID, []types.AgentMessage{msg}); err != nil {
 		t.Fatal(err)
 	}
-	checkedBefore, badBefore := session.ParityStats()
 	loaded, err := s.Load(h.ID, 0, 0)
 	if err != nil || len(loaded.Messages) != 1 {
 		t.Fatalf("load: %v", err)
@@ -128,9 +128,6 @@ func TestLoadServesTheImageBackFromTheFile(t *testing.T) {
 	gotRaw, _ := json.Marshal(got)
 	if same, _ := msgparts.Equal(msg.Data, gotRaw); !same {
 		t.Fatalf("the image did not come back identical")
-	}
-	if checked, bad := session.ParityStats(); checked == checkedBefore || bad != badBefore {
-		t.Fatalf("the rebuild from the file should have been checked and clean: checked %d->%d bad %d->%d", checkedBefore, checked, badBefore, bad)
 	}
 }
 
@@ -149,8 +146,9 @@ func TestTheSameImageIsStoredOnce(t *testing.T) {
 	}
 }
 
-// If the file is gone or damaged, the original content is served: history is
-// never wrong, and the problem is counted.
+// If the file is gone or damaged, the stage-6 audit refuses to drop `content`,
+// so the original stays the source of truth and the load serves it: history is
+// never wrong.
 func TestAMissingOrDamagedImageFileFallsBackToTheOriginal(t *testing.T) {
 	for name, damage := range map[string]func(path string){
 		"deleted":   func(p string) { os.Remove(p) },
@@ -169,8 +167,7 @@ func TestAMissingOrDamagedImageFileFallsBackToTheOriginal(t *testing.T) {
 			files := fileNames(t, imagesDir(dir, h))
 			damage(filepath.Join(imagesDir(dir, h), files[0]))
 
-			fresh := services.NewSessionService(m) // empty verification cache
-			_, badBefore := session.ParityStats()
+			fresh := services.NewSessionService(m) // re-runs the stage-6 audit
 			loaded, err := fresh.Load(h.ID, 0, 0)
 			if err != nil {
 				t.Fatalf("a damaged image file must not fail the load: %v", err)
@@ -182,9 +179,6 @@ func TestAMissingOrDamagedImageFileFallsBackToTheOriginal(t *testing.T) {
 			gotRaw, _ := json.Marshal(got)
 			if same, _ := msgparts.Equal(msg.Data, gotRaw); !same {
 				t.Fatal("served wrong history instead of falling back to the original")
-			}
-			if _, badAfter := session.ParityStats(); badAfter == badBefore {
-				t.Fatal("the failure was not counted")
 			}
 		})
 	}
@@ -368,8 +362,14 @@ func TestMovingASessionBetweenProjectsMovesItsImages(t *testing.T) {
 
 func verifyImageSplit(t *testing.T, c *sql.DB, id, imgDir string) {
 	t.Helper()
-	var content, skeleton string
-	if err := c.QueryRow(`SELECT content, skeleton FROM messages WHERE id = ?`, id).Scan(&content, &skeleton); err != nil {
+	var content sql.NullString
+	if contentKept(t, c) {
+		if err := c.QueryRow(`SELECT content FROM messages WHERE id = ?`, id).Scan(&content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var skeleton string
+	if err := c.QueryRow(`SELECT COALESCE(skeleton,'') FROM messages WHERE id = ?`, id).Scan(&skeleton); err != nil {
 		t.Fatal(err)
 	}
 	rows, _ := c.Query(`SELECT slot, kind, meta, body FROM message_parts WHERE message_id = ? ORDER BY slot`, id)
@@ -389,11 +389,14 @@ func verifyImageSplit(t *testing.T, c *sql.DB, id, imgDir string) {
 		}
 		parts = append(parts, p)
 	}
+	rows.Close()
 	back, err := msgparts.Assemble([]byte(skeleton), parts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if same, _ := msgparts.Equal([]byte(content), back); !same {
-		t.Fatal("an image message does not rebuild from its skeleton, parts and file")
+	if content.Valid {
+		if same, _ := msgparts.Equal([]byte(content.String), back); !same {
+			t.Fatal("an image message does not rebuild from its skeleton, parts and file")
+		}
 	}
 }

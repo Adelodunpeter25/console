@@ -5,6 +5,7 @@ package tests
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/msgparts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
@@ -46,7 +48,7 @@ func contents(t *testing.T, c *sql.DB) map[string]string {
 	return out
 }
 
-func TestBackfillConvertsOldMessagesOnFirstLoadAndNeverChangesContent(t *testing.T) {
+func TestBackfillConvertsOldMessagesOnFirstLoad(t *testing.T) {
 	s, m := partsStore(t)
 	h := partsSession(t, s)
 	c := sessionConn(t, m, h.ID)
@@ -68,10 +70,32 @@ func TestBackfillConvertsOldMessagesOnFirstLoadAndNeverChangesContent(t *testing
 	if pending != 0 {
 		t.Fatalf("%d messages still pending after the first load", pending)
 	}
-	for id, want := range before {
-		if got := contents(t, c)[id]; got != want {
-			t.Fatalf("%s: content was modified by the backfill:\n before %q\n after  %q", id, want, got)
+	// Every message must come back exactly as it was stored, and while the
+	// `content` column is still there, it must be untouched.
+	for _, raw := range loaded.Messages {
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
 		}
+		id, _ := m["id"].(string)
+		if id == "" {
+			t.Fatal("a loaded message has no id")
+		}
+		delete(m, "id")
+		delete(m, "createdAt")
+		served, _ := json.Marshal(m)
+		if same, _ := msgparts.Equal([]byte(before[id]), served); !same {
+			t.Fatalf("%s: served a different message than was stored:\n before %q\n after  %q", id, before[id], served)
+		}
+	}
+	if contentKept(t, c) {
+		for id, want := range before {
+			if got := contents(t, c)[id]; got != want {
+				t.Fatalf("%s: content was modified by the backfill:\n before %q\n after  %q", id, want, got)
+			}
+		}
+	}
+	for id := range before {
 		verifySplit(t, c, id)
 	}
 	var parts int
@@ -99,7 +123,10 @@ func TestBackfillIsRepeatableAndDoesNotDuplicate(t *testing.T) {
 	}
 }
 
-func TestBackfillLeavesUnsplittableRowsAloneAndDoesNotRetryThem(t *testing.T) {
+// Rows nothing can be split out of (not the expected JSON, say) are stored
+// whole: their JSON becomes their own skeleton. They must not break the load;
+// a row that cannot even be re-issued as JSON is skipped on read and logged.
+func TestUnsplittableRowsDoNotBreakTheLoad(t *testing.T) {
 	s, m := partsStore(t)
 	h := partsSession(t, s)
 	c := sessionConn(t, m, h.ID)
@@ -112,23 +139,36 @@ func TestBackfillLeavesUnsplittableRowsAloneAndDoesNotRetryThem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a bad row must not break the load: %v", err)
 	}
-	if len(loaded.Messages) != 3 {
-		t.Fatalf("every message must still be returned, got %d", len(loaded.Messages))
+	ids := map[string]bool{}
+	servedArr := false
+	for _, raw := range loaded.Messages {
+		var m map[string]any
+		_ = json.Unmarshal(raw, &m)
+		if id, _ := m["id"].(string); id != "" {
+			ids[id] = true
+		}
+		if strings.Trim(string(raw), " ") == "[1,2,3]" {
+			servedArr = true
+		}
 	}
-	states := map[string]int{}
-	rows, _ := c.Query(`SELECT id, split_state FROM messages`)
-	for rows.Next() {
-		var id string
-		var st int
-		_ = rows.Scan(&id, &st)
-		states[id] = st
+	// "junk" is not JSON at all, so it cannot be rebuilt and is left out.
+	if len(loaded.Messages) != 2 || !ids["good"] || !servedArr || ids["junk"] {
+		t.Fatalf("want good and arr served and junk skipped, got %v (arr=%v)", ids, servedArr)
 	}
-	rows.Close()
-	if states["good"] != 1 || states["junk"] != 2 || states["arr"] != 2 {
-		t.Fatalf("states = %v, want good=1 junk=2 arr=2", states)
+	for _, id := range []string{"good", "arr", "junk"} {
+		var skeleton string
+		var state int
+		if err := c.QueryRow(`SELECT COALESCE(skeleton,''), split_state FROM messages WHERE id = ?`, id).Scan(&skeleton, &state); err != nil {
+			t.Fatal(err)
+		}
+		if state != 1 {
+			t.Fatalf("%s: split_state = %d, want 1", id, state)
+		}
 	}
-	if got := contents(t, c)["junk"]; got != "this is not json" {
-		t.Fatalf("an unsplittable row's content changed: %q", got)
+	var junkSkeleton string
+	_ = c.QueryRow(`SELECT COALESCE(skeleton,'') FROM messages WHERE id = 'junk'`).Scan(&junkSkeleton)
+	if junkSkeleton != "this is not json" {
+		t.Fatalf("an unsplittable row must keep its whole JSON as the skeleton: %q", junkSkeleton)
 	}
 }
 

@@ -1,13 +1,14 @@
-// Writing a message: the original JSON stays in `content` (authoritative during
-// the transition) and is also split into a skeleton, searchable text and raw
-// part bodies. Every path that stores a message goes through insertMessage, so
-// the two copies cannot drift apart.
+// Writing a message: the message is split into a skeleton, searchable text and
+// raw part bodies. While the database still has a `content` column (before the
+// stage-6 drop), the original JSON is written there too; every path that stores
+// a message goes through insertMessage, so the copies cannot drift apart.
 package session
 
 import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/msgparts"
 )
@@ -19,11 +20,12 @@ const (
 )
 
 // insertMessage stores one message. Image bodies go to the session's image
-// store (images may be nil, which keeps them in the database). With ignore it behaves like INSERT OR
-// IGNORE and reports whether a row was actually added. A message that cannot be
-// split is still stored (its content is complete); it is marked so reads use the
-// original JSON, and the failure is logged rather than failing the write.
-func insertMessage(tx *sql.Tx, images *imageStore, ignore bool, id, role, content string, createdAt int64) (bool, error) {
+// store (images may be nil, which keeps them in the database). With ignore it
+// behaves like INSERT OR IGNORE and reports whether a row was actually added.
+// withContent writes the original JSON to the `content` column and is only
+// true while that column still exists. A message that cannot be split is
+// stored whole: its JSON becomes its own skeleton, with no parts to refill.
+func insertMessage(tx *sql.Tx, images *imageStore, ignore, withContent bool, id, role, content string, createdAt int64) (bool, error) {
 	var (
 		skeleton any
 		text     any
@@ -32,8 +34,8 @@ func insertMessage(tx *sql.Tx, images *imageStore, ignore bool, id, role, conten
 	)
 	res, err := msgparts.Split([]byte(content))
 	if err != nil {
-		slog.Warn("message could not be split; stored as-is", "message", id, "error", err)
-		state = splitUnsplittable
+		slog.Warn("message stored whole: nothing could be split out of it", "message", id, "error", err)
+		skeleton, text, parts = content, "", nil
 	} else {
 		skeleton, text, parts = string(res.Skeleton), res.Text, images.externalize(res.Parts)
 	}
@@ -42,9 +44,14 @@ func insertMessage(tx *sql.Tx, images *imageStore, ignore bool, id, role, conten
 	if ignore {
 		verb = "INSERT OR IGNORE"
 	}
-	r, err := tx.Exec(
-		verb+` INTO messages (id, role, content, created_at, skeleton, text, split_state) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, role, content, createdAt, skeleton, text, state)
+	args := []any{id, role, createdAt, skeleton, text, state}
+	cols := "(id, role, created_at, skeleton, text, split_state)"
+	if withContent {
+		args = []any{id, role, content, createdAt, skeleton, text, state}
+		cols = "(id, role, content, created_at, skeleton, text, split_state)"
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")
+	r, err := tx.Exec(verb+" INTO messages "+cols+" VALUES ("+placeholders+")", args...)
 	if err != nil {
 		return false, err
 	}

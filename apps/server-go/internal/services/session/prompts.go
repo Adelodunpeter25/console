@@ -1,6 +1,7 @@
 package session
 
 import (
+	"database/sql"
 	"encoding/json"
 	"strings"
 )
@@ -28,19 +29,46 @@ func (s *Service) ListPrompts(sessionID string) ([]PromptEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.ensureBackfilled(sessionID, projectID, conn)
+	s.ensureContentDropped(sessionID, projectID, conn)
 
-	rows, err := conn.Query(`SELECT id, created_at, content FROM messages WHERE role = 'user' ORDER BY rowid`)
+	// The content column exists only while the stage-6 migration is pending or
+	// its audit refused the drop; a literal keeps one query shape for both.
+	contentSel := "''"
+	if hasContentColumn(conn) {
+		contentSel = "content"
+	}
+	rows, err := conn.Query(`SELECT id, created_at, ` + contentSel + `, skeleton, split_state FROM messages WHERE role = 'user' ORDER BY rowid`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	prompts := []PromptEntry{}
+	type promptRow struct {
+		id        string
+		createdAt int64
+		content   sql.NullString
+		skeleton  sql.NullString
+		state     int
+	}
+	scan := make([]promptRow, 0)
 	for rows.Next() {
-		var id, content string
-		var createdAt int64
-		if err := rows.Scan(&id, &createdAt, &content); err != nil {
+		var r promptRow
+		if err := rows.Scan(&r.id, &r.createdAt, &r.content, &r.skeleton, &r.state); err != nil {
 			return nil, err
+		}
+		scan = append(scan, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	srows := make([]storedRow, len(scan))
+	for i, r := range scan {
+		srows[i] = storedRow{id: r.id, content: r.content, skeleton: r.skeleton, state: r.state}
+	}
+	bodies := s.materialize(sessionID, projectID, conn, srows)
+	prompts := []PromptEntry{}
+	for i, r := range scan {
+		if bodies[i] == "" {
+			continue
 		}
 		var msg struct {
 			User *struct {
@@ -48,12 +76,12 @@ func (s *Service) ListPrompts(sessionID string) ([]PromptEntry, error) {
 				Synthetic bool   `json:"synthetic"`
 			} `json:"user"`
 		}
-		if json.Unmarshal([]byte(content), &msg) != nil || msg.User == nil || msg.User.Synthetic {
+		if json.Unmarshal([]byte(bodies[i]), &msg) != nil || msg.User == nil || msg.User.Synthetic {
 			continue
 		}
-		prompts = append(prompts, PromptEntry{ID: id, CreatedAt: createdAt, Preview: promptPreview(msg.User.Content)})
+		prompts = append(prompts, PromptEntry{ID: r.id, CreatedAt: r.createdAt, Preview: promptPreview(msg.User.Content)})
 	}
-	return prompts, rows.Err()
+	return prompts, nil
 }
 
 const (
