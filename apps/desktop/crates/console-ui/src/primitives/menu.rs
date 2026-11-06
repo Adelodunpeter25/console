@@ -29,9 +29,9 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, Bounds, Display, Element, ElementId, FocusHandle, FontWeight, GlobalElementId,
     InspectorElementId, InteractiveElement, IntoElement, KeyDownEvent, LayoutId, MouseButton,
-    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, SharedString, Size,
-    StatefulInteractiveElement, Style, Styled, Window, actions, anchored, canvas, deferred, div,
-    prelude::FluentBuilder, px,
+    MouseDownEvent, ParentElement, Pixels, Point, Position, RenderOnce, ScrollHandle, SharedString,
+    Size, StatefulInteractiveElement, Style, Styled, Window, actions, anchored, canvas, deferred,
+    div, prelude::FluentBuilder, px,
 };
 
 actions!(
@@ -220,10 +220,13 @@ struct MenuState {
 /// Cross-frame state for one context menu. The owner keeps one per menu site.
 #[derive(Clone)]
 pub struct ContextMenuHandle {
-    state: Rc<RefCell<MenuState>>,
-    /// Stable focus identity shared by dropdown and keyboard context triggers.
-    trigger_focus: FocusHandle,
-    focus: FocusHandle,
+state: Rc<RefCell<MenuState>>,
+/// Stable focus identity shared by dropdown and keyboard context triggers.
+trigger_focus: FocusHandle,
+focus: FocusHandle,
+/// Scroll state of the menu's row list, shared across frames so keyboard
+/// navigation can keep the highlighted row in view.
+scroll: ScrollHandle,
     /// The trigger's bounds as of the last frame, so a dropdown can align under
     /// it. Recorded by a zero-cost canvas inside the trigger.
     trigger_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
@@ -240,6 +243,7 @@ impl ContextMenuHandle {
             state: Rc::new(RefCell::new(MenuState::default())),
             trigger_focus: cx.focus_handle(),
             focus: cx.focus_handle(),
+            scroll: ScrollHandle::default(),
             trigger_bounds: Rc::new(Cell::new(None)),
             on_toggle: Rc::new(Vec::new()),
         }
@@ -979,10 +983,12 @@ impl RenderOnce for MenuCard {
         // The rows scroll once they outgrow roughly seven entries — a long
         // repo or branch list used to overflow the window edge instead.
         // One card renders at a time, so a fixed id is enough for the
-        // stateful scroll div.
+        // stateful scroll div. The handle is shared with the keyboard
+        // handler so arrow keys keep the highlighted row in view.
         let mut list = div()
             .id("menu-scroll-list")
             .overflow_y_scroll()
+            .track_scroll(&self.handle.scroll)
             .flex()
             .flex_col()
             .max_h(px(if context_style { 232.0 } else { 190.0 }));
@@ -1166,6 +1172,9 @@ fn on_menu_key(
     let current = handle.state.borrow().highlighted;
     if let Some(next) = next_highlight(focusable, current, key) {
         handle.state.borrow_mut().highlighted = Some(next);
+        // Keep the new highlight inside the scroll viewport; applied at the
+        // next paint against the shared scroll handle.
+        handle.scroll.scroll_to_item(next);
         window.refresh();
         cx.stop_propagation();
         return;
