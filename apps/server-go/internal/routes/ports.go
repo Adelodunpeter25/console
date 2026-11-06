@@ -14,6 +14,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -45,7 +46,43 @@ func sendPortList(c *fiber.Ctx, list []types.ClientPort) error {
 	return c.JSON(fiber.Map{"success": true, "data": data})
 }
 
+// maxTunnelsPerPort bounds concurrent tunnel WebSockets for one port. A
+// healthy dev server needs a handful; a forward loop multiplies within
+// seconds, so the cap trips long before sockets pile up.
+const maxTunnelsPerPort = 8
+
+// tunnelLimiter counts active tunnels per forwarded port.
+type tunnelLimiter struct {
+	mu     sync.Mutex
+	counts map[int]int
+}
+
+func newTunnelLimiter() *tunnelLimiter {
+	return &tunnelLimiter{counts: make(map[int]int)}
+}
+
+func (l *tunnelLimiter) acquire(port int) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.counts[port] >= maxTunnelsPerPort {
+		return false
+	}
+	l.counts[port]++
+	return true
+}
+
+func (l *tunnelLimiter) release(port int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.counts[port] <= 1 {
+		delete(l.counts, port)
+		return
+	}
+	l.counts[port]--
+}
+
 func RegisterPortRoutes(app *fiber.App, registry *terminalsvc.PortRegistry) {
+	tunnels := newTunnelLimiter()
 	h := app.Group("/api/ports")
 
 	h.Get("/stream", func(c *fiber.Ctx) error {
@@ -138,7 +175,17 @@ func RegisterPortRoutes(app *fiber.App, registry *terminalsvc.PortRegistry) {
 		if perr != nil || port < 1024 || port > 65535 {
 			return fiber.NewError(fiber.StatusBadRequest, "Invalid port")
 		}
+		// A forwarder listening on the port it forwards makes each tunnel
+		// dial back into itself, multiplying connections until the machine
+		// drowns in sockets. Cap tunnels per port so the loop fails loudly
+		// instead of hanging the browser silently.
+		if !tunnels.acquire(port) {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "Tunnel loop suspected: too many connections to this port")
+		}
 		wsErr := upgrader.Upgrade(c.Context(), func(conn *websocket.Conn) {
+			// fasthttp hijacks the connection, so this handler outlives
+			// Upgrade; the slot must be held exactly as long as the socket.
+			defer tunnels.release(port)
 			defer conn.Close()
 			target, derr := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 5*time.Second)
 			if derr != nil {
@@ -188,6 +235,8 @@ func RegisterPortRoutes(app *fiber.App, registry *terminalsvc.PortRegistry) {
 			}
 		})
 		if wsErr != nil {
+			// The handler never ran, so it cannot release the slot.
+			tunnels.release(port)
 			return fiber.NewError(fiber.StatusBadRequest, wsErr.Error())
 		}
 		return nil

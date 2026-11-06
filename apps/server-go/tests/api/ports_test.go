@@ -15,7 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -154,4 +156,101 @@ func TestPortRoutesForward(t *testing.T) {
 	if resp, err := app.Test(del, 10000); err != nil || resp.StatusCode != 400 {
 		t.Fatalf("second delete must 400: %v", resp)
 	}
+}
+
+// A forwarder listening on the port it forwards makes every tunnel dial back
+// into itself, multiplying connections. The cap must admit a healthy number
+// of tunnels and refuse the flood with a distinct close code.
+func TestTunnelLoopGuard(t *testing.T) {
+	registry := terminalsvc.NewPortRegistry()
+	t.Cleanup(registry.CloseAll)
+	app := fiber.New()
+	routes.RegisterPortRoutes(app, registry)
+
+	// Upstream that holds every connection open, so tunnels keep their slots.
+	up, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer up.Close()
+	accepted := make(chan net.Conn, 32)
+	go func() {
+		for {
+			conn, err := up.Accept()
+			if err != nil {
+				return
+			}
+			accepted <- conn
+		}
+	}()
+	t.Cleanup(func() {
+		for {
+			select {
+			case conn := <-accepted:
+				conn.Close()
+			default:
+				return
+			}
+		}
+	})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = app.Listener(ln) }()
+	t.Cleanup(func() { _ = app.Shutdown() })
+
+	port := up.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("ws://%s/api/ports/%d/tunnel", ln.Addr(), port)
+
+	// maxTunnelsPerPort (routes) is 8: admit 8, refuse the 9th.
+	var held []*websocket.Conn
+	defer func() {
+		for _, conn := range held {
+			conn.Close()
+		}
+	}()
+	for i := 0; i < 8; i++ {
+		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+		if err != nil {
+			t.Fatalf("tunnel %d must be admitted: %v", i+1, err)
+		}
+		held = append(held, conn)
+		// The server dials the upstream only after taking its slot, so an
+		// arriving connection proves the tunnel is holding it.
+		select {
+		case <-accepted:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("tunnel %d never reached the upstream", i+1)
+		}
+	}
+
+	loopConn, resp, err := websocket.DefaultDialer.Dial(url, nil)
+	if loopConn != nil {
+		loopConn.Close()
+	}
+	if err == nil {
+		t.Fatal("flood tunnel must be refused")
+	}
+	if resp == nil || resp.StatusCode != 503 {
+		t.Fatalf("flood tunnel must refuse 503, got %v", resp)
+	}
+
+	// A freed slot admits a new tunnel again.
+	held[0].Close()
+	held = held[1:]
+	var admitted *websocket.Conn
+	for attempt := 0; attempt < 50; attempt++ {
+		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+		if err == nil {
+			admitted = conn
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if admitted == nil {
+		t.Fatal("released slot must admit a new tunnel")
+	}
+	admitted.Close()
 }
