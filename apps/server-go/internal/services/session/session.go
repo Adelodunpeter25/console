@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +19,12 @@ import (
 // ErrSessionBusy refuses a settle: the session has a run in flight or a
 // queued prompt, so it is not finished work. The routes layer maps it to 409.
 var ErrSessionBusy = errors.New("session has an active run or queued prompt")
+
+// ErrCwdMissing rejects pointing a project session at a working directory
+// that is no longer on disk (typically: the folder was deleted after the
+// project was registered). Failing here beats a session whose every tool
+// call and terminal spawn dies later. The routes layer maps it to 400.
+var ErrCwdMissing = errors.New("working directory does not exist")
 
 type Service struct {
 	manager *db.DB
@@ -85,6 +92,11 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 		if cwd == "" {
 			if wd, err := os.Getwd(); err == nil {
 				cwd = wd
+			}
+		}
+		if cwd != "" {
+			if _, err := os.Stat(cwd); err != nil {
+				return types.SessionHeader{}, fmt.Errorf("%w: %s", ErrCwdMissing, cwd)
 			}
 		}
 		if opts.ProjectID != nil {

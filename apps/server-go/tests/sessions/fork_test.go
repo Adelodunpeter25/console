@@ -23,6 +23,7 @@ func appendMsg(t *testing.T, sessions interface {
 func TestForkCopiesThroughMessage(t *testing.T) {
 	manager, sessions, _, _ := newTestManager(t)
 
+	makeConsoleDir(t)
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Title: "Explore", Cwd: "/tmp/console", ModelID: "m", Provider: "p",
 	})
@@ -135,6 +136,7 @@ func TestForkErrors(t *testing.T) {
 	if _, err := sessions.Fork("does-not-exist", "m1"); err == nil {
 		t.Fatal("unknown session must fail")
 	}
+	makeConsoleDir(t)
 	header, err := sessions.Create(types.CreateSessionOptions{Cwd: "/tmp/console", ModelID: "m", Provider: "p"})
 	if err != nil {
 		t.Fatal(err)
@@ -156,6 +158,7 @@ func TestForkErrors(t *testing.T) {
 func TestForkSharesWorktree(t *testing.T) {
 	manager, sessions, _, _ := newTestManager(t)
 
+	makeConsoleDir(t)
 	header, err := sessions.Create(types.CreateSessionOptions{Cwd: "/tmp/console", ModelID: "m", Provider: "p"})
 	if err != nil {
 		t.Fatal(err)

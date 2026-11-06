@@ -169,6 +169,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 			// Worktree request errors are client errors, not 500s.
 			if errors.Is(err, services.ErrWorktreeScratchpad) ||
 				errors.Is(err, services.ErrWorktreeNeedsCwd) ||
+				errors.Is(err, session.ErrCwdMissing) ||
 				errors.Is(err, gitsvc.ErrNotGitRepo) ||
 				errors.Is(err, gitsvc.ErrUnknownBaseBranch) ||
 				errors.Is(err, gitsvc.ErrUnbornHEAD) {
@@ -277,6 +278,11 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 					projectID = header.ProjectID
 				}
 				if err := sessions.UpdateCwd(id, cwd, projectID, projectGiven); err != nil {
+					// A ghost folder is a client fixable state, not a
+					// server fault: the project's directory was deleted.
+					if errors.Is(err, session.ErrCwdMissing) {
+						return sessionError(c, fiber.StatusBadRequest, err.Error())
+					}
 					return sessionError(c, fiber.StatusInternalServerError, err.Error())
 				}
 			}
@@ -462,8 +468,8 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	})
 
 	// DELETE /api/sessions/:id/permanent — irreversibly delete a
-// soft-deleted session. Any owned worktree is force-removed (dirty
-// worktrees and unmerged branches included).
+	// soft-deleted session. Any owned worktree is force-removed (dirty
+	// worktrees and unmerged branches included).
 	h.Delete("/:id/permanent", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		deleted, err := sessions.PermanentDelete(id)

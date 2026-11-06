@@ -6,6 +6,7 @@ package tests
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
@@ -24,6 +25,9 @@ func TestTurnCoalescesConsecutiveTextDeltas(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/coalesce-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/coalesce-test", ModelID: "mock", Provider: "mock",
 	})

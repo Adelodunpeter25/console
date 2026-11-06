@@ -5,6 +5,7 @@ package session
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -255,6 +256,14 @@ func (s *Service) UpdateCwd(sessionID, cwd string, newProjectID *string, project
 	}
 	now := utils.NowMillis()
 	trimmed := strings.TrimSpace(cwd)
+	// A project-linked update must land on a directory that exists — the
+	// usual way a session ends up pointing at a ghost is a project whose
+	// folder was deleted after registration.
+	if target != "" && trimmed != "" {
+		if _, err := os.Stat(trimmed); err != nil {
+			return fmt.Errorf("%w: %s", ErrCwdMissing, trimmed)
+		}
+	}
 	// A scratchpad session's cwd is its sandboxed dir, which Create makes
 	// on the create path only. Clients that clear the project on an
 	// existing session (the desktop's "No Folder" sends an explicit null)
