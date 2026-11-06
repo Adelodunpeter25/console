@@ -126,9 +126,23 @@ export function leafById(node: WorkspaceNode, id: string): LeafPaneNode | null {
   return null;
 }
 
-/// The first leaf in layout order (the default target when none is active).
+/// Find the first leaf in layout order (the default target when none is
+/// active).
 export function firstLeaf(node: WorkspaceNode): LeafPaneNode | null {
   return leaves(node)[0] ?? null;
+}
+
+/// Find any node (leaf or split) by id. Views use this to re-resolve their
+/// subtree from the store's tree each render — components run once, so a
+/// node captured as a prop at mount would go stale as the tree edits.
+export function findNode(node: WorkspaceNode, id: string): WorkspaceNode | null {
+  if (node.id === id) return node;
+  if (node.type === "split") {
+    return (
+      findNode(node.children[0]!, id) ?? findNode(node.children[1]!, id)
+    );
+  }
+  return null;
 }
 
 /// Separator between a project id and a worktree path inside a workspace key.
