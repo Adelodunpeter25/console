@@ -425,6 +425,11 @@ pub struct ConsoleDesktopApp {
     /// Failure text for the repo list and repo-task actions, shown verbatim
     /// in the menu's GitHub section. Cleared on any retry.
     pub github_repos_error: Option<String>,
+    /// Whether a repo-list fetch has completed at least once for the active
+    /// server. The project menus fetch on open until this is true, so the
+    /// list is ready by the second open without a boot-time request that
+    /// would race the environment's base URL.
+    pub github_repos_loaded: bool,
     /// The repo a task (clone + open or clone + select) is cloning right
     /// now, so the footer chip and the floating card can show "Cloning
     /// <name>…" and a second tap waits instead of firing a duplicate clone.

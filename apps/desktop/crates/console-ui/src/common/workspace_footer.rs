@@ -10,7 +10,7 @@
 
 use std::rc::Rc;
 
-use console_core::{ContextSnapshot, GithubRepo, GitBranchInfo, ProjectInfo, UsageReport};
+use console_core::{ContextSnapshot, GitBranchInfo, GithubRepo, ProjectInfo, UsageReport};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };

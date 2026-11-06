@@ -196,14 +196,28 @@ pub struct FloatingComposerState {
 }
 
 impl FloatingComposerState {
-    pub fn new(window: &mut Window, cx: &mut App) -> Self {
+    pub fn new(
+        window: &mut Window,
+        cx: &mut App,
+        // Runs when the card's project menu opens — the app fetches the
+        // GitHub repo list here if it was never loaded, the same hook the
+        // docked panes wire onto their own menu handles.
+        on_project_menu_open: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
         let input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("Describe a task…"));
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
 
         Self {
             input,
             model_search,
-            project_menu: ContextMenuHandle::new(cx),
+            project_menu: {
+                let on_open = std::rc::Rc::new(on_project_menu_open);
+                ContextMenuHandle::new(cx).on_toggle(move |open, window, cx| {
+                    if open {
+                        (on_open)(window, cx);
+                    }
+                })
+            },
             branch_menu: ContextMenuHandle::new(cx),
             model_menu: ContextMenuHandle::new(cx),
             thinking_menu: ContextMenuHandle::new(cx),

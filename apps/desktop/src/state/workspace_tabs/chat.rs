@@ -85,7 +85,19 @@ impl ConsoleDesktopApp {
             }
         });
         let approval_menu = ContextMenuHandle::new(cx);
-        let project_menu = ContextMenuHandle::new(cx);
+        // Opening the project menu fetches the GitHub repo list if it was
+        // never loaded for this server, so a token connected elsewhere (or
+        // after boot) still shows the repos without a restart.
+        let project_menu = {
+            let entity = entity.clone();
+            ContextMenuHandle::new(cx).on_toggle(move |open, _window, cx| {
+                if open {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                    }
+                }
+            })
+        };
         let branch_menu = ContextMenuHandle::new(cx);
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
@@ -159,7 +171,13 @@ impl ConsoleDesktopApp {
                     this.selected_session_id = this.active_session_for_pane(&submit_pane_id);
                     let attachments = (*this.attachments_for_pane(&submit_pane_id)).clone();
                     let annotations = (*this.annotations_for_pane(&submit_pane_id)).clone();
-                    this.submit_prompt_with_context(prompt.clone(), attachments, annotations, context_files, cx);
+                    this.submit_prompt_with_context(
+                        prompt.clone(),
+                        attachments,
+                        annotations,
+                        context_files,
+                        cx,
+                    );
                 }
                 ComposerEvent::SubmitSteer(prompt, context_files) => {
                     let prompt = this.prompt_with_staged_comments(&steer_pane_id, prompt, cx);

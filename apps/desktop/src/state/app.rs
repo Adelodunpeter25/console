@@ -342,6 +342,7 @@ impl ConsoleDesktopApp {
             move |open, _window, cx| {
                 if open {
                     if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.ensure_github_repos(cx));
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
                                 let _ = window.update(cx, |_, window, cx| {
@@ -729,7 +730,14 @@ impl ConsoleDesktopApp {
                 .new(|cx| GlobalSearchPanel::new(client_for_palettes.clone(), window, cx)),
             project_browse_palette: cx
                 .new(|cx| ProjectBrowsePalette::new(client_for_palettes.clone(), window, cx)),
-            floating_composer: FloatingComposerState::new(window, cx),
+            floating_composer: {
+                let entity = cx.entity().downgrade();
+                FloatingComposerState::new(window, cx, move |_window, cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| this.ensure_github_repos(cx));
+                    }
+                })
+            },
             terminals: std::collections::HashMap::new(),
             browser_views: std::collections::HashMap::new(),
             agent_browser_tabs: std::collections::HashMap::new(),
@@ -748,6 +756,7 @@ impl ConsoleDesktopApp {
             github_repos: None,
             github_repos_loading: false,
             github_repos_error: None,
+            github_repos_loaded: false,
             repo_task_cloning: None,
             provider_credentials: std::collections::HashMap::new(),
             provider_credential_busy: std::collections::HashSet::new(),

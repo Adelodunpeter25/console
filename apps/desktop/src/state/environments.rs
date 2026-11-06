@@ -265,6 +265,10 @@ impl ConsoleDesktopApp {
                                 this.load_providers(cx);
                                 this.load_projects(cx);
                                 this.refresh_auth_status(cx);
+                                // The URL changed: the repo list belongs to
+                                // the old server until refetched.
+                                this.github_repos = None;
+                                this.github_repos_loaded = false;
                                 this.fetch_usage(cx);
                                 cx.notify();
                             });
@@ -334,6 +338,10 @@ impl ConsoleDesktopApp {
                         this.selected_session_id = None;
                         this.projects = std::rc::Rc::new(Vec::new());
                         this.selected_project_id = None;
+                        // The GitHub repo list belongs to the old server; the
+                        // next menu open refetches it from the new one.
+                        this.github_repos = None;
+                        this.github_repos_loaded = false;
                         this.branches = std::rc::Rc::new(Vec::new());
                         this.branch_loaded = false;
                         this.transcript_scroll_positions.clear();

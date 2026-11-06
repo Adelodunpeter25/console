@@ -25,6 +25,18 @@ use console_core::GithubRepo;
 
 impl ConsoleDesktopApp {
     /// Fetch the connected account's repositories for the pickers' GitHub
+    /// section — but only if no fetch has completed for the active server
+    /// yet. The project menus call this on open, which is what puts the list
+    /// in the menu after a token was connected on another device (a plain
+    /// boot never ran `refresh_settings`, so nothing else would fetch).
+    pub fn ensure_github_repos(&mut self, cx: &mut Context<Self>) {
+        if self.github_repos_loaded || self.github_repos_loading {
+            return;
+        }
+        self.refresh_github_repos(cx);
+    }
+
+    /// Fetch the connected account's repositories for the pickers' GitHub
     /// section. A failure is kept in `github_repos_error` so the menus can
     /// distinguish "no repos" from "could not load".
     pub fn refresh_github_repos(&mut self, cx: &mut Context<Self>) {
@@ -42,6 +54,7 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.github_repos_loading = false;
+                        this.github_repos_loaded = true;
                         // An open floating composer paints its own copy of
                         // this list — keep it in step.
                         let mirror = this.floating_composer.open;
@@ -90,11 +103,7 @@ impl ConsoleDesktopApp {
     /// The footer's one-tap action: clone (or reuse) the repo and open the
     /// fresh session. The server owns the destination; see
     /// `POST /api/sessions/from-repo`.
-    pub fn open_repo_task(
-        &mut self,
-        repo: GithubRepo,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn open_repo_task(&mut self, repo: GithubRepo, cx: &mut Context<Self>) {
         if self.repo_task_cloning.is_some() {
             return;
         }
@@ -133,11 +142,7 @@ impl ConsoleDesktopApp {
     /// resulting project for the card's submit. No session is opened here —
     /// the card creates the session on submit, so the prompt the user is
     /// typing survives the tap.
-    pub fn floating_clone_repo(
-        &mut self,
-        repo: GithubRepo,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn floating_clone_repo(&mut self, repo: GithubRepo, cx: &mut Context<Self>) {
         if self.repo_task_cloning.is_some() {
             return;
         }
@@ -191,11 +196,7 @@ impl ConsoleDesktopApp {
     /// session. The server registered the project and created the session;
     /// this only mirrors them, then `select_and_open_session` handles the
     /// workspace switch (it reads the session's project).
-    pub fn adopt_repo_task(
-        &mut self,
-        task: console_core::types::RepoTask,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn adopt_repo_task(&mut self, task: console_core::types::RepoTask, cx: &mut Context<Self>) {
         if !self.projects.iter().any(|p| p.id == task.project.id) {
             Rc::make_mut(&mut self.projects).push(task.project.clone());
         }

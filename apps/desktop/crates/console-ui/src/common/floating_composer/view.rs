@@ -187,10 +187,7 @@ impl FloatingComposerView {
         self
     }
 
-    pub fn on_refresh_github_repos(
-        mut self,
-        f: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_refresh_github_repos(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_refresh_github_repos = Rc::new(f);
         self
     }
