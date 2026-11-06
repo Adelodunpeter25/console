@@ -37,3 +37,24 @@ export function formatWorkingElapsed(seconds: number): string {
   const minutes = Math.floor((seconds % 3_600) / 60);
   return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
 }
+
+/// Format a message timestamp for a bubble's hover footer in the user's
+/// local time ("HH:MM"). Accepts unix seconds or milliseconds.
+export function formatMessageTime(timestamp?: number | null): string | undefined {
+  if (timestamp == null) return undefined;
+  const seconds =
+    timestamp > 10_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
+  const date = new Date(seconds * 1000);
+  if (isNaN(date.getTime())) return undefined;
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+/// console-shared's `format_tokens_per_second`: "12.3 tok/s", hidden when
+/// the rate is absent or not positive.
+export function formatTokensPerSecond(tokPerSec?: number | null): string | undefined {
+  const rate = tokPerSec;
+  if (rate == null || !isFinite(rate) || rate <= 0) return undefined;
+  return `${rate.toFixed(1)} tok/s`;
+}
