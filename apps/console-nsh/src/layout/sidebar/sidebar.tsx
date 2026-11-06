@@ -7,8 +7,8 @@ import { Text, View } from "nsh";
 import type { ProjectSummary, SessionSummary } from "console-nsh/native";
 import { DraftItem, type DraftSummary } from "./draft_item";
 import { GroupHeader, SortModeToggle, type SortMode } from "./group_header";
-import { SessionItem } from "./session_item";
-import { groupSessions, groupSessionsByProject } from "./session_groups";
+import { SessionItem } from "../session/session_item";
+import { groupSessions, groupSessionsByProject } from "../session/session_groups";
 
 export function Sidebar(props: {
   loading: boolean;

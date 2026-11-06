@@ -2,7 +2,7 @@
 // The runner opens `session_item.fixture.tsx`; the fixture renders the
 // callbacks it received on screen, so that is what the tests observe.
 import { expect, open, test } from "nsh/test";
-import { formatTimeAgo } from "../utils/time";
+import { formatTimeAgo } from "../../utils/time";
 
 test("the card shows its rows, the General fallback and the draft marker", async () => {
   const app = await open("./session_item.fixture.tsx", { platform: "linux" });

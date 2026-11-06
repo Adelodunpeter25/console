@@ -8,11 +8,11 @@ import {
   type ProjectSummary,
   type SessionSummary,
 } from "console-nsh/native";
-import { Sidebar } from "./src/layout/sidebar";
+import { Sidebar } from "./src/layout/sidebar/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
 import { EmptyChatState } from "./src/common/empty_state";
-import type { SortMode } from "./src/layout/group_header";
-import type { DraftSummary } from "./src/layout/draft_item";
+import type { SortMode } from "./src/layout/sidebar/group_header";
+import type { DraftSummary } from "./src/layout/sidebar/draft_item";
 
 // The Go dev server's default port; the desktop app defaults the same way.
 const backendUrl = "http://localhost:2003";

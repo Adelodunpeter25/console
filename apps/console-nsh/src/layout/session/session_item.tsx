@@ -5,8 +5,8 @@
 // preview arrive with the primitives pass.
 
 import { Text, View, token } from "nsh";
-import { Icon } from "../common/icons";
-import { formatTimeAgo } from "../utils/time";
+import { Icon } from "../../common/icons";
+import { formatTimeAgo } from "../../utils/time";
 
 export function SessionItem(props: {
   title: string;

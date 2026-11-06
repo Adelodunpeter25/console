@@ -3,7 +3,7 @@
 // chat; the "new chat" draft (no session yet) opens a new chat on press.
 
 import { Text, View } from "nsh";
-import { formatTimeAgo } from "../utils/time";
+import { formatTimeAgo } from "../../utils/time";
 
 /// What the sidebar shows for a draft; mirrors console-ui's `DraftSummary`.
 export type DraftSummary = {
