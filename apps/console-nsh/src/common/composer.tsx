@@ -10,8 +10,28 @@
 // a body-level const would freeze it at mount.
 
 import { Image, Text, View, token } from "nsh";
-import { Input } from "nsh/base";
+import { Input, Popover } from "nsh/base";
 import { Icon, type IconName } from "./icons";
+import {
+  ApprovalModeDropdown,
+  approvalModeIcon,
+  approvalModeLabel,
+} from "./approval_selector";
+import {
+  ModelDropdownMenu,
+  providerIconName,
+  type CatalogProvider,
+  type PickerTab,
+  type SelectedModel,
+  formatModelName,
+} from "./model_picker";
+export type {
+  CatalogModel,
+  CatalogProvider,
+  PickerTab,
+  SelectedModel,
+} from "./model_picker";
+import { signal } from "nsh";
 
 /// A staged file comment chip above the composer's text field
 /// (`composer_view.rs` `ComposerComment`).
@@ -42,41 +62,19 @@ export type ComposerAttachment = {
 /// run is live (send becomes stop) or the composer is ready.
 export type ComposerRunState = "ready" | "running";
 
-/// The approval modes of the desktop (`console-core`'s `ApprovalMode`).
-export const APPROVAL_MODES = [
-  "AlwaysAsk",
-  "AcceptEdits",
-  "PlanMode",
-  "FullAccess",
-] as const;
-export type ApprovalMode = (typeof APPROVAL_MODES)[number];
-
-export function approvalModeLabel(mode: ApprovalMode): string {
-  switch (mode) {
-    case "AlwaysAsk":
-      return "Always Ask";
-    case "AcceptEdits":
-      return "Accept Edits";
-    case "PlanMode":
-      return "Plan Mode";
-    case "FullAccess":
-      return "Full Access";
-  }
-}
-
-export function approvalModeIcon(mode: ApprovalMode): IconName {
-  // The desktop's `ApprovalModeIconExt::icon`.
-  switch (mode) {
-    case "AlwaysAsk":
-      return "TriangleAlert";
-    case "AcceptEdits":
-      return "Pencil";
-    case "PlanMode":
-      return "List";
-    case "FullAccess":
-      return "Zap";
-  }
-}
+// The approval modes and their presentation moved to `approval_selector.tsx`
+// (console-ui's `approval_selector.rs`); re-exported here for the call sites
+// that import them from the composer.
+export {
+  APPROVAL_MODES,
+  approvalModeDescription,
+  approvalModeFromValue,
+  approvalModeIcon,
+  approvalModeLabel,
+  approvalModeValue,
+} from "./approval_selector";
+import type { ApprovalMode } from "./approval_selector";
+export type { ApprovalMode } from "./approval_selector";
 
 /// The thinking levels of the desktop (`console-core`'s `ThinkingLevel`).
 export const THINKING_LEVELS = [
@@ -101,7 +99,14 @@ export function Composer(props: {
   runState?: ComposerRunState;
   approvalMode?: ApprovalMode;
   onApprovalMode?: (mode: ApprovalMode) => void;
-  modelLabel?: string | null;
+  /// The provider catalog for the model picker. Without it the model chip
+  /// renders as a plain label (no popover), like the desktop's footer
+  /// without a menu.
+  providers?: CatalogProvider[];
+  selectedModel?: SelectedModel | null;
+  favorites?: Set<string>;
+  onModelSelect?: (provider: string, modelId: string) => void;
+  onFavorite?: (provider: string, modelId: string) => void;
   thinkingLevel?: ThinkingLevel;
   onCycleThinking?: () => void;
   attachments?: ComposerAttachment[];
@@ -123,10 +128,27 @@ export function Composer(props: {
     annotations().length > 0;
   const approvalMode = () => props.approvalMode ?? "AlwaysAsk";
   const thinkingLevel = () => props.thinkingLevel ?? "None";
+  // The picker's one-line filter and its active tab, owned by the composer
+  // so they survive opening and closing the popover (the desktop's `search`
+  // entity and `active_tab`).
+  const search = signal("");
+  const tab = signal<PickerTab | null>(null);
+  const activeTab = () =>
+    tab() ??
+    ({ kind: "provider", name: props.providers?.[0]?.name ?? "" } as PickerTab);
 
   const send = () => {
     if (hasDraft() && !isRunning()) props.onSend();
   };
+
+  const modelLabel = () =>
+    props.selectedModel
+      ? formatModelName(props.selectedModel.modelId)
+      : "Select Model";
+  const modelProviderIcon = (): IconName =>
+    props.selectedModel
+      ? providerIconName(props.selectedModel.provider)
+      : "Sparkle";
 
   return (
     <View
@@ -194,40 +216,79 @@ export function Composer(props: {
       />
 
       <View class="flex-row items-center gap-2 px-3 pb-3">
-        {props.modelLabel ? (
-          <View
-            class="h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
-            testID="model-chip"
-          >
-            <Text class="text-[11px] text-foreground">{props.modelLabel}</Text>
-            <Icon name="ChevronDown" size={10} color={token("muted-foreground")} />
-          </View>
-        ) : null}
-
-        <View
-          class="h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
-          onPress={() => {
-            if (!props.onApprovalMode) return;
-            const modes = APPROVAL_MODES;
-            const next = modes[(modes.indexOf(approvalMode()) + 1) % modes.length];
-            props.onApprovalMode(next);
-          }}
-          testID="approval-chip"
-          role="button"
+        <Popover
+          placement="top"
+          align="start"
+          popupClass="rounded-[13px]"
+          trigger={
+            <View
+              class="flex h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
+              testID="model-chip"
+              accessibilityLabel="Select model"
+              role="button"
+            >
+              <Icon
+                name={modelProviderIcon()}
+                size={11}
+                mono={false}
+              />
+              <Text class="text-[11px] text-foreground">{modelLabel()}</Text>
+              <Icon name="ChevronDown" size={10} color={token("muted-foreground")} />
+            </View>
+          }
         >
-          <Icon
-            name={approvalModeIcon(approvalMode())}
-            size={11}
-            color={
-              approvalMode() === "FullAccess"
-                ? token("destructive")
-                : token("muted-foreground")
-            }
+          {props.providers ? (
+            <ModelDropdownMenu
+              providers={props.providers}
+              selected={() => props.selectedModel}
+              activeTab={activeTab}
+              favorites={() => props.favorites ?? new Set()}
+              searchQuery={() => search()}
+              onSearch={(q) => search.set(q)}
+              onSelect={(provider, modelId) => props.onModelSelect?.(provider, modelId)}
+              onFavorite={(provider, modelId) => props.onFavorite?.(provider, modelId)}
+              onTab={(t) => tab.set(t)}
+            />
+          ) : (
+            <View class="p-3">
+              <Text class="text-[11px] text-muted-foreground">
+                No model catalog
+              </Text>
+            </View>
+          )}
+        </Popover>
+
+        <Popover
+          placement="top"
+          align="start"
+          popupClass="rounded-xl"
+          trigger={
+            <View
+              class="flex h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
+              testID="approval-chip"
+              accessibilityLabel="Approval mode"
+              role="button"
+            >
+              <Icon
+                name={approvalModeIcon(approvalMode())}
+                size={11}
+                color={
+                  approvalMode() === "FullAccess"
+                    ? token("destructive")
+                    : token("muted-foreground")
+                }
+              />
+              <Text class="text-[11px] text-muted-foreground">
+                {approvalModeLabel(approvalMode())}
+              </Text>
+            </View>
+          }
+        >
+          <ApprovalModeDropdown
+            selected={approvalMode()}
+            onSelect={(mode) => props.onApprovalMode?.(mode)}
           />
-          <Text class="text-[11px] text-muted-foreground">
-            {approvalModeLabel(approvalMode())}
-          </Text>
-        </View>
+        </Popover>
 
         {props.onCycleThinking ? (
           <View

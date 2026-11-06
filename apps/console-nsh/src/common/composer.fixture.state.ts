@@ -7,3 +7,4 @@ export const draft = signal("");
 export const sent = signal<string | null>(null);
 export const approval = signal<ApprovalMode>("AlwaysAsk");
 export const thinking = signal<ThinkingLevel>("Medium");
+export const selected = signal("");

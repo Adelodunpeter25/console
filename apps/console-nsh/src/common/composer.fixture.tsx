@@ -1,15 +1,33 @@
-// The composer test fixture: the Composer wired to `composer.fixture.state`.
-// `nsh test` headless runs the fixture in its own engine, so the state this
-// renders on screen is how the tests observe it (signals set in the app are
-// not visible to the test file's module graph).
-import { Composer } from "./composer";
+// The composer test fixture: the Composer wired to `composer.fixture.state`,
+// with a small static provider catalog for the model picker. `nsh test`
+// headless runs the fixture in its own engine, so the state this renders on
+// screen is how the tests observe it (signals set in the app are not
+// visible to the test file's module graph).
+import { Composer, type CatalogProvider } from "./composer";
 import {
   approval,
   draft,
+  selected,
   sent,
   thinking,
 } from "./composer.fixture.state";
 import { mount, Text, View } from "nsh";
+
+const providers: CatalogProvider[] = [
+  {
+    name: "anthropic",
+    displayName: "Anthropic",
+    models: [
+      { id: "claude-opus-5", contextWindow: 200_000 },
+      { id: "claude-sonnet-5", contextWindow: 200_000 },
+    ],
+  },
+  {
+    name: "openai",
+    displayName: "OpenAI",
+    models: [{ id: "gpt-6", contextWindow: 1_000_000 }],
+  },
+];
 
 function Fixture() {
   return (
@@ -20,13 +38,17 @@ function Fixture() {
         onSend={() => sent.set(draft())}
         approvalMode={approval()}
         onApprovalMode={(m) => approval.set(m)}
-        modelLabel="Claude Opus"
+        providers={providers}
+        selectedModel={{ provider: "anthropic", modelId: "claude-opus-5" }}
+        favorites={new Set(["anthropic:claude-sonnet-5"])}
+        onModelSelect={(provider, modelId) => selected.set(`${provider}:${modelId}`)}
         thinkingLevel={thinking()}
         onCycleThinking={() => {}}
       />
       <Text class="text-xs">Sent: {sent() ?? "none"}</Text>
       <Text class="text-xs">Approval: {approval()}</Text>
       <Text class="text-xs">Draft: {draft() || "empty"}</Text>
+      <Text class="text-xs">Selected: {selected() || "none"}</Text>
     </View>
   );
 }
