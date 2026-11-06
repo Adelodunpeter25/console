@@ -42,6 +42,12 @@ where it bites hardest.
 - NSH 0.4.0 has been exercised end to end (init, TSX screens, keymap, headless tests, web
   backend) outside the repo; nothing in `apps/` has been touched.
 
+## Priorities
+
+The priority is **migrating the desktop app over** (phases 0–5). The web build is **not a
+priority** — it is planned after the cutover (phase 6) and only started once the desktop app
+is the real Console app. Phases 2–4 can interleave once phase 1 lands.
+
 ## Phases
 
 | Phase | File | What it delivers |
@@ -50,9 +56,8 @@ where it bites hardest.
 | 1 | [phase-1-foundation.md](phase-1-foundation.md) | NSH app crate wired to `console-core` |
 | 2 | [phase-2-workspace-screens.md](phase-2-workspace-screens.md) | Chat, workspace, settings screens |
 | 3 | [phase-3-browser-and-devices.md](phase-3-browser-and-devices.md) | Built-in browser + device streaming |
-| 4 | [phase-4-editor-and-visualise.md](phase-4-editor-and-visualise.md) | Editor, diffs, `/visualise` |
-| 5 | [phase-5-web.md](phase-5-web.md) | Web build on Vercel, connected to the server |
-| 6 | [phase-6-cutover.md](phase-6-cutover.md) | Parity checklist, packaging, remove GPUI app |
+| 4 | [phase-4-editor-and-visualise.md](phase-4-editor-and-visualise.md) | Editor, diffs, `/visualise`, terminal |
+| 5 | [phase-5-cutover.md](phase-5-cutover.md) | Parity checklist, packaging, remove GPUI app |
+| 6 | [phase-6-web.md](phase-6-web.md) | Web build on Vercel — later, not a priority |
 
-Each phase ends with something runnable; phases 2–4 can interleave once phase 1 lands. The GPUI
-app is deleted only in phase 6.
+Each phase ends with something runnable. The GPUI app is deleted only in phase 5.

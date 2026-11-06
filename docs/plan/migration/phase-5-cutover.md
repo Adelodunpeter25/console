@@ -1,4 +1,4 @@
-# Phase 6 — cutover
+# Phase 5 — cutover
 
 **Goal**: the NSH app becomes *the* Console app; the GPUI app is removed.
 

@@ -1,4 +1,7 @@
-# Phase 5 — web: Vercel build connected to the server
+# Phase 6 — web (later, not a priority): Vercel build connected to the server
+
+**Priority**: low. The desktop migration (phases 0–5) comes first; this phase starts only after
+the cutover, once the NSH app *is* the Console app.
 
 **Goal**: the NSH app as a static site on Vercel, talking to the Go server from a browser.
 
