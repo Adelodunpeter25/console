@@ -104,7 +104,7 @@ impl ConsoleDesktopApp {
             self.close_settings(window, cx);
             return;
         }
-        self.open_settings_tab(console_ui::settings::SettingsTab::Providers, window, cx);
+        self.open_settings_tab(console_ui::settings::SettingsTab::Servers, window, cx);
     }
 
     /// Open the settings on a given tab, taking over the window.

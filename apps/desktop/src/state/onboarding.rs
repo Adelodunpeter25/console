@@ -152,9 +152,14 @@ impl ConsoleDesktopApp {
             Rc::new(move |window: &mut Window, cx: &mut gpui::App| {
                 if let Some(app) = entity.upgrade() {
                     // Providers and the GitHub key both live on Settings >
-                    // Providers, which `open_settings` already opens (and which
-                    // already refreshes both statuses on entry).
-                    app.update(cx, |this, cx| this.open_settings(window, cx));
+                    // Providers, which refreshes both statuses on entry.
+                    app.update(cx, |this, cx| {
+                        this.open_settings_tab(
+                            console_ui::settings::SettingsTab::Providers,
+                            window,
+                            cx,
+                        );
+                    });
                 }
             })
         };
