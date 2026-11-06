@@ -5,8 +5,12 @@
 package run
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
@@ -31,6 +35,12 @@ type Capability struct {
 	// AlwaysLoaded capabilities have their tools present every turn; only the
 	// reference is opt-in.
 	AlwaysLoaded bool
+	// Tier is the strongest tier of the tools it loads. Modes that deny that
+	// tier (plan mode denies exec) neither list nor read the capability.
+	Tier tools.ToolTier
+	// GatedTools are its always-present tools. Until the reference is on, a
+	// call to one is refused and answered with the reference instead.
+	GatedTools []string
 }
 
 // loadContext is what a Load needs to know about the run.
@@ -49,6 +59,7 @@ var Capabilities = []Capability{
 		Description: "Drive the computer: read app windows and operate them with keyboard and mouse",
 		Text:        cua.SkillText,
 		Split:       cua.SplitInvocation,
+		Tier:        tools.TierExec,
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := cua.NewLoader(s.cuaManager, c.sessionID).Load(registry)
 			return err
@@ -61,6 +72,8 @@ var Capabilities = []Capability{
 		Split:          browseruse.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
+		Tier:           tools.TierExec,
+		GatedTools:     []string{"browser"},
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := browseruse.NewLoader(s.browseruseManager, c.sessionID, c.browserHandler).Load(registry)
 			return err
@@ -72,6 +85,9 @@ var Capabilities = []Capability{
 		Text:           visualize.SkillText,
 		Split:          visualize.SplitInvocation,
 		AgentMayEnable: true,
+		AlwaysLoaded:   true,
+		Tier:           tools.TierRead,
+		GatedTools:     []string{"visualize"},
 		Load: func(_ *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := visualize.NewLoader(c.sessionID).Load(registry)
 			return err
@@ -84,6 +100,8 @@ var Capabilities = []Capability{
 		Split:          console.SplitInvocation,
 		AgentMayEnable: true,
 		AlwaysLoaded:   true,
+		Tier:           tools.TierExec,
+		GatedTools:     []string{"console"},
 		Load: func(s *Service, c *loadContext, registry *tools.Registry) error {
 			_, err := console.NewLoader(s.consoleManager, c.sessionID, c.projectID, c.cwd, c.mode).Load(registry)
 			return err
@@ -149,9 +167,65 @@ func (s *Service) loadCapabilities(lc *loadContext, registry *tools.Registry) []
 		}
 		if err := c.Load(s, lc, registry); err != nil {
 			failures = append(failures, c.Name+" is unavailable: "+err.Error())
+			continue
+		}
+		for _, name := range c.GatedTools {
+			if t, err := registry.Get(name); err == nil {
+				registry.Replace(&referenceGate{Tool: t, svc: s, sessionID: lc.sessionID, capability: c})
+			}
 		}
 	}
 	return failures
+}
+
+// referenceGate refuses a capability's tool until its reference is on, then
+// switches it on and returns the reference as the answer. A blind call could
+// click or run something, so it never executes; the retry does.
+type referenceGate struct {
+	tools.Tool
+	svc        *Service
+	sessionID  string
+	capability Capability
+}
+
+func (g *referenceGate) Execute(ctx context.Context, arguments json.RawMessage) (any, error) {
+	if g.svc.capabilityOn(g.sessionID, g.capability) {
+		return g.Tool.Execute(ctx, arguments)
+	}
+	if err := g.svc.sessions.AddCapability(g.sessionID, g.capability.Name); err != nil {
+		return nil, tools.NewToolError("Could not load the %s skill: %v", g.capability.Name, err)
+	}
+	return nil, tools.NewToolError("Not run: you called %s before reading the %s skill. It is loaded now; read it and call %s again.\n\n%s",
+		g.Name(), g.capability.Name, g.Name(), g.capability.Text())
+}
+
+// allowedIn reports whether the mode permits the capability's tools.
+func (c Capability) allowedIn(mode string) bool {
+	return permissions.Resolve(permissions.Mode(mode), c.Tier) != permissions.Deny
+}
+
+// builtinSkillsSetup lists the built-in skills usable in a mode, so the model
+// knows they exist and that its tools need the skill read first. It is names
+// and one line each; the references load on demand.
+func builtinSkillsSetup(mode string) string {
+	var lines []string
+	for _, c := range Capabilities {
+		if !c.allowedIn(mode) {
+			continue
+		}
+		line := fmt.Sprintf("- %s: %s", c.Name, c.Description)
+		if len(c.GatedTools) > 0 {
+			line += fmt.Sprintf(" (tool: %s)", strings.Join(c.GatedTools, ", "))
+		} else if !c.AgentMayEnable {
+			line += " (only the user can switch it on: ask them to type /" + c.Name + ")"
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "# Built-in skills\nCall readSkill with the name before first using a built-in skill or its tool; the tool refuses to run until you have.\n<builtin-skills>\n" +
+		strings.Join(lines, "\n") + "\n</builtin-skills>"
 }
 
 // readSkillCapabilities is what the agent's readSkill sees for one run.
@@ -160,6 +234,9 @@ func (s *Service) readSkillCapabilities(lc *loadContext, registry *tools.Registr
 		out := make([]tools.Capability, 0, len(Capabilities))
 		for _, c := range Capabilities {
 			c := c
+			if !c.allowedIn(lc.mode) {
+				continue
+			}
 			tc := tools.Capability{Name: c.Name, Description: c.Description, Text: c.Text(), Active: s.capabilityOn(lc.sessionID, c)}
 			if c.AgentMayEnable {
 				tc.Activate = func() error {

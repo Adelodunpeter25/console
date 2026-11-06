@@ -420,6 +420,9 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// Capability references ride setup rather than the user message: setup is
 	// sent every turn but never persisted, so the chat history keeps exactly
 	// what the user typed.
+	if list := builtinSkillsSetup(string(mode)); list != "" {
+		setup = strings.TrimSpace(setup + "\n\n" + list)
+	}
 	for _, ref := range s.capabilitySetup(sessionID) {
 		setup = strings.TrimSpace(setup + "\n\n" + ref)
 	}

@@ -136,6 +136,45 @@ func TestReadSkillUnknownNameListsCapabilities(t *testing.T) {
 	}
 }
 
+func TestBuiltinSkillsListFollowsTheMode(t *testing.T) {
+	build := builtinSkillsSetup("always-ask")
+	for _, want := range []string{"browser-use", "console", "visualize", "computer-use", "/computer-use", "readSkill"} {
+		if !strings.Contains(build, want) {
+			t.Errorf("always-ask list missing %q:\n%s", want, build)
+		}
+	}
+	plan := builtinSkillsSetup("plan-mode")
+	if !strings.Contains(plan, "visualize") {
+		t.Errorf("plan mode keeps read-tier visualize:\n%s", plan)
+	}
+	for _, banned := range []string{"browser-use", "console", "computer-use"} {
+		if strings.Contains(plan, banned) {
+			t.Errorf("plan mode must not list exec-tier %q:\n%s", banned, plan)
+		}
+	}
+}
+
+func TestToolsRefuseUntilTheirSkillIsRead(t *testing.T) {
+	svc, id := newCapService(t)
+	registry := tools.NewRegistry()
+	svc.loadCapabilities(&loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access"}, registry)
+	tool, err := registry.Get("visualize")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := []byte(`{"spec":{}}`)
+	_, err = tool.Execute(t.Context(), args)
+	if err == nil || !strings.Contains(err.Error(), "before reading the visualize skill") {
+		t.Fatalf("first call must be refused with the reference, got %v", err)
+	}
+	if on, _ := svc.sessions.Capabilities(id); !contains(on, "visualize") {
+		t.Fatalf("refusal must switch the skill on: %v", on)
+	}
+	if _, err = tool.Execute(t.Context(), args); err != nil && strings.Contains(err.Error(), "before reading") {
+		t.Fatalf("retry must reach the real tool, got %v", err)
+	}
+}
+
 func TestPopupListComesFromTheTable(t *testing.T) {
 	got := CapabilityDescriptions()
 	if len(got) != len(Capabilities) {
