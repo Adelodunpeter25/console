@@ -360,6 +360,8 @@ impl FloatingComposerState {
             selected_model: self.selected_model.clone(),
             picker_tab: self.picker_tab.clone(),
             model_search_query,
+            // Overwritten per frame by the app, which owns the clone state.
+            repo_cloning: None,
             thinking_level: self.thinking_level,
             supported_thinking_levels: self.supported_thinking_levels.clone(),
             approval_mode: self.approval_mode,

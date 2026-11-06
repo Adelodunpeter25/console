@@ -1054,7 +1054,8 @@ impl ConsoleDesktopApp {
                     self.github_repos.clone(),
                     self.github_repos_loading,
                     self.github_repos_error.clone(),
-                );
+                )
+                .repo_cloning(self.repo_task_cloning.clone());
 
                 div()
                     .relative()

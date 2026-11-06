@@ -11,6 +11,10 @@
 //! - The floating composer card (`floating_clone_repo`) only selects the
 //!   cloned project for its submit, so the prompt the user is typing stays
 //!   in the card and becomes the session's first run.
+//!
+//! While a clone runs, `repo_task_cloning` names it: the footer chip and
+//! the floating card show "Cloning <name>…", and further repo taps wait
+//! instead of firing a duplicate clone.
 
 use std::rc::Rc;
 
@@ -91,10 +95,10 @@ impl ConsoleDesktopApp {
         repo: GithubRepo,
         cx: &mut Context<Self>,
     ) {
-        if self.repo_task_busy {
+        if self.repo_task_cloning.is_some() {
             return;
         }
-        self.repo_task_busy = true;
+        self.repo_task_cloning = Some(repo.name.clone());
         self.github_repos_error = None;
         cx.notify();
 
@@ -105,7 +109,7 @@ impl ConsoleDesktopApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.repo_task_busy = false;
+                        this.repo_task_cloning = None;
                         match result {
                             Ok(task) => this.adopt_repo_task(task, cx),
                             Err(error) if console_core::is_github_not_connected(&error) => {
@@ -134,10 +138,10 @@ impl ConsoleDesktopApp {
         repo: GithubRepo,
         cx: &mut Context<Self>,
     ) {
-        if self.repo_task_busy {
+        if self.repo_task_cloning.is_some() {
             return;
         }
-        self.repo_task_busy = true;
+        self.repo_task_cloning = Some(repo.name.clone());
         self.floating_composer.error = None;
         cx.notify();
 
@@ -148,7 +152,7 @@ impl ConsoleDesktopApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.repo_task_busy = false;
+                        this.repo_task_cloning = None;
                         match result {
                             Ok(project) => {
                                 if !this.projects.iter().any(|p| p.id == project.id) {

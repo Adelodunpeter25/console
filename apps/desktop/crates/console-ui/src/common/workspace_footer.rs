@@ -37,6 +37,10 @@ pub struct WorkspaceFooter {
     github_repos: Option<Rc<Vec<GithubRepo>>>,
     github_repos_loading: bool,
     github_repos_error: Option<String>,
+    /// The repo a GitHub tap is cloning right now, if any. Shown on the
+    /// project chip ("Cloning <name>…") because the menu itself closes on
+    /// tap — without this, a long clone looks like nothing happened.
+    repo_cloning: Option<String>,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
     usage_menu: ContextMenuHandle,
@@ -88,6 +92,7 @@ impl WorkspaceFooter {
             github_repos: None,
             github_repos_loading: false,
             github_repos_error: None,
+            repo_cloning: None,
             project_menu,
             branch_menu,
             usage_menu,
@@ -127,6 +132,12 @@ impl WorkspaceFooter {
         self.github_repos_error = error;
         self
     }
+
+    /// The repo a GitHub tap is cloning right now, if any.
+    pub fn repo_cloning(mut self, name: Option<String>) -> Self {
+        self.repo_cloning = name;
+        self
+    }
 }
 
 impl RenderOnce for WorkspaceFooter {
@@ -136,9 +147,15 @@ impl RenderOnce for WorkspaceFooter {
             .selected_project_id
             .as_deref()
             .and_then(|id| self.projects.iter().find(|project| project.id == id));
-        let project_label = selected_project
-            .map(|project| project.name.clone())
-            .unwrap_or_else(|| "No project".to_owned());
+        let project_label = if let Some(name) = &self.repo_cloning {
+            // The menu closes on tap, so this chip is the only place the
+            // running clone is visible.
+            format!("Cloning {name}…")
+        } else {
+            selected_project
+                .map(|project| project.name.clone())
+                .unwrap_or_else(|| "No project".to_owned())
+        };
         let current_branch = self
             .branches
             .iter()

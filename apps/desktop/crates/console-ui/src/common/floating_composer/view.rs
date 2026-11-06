@@ -51,6 +51,9 @@ pub struct Data {
     pub selected_model: Option<SelectedModel>,
     pub picker_tab: PickerTab,
     pub model_search_query: String,
+    /// The repo a GitHub tap is cloning right now, if any. Painted as a
+    /// "Cloning <name>…" line because the card's menu closes on tap.
+    pub repo_cloning: Option<String>,
     pub thinking_level: Option<ThinkingLevel>,
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub approval_mode: ApprovalMode,
@@ -122,6 +125,7 @@ impl FloatingComposerView {
                 selected_model: None,
                 picker_tab: PickerTab::Favorites,
                 model_search_query: String::new(),
+                repo_cloning: None,
                 thinking_level: None,
                 supported_thinking_levels: Vec::new(),
                 approval_mode: ApprovalMode::default(),
@@ -298,6 +302,7 @@ impl FloatingComposerView {
         let has_project = selected_project_id.is_some();
         let submitting = data.submitting;
         let error = data.error.clone();
+        let repo_cloning = data.repo_cloning.clone();
 
         // ---- header: project + branch selectors on the left ----
         // Both answer "where does this work happen", so they sit together
@@ -704,6 +709,18 @@ impl FloatingComposerView {
                     )
                     // suggestion popup
                     .when_some(autocomplete, |el, popup| el.child(popup))
+                    // cloning — the GitHub section's tap starts a clone that
+                    // outlives the menu, so this keeps it visible in the card.
+                    .when_some(repo_cloning, |el, name| {
+                        el.child(
+                            div()
+                                .px(px(14.0))
+                                .pb(px(6.0))
+                                .text_size(px(11.5))
+                                .text_color(theme.text_secondary)
+                                .child(format!("Cloning {name}…")),
+                        )
+                    })
                     // error — a failed launch keeps the card open with the
                     // prompt intact, so this is the retry affordance.
                     .when_some(error, |el, message| {

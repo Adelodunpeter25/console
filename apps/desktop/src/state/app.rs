@@ -748,7 +748,7 @@ impl ConsoleDesktopApp {
             github_repos: None,
             github_repos_loading: false,
             github_repos_error: None,
-            repo_task_busy: false,
+            repo_task_cloning: None,
             provider_credentials: std::collections::HashMap::new(),
             provider_credential_busy: std::collections::HashSet::new(),
             provider_credential_forms_open: std::collections::HashSet::new(),

@@ -183,6 +183,11 @@ impl ConsoleDesktopApp {
 
     /// Submit the card: create the session it described and run the prompt.
     pub fn submit_floating_composer(&mut self, text: String, cx: &mut Context<Self>) -> bool {
+        // A repo clone in flight selects its project when it lands; launching
+        // before that would silently use the previous selection.
+        if self.repo_task_cloning.is_some() {
+            return false;
+        }
         let Some(submit) = self.floating_composer.submit(text, cx) else {
             return false;
         };
@@ -252,7 +257,10 @@ impl ConsoleDesktopApp {
             .read(cx)
             .content()
             .to_string();
-        let data = self.floating_composer.view_data(query);
+        let mut data = self.floating_composer.view_data(query);
+        // The clone runs in app state, not the card's, so feed the name in
+        // each frame — the card's "Cloning <name>…" line then tracks it live.
+        data.repo_cloning = self.repo_task_cloning.clone();
         let entity = cx.entity().downgrade();
         let card = &self.floating_composer;
         let model_menu = ModelDropdownMenu::new(

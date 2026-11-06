@@ -425,9 +425,10 @@ pub struct ConsoleDesktopApp {
     /// Failure text for the repo list and repo-task actions, shown verbatim
     /// in the menu's GitHub section. Cleared on any retry.
     pub github_repos_error: Option<String>,
-    /// True while a repo task (clone + create session) is in flight, so a
-    /// second tap waits rather than firing duplicate clones.
-    pub repo_task_busy: bool,
+    /// The repo a task (clone + open or clone + select) is cloning right
+    /// now, so the footer chip and the floating card can show "Cloning
+    /// <name>…" and a second tap waits instead of firing a duplicate clone.
+    pub repo_task_cloning: Option<String>,
     /// Pasted provider API keys, keyed by provider id. Carries only whether a
     /// key exists and where it came from — never the key, which lives on the
     /// server and is not readable through any endpoint. See
