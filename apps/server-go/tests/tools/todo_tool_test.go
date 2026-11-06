@@ -5,6 +5,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -82,6 +83,9 @@ func TestTodoPersistsAcrossToolInstances(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/todo-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/todo-test", ModelID: "mock", Provider: "mock",
 	})
@@ -144,6 +148,9 @@ func TestClearCompletedTodos(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/todo-clear-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/todo-clear-test", ModelID: "mock", Provider: "mock",
 	})

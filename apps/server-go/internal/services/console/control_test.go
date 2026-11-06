@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -742,6 +743,10 @@ func newSearchRuntime(t *testing.T, projectID, cwd string) (*Runtime, *services.
 
 func searchSession(t *testing.T, sessions *services.SessionService, id, title, cwd, text string) {
 	t.Helper()
+	// Create must not point a session at a directory that is not on disk.
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	h, err := sessions.Create(types.CreateSessionOptions{ID: id, Title: title, Cwd: cwd, ModelID: "m", Provider: "p"})
 	if err != nil {
 		t.Fatal(err)
@@ -769,10 +774,12 @@ func searchHits(t *testing.T, out any) []map[string]any {
 }
 
 func TestSearchDefaultsToTheCurrentDirectoryAndLeavesOutTheAgentsOwnSession(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "caller", "Me", "/work/app", "the quarterly report is here")
-	searchSession(t, sessions, "other1", "Other", "/work/app", "the quarterly report draft")
-	searchSession(t, sessions, "elsewhere", "Far", "/somewhere/else", "the quarterly report too")
+	base := t.TempDir()
+	app, elsewhere := filepath.Join(base, "app"), filepath.Join(base, "else")
+	runtime, sessions := newSearchRuntime(t, "", app)
+	searchSession(t, sessions, "caller", "Me", app, "the quarterly report is here")
+	searchSession(t, sessions, "other1", "Other", app, "the quarterly report draft")
+	searchSession(t, sessions, "elsewhere", "Far", elsewhere, "the quarterly report too")
 
 	hits := searchHits(t, evalJSON(t, runtime, `console.sessions.search({query:"quarterly report"})`))
 	if len(hits) != 1 || hits[0]["session_id"] != "other1" {
@@ -781,12 +788,14 @@ func TestSearchDefaultsToTheCurrentDirectoryAndLeavesOutTheAgentsOwnSession(t *t
 }
 
 func TestSearchScopeOptions(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "a", "A", "/work/app", "needle in app")
-	searchSession(t, sessions, "b", "B", "/work/lib", "needle in lib")
+	base := t.TempDir()
+	app, lib := filepath.Join(base, "app"), filepath.Join(base, "lib")
+	runtime, sessions := newSearchRuntime(t, "", app)
+	searchSession(t, sessions, "a", "A", app, "needle in app")
+	searchSession(t, sessions, "b", "B", lib, "needle in lib")
 
 	count := func(code string) int { return len(searchHits(t, evalJSON(t, runtime, code))) }
-	if n := count(`console.sessions.search({query:"needle", cwd:"/work/lib"})`); n != 1 {
+	if n := count(`console.sessions.search({query:"needle", cwd:` + mustJSONString(lib) + `})`); n != 1 {
 		t.Fatalf("cwd scope = %d hits", n)
 	}
 	if n := count(`console.sessions.search({query:"needle", all_projects:true})`); n != 2 {
@@ -798,8 +807,8 @@ func TestSearchScopeOptions(t *testing.T) {
 }
 
 func TestSearchRefusals(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "a", "A", "/work/app", "x")
+	runtime, sessions := newSearchRuntime(t, "", filepath.Join(t.TempDir(), "app"))
+	searchSession(t, sessions, "a", "A", runtime.cwd, "x")
 	for name, code := range map[string]string{
 		"no query":         `console.sessions.search({})`,
 		"empty query":      `console.sessions.search({query:""})`,
@@ -829,8 +838,8 @@ func TestSearchWithNoProjectOrDirectoryExplainsWhatToPass(t *testing.T) {
 }
 
 func TestSearchResultCarriesWhatAFindBarNeeds(t *testing.T) {
-	runtime, sessions := newSearchRuntime(t, "", "/work/app")
-	searchSession(t, sessions, "other", "Other", "/work/app", "alpha needle beta needle gamma")
+	runtime, sessions := newSearchRuntime(t, "", filepath.Join(t.TempDir(), "app"))
+	searchSession(t, sessions, "other", "Other", runtime.cwd, "alpha needle beta needle gamma")
 	out := evalJSON(t, runtime, `console.sessions.search({query:"needle"})`).(map[string]any)
 	hits := searchHits(t, out)
 	if len(hits) != 1 {

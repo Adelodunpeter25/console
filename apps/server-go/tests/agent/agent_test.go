@@ -300,6 +300,9 @@ func TestAgentLoopToolRoundTrip(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/agent-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/agent-test", ModelID: "mock", Provider: "mock",
 	})
@@ -378,6 +381,9 @@ func TestContextFilesMaterializeForAgentButPersistClean(t *testing.T) {
 	}
 	t.Cleanup(manager.Close)
 	sessions := services.NewSessionService(manager)
+	if err := os.MkdirAll("/tmp/context-files-test", 0o755); err != nil {
+		t.Fatal(err)
+	}
 	header, err := sessions.Create(types.CreateSessionOptions{
 		Cwd: "/tmp/context-files-test", ModelID: "mock", Provider: "mock",
 	})
