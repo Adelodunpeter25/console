@@ -88,6 +88,9 @@ export function MarkdownBlocks(props: {
   /// The markdown source.
   source: string;
   metrics?: Metrics;
+  /// Lets the text be selected and copied with a native long-press or
+  /// pointer drag, per block (message bubbles opt in; chrome doesn't).
+  selectable?: boolean;
 }) {
   const metrics = props.metrics ?? METRICS.BODY;
   return (
@@ -97,6 +100,7 @@ export function MarkdownBlocks(props: {
       styles={textViewStyles(metrics)}
       renderCodeBlock={renderCodeBlockAt(metrics)}
       codeBlockActions={[{ id: "copy" }]}
+      selectable={props.selectable}
     />
   );
 }

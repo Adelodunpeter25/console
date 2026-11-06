@@ -3,7 +3,8 @@
 // headless runs the fixture in its own engine, so the state this renders on
 // screen is how the tests observe it (signals set in the app are not
 // visible to the test file's module graph).
-import { Composer, FloatingComposer, type CatalogProvider } from "./composer";
+import { Composer, type CatalogProvider } from "./composer";
+import { FloatingComposer } from "./floating_composer";
 import {
   approval,
   draft,

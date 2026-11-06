@@ -9,6 +9,7 @@ import type { AgentMessage } from "./transcript_view";
 const state = createTranscriptState();
 const jumped = signal<number | null>(null);
 const forked = signal<string | null>(null);
+const cited = signal<string | null>(null);
 
 const ScenarioButton = (props: { label: string; onPress: () => void }) => (
   <View
@@ -107,12 +108,14 @@ function Fixture() {
         <TranscriptView
           state={state}
           onFork={(id) => forked.set(id)}
+          onCite={(text) => cited.set(text)}
           onJumpToPrompt={(fromEnd) => jumped.set(fromEnd)}
           onRequestPrompts={() => state.setPrompts(state.prompts())}
         />
       </View>
       <Text>Jumped: {jumped() == null ? "none" : String(jumped())}</Text>
       <Text>Forked: {forked() ?? "none"}</Text>
+      <Text>Cited: {cited() ?? "none"}</Text>
     </View>
   );
 }

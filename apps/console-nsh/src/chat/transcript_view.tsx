@@ -54,6 +54,10 @@ export { createTranscriptState, type TranscriptState } from "./transcript_state"
 export function TranscriptView(props: {
   state: TranscriptState;
   onFork?: (messageId: string) => void;
+  /// Quotes a message into the composer (the desktop's "Quote selection"
+  /// popup; here a per-message affordance — nsh has no cross-view selection
+  /// to host the drag-selection pill).
+  onCite?: (text: string) => void;
   onOpenChange?: (path: string, diffText: string | null) => void;
   onPreviewImage?: (uri: string) => void;
   /// Fetches the chat's full prompt list when the popup opens stale.
@@ -139,6 +143,7 @@ export function TranscriptView(props: {
           expanded={() => state.userMessageExpanded(expandKey)}
           onToggleExpand={() => state.toggleUserMessageExpanded(expandKey)}
           onPreviewImage={props.onPreviewImage}
+          onCite={props.onCite}
         />
         {activity ? (
           <ToolCalls
@@ -168,6 +173,7 @@ export function TranscriptView(props: {
         tokPerSec={message.tokPerSec}
         forkMessageId={message.id}
         onFork={props.onFork}
+        onCite={props.onCite}
         thinkingExpanded={() => state.thinkingExpanded()}
         onThinkingToggle={(id, expanded) => state.toggleThinking(id, expanded)}
         fileChanges={turn}

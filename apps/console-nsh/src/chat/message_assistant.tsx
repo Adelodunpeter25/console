@@ -11,7 +11,7 @@
 
 import { Image, Text, View, token } from "nsh";
 import { Icon } from "../common/icons";
-import { CopyButton } from "../common/copy_button";
+import { CopyButton, CiteButton } from "../common/copy_button";
 import { TurnChangeChips, type TurnChanges } from "./change_chips";
 import { ThinkingBlock } from "./thinking_block";
 import { MarkdownBlocks, METRICS } from "./markdown/render";
@@ -42,6 +42,9 @@ export function AssistantMessageBubble(props: {
   contentForCopy?: string | (() => string);
   forkMessageId?: string | null;
   onFork?: (messageId: string) => void;
+  /// Quotes this message into the composer (the desktop's "Quote selection"
+  /// pill, reduced to a per-message affordance — see CiteButton).
+  onCite?: (text: string) => void;
   thinkingExpanded?: Set<string> | (() => Set<string>);
   onThinkingToggle?: (thinkingId: string, expanded: boolean) => void;
   fileChanges?: TurnChanges | null;
@@ -99,7 +102,7 @@ export function AssistantMessageBubble(props: {
           // prevents the same call from appearing twice while a streamed
           // turn is replaced by its persisted form.
           return (
-            <MarkdownBlocks source={part.text} metrics={METRICS.BODY} />
+            <MarkdownBlocks source={part.text} metrics={METRICS.BODY} selectable />
           );
         }
         if (part.type === "toolCall") {
@@ -159,6 +162,12 @@ export function AssistantMessageBubble(props: {
 
               <Icon name="Fork" size={14} color={token("muted-foreground")} />
             </View>
+          ) : null}
+          {props.onCite != null ? (
+            <>
+              <CopyButton id={`copy-assistant-${props.forkMessageId ?? "message"}`} content={contentForCopy} />
+              <CiteButton onCite={() => props.onCite!(contentForCopy())} />
+            </>
           ) : null}
         </View>
       </View>
