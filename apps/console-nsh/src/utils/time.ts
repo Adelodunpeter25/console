@@ -22,3 +22,18 @@ export function formatTimeAgo(
   }
   return `${Math.floor(seconds / 86_400)}d`;
 }
+
+/// Compact live-elapsed label for the transcript's working indicator:
+/// "37s", "1m 5s", "1h 2m" — prose-free so it can tick every second beside
+/// the pulsing dots (console-ui's `format_working_elapsed`).
+export function formatWorkingElapsed(seconds: number): string {
+  if (seconds <= 59) return `${seconds}s`;
+  if (seconds <= 3_599) {
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+  }
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+}
