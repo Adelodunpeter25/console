@@ -4,6 +4,22 @@ Platform findings and workarounds from the migration spikes, against NSH v0.4.0.
 what we saw, what causes it (checked in NSH's source), and what we do about it. New findings go
 on top.
 
+## 5. `console-core` does not compile for the web target (yet)
+
+**Seen in**: phase 1, `nsh run --target web` of `apps/console-nsh` (the crate that links
+`console-core`). The desktop/headless builds of the same crate are fine.
+
+**Symptom**: the wasm build fails inside console-core's dependency tree — `mio` (tokio's net
+driver) does not compile for `wasm32-unknown-unknown`; `tokio-tungstenite` and `termy` are
+native-only for the same reason. `console-core` inherits tokio with `features = ["full"]`
+(`apps/desktop/Cargo.toml`), so the net stack always comes in.
+
+**What we do about it**: nothing in the phase 1 crate — the desktop and headless targets are
+what matter now, and the web deployment story is phase 6. When web matters, either gate
+console-core's native-only dependencies behind a feature (leaving a wasm-safe core of types and
+pure services), or give the NSH crate a wasm-safe facade and let the web target's transport use
+the browser's fetch (reqwest supports wasm). Decide then, with a real screen to test against.
+
 ## 1. Web target drops a controlled `Input`'s app-side value updates
 
 **Seen in**: phase 0 spike, web target (`nsh run --target web`). The headless runner

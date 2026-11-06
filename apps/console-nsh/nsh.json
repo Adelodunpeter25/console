@@ -1,0 +1,8 @@
+{
+  "name": "console-nsh",
+  "id": "com.example.consolensh",
+  "version": "1.0.0",
+  "build": 1,
+  "rust": ".",
+  "theme": "theme.json"
+}
