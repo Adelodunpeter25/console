@@ -24,11 +24,13 @@ export function Sidebar(props: {
   onSortMode: (mode: SortMode) => void;
   onNewChat?: () => void;
 }) {
-  const projectNameById = new Map(props.projects.map((p) => [p.id, p.name]));
-  const groups =
+  // Read lazily: nsh tracks prop reads in JSX, not body-level consts.
+  const projectNameById = () =>
+    new Map(props.projects.map((p) => [p.id, p.name] as const));
+  const groups = () =>
     props.sortMode === "project"
       ? groupSessionsByProject(props.sessions, (id) =>
-          projectNameById.get(id) ?? null,
+          projectNameById().get(id) ?? null,
         )
       : groupSessions(props.sessions);
   return (
@@ -93,7 +95,7 @@ export function Sidebar(props: {
             No chats yet
           </Text>
         ) : (
-          groups.map((group) => (
+          groups().map((group) => (
             <View class="flex flex-col">
               <GroupHeader label={group.label} count={group.sessions.length} />
               {group.sessions.map((s) => (

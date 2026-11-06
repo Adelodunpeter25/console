@@ -13,7 +13,6 @@ export function SortModeToggle(props: {
   mode: SortMode;
   onToggle: () => void;
 }) {
-  const label = props.mode === "date" ? "Date" : "Project";
   return (
     <View
       class="h-5 flex-row items-center gap-1 rounded-md px-1.5 active:bg-muted"
@@ -21,7 +20,7 @@ export function SortModeToggle(props: {
       role="button"
     >
       <Text class="text-[11px] font-semibold text-muted-foreground">
-        {label}
+        {props.mode === "date" ? "Date" : "Project"}
       </Text>
     </View>
   );

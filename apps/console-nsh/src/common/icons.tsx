@@ -17,14 +17,13 @@ export function Icon(props: {
   /// false for provider and file-type logos, which keep their brand colors.
   mono?: boolean;
 }) {
-  const asset = ICON_ASSETS[props.name];
-  const size = props.size ?? 16;
+  const asset = () => ICON_ASSETS[props.name];
   return (
     <Image
-      src={asset.url}
+      src={asset().url}
       style={{
-        width: size,
-        height: size,
+        width: props.size ?? 16,
+        height: props.size ?? 16,
         tintColor: props.mono === false ? undefined : props.color,
       }}
     />
