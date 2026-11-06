@@ -1,12 +1,12 @@
-// Reading messages back: split rows are rebuilt from their skeleton and parts,
-// and every rebuild is checked against the original `content` before it is
-// served. If the two ever differ the original is served and the difference is
-// logged and counted, so a bug in the rebuild can degrade to "slower than
-// planned" but never to "history that is wrong".
+// Reading messages back. Once a database has completed the stage-6 drop (its
+// `content` column is gone), every message is rebuilt from its skeleton and
+// parts: the rebuild is the source of truth. A row that cannot be rebuilt has
+// no original to fall back on, so it is logged loudly and left out of the
+// result rather than served wrong.
 //
-// While `content` is kept (the transition), a message is verified the first
-// time it is read in this process. Once verified, it is identical to `content`
-// by definition, so later reads serve `content` without repeating the work.
+// While `content` is still present — the migration has not run yet, or its
+// audit refused the drop — reads serve the original directly, which is the
+// pre-split behavior.
 package session
 
 import (
@@ -14,8 +14,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/msgparts"
 )
@@ -24,7 +22,7 @@ import (
 const partsQueryChunk = 400
 
 type storedRow struct {
-	content   string
+	content   sql.NullString
 	createdAt int64
 	rowid     int64
 	id        string
@@ -32,60 +30,35 @@ type storedRow struct {
 	state     int
 }
 
-var (
-	parityChecked    atomic.Int64
-	parityMismatched atomic.Int64
-)
-
-// ParityStats reports how many messages have been rebuilt and compared against
-// their original, and how many of those differed. The second number should
-// stay zero; a nonzero value means the rebuild has a bug worth finding before
-// the original column is ever dropped.
-func ParityStats() (checked, mismatched int64) {
-	return parityChecked.Load(), parityMismatched.Load()
-}
-
-// verifiedSet remembers, per session, which messages already passed the check.
-type verifiedSet struct {
-	mu   sync.Mutex
-	sess map[string]map[string]struct{}
-}
-
-func (v *verifiedSet) has(session, id string) bool {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	_, ok := v.sess[session][id]
-	return ok
-}
-
-func (v *verifiedSet) add(session, id string) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	if v.sess == nil {
-		v.sess = map[string]map[string]struct{}{}
+// hasContentColumn reports whether the messages table still has a `content`
+// column, i.e. this database has not yet completed the drop of stage 6.
+func hasContentColumn(conn *sql.DB) bool {
+	var n int
+	if err := conn.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'content'`,
+	).Scan(&n); err != nil {
+		// An unreadable pragma leaves the conservative answer: keep reading
+		// and writing the original column if it is there.
+		return true
 	}
-	if v.sess[session] == nil {
-		v.sess[session] = map[string]struct{}{}
-	}
-	v.sess[session][id] = struct{}{}
+	return n > 0
 }
 
-// forget drops a session's record, so its messages are verified again. Called
-// whenever the session's messages are rewritten.
-func (v *verifiedSet) forget(session string) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	delete(v.sess, session)
-}
-
-// materialize returns the JSON of each row, rebuilt from parts where that is
-// possible and proven, and the original content otherwise.
+// materialize returns the JSON of each row. With `content` still present it is
+// served as stored; after the drop every row is rebuilt from its skeleton and
+// parts. A row that cannot be rebuilt is returned empty, so callers leave that
+// message out; each such row is logged.
 func (s *Service) materialize(sessionID, projectID string, conn *sql.DB, rows []storedRow) []string {
 	out := make([]string, len(rows))
-	var need []string // split rows not yet verified in this process
-	for i, r := range rows {
-		out[i] = r.content
-		if r.state == splitDone && r.skeleton.Valid && !s.verified.has(sessionID, r.id) {
+	if hasContentColumn(conn) {
+		for i, r := range rows {
+			out[i] = r.content.String
+		}
+		return out
+	}
+	var need []string
+	for _, r := range rows {
+		if r.state == splitDone && r.skeleton.Valid {
 			need = append(need, r.id)
 		}
 	}
@@ -94,39 +67,32 @@ func (s *Service) materialize(sessionID, projectID string, conn *sql.DB, rows []
 	}
 	parts, err := loadParts(conn, need)
 	if err != nil {
-		// The original is complete, so serve it and try again next time. This is
-		// still a failure to rebuild, so it is counted: a counter that only saw
-		// clean mismatches would hide unreadable parts.
-		parityChecked.Add(int64(len(need)))
-		parityMismatched.Add(int64(len(need)))
-		slog.Error("message parts could not be read; serving original content",
+		// Nothing can be rebuilt, so every message of this page is skipped.
+		slog.Error("message parts could not be read; no message can be rebuilt",
 			"session", sessionID, "messages", len(need), "error", err)
 		return out
 	}
 	images := s.imagesFor(sessionID, projectID)
 	for i, r := range rows {
-		if r.state != splitDone || !r.skeleton.Valid || s.verified.has(sessionID, r.id) {
+		if r.state != splitDone || !r.skeleton.Valid {
+			slog.Error("message has no split copy to rebuild; skipping it",
+				"session", sessionID, "message", r.id, "state", r.state)
 			continue
 		}
-		parityChecked.Add(1)
-		// Image bodies live in files; fetch them before rebuilding. A missing or
-		// unreadable file is a mismatch, not an error: the original still has it.
-		err := images.hydrate(parts[r.id])
-		var back []byte
-		if err == nil {
-			back, err = msgparts.Assemble([]byte(r.skeleton.String), parts[r.id])
+		// Image bodies live in files; fetch them before rebuilding. A missing
+		// or damaged file fails the rebuild below, which logs it.
+		if err := images.hydrate(parts[r.id]); err != nil {
+			slog.Error("message's image files could not be read; skipping it",
+				"session", sessionID, "message", r.id, "error", err)
+			continue
 		}
-		if err == nil {
-			var same bool
-			if same, err = msgparts.Equal([]byte(r.content), back); err == nil && same {
-				out[i] = string(back)
-				s.verified.add(sessionID, r.id)
-				continue
-			}
+		back, err := msgparts.Assemble([]byte(r.skeleton.String), parts[r.id])
+		if err != nil {
+			slog.Error("message could not be rebuilt from its parts; skipping it",
+				"session", sessionID, "message", r.id, "error", err)
+			continue
 		}
-		parityMismatched.Add(1)
-		slog.Error("message rebuilt from parts differs from its original; serving the original",
-			"session", sessionID, "message", r.id, "error", err)
+		out[i] = string(back)
 	}
 	return out
 }
@@ -147,7 +113,7 @@ func loadParts(conn *sql.DB, ids []string) (map[string][]msgparts.Part, error) {
 		}
 		rows, err := conn.Query(
 			`SELECT message_id, slot, kind, meta, body FROM message_parts WHERE message_id IN (`+
-				strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")+`) ORDER BY message_id, slot`, args...)
+				strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")+") ORDER BY message_id, slot", args...)
 		if err != nil {
 			return nil, err
 		}

@@ -222,7 +222,7 @@ func (s *Service) searchSession(h types.SessionHeader, words, roles []string, pe
 		return nil, err
 	}
 	// Old messages have no searchable text until they are split.
-	s.ensureBackfilled(h.ID, projectID, conn)
+	s.ensureContentDropped(h.ID, projectID, conn)
 
 	roleMarks := strings.TrimSuffix(strings.Repeat("?,", len(roles)), ",")
 	args := make([]any, 0, len(roles))

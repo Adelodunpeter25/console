@@ -54,13 +54,25 @@ func sessionConn(t *testing.T, m *db.DB, id string) *sql.DB {
 	return c
 }
 
-// verifySplit checks one stored row end to end: content untouched, parts present,
-// and the skeleton plus parts rebuild to exactly the content.
+// contentKept reports whether the test database still has a `content` column,
+// i.e. the stage-6 drop has not happened for it.
+func contentKept(t *testing.T, c *sql.DB) bool {
+	t.Helper()
+	var n int
+	if err := c.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('messages') WHERE name = 'content'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n > 0
+}
+
+// verifySplit checks one stored row end to end: parts present, and the skeleton
+// plus parts rebuild exactly. While `content` is still there it must equal the
+// rebuild; after the drop there is no original left to compare with.
 func verifySplit(t *testing.T, c *sql.DB, id string) {
 	t.Helper()
-	var content, skeleton string
+	var skeleton string
 	var state int
-	if err := c.QueryRow(`SELECT content, COALESCE(skeleton,''), split_state FROM messages WHERE id = ?`, id).Scan(&content, &skeleton, &state); err != nil {
+	if err := c.QueryRow(`SELECT COALESCE(skeleton,''), split_state FROM messages WHERE id = ?`, id).Scan(&skeleton, &state); err != nil {
 		t.Fatalf("%s: %v", id, err)
 	}
 	if state != 1 {
@@ -87,8 +99,14 @@ func verifySplit(t *testing.T, c *sql.DB, id string) {
 	if err != nil {
 		t.Fatalf("%s: assemble: %v", id, err)
 	}
-	if same, _ := msgparts.Equal([]byte(content), back); !same {
-		t.Fatalf("%s: the split copy no longer matches content\n content:  %.200s\n rebuilt:  %.200s", id, content, back)
+	if contentKept(t, c) {
+		var content string
+		if err := c.QueryRow(`SELECT content FROM messages WHERE id = ?`, id).Scan(&content); err != nil {
+			t.Fatal(err)
+		}
+		if same, _ := msgparts.Equal([]byte(content), back); !same {
+			t.Fatalf("%s: the split copy no longer matches content\n content:  %.200s\n rebuilt:  %.200s", id, content, back)
+		}
 	}
 }
 
@@ -216,13 +234,23 @@ func TestAMessageThatCannotBeSplitIsStillStored(t *testing.T) {
 		t.Fatalf("an unsplittable message must not fail the write: %v", err)
 	}
 	c := sessionConn(t, m, h.ID)
-	var content string
+	var skeleton string
 	var state int
-	if err := c.QueryRow(`SELECT content, split_state FROM messages WHERE id = 'bad'`).Scan(&content, &state); err != nil {
+	if err := c.QueryRow(`SELECT COALESCE(skeleton,''), split_state FROM messages WHERE id = 'bad'`).Scan(&skeleton, &state); err != nil {
 		t.Fatal(err)
 	}
-	if content != "not json at all" || state != 2 {
-		t.Fatalf("content=%q state=%d; want the original kept and state 2 (read content)", content, state)
+	// The whole JSON becomes the row's own skeleton, with no parts to refill.
+	if skeleton != "not json at all" || state != 1 {
+		t.Fatalf("skeleton=%q state=%d; want the original kept whole and state 1", skeleton, state)
+	}
+	if contentKept(t, c) {
+		var content string
+		if err := c.QueryRow(`SELECT content FROM messages WHERE id = 'bad'`).Scan(&content); err != nil {
+			t.Fatal(err)
+		}
+		if content != "not json at all" {
+			t.Fatalf("content=%q; want the original kept", content)
+		}
 	}
 }
 

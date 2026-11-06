@@ -28,12 +28,10 @@ var ErrCwdMissing = errors.New("working directory does not exist")
 
 type Service struct {
 	manager *db.DB
-	// backfilled remembers sessions whose old messages are all converted, so the
-	// check is skipped on every later load in this process.
-	backfilled sync.Map
-	// verified remembers which messages were already proven to rebuild from
-	// their parts exactly, so each is checked once per process.
-	verified verifiedSet
+	// migrated remembers sessions whose database no longer has a `content`
+	// column (or whose migration was decided), so the check is skipped on
+	// every later open in this process.
+	migrated sync.Map
 	// isBusy reports whether a run is in flight on a session. Wired by the
 	// caller (the run service's IsActive) rather than imported, since run
 	// already depends on this package.
@@ -316,9 +314,15 @@ func (s *Service) load(sessionID string, limit int64, before int64, includeDelet
 	if err != nil {
 		return nil, err
 	}
-	s.ensureBackfilled(sessionID, projectIDFrom(headers[0].ProjectID), conn)
+	s.ensureContentDropped(sessionID, projectIDFrom(headers[0].ProjectID), conn)
 
-	query := `SELECT content, created_at, rowid, id, skeleton, split_state FROM messages`
+	// The content column exists only while the stage-6 migration is pending or
+	// its audit refused the drop; a literal keeps one query shape for both.
+	contentSel := "''"
+	if hasContentColumn(conn) {
+		contentSel = "content"
+	}
+	query := `SELECT ` + contentSel + `, created_at, rowid, id, skeleton, split_state FROM messages`
 	var args []any
 	if before > 0 {
 		query += ` WHERE rowid < ?`
@@ -354,11 +358,14 @@ func (s *Service) load(sessionID string, limit int64, before int64, includeDelet
 	if hasMore {
 		fetched = fetched[:limit]
 	}
-	// Oldest first for display. Split messages are rebuilt from their parts and
-	// checked against the original; anything unproven is served as stored.
+	// Oldest first for display. Split messages are rebuilt from their parts;
+	// a row that cannot be rebuilt is skipped (it is logged in materialize).
 	bodies := s.materialize(sessionID, projectIDFrom(headers[0].ProjectID), conn, fetched)
 	messages := make([]json.RawMessage, 0, len(fetched))
 	for i := len(fetched) - 1; i >= 0; i-- {
+		if bodies[i] == "" {
+			continue
+		}
 		messages = append(messages, withCreatedAt(bodies[i], fetched[i].createdAt, fetched[i].id))
 	}
 	result := &types.LoadedSession{Header: headers[0], Messages: messages, HasMore: hasMore}

@@ -1,6 +1,7 @@
-// Stage 4: Load rebuilds split messages from their parts, and proves each
-// rebuild against the original before serving it. A wrong rebuild must degrade
-// to serving the original, never to serving wrong history.
+// Load rebuilds split messages from their parts. While the stage-6 migration
+// has not dropped `content`, a rebuild is proven against it before serving;
+// after the drop, the rebuild is the source of truth and a damaged message is
+// left out (loudly logged), never served wrong.
 package tests
 
 import (
@@ -11,7 +12,6 @@ import (
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/msgparts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -55,29 +55,33 @@ func TestLoadReturnsTheSameMessagesAsBefore(t *testing.T) {
 	_ = c
 }
 
-func TestLoadServesRebuiltMessagesAndCountsThemVerified(t *testing.T) {
+// Repeated loads give the same messages every time: with `content` gone, every
+// read rebuilds from parts, so nothing may depend on a one-time check.
+func TestLoadIsTheSameOnEveryRead(t *testing.T) {
 	s, _ := partsStore(t)
 	h := partsSession(t, s)
 	if err := s.AppendMessages(h.ID, toolTurn()); err != nil {
 		t.Fatal(err)
 	}
-	beforeChecked, beforeBad := session.ParityStats()
+	var first json.RawMessage
 	for i := 0; i < 3; i++ {
-		if _, err := s.Load(h.ID, 0, 0); err != nil {
-			t.Fatal(err)
+		loaded, err := s.Load(h.ID, 0, 0)
+		if err != nil || len(loaded.Messages) != 3 {
+			t.Fatalf("load %d: %v", i, err)
 		}
-	}
-	checked, bad := session.ParityStats()
-	if checked-beforeChecked != 3 {
-		t.Fatalf("checked %d messages, want 3 (each verified once, not on every read)", checked-beforeChecked)
-	}
-	if bad != beforeBad {
-		t.Fatalf("%d mismatches on healthy data", bad-beforeBad)
+		if i == 0 {
+			first = loaded.Messages[2]
+			continue
+		}
+		if string(first) != string(loaded.Messages[2]) {
+			t.Fatalf("load %d served a different message than load 0:\n %s\n %s", i, first, loaded.Messages[2])
+		}
 	}
 }
 
-// If the parts are damaged the original is served, the problem is counted, and
-// the load does not fail. This is the property that makes the transition safe.
+// If the parts are damaged, the stage-6 audit refuses to drop `content`, so
+// the original stays the source of truth and the load serves it. A damaged
+// message must degrade to the original, never to wrong history.
 func TestLoadFallsBackToTheOriginalWhenPartsAreDamaged(t *testing.T) {
 	s, m := partsStore(t)
 	h := partsSession(t, s)
@@ -110,13 +114,14 @@ func TestLoadFallsBackToTheOriginalWhenPartsAreDamaged(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		// A fresh service has an empty verification cache, so this load really
-		// rebuilds and compares instead of trusting an earlier pass.
+		// A fresh service re-runs the stage-6 audit, so this load really
+		// rebuilds and compares instead of trusting an earlier pass. The audit
+		// finds the damage, refuses to drop `content`, and the load serves the
+		// original.
 		s2 := services.NewSessionService(m)
 		if _, err := c.Exec(stmt); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		_, badBefore := session.ParityStats()
 		loaded, err := s2.Load(h.ID, 0, 0)
 		if err != nil {
 			t.Fatalf("%s: a damaged message must not fail the load: %v", name, err)
@@ -127,9 +132,6 @@ func TestLoadFallsBackToTheOriginalWhenPartsAreDamaged(t *testing.T) {
 		gotRaw, _ := json.Marshal(got)
 		if same, _ := msgparts.Equal([]byte(original), gotRaw); !same {
 			t.Errorf("%s: served wrong history instead of the original\n got %s", name, gotRaw)
-		}
-		if _, badAfter := session.ParityStats(); badAfter == badBefore {
-			t.Errorf("%s: the mismatch was not counted", name)
 		}
 	}
 }
@@ -191,9 +193,9 @@ func TestLoadPaginationStillWorksWithRebuiltMessages(t *testing.T) {
 	}
 }
 
-// Rewriting a session's messages must invalidate earlier verification, so the
-// new history is checked fresh.
-func TestReplaceInvalidatesVerification(t *testing.T) {
+// Rewriting a session's messages and then loading them must serve the new
+// history, built the same way as any other message.
+func TestReplaceThenLoadServesTheNewHistory(t *testing.T) {
 	s, _ := partsStore(t)
 	h := partsSession(t, s)
 	if err := s.AppendMessages(h.ID, toolTurn()); err != nil {
@@ -205,11 +207,12 @@ func TestReplaceInvalidatesVerification(t *testing.T) {
 	if err := s.ReplaceMessages(h.ID, toolTurn()[:1]); err != nil {
 		t.Fatal(err)
 	}
-	checkedBefore, _ := session.ParityStats()
-	if _, err := s.Load(h.ID, 0, 0); err != nil {
-		t.Fatal(err)
+	loaded, err := s.Load(h.ID, 0, 0)
+	if err != nil || len(loaded.Messages) != 1 {
+		t.Fatalf("load: %v", err)
 	}
-	if checkedAfter, _ := session.ParityStats(); checkedAfter == checkedBefore {
-		t.Fatal("a message rewritten by ReplaceMessages must be verified again")
+	got := loadedJSON(t, loaded.Messages[0])
+	if got["id"] != "u1" {
+		t.Fatalf("served %v, want the replacement message u1", got["id"])
 	}
 }

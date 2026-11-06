@@ -346,9 +346,11 @@ func InitSessionDB(db *sql.DB, path string) error {
 }
 
 // migrateMessageParts adds the split-message storage next to the original
-// `content` column, which stays authoritative until a later, deliberate step
-// drops it. Every statement is additive and idempotent, so an old database
-// upgrades in place and a new one is created the same way.
+// `content` column. The column is created for new databases too, so writes
+// have one shape; the server's stage-6 migration (services/session/drop.go)
+// audits the rebuild and then drops it, the first time a session is opened.
+// Every statement is additive and idempotent, so an old database upgrades in
+// place and a new one is created the same way.
 //
 //	skeleton     the message JSON with its heavy bodies replaced by slot markers
 //	text         the human-readable words, for search
