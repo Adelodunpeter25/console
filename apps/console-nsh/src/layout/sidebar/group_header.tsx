@@ -4,6 +4,7 @@
 // context menu lands).
 
 import { Text, View } from "nsh";
+import { Hint } from "../../common/tooltip";
 
 export type SortMode = "date" | "project";
 
@@ -18,6 +19,8 @@ export function SortModeToggle(props: {
       class="h-5 flex-row items-center gap-1 rounded-md px-1.5 active:bg-muted"
       onPress={props.onToggle}
       role="button"
+      accessibilityLabel="Sort mode"
+      tooltip={<Hint>{props.mode === "date" ? "Sort by project" : "Sort by date"}</Hint>}
     >
       <Text class="text-[11px] font-semibold text-muted-foreground">
         {props.mode === "date" ? "Date" : "Project"}

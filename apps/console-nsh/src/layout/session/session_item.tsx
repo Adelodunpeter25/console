@@ -6,6 +6,7 @@
 
 import { Text, View, token } from "nsh";
 import { Icon } from "../../common/icons";
+import { Hint } from "../../common/tooltip";
 import { formatTimeAgo } from "../../utils/time";
 
 export function SessionItem(props: {
@@ -61,6 +62,9 @@ export function SessionItem(props: {
             }
             onPress={() => props.onToggleSettle?.()}
             accessibilityLabel={settled() ? "Move back to active" : "Settle chat"}
+            tooltip={
+              <Hint>{settled() ? "Move back to active" : "Settle chat"}</Hint>
+            }
             role="button"
           >
             <Icon
