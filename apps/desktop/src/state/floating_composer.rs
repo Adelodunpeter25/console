@@ -160,68 +160,6 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// A GitHub repo row in the card's project menu was clicked: clone it
-    /// server-side (the picker flow — the server picks the folder) and
-    /// select the resulting project for this card's submit. Unlike the
-    /// footer's flow, no session is opened here: the card's whole point is
-    /// that the session is created on submit, carrying the prompt the user
-    /// is already typing.
-    pub fn floating_clone_repo(
-        &mut self,
-        repo: console_core::GithubRepo,
-        cx: &mut Context<Self>,
-    ) {
-        if self.repo_task_busy {
-            return;
-        }
-        self.repo_task_busy = true;
-        self.floating_composer.error = None;
-        cx.notify();
-
-        let client = self.client.clone();
-        let url = repo.clone_target();
-        cx.spawn(async move |entity, cx| {
-            let result = client.projects.clone_project(&url, "", None).await;
-            let _ = cx.update(|cx| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.repo_task_busy = false;
-                        match result {
-                            Ok(project) => {
-                                if !this.projects.iter().any(|p| p.id == project.id) {
-                                    Rc::make_mut(&mut this.projects).push(project.clone());
-                                }
-                                // The card paints its own copy of the list.
-                                if !this
-                                    .floating_composer
-                                    .projects
-                                    .iter()
-                                    .any(|p| p.id == project.id)
-                                {
-                                    Rc::make_mut(&mut this.floating_composer.projects)
-                                        .push(project.clone());
-                                }
-                                this.floating_project_changed(project.id, cx);
-                            }
-                            // Same handoff as the footer: a 409 means the
-                            // token is missing or dead — go to Accounts.
-                            Err(error) if console_core::is_github_not_connected(&error) => {
-                                this.github_status = None;
-                                this.github_repos = None;
-                                this.open_github_settings(cx);
-                            }
-                            Err(error) => {
-                                this.floating_composer.error = Some(error.to_string());
-                                cx.notify();
-                            }
-                        }
-                    });
-                }
-            });
-        })
-        .detach();
-    }
-
     /// A different model was picked: which thinking levels exist depends on the
     /// model, so re-seed the card's thinking controls.
     pub fn floating_model_changed(&mut self, model: SelectedModel, cx: &mut Context<Self>) {
