@@ -50,6 +50,8 @@ import com.console.mobile.core.util.formatContextWindow
 import com.console.mobile.core.util.formatModelName
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.ApprovalModeOption
+import com.console.mobile.data.api.ApiException
+import com.console.mobile.data.model.GithubRepo
 import console.v1.Model
 import console.v1.ProjectInfo
 import com.console.mobile.data.model.favoriteKey
@@ -69,8 +71,13 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.console.mobile.ui.components.common.new.ActionButton
 import com.console.mobile.ui.components.common.new.ActionButtonKind
+import com.console.mobile.ui.components.common.new.ActionRow
 import com.console.mobile.ui.components.common.new.Banner
+import com.console.mobile.ui.components.common.new.Note
+import com.console.mobile.ui.components.common.new.Section
 import com.console.mobile.ui.components.common.new.SectionCard
+import io.github.lyxnx.compose.ui.tablericons.outline.BrandGithub
+import io.github.lyxnx.compose.ui.tablericons.outline.Refresh
 
 /**
  * Selection sheets shared by the composer strip and settings. These are
@@ -87,6 +94,7 @@ fun ProjectPickerSheet(
     onSelect: (ProjectInfo) -> Unit,
     onSelectNone: () -> Unit,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit,
 ) {
     BaseSheet(onDismiss = onDismiss, title = "Select Folder") {
         if (locked) {
@@ -106,6 +114,94 @@ fun ProjectPickerSheet(
                     kind = ActionButtonKind.Primary,
                     modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
                 )
+            }
+            GithubPickerSection(onSelect = onSelect, onConnectGithub = onConnectGithub)
+        }
+    }
+}
+
+/**
+ * The GitHub part of a project picker: the connected account's repositories,
+ * cloned on tap and then selected like any local project — the clone lands in
+ * the server's projects root (~/console/projects), no folder picking here.
+ * Mirrors the desktop's github_menu_section, so loading, retry and the
+ * "Connect GitHub…" handoff behave the same on both.
+ */
+@Composable
+private fun GithubPickerSection(
+    onSelect: (ProjectInfo) -> Unit,
+    onConnectGithub: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var repos by remember { mutableStateOf<List<GithubRepo>?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    // A real failure (network, server). Not-connected is a state, not an
+    // error: it leaves this null and shows the connect handoff instead.
+    var error by remember { mutableStateOf<String?>(null) }
+    // The repo being cloned, so taps are blocked and the row shows progress.
+    var cloningRepo by remember { mutableStateOf<String?>(null) }
+    var cloneError by remember { mutableStateOf<String?>(null) }
+
+    fun load() {
+        scope.launch {
+            loading = true
+            error = null
+            try {
+                repos = AppContainer.projectRepository.listGithubRepos()
+            } catch (e: ApiException) {
+                if (e.code != "409") error = e.message ?: "Couldn't load repositories"
+            } catch (_: Exception) {
+                error = "Couldn't load repositories"
+            } finally {
+                loading = false
+            }
+        }
+    }
+    LaunchedEffect(Unit) { load() }
+
+    fun clone(repo: GithubRepo) {
+        if (cloningRepo != null) return
+        cloningRepo = repo.name
+        cloneError = null
+        scope.launch {
+            try {
+                val proj = AppContainer.projectRepository.cloneProject(repo.cloneUrl)
+                cloningRepo = null
+                onSelect(proj)
+            } catch (e: ApiException) {
+                cloningRepo = null
+                cloneError = e.message ?: "Clone failed"
+            } catch (_: Exception) {
+                cloningRepo = null
+                cloneError = "Clone failed"
+            }
+        }
+    }
+
+    cloneError?.let {
+        Banner(text = it, modifier = Modifier.padding(top = 12.dp))
+    }
+    Section(title = "GitHub") {
+        when {
+            loading -> Note("Loading repositories…")
+            error != null -> {
+                Note("Couldn't load repositories")
+                ActionRow(icon = TablerIcons.Outline.Refresh, title = "Retry") { load() }
+            }
+            repos == null -> ActionRow(icon = TablerIcons.Outline.BrandGithub, title = "Connect GitHub…") { onConnectGithub() }
+            repos?.isEmpty() == true -> Note("No repositories found")
+            else -> {
+                repos?.take(20)?.forEach { repo ->
+                    val busy = cloningRepo == repo.name
+                    OptionRow(
+                        title = if (busy) "Cloning ${repo.name}…" else repo.name,
+                        subtitle = repo.description ?: if (repo.private) "Private" else null,
+                    ) {
+                        if (cloningRepo == null) clone(repo)
+                    }
+                    SectionDivider()
+                }
+                ActionRow(icon = TablerIcons.Outline.Refresh, title = "Refresh") { load() }
             }
         }
     }

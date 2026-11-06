@@ -159,9 +159,10 @@ fun AppNavGraph() {
                             }
                         },
                         onAddProject = { navController.navigate(RouteAddProject) },
+                        onConnectGithub = { navController.navigate(RouteSettingsProviders) },
                         onOpenPorts = { navController.navigate(RoutePorts) { launchSingleTop = true } },
                         onOpenUrl = { url -> navController.navigate(RouteBrowser(url)) { launchSingleTop = true } },
-                    )
+                        )
                 }
             }
             // A link target, opened as a push from wherever the link lived, so
@@ -256,6 +257,15 @@ fun AppNavGraph() {
                     onAddProject = { navController.navigate(RouteAddProject) },
                     startSection = com.console.mobile.feature.settings.SettingsSection.Providers,
                     openedFromSetup = true,
+                )
+            }
+            // The pickers' "Connect GitHub…" handoff: straight to the GitHub
+            // token row, and back returns to wherever the picker lived.
+            composable<RouteSettingsProviders> {
+                SettingsScreen(
+                    onBackToHome = { navController.popBackStack() },
+                    onAddProject = { navController.navigate(RouteAddProject) },
+                    startSection = com.console.mobile.feature.settings.SettingsSection.Providers,
                 )
             }
             composable<RouteAddProject> {

@@ -61,6 +61,7 @@ fun ChatScreen(
     onBackToHome: () -> Unit,
     onOpenTab: (MobileTab) -> Unit,
     onAddProject: () -> Unit,
+    onConnectGithub: () -> Unit = {},
     onOpenPorts: () -> Unit,
     onOpenUrl: (String) -> Unit,
 ) {
@@ -356,6 +357,7 @@ fun ChatScreen(
                         running = chat.running,
                         projectLocked = hasMessages,
                         onAddProject = onAddProject,
+                        onConnectGithub = onConnectGithub,
                         onSend = {
                             subagentPanelOpen = false
                             keyboardController?.hide()

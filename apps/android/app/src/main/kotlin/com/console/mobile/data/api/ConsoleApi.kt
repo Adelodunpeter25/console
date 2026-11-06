@@ -124,6 +124,10 @@ interface ConsoleApi {
     suspend fun connectGitHub(payload: com.console.mobile.data.model.GitHubTokenDto): console.v1.GitHubAuthStatus
     suspend fun getGitHubStatus(): console.v1.GitHubAuthStatus
     suspend fun disconnectGitHub()
+    // repos of the connected GitHub account, for the pickers' GitHub section
+    suspend fun getGithubRepos(): List<com.console.mobile.data.model.GithubRepo>
+    /** POST /api/projects/clone — clone a remote repo and register it; empty parentDir means the server's projects root. */
+    suspend fun cloneProject(url: String, parentDir: String = "", name: String? = null): ProjectInfo
     // provider API keys (generic, /api/providers/:id/credential). The key is
     // stored on the server — it is the only party that talks to the provider —
     // and is never read back, so status is the only thing a client can learn.

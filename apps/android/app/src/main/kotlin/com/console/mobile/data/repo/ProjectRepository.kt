@@ -48,6 +48,26 @@ class ProjectRepository(
         proj
     }
 
+    /** Repos of the connected GitHub account, for the pickers' GitHub section. */
+    suspend fun listGithubRepos(): List<com.console.mobile.data.model.GithubRepo> = withContext(Dispatchers.IO) {
+        api.getGithubRepos()
+    }
+
+    /**
+     * Clone a GitHub repo on the server (into the server's projects root when
+     * [parentDir] is empty) and register it, so the pickers can select it like
+     * any other project. A second tap on the same repo fails with the server's
+     * "target folder already exists" error — the project registered on the
+     * first tap is then selectable from the regular list.
+     */
+    suspend fun cloneProject(url: String, parentDir: String = "", name: String? = null): ProjectInfo = withContext(Dispatchers.IO) {
+        val proj = api.cloneProject(url, parentDir, name)
+        withContext(Dispatchers.Main.immediate) {
+            projectState.addProject(proj)
+        }
+        proj
+    }
+
     suspend fun deleteProject(projectId: String) = withContext(Dispatchers.IO) {
         api.deleteProject(projectId)
         withContext(Dispatchers.Main.immediate) {
