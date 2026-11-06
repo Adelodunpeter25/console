@@ -7,7 +7,7 @@
 //
 // Deviations: the desktop's markdown-view/presentation caches are dropped —
 // nsh reactivity re-parses only when a part's text changes — and the
-// hover-only footer renders always (no group hover in nsh).
+// footer's time/throughput/fork/copy row reveals on hover (group hover).
 
 import { Image, Text, View, token } from "nsh";
 import { Icon } from "../common/icons";
@@ -78,7 +78,7 @@ export function AssistantMessageBubble(props: {
   const forkable = () => props.forkMessageId != null && !isStreaming();
 
   return (
-    <View class="w-full flex-col gap-1.5">
+    <View class="group w-full flex-col gap-1.5">
       {parts().map((part, index) => {
         if (part.type === "thinking") {
           const collapsed = !thinkingExpanded().has(`part-${index}`);
@@ -122,7 +122,7 @@ export function AssistantMessageBubble(props: {
         );
       })}
       {/* Footer: this turn's changed-file chips (always visible), then
-          time + throughput + fork + copy (hover only on the desktop). */}
+          time + throughput + fork + copy (revealed on hover). */}
       <View class="flex-col gap-1">
         {props.fileChanges != null && props.fileChanges.files.length > 0 ? (
           <TurnChangeChips
@@ -132,7 +132,7 @@ export function AssistantMessageBubble(props: {
             onToggle={props.onToggleChanges}
           />
         ) : null}
-        <View class="h-[27px] flex-row items-center gap-1">
+        <View class="h-[27px] flex-row items-center gap-1 opacity-0 group-hover:opacity-100">
           {(() => {
             const timestamp = formatMessageTime(props.createdAt);
             return timestamp != null ? (

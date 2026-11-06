@@ -62,7 +62,7 @@ export function PromptJump(props: {
   const hasPrompts = state.messages().length > 0;
   if (!hasPrompts) return null;
   return (
-    <View class="absolute bottom-3 right-4 flex-row items-center overflow-hidden rounded-[17px] border border-border bg-popover">
+    <View class="absolute bottom-3 right-4 flex-row items-center overflow-hidden rounded-[17px] border border-border bg-popover opacity-0 group-hover:opacity-100">
       <Popover
         placement="top"
         align="end"

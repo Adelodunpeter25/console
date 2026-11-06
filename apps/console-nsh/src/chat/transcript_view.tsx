@@ -19,8 +19,6 @@
 // - The markdown-view and presentation caches are dropped: nsh re-renders
 //   only what a signal change touches, and there is no virtualization to
 //   remount rows against.
-// - The floating controls pill always shows instead of hover-only (nsh has
-//   no group hover).
 
 import { Text, View, token } from "nsh";
 import type { JSX } from "nsh";
@@ -211,7 +209,7 @@ export function TranscriptView(props: {
           </Text>
         </View>
       ) : (
-        <View class="relative h-full w-full flex-col">
+        <View class="group relative h-full w-full flex-col">
           <View class="h-full w-full flex-col pb-11">{rows()}</View>
           {workingRow()}
           <PromptJump

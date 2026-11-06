@@ -6,8 +6,8 @@
 // Deviations from the Rust source: the GPUI transcript-selection machinery
 // (selectable runs, the selection registry, row keys) has no nsh
 // counterpart, so the bubble renders plain text and the Copy/Cite selection
-// popup is dropped; and nsh exposes no group hover, so the footer renders
-// quietly but always.
+// popup is dropped; and the timestamp/copy footer stays hidden until the
+// bubble is hovered (group hover).
 
 import { Image, Text, View } from "nsh";
 import { CopyButton } from "../common/copy_button";
@@ -195,7 +195,7 @@ export function UserMessageBubble(props: {
   );
 
   return (
-    <View class="w-full flex-col items-end gap-[3px]">
+    <View class="group w-full flex-col items-end gap-[3px]">
       {/* Message: image(s) pinned to the top, user bubble card below. */}
       <View class="max-w-[540px] flex-col items-end gap-2">
         {(props.attachments?.length ?? 0) > 0 ? (
@@ -265,8 +265,8 @@ export function UserMessageBubble(props: {
           </View>
         ) : null}
       </View>
-      {/* Footer: timestamp + copy (the desktop shows these on hover only). */}
-      <View class="h-[27px] flex-row items-center gap-1">
+      {/* Footer: timestamp + copy, revealed on hover like the desktop. */}
+      <View class="h-[27px] flex-row items-center gap-1 opacity-0 group-hover:opacity-100">
         {(() => {
           const timestamp = formatMessageTime(props.createdAt);
           return timestamp != null ? (
