@@ -13,6 +13,7 @@ mod bootstrap;
 mod browser_actions;
 mod browser_annotations;
 mod chrome_import;
+pub mod updates;
 mod deleted_sessions;
 mod draft_sync;
 mod drafts;

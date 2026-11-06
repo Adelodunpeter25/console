@@ -54,6 +54,7 @@ actions!(
         CycleApprovalMode,
         /// Open settings window.
         OpenSettings,
+        CheckForUpdates,
         /// Toggle the left sidebar.
         ToggleLeftSidebar,
         /// Toggle the right workspace inspector panel.
@@ -217,6 +218,25 @@ pub fn init_handlers(cx: &mut App) {
                 window
                     .update(cx, |_, window, cx| {
                         app.update(cx, |this, cx| this.open_settings(window, cx));
+                    })
+                    .ok();
+            });
+        }
+    });
+
+    cx.on_action(|_: &CheckForUpdates, cx| {
+        if let Some((window, app)) = crate::window::get_active_window(cx) {
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |_, window, cx| {
+                        app.update(cx, |this, cx| {
+                            this.open_settings_tab(
+                                console_ui::settings::SettingsTab::Updates,
+                                window,
+                                cx,
+                            );
+                            this.check_for_update(cx);
+                        });
                     })
                     .ok();
             });

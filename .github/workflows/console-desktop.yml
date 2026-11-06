@@ -5,7 +5,8 @@
 #
 # Assets: Console-macos-x64.zip + Console-macos-arm64.zip (ditto-packed .app
 # bundles, ad-hoc signed — see apps/desktop/scripts/build.sh), plus
-# Console-windows-x64.zip (NSIS installer, see apps/desktop/scripts/build.ps1).
+# Console-windows-x64.zip (NSIS installer, see apps/desktop/scripts/build.ps1),
+# plus latest.json ({"build": N}) for the in-app updater.
 name: Build console-desktop
 
 on:
@@ -15,6 +16,11 @@ on:
 
 permissions:
   contents: write
+
+# Baked into every build (apps/desktop/src/build.rs) and published as
+# latest.json; the in-app updater installs when the published number is higher.
+env:
+  CONSOLE_BUILD_NUMBER: ${{ github.run_number }}
 
 jobs:
   build:
@@ -136,6 +142,9 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Write latest.json
+        run: echo '{"build":${{ github.run_number }}}' > dist/latest.json
+
       # Retried: the upload itself usually succeeds but the action's final
       # release API call occasionally times out (Headers Timeout Error).
       # Re-runs are safe — assets are deleted then re-uploaded.
@@ -155,3 +164,4 @@ jobs:
               dist/Console-macos-x64.zip
               dist/Console-macos-arm64.zip
               dist/Console-windows-x64.zip
+              dist/latest.json
