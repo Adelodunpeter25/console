@@ -162,6 +162,13 @@ export function createWorkspaceStore(root?: WorkspaceNode) {
       if (removed != null) paneChanged(null);
       return removed;
     },
+
+    /// Swaps in a restored tree (app start; the persisted document parses
+    /// back to the same shape).
+    restoreTree(restored: WorkspaceNode): void {
+      tree.set(restored);
+      paneChanged(null);
+    },
   };
 }
 

@@ -1,22 +1,50 @@
-// The floating compact composer (console-ui's `floating_composer/`, first
-// cut): a collapsed pill that expands into the full `Composer` and collapses
-// again with Escape over an empty draft — the desktop's open/collapse
-// behaviour. Its launcher-card extras (project, branch and GitHub menus)
-// land with the workspace panes they launch into.
+// The floating compact composer, ported from console-ui's
+// `floating_composer/` (the Cmd+N launcher card): a collapsed pill that
+// expands into a launcher — project, branch/worktree and GitHub header menus
+// over the full `Composer` — and collapses again with Escape over an empty
+// draft. The desktop card submits a brand-new session (`BranchChoice` picks
+// project folder / new worktree / existing branch); the submit here hands
+// `onLaunch` the draft and the picked checkout, and the session creation
+// itself lands with the session wiring.
 //
 // NSH renders components once and tracks prop reads in JSX, so the draft
 // emptiness is read inside the keymap handler rather than normalized into a
 // body-level const (which would freeze it at mount).
 
 import { Text, View, keymap, signal, token } from "nsh";
+import { Popover } from "nsh/base";
 import { Icon } from "./icons";
+import { MenuChip } from "./menu_chip";
+import {
+  branchMenuSection,
+  githubMenuSection,
+  projectMenuSection,
+} from "./picker_menus";
+import type {
+  GitBranchInfo,
+  GithubRepo,
+  ProjectInfo,
+} from "./workspace_footer";
 import { Composer } from "./composer";
 
-export function FloatingComposer(props: Parameters<typeof Composer>[0]) {
-  const open = signal(false);
+/// The checkout a launched session runs in (the desktop's `BranchChoice`).
+export type LauncherCheckout =
+  | { kind: "project" }
+  | { kind: "newWorktree" }
+  | { kind: "branch"; name: string };
 
-  /// Escape over an empty draft collapses the card back to the pill; a
-  /// draft keeps the focus (and the escape for the autocomplete).
+export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
+  projects?: ProjectInfo[];
+  branches?: GitBranchInfo[];
+  repos?: GithubRepo[] | null;
+  /// Called with the draft and the picked checkout when the card submits.
+  onLaunch?: (draft: string, checkout: LauncherCheckout) => void;
+}) {
+  const open = signal(false);
+  const selectedProjectId = signal<string | null>(null);
+  const checkout = signal<LauncherCheckout>({ kind: "project" });
+  // Escape over an empty draft collapses the card back to the pill; a
+  // draft keeps the focus (and the escape for the autocomplete).
   function EscapeCollapses() {
     keymap.bind("escape", () => {
       if (props.value === "") open.set(false);
@@ -24,12 +52,135 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0]) {
     return null;
   }
 
+  const projectName = () =>
+    props.projects?.find((p) => p.id === selectedProjectId())?.name ??
+    "Select project";
+
+  const checkoutLabel = (): string => {
+    const choice = checkout();
+    if (choice.kind === "newWorktree") return "New worktree";
+    if (choice.kind === "branch") return choice.name;
+    return "Project folder";
+  };
+
+  const launch = () => {
+    if (props.value.trim() === "") return;
+    props.onLaunch?.(props.value, checkout());
+    open.set(false);
+  };
+
   return (
     <View class="w-full">
       {open() ? (
-        <View class="flex-col">
+        <View class="flex-col gap-2 rounded-xl border border-border bg-card p-2">
           <EscapeCollapses />
-          <Composer {...props} />
+          <View class="flex-row items-center gap-1.5 px-1">
+            {props.projects != null ? (
+              <Popover
+                placement="bottom"
+                align="start"
+                trigger={
+                  <MenuChip
+                    icon="Folder"
+                    label={projectName}
+                    accessibilityLabel="Project menu"
+                  />
+                }
+              >
+                <View class="w-[220px] flex-col py-1">
+                  {projectMenuSection({
+                    projects: props.projects,
+                    selectedId: selectedProjectId(),
+                    withIcons: false,
+                    onSelect: (id) => selectedProjectId.set(id),
+                  })}
+                </View>
+              </Popover>
+            ) : null}
+            {props.branches != null ? (
+              <Popover
+                placement="bottom"
+                align="start"
+                trigger={
+                  <MenuChip
+                    icon="GitBranch"
+                    label={checkoutLabel}
+                    accessibilityLabel="Branch menu"
+                  />
+                }
+              >
+                <View class="w-[220px] flex-col py-1">
+                  {branchMenuSection({
+                    branches: props.branches,
+                    isSelected: (b) => {
+                      const choice = checkout();
+                      return choice.kind === "branch" && choice.name === b.name;
+                    },
+                    onSelect: (name) => checkout.set({ kind: "branch", name }),
+                    withIcons: false,
+                    newWorktree: {
+                      label: "New worktree",
+                      onNewWorktree: () => checkout.set({ kind: "newWorktree" }),
+                    },
+                  })}
+                  <View class="px-2 py-1">
+                    <View
+                      class="flex-row items-center gap-1.5 rounded-md px-2 py-1 hover:bg-accent"
+                      role="menuitemradio"
+                      accessibilityState={{
+                        selected: checkout().kind === "project",
+                      }}
+                      accessibilityLabel="Project folder"
+                      onPress={() => checkout.set({ kind: "project" })}
+                    >
+                      <Icon
+                        name="Folder"
+                        size={12}
+                        color={token("muted-foreground")}
+                      />
+                      <Text class="text-[12.5px] text-foreground">
+                        Project folder
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Popover>
+            ) : null}
+            {props.repos != null ? (
+              <Popover
+                placement="bottom"
+                align="start"
+                trigger={
+                  <MenuChip
+                    icon="Github"
+                    label="GitHub"
+                    accessibilityLabel="GitHub menu"
+                  />
+                }
+              >
+                <View class="w-[240px] flex-col py-1">
+                  {githubMenuSection({
+                    repos: props.repos,
+                    loading: false,
+                    hasError: false,
+                    onOpen: () => {},
+                    onRefresh: () => {},
+                    onConnect: () => {},
+                  })}
+                </View>
+              </Popover>
+            ) : null}
+            <View class="flex-1" />
+            <View
+              class="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
+              role="button"
+              accessibilityLabel="Close launcher"
+              onPress={() => open.set(false)}
+            >
+              <Icon name="X" size={12} color={token("muted-foreground")} />
+            </View>
+          </View>
+          <Composer {...props} onSend={launch} />
         </View>
       ) : (
         <View

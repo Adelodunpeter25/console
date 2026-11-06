@@ -4,6 +4,7 @@
 
 import { Text, View } from "nsh";
 import { formatTimeAgo } from "../../utils/time";
+import { DraftContextMenu } from "../session/session_context_menu";
 
 /// What the sidebar shows for a draft; mirrors console-ui's `DraftSummary`.
 export type DraftSummary = {
@@ -19,6 +20,7 @@ export function DraftItem(props: {
   active: boolean;
   onSelect?: (sessionId: string) => void;
   onNewChat?: () => void;
+  onDelete?: () => void;
 }) {
   const press = () => {
     if (props.draft.sessionId) {
@@ -27,7 +29,7 @@ export function DraftItem(props: {
       props.onNewChat?.();
     }
   };
-  return (
+  const row = (
     <View
       class={
         "flex-row items-center gap-2 rounded-md px-3 py-1.5 " +
@@ -48,5 +50,10 @@ export function DraftItem(props: {
         {formatTimeAgo(props.draft.updatedAt)}
       </Text>
     </View>
+  );
+  return props.onDelete ? (
+    <DraftContextMenu onDelete={props.onDelete}>{row}</DraftContextMenu>
+  ) : (
+    row
   );
 }

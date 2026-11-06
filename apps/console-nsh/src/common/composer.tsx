@@ -9,8 +9,9 @@
 // derived from props are read lazily (`()` thunks): normalizing a prop into
 // a body-level const would freeze it at mount.
 
-import { Image, Text, View, token } from "nsh";
+import { Image, Text, View, effect, token } from "nsh";
 import { Input, Popover } from "nsh/base";
+import type { InputRef } from "nsh/types";
 import { Icon, type IconName } from "./icons";
 import {
   ApprovalModeDropdown,
@@ -32,6 +33,16 @@ export type {
   SelectedModel,
 } from "./model_picker";
 import { keymap, signal } from "nsh";
+
+/// Focus requests for the docked composer's input: bumped by the global
+/// shortcut (cmd+l, the desktop's `FocusComposer`); every mounted Composer
+/// watches it and takes focus. A signal, not a direct call, so the app
+/// doesn't need a ref into whichever composer is on screen.
+export const composerFocusRequest = signal(0);
+
+export function focusComposer(): void {
+  composerFocusRequest.set(composerFocusRequest() + 1);
+}
 import { ComposerAutocompleteRow } from "./composer_autocomplete_row";
 import {
   detectTrigger,
@@ -179,6 +190,11 @@ export function Composer(props: {
   // The composer caret, tracked so autocomplete triggers detect against it
   // (the desktop reads the input entity's caret).
   const selection = signal({ start: 0, end: 0 });
+  // The mounted input, for the cmd+l focus request.
+  let inputRef: InputRef | null = null;
+  effect(() => {
+    if (composerFocusRequest() > 0) inputRef?.focus();
+  });
   // The highlighted suggestion row; reset whenever the open set changes.
   const highlighted = signal(0);
   // Where the input's caret goes after a completion inserts text
@@ -362,6 +378,9 @@ export function Composer(props: {
         placeholder={props.placeholder ?? "Ask Console anything…"}
         value={props.value}
         selectedRange={pinnedSelection() ?? undefined}
+        ref={(ref: InputRef | null) => {
+          inputRef = ref;
+        }}
         onChange={(e: { value: string }) => {
           pinnedSelection.set(null);
           highlighted.set(0);

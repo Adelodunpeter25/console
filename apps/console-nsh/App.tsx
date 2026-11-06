@@ -1,16 +1,21 @@
-// Console — the NSH app's shell. Phase 2.1: the title bar and the
-// project/session sidebar read real data from the Go server through
-// console-core. Panes arrive in subphase 2.3.
+// Console — the NSH app's shell. Phase 2.1 (title bar, sidebar with project
+// groups and drafts) beside phase 2.3 (the workspace pane tree: tabs,
+// splits, persisted layouts, the Cmd+N launcher composer and the global
+// shortcuts).
 
-import { mount, signal, View } from "nsh";
+import { effect, mount, signal, View } from "nsh";
 import {
   Console,
   type ProjectSummary,
   type SessionSummary,
 } from "console-nsh/native";
+import { FloatingComposer } from "./src/common/floating_composer";
 import { Sidebar } from "./src/layout/sidebar/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
-import { EmptyChatState } from "./src/common/empty_state";
+import { createWorkspaceStore } from "./src/workspace/workspace_store";
+import { WorkspaceView } from "./src/workspace/workspace_view";
+import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
+import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
 
 // The Go dev server's default port; the desktop app defaults the same way.
@@ -26,6 +31,10 @@ const sessions = signal<SessionSummary[]>([]);
 const sessionsError = signal<string | null>(null);
 const selectedSessionId = signal<string | null>(null);
 const sortMode = signal<SortMode>("date");
+
+// The launcher composer (Cmd+N) and the workspace pane tree.
+const launcherOpen = signal(false);
+const store = createWorkspaceStore();
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -63,9 +72,58 @@ function selectProject(id: string) {
   void loadSessions(id);
 }
 
+/// Opens a session's chat tab in the workspace (the sidebar and the
+/// launcher both land here). Real transcript wiring arrives with the chat
+/// pane content (2.4); the tab opens now so the shell is usable.
+function openChat(sessionId: string, title: string) {
+  store.openTab(null, { type: "chat", sessionId, title });
+  selectedSessionId.set(sessionId);
+}
+
+function selectSession(id: string) {
+  const session = sessions().find((s) => s.id === id);
+  openChat(id, session?.title ?? id);
+}
+
+// Workspace persistence: restore the saved layout once, then write the
+// whole document on every revision (the document is small — a pane tree —
+// so whole-document writes stay cheap). A restored tree carries no session
+// content yet; its chat tabs re-render when the session wiring lands (2.4).
+const WORKSPACE_KEY = "default";
+
+const WELCOME_TAB = {
+  type: "chat" as const,
+  sessionId: "welcome",
+  title: "Welcome",
+};
+
+void (async () => {
+  try {
+    const saved = await Console.loadWorkspaceLayout(WORKSPACE_KEY);
+    if (saved != null) store.restoreTree(JSON.parse(saved) as WorkspaceNode);
+    else store.openTab(null, WELCOME_TAB);
+  } catch {
+    store.openTab(null, WELCOME_TAB);
+  }
+})();
+
+effect(() => {
+  if (store.revision() === 0) return;
+  // Deferred off the reactive pass: nsh's native bridge rejects calls made
+  // from a running component's engine thread, and a short debounce also
+  // collapses bursts of revisions (a streaming open bumps several) into one
+  // write.
+  setTimeout(() => {
+    // Fire-and-forget: a failed write (disk full, host gone) leaves the
+    // tree in memory; the next successful write catches up.
+    Console.saveWorkspaceLayout(WORKSPACE_KEY, JSON.stringify(store.tree()));
+  }, 250);
+});
+
 function App() {
   return (
     <View class="flex flex-1 flex-col bg-background">
+      <WorkspaceShortcuts store={store} onNewChat={() => launcherOpen.set(true)} />
       <TitleBar />
       <View class="flex flex-1 flex-row">
         <Sidebar
@@ -79,17 +137,34 @@ function App() {
           activeSessionId={selectedSessionId()}
           sortMode={sortMode()}
           onProject={selectProject}
-          onSession={(id) => selectedSessionId.set(id)}
+          onSession={selectSession}
           onSortMode={(mode) => sortMode.set(mode)}
-          onNewChat={() => selectedSessionId.set(null)}
+          onNewChat={() => launcherOpen.set(true)}
         />
-        <View class="flex flex-1 flex-col">
-          <EmptyChatState onNewChat={() => selectedSessionId.set(null)} />
+        <View class="flex flex-1 flex-col gap-2 p-2">
+          <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
+            <WorkspaceView store={store} />
+          </View>
+          {launcherOpen() ? (
+            <FloatingComposer
+              value={launcherDraft()}
+              onChange={(text: string) => launcherDraft.set(text)}
+              onSend={() => {}}
+              projects={projects().map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
+              onLaunch={(draft) => {
+                launcherOpen.set(false);
+                launcherDraft.set("");
+                openChat(`draft:${draft.slice(0, 32)}`, draft.slice(0, 48) || "New chat");
+              }}
+            />
+          ) : null}
         </View>
       </View>
     </View>
   );
 }
+
+const launcherDraft = signal("");
 
 void (async () => {
   await loadProjects();
@@ -98,4 +173,13 @@ void (async () => {
 
 mount(App);
 
-export { App, loadProjects, loadSessions, selectProject, projectsError, sessionsError };
+export {
+  App,
+  loadProjects,
+  loadSessions,
+  selectProject,
+  projectsError,
+  sessionsError,
+  launcherOpen,
+  store,
+};
