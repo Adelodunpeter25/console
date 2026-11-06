@@ -314,6 +314,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console-nsh"
+version = "0.1.0"
+dependencies = [
+ "console-core",
+ "nsh-base",
+ "nsh-core",
+ "tokio",
+]
+
+[[package]]
 name = "console-proto"
 version = "0.1.0"
 dependencies = [
@@ -1341,16 +1351,6 @@ checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
 dependencies = [
  "memchr",
  "minimal-lexical",
-]
-
-[[package]]
-name = "nsh-app-console-nsh"
-version = "0.1.0"
-dependencies = [
- "console-core",
- "nsh-base",
- "nsh-core",
- "tokio",
 ]
 
 [[package]]

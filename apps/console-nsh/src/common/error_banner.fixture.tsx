@@ -7,7 +7,7 @@ import { Text, View, mount } from "nsh";
 
 function Fixture() {
   return (
-    <View class="h-32 w-[800px] justify-center">
+    <View class="w-full p-2">
       <ErrorBanner
         message="Session failed to start: connection refused"
         onCopied={() => dismissed.set("yes")}

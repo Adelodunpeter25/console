@@ -22,9 +22,7 @@ export function ErrorBanner(props: {
   return (
     <CenteredStripe paddingY={6}>
       <View class="w-full max-w-[768px] flex-row items-center gap-1.5 rounded border border-destructive/35 bg-card px-2.5 py-[7px]">
-        {/* flex-1 here would break press hit-testing on the copy button
-            (an nsh layout quirk), so the text sizes naturally. */}
-        <Text class="text-[11.5px] text-destructive">
+        <Text class="min-w-0 flex-1 text-[11.5px] text-destructive">
           {message()}
         </Text>
         <CopyButton id="error-copy" content={message} onCopied={props.onCopied} />
