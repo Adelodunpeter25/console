@@ -29,6 +29,19 @@ pub fn clone_project_body(url: &str, parent_dir: &str, name: Option<&str>) -> Va
     body
 }
 
+/// Request body for `POST /api/sessions/from-repo`.
+///
+/// Same shape rules as `clone_project_body`: camelCase keys, and `name` is
+/// omitted rather than sent as null when the caller has none — the server
+/// derives the folder (and the reuse check) from the URL's last segment.
+pub fn repo_task_body(url: &str, name: Option<&str>) -> Value {
+    let mut body = json!({ "url": url });
+    if let Some(name) = name.filter(|name| !name.trim().is_empty()) {
+        body["name"] = json!(name);
+    }
+    body
+}
+
 /// Error marker for the server's 409 reply.
 ///
 /// A clone of a private repo with no stored token answers 409 rather than 400
@@ -200,6 +213,66 @@ impl ProjectService {
             .context("Failed to parse clone project response")?;
         if body.success {
             body.data.ok_or_else(|| anyhow!("Project data is missing"))
+        } else {
+            Err(bootstrap_error(status, body.error))
+        }
+    }
+
+    /// `GET /api/github/repos` — the connected account's repositories, most
+    /// recently pushed first, for the project menu's GitHub section. Not
+    /// connected (or a revoked token) fails with [`GithubNotConnected`] —
+    /// check with [`is_github_not_connected`] so the picker can point at
+    /// Accounts.
+    pub async fn list_github_repos(&self) -> Result<Vec<GithubRepo>> {
+        let url = self.transport.url("/api/github/repos").await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to list GitHub repositories")?;
+
+        let status = resp.status();
+        let body: ApiResponse<Vec<GithubRepo>> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse GitHub repositories response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(bootstrap_error(status, body.error))
+        }
+    }
+
+    /// `POST /api/sessions/from-repo` — the one-tap repo-picker path: the
+    /// server clones the repo (or reuses an already-registered project at
+    /// its default location), registers it, and creates the session. The
+    /// caller opens the session and prompts through the normal run flow.
+    /// Not-connected fails with [`GithubNotConnected`] like clone does.
+    pub async fn create_session_from_repo(&self, url: &str, name: Option<&str>) -> Result<RepoTask> {
+        let body = repo_task_body(url, name);
+        let endpoint = self.transport.url("/api/sessions/from-repo").await;
+        let resp = self
+            .transport
+            .client()
+            .post(&endpoint)
+            .headers(self.transport.build_headers().await)
+            .json(&body)
+            .send()
+            .await
+            .context("Failed to start task from repository")?;
+
+        let status = resp.status();
+        let body: ApiResponse<RepoTask> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse repository task response")?;
+        if body.success {
+            body.data.ok_or_else(|| anyhow!("Repository task data is missing"))
         } else {
             Err(bootstrap_error(status, body.error))
         }

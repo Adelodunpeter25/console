@@ -476,6 +476,26 @@ impl ConsoleDesktopApp {
         self.close_new_project_dialog(cx);
     }
 
+    /// Mirror a repo task's results into local state and open the fresh
+    /// session — the success path of the project menu's GitHub section.
+    /// The server registered the project and created the session; this only
+    /// mirrors them, then `select_and_open_session` handles the workspace
+    /// switch (it reads the session's project).
+    pub fn adopt_repo_task(
+        &mut self,
+        task: console_core::types::RepoTask,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.projects.iter().any(|p| p.id == task.project.id) {
+            Rc::make_mut(&mut self.projects).push(task.project.clone());
+        }
+        if !self.sessions.iter().any(|s| s.id == task.session.id) {
+            Rc::make_mut(&mut self.sessions).push(task.session.clone());
+        }
+        crate::window::broadcast_settings_refresh(cx);
+        self.select_and_open_session(task.session.id.clone(), cx);
+    }
+
     /// Check out a branch in the selected pane's project and refresh its branch list.
     pub fn checkout_branch_for_pane(
         &mut self,

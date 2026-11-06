@@ -10,7 +10,7 @@
 
 use std::rc::Rc;
 
-use console_core::{ContextSnapshot, GitBranchInfo, ProjectInfo, UsageReport};
+use console_core::{ContextSnapshot, GithubRepo, GitBranchInfo, ProjectInfo, UsageReport};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, Styled, Window, div, px,
 };
@@ -29,6 +29,12 @@ pub struct WorkspaceFooter {
     is_git_repository: bool,
     branch_pending: bool,
     project_locked: bool,
+    /// Repositories from the connected GitHub account for the menu's GitHub
+    /// section. None until the first fetch; `github_repos_error` then says
+    /// why (None error + None repos means not connected).
+    github_repos: Option<Rc<Vec<GithubRepo>>>,
+    github_repos_loading: bool,
+    github_repos_error: Option<String>,
     project_menu: ContextMenuHandle,
     branch_menu: ContextMenuHandle,
     usage_menu: ContextMenuHandle,
@@ -38,6 +44,9 @@ pub struct WorkspaceFooter {
     on_select_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_open_github_repo: Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,
+    on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_select_branch: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_worktree: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
@@ -60,6 +69,9 @@ impl WorkspaceFooter {
         on_select_project: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_project: impl Fn(&mut Window, &mut App) + 'static,
         on_no_project: impl Fn(&mut Window, &mut App) + 'static,
+        on_open_github_repo: impl Fn(GithubRepo, &mut Window, &mut App) + 'static,
+        on_refresh_github_repos: impl Fn(&mut Window, &mut App) + 'static,
+        on_connect_github: impl Fn(&mut Window, &mut App) + 'static,
         on_select_branch: impl Fn(String, &mut Window, &mut App) + 'static,
         on_new_worktree: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
@@ -71,6 +83,9 @@ impl WorkspaceFooter {
             is_git_repository,
             branch_pending,
             project_locked: false,
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
             project_menu,
             branch_menu,
             usage_menu,
@@ -80,6 +95,9 @@ impl WorkspaceFooter {
             on_select_project: Rc::new(on_select_project),
             on_new_project: Rc::new(on_new_project),
             on_no_project: Rc::new(on_no_project),
+            on_open_github_repo: Rc::new(on_open_github_repo),
+            on_refresh_github_repos: Rc::new(on_refresh_github_repos),
+            on_connect_github: Rc::new(on_connect_github),
             on_select_branch: Rc::new(on_select_branch),
             on_new_worktree: Rc::new(on_new_worktree),
         }
@@ -90,6 +108,21 @@ impl WorkspaceFooter {
     /// the chip.
     pub fn project_locked(mut self, locked: bool) -> Self {
         self.project_locked = locked;
+        self
+    }
+
+    /// Supply the GitHub section's data: the connected account's repos, plus
+    /// loading and error flags. Without this the menu simply has no GitHub
+    /// section.
+    pub fn github_section(
+        mut self,
+        repos: Option<Rc<Vec<GithubRepo>>>,
+        loading: bool,
+        error: Option<String>,
+    ) -> Self {
+        self.github_repos = repos;
+        self.github_repos_loading = loading;
+        self.github_repos_error = error;
         self
     }
 }
@@ -174,6 +207,81 @@ impl RenderOnce for WorkspaceFooter {
                             .icon(IconName::X.path())
                             .selected(selected_id.is_none()),
                         );
+                        let github_repos = self.github_repos.clone();
+                        let github_repos_loading = self.github_repos_loading;
+                        let github_repos_error = self.github_repos_error.clone();
+                        let on_open_github_repo = self.on_open_github_repo.clone();
+                        let on_refresh_github_repos = self.on_refresh_github_repos.clone();
+                        let on_connect_github = self.on_connect_github.clone();
+                        items.push(MenuItem::Separator);
+                        items.push(MenuItem::Header("GitHub".into()));
+                        if github_repos_loading {
+                            items.push(
+                                MenuItem::new("Loading repositories…", |_, _| {})
+                                    .disabled(true),
+                            );
+                        } else if let Some(repos) = github_repos {
+                            if repos.is_empty() {
+                                items.push(
+                                    MenuItem::new("No repositories found", |_, _| {})
+                                        .disabled(true),
+                                );
+                            }
+                            for repo in repos.iter().take(20) {
+                                let repo = repo.clone();
+                                items.push(
+                                    MenuItem::new(repo.name.clone(), {
+                                        let on_open_github_repo =
+                                            on_open_github_repo.clone();
+                                        move |window, cx| {
+                                            (on_open_github_repo)(repo.clone(), window, cx);
+                                        }
+                                    })
+                                    .icon(IconName::Github.path()),
+                                );
+                            }
+                            items.push(
+                                MenuItem::new("Refresh", {
+                                    let on_refresh_github_repos =
+                                        on_refresh_github_repos.clone();
+                                    move |window, cx| {
+                                        (on_refresh_github_repos)(window, cx);
+                                    }
+                                })
+                                .icon(IconName::Refresh.path()),
+                            );
+                        } else if let Some(error) = github_repos_error {
+                            // A real failure (network, server). The text is
+                            // too long for a menu row, so the row stays
+                            // inert and the retry sits under it.
+                            items.push(
+                                MenuItem::new("Couldn't load repositories", |_, _| {})
+                                    .disabled(true),
+                            );
+                            log::warn!("github repo list error: {error}");
+                            items.push(
+                                MenuItem::new("Retry", {
+                                    let on_refresh_github_repos =
+                                        on_refresh_github_repos.clone();
+                                    move |window, cx| {
+                                        (on_refresh_github_repos)(window, cx);
+                                    }
+                                })
+                                .icon(IconName::Refresh.path()),
+                            );
+                        } else {
+                            // Not connected: the fetch reports this as a
+                            // state, not an error. Offer the handoff.
+                            items.push(
+                                MenuItem::new("Connect GitHub…", {
+                                    let on_connect_github = on_connect_github.clone();
+                                    move |window, cx| {
+                                        (on_connect_github)(window, cx);
+                                    }
+                                })
+                                .icon(IconName::Github.path()),
+                            );
+                        }
                         items
                     },
                 )
