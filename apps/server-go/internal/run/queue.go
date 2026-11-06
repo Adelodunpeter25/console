@@ -4,6 +4,7 @@
 package run
 
 import (
+	"errors"
 	"log/slog"
 	"time"
 
@@ -46,6 +47,26 @@ func (s *Service) QueuePrompt(sessionID string, dto Prompt) (*types.QueuedPrompt
 		hub.Broadcast(loop.Event{Kind: loop.EventQueueUpdated, Queued: qp})
 	}
 	return qp, nil
+}
+
+// startStagedIfIdle runs the staged prompt now when no run is active and
+// reports whether it did. If the run that would drain it started meanwhile,
+// the prompt goes back in the queue.
+func (s *Service) startStagedIfIdle(sessionID string) (bool, error) {
+	if s.IsActive(sessionID) {
+		return false, nil
+	}
+	staged, ok := s.takeStaged(sessionID)
+	if !ok {
+		return false, nil
+	}
+	if _, err := s.StartRun(sessionID, staged); err != nil {
+		if errors.Is(err, ErrActive) {
+			_, err = s.QueuePrompt(sessionID, staged)
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // EditQueuedPrompt edits the staged prompt in place (keeps its id).
@@ -125,7 +146,10 @@ func (s *Service) Steer(sessionID string, dto Prompt) (bool, error) {
 	// unlocking would race execute()'s turn-boundary swap (turns.go) and
 	// could cancel the wrong (not-yet-started) turn's context instead.
 	if !s.cancelActive(sessionID) {
-		return false, nil
+		// The run ended first: drop the prompt just staged, since the caller
+		// is told no run was steered and would otherwise send it again.
+		_, err := s.ClearQueuedPrompt(sessionID)
+		return false, err
 	}
 	s.decisions.RejectAllForSession(sessionID, "Run steered")
 	slog.Info("run steered", "session", sessionID)

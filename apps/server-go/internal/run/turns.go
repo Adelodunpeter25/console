@@ -115,6 +115,11 @@ func (s *Service) execute(ctx context.Context, sessionID, runID string, first Pr
 				hub.Close(OutcomeDone)
 				if runErr == nil {
 					s.notifyDone(sessionID)
+					// A prompt queued after nextTurn looked but before the slot was
+					// released would never be drained: nothing is running to drain it.
+					if _, err := s.startStagedIfIdle(sessionID); err != nil {
+						slog.Warn("start prompt queued during settle", "session", sessionID, "error", err)
+					}
 				}
 			}
 			return

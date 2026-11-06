@@ -37,19 +37,13 @@ func (s *Service) promptSession(sessionID, text, modelID, provider, approval, th
 	if _, err := s.QueuePrompt(sessionID, dto); err != nil {
 		return false, mapPromptErr(sessionID, err)
 	}
-	// The run may have settled between the check and the staging: a staged
-	// prompt is only drained by a run that is still going, so one left behind
-	// would sit unseen until the next run. Take it back and start it now. If
-	// the run drained it first, takeStaged finds nothing and we are done.
-	if !s.IsActive(sessionID) {
-		if staged, ok := s.takeStaged(sessionID); ok {
-			if _, err := s.StartRun(sessionID, staged); err != nil && !errors.Is(err, ErrActive) {
-				return false, mapPromptErr(sessionID, err)
-			}
-			return false, nil
-		}
+	// The run may have settled between the check and the staging; start the
+	// prompt now rather than leave it unseen until the next run.
+	started, err := s.startStagedIfIdle(sessionID)
+	if err != nil {
+		return false, mapPromptErr(sessionID, err)
 	}
-	return true, nil
+	return !started, nil
 }
 
 // hasStaged reports whether a prompt is waiting for the session's next turn.

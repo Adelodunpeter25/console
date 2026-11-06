@@ -213,6 +213,8 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 	app.Post("/api/sessions/:id/abort", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		if !runs.Abort(sessionID) {
+			// A prompt staged just as the run ended would otherwise survive Stop.
+			_, _ = runs.ClearQueuedPrompt(sessionID)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No active run found for session '" + sessionID + "'."})
 		}
 		if _, err := runs.ClearQueuedPrompt(sessionID); err != nil {
