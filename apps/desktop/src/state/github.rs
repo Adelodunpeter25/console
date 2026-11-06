@@ -151,10 +151,19 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.github_repos_loading = false;
+                        // An open floating composer paints its own copy of
+                        // this list — keep it in step.
+                        let mirror = this.floating_composer.open;
                         match result {
                             Ok(repos) => {
-                                this.github_repos = Some(std::rc::Rc::new(repos));
+                                this.github_repos = Some(std::rc::Rc::new(repos.clone()));
                                 this.github_repos_error = None;
+                                if mirror {
+                                    this.floating_composer.github_repos =
+                                        Some(std::rc::Rc::new(repos));
+                                    this.floating_composer.github_repos_loading = false;
+                                    this.floating_composer.github_repos_error = None;
+                                }
                             }
                             // Not-connected is a state, not a failure: the
                             // menu shows its own "connect" row for it, not
@@ -165,9 +174,20 @@ impl ConsoleDesktopApp {
                                 this.github_repos = None;
                                 this.github_repos_error = None;
                                 this.github_status = None;
+                                if mirror {
+                                    this.floating_composer.github_repos = None;
+                                    this.floating_composer.github_repos_loading = false;
+                                    this.floating_composer.github_repos_error = None;
+                                }
                             }
                             Err(error) => {
+                                log::warn!("github repo list error: {error}");
                                 this.github_repos_error = Some(error.to_string());
+                                if mirror {
+                                    this.floating_composer.github_repos_loading = false;
+                                    this.floating_composer.github_repos_error =
+                                        Some(error.to_string());
+                                }
                             }
                         }
                         cx.notify();
@@ -228,7 +248,7 @@ impl ConsoleDesktopApp {
     /// Open Settings on the Providers tab, where the GitHub token lives.
     /// Runs on the main window even when called from a pane menu, mirroring
     /// the New-project dialog's handoff.
-    fn open_github_settings(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn open_github_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(main_handle) = self.main_window_handle {
             let app_entity = cx.entity().clone();
             cx.defer(move |cx| {

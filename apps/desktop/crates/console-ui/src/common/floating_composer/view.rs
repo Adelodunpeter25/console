@@ -9,8 +9,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
-    SelectedModel, ThinkingLevel,
+    ApprovalMode, GitBranchInfo, GithubRepo, ImageAttachment, Model, ProjectInfo,
+    ProviderCatalogEntry, SelectedModel, ThinkingLevel,
 };
 use gpui::{
     App, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement, ParentElement,
@@ -30,10 +30,19 @@ use crate::primitives::{
 };
 use crate::theme::Theme;
 
+use super::super::github_menu::github_menu_section;
+
 /// One frame of state to paint.
 pub struct Data {
     pub projects: Rc<Vec<ProjectInfo>>,
     pub selected_project_id: Option<String>,
+    /// The connected GitHub account's repos for the project menu's GitHub
+    /// section, with load/error flags (None error + None repos = not
+    /// connected). Mirrored from app state on every frame, so a refresh from
+    /// any menu reaches an open card.
+    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
     pub branches: Rc<Vec<GitBranchInfo>>,
     pub branch: BranchChoice,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
@@ -62,6 +71,9 @@ pub struct FloatingComposerView {
     data: Data,
     on_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_choose_github_repo: Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,
+    on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_branch: Rc<dyn Fn(BranchChoice, &mut Window, &mut App) + 'static>,
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
@@ -99,6 +111,9 @@ impl FloatingComposerView {
             data: Data {
                 projects: Rc::new(Vec::new()),
                 selected_project_id: None,
+                github_repos: None,
+                github_repos_loading: false,
+                github_repos_error: None,
                 branches: Rc::new(Vec::new()),
                 branch: BranchChoice::default(),
                 providers: Rc::new(Vec::new()),
@@ -117,6 +132,9 @@ impl FloatingComposerView {
             },
             on_dismiss: Rc::new(|_, _| {}),
             on_choose_project: Rc::new(|_, _, _| {}),
+            on_choose_github_repo: Rc::new(|_, _, _| {}),
+            on_refresh_github_repos: Rc::new(|_, _| {}),
+            on_connect_github: Rc::new(|_, _| {}),
             on_choose_branch: Rc::new(|_, _, _| {}),
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
@@ -152,6 +170,29 @@ impl FloatingComposerView {
         f: impl Fn(String, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_choose_project = Rc::new(f);
+        self
+    }
+
+    /// A GitHub repo row was clicked: clone it (server-side) and select the
+    /// resulting project for this card's submit.
+    pub fn on_choose_github_repo(
+        mut self,
+        f: impl Fn(GithubRepo, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_github_repo = Rc::new(f);
+        self
+    }
+
+    pub fn on_refresh_github_repos(
+        mut self,
+        f: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_refresh_github_repos = Rc::new(f);
+        self
+    }
+
+    pub fn on_connect_github(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_connect_github = Rc::new(f);
         self
     }
 
@@ -270,38 +311,53 @@ impl FloatingComposerView {
         let project_trigger = MenuChip::new("floating-project-chip")
             .height(px(28.0))
             .icon(IconName::Folder.path(), theme.text_tertiary)
-            .label(project_label)
-            .disabled(data.projects.is_empty());
+            .label(project_label);
         let on_choose_project = self.on_choose_project.clone();
-        let has_projects = !data.projects.is_empty();
-        let project_control: gpui::AnyElement = if has_projects {
-            dropdown_menu(
-                project_trigger,
-                "floating-project-menu",
-                &self.project_menu,
-                MenuAlign::AboveLeft,
-                move |_| {
-                    let projects = data.projects.clone();
-                    let selected = selected_project_id.clone();
-                    let on_choose_project = on_choose_project.clone();
-                    projects
-                        .iter()
-                        .map(|project| {
-                            let id = project.id.clone();
-                            let name = project.name.clone();
-                            let on_choose_project = on_choose_project.clone();
-                            MenuItem::new(name, move |window, cx| {
-                                on_choose_project(id.clone(), window, cx);
-                            })
-                            .icon(IconName::Folder.path())
-                            .selected(selected.as_deref() == Some(project.id.as_str()))
+        let on_choose_github_repo = self.on_choose_github_repo.clone();
+        let on_refresh_github_repos = self.on_refresh_github_repos.clone();
+        let on_connect_github = self.on_connect_github.clone();
+        let project_control: gpui::AnyElement = dropdown_menu(
+            project_trigger,
+            "floating-project-menu",
+            &self.project_menu,
+            MenuAlign::AboveLeft,
+            move |_| {
+                let projects = data.projects.clone();
+                let selected = selected_project_id.clone();
+                let on_choose_project = on_choose_project.clone();
+                let mut items: Vec<MenuItem> = projects
+                    .iter()
+                    .map(|project| {
+                        let id = project.id.clone();
+                        let name = project.name.clone();
+                        let on_choose_project = on_choose_project.clone();
+                        MenuItem::new(name, move |window, cx| {
+                            on_choose_project(id.clone(), window, cx);
                         })
-                        .collect()
-                },
-            )
-        } else {
-            project_trigger.into_any_element()
-        };
+                        .icon(IconName::Folder.path())
+                        .selected(selected.as_deref() == Some(project.id.as_str()))
+                    })
+                    .collect();
+                // The GitHub section needs no local projects to make sense —
+                // cloning from GitHub is how the list grows in the first
+                // place — so the menu always offers it.
+                if !items.is_empty() {
+                    items.push(MenuItem::Separator);
+                }
+                let github_repos = data.github_repos.clone();
+                let github_repos_loading = data.github_repos_loading;
+                let github_repos_error = data.github_repos_error.clone();
+                items.extend(github_menu_section(
+                    github_repos,
+                    github_repos_loading,
+                    github_repos_error.is_some(),
+                    &on_choose_github_repo,
+                    &on_refresh_github_repos,
+                    &on_connect_github,
+                ));
+                items
+            },
+        );
 
         // ---- branch selector, painted in the header beside the project ----
         // Same treatment as the project chip beside it: no outline, no filled

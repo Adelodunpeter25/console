@@ -25,8 +25,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use console_core::{
-    ApprovalMode, GitBranchInfo, ImageAttachment, Model, ProjectInfo, ProviderCatalogEntry,
-    SelectedModel, ThinkingLevel,
+    ApprovalMode, GitBranchInfo, GithubRepo, ImageAttachment, Model, ProjectInfo,
+    ProviderCatalogEntry, SelectedModel, ThinkingLevel,
 };
 use gpui::{App, AppContext, Entity, KeyBinding, Window};
 
@@ -115,6 +115,9 @@ pub struct FloatingSubmit {
 pub struct FloatingSnapshot {
     pub projects: Rc<Vec<ProjectInfo>>,
     pub selected_project_id: Option<String>,
+    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
     pub branches: Rc<Vec<GitBranchInfo>>,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
     pub models_by_provider: Rc<HashMap<String, Vec<Model>>>,
@@ -132,6 +135,9 @@ impl FloatingSnapshot {
         Self {
             projects: Rc::new(Vec::new()),
             selected_project_id: None,
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
             branches: Rc::new(Vec::new()),
             providers: Rc::new(Vec::new()),
             models_by_provider: Rc::new(HashMap::new()),
@@ -162,6 +168,12 @@ pub struct FloatingComposerState {
     pub error: Option<String>,
     pub projects: Rc<Vec<ProjectInfo>>,
     pub selected_project_id: Option<String>,
+    /// The connected GitHub account's repos for the project menu's GitHub
+    /// section (None error + None repos = not connected). Seeded on open and
+    /// refreshed in place, so a refresh from any menu reaches an open card.
+    pub github_repos: Option<Rc<Vec<GithubRepo>>>,
+    pub github_repos_loading: bool,
+    pub github_repos_error: Option<String>,
     pub branches: Rc<Vec<GitBranchInfo>>,
     pub branch: BranchChoice,
     pub providers: Rc<Vec<ProviderCatalogEntry>>,
@@ -202,6 +214,9 @@ impl FloatingComposerState {
             error: None,
             projects: Rc::new(Vec::new()),
             selected_project_id: None,
+            github_repos: None,
+            github_repos_loading: false,
+            github_repos_error: None,
             branches: Rc::new(Vec::new()),
             branch: BranchChoice::default(),
             providers: Rc::new(Vec::new()),
@@ -223,6 +238,9 @@ impl FloatingComposerState {
         let FloatingSnapshot {
             projects,
             selected_project_id,
+            github_repos,
+            github_repos_loading,
+            github_repos_error,
             branches,
             providers,
             models_by_provider,
@@ -235,6 +253,9 @@ impl FloatingComposerState {
 
         self.projects = projects;
         self.selected_project_id = selected_project_id;
+        self.github_repos = github_repos;
+        self.github_repos_loading = github_repos_loading;
+        self.github_repos_error = github_repos_error;
         self.branches = branches;
         self.providers = providers;
         self.models_by_provider = models_by_provider;
@@ -328,6 +349,9 @@ impl FloatingComposerState {
         FloatingComposerData {
             projects: self.projects.clone(),
             selected_project_id: self.selected_project_id.clone(),
+            github_repos: self.github_repos.clone(),
+            github_repos_loading: self.github_repos_loading,
+            github_repos_error: self.github_repos_error.clone(),
             branches: self.branches.clone(),
             branch: self.branch.clone(),
             providers: self.providers.clone(),

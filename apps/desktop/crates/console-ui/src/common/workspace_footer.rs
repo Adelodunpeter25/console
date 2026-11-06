@@ -20,6 +20,8 @@ use crate::primitives::{
 };
 use crate::theme::Theme;
 
+use super::github_menu::github_menu_section;
+
 #[derive(IntoElement)]
 pub struct WorkspaceFooter {
     projects: Rc<Vec<ProjectInfo>>,
@@ -213,75 +215,14 @@ impl RenderOnce for WorkspaceFooter {
                         let on_open_github_repo = self.on_open_github_repo.clone();
                         let on_refresh_github_repos = self.on_refresh_github_repos.clone();
                         let on_connect_github = self.on_connect_github.clone();
-                        items.push(MenuItem::Separator);
-                        items.push(MenuItem::Header("GitHub".into()));
-                        if github_repos_loading {
-                            items.push(
-                                MenuItem::new("Loading repositories…", |_, _| {})
-                                    .disabled(true),
-                            );
-                        } else if let Some(repos) = github_repos {
-                            if repos.is_empty() {
-                                items.push(
-                                    MenuItem::new("No repositories found", |_, _| {})
-                                        .disabled(true),
-                                );
-                            }
-                            for repo in repos.iter().take(20) {
-                                let repo = repo.clone();
-                                items.push(
-                                    MenuItem::new(repo.name.clone(), {
-                                        let on_open_github_repo =
-                                            on_open_github_repo.clone();
-                                        move |window, cx| {
-                                            (on_open_github_repo)(repo.clone(), window, cx);
-                                        }
-                                    })
-                                    .icon(IconName::Github.path()),
-                                );
-                            }
-                            items.push(
-                                MenuItem::new("Refresh", {
-                                    let on_refresh_github_repos =
-                                        on_refresh_github_repos.clone();
-                                    move |window, cx| {
-                                        (on_refresh_github_repos)(window, cx);
-                                    }
-                                })
-                                .icon(IconName::Refresh.path()),
-                            );
-                        } else if let Some(error) = github_repos_error {
-                            // A real failure (network, server). The text is
-                            // too long for a menu row, so the row stays
-                            // inert and the retry sits under it.
-                            items.push(
-                                MenuItem::new("Couldn't load repositories", |_, _| {})
-                                    .disabled(true),
-                            );
-                            log::warn!("github repo list error: {error}");
-                            items.push(
-                                MenuItem::new("Retry", {
-                                    let on_refresh_github_repos =
-                                        on_refresh_github_repos.clone();
-                                    move |window, cx| {
-                                        (on_refresh_github_repos)(window, cx);
-                                    }
-                                })
-                                .icon(IconName::Refresh.path()),
-                            );
-                        } else {
-                            // Not connected: the fetch reports this as a
-                            // state, not an error. Offer the handoff.
-                            items.push(
-                                MenuItem::new("Connect GitHub…", {
-                                    let on_connect_github = on_connect_github.clone();
-                                    move |window, cx| {
-                                        (on_connect_github)(window, cx);
-                                    }
-                                })
-                                .icon(IconName::Github.path()),
-                            );
-                        }
+                        items.extend(github_menu_section(
+                            github_repos,
+                            github_repos_loading,
+                            github_repos_error.is_some(),
+                            &on_open_github_repo,
+                            &on_refresh_github_repos,
+                            &on_connect_github,
+                        ));
                         items
                     },
                 )

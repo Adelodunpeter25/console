@@ -1013,10 +1013,15 @@ impl ConsoleDesktopApp {
                         move |window, cx| {
                             if let Some(app) = entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    // Same handoff the New-project dialog
-                                    // uses: token lives in Settings >
-                                    // Providers.
-                                    this.open_settings(window, cx)
+                                    // Not open_settings: it toggles, and
+                                    // closing settings the user already had
+                                    // open would be a surprise from a menu
+                                    // row.
+                                    this.open_settings_tab(
+                                        console_ui::settings::SettingsTab::Providers,
+                                        window,
+                                        cx,
+                                    );
                                 });
                             }
                         }

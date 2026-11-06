@@ -57,6 +57,9 @@ impl ConsoleDesktopApp {
         let snapshot = FloatingSnapshot {
             projects: self.projects.clone(),
             selected_project_id: project_id,
+            github_repos: self.github_repos.clone(),
+            github_repos_loading: self.github_repos_loading,
+            github_repos_error: self.github_repos_error.clone(),
             branches: self.branches.clone(),
             providers: self.providers.clone(),
             models_by_provider: self.models_by_provider.clone(),
@@ -155,6 +158,68 @@ impl ConsoleDesktopApp {
         self.floating_composer.choose_project(project_id.clone());
         self.refresh_branches_for_project(&project_id, cx);
         cx.notify();
+    }
+
+    /// A GitHub repo row in the card's project menu was clicked: clone it
+    /// server-side (the picker flow — the server picks the folder) and
+    /// select the resulting project for this card's submit. Unlike the
+    /// footer's flow, no session is opened here: the card's whole point is
+    /// that the session is created on submit, carrying the prompt the user
+    /// is already typing.
+    pub fn floating_clone_repo(
+        &mut self,
+        repo: console_core::GithubRepo,
+        cx: &mut Context<Self>,
+    ) {
+        if self.repo_task_busy {
+            return;
+        }
+        self.repo_task_busy = true;
+        self.floating_composer.error = None;
+        cx.notify();
+
+        let client = self.client.clone();
+        let url = repo.clone_target();
+        cx.spawn(async move |entity, cx| {
+            let result = client.projects.clone_project(&url, "", None).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.repo_task_busy = false;
+                        match result {
+                            Ok(project) => {
+                                if !this.projects.iter().any(|p| p.id == project.id) {
+                                    Rc::make_mut(&mut this.projects).push(project.clone());
+                                }
+                                // The card paints its own copy of the list.
+                                if !this
+                                    .floating_composer
+                                    .projects
+                                    .iter()
+                                    .any(|p| p.id == project.id)
+                                {
+                                    Rc::make_mut(&mut this.floating_composer.projects)
+                                        .push(project.clone());
+                                }
+                                this.floating_project_changed(project.id, cx);
+                            }
+                            // Same handoff as the footer: a 409 means the
+                            // token is missing or dead — go to Accounts.
+                            Err(error) if console_core::is_github_not_connected(&error) => {
+                                this.github_status = None;
+                                this.github_repos = None;
+                                this.open_github_settings(cx);
+                            }
+                            Err(error) => {
+                                this.floating_composer.error = Some(error.to_string());
+                                cx.notify();
+                            }
+                        }
+                    });
+                }
+            });
+        })
+        .detach();
     }
 
     /// A different model was picked: which thinking levels exist depends on the
@@ -328,6 +393,42 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| {
                         this.floating_composer.project_menu.close(window, cx);
                         this.floating_project_changed(id, cx);
+                    });
+                }
+            }
+        })
+        .on_choose_github_repo({
+            let entity = entity.clone();
+            move |repo: console_core::GithubRepo, window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.floating_composer.project_menu.close(window, cx);
+                        this.floating_clone_repo(repo, cx);
+                    });
+                }
+            }
+        })
+        .on_refresh_github_repos({
+            let entity = entity.clone();
+            move |_window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| this.refresh_github_repos(cx));
+                }
+            }
+        })
+        .on_connect_github({
+            let entity = entity.clone();
+            move |window, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        // Not open_settings: it toggles, and closing the
+                        // settings the user already had open would be a
+                        // surprise coming from a menu row.
+                        this.open_settings_tab(
+                            console_ui::settings::SettingsTab::Providers,
+                            window,
+                            cx,
+                        );
                     });
                 }
             }
