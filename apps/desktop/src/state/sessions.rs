@@ -1298,7 +1298,7 @@ impl ConsoleDesktopApp {
                                 let queue_session_id = session_id.clone();
                                 cx.spawn(async move |entity, cx| {
                                     if let Ok(q) =
-                                        queue_client.runs.get_queued_prompt(&queue_session_id).await
+                                        queue_client.runs.get_queued_prompts(&queue_session_id).await
                                     {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {
@@ -1310,7 +1310,7 @@ impl ConsoleDesktopApp {
                                                     {
                                                         return;
                                                     }
-                                                    this.set_queued_prompt_for_session(
+                                                    this.set_queue_from_server(
                                                         &queue_session_id,
                                                         q,
                                                     );

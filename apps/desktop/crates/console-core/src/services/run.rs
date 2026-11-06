@@ -311,6 +311,74 @@ impl RunService {
         }
     }
 
+    /// Every queued prompt, next to run first.
+    pub async fn get_queued_prompts(&self, session_id: &str) -> Result<Vec<QueuedPrompt>> {
+        #[derive(serde::Deserialize)]
+        struct QueuedPrompts {
+            #[serde(default, rename = "queuedPrompts")]
+            queued_prompts: Vec<QueuedPrompt>,
+        }
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue/all", session_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .get(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to get queued prompts")?;
+
+        let body: ApiResponse<QueuedPrompts> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse queued prompts response")?;
+        if body.success {
+            Ok(body.data.map(|d| d.queued_prompts).unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to get queued prompts".into())
+            ))
+        }
+    }
+
+    /// Remove one queued prompt; true when it was queued.
+    pub async fn delete_queued_prompt(&self, session_id: &str, queue_id: &str) -> Result<bool> {
+        let url = self
+            .transport
+            .url(&format!("/api/sessions/{}/queue/{}", session_id, queue_id))
+            .await;
+        let resp = self
+            .transport
+            .client()
+            .delete(&url)
+            .headers(self.transport.build_headers().await)
+            .send()
+            .await
+            .context("Failed to delete queued prompt")?;
+
+        let body: ApiResponse<serde_json::Value> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse delete queued prompt response")?;
+        if body.success {
+            Ok(body
+                .data
+                .and_then(|v| v.get("deleted").and_then(|b| b.as_bool()))
+                .unwrap_or(true))
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Failed to delete queued prompt".into())
+            ))
+        }
+    }
+
     pub async fn edit_queued_prompt(
         &self,
         session_id: &str,
