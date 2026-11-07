@@ -49,23 +49,6 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function selectProject(id: string) {
-  store_.selectProject(id);
-  selectedSessionId.set(null);
-  // The launcher's branch menu reads the selected project's branches (the
-  // desktop's floating composer does the same through the git service).
-  const path = store_.projects().find((p) => p.id === id)?.path ?? "";
-  if (path !== "") {
-    void backend
-      .gitBranches(backendUrl, path)
-      .then((raw) => JSON.parse(raw) as { branches?: GitBranchInfo[] })
-      .then((parsed) => launcherBranches.set(parsed.branches ?? []))
-      .catch(() => launcherBranches.set([]));
-  } else {
-    launcherBranches.set([]);
-  }
-}
-
 /// Opens a session's chat tab in the workspace (the sidebar and the
 /// launcher both land here). Real transcript wiring arrives with the chat
 /// pane content (2.4); the tab opens now so the shell is usable.
@@ -135,16 +118,12 @@ function App() {
       {paired() ? (
         <View class="flex flex-1 flex-row">
         <Sidebar
-          loading={store_.loading()}
           projects={store_.projects()}
-          projectsError={store_.projectsError()}
-          selectedProjectId={store_.selectedProjectId()}
           sessions={store_.sessions()}
           sessionsLoading={store_.sessionsLoading()}
           sessionsError={store_.sessionsError()}
           activeSessionId={selectedSessionId()}
           sortMode={sortMode()}
-          onProject={selectProject}
           onSession={selectSession}
           onSortMode={(mode) => sortMode.set(mode)}
           onNewChat={() => launcherOpen.set(true)}
