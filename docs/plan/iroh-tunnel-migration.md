@@ -55,14 +55,14 @@ Cloudflare — the relay is a long-lived TCP server, not a Worker workload.
 
 Behind the existing backend switch, so the relay keeps working throughout:
 
-- [ ] Go server: iroh endpoint via `iroh-go`, listens on an ALPN, serves the
+- [x] Go server: iroh endpoint via `iroh-go`, listens on an ALPN, serves the
       existing API over HTTP/1.1-on-iroh. Node ID + keypair stored in the
       tunnel dir alongside today's relay info.
 - [ ] Desktop: connect to the server by node ID, pairing flow works
       end-to-end over iroh.
 - [ ] Android: same, via the Kotlin binding.
 - [ ] Pairing QR emits/consumes the new node-ID format on all three ends.
-- [ ] CF relay backend remains default until the spike proves out.
+- [x] CF relay backend remains default until the spike proves out.
 
 ## Decision gate — measure before shipping
 
@@ -83,4 +83,26 @@ Behind the existing backend switch, so the relay keeps working throughout:
 
 ## Status
 
-Planning. No code written yet.
+Server side of Phase 1 done; desktop, Android and the pairing QR format are
+not started.
+
+Built: `internal/tunnel/irohbackend`, behind the `iroh` build tag, selected
+with `CONSOLE_RELAY=iroh`. One HTTP request per bidirectional stream on ALPN
+`console-device/1`, bridged to the loopback target. Key and node ID live in
+the tunnel dir (`iroh.key`, `iroh.json`). Test:
+`go test -tags iroh ./tests/tunnel/ -run TestIroh` (uses n0's public relay).
+
+Findings so far (decision gate):
+- `iroh-go` has no tags; pinned to a commit. Static libs exist for linux
+  amd64/arm64 (musl) only. No macOS or Windows, while CI ships both, so the
+  backend must stay behind a build tag. Linking the musl lib into a glibc
+  build works here.
+- The module needs `go 1.26.1` (go.mod bumped from 1.25.0) and the module
+  download is ~97 MB (it vendors the libs).
+- Stream EOF is `Read` returning (0 bytes, nil) after the peer's `Finish()`.
+- A fresh endpoint is only dialable after `Online()`; a client that dials
+  before its own `Online()` fails intermittently with an opaque `IrohError`.
+- `Online()` blocks forever with relays disabled; direct dial by address
+  works without it.
+- Errors are opaque; mismatched ALPN gives a bare `IrohError`.
+- Not yet measured: hole-punch rate on real networks, latency vs the relay.

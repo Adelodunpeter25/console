@@ -245,6 +245,15 @@ func startRemoteAccess(listenAddr string) func() {
 	}
 	target := net.JoinHostPort("127.0.0.1", port)
 	dir := filepath.Join(utils.ConsoleStorageDir(), "tunnel")
+	if tunnel.IrohSelected() {
+		stop, err := tunnel.StartIroh(dir, target, func(id string) {
+			slog.Info("remote access ready", "iroh_node_id", id)
+		})
+		if err != nil {
+			slog.Warn("remote access is unavailable", "error", err)
+		}
+		return stop
+	}
 	if tunnel.RelayEnabled() {
 		return startRelay(dir, target)
 	}

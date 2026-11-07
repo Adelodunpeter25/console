@@ -22,15 +22,25 @@ func RelayEnabled() bool {
 	return true
 }
 
+// IrohSelected reports whether CONSOLE_RELAY=iroh chose the iroh backend.
+func IrohSelected() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("CONSOLE_RELAY")), "iroh")
+}
+
 // Info is the public address of the active backend, as the CLI shows it.
 type Info struct {
 	URL string
+	// NodeID is the iroh node ID; set only by the iroh backend.
+	NodeID string
 	// Ready is false while an OpenTunnel certificate is still being issued.
 	Ready bool
 }
 
 // ReadInfo reports the active backend's stored address in dir, if any.
 func ReadInfo(dir string) (Info, bool) {
+	if IrohSelected() {
+		return irohInfo(dir)
+	}
 	if RelayEnabled() {
 		info, ok := cfrelay.ReadInfo(dir)
 		return Info{URL: info.URL, Ready: info.Ready}, ok

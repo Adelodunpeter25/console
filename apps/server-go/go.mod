@@ -1,8 +1,9 @@
 module github.com/Adelodunpeter25/console/apps/server-go
 
-go 1.25.0
+go 1.26.1
 
 require (
+	git.coopcloud.tech/decentral1se/iroh-go v0.0.0-20261031181753-e51a0607d130
 	github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73
 	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
