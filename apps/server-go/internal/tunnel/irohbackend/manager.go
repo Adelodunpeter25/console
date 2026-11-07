@@ -1,4 +1,4 @@
-//go:build iroh && linux && (amd64 || arm64)
+//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
 
 // Package irohbackend serves the local HTTP target over an iroh endpoint.
 //
@@ -17,8 +17,8 @@
 // back before closing.
 //
 // The package is behind the `iroh` build tag: the iroh-go FFI ships
-// static libraries for linux amd64/arm64 only today, so default builds —
-// and every CI platform — stay free of it. Build with `-tags iroh` to
+// static libraries for linux, macOS and windows-amd64 only (see the
+// Adelodunpeter25/iroh-go fork), so default builds stay free of it. Build with `-tags iroh` to
 // include it; the tunnel switch then picks this backend with
 // CONSOLE_RELAY=iroh.
 package irohbackend
@@ -33,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	iroh "git.coopcloud.tech/decentral1se/iroh-go"
+	iroh "github.com/Adelodunpeter25/iroh-go"
 )
 
 // onlineWait caps how long Start waits for the relay registration.

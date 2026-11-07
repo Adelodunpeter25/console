@@ -1,5 +1,5 @@
-git.coopcloud.tech/decentral1se/iroh-go v0.0.0-20261031181753-e51a0607d130 h1:lKpVCGqKz/H5M+nH67jm02E4TgYwxIHw1TWMRA9mJ6w=
-git.coopcloud.tech/decentral1se/iroh-go v0.0.0-20261031181753-e51a0607d130/go.mod h1:UdtdmIaX3URspGOweIFN1Xlv0KuRyHGKo7PDjtUxPqE=
+github.com/Adelodunpeter25/iroh-go v0.0.0-20261107171317-19ca66f78eed h1:fNo/6cwGvOiuoT0Yocl3NGvr2yDGxfyzHyLrQBNcZQs=
+github.com/Adelodunpeter25/iroh-go v0.0.0-20261107171317-19ca66f78eed/go.mod h1:+ul6B3sMRtSAgZrjqHXg6ZLdNWwhYstLT2MUF7Kh8Bc=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73 h1:MMs4dBDfLY0UUoVkPSF0P6q6h5PRe4xCp/K5caoSFQw=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=

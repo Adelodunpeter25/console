@@ -1,4 +1,4 @@
-//go:build iroh && linux && (amd64 || arm64)
+//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
 
 // The iroh backend end to end: a client dials the server by node ID alone
 // and carries a real HTTP request over a QUIC stream.
@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	iroh "git.coopcloud.tech/decentral1se/iroh-go"
+	iroh "github.com/Adelodunpeter25/iroh-go"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/irohbackend"
 )

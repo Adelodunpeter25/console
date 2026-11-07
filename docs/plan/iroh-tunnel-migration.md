@@ -88,10 +88,12 @@ Remaining (open):
 - [ ] Desktop: connect by node ID
 - [ ] Android: connect by node ID
 - [ ] Pairing QR node-ID format on all three ends
-- [ ] Fork `iroh-go` to our own repo (upstream rejects contributions and lags
-      the latest iroh), bump to latest iroh/iroh-ffi
-- [ ] Fork CI: build static libs for macOS and Windows
-- [ ] Point server-go at the fork and drop the linux-only build tag
+- [~] Fork `iroh-go` (Adelodunpeter25/iroh-go; upstream rejects contributions
+      and lags the latest iroh): forked; still to bump to latest iroh/iroh-ffi
+- [x] Fork CI builds static libs for macOS (x64, arm64) and Windows x64;
+      Intel mac is link-checked only, never run
+- [x] server-go points at the fork; the `iroh` tag now covers linux, macOS
+      and windows-amd64. CI for server-go does not build with the tag yet
 - [ ] Measure hole-punch rate and latency vs the relay
 
 Built: `internal/tunnel/irohbackend`, behind the `iroh` build tag, selected
@@ -101,9 +103,9 @@ the tunnel dir (`iroh.key`, `iroh.json`). Test:
 `go test -tags iroh ./tests/tunnel/ -run TestIroh` (uses n0's public relay).
 
 Findings so far (decision gate):
-- `iroh-go` has no tags; pinned to a commit. Static libs exist for linux
-  amd64/arm64 (musl) only. No macOS or Windows, while CI ships both, so the
-  backend must stay behind a build tag. Linking the musl lib into a glibc
+- `iroh-go` has no tags; pinned to a commit. Upstream has static libs for
+  linux amd64/arm64 (musl) only; our fork adds macOS and Windows. The backend
+  stays behind a build tag until server-go CI builds it on all platforms. Linking the musl lib into a glibc
   build works here.
 - The module needs `go 1.26.1` (go.mod bumped from 1.25.0) and the module
   download is ~97 MB (it vendors the libs).

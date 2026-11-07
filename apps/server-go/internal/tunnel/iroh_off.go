@@ -1,10 +1,10 @@
-//go:build !(iroh && linux && (amd64 || arm64))
+//go:build !(iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)))
 
 package tunnel
 
 import "errors"
 
-// IrohAvailable is false: build with -tags iroh on linux amd64/arm64.
+// IrohAvailable is false: build with -tags iroh on linux, macOS or windows-amd64.
 const IrohAvailable = false
 
 // StartIroh always fails in builds without the iroh backend.

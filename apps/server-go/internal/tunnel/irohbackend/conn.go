@@ -1,4 +1,4 @@
-//go:build iroh && linux && (amd64 || arm64)
+//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
 
 package irohbackend
 
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	iroh "git.coopcloud.tech/decentral1se/iroh-go"
+	iroh "github.com/Adelodunpeter25/iroh-go"
 )
 
 // errClosed is returned by reads and writes once the stream is shut.
