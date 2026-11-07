@@ -11,10 +11,10 @@
 // traffic when hole-punching fails.
 //
 // The API itself is plain HTTP/1.1 carried over bidirectional QUIC streams
-// on the console-device/1 ALPN, one request per stream: the client
-// half-closes (Finish) after the request, the bridge reads until that end,
-// forwards the request to the loopback target, and copies the response
-// back before closing.
+// on the console-device/1 ALPN. One stream is one TCP connection to the
+// loopback target, bridged byte for byte, so keep-alive, SSE and WebSocket
+// traffic behave as they do over TCP. A client that sends one request and
+// half-closes (Finish) gets the response and then EOF.
 //
 // The package is behind the `iroh` build tag: the iroh-go FFI ships
 // static libraries for linux, macOS and windows-amd64 only (see the
@@ -24,12 +24,12 @@
 package irohbackend
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
-	"net/http"
+	"net"
 	"sync"
 	"time"
 
@@ -38,6 +38,13 @@ import (
 
 // onlineWait caps how long Start waits for the relay registration.
 const onlineWait = 10 * time.Second
+
+// dialTimeout bounds the dial to the loopback target.
+const dialTimeout = 5 * time.Second
+
+// halfCloseGrace is how long one direction may stay open after the other
+// has ended.
+const halfCloseGrace = 30 * time.Second
 
 // Manager keeps an iroh endpoint alive for the life of the server.
 type Manager struct {
@@ -199,31 +206,39 @@ func (m *Manager) handleIncoming(incoming *iroh.Incoming) {
 	m.serveStream(conn, stream)
 }
 
-// serveStream carries one HTTP request over one bidirectional stream.
+// serveStream bridges one bidirectional stream to one loopback TCP
+// connection, byte for byte. It is deliberately not HTTP-aware: keep-alive,
+// SSE and WebSocket upgrades all ride on the one connection, exactly as
+// they would over TCP. The client half-closing the stream ends the request
+// direction; the target closing ends the response direction.
 func (m *Manager) serveStream(conn *iroh.Connection, stream *iroh.BiStream) {
 	bridge := newStreamConn(stream.Recv(), stream.Send())
 	defer bridge.Close()
 
-	req, err := http.ReadRequest(bufio.NewReader(bridge))
+	upstream, err := net.DialTimeout("tcp", m.Target, dialTimeout)
 	if err != nil {
-		// A stream that never made it to a request: nothing to answer.
-		m.log().Debug("iroh: no request on stream", "error", err)
+		m.log().Warn("iroh: could not reach the local server", "error", err)
 		return
 	}
-	m.log().Debug("iroh: request", "method", req.Method, "path", req.URL.Path)
-	resp, err := m.forward(req)
-	if err != nil {
-		m.log().Warn("iroh: request did not reach the local server", "error", err)
-		_, _ = bridge.Write([]byte("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"))
-		return
-	}
-	defer resp.Body.Close()
-	if err := resp.Write(bridge); err != nil {
-		m.log().Debug("iroh: response write failed", "error", err)
-	}
-}
+	defer upstream.Close()
 
-// forward replays the request against the loopback target.
-func (m *Manager) forward(req *http.Request) (*http.Response, error) {
-	return roundTrip(req, m.Target)
+	done := make(chan struct{}, 2)
+	go func() {
+		_, _ = io.Copy(upstream, bridge)
+		if tcp, ok := upstream.(*net.TCPConn); ok {
+			_ = tcp.CloseWrite()
+		}
+		done <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(bridge, upstream)
+		_ = bridge.HalfClose()
+		done <- struct{}{}
+	}()
+	<-done
+	// One side ended; give the other a bounded time to drain.
+	select {
+	case <-done:
+	case <-time.After(halfCloseGrace):
+	}
 }
