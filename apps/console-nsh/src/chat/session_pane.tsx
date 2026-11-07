@@ -96,6 +96,8 @@ export function SessionPane(props: {
   onOpenChange?: (path: string, diffText: string | null) => void;
   /// Opens the session's changes-review tab (the header's review chip).
   onOpenReview?: () => void;
+  /// Previews a message image full-screen (the bubble's press).
+  onPreviewImage?: (uri: string) => void;
 }) {
   const controller = props.controller;
   const draft = signal("");
@@ -115,6 +117,7 @@ export function SessionPane(props: {
           })();
         }}
         onOpenChange={props.onOpenChange}
+        onPreviewImage={props.onPreviewImage}
       />
       {(() => {
         const permission = controller.pendingPermission();

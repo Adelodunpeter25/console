@@ -19,6 +19,7 @@ import { TitleBar } from "./src/layout/title_bar";
 import { PairingCard } from "./src/layout/pairing_card";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
 import { WorkspaceView } from "./src/workspace/workspace_view";
+import { ImagePreviewOverlay, previewImage } from "./src/workspace/image_preview";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
@@ -157,8 +158,10 @@ function App() {
                   projectId,
                 })
               }
+              onPreviewImage={(uri) => previewImage.set(uri)}
             />
           </View>
+          <ImagePreviewOverlay />
           {launcherOpen() ? (
             <FloatingComposer
               value={launcherDraft()}
@@ -191,7 +194,12 @@ function App() {
                       null,
                     );
                     if (draft.trim() !== "") {
-                      void chatController(backendUrl, header.id).send(draft);
+                      // The picker's choice rides with the first run (the
+                      // desktop's card model pushed onto the prompt).
+                      void chatController(backendUrl, header.id).send(
+                        draft,
+                        catalog.selected(),
+                      );
                     }
                     openChat(header.id, draft.slice(0, 48) || "New chat");
                   } catch (err) {

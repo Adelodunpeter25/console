@@ -110,6 +110,7 @@ function PaneContent(props: {
   projectPath: (projectId: string | null | undefined) => string | null;
   onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+  onPreviewImage?: (uri: string) => void;
 }) {
   return (
     <View class="flex-1 flex-col">
@@ -134,6 +135,7 @@ function PaneContent(props: {
               onOpenReview={() =>
                 props.onOpenReview?.(props.pane.id, tab.sessionId, tab.projectId ?? null)
               }
+              onPreviewImage={props.onPreviewImage}
             />
           );
         }
@@ -171,6 +173,7 @@ function NodeView(props: {
   projectPath: (projectId: string | null | undefined) => string | null;
   onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+  onPreviewImage?: (uri: string) => void;
 }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
@@ -193,6 +196,7 @@ function NodeView(props: {
                 projectPath={props.projectPath}
                 onOpenDiff={props.onOpenDiff}
                 onOpenReview={props.onOpenReview}
+                onPreviewImage={props.onPreviewImage}
               />
             </View>
           );
@@ -213,6 +217,7 @@ function NodeView(props: {
                 projectPath={props.projectPath}
                 onOpenDiff={props.onOpenDiff}
                 onOpenReview={props.onOpenReview}
+                onPreviewImage={props.onPreviewImage}
               />
             </ResizablePanel>
             <ResizablePanel size={node.sizes[1]} minSize={10}>
@@ -223,6 +228,7 @@ function NodeView(props: {
                 projectPath={props.projectPath}
                 onOpenDiff={props.onOpenDiff}
                 onOpenReview={props.onOpenReview}
+                onPreviewImage={props.onPreviewImage}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -241,6 +247,7 @@ export function WorkspaceView(props: {
   projectPath?: (projectId: string | null | undefined) => string | null;
   onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+  onPreviewImage?: (uri: string) => void;
 }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
@@ -255,6 +262,7 @@ export function WorkspaceView(props: {
             projectPath={props.projectPath ?? (() => null)}
             onOpenDiff={props.onOpenDiff}
             onOpenReview={props.onOpenReview}
+            onPreviewImage={props.onPreviewImage}
           />
         );
       })()}
