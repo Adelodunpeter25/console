@@ -37,7 +37,7 @@ export function Sidebar(props: {
         )
       : groupSessions(props.sessions);
   return (
-    <View class="flex w-56 shrink-0 flex-col border-r border-border bg-card">
+    <View class="flex w-[260px] shrink-0 flex-col border-r border-border bg-card">
       <View class="flex h-12 shrink-0 items-center justify-between px-4">
         <Text class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Projects

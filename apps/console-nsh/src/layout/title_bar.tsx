@@ -43,7 +43,7 @@ export function TitleBar(props: {
   );
   return (
     <View
-      class="flex h-12 shrink-0 flex-row items-center border-b border-border bg-card"
+      class="flex h-10 shrink-0 flex-row items-center border-b border-border bg-card"
       desktop={{ windowDrag: true }}
     >
       <View
