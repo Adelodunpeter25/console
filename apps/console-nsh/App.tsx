@@ -23,6 +23,8 @@ import { ImagePreviewOverlay, previewImage } from "./src/workspace/image_preview
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
+import type { GitBranchInfo } from "./src/common/workspace_footer";
+import { approvalModeValue } from "./src/common/approval_selector";
 
 // The Go dev server's port; resolved like the desktop (`CONSOLE_BACKEND_URL`
 // env, else localhost:3000).
@@ -36,6 +38,8 @@ const sortMode = signal<SortMode>("date");
 // The launcher composer (Cmd+N) and the workspace pane tree.
 const launcherOpen = signal(false);
 const store = createWorkspaceStore();
+// The selected project's branches, for the launcher's branch menu.
+const launcherBranches = signal<GitBranchInfo[]>([]);
 
 // Pairing gate: the shell stays on the pairing card until the app holds a
 // device credential for the backend (the desktop's startup check).
@@ -48,6 +52,18 @@ function errorMessage(err: unknown): string {
 function selectProject(id: string) {
   store_.selectProject(id);
   selectedSessionId.set(null);
+  // The launcher's branch menu reads the selected project's branches (the
+  // desktop's floating composer does the same through the git service).
+  const path = store_.projects().find((p) => p.id === id)?.path ?? "";
+  if (path !== "") {
+    void backend
+      .gitBranches(backendUrl, path)
+      .then((raw) => JSON.parse(raw) as { branches?: GitBranchInfo[] })
+      .then((parsed) => launcherBranches.set(parsed.branches ?? []))
+      .catch(() => launcherBranches.set([]));
+  } else {
+    launcherBranches.set([]);
+  }
 }
 
 /// Opens a session's chat tab in the workspace (the sidebar and the
@@ -179,7 +195,8 @@ function App() {
               projects={store_
                 .projects()
                 .map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
-              onLaunch={(draft) => {
+              branches={launcherBranches()}
+              onLaunch={(draft, _checkout, launch) => {
                 launcherOpen.set(false);
                 launcherDraft.set("");
                 void (async () => {
@@ -187,19 +204,22 @@ function App() {
                     // The launcher's submit creates the session, then opens
                     // its chat tab and streams the draft into it (the
                     // desktop's floating composer does the same through
-                    // console-core).
+                    // console-core). The card's project choice wins over
+                    // the sidebar's selection.
                     const header = await backend.createSession(
                       backendUrl,
-                      store_.selectedProjectId() ?? "",
+                      launch.projectId ?? store_.selectedProjectId() ?? "",
                       null,
                     );
                     if (draft.trim() !== "") {
-                      // The picker's choice rides with the first run (the
-                      // desktop's card model pushed onto the prompt).
-                      void chatController(backendUrl, header.id).send(
-                        draft,
-                        catalog.selected(),
-                      );
+                      // The card's choices ride with the first run (the
+                      // desktop pushes the card's model, thinking and
+                      // approval onto the prompt).
+                      void chatController(backendUrl, header.id).send(draft, {
+                        model: launch.model,
+                        thinkingLevel: launch.thinkingLevel,
+                        approvalMode: approvalModeValue(launch.approvalMode),
+                      });
                     }
                     openChat(header.id, draft.slice(0, 48) || "New chat");
                   } catch (err) {

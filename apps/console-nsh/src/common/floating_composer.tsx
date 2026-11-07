@@ -25,7 +25,15 @@ import type {
   GithubRepo,
   ProjectInfo,
 } from "./workspace_footer";
-import { Composer } from "./composer";
+import { Composer, THINKING_LEVELS, thinkingLevelLabel, type ThinkingLevel } from "./composer";
+import {
+  APPROVAL_MODES,
+  approvalModeDescription,
+  approvalModeIcon,
+  approvalModeLabel,
+  approvalModeValue,
+  type ApprovalMode,
+} from "./approval_selector";
 import {
   ModelDropdownMenu,
   formatModelName,
@@ -45,7 +53,16 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   branches?: GitBranchInfo[];
   repos?: GithubRepo[] | null;
   /// Called with the draft and the picked checkout when the card submits.
-  onLaunch?: (draft: string, checkout: LauncherCheckout) => void;
+  onLaunch?: (
+    draft: string,
+    checkout: LauncherCheckout,
+    launch: {
+      projectId: string | null;
+      model: SelectedModel | null;
+      thinkingLevel: ThinkingLevel;
+      approvalMode: ApprovalMode;
+    },
+  ) => void;
   /// The model catalog (the launcher's model chip + picker). Absent until
   /// the catalog store loads, matching the desktop's launcher card.
   modelCatalog?: {
@@ -59,6 +76,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   const open = signal(false);
   const selectedProjectId = signal<string | null>(null);
   const checkout = signal<LauncherCheckout>({ kind: "project" });
+  // The card's thinking and approval choices (the desktop card's two menus
+  // beside the model picker; card-local so a launch doesn't inherit a pane).
+  const thinking = signal<ThinkingLevel>("None");
+  const approval = signal<ApprovalMode>("AlwaysAsk");
   // The model picker's card-local state (desktop owns it on the app entity;
   // the launcher card is this app's picker host, so card-local signals do).
   const pickerTab = signal<PickerTab>({ kind: "favorites" });
@@ -90,7 +111,12 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
 
   const launch = () => {
     if (props.value.trim() === "") return;
-    props.onLaunch?.(props.value, checkout());
+    props.onLaunch?.(props.value, checkout(), {
+      projectId: selectedProjectId(),
+      model: props.modelCatalog?.selected ?? null,
+      thinkingLevel: thinking(),
+      approvalMode: approval(),
+    });
     open.set(false);
   };
 
@@ -224,6 +250,80 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                 />
               </Popover>
             ) : null}
+            <Popover
+              placement="bottom"
+              align="start"
+              trigger={
+                <MenuChip
+                  icon="Brain"
+                  label={() => thinkingLevelLabel(thinking())}
+                  accessibilityLabel="Thinking menu"
+                />
+              }
+            >
+              <View class="w-[200px] flex-col py-1">
+                {THINKING_LEVELS.map((level) => (
+                  <View
+                    class="flex-row items-center gap-1.5 rounded-md px-2 py-1 hover:bg-accent"
+                    role="menuitemradio"
+                    accessibilityState={{ selected: thinking() === level }}
+                    accessibilityLabel={`Thinking ${level}`}
+                    onPress={() => thinking.set(level)}
+                  >
+                    <View class="w-4">
+                      {thinking() === level ? (
+                        <Icon name="Check" size={12} color={token("primary")} />
+                      ) : null}
+                    </View>
+                    <Text class="text-[12.5px] text-foreground">
+                      {thinkingLevelLabel(level)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Popover>
+            <Popover
+              placement="bottom"
+              align="start"
+              trigger={
+                <MenuChip
+                  icon={approvalModeIcon(approval())}
+                  label={() => approvalModeLabel(approval())}
+                  accessibilityLabel="Approval menu"
+                />
+              }
+            >
+              <View class="w-[240px] flex-col py-1">
+                {APPROVAL_MODES.map((mode) => (
+                  <View
+                    class="flex-col gap-0.5 rounded-md px-2 py-1.5 hover:bg-accent"
+                    role="menuitemradio"
+                    accessibilityState={{ selected: approval() === mode }}
+                    accessibilityLabel={`Approval ${approvalModeLabel(mode)}`}
+                    onPress={() => approval.set(mode)}
+                  >
+                    <View class="flex-row items-center gap-1.5">
+                      <View class="w-4">
+                        {approval() === mode ? (
+                          <Icon name="Check" size={12} color={token("primary")} />
+                        ) : null}
+                      </View>
+                      <Icon
+                        name={approvalModeIcon(mode)}
+                        size={12}
+                        color={token("muted-foreground")}
+                      />
+                      <Text class="text-[12.5px] text-foreground">
+                        {approvalModeLabel(mode)}
+                      </Text>
+                    </View>
+                    <Text class="pl-[22px] text-[11px] text-muted-foreground">
+                      {approvalModeDescription(mode)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </Popover>
             <View class="flex-1" />
             <View
               class="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
@@ -234,7 +334,17 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               <Icon name="X" size={12} color={token("muted-foreground")} />
             </View>
           </View>
-          <Composer {...props} onSend={launch} />
+          <Composer
+            {...props}
+            thinkingLevel={thinking()}
+            approvalMode={approval()}
+            onApprovalMode={(mode: ApprovalMode) => approval.set(mode)}
+            onCycleThinking={() => {
+              const at = THINKING_LEVELS.indexOf(thinking());
+              thinking.set(THINKING_LEVELS[(at + 1) % THINKING_LEVELS.length]!);
+            }}
+            onSend={launch}
+          />
         </View>
       ) : (
         <View
