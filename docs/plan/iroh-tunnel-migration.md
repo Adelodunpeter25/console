@@ -83,8 +83,16 @@ Behind the existing backend switch, so the relay keeps working throughout:
 
 ## Status
 
-Server side of Phase 1 done; desktop, Android and the pairing QR format are
-not started.
+Server side of Phase 1 done and committed locally; nothing is pushed.
+Remaining (open):
+- [ ] Desktop: connect by node ID
+- [ ] Android: connect by node ID
+- [ ] Pairing QR node-ID format on all three ends
+- [ ] Fork `iroh-go` to our own repo (upstream rejects contributions and lags
+      the latest iroh), bump to latest iroh/iroh-ffi
+- [ ] Fork CI: build static libs for macOS and Windows
+- [ ] Point server-go at the fork and drop the linux-only build tag
+- [ ] Measure hole-punch rate and latency vs the relay
 
 Built: `internal/tunnel/irohbackend`, behind the `iroh` build tag, selected
 with `CONSOLE_RELAY=iroh`. One HTTP request per bidirectional stream on ALPN
