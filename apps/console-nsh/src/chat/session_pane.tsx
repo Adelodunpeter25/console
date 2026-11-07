@@ -26,6 +26,7 @@ import {
 } from "./interaction_card";
 import { applyRunEvent, type ChatRunEvent } from "./run_events";
 import type { AgentMessage, UserMessage } from "./transcript_model";
+import { CatalogService, DraftService, SessionService } from "../services";
 
 export interface ChatController {
   state: ReturnType<typeof createTranscriptState>;
@@ -112,10 +113,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
   const pendingPermission = signal<PermissionRequestJson | null>(null);
   const pendingQuestion = signal<AskQuestionJson | null>(null);
   const submitting = signal(false);
-  const catalogProviders = signal<CatalogProvider[]>([]);
-  const modelFavorites = signal<Set<string>>(new Set());
   const selectedModel = signal<SelectedModel | null>(null);
-  const savedDraftText = signal("");
 
   async function load(): Promise<void> {
     try {
@@ -142,96 +140,21 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       loadError.set(err instanceof Error ? err.message : String(err));
     }
 
-    // Load draft
-    try {
-      const rawDraft = await Console.draft(baseUrl, sessionId);
-      if (rawDraft && rawDraft !== "null") {
-        const parsed = JSON.parse(rawDraft) as { text?: string };
-        if (parsed.text) {
-          savedDraftText.set(parsed.text);
-        }
-      }
-    } catch {
-      // Draft read is best-effort
-    }
-
-    // Load providers & favorites
-    try {
-      const rawProviders = await Console.providers(baseUrl);
-      if (rawProviders) {
-        const parsed = JSON.parse(rawProviders) as Array<{
-          name: string;
-          displayName?: string;
-          models?: Array<{ id: string; contextWindow?: number }>;
-        }>;
-        catalogProviders.set(
-          parsed.map((p) => ({
-            name: p.name,
-            displayName: p.displayName ?? p.name,
-            models: (p.models ?? []).map((m) => ({
-              id: m.id,
-              contextWindow: m.contextWindow ?? 0,
-            })),
-          })),
-        );
-      }
-    } catch {
-      // Providers read is best-effort
-    }
-
-    try {
-      const rawFavorites = await Console.modelFavorites(baseUrl);
-      if (rawFavorites) {
-        const parsed = JSON.parse(rawFavorites) as Array<{
-          provider?: string;
-          modelId?: string;
-        }>;
-        const favSet = new Set<string>();
-        for (const f of parsed) {
-          if (f.provider && f.modelId) {
-            favSet.add(`${f.provider}:${f.modelId}`);
-          }
-        }
-        modelFavorites.set(favSet);
-      }
-    } catch {
-      // Favorites read is best-effort
-    }
+    // Load draft and catalog via centralized services
+    void DraftService.load(baseUrl, sessionId);
+    void CatalogService.ensure(baseUrl);
   }
 
   async function toggleFavorite(provider: string, modelId: string): Promise<void> {
-    const key = `${provider}:${modelId}`;
-    const favs = new Set(modelFavorites());
-    const isFav = favs.has(key);
-    const nextFav = !isFav;
-    if (nextFav) {
-      favs.add(key);
-    } else {
-      favs.delete(key);
-    }
-    modelFavorites.set(favs);
     try {
-      await Console.setModelFavorite(baseUrl, provider, modelId, nextFav);
+      await CatalogService.toggleFavorite(baseUrl, provider, modelId);
     } catch (err) {
-      // Revert on failure
-      if (isFav) favs.add(key);
-      else favs.delete(key);
-      modelFavorites.set(favs);
       loadError.set(err instanceof Error ? err.message : String(err));
     }
   }
 
   async function persistDraft(text: string): Promise<void> {
-    savedDraftText.set(text);
-    try {
-      await Console.saveDraft(baseUrl, {
-        sessionId,
-        text,
-        updatedAt: Date.now(),
-      });
-    } catch {
-      // Best-effort
-    }
+    await DraftService.save(baseUrl, sessionId, text);
   }
 
   async function send(prompt: string): Promise<void> {
@@ -342,10 +265,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
 
   async function fork(messageId: string): Promise<string | null> {
     try {
-      const header = JSON.parse(
-        await Console.forkSession(baseUrl, sessionId, messageId),
-      ) as { id: string };
-      return header.id;
+      return await SessionService.fork(baseUrl, sessionId, messageId);
     } catch (err) {
       loadError.set(err instanceof Error ? err.message : String(err));
       return null;
@@ -370,12 +290,12 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     pendingPermission: pendingPermission,
     pendingQuestion: pendingQuestion,
     submitting: submitting,
-    providers: () => catalogProviders(),
-    favorites: () => modelFavorites(),
+    providers: CatalogService.providers,
+    favorites: CatalogService.favorites,
     selectedModel: () => selectedModel(),
     selectModel: (provider, modelId) => selectedModel.set({ provider, modelId }),
     toggleFavorite,
-    savedDraft: () => savedDraftText(),
+    savedDraft: () => DraftService.get(sessionId),
     saveDraft: persistDraft,
   };
 }

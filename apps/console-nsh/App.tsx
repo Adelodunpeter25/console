@@ -19,6 +19,7 @@ import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { GitBranchInfo } from "./src/common/workspace_footer";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
+import { GitService, SessionService } from "./src/services";
 
 // The Go dev server's default port; the desktop app defaults the same way.
 // A caller may point the loaders at another base URL (tests, discovery).
@@ -80,18 +81,8 @@ function selectProject(id: string) {
   const p = projects().find((item) => item.id === id);
   if (p?.path) {
     void (async () => {
-      try {
-        const raw = await Console.gitBranches(backendUrl, p.path);
-        const parsed = JSON.parse(raw) as { branches?: Array<{ name: string; current?: boolean }> };
-        projectBranches.set(
-          (parsed.branches ?? []).map((b) => ({
-            name: b.name,
-            current: b.current ?? false,
-          })),
-        );
-      } catch {
-        projectBranches.set([]);
-      }
+      const branches = await GitService.listBranches(backendUrl, p.path);
+      projectBranches.set(branches);
     })();
   } else {
     projectBranches.set([]);
@@ -184,12 +175,10 @@ function App() {
             void (async () => {
               try {
                 const s = sessions().find((item) => item.id === id);
-                if (s?.status === "settled") {
-                  await Console.unsettleSession(backendUrl, id);
-                } else {
-                  await Console.settleSession(backendUrl, id);
+                if (s) {
+                  await SessionService.toggleSettle(backendUrl, s);
+                  await loadSessions(selectedProjectId());
                 }
-                await loadSessions(selectedProjectId());
               } catch (err) {
                 console.error("toggle settle failed:", errorMessage(err));
               }
@@ -198,7 +187,7 @@ function App() {
           onDeleteSession={(id) => {
             void (async () => {
               try {
-                await Console.deleteSession(backendUrl, id);
+                await SessionService.delete(backendUrl, id);
                 await loadSessions(selectedProjectId());
               } catch (err) {
                 console.error("delete session failed:", errorMessage(err));
@@ -226,9 +215,11 @@ function App() {
                     // its chat tab and streams the draft into it (the
                     // desktop's floating composer does the same through
                     // console-core).
-                    const header = JSON.parse(
-                      await Console.createSession(backendUrl, selectedProjectId() ?? "", null),
-                    ) as { id: string };
+                    const header = await SessionService.create(
+                      backendUrl,
+                      selectedProjectId() ?? "",
+                      null,
+                    );
                     if (draft.trim() !== "") {
                       void chatController(backendUrl, header.id).send(draft);
                     }
