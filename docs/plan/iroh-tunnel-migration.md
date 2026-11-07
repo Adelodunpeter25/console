@@ -110,7 +110,13 @@ Remaining (open):
       Intel mac is link-checked only, never run
 - [x] server-go points at the fork; the `iroh` tag now covers linux, macOS
       and windows-amd64. CI for server-go does not build with the tag yet
-- [ ] Measure hole-punch rate and latency vs the relay
+- [~] Measure hole-punch rate and latency vs the relay. Only one number so
+      far: on one machine, a small request through the desktop tunnel to the
+      Go bridge takes p50 0.92 ms / p95 3.03 ms over 200 requests
+      (`latency_through_the_tunnel`, `--ignored`). That is tunnel overhead,
+      not internet latency. Still to do on real networks (home Wi-Fi, mobile
+      data, office NAT): hole-punch success rate, and the same request through
+      the Cloudflare relay for comparison
 
 Built: `internal/tunnel/irohbackend`, behind the `iroh` build tag, selected
 with `CONSOLE_RELAY=iroh`. One bidirectional stream per TCP-style connection on ALPN
