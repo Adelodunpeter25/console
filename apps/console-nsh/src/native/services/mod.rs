@@ -3,6 +3,7 @@
 //! [`crate::native::types`].
 
 pub mod auth;
+pub mod assist;
 pub mod catalog;
 pub mod chat;
 pub mod fs_git;

@@ -97,3 +97,16 @@ export function createCatalogStore(baseUrl: string) {
 }
 
 export type CatalogStore = ReturnType<typeof createCatalogStore>;
+
+const catalogStores = new Map<string, CatalogStore>();
+
+/// The catalog store for a server, creating it on first use (the same
+/// memoization pattern as `chatController`).
+export function catalogStore(baseUrl: string): CatalogStore {
+  let store = catalogStores.get(baseUrl);
+  if (store == null) {
+    store = createCatalogStore(baseUrl);
+    catalogStores.set(baseUrl, store);
+  }
+  return store;
+}

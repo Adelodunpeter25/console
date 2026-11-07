@@ -19,11 +19,15 @@ import { Input } from "nsh/base";
 import { Composer } from "../common/composer";
 import { Icon } from "../common/icons";
 import { TranscriptView } from "./transcript_view";
+import { changesSummaryFrom, changesSummaryIsEmpty } from "./change_chips";
 import {
   PermissionInteractionCard,
   QuestionInteractionCard,
 } from "./interaction_card";
 import type { ChatController } from "../services/chat_controller";
+import { backend } from "../services/backend";
+import type { SuggestionFile } from "../common/composer_autocomplete";
+import { catalogStore } from "../stores/catalog_store";
 
 function decodeArgs(base64: string | undefined): unknown {
   if (base64 == null) return null;
@@ -32,32 +36,6 @@ function decodeArgs(base64: string | undefined): unknown {
   } catch {
     return null;
   }
-}
-
-/// The header row above the composer: the session's status and the model
-/// chip (the desktop's composer footer, minus the picker — the model menu
-/// lands with the model catalog port).
-function SessionHeaderRow(props: { controller: ChatController }) {
-  const controller = props.controller;
-  const status = controller.sessionStatus();
-  const working = status === "working";
-  const label = working ? "Working" : status;
-  return (
-    <View class="flex-none flex-row items-center gap-2 px-3 py-1">
-      <View
-        class="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: token(working ? "warning" : "muted-foreground") }}
-      />
-      <Text class="text-[11px] text-muted-foreground">{label}</Text>
-      {controller.sessionModel() !== "" ? (
-        <Text class="max-w-[220px] truncate rounded border border-border px-1.5 py-[1px] text-[10px] text-muted-foreground">
-          {controller.sessionProvider() !== ""
-            ? `${controller.sessionProvider()} · ${controller.sessionModel()}`
-            : controller.sessionModel()}
-        </Text>
-      ) : null}
-    </View>
-  );
 }
 
 /// The custom-answer input inside the question card (a one-line input bound
@@ -91,14 +69,37 @@ function QuestionCustomInput(props: { controller: ChatController }): JSX.Element
 /// as a new tab (the desktop's fork behaviour).
 export function SessionPane(props: {
   controller: ChatController;
+  baseUrl: string;
   onOpenSession?: (sessionId: string, title: string) => void;
   /// Opens the diff tab for one changed file (a change chip's press).
   onOpenChange?: (path: string, diffText: string | null) => void;
   /// Opens the session's changes-review tab (the header's review chip).
   onOpenReview?: () => void;
+  /// Previews a message image full-screen (the bubble's press).
+  onPreviewImage?: (uri: string) => void;
 }) {
   const controller = props.controller;
   const draft = signal("");
+  const catalog = catalogStore(props.baseUrl);
+  void catalog.load();
+  // The mention popup's workspace files: one query-less search per session
+  // (the desktop searches per trigger; the popup filters client-side, so
+  // this covers it — per-query refinement can follow).
+  const mentionFiles = signal<SuggestionFile[]>([]);
+  void (async () => {
+    try {
+      const res = JSON.parse(
+        await backend.fileSearch(props.baseUrl, controller.sessionId, "", null, false),
+      ) as { items?: { relativePath?: string; absolutePath?: string }[] };
+      mentionFiles.set(
+        (res.items ?? [])
+          .filter((i) => i.relativePath != null && i.absolutePath != null)
+          .map((i) => ({ relativePath: i.relativePath!, absolutePath: i.absolutePath! })),
+      );
+    } catch {
+      mentionFiles.set([]);
+    }
+  })();
   return (
     <View class="flex-1 flex-col">
       {controller.error() != null ? (
@@ -106,21 +107,26 @@ export function SessionPane(props: {
           <Text class="text-[11px] text-red-500">{controller.error()}</Text>
         </View>
       ) : null}
-      <TranscriptView
-        state={controller.state}
-        onFork={(messageId: string) => {
-          void (async () => {
-            const forked = await controller.fork(messageId);
-            if (forked != null) props.onOpenSession?.(forked, "Fork");
-          })();
-        }}
-        onOpenChange={props.onOpenChange}
-      />
+      {/* flex-1 wrapper: TranscriptView fills its height (h-full List); a
+          bare h-full child would take the whole pane and clip the composer. */}
+      <View class="min-h-0 flex-1 flex-col">
+        <TranscriptView
+          state={controller.state}
+          onFork={(messageId: string) => {
+            void (async () => {
+              const forked = await controller.fork(messageId);
+              if (forked != null) props.onOpenSession?.(forked, "Fork");
+            })();
+          }}
+          onOpenChange={props.onOpenChange}
+          onPreviewImage={props.onPreviewImage}
+        />
+      </View>
       {(() => {
         const permission = controller.pendingPermission();
         if (permission != null) {
           return (
-            <View class="flex-none p-2">
+            <View class="flex-none flex-row justify-center px-5 py-2">
               <PermissionInteractionCard
                 request={{
                   toolName: permission.toolName,
@@ -136,7 +142,7 @@ export function SessionPane(props: {
         const question = controller.pendingQuestion();
         if (question != null) {
           return (
-            <View class="flex-none p-2">
+            <View class="flex-none flex-row justify-center px-5 py-2">
               <QuestionInteractionCard
                 request={{
                   question: question.question,
@@ -171,20 +177,39 @@ export function SessionPane(props: {
         }
         return null;
       })()}
-      <SessionHeaderRow controller={controller} />
-      {props.onOpenReview != null ? (
-        <View class="flex-none flex-row px-3 pb-1">
-          <View
-            class="flex-row items-center gap-1.5 rounded-[7px] border border-border px-2 py-[3px] hover:bg-accent"
-            role="button"
-            accessibilityLabel="Open changes review"
-            onPress={props.onOpenReview}
-          >
-            <Icon name="ReplaceAll" size={12} color={token("muted-foreground")} />
-            <Text class="text-[12px] text-muted-foreground">Review changes</Text>
+      {/* The turn's changes pill: GPUI's `changes_pill` — "N files changed
+          +A -D" over the raised surface; pressing opens the review tab. */}
+      {(() => {
+        const summary = changesSummaryFrom(controller.state.sessionChanges());
+        if (props.onOpenReview == null || changesSummaryIsEmpty(summary)) {
+          return null;
+        }
+        return (
+          <View class="flex-none flex-row px-3 pb-1">
+            <View
+              class="flex-row items-center gap-1.5 rounded-full bg-popover px-2.5 py-[5px] hover:bg-muted"
+              onPress={props.onOpenReview}
+              accessibilityLabel="Open changes review"
+              role="button"
+            >
+              <Icon name="FileDiff" size={13} color={token("muted-foreground")} />
+              <Text class="text-[12px] font-medium text-muted-foreground">
+                {`${summary.files} file${summary.files === 1 ? "" : "s"} changed`}
+              </Text>
+              {summary.additions > 0 ? (
+                <Text class="text-[12px] font-semibold text-[#62c987]">
+                  {`+${summary.additions}`}
+                </Text>
+              ) : null}
+              {summary.deletions > 0 ? (
+                <Text class="text-[12px] font-semibold text-destructive">
+                  {`-${summary.deletions}`}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-      ) : null}
+        );
+      })()}
       <View class="flex-none border-t border-border">
         <Composer
           value={draft()}
@@ -196,6 +221,16 @@ export function SessionPane(props: {
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
+          files={mentionFiles()}
+          providers={catalog.providers() ?? undefined}
+          selectedModel={catalog.selected()}
+          favorites={catalog.favorites()}
+          onModelSelect={(provider: string, modelId: string) =>
+            catalog.selectModel(provider, modelId)
+          }
+          onFavorite={(provider: string, modelId: string) =>
+            void catalog.toggleFavorite(provider, modelId)
+          }
         />
       </View>
     </View>

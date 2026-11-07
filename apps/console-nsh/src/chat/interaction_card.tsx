@@ -182,7 +182,7 @@ export function QuestionInteractionCard(props: {
           present. This matches the desktop question panel and lets users
           answer values the model did not pre-populate. */}
       {props.customInput ? (
-        <View class="h-8 rounded-md border border-border bg-muted px-2 pl-6">
+        <View class="h-8 rounded-[7px] border border-border bg-muted pr-2 pl-6">
           {props.customInput}
         </View>
       ) : null}

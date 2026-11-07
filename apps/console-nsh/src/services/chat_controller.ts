@@ -10,14 +10,28 @@ import { signal } from "nsh";
 import { createTranscriptState } from "../chat/transcript_view";
 import { applyRunEvent, type ChatRunEvent } from "../chat/run_events";
 import type { AgentMessage, UserMessage } from "../chat/transcript_model";
+import type { SelectedModel } from "../stores/catalog_store";
 import { backend } from "./backend";
+
+/// What a launch (or a pane send) adds on top of the prompt: the picked
+/// model and the card's thinking/approval choices, all optional and all
+/// riding with the run (desktop `RunPromptDto` fields).
+export interface SendOptions {
+  model?: SelectedModel | null;
+  /// console-core's ThinkingLevel wire value (lowercase).
+  thinkingLevel?: string | null;
+  /// console-core's ApprovalMode wire value ("always-ask", …).
+  approvalMode?: string | null;
+}
 
 export interface ChatController {
   state: ReturnType<typeof createTranscriptState>;
+  /// The session this controller drives (the file search's scope).
+  sessionId: string;
   /// Sends a prompt as a new run. Optimistically appends the user message,
   /// streams the run's events into the transcript, then reconciles with the
   /// server's canonical history once the run settles.
-  send(prompt: string): Promise<void>;
+  send(prompt: string, options?: SendOptions): Promise<void>;
   /// Reloads the tail page (the canonical history after a settle or an
   /// external change).
   refresh(): Promise<void>;
@@ -98,9 +112,22 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     }
   }
 
-  async function send(prompt: string): Promise<void> {
+  async function send(prompt: string, options?: SendOptions): Promise<void> {
     const trimmed = prompt.trim();
     if (trimmed === "") return;
+    // The picker's choice rides with the run (desktop parity: the floating
+    // composer's card model is pushed onto the run, not the pane's).
+    const payload: Record<string, unknown> = { prompt: trimmed };
+    if (options?.model != null) {
+      payload.modelId = options.model.modelId;
+      payload.provider = options.model.provider;
+    }
+    if (options?.thinkingLevel != null) {
+      payload.thinkingLevel = options.thinkingLevel.toLowerCase();
+    }
+    if (options?.approvalMode != null) {
+      payload.approvalMode = options.approvalMode;
+    }
     // Optimistic user row; canonical ids land with the settle refresh.
     state.pushMessage({
       type: "user",
@@ -109,7 +136,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     });
     state.beginStreaming();
     try {
-      await backend.runPrompt(baseUrl, sessionId, { prompt: trimmed }, (event: unknown) => {
+      await backend.runPrompt(baseUrl, sessionId, payload, (event: unknown) => {
         const ev = event as ChatRunEvent;
         applyRunEvent(state, ev, {
           onPermission: (request) => {
@@ -212,6 +239,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
 
   return {
     state,
+    sessionId,
     send,
     refresh: load,
     answerPermission,

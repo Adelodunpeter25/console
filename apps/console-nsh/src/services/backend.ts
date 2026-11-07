@@ -98,6 +98,13 @@ export const backend = {
   // Files and git
   fsBrowse: (baseUrl: string, path: string | null) => text(Console.fsBrowse(baseUrl, path)),
   fsReadFile: (baseUrl: string, path: string) => text(Console.fsReadFile(baseUrl, path)),
+  fileSearch: (
+    baseUrl: string,
+    sessionId: string | null,
+    query: string,
+    root: string | null,
+    includeDirs: boolean,
+  ) => text(Console.fileSearch(baseUrl, sessionId, query, root, includeDirs)),
   gitStatus: (baseUrl: string, repoPath: string) => text(Console.gitStatus(baseUrl, repoPath)),
   gitDiff: (baseUrl: string, repoPath: string, filePath: string | null) =>
     text(Console.gitDiff(baseUrl, repoPath, filePath)),

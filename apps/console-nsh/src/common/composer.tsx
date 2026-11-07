@@ -9,7 +9,7 @@
 // derived from props are read lazily (`()` thunks): normalizing a prop into
 // a body-level const would freeze it at mount.
 
-import { Image, Text, View, effect, token } from "nsh";
+import { Image, Text, View, colorScheme, effect, token } from "nsh";
 import { Input, Popover } from "nsh/base";
 import type { InputRef } from "nsh/types";
 import { Icon, type IconName } from "./icons";
@@ -294,9 +294,17 @@ export function Composer(props: {
 
   return (
     <View
-      class="flex flex-col rounded-2xl border border-border bg-card"
+      class="flex flex-col bg-[#ffffff] px-5 pt-1 pb-2.5 dark:bg-[#0a0a0a]"
       testID={props.testID}
     >
+      {/* The composer box: GPUI's `composer-box` — 13px radius over the
+          composer surface, accent border while a run streams. */}
+      <View
+        class="mx-auto flex w-full max-w-[768px] flex-col rounded-[13px] border border-[#d3d1d3] bg-[#ffffff] py-2.5 dark:border-[#3c3c3c] dark:bg-[#0a0a0a]"
+        style={
+          isRunning() ? { borderColor: "#e2795b52" } : undefined
+        }
+      >
       {comments().length > 0 ? (
         <View class="flex flex-row flex-wrap gap-1.5 px-3 pb-1.5 pt-3">
           {comments().map((comment) => (
@@ -374,7 +382,7 @@ export function Composer(props: {
       <Input
         multiline
         submitBehavior="submit"
-        class="px-3.5 py-3 text-sm text-foreground"
+        class="min-h-[36px] px-3 py-0.5 text-sm text-foreground"
         placeholder={props.placeholder ?? "Ask Console anything…"}
         value={props.value}
         selectedRange={pinnedSelection() ?? undefined}
@@ -420,25 +428,36 @@ export function Composer(props: {
         return null;
       })()}
 
-      <View class="flex-row items-center gap-2 px-3 pb-3">
+      <View class="mt-2 flex-row items-center gap-1 px-2.5">
+        <View
+          class="rounded-[6px] p-[5px] hover:bg-muted"
+          testID="attach-button"
+          accessibilityLabel="Attach"
+          role="button"
+        >
+          <Icon name="Plus" size={13} color={token("muted-foreground")} />
+        </View>
+
         <Popover
           placement="top"
           align="start"
           popupClass="rounded-[13px]"
           trigger={
             <View
-              class="flex h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
+              class="flex h-6 flex-row items-center gap-1.5 rounded-[7px] border border-[#d3d1d3] bg-[#ffffff] px-2.5 hover:bg-muted dark:border-[#3c3c3c] dark:bg-[#0a0a0a]"
               testID="model-chip"
               accessibilityLabel="Select model"
               role="button"
             >
               <Icon
                 name={modelProviderIcon()}
-                size={11}
-                mono={false}
+                size={10.5}
+                color={token("foreground")}
               />
-              <Text class="text-[11px] text-foreground">{modelLabel()}</Text>
-              <Icon name="ChevronDown" size={10} color={token("muted-foreground")} />
+              <Text class="text-[11.5px] text-muted-foreground">
+                {modelLabel()}
+              </Text>
+              <Icon name="ChevronDown" size={9} color={token("muted-foreground")} />
             </View>
           }
         >
@@ -469,7 +488,7 @@ export function Composer(props: {
           popupClass="rounded-xl"
           trigger={
             <View
-              class="flex h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
+              class="flex h-[26px] flex-row items-center gap-1.5 rounded-[7px] border border-[#d3d1d3] bg-[#ffffff] px-2.5 hover:bg-muted dark:border-[#3c3c3c] dark:bg-[#0a0a0a]"
               testID="approval-chip"
               accessibilityLabel="Approval mode"
               role="button"
@@ -479,13 +498,14 @@ export function Composer(props: {
                 size={11}
                 color={
                   approvalMode() === "FullAccess"
-                    ? token("destructive")
+                    ? token("warning")
                     : token("muted-foreground")
                 }
               />
-              <Text class="text-[11px] text-muted-foreground">
+              <Text class="text-[11.5px] text-muted-foreground">
                 {approvalModeLabel(approvalMode())}
               </Text>
+              <Icon name="ChevronDown" size={9} color={token("muted-foreground")} />
             </View>
           }
         >
@@ -497,32 +517,26 @@ export function Composer(props: {
 
         {props.onCycleThinking ? (
           <View
-            class="h-6 flex-row items-center gap-1.5 rounded-md border border-border px-2"
+            class="flex h-6 flex-row items-center gap-1.5 rounded-[7px] border border-[#d3d1d3] bg-[#ffffff] px-2.5 hover:bg-muted dark:border-[#3c3c3c] dark:bg-[#0a0a0a]"
             onPress={props.onCycleThinking}
             testID="thinking-chip"
             role="button"
           >
-            <Text class="text-[11px] text-muted-foreground">
+            <Text class="text-[11.5px] text-muted-foreground">
               {thinkingLevelLabel(thinkingLevel())}
             </Text>
+            <Icon name="ChevronDown" size={9} color={token("muted-foreground")} />
           </View>
         ) : null}
 
         <View class="flex-1" />
 
         <View
-          class="flex h-8 w-8 items-center justify-center rounded-lg border border-border"
-          testID="attach-button"
-        >
-          <Icon name="Paperclip" size={14} color={token("muted-foreground")} />
-        </View>
-
-        <View
           class={
-            "flex h-8 w-8 items-center justify-center rounded-lg " +
+            "flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full " +
             (hasDraft() && !isRunning()
-              ? "bg-primary"
-              : "border border-border opacity-50")
+              ? "bg-[#f4ede5] dark:bg-[#2a2520]"
+              : "bg-[#d9d7d9] dark:bg-[#2f2f2f]")
           }
           onPress={send}
           testID="send-button"
@@ -531,10 +545,17 @@ export function Composer(props: {
         >
           <Icon
             name={isRunning() ? "Stop" : "ArrowUp"}
-            size={14}
-            color={hasDraft() && !isRunning() ? token("primary-foreground") : token("muted-foreground")}
+            size={15}
+            color={
+              hasDraft() && !isRunning()
+                ? colorScheme() === "dark"
+                  ? "#f4ede5"
+                  : "#3a2b21"
+                : token("muted-foreground")
+            }
           />
         </View>
+      </View>
       </View>
     </View>
   );

@@ -19,9 +19,12 @@ import { TitleBar } from "./src/layout/title_bar";
 import { PairingCard } from "./src/layout/pairing_card";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
 import { WorkspaceView } from "./src/workspace/workspace_view";
+import { ImagePreviewOverlay, previewImage } from "./src/workspace/image_preview";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
+import type { GitBranchInfo } from "./src/common/workspace_footer";
+import { approvalModeValue } from "./src/common/approval_selector";
 
 // The Go dev server's port; resolved like the desktop (`CONSOLE_BACKEND_URL`
 // env, else localhost:3000).
@@ -35,6 +38,8 @@ const sortMode = signal<SortMode>("date");
 // The launcher composer (Cmd+N) and the workspace pane tree.
 const launcherOpen = signal(false);
 const store = createWorkspaceStore();
+// The selected project's branches, for the launcher's branch menu.
+const launcherBranches = signal<GitBranchInfo[]>([]);
 
 // Pairing gate: the shell stays on the pairing card until the app holds a
 // device credential for the backend (the desktop's startup check).
@@ -42,11 +47,6 @@ const paired = signal(true);
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function selectProject(id: string) {
-  store_.selectProject(id);
-  selectedSessionId.set(null);
 }
 
 /// Opens a session's chat tab in the workspace (the sidebar and the
@@ -118,16 +118,12 @@ function App() {
       {paired() ? (
         <View class="flex flex-1 flex-row">
         <Sidebar
-          loading={store_.loading()}
           projects={store_.projects()}
-          projectsError={store_.projectsError()}
-          selectedProjectId={store_.selectedProjectId()}
           sessions={store_.sessions()}
           sessionsLoading={store_.sessionsLoading()}
           sessionsError={store_.sessionsError()}
           activeSessionId={selectedSessionId()}
           sortMode={sortMode()}
-          onProject={selectProject}
           onSession={selectSession}
           onSortMode={(mode) => sortMode.set(mode)}
           onNewChat={() => launcherOpen.set(true)}
@@ -157,11 +153,17 @@ function App() {
                   projectId,
                 })
               }
+              onPreviewImage={(uri) => previewImage.set(uri)}
             />
           </View>
+          <ImagePreviewOverlay />
           {launcherOpen() ? (
-            <FloatingComposer
-              value={launcherDraft()}
+            <View class="absolute right-0 bottom-0 left-0 flex flex-row justify-center px-6 pb-2">
+              <View class="w-full max-w-[768px]">
+                <FloatingComposer
+                  open={launcherOpen()}
+                  onDismiss={() => launcherOpen.set(false)}
+                  value={launcherDraft()}
               onChange={(text: string) => launcherDraft.set(text)}
               onSend={() => {}}
               modelCatalog={{
@@ -176,7 +178,8 @@ function App() {
               projects={store_
                 .projects()
                 .map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
-              onLaunch={(draft) => {
+              branches={launcherBranches()}
+              onLaunch={(draft, _checkout, launch) => {
                 launcherOpen.set(false);
                 launcherDraft.set("");
                 void (async () => {
@@ -184,14 +187,22 @@ function App() {
                     // The launcher's submit creates the session, then opens
                     // its chat tab and streams the draft into it (the
                     // desktop's floating composer does the same through
-                    // console-core).
+                    // console-core). The card's project choice wins over
+                    // the sidebar's selection.
                     const header = await backend.createSession(
                       backendUrl,
-                      store_.selectedProjectId() ?? "",
+                      launch.projectId ?? store_.selectedProjectId() ?? "",
                       null,
                     );
                     if (draft.trim() !== "") {
-                      void chatController(backendUrl, header.id).send(draft);
+                      // The card's choices ride with the first run (the
+                      // desktop pushes the card's model, thinking and
+                      // approval onto the prompt).
+                      void chatController(backendUrl, header.id).send(draft, {
+                        model: launch.model,
+                        thinkingLevel: launch.thinkingLevel,
+                        approvalMode: approvalModeValue(launch.approvalMode),
+                      });
                     }
                     openChat(header.id, draft.slice(0, 48) || "New chat");
                   } catch (err) {
@@ -202,7 +213,9 @@ function App() {
                   }
                 })();
               }}
-            />
+                />
+              </View>
+            </View>
           ) : null}
         </View>
         </View>

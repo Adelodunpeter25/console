@@ -21,11 +21,11 @@ test("a section collapses and re-expands over its chats", async () => {
   const app = await open("./project_groups.fixture.tsx", {
     platform: "linux",
   });
-  await app.press("label:Toggle project console");
+  await app.press("text:console >> nth=0");
   expect(app.texts().some((t) => t === "Fix the login loop")).toBe(false);
   // The other sections stay open.
   expect(app.texts()).toContain("Ship the sidebar");
-  await app.press("label:Toggle project console");
+  await app.press("text:console >> nth=0");
   expect(app.texts()).toContain("Fix the login loop");
 });
 

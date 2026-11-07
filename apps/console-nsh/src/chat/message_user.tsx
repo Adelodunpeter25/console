@@ -181,7 +181,7 @@ export function UserMessageBubble(props: {
   };
 
   const messageTextElement = (
-    <Text>
+    <Text class="text-[14px] leading-5 text-[#3a2b21] dark:text-[#e2e2e2]">
       {segments().map((segment) =>
         segment.path != null ? (
           <Text class="rounded bg-muted px-[2.5px] text-primary">
@@ -232,7 +232,7 @@ export function UserMessageBubble(props: {
           </View>
         ) : null}
         {hasContent ? (
-          <View class="max-w-[540px] flex-col rounded-xl border border-border bg-muted px-[14px] py-[9px]">
+          <View class="max-w-[540px] flex-col rounded-xl border border-[#8a5c2e33] bg-[#f4ede5] px-[14px] py-[9px] dark:border-[#f7ce8a26] dark:bg-[#2a2520]">
             <View
               class="flex-col"
               style={

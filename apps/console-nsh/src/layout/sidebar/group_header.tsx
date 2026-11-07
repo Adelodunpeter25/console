@@ -1,10 +1,12 @@
-// A section header for the sidebar's chat list, ported from console-ui's
-// `layout/sidebar/group_header.rs` (the label, the count, and the
-// date/project sort toggle; the rename affordance stays GPUI-side until the
-// context menu lands).
+// Section headers for the sidebar's chat list, ported from console-ui's
+// `layout/sidebar/group_header.rs`: the collapsible 28px header (a 14.5px
+// semibold label whose chevron is revealed on hover) and the date/project
+// sort toggle. The rename affordance stays GPUI-side until the context menu
+// lands.
 
-import { Text, View } from "nsh";
+import { Text, View, token } from "nsh";
 import { Hint } from "../../common/tooltip";
+import { Icon } from "../../common/icons";
 
 export type SortMode = "date" | "project";
 
@@ -16,12 +18,15 @@ export function SortModeToggle(props: {
 }) {
   return (
     <View
-      class="h-5 flex-row items-center gap-1 rounded-md px-1.5 active:bg-muted"
+      class="h-5 flex-row items-center gap-1 rounded-md px-1.5 hover:bg-muted active:bg-muted"
       onPress={props.onToggle}
       role="button"
       accessibilityLabel="Sort mode"
-      tooltip={<Hint>{props.mode === "date" ? "Sort by project" : "Sort by date"}</Hint>}
+      tooltip={
+        <Hint>{props.mode === "date" ? "Sort by project" : "Sort by date"}</Hint>
+      }
     >
+      <Icon name="SortVertical" size={12} color={token("muted-foreground")} />
       <Text class="text-[11px] font-semibold text-muted-foreground">
         {props.mode === "date" ? "Date" : "Project"}
       </Text>
@@ -29,13 +34,37 @@ export function SortModeToggle(props: {
   );
 }
 
-export function GroupHeader(props: { label: string; count?: number }) {
+/// A section header: the label collapses or expands the group (a chevron
+/// reveals on hover, rotated while collapsed). No count — the GPUI header
+/// doesn't show one.
+export function GroupHeader(props: {
+  label: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
+  const collapsed = () => props.collapsed ?? false;
   return (
-    <View class="flex-row items-center justify-between px-3 py-1">
-      <Text class="text-xs text-muted-foreground">{props.label}</Text>
-      {props.count !== undefined && props.count > 0 ? (
-        <Text class="text-xs text-muted-foreground">{props.count}</Text>
-      ) : null}
+    <View
+      class="group h-7 flex-row items-center justify-between"
+      onPress={props.onToggle}
+      role="button"
+      accessibilityLabel={`${collapsed() ? "Expand" : "Collapse"} ${props.label}`}
+    >
+      <View class="h-[22px] flex-row items-center gap-1 rounded-md px-1 hover:bg-muted">
+        <Text class="text-[14.5px] font-semibold text-foreground">
+          {props.label}
+        </Text>
+        <View
+          class="opacity-0 group-hover:opacity-100"
+          style={
+            collapsed()
+              ? { transform: [{ rotate: "-90deg" }], opacity: 1 }
+              : undefined
+          }
+        >
+          <Icon name="ChevronDown" size={11} color={token("muted-foreground")} />
+        </View>
+      </View>
     </View>
   );
 }

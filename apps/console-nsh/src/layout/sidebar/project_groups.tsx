@@ -7,9 +7,6 @@
 
 import { View } from "nsh";
 import type { SessionSummary } from "console-nsh/native";
-import { Icon } from "../../common/icons";
-import { Hint } from "../../common/tooltip";
-import { token } from "nsh";
 import { GroupHeader } from "./group_header";
 import { SessionItem } from "../session/session_item";
 import { groupSessionsByProject } from "../session/session_groups";
@@ -33,30 +30,11 @@ export function ProjectGroups(props: {
           const collapsed = props.collapsed(group.label);
           return (
             <View class="flex flex-col">
-              <View
-                class="flex-row items-center gap-1 rounded-md px-1 active:bg-muted"
-                onPress={() => props.onToggleProject(group.label)}
-                accessibilityLabel={`Toggle project ${group.label}`}
-                tooltip={<Hint>{collapsed ? "Expand" : "Collapse"}</Hint>}
-                role="button"
-              >
-                <View
-                  class="flex-none"
-                  style={
-                    collapsed ? { transform: [{ rotate: "-90deg" }] } : undefined
-                  }
-                >
-                  <Icon
-                    name="ChevronDown"
-                    size={11}
-                    color={token("muted-foreground")}
-                  />
-                </View>
-                <GroupHeader
-                  label={group.label}
-                  count={group.sessions.length}
-                />
-              </View>
+              <GroupHeader
+                label={group.label}
+                collapsed={collapsed}
+                onToggle={() => props.onToggleProject(group.label)}
+              />
               {collapsed
                 ? null
                 : group.sessions.map((s) => (
