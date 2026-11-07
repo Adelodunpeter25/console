@@ -108,17 +108,21 @@ export function SessionPane(props: {
           <Text class="text-[11px] text-red-500">{controller.error()}</Text>
         </View>
       ) : null}
-      <TranscriptView
-        state={controller.state}
-        onFork={(messageId: string) => {
-          void (async () => {
-            const forked = await controller.fork(messageId);
-            if (forked != null) props.onOpenSession?.(forked, "Fork");
-          })();
-        }}
-        onOpenChange={props.onOpenChange}
-        onPreviewImage={props.onPreviewImage}
-      />
+      {/* flex-1 wrapper: TranscriptView fills its height (h-full List); a
+          bare h-full child would take the whole pane and clip the composer. */}
+      <View class="min-h-0 flex-1 flex-col">
+        <TranscriptView
+          state={controller.state}
+          onFork={(messageId: string) => {
+            void (async () => {
+              const forked = await controller.fork(messageId);
+              if (forked != null) props.onOpenSession?.(forked, "Fork");
+            })();
+          }}
+          onOpenChange={props.onOpenChange}
+          onPreviewImage={props.onPreviewImage}
+        />
+      </View>
       {(() => {
         const permission = controller.pendingPermission();
         if (permission != null) {
