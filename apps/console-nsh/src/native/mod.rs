@@ -4,6 +4,7 @@
 
 pub mod http;
 pub mod services;
+
 pub mod types;
 
 use nsh_core::prelude::*;
@@ -12,7 +13,7 @@ use nsh_core::JsonValue;
 use services::auth;
 use services::chat::Chat;
 use services::workspace::WorkspacePersist;
-use services::{catalog, fs_git};
+use services::{assist, catalog, fs_git};
 use services::{projects::Projects, sessions::Sessions};
 use types::{ProjectSummary, SessionSummary};
 
@@ -246,6 +247,24 @@ impl Console {
     /// One file's content and metadata (the file viewer's source).
     pub async fn fs_read_file(base_url: String, path: String) -> Result<String, String> {
         fs_git::read_file(&base_url, &path).await
+    }
+
+    /// Searches workspace files (the composer's `@` mention popup's source).
+    pub async fn file_search(
+        base_url: String,
+        session_id: Option<String>,
+        query: String,
+        root: Option<String>,
+        include_dirs: bool,
+    ) -> Result<String, String> {
+        assist::search_files(
+            &base_url,
+            session_id.as_deref().filter(|s| !s.is_empty()),
+            &query,
+            root.as_deref(),
+            include_dirs,
+        )
+        .await
     }
 
     /// The git status summary for a working tree (the repo path is required

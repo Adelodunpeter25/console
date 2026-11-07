@@ -8,6 +8,9 @@ import { expect, open, test } from "nsh/test";
 test("a long diff previews its first 200 lines and offers the full diff", async () => {
   const app = await open("./diff_popover.fixture.tsx", { platform: "android" });
   await app.press("label:Show diff for big.ts");
+  // The card opens asynchronously after the press; give it a beat so the
+  // read below doesn't race the render.
+  await new Promise((r) => setTimeout(r, 200));
   // The DiffView renders parsed diff lines (the +/- itself is a change bar,
   // not text); the `diff --git` file header is not part of the line view.
   expect(app.texts()).toContain("line 1");

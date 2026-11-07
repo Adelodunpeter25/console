@@ -25,6 +25,8 @@ import {
   QuestionInteractionCard,
 } from "./interaction_card";
 import type { ChatController } from "../services/chat_controller";
+import { backend } from "../services/backend";
+import type { SuggestionFile } from "../common/composer_autocomplete";
 import { catalogStore } from "../stores/catalog_store";
 
 function decodeArgs(base64: string | undefined): unknown {
@@ -80,6 +82,24 @@ export function SessionPane(props: {
   const draft = signal("");
   const catalog = catalogStore(props.baseUrl);
   void catalog.load();
+  // The mention popup's workspace files: one query-less search per session
+  // (the desktop searches per trigger; the popup filters client-side, so
+  // this covers it — per-query refinement can follow).
+  const mentionFiles = signal<SuggestionFile[]>([]);
+  void (async () => {
+    try {
+      const res = JSON.parse(
+        await backend.fileSearch(props.baseUrl, controller.sessionId, "", null, false),
+      ) as { items?: { relativePath?: string; absolutePath?: string }[] };
+      mentionFiles.set(
+        (res.items ?? [])
+          .filter((i) => i.relativePath != null && i.absolutePath != null)
+          .map((i) => ({ relativePath: i.relativePath!, absolutePath: i.absolutePath! })),
+      );
+    } catch {
+      mentionFiles.set([]);
+    }
+  })();
   return (
     <View class="flex-1 flex-col">
       {controller.error() != null ? (
@@ -106,7 +126,7 @@ export function SessionPane(props: {
         const permission = controller.pendingPermission();
         if (permission != null) {
           return (
-            <View class="flex-none p-2">
+            <View class="flex-none flex-row justify-center px-5 py-2">
               <PermissionInteractionCard
                 request={{
                   toolName: permission.toolName,
@@ -122,7 +142,7 @@ export function SessionPane(props: {
         const question = controller.pendingQuestion();
         if (question != null) {
           return (
-            <View class="flex-none p-2">
+            <View class="flex-none flex-row justify-center px-5 py-2">
               <QuestionInteractionCard
                 request={{
                   question: question.question,
@@ -201,6 +221,7 @@ export function SessionPane(props: {
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
+          files={mentionFiles()}
           providers={catalog.providers() ?? undefined}
           selectedModel={catalog.selected()}
           favorites={catalog.favorites()}

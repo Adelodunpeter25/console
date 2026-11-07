@@ -26,6 +26,8 @@ export interface SendOptions {
 
 export interface ChatController {
   state: ReturnType<typeof createTranscriptState>;
+  /// The session this controller drives (the file search's scope).
+  sessionId: string;
   /// Sends a prompt as a new run. Optimistically appends the user message,
   /// streams the run's events into the transcript, then reconciles with the
   /// server's canonical history once the run settles.
@@ -237,6 +239,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
 
   return {
     state,
+    sessionId,
     send,
     refresh: load,
     answerPermission,
