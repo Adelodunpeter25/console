@@ -12,6 +12,7 @@ import {
 import { FloatingComposer } from "./src/common/floating_composer";
 import { Sidebar } from "./src/layout/sidebar/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
+import { PairingCard } from "./src/layout/pairing_card";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
 import { WorkspaceView, chatController } from "./src/workspace/workspace_view";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
@@ -35,6 +36,10 @@ const sortMode = signal<SortMode>("date");
 // The launcher composer (Cmd+N) and the workspace pane tree.
 const launcherOpen = signal(false);
 const store = createWorkspaceStore();
+
+// Pairing gate: the shell stays on the pairing card until the app holds a
+// device credential for the backend (the desktop's startup check).
+const paired = signal(true);
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -97,15 +102,28 @@ const WELCOME_TAB = {
   title: "Welcome",
 };
 
-void (async () => {
-  try {
-    const saved = await Console.loadWorkspaceLayout(WORKSPACE_KEY);
-    if (saved != null) store.restoreTree(JSON.parse(saved) as WorkspaceNode);
-    else store.openTab(null, WELCOME_TAB);
-  } catch {
-    store.openTab(null, WELCOME_TAB);
+// Deferred off the reactive pass: nsh's native bridge must not be called
+// while components run (the save effect below does the same). Mounting
+// first also means the reactive runtime exists when the bridge call lands.
+const startup = () => {
+  void (async () => {
+    try {
+      const saved = await Console.loadWorkspaceLayout(WORKSPACE_KEY);
+      if (saved != null) store.restoreTree(JSON.parse(saved) as WorkspaceNode);
+      else store.openTab(null, WELCOME_TAB);
+    } catch {
+      store.openTab(null, WELCOME_TAB);
+    }
+  })();
+  // Startup pairing check: an unpaired app boots onto the pairing card and
+  // only loads data once paired (the desktop's bootstrap does the same).
+  paired.set(Console.authPaired(backendUrl));
+  if (paired()) {
+    void loadProjects();
+    void loadSessions(null);
   }
-})();
+};
+setTimeout(startup, 0);
 
 effect(() => {
   if (store.revision() === 0) return;
@@ -125,7 +143,8 @@ function App() {
     <View class="flex flex-1 flex-col bg-background">
       <WorkspaceShortcuts store={store} onNewChat={() => launcherOpen.set(true)} />
       <TitleBar />
-      <View class="flex flex-1 flex-row">
+      {paired() ? (
+        <View class="flex flex-1 flex-row">
         <Sidebar
           loading={loading()}
           projects={projects()}
@@ -178,22 +197,28 @@ function App() {
             />
           ) : null}
         </View>
-      </View>
+        </View>
+      ) : (
+        <PairingCard baseUrl={backendUrl} onPaired={() => {
+          paired.set(true);
+          void loadProjects();
+          void loadSessions(null);
+        }} />
+      )}
     </View>
   );
 }
 
 const launcherDraft = signal("");
 
-void (async () => {
-  await loadProjects();
-  await loadSessions(null);
-})();
+// Startup pairing check and the welcome tab land in `startup`, deferred
+// until after mount (the bridge must not be called while components run).
 
 mount(App);
 
 export {
   App,
+  paired,
   loadProjects,
   loadSessions,
   selectProject,

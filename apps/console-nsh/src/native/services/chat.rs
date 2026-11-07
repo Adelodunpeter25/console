@@ -65,7 +65,7 @@ impl Chat {
     ) -> Result<(), String> {
         let dto: console_core::RunPromptDto =
             serde_json::from_value(prompt).map_err(|err| format!("bad prompt: {err}"))?;
-        let client = console_core::ConsoleClient::new(Some(base_url.to_owned()));
+        let client = http::client(base_url);
         let stream = Transport::default()
             .start_run(&client, session_id, &dto)
             .await
@@ -82,7 +82,7 @@ impl Chat {
         since: Option<u64>,
         on_event: Callback<JsonValue, ()>,
     ) -> Result<(), String> {
-        let client = console_core::ConsoleClient::new(Some(base_url.to_owned()));
+        let client = http::client(base_url);
         let stream = Transport::default()
             .attach_run(&client, session_id, since)
             .await

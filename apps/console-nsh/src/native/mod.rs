@@ -9,6 +9,7 @@ pub mod types;
 use nsh_core::prelude::*;
 use nsh_core::JsonValue;
 
+use services::auth;
 use services::chat::Chat;
 use services::workspace::WorkspacePersist;
 use services::{projects::Projects, sessions::Sessions};
@@ -115,5 +116,32 @@ impl Console {
         answer: JsonValue,
     ) -> Result<(), String> {
         Chat::answer_question(&base_url, &session_id, &request_id, answer).await
+    }
+
+    /// Whether a paired device credential is on disk for this server.
+    pub fn auth_paired(base_url: String) -> bool {
+        auth::paired(&base_url)
+    }
+
+    /// Exchanges a one-time pairing grant (the code the server shows) for
+    /// this device's long-lived credential, stores it for the normalized
+    /// server URL, and returns the paired device and server identity.
+    pub async fn auth_pair_with_code(
+        host: String,
+        code: String,
+        device_name: String,
+    ) -> Result<String, String> {
+        auth::pair_with_code(&host, &code, &device_name).await
+    }
+
+    /// Forgets this server's credential.
+    pub fn auth_unpair(base_url: String) -> Result<(), String> {
+        auth::unpair(&base_url)
+    }
+
+    /// The devices paired with this server (an authenticated read).
+    pub async fn auth_devices(base_url: String) -> Result<JsonValue, String> {
+        let devices = auth::devices(&base_url).await?;
+        serde_json::to_value(&devices).map_err(|err| err.to_string())
     }
 }

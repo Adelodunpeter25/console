@@ -2,6 +2,7 @@
 //! uses them; each maps the proto types to the plain structs of
 //! [`crate::native::types`].
 
+pub mod auth;
 pub mod chat;
 pub mod projects;
 pub mod sessions;

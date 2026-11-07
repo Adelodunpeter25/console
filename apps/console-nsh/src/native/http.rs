@@ -1,12 +1,30 @@
 //! The transport wiring: one place builds an `HttpTransport` from a base URL.
+//!
+//! Every transport here carries the paired device credential stored for
+//! that server (the shared `server-auth.json` the desktop app writes too),
+//! so a paired app authenticates every call and an unpaired one degrades to
+//! the same unauthenticated requests the desktop makes before pairing.
 
 use std::time::Duration;
 
 use console_core::HttpTransport;
+use console_core::utils::server_auth_store;
+use console_shared::path::storage_directory;
 
-/// A transport pointed at the backend.
+/// A transport pointed at the backend, with the server's stored device
+/// token when one is on disk.
 pub fn transport(base_url: &str) -> HttpTransport {
-    HttpTransport::new(Some(base_url.to_owned()))
+    let token = server_auth_store::token_for(&storage_directory(), base_url);
+    HttpTransport::new_with_auth(Some(base_url.to_owned()), token)
+}
+
+/// A full `ConsoleClient` for the backend — the same shape the desktop's
+/// state constructs, auth included.
+pub fn client(base_url: &str) -> console_core::ConsoleClient {
+    console_core::ConsoleClient::new_with_auth(
+        Some(base_url.to_owned()),
+        server_auth_store::token_for(&storage_directory(), base_url),
+    )
 }
 
 /// Fetches `{base_url}/health` and returns the response body, or rejects

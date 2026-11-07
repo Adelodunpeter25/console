@@ -318,6 +318,7 @@ name = "console-nsh"
 version = "0.1.0"
 dependencies = [
  "console-core",
+ "console-shared",
  "futures-util",
  "nsh-base",
  "nsh-core",
