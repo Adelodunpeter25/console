@@ -7,7 +7,9 @@ pub mod services;
 pub mod types;
 
 use nsh_core::prelude::*;
+use nsh_core::JsonValue;
 
+use services::chat::Chat;
 use services::workspace::WorkspacePersist;
 use services::{projects::Projects, sessions::Sessions};
 use types::{ProjectSummary, SessionSummary};
@@ -55,5 +57,42 @@ impl Console {
     pub fn delete_workspace_layout(key: String) -> Result<(), String> {
         WorkspacePersist::delete(&key);
         Ok(())
+    }
+
+    /// Starts one agent run and forwards each `AgentSessionEvent` to
+    /// `on_event` as camelCase JSON. The promise settles when the run's
+    /// stream ends, so awaiting it is the run's lifecycle.
+    pub async fn run_prompt(
+        base_url: String,
+        session_id: String,
+        prompt: JsonValue,
+        on_event: Callback<JsonValue, ()>,
+    ) -> Result<(), String> {
+        Chat::run_prompt(&base_url, &session_id, prompt, on_event).await
+    }
+
+    /// Reattaches to a run already in flight (an app restart mid-run), from
+    /// `since` events in.
+    pub async fn attach_run(
+        base_url: String,
+        session_id: String,
+        since: Option<u64>,
+        on_event: Callback<JsonValue, ()>,
+    ) -> Result<(), String> {
+        Chat::attach_run(&base_url, &session_id, since, on_event).await
+    }
+
+    /// One session's stored message history, as the server serializes it.
+    pub async fn chat_messages(base_url: String, session_id: String) -> Result<String, String> {
+        Chat::messages(&base_url, &session_id).await
+    }
+
+    /// Creates a session (the launcher's submit) and returns its header.
+    pub async fn create_session(
+        base_url: String,
+        project_id: String,
+        title: Option<String>,
+    ) -> Result<String, String> {
+        Chat::create_session(&base_url, &project_id, title).await
     }
 }

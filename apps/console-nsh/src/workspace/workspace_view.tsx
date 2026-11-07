@@ -13,6 +13,7 @@
 import { Text, View, token } from "nsh";
 import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { Icon } from "../common/icons";
+import { SessionPane, createChatController } from "../chat/session_pane";
 import {
   findNode,
   tabId,
@@ -87,10 +88,27 @@ function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
   );
 }
 
-/// One tab's content. Chat tabs render the real transcript in the app; the
-/// headless-safe placeholder keeps the pane/tree mechanics testable before
-/// the session wiring lands.
-function PaneContent(props: { pane: LeafPaneNode }) {
+/// One tab's content. Chat tabs render the real transcript through the
+/// native bridge; a chat tab without a real session (the welcome tab,
+/// `sessionId: "welcome"`) keeps the headless-safe placeholder. Controllers
+/// live in a module-level cache keyed by session id, so switching tabs back
+/// keeps the loaded transcript instead of reloading (the desktop keeps one
+/// transcript entity per session the same way).
+const chatControllers = new Map<string, ReturnType<typeof createChatController>>();
+
+/// The controller for one session's chat tab, creating it on first use. The
+/// launcher (App.tsx) calls this too, so its run streams into the same
+/// transcript the pane renders.
+export function chatController(baseUrl: string, sessionId: string) {
+  let controller = chatControllers.get(sessionId);
+  if (controller == null) {
+    controller = createChatController(baseUrl, sessionId);
+    chatControllers.set(sessionId, controller);
+  }
+  return controller;
+}
+
+function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
   return (
     <View class="flex-1 flex-col">
       {(() => {
@@ -102,6 +120,11 @@ function PaneContent(props: { pane: LeafPaneNode }) {
             <View class="flex-1 items-center justify-center">
               <Text class="text-muted-foreground">No tab open</Text>
             </View>
+          );
+        }
+        if (tab.type === "chat" && tab.sessionId !== "welcome") {
+          return (
+            <SessionPane controller={chatController(props.baseUrl, tab.sessionId)} />
           );
         }
         return (
@@ -116,7 +139,7 @@ function PaneContent(props: { pane: LeafPaneNode }) {
 
 /// Renders the node with `nodeId`, re-resolved from the tree inside JSX:
 /// when a pane closes, its node leaves the tree and this renders nothing.
-function NodeView(props: { nodeId: string; store: WorkspaceStore }) {
+function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: string }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
       {(() => {
@@ -132,7 +155,7 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore }) {
               onPress={() => props.store.focusPane(node.id)}
             >
               <TabStrip pane={node} store={props.store} />
-              <PaneContent pane={node} />
+              <PaneContent pane={node} baseUrl={props.baseUrl} />
             </View>
           );
         }
@@ -145,10 +168,10 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore }) {
             class="flex-1"
           >
             <ResizablePanel size={node.sizes[0]} minSize={10}>
-              <NodeView nodeId={node.children[0]!.id} store={props.store} />
+              <NodeView nodeId={node.children[0]!.id} store={props.store} baseUrl={props.baseUrl} />
             </ResizablePanel>
             <ResizablePanel size={node.sizes[1]} minSize={10}>
-              <NodeView nodeId={node.children[1]!.id} store={props.store} />
+              <NodeView nodeId={node.children[1]!.id} store={props.store} baseUrl={props.baseUrl} />
             </ResizablePanel>
           </ResizablePanelGroup>
         );
@@ -158,12 +181,13 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore }) {
 }
 
 /// The whole workspace: every pane, split and tab, driven by the store.
-export function WorkspaceView(props: { store: WorkspaceStore }) {
+export function WorkspaceView(props: { store: WorkspaceStore; baseUrl?: string }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
       {(() => {
+        const baseUrl = props.baseUrl ?? "";
         props.store.revision();
-        return <NodeView nodeId={props.store.tree().id} store={props.store} />;
+        return <NodeView nodeId={props.store.tree().id} store={props.store} baseUrl={baseUrl} />;
       })()}
     </View>
   );

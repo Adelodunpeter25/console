@@ -13,7 +13,7 @@ import { FloatingComposer } from "./src/common/floating_composer";
 import { Sidebar } from "./src/layout/sidebar/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
-import { WorkspaceView } from "./src/workspace/workspace_view";
+import { WorkspaceView, chatController } from "./src/workspace/workspace_view";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
@@ -143,7 +143,7 @@ function App() {
         />
         <View class="flex flex-1 flex-col gap-2 p-2">
           <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
-            <WorkspaceView store={store} />
+            <WorkspaceView store={store} baseUrl={backendUrl} />
           </View>
           {launcherOpen() ? (
             <FloatingComposer
@@ -154,7 +154,26 @@ function App() {
               onLaunch={(draft) => {
                 launcherOpen.set(false);
                 launcherDraft.set("");
-                openChat(`draft:${draft.slice(0, 32)}`, draft.slice(0, 48) || "New chat");
+                void (async () => {
+                  try {
+                    // The launcher's submit creates the session, then opens
+                    // its chat tab and streams the draft into it (the
+                    // desktop's floating composer does the same through
+                    // console-core).
+                    const header = JSON.parse(
+                      await Console.createSession(backendUrl, selectedProjectId() ?? "", null),
+                    ) as { id: string };
+                    if (draft.trim() !== "") {
+                      void chatController(backendUrl, header.id).send(draft);
+                    }
+                    openChat(header.id, draft.slice(0, 48) || "New chat");
+                  } catch (err) {
+                    // Session creation failed (backend down): fall back to a
+                    // placeholder tab so the draft text is not lost.
+                    openChat(`draft:${Date.now()}`, draft.slice(0, 48) || "New chat");
+                    console.error("session create failed:", errorMessage(err));
+                  }
+                })();
               }}
             />
           ) : null}

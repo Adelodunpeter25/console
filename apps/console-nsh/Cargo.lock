@@ -318,8 +318,10 @@ name = "console-nsh"
 version = "0.1.0"
 dependencies = [
  "console-core",
+ "futures-util",
  "nsh-base",
  "nsh-core",
+ "serde_json",
  "tokio",
 ]
 
