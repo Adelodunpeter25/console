@@ -99,6 +99,8 @@ export const backend = {
   providerModels: (baseUrl: string, providerId: string) =>
     text(Console.providerModels(baseUrl, providerId)),
   modelFavorites: (baseUrl: string) => text(Console.modelFavorites(baseUrl)),
+  setModelFavorite: (baseUrl: string, provider: string, modelId: string, favorite: boolean) =>
+    parsed(() => Console.setModelFavorite(baseUrl, provider, modelId, favorite)),
   usage: (baseUrl: string) => text(Console.usage(baseUrl)),
   settings: (baseUrl: string) => text(Console.settings(baseUrl)),
 

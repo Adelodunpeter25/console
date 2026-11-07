@@ -252,6 +252,16 @@ impl Console {
         catalog::model_favorites(&base_url).await
     }
 
+    /// Sets (or clears, with `false`) one favorite model — the picker's star.
+    pub async fn set_model_favorite(
+        base_url: String,
+        provider: String,
+        model_id: String,
+        favorite: bool,
+    ) -> Result<(), String> {
+        catalog::set_model_favorite(&base_url, &provider, &model_id, favorite).await
+    }
+
     /// Usage reports per provider (`null` where a provider has no report).
     pub async fn usage(base_url: String) -> Result<String, String> {
         catalog::usage(&base_url).await

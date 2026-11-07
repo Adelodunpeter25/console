@@ -10,6 +10,8 @@
 import { effect, mount, signal, View } from "nsh";
 import { backend } from "./src/services/backend";
 import { chatController } from "./src/services/chat_controller";
+import { resolveBackendUrl } from "./src/services/discovery";
+import { createCatalogStore } from "./src/stores/catalog_store";
 import { createSessionsStore } from "./src/stores/sessions_store";
 import { FloatingComposer } from "./src/common/floating_composer";
 import { Sidebar } from "./src/layout/sidebar/sidebar";
@@ -21,11 +23,12 @@ import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
 
-// The Go dev server's default port; the desktop app defaults the same way.
-// A caller may point the loaders at another base URL (tests, discovery).
-export const backendUrl = "http://localhost:2003";
+// The Go dev server's port; resolved like the desktop (`CONSOLE_BACKEND_URL`
+// env, else localhost:3000).
+export const backendUrl = resolveBackendUrl();
 
 const store_ = createSessionsStore(backendUrl);
+const catalog = createCatalogStore(backendUrl);
 const selectedSessionId = signal<string | null>(null);
 const sortMode = signal<SortMode>("date");
 
@@ -89,6 +92,7 @@ const startup = () => {
   if (paired()) {
     void store_.loadProjects();
     void store_.loadSessions(null);
+    void catalog.load();
   }
 };
 setTimeout(startup, 0);
@@ -137,6 +141,15 @@ function App() {
               value={launcherDraft()}
               onChange={(text: string) => launcherDraft.set(text)}
               onSend={() => {}}
+              modelCatalog={{
+                providers: catalog.providers() ?? [],
+                favorites: catalog.favorites(),
+                selected: catalog.selected(),
+                onSelect: (provider: string, modelId: string) =>
+                  catalog.selectModel(provider, modelId),
+                onFavorite: (provider: string, modelId: string) =>
+                  void catalog.toggleFavorite(provider, modelId),
+              }}
               projects={store_
                 .projects()
                 .map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
@@ -175,6 +188,7 @@ function App() {
           paired.set(true);
           void store_.loadProjects();
           void store_.loadSessions(null);
+          void catalog.load();
         }} />
       )}
     </View>

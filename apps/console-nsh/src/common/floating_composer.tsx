@@ -26,6 +26,13 @@ import type {
   ProjectInfo,
 } from "./workspace_footer";
 import { Composer } from "./composer";
+import {
+  ModelDropdownMenu,
+  formatModelName,
+  type CatalogProvider,
+  type PickerTab,
+  type SelectedModel,
+} from "./model_picker";
 
 /// The checkout a launched session runs in (the desktop's `BranchChoice`).
 export type LauncherCheckout =
@@ -39,10 +46,23 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   repos?: GithubRepo[] | null;
   /// Called with the draft and the picked checkout when the card submits.
   onLaunch?: (draft: string, checkout: LauncherCheckout) => void;
+  /// The model catalog (the launcher's model chip + picker). Absent until
+  /// the catalog store loads, matching the desktop's launcher card.
+  modelCatalog?: {
+    providers: CatalogProvider[];
+    favorites: Set<string>;
+    selected: SelectedModel | null;
+    onSelect: (provider: string, modelId: string) => void;
+    onFavorite: (provider: string, modelId: string) => void;
+  };
 }) {
   const open = signal(false);
   const selectedProjectId = signal<string | null>(null);
   const checkout = signal<LauncherCheckout>({ kind: "project" });
+  // The model picker's card-local state (desktop owns it on the app entity;
+  // the launcher card is this app's picker host, so card-local signals do).
+  const pickerTab = signal<PickerTab>({ kind: "favorites" });
+  const pickerSearch = signal("");
   // Escape over an empty draft collapses the card back to the pill; a
   // draft keeps the focus (and the escape for the autocomplete).
   function EscapeCollapses() {
@@ -61,6 +81,11 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
     if (choice.kind === "newWorktree") return "New worktree";
     if (choice.kind === "branch") return choice.name;
     return "Project folder";
+  };
+
+  const modelLabel = (): string => {
+    const selected = props.modelCatalog?.selected;
+    return selected != null ? formatModelName(selected.modelId) : "Model";
   };
 
   const launch = () => {
@@ -168,6 +193,35 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                     onConnect: () => {},
                   })}
                 </View>
+              </Popover>
+            ) : null}
+            {props.modelCatalog != null ? (
+              <Popover
+                placement="bottom"
+                align="start"
+                trigger={
+                  <MenuChip
+                    icon="Sparkle"
+                    label={modelLabel}
+                    accessibilityLabel="Model menu"
+                  />
+                }
+              >
+                <ModelDropdownMenu
+                  providers={props.modelCatalog.providers}
+                  selected={() => props.modelCatalog?.selected ?? null}
+                  activeTab={() => pickerTab()}
+                  favorites={() => props.modelCatalog?.favorites ?? new Set()}
+                  searchQuery={() => pickerSearch()}
+                  onSearch={(query: string) => pickerSearch.set(query)}
+                  onSelect={(provider: string, modelId: string) =>
+                    props.modelCatalog?.onSelect(provider, modelId)
+                  }
+                  onTab={(tab: PickerTab) => pickerTab.set(tab)}
+                  onFavorite={(provider: string, modelId: string) =>
+                    props.modelCatalog?.onFavorite(provider, modelId)
+                  }
+                />
               </Popover>
             ) : null}
             <View class="flex-1" />

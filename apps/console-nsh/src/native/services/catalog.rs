@@ -58,6 +58,23 @@ pub async fn model_favorites(base_url: &str) -> Result<String, String> {
     serde_json::to_string(&result).map_err(|err| err.to_string())
 }
 
+/// Sets (or clears, with `false`) one favorite model — the picker's star.
+pub async fn set_model_favorite(
+    base_url: &str,
+    provider: &str,
+    model_id: &str,
+    favorite: bool,
+) -> Result<(), String> {
+    let service = ModelFavoriteService::new(http::transport(base_url));
+    service
+        .set(console_proto::ModelFavorite {
+            provider: provider.to_string(),
+            model_id: model_id.to_string(),
+        }, favorite)
+        .await
+        .map_err(|err| err.to_string())
+}
+
 /// Usage reports per provider (`null` where a provider has no report).
 pub async fn usage(base_url: &str) -> Result<String, String> {
     let service = UsageService::new(http::transport(base_url));
