@@ -2,19 +2,21 @@
 // groups and drafts) beside phase 2.3 (the workspace pane tree: tabs,
 // splits, persisted layouts, the Cmd+N launcher composer and the global
 // shortcuts).
+//
+// The shell renders and routes only; data flows through the sessions store
+// (`src/stores/sessions_store.ts`) and the service layer
+// (`src/services/`), never the native bridge directly.
 
 import { effect, mount, signal, View } from "nsh";
-import {
-  Console,
-  type ProjectSummary,
-  type SessionSummary,
-} from "console-nsh/native";
+import { backend } from "./src/services/backend";
+import { chatController } from "./src/services/chat_controller";
+import { createSessionsStore } from "./src/stores/sessions_store";
 import { FloatingComposer } from "./src/common/floating_composer";
 import { Sidebar } from "./src/layout/sidebar/sidebar";
 import { TitleBar } from "./src/layout/title_bar";
 import { PairingCard } from "./src/layout/pairing_card";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
-import { WorkspaceView, chatController } from "./src/workspace/workspace_view";
+import { WorkspaceView } from "./src/workspace/workspace_view";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
@@ -23,13 +25,7 @@ import type { SortMode } from "./src/layout/sidebar/group_header";
 // A caller may point the loaders at another base URL (tests, discovery).
 export const backendUrl = "http://localhost:2003";
 
-const loading = signal(true);
-const projects = signal<ProjectSummary[]>([]);
-const projectsError = signal<string | null>(null);
-const selectedProjectId = signal<string | null>(null);
-const sessionsLoading = signal(false);
-const sessions = signal<SessionSummary[]>([]);
-const sessionsError = signal<string | null>(null);
+const store_ = createSessionsStore(backendUrl);
 const selectedSessionId = signal<string | null>(null);
 const sortMode = signal<SortMode>("date");
 
@@ -45,36 +41,9 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function loadProjects(baseUrl: string = backendUrl) {
-  loading.set(true);
-  try {
-    projects.set(await Console.projects(baseUrl));
-    projectsError.set(null);
-  } catch (err) {
-    projects.set([]);
-    projectsError.set(errorMessage(err));
-  } finally {
-    loading.set(false);
-  }
-}
-
-async function loadSessions(projectId: string | null, baseUrl: string = backendUrl) {
-  sessionsLoading.set(true);
-  try {
-    sessions.set(await Console.sessions(baseUrl, projectId ?? ""));
-    sessionsError.set(null);
-  } catch (err) {
-    sessions.set([]);
-    sessionsError.set(errorMessage(err));
-  } finally {
-    sessionsLoading.set(false);
-  }
-}
-
 function selectProject(id: string) {
-  selectedProjectId.set(id);
+  store_.selectProject(id);
   selectedSessionId.set(null);
-  void loadSessions(id);
 }
 
 /// Opens a session's chat tab in the workspace (the sidebar and the
@@ -86,8 +55,7 @@ function openChat(sessionId: string, title: string) {
 }
 
 function selectSession(id: string) {
-  const session = sessions().find((s) => s.id === id);
-  openChat(id, session?.title ?? id);
+  openChat(id, store_.session(id)?.title ?? id);
 }
 
 // Workspace persistence: restore the saved layout once, then write the
@@ -108,7 +76,7 @@ const WELCOME_TAB = {
 const startup = () => {
   void (async () => {
     try {
-      const saved = await Console.loadWorkspaceLayout(WORKSPACE_KEY);
+      const saved = backend.loadWorkspaceLayout(WORKSPACE_KEY);
       if (saved != null) store.restoreTree(JSON.parse(saved) as WorkspaceNode);
       else store.openTab(null, WELCOME_TAB);
     } catch {
@@ -117,10 +85,10 @@ const startup = () => {
   })();
   // Startup pairing check: an unpaired app boots onto the pairing card and
   // only loads data once paired (the desktop's bootstrap does the same).
-  paired.set(Console.authPaired(backendUrl));
+  paired.set(backend.authPaired(backendUrl));
   if (paired()) {
-    void loadProjects();
-    void loadSessions(null);
+    void store_.loadProjects();
+    void store_.loadSessions(null);
   }
 };
 setTimeout(startup, 0);
@@ -134,7 +102,7 @@ effect(() => {
   setTimeout(() => {
     // Fire-and-forget: a failed write (disk full, host gone) leaves the
     // tree in memory; the next successful write catches up.
-    Console.saveWorkspaceLayout(WORKSPACE_KEY, JSON.stringify(store.tree()));
+    backend.saveWorkspaceLayout(WORKSPACE_KEY, JSON.stringify(store.tree()));
   }, 250);
 });
 
@@ -146,13 +114,13 @@ function App() {
       {paired() ? (
         <View class="flex flex-1 flex-row">
         <Sidebar
-          loading={loading()}
-          projects={projects()}
-          projectsError={projectsError()}
-          selectedProjectId={selectedProjectId()}
-          sessions={sessions()}
-          sessionsLoading={sessionsLoading()}
-          sessionsError={sessionsError()}
+          loading={store_.loading()}
+          projects={store_.projects()}
+          projectsError={store_.projectsError()}
+          selectedProjectId={store_.selectedProjectId()}
+          sessions={store_.sessions()}
+          sessionsLoading={store_.sessionsLoading()}
+          sessionsError={store_.sessionsError()}
           activeSessionId={selectedSessionId()}
           sortMode={sortMode()}
           onProject={selectProject}
@@ -169,7 +137,9 @@ function App() {
               value={launcherDraft()}
               onChange={(text: string) => launcherDraft.set(text)}
               onSend={() => {}}
-              projects={projects().map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
+              projects={store_
+                .projects()
+                .map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
               onLaunch={(draft) => {
                 launcherOpen.set(false);
                 launcherDraft.set("");
@@ -179,9 +149,11 @@ function App() {
                     // its chat tab and streams the draft into it (the
                     // desktop's floating composer does the same through
                     // console-core).
-                    const header = JSON.parse(
-                      await Console.createSession(backendUrl, selectedProjectId() ?? "", null),
-                    ) as { id: string };
+                    const header = await backend.createSession(
+                      backendUrl,
+                      store_.selectedProjectId() ?? "",
+                      null,
+                    );
                     if (draft.trim() !== "") {
                       void chatController(backendUrl, header.id).send(draft);
                     }
@@ -201,8 +173,8 @@ function App() {
       ) : (
         <PairingCard baseUrl={backendUrl} onPaired={() => {
           paired.set(true);
-          void loadProjects();
-          void loadSessions(null);
+          void store_.loadProjects();
+          void store_.loadSessions(null);
         }} />
       )}
     </View>
@@ -219,11 +191,7 @@ mount(App);
 export {
   App,
   paired,
-  loadProjects,
-  loadSessions,
-  selectProject,
-  projectsError,
-  sessionsError,
+  store_ as sessionsStore,
   launcherOpen,
   store,
 };

@@ -7,7 +7,7 @@
 
 import { signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
-import { Console } from "console-nsh/native";
+import { backend } from "../services/backend";
 
 export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
   // One pasted line fills both fields (the desktop settings form): the
@@ -22,10 +22,7 @@ export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
 
   const parsePaste = (text: string) => {
     try {
-      const split = JSON.parse(Console.authSplitPairingLine(text)) as {
-        host: string;
-        code: string;
-      };
+      const split = backend.authSplitPairingLine(text);
       if (split.code !== "") {
         host.set(split.host);
         code.set(split.code);
@@ -41,7 +38,7 @@ export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
     error.set(null);
     void (async () => {
       try {
-        await Console.authPairWithCode(host().trim(), code().trim(), deviceName().trim() || "Console (nsh)");
+        await backend.authPairWithCode(host().trim(), code().trim(), deviceName().trim() || "Console (nsh)");
         props.onPaired();
       } catch (err) {
         error.set(err instanceof Error ? err.message : String(err));
