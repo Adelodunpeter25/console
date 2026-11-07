@@ -4,14 +4,13 @@
 // with no stored diff; other files without a diff get no popover.
 //
 // The desktop opens the card on hover with show/hide delays; the card here
-// is nsh's `Popover`, opened by pressing the chip (the hover equivalent —
-// nsh's `HoverCard` — is available and can replace this), with the preview
-// rendered through the shared `DiffView` (gutter, change bars), capped,
-// full diff one press away.
+// is nsh's `HoverCard` with the same delays (the popover note below). The
+// card's contents are the custom `DiffView` preview — gutter, change bars,
+// capped — with the full diff one press away.
 
 import { Text, View } from "nsh";
 import type { JSX } from "nsh";
-import { Popover } from "nsh/base";
+import { HoverCard } from "nsh/base";
 import { DiffView, parseUnifiedDiff } from "./diff_view";
 import type { TurnChange } from "./change_chips";
 
@@ -99,7 +98,10 @@ function DiffCardBody(props: {
 }
 
 /// Give a chip its diff popover (`with_diff_popover`): `trigger` is the chip.
-/// Returns the chip unchanged when the file has nothing to show.
+/// Returns the chip unchanged when the file has nothing to show. A
+/// `HoverCard`, not a `Popover`: the desktop's hover-open behaviour (rest
+/// the pointer 300ms to open, 150ms grace to come back — `diff_popover.rs`'s
+/// `SHOW_DELAY`/`HIDE_DELAY`); on touch screens a press opens and closes it.
 export function WithDiffPopover(props: {
   change: TurnChange;
   trigger: JSX.Element;
@@ -108,15 +110,17 @@ export function WithDiffPopover(props: {
   const body = bodyFor(props.change);
   if (body == null) return props.trigger;
   return (
-    <Popover
+    <HoverCard
       placement="top"
       align="start"
       offset={6}
+      openDelay={300}
+      closeDelay={150}
       popupClass="rounded-[10px] border border-border bg-popover p-1 shadow-md"
       popupStyle={{ width: 560, maxWidth: 380 }}
       trigger={props.trigger}
     >
       <DiffCardBody change={props.change} onOpen={props.onOpen} />
-    </Popover>
+    </HoverCard>
   );
 }
