@@ -3,7 +3,9 @@
 //! [`crate::native::types`].
 
 pub mod auth;
+pub mod catalog;
 pub mod chat;
+pub mod fs_git;
 pub mod projects;
 pub mod sessions;
 pub mod workspace;

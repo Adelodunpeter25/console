@@ -12,6 +12,7 @@ use nsh_core::JsonValue;
 use services::auth;
 use services::chat::Chat;
 use services::workspace::WorkspacePersist;
+use services::{catalog, fs_git};
 use services::{projects::Projects, sessions::Sessions};
 use types::{ProjectSummary, SessionSummary};
 
@@ -143,5 +144,66 @@ impl Console {
     pub async fn auth_devices(base_url: String) -> Result<JsonValue, String> {
         let devices = auth::devices(&base_url).await?;
         serde_json::to_value(&devices).map_err(|err| err.to_string())
+    }
+
+    /// Browses one directory (`null` = the server's default).
+    pub async fn fs_browse(base_url: String, path: Option<String>) -> Result<String, String> {
+        fs_git::browse(&base_url, path.as_deref()).await
+    }
+
+    /// One file's content and metadata (the file viewer's source).
+    pub async fn fs_read_file(base_url: String, path: String) -> Result<String, String> {
+        fs_git::read_file(&base_url, &path).await
+    }
+
+    /// The git status summary for a working tree (the repo path is required
+    /// by the server).
+    pub async fn git_status(base_url: String, path: String) -> Result<String, String> {
+        fs_git::git_status(&base_url, &path).await
+    }
+
+    /// One file's diff against HEAD (`null` file = the whole tree's).
+    pub async fn git_diff(
+        base_url: String,
+        repo_path: String,
+        file_path: Option<String>,
+    ) -> Result<String, String> {
+        fs_git::git_diff(&base_url, &repo_path, file_path.as_deref()).await
+    }
+
+    /// The working tree's branches (the checkout menu's source; the repo
+    /// path is required by the server).
+    pub async fn git_branches(base_url: String, path: String) -> Result<String, String> {
+        fs_git::git_branches(&base_url, &path).await
+    }
+
+    /// One chat's saved composer draft (`null` when there is none).
+    pub async fn draft(base_url: String, session_id: String) -> Result<String, String> {
+        catalog::draft(&base_url, &session_id).await
+    }
+
+    /// The provider catalog with its models (the model picker's source).
+    pub async fn providers(base_url: String) -> Result<String, String> {
+        catalog::providers(&base_url).await
+    }
+
+    /// One provider's models.
+    pub async fn provider_models(base_url: String, provider_id: String) -> Result<String, String> {
+        catalog::provider_models(&base_url, &provider_id).await
+    }
+
+    /// The user's favorite models (the picker's star state).
+    pub async fn model_favorites(base_url: String) -> Result<String, String> {
+        catalog::model_favorites(&base_url).await
+    }
+
+    /// Usage reports per provider (`null` where a provider has no report).
+    pub async fn usage(base_url: String) -> Result<String, String> {
+        catalog::usage(&base_url).await
+    }
+
+    /// The user's console settings.
+    pub async fn settings(base_url: String) -> Result<String, String> {
+        catalog::settings(&base_url).await
     }
 }
