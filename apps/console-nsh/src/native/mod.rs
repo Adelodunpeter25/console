@@ -95,4 +95,25 @@ impl Console {
     ) -> Result<String, String> {
         Chat::create_session(&base_url, &project_id, title).await
     }
+
+    /// Answers a pending permission request (the card's Allow / Deny).
+    pub async fn approve_permission(
+        base_url: String,
+        session_id: String,
+        request_id: String,
+        allow: bool,
+    ) -> Result<(), String> {
+        Chat::approve_permission(&base_url, &session_id, &request_id, allow).await
+    }
+
+    /// Answers a pending question (the card's option pick, custom answer, or
+    /// skip). `answer` is the JSON value the server accepts.
+    pub async fn answer_question(
+        base_url: String,
+        session_id: String,
+        request_id: String,
+        answer: JsonValue,
+    ) -> Result<(), String> {
+        Chat::answer_question(&base_url, &session_id, &request_id, answer).await
+    }
 }

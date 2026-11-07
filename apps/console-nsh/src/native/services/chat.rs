@@ -11,6 +11,7 @@
 
 use console_core::SessionService;
 use console_core::services::{ChatEventStream, Transport};
+use console_core::RunService;
 use futures_util::StreamExt;
 use nsh_core::element::Callback;
 use nsh_core::JsonValue;
@@ -123,5 +124,49 @@ impl Chat {
             .await
             .map_err(|err| err.to_string())?;
         serde_json::to_string(&header).map_err(|err| err.to_string())
+    }
+
+    /// Answers a pending permission request (the card's Allow / Deny).
+    pub async fn approve_permission(
+        base_url: &str,
+        session_id: &str,
+        request_id: &str,
+        allow: bool,
+    ) -> Result<(), String> {
+        let service = RunService::new(http::transport(base_url));
+        service
+            .approve_permission(
+                session_id,
+                console_core::ApproveToolPermissionDto {
+                    request_id: request_id.to_string(),
+                    allow,
+                },
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    /// Answers a pending question (the card's option pick, custom answer, or
+    /// skip). `answer` is the JSON value the server accepts: a string for a
+    /// single pick, an array of strings for multi-select.
+    pub async fn answer_question(
+        base_url: &str,
+        session_id: &str,
+        request_id: &str,
+        answer: JsonValue,
+    ) -> Result<(), String> {
+        let service = RunService::new(http::transport(base_url));
+        service
+            .answer_question(
+                session_id,
+                console_core::AnswerQuestionDto {
+                    request_id: request_id.to_string(),
+                    answer,
+                },
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+        Ok(())
     }
 }

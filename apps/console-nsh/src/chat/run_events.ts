@@ -67,8 +67,19 @@ const streamPart = (part: Record<string, unknown> | undefined) => {
 
 /// Applies one event. Returns whether the run stream has ended (`sessionEnd`
 /// or a terminal error), so the caller knows its `run_prompt` promise is the
-/// only remaining lifecycle step.
-export function applyRunEvent(state: TranscriptState, event: ChatRunEvent): boolean {
+/// only remaining lifecycle step. `interactive` receives the two requests
+/// that pause the run for the user (permissions, questions) — the pane owns
+/// their display and answers, the way the desktop hangs pending requests off
+/// the session rather than the transcript.
+export function applyRunEvent(
+  state: TranscriptState,
+  event: ChatRunEvent,
+  interactive?: {
+    onPermission: (request: Record<string, unknown> | null) => void;
+    onQuestion: (request: Record<string, unknown> | null) => void;
+  },
+): boolean {
+  const inter = interactive;
   switch (event["type"]) {
     case "turnStart":
       state.beginStreaming();
@@ -108,6 +119,16 @@ export function applyRunEvent(state: TranscriptState, event: ChatRunEvent): bool
     case "toolExecutionEnd":
       state.appendToolResults(
         ((event["results"] as unknown[]) ?? []).map((r) => mapToolResult(r as Record<string, unknown>)),
+      );
+      return false;
+    case "permissionRequest":
+      inter?.onPermission(
+        (event["request"] as Record<string, unknown> | undefined) ?? null,
+      );
+      return false;
+    case "askQuestion":
+      inter?.onQuestion(
+        (event["request"] as Record<string, unknown> | undefined) ?? null,
       );
       return false;
     case "sessionEnd":
