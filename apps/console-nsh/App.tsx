@@ -16,6 +16,7 @@ import { PairingCard } from "./src/layout/pairing_card";
 import { createWorkspaceStore } from "./src/workspace/workspace_store";
 import { WorkspaceView, chatController } from "./src/workspace/workspace_view";
 import { WorkspaceShortcuts } from "./src/workspace/shortcuts";
+import type { GitBranchInfo } from "./src/common/workspace_footer";
 import type { WorkspaceNode } from "./src/workspace/model";
 import type { SortMode } from "./src/layout/sidebar/group_header";
 
@@ -27,6 +28,7 @@ const loading = signal(true);
 const projects = signal<ProjectSummary[]>([]);
 const projectsError = signal<string | null>(null);
 const selectedProjectId = signal<string | null>(null);
+const projectBranches = signal<GitBranchInfo[]>([]);
 const sessionsLoading = signal(false);
 const sessions = signal<SessionSummary[]>([]);
 const sessionsError = signal<string | null>(null);
@@ -75,6 +77,25 @@ function selectProject(id: string) {
   selectedProjectId.set(id);
   selectedSessionId.set(null);
   void loadSessions(id);
+  const p = projects().find((item) => item.id === id);
+  if (p?.path) {
+    void (async () => {
+      try {
+        const raw = await Console.gitBranches(backendUrl, p.path);
+        const parsed = JSON.parse(raw) as { branches?: Array<{ name: string; current?: boolean }> };
+        projectBranches.set(
+          (parsed.branches ?? []).map((b) => ({
+            name: b.name,
+            current: b.current ?? false,
+          })),
+        );
+      } catch {
+        projectBranches.set([]);
+      }
+    })();
+  } else {
+    projectBranches.set([]);
+  }
 }
 
 /// Opens a session's chat tab in the workspace (the sidebar and the
@@ -159,6 +180,31 @@ function App() {
           onSession={selectSession}
           onSortMode={(mode) => sortMode.set(mode)}
           onNewChat={() => launcherOpen.set(true)}
+          onToggleSettle={(id) => {
+            void (async () => {
+              try {
+                const s = sessions().find((item) => item.id === id);
+                if (s?.status === "settled") {
+                  await Console.unsettleSession(backendUrl, id);
+                } else {
+                  await Console.settleSession(backendUrl, id);
+                }
+                await loadSessions(selectedProjectId());
+              } catch (err) {
+                console.error("toggle settle failed:", errorMessage(err));
+              }
+            })();
+          }}
+          onDeleteSession={(id) => {
+            void (async () => {
+              try {
+                await Console.deleteSession(backendUrl, id);
+                await loadSessions(selectedProjectId());
+              } catch (err) {
+                console.error("delete session failed:", errorMessage(err));
+              }
+            })();
+          }}
         />
         <View class="flex flex-1 flex-col gap-2 p-2">
           <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
@@ -170,6 +216,7 @@ function App() {
               onChange={(text: string) => launcherDraft.set(text)}
               onSend={() => {}}
               projects={projects().map((p) => ({ id: p.id, name: p.name, path: p.path ?? "" }))}
+              branches={projectBranches()}
               onLaunch={(draft) => {
                 launcherOpen.set(false);
                 launcherDraft.set("");

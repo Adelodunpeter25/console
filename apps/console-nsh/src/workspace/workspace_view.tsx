@@ -108,7 +108,7 @@ export function chatController(baseUrl: string, sessionId: string) {
   return controller;
 }
 
-function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
+function PaneContent(props: { pane: LeafPaneNode; baseUrl: string; store: WorkspaceStore }) {
   return (
     <View class="flex-1 flex-col">
       {(() => {
@@ -124,7 +124,12 @@ function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
         }
         if (tab.type === "chat" && tab.sessionId !== "welcome") {
           return (
-            <SessionPane controller={chatController(props.baseUrl, tab.sessionId)} />
+            <SessionPane
+              controller={chatController(props.baseUrl, tab.sessionId)}
+              onOpenSession={(sessionId, title) => {
+                props.store.openTab(props.pane.id, { type: "chat", sessionId, title });
+              }}
+            />
           );
         }
         return (
@@ -155,7 +160,7 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: strin
               onPress={() => props.store.focusPane(node.id)}
             >
               <TabStrip pane={node} store={props.store} />
-              <PaneContent pane={node} baseUrl={props.baseUrl} />
+              <PaneContent pane={node} baseUrl={props.baseUrl} store={props.store} />
             </View>
           );
         }

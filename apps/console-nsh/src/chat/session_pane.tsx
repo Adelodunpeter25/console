@@ -18,7 +18,7 @@
 import { signal, Text, View, token, type JSX } from "nsh";
 import { Input } from "nsh/base";
 import { Console } from "console-nsh/native";
-import { Composer } from "../common/composer";
+import { Composer, type CatalogProvider, type SelectedModel } from "../common/composer";
 import { TranscriptView, createTranscriptState } from "./transcript_view";
 import {
   PermissionInteractionCard,
@@ -54,6 +54,17 @@ export interface ChatController {
   pendingPermission: () => PermissionRequestJson | null;
   pendingQuestion: () => AskQuestionJson | null;
   submitting: () => boolean;
+  /// The provider catalog with its available models.
+  providers: () => CatalogProvider[];
+  /// The user's favorite models (keyed as `${provider}:${modelId}`).
+  favorites: () => Set<string>;
+  /// The currently selected model for this session.
+  selectedModel: () => SelectedModel | null;
+  selectModel: (provider: string, modelId: string) => void;
+  toggleFavorite: (provider: string, modelId: string) => Promise<void>;
+  /// Saved draft text for this session.
+  savedDraft: () => string;
+  saveDraft: (text: string) => Promise<void>;
 }
 
 // The wire shapes (pbjson camelCase; `args` is base64 bytes).
@@ -101,6 +112,10 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
   const pendingPermission = signal<PermissionRequestJson | null>(null);
   const pendingQuestion = signal<AskQuestionJson | null>(null);
   const submitting = signal(false);
+  const catalogProviders = signal<CatalogProvider[]>([]);
+  const modelFavorites = signal<Set<string>>(new Set());
+  const selectedModel = signal<SelectedModel | null>(null);
+  const savedDraftText = signal("");
 
   async function load(): Promise<void> {
     try {
@@ -110,6 +125,12 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       sessionStatus.set(detail.header?.status ?? "idle");
       sessionModel.set(detail.header?.modelId ?? "");
       sessionProvider.set(detail.header?.provider ?? "");
+      if (detail.header?.modelId && detail.header?.provider) {
+        selectedModel.set({
+          provider: detail.header.provider,
+          modelId: detail.header.modelId,
+        });
+      }
       promptHistory.set(
         (detail.messages ?? [])
           .filter((m): m is UserMessage => m.type === "user")
@@ -119,6 +140,97 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       loadError.set(null);
     } catch (err) {
       loadError.set(err instanceof Error ? err.message : String(err));
+    }
+
+    // Load draft
+    try {
+      const rawDraft = await Console.draft(baseUrl, sessionId);
+      if (rawDraft && rawDraft !== "null") {
+        const parsed = JSON.parse(rawDraft) as { text?: string };
+        if (parsed.text) {
+          savedDraftText.set(parsed.text);
+        }
+      }
+    } catch {
+      // Draft read is best-effort
+    }
+
+    // Load providers & favorites
+    try {
+      const rawProviders = await Console.providers(baseUrl);
+      if (rawProviders) {
+        const parsed = JSON.parse(rawProviders) as Array<{
+          name: string;
+          displayName?: string;
+          models?: Array<{ id: string; contextWindow?: number }>;
+        }>;
+        catalogProviders.set(
+          parsed.map((p) => ({
+            name: p.name,
+            displayName: p.displayName ?? p.name,
+            models: (p.models ?? []).map((m) => ({
+              id: m.id,
+              contextWindow: m.contextWindow ?? 0,
+            })),
+          })),
+        );
+      }
+    } catch {
+      // Providers read is best-effort
+    }
+
+    try {
+      const rawFavorites = await Console.modelFavorites(baseUrl);
+      if (rawFavorites) {
+        const parsed = JSON.parse(rawFavorites) as Array<{
+          provider?: string;
+          modelId?: string;
+        }>;
+        const favSet = new Set<string>();
+        for (const f of parsed) {
+          if (f.provider && f.modelId) {
+            favSet.add(`${f.provider}:${f.modelId}`);
+          }
+        }
+        modelFavorites.set(favSet);
+      }
+    } catch {
+      // Favorites read is best-effort
+    }
+  }
+
+  async function toggleFavorite(provider: string, modelId: string): Promise<void> {
+    const key = `${provider}:${modelId}`;
+    const favs = new Set(modelFavorites());
+    const isFav = favs.has(key);
+    const nextFav = !isFav;
+    if (nextFav) {
+      favs.add(key);
+    } else {
+      favs.delete(key);
+    }
+    modelFavorites.set(favs);
+    try {
+      await Console.setModelFavorite(baseUrl, provider, modelId, nextFav);
+    } catch (err) {
+      // Revert on failure
+      if (isFav) favs.add(key);
+      else favs.delete(key);
+      modelFavorites.set(favs);
+      loadError.set(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function persistDraft(text: string): Promise<void> {
+    savedDraftText.set(text);
+    try {
+      await Console.saveDraft(baseUrl, {
+        sessionId,
+        text,
+        updatedAt: Date.now(),
+      });
+    } catch {
+      // Best-effort
     }
   }
 
@@ -258,6 +370,13 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     pendingPermission: pendingPermission,
     pendingQuestion: pendingQuestion,
     submitting: submitting,
+    providers: () => catalogProviders(),
+    favorites: () => modelFavorites(),
+    selectedModel: () => selectedModel(),
+    selectModel: (provider, modelId) => selectedModel.set({ provider, modelId }),
+    toggleFavorite,
+    savedDraft: () => savedDraftText(),
+    saveDraft: persistDraft,
   };
 }
 
@@ -321,7 +440,7 @@ export function SessionPane(props: {
   onOpenSession?: (sessionId: string, title: string) => void;
 }) {
   const controller = props.controller;
-  const draft = signal("");
+  const draft = signal(controller.savedDraft());
   return (
     <View class="flex-1 flex-col">
       {controller.error() != null ? (
@@ -397,14 +516,23 @@ export function SessionPane(props: {
       <View class="flex-none border-t border-border">
         <Composer
           value={draft()}
-          onChange={(text: string) => draft.set(text)}
+          onChange={(text: string) => {
+            draft.set(text);
+            void controller.saveDraft(text);
+          }}
           onSend={() => {
             const text = draft();
             draft.set("");
+            void controller.saveDraft("");
             void controller.send(text);
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
+          providers={controller.providers().length > 0 ? controller.providers() : undefined}
+          selectedModel={controller.selectedModel()}
+          favorites={controller.favorites()}
+          onModelSelect={(provider, modelId) => controller.selectModel(provider, modelId)}
+          onFavorite={(provider, modelId) => void controller.toggleFavorite(provider, modelId)}
         />
       </View>
     </View>
