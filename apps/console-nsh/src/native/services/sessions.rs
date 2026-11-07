@@ -92,4 +92,42 @@ impl Sessions {
             .map_err(|err| err.to_string())?;
         serde_json::to_string(&header).map_err(|err| err.to_string())
     }
+
+    /// One chat's file changes (the review tab's list). `turn_index` of
+    /// `None` aggregates every turn.
+    pub async fn changes(
+        &self,
+        id: &str,
+        turn_index: Option<u64>,
+    ) -> Result<String, String> {
+        let changes = self
+            .service
+            .get_changes(id, turn_index)
+            .await
+            .map_err(|err| err.to_string())?;
+        serde_json::to_string(&changes).map_err(|err| err.to_string())
+    }
+
+    /// The cached unified diff text of one file change (the review tab's
+    /// per-file diff, served straight from the backend's DB).
+    pub async fn change_diff(&self, id: &str, path: &str, turn_index: u64) -> Result<String, String> {
+        self.service
+            .get_change_diff(id, path, turn_index)
+            .await
+            .map_err(|err| err.to_string())
+    }
+
+    /// Marks one file change reviewed (or unreviews it).
+    pub async fn set_change_reviewed(
+        &self,
+        id: &str,
+        path: &str,
+        turn_index: u32,
+        reviewed: bool,
+    ) -> Result<(), String> {
+        self.service
+            .set_change_reviewed(id, path, turn_index, reviewed)
+            .await
+            .map_err(|err| err.to_string())
+    }
 }

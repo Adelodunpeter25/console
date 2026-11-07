@@ -195,6 +195,43 @@ impl Console {
         Sessions::new(&base_url).fork(&session_id, &message_id).await
     }
 
+    /// One chat's file changes (the review tab's list; `turn_index` of
+    /// `null` aggregates every turn).
+    pub async fn session_changes(
+        base_url: String,
+        session_id: String,
+        turn_index: Option<u64>,
+    ) -> Result<String, String> {
+        Sessions::new(&base_url)
+            .changes(&session_id, turn_index)
+            .await
+    }
+
+    /// The cached diff text of one file change.
+    pub async fn session_change_diff(
+        base_url: String,
+        session_id: String,
+        path: String,
+        turn_index: u64,
+    ) -> Result<String, String> {
+        Sessions::new(&base_url)
+            .change_diff(&session_id, &path, turn_index)
+            .await
+    }
+
+    /// Marks one file change reviewed (or unreviews it).
+    pub async fn set_change_reviewed(
+        base_url: String,
+        session_id: String,
+        path: String,
+        turn_index: u32,
+        reviewed: bool,
+    ) -> Result<(), String> {
+        Sessions::new(&base_url)
+            .set_change_reviewed(&session_id, &path, turn_index, reviewed)
+            .await
+    }
+
     /// Saves one chat's composer draft (the desktop's draft sync shape; the
     /// draft JSON carries its own `sessionId`).
     pub async fn save_draft(base_url: String, draft: JsonValue) -> Result<(), String> {

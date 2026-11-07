@@ -15,6 +15,7 @@ import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { Icon } from "../common/icons";
 import { SessionPane } from "../chat/session_pane";
 import { chatController } from "../services/chat_controller";
+import { DiffViewerTab, FileViewerTab, ReviewTab } from "./viewer_tabs";
 import {
   findNode,
   tabId,
@@ -91,9 +92,25 @@ function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
 
 /// One tab's content. Chat tabs render the real transcript through the
 /// chat-controller service; a chat tab without a real session (the welcome
-/// tab, `sessionId: "welcome"`) keeps the headless-safe placeholder.
+/// tab, `sessionId: "welcome"`) keeps the headless-safe placeholder. The
+/// viewer tabs (file, diff, changes review) fetch through the viewers
+/// service; change chips and the header's review chip open more of them.
+///
+/// `projectPath` resolves a tab's project id to its checkout on disk (the
+/// git calls need it); `openChange`/`openReview` open diff and review tabs.
 
-function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
+function baseName(path: string): string {
+  const at = path.lastIndexOf("/");
+  return at >= 0 ? path.slice(at + 1) : path;
+}
+
+function PaneContent(props: {
+  pane: LeafPaneNode;
+  baseUrl: string;
+  projectPath: (projectId: string | null | undefined) => string | null;
+  onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
+  onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+}) {
   return (
     <View class="flex-1 flex-col">
       {(() => {
@@ -109,8 +126,31 @@ function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
         }
         if (tab.type === "chat" && tab.sessionId !== "welcome") {
           return (
-            <SessionPane controller={chatController(props.baseUrl, tab.sessionId)} />
+            <SessionPane
+              controller={chatController(props.baseUrl, tab.sessionId)}
+              onOpenChange={(path) =>
+                props.onOpenDiff?.(props.pane.id, path, tab.projectId ?? null)
+              }
+              onOpenReview={() =>
+                props.onOpenReview?.(props.pane.id, tab.sessionId, tab.projectId ?? null)
+              }
+            />
           );
+        }
+        if (tab.type === "file") {
+          return <FileViewerTab baseUrl={props.baseUrl} path={tab.path} />;
+        }
+        if (tab.type === "diff") {
+          return (
+            <DiffViewerTab
+              baseUrl={props.baseUrl}
+              repoPath={props.projectPath(tab.projectId)}
+              path={tab.path}
+            />
+          );
+        }
+        if (tab.type === "changesReview") {
+          return <ReviewTab baseUrl={props.baseUrl} sessionId={tab.sessionId} />;
         }
         return (
           <View class="flex-1 items-center justify-center">
@@ -124,7 +164,14 @@ function PaneContent(props: { pane: LeafPaneNode; baseUrl: string }) {
 
 /// Renders the node with `nodeId`, re-resolved from the tree inside JSX:
 /// when a pane closes, its node leaves the tree and this renders nothing.
-function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: string }) {
+function NodeView(props: {
+  nodeId: string;
+  store: WorkspaceStore;
+  baseUrl: string;
+  projectPath: (projectId: string | null | undefined) => string | null;
+  onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
+  onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+}) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
       {(() => {
@@ -140,7 +187,13 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: strin
               onPress={() => props.store.focusPane(node.id)}
             >
               <TabStrip pane={node} store={props.store} />
-              <PaneContent pane={node} baseUrl={props.baseUrl} />
+              <PaneContent
+                pane={node}
+                baseUrl={props.baseUrl}
+                projectPath={props.projectPath}
+                onOpenDiff={props.onOpenDiff}
+                onOpenReview={props.onOpenReview}
+              />
             </View>
           );
         }
@@ -153,10 +206,24 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: strin
             class="flex-1"
           >
             <ResizablePanel size={node.sizes[0]} minSize={10}>
-              <NodeView nodeId={node.children[0]!.id} store={props.store} baseUrl={props.baseUrl} />
+              <NodeView
+                nodeId={node.children[0]!.id}
+                store={props.store}
+                baseUrl={props.baseUrl}
+                projectPath={props.projectPath}
+                onOpenDiff={props.onOpenDiff}
+                onOpenReview={props.onOpenReview}
+              />
             </ResizablePanel>
             <ResizablePanel size={node.sizes[1]} minSize={10}>
-              <NodeView nodeId={node.children[1]!.id} store={props.store} baseUrl={props.baseUrl} />
+              <NodeView
+                nodeId={node.children[1]!.id}
+                store={props.store}
+                baseUrl={props.baseUrl}
+                projectPath={props.projectPath}
+                onOpenDiff={props.onOpenDiff}
+                onOpenReview={props.onOpenReview}
+              />
             </ResizablePanel>
           </ResizablePanelGroup>
         );
@@ -166,13 +233,30 @@ function NodeView(props: { nodeId: string; store: WorkspaceStore; baseUrl: strin
 }
 
 /// The whole workspace: every pane, split and tab, driven by the store.
-export function WorkspaceView(props: { store: WorkspaceStore; baseUrl?: string }) {
+/// `projectPath` resolves a project id to its checkout (git tabs need it);
+/// `onOpenDiff`/`onOpenReview` open a viewer tab from the chat transcript.
+export function WorkspaceView(props: {
+  store: WorkspaceStore;
+  baseUrl?: string;
+  projectPath?: (projectId: string | null | undefined) => string | null;
+  onOpenDiff?: (paneId: string, path: string, projectId: string | null) => void;
+  onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
+}) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
       {(() => {
         const baseUrl = props.baseUrl ?? "";
         props.store.revision();
-        return <NodeView nodeId={props.store.tree().id} store={props.store} baseUrl={baseUrl} />;
+        return (
+          <NodeView
+            nodeId={props.store.tree().id}
+            store={props.store}
+            baseUrl={baseUrl}
+            projectPath={props.projectPath ?? (() => null)}
+            onOpenDiff={props.onOpenDiff}
+            onOpenReview={props.onOpenReview}
+          />
+        );
       })()}
     </View>
   );

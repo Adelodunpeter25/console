@@ -64,6 +64,17 @@ export const backend = {
     parsed(() => Console.unsettleSession(baseUrl, sessionId)),
   forkSession: (baseUrl: string, sessionId: string, messageId: string) =>
     json<{ id: string }>(Console.forkSession(baseUrl, sessionId, messageId)),
+  sessionChanges: (baseUrl: string, sessionId: string, turnIndex: number | null) =>
+    text(Console.sessionChanges(baseUrl, sessionId, turnIndex)),
+  sessionChangeDiff: (baseUrl: string, sessionId: string, path: string, turnIndex: number) =>
+    text(Console.sessionChangeDiff(baseUrl, sessionId, path, turnIndex)),
+  setChangeReviewed: (
+    baseUrl: string,
+    sessionId: string,
+    path: string,
+    turnIndex: number,
+    reviewed: boolean,
+  ) => parsed(() => Console.setChangeReviewed(baseUrl, sessionId, path, turnIndex, reviewed)),
   approvePermission: (baseUrl: string, sessionId: string, requestId: string, allow: boolean) =>
     parsed(() => Console.approvePermission(baseUrl, sessionId, requestId, allow)),
   answerQuestion: (baseUrl: string, sessionId: string, requestId: string, answer: unknown) =>

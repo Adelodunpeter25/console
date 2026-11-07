@@ -134,7 +134,30 @@ function App() {
         />
         <View class="flex flex-1 flex-col gap-2 p-2">
           <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
-            <WorkspaceView store={store} baseUrl={backendUrl} />
+            <WorkspaceView
+              store={store}
+              baseUrl={backendUrl}
+              projectPath={(projectId) =>
+                store_.projects().find((p) => p.id === projectId)?.path ?? null
+              }
+              onOpenDiff={(paneId, path, projectId) =>
+                store.openTab(paneId, {
+                  type: "diff",
+                  path,
+                  title: path.slice(path.lastIndexOf("/") + 1),
+                  projectId,
+                })
+              }
+              onOpenReview={(paneId, sessionId, projectId) =>
+                store.openTab(paneId, {
+                  type: "changesReview",
+                  sessionId,
+                  scope: "allTurns",
+                  title: "Review changes",
+                  projectId,
+                })
+              }
+            />
           </View>
           {launcherOpen() ? (
             <FloatingComposer

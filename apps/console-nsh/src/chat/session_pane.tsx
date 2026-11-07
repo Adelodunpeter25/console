@@ -17,6 +17,7 @@
 import { signal, Text, View, token, type JSX } from "nsh";
 import { Input } from "nsh/base";
 import { Composer } from "../common/composer";
+import { Icon } from "../common/icons";
 import { TranscriptView } from "./transcript_view";
 import {
   PermissionInteractionCard,
@@ -91,6 +92,10 @@ function QuestionCustomInput(props: { controller: ChatController }): JSX.Element
 export function SessionPane(props: {
   controller: ChatController;
   onOpenSession?: (sessionId: string, title: string) => void;
+  /// Opens the diff tab for one changed file (a change chip's press).
+  onOpenChange?: (path: string, diffText: string | null) => void;
+  /// Opens the session's changes-review tab (the header's review chip).
+  onOpenReview?: () => void;
 }) {
   const controller = props.controller;
   const draft = signal("");
@@ -109,6 +114,7 @@ export function SessionPane(props: {
             if (forked != null) props.onOpenSession?.(forked, "Fork");
           })();
         }}
+        onOpenChange={props.onOpenChange}
       />
       {(() => {
         const permission = controller.pendingPermission();
@@ -166,6 +172,19 @@ export function SessionPane(props: {
         return null;
       })()}
       <SessionHeaderRow controller={controller} />
+      {props.onOpenReview != null ? (
+        <View class="flex-none flex-row px-3 pb-1">
+          <View
+            class="flex-row items-center gap-1.5 rounded-[7px] border border-border px-2 py-[3px] hover:bg-accent"
+            role="button"
+            accessibilityLabel="Open changes review"
+            onPress={props.onOpenReview}
+          >
+            <Icon name="ReplaceAll" size={12} color={token("muted-foreground")} />
+            <Text class="text-[12px] text-muted-foreground">Review changes</Text>
+          </View>
+        </View>
+      ) : null}
       <View class="flex-none border-t border-border">
         <Composer
           value={draft()}
