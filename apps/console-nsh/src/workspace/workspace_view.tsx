@@ -54,7 +54,7 @@ function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
         return (
           <View
             class={
-              "flex-none flex-row items-center gap-1.5 border-b-2 px-2.5 " +
+              "h-[30px] flex-none flex-row items-center gap-1.5 border-b-2 px-2.5 " +
               (active ? "bg-muted" : "border-transparent hover:bg-muted")
             }
             style={active ? { borderBottomColor: "#e2795b" } : undefined}
@@ -70,7 +70,7 @@ function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
             />
             <Text
               class={
-                "max-w-[140px] truncate text-[12px] " +
+                "w-[140px] truncate text-[12px] " +
                 (active ? "font-medium text-foreground" : "text-muted-foreground")
               }
             >

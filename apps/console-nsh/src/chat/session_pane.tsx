@@ -36,32 +36,6 @@ function decodeArgs(base64: string | undefined): unknown {
   }
 }
 
-/// The header row above the composer: the session's status and the model
-/// chip (the desktop's composer footer, minus the picker — the model menu
-/// lands with the model catalog port).
-function SessionHeaderRow(props: { controller: ChatController }) {
-  const controller = props.controller;
-  const status = controller.sessionStatus();
-  const working = status === "working";
-  const label = working ? "Working" : status;
-  return (
-    <View class="flex-none flex-row items-center gap-2 px-3 py-1">
-      <View
-        class="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: token(working ? "warning" : "muted-foreground") }}
-      />
-      <Text class="text-[11px] text-muted-foreground">{label}</Text>
-      {controller.sessionModel() !== "" ? (
-        <Text class="max-w-[220px] truncate rounded border border-border px-1.5 py-[1px] text-[10px] text-muted-foreground">
-          {controller.sessionProvider() !== ""
-            ? `${controller.sessionProvider()} · ${controller.sessionModel()}`
-            : controller.sessionModel()}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 /// The custom-answer input inside the question card (a one-line input bound
 /// to a signal; the card reads it through the `customAnswer` thunk). One
 /// shared draft: the server asks one question per run, so only one card is
@@ -183,7 +157,6 @@ export function SessionPane(props: {
         }
         return null;
       })()}
-      <SessionHeaderRow controller={controller} />
       {/* The turn's changes pill: GPUI's `changes_pill` — "N files changed
           +A -D" over the raised surface; pressing opens the review tab. */}
       {(() => {
