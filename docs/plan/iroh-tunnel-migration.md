@@ -88,9 +88,11 @@ Remaining (open):
 - [ ] Desktop: connect by node ID
 - [ ] Android: connect by node ID
 - [ ] Pairing QR node-ID format on all three ends
-- [~] Fork `iroh-go` (Adelodunpeter25/iroh-go; upstream rejects contributions
-      and lags the latest iroh): forked; still to bump to latest iroh/iroh-ffi
-- [x] Fork CI builds static libs for macOS (x64, arm64) and Windows x64;
+- [x] Fork `iroh-go` (Adelodunpeter25/iroh-go; upstream rejects contributions
+      and lags the latest iroh): forked and bumped to iroh 1.4.1 (iroh-ffi
+      still v1.2.0; iroh-services held at 1.0.0 because 2.0.0 is breaking)
+- [x] Fork CI builds static libs for all five platforms (linux x64/arm64,
+      macOS x64/arm64, Windows x64);
       Intel mac is link-checked only, never run
 - [x] server-go points at the fork; the `iroh` tag now covers linux, macOS
       and windows-amd64. CI for server-go does not build with the tag yet
