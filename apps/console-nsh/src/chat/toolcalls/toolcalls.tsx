@@ -4,9 +4,9 @@
 // always matched by `toolCallId`, never by their position in the transcript.
 //
 // Deviations from the Rust source, until their dependencies are ported:
-// - The editor diff views (`EditorDiff`/`file_diff_block`) live behind the
-//   concurrent diff-popover port; edit rows render the diff's changed lines
-//   as colored monospace text instead.
+// - Edit rows render their diffs through the shared `DiffView`
+//   (`../diff_view`); syntax highlighting waits for the markdown code-block
+//   hooks.
 // - console-core's `argument_summary`/`argument_path` and the markdown
 //   selection/link plumbing are not ported; summary/path/label helpers live
 //   in `model.ts` as local subsets, and selection is dropped.

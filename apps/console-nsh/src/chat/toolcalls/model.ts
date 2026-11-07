@@ -4,6 +4,7 @@
 // `chat/toolcalls.rs`.
 
 import type { IconName } from "../../common/icons";
+import type { DiffLine } from "../diff_view";
 
 /// Tallest an edit row's diff grows before it scrolls inside the row.
 export const EDIT_DIFF_MAX_HEIGHT = 240;
@@ -49,7 +50,7 @@ export interface FileDiff {
   path: string;
   added: number;
   removed: number;
-  lines: { kind: "+" | "-" | " "; text: string }[];
+  lines: DiffLine[];
 }
 
 function kindFlag(call: ToolCall, flag: number): boolean {
@@ -128,6 +129,25 @@ function truncate(text: string, max: number): string {
 function lineDiff(oldText: string, newText: string): FileDiff["lines"] {
   const oldLines = oldText.split("\n");
   const newLines = newText.split("\n");
+  // A fresh file has no old side; an emptied file has no new side. Calling
+  // lineDiff with an empty string would otherwise yield a phantom removal
+  // (or addition) for the empty text.
+  if (oldText === "") {
+    return newLines.map((text, index) => ({
+      kind: "+" as const,
+      text,
+      oldNo: null,
+      newNo: index + 1,
+    }));
+  }
+  if (newText === "") {
+    return oldLines.map((text, index) => ({
+      kind: "-" as const,
+      text,
+      oldNo: index + 1,
+      newNo: null,
+    }));
+  }
   let start = 0;
   while (
     start < oldLines.length &&
@@ -147,11 +167,15 @@ function lineDiff(oldText: string, newText: string): FileDiff["lines"] {
     endNew -= 1;
   }
   const lines: FileDiff["lines"] = [];
+  // Line numbers are 1-based within each file; the changed middle starts
+  // after `start` unchanged lines on both sides.
+  let oldLine = start;
   for (const text of oldLines.slice(start, endOld)) {
-    lines.push({ kind: "-", text });
+    lines.push({ kind: "-", text, oldNo: ++oldLine, newNo: null });
   }
+  let newLine = start;
   for (const text of newLines.slice(start, endNew)) {
-    lines.push({ kind: "+", text });
+    lines.push({ kind: "+", text, oldNo: null, newNo: ++newLine });
   }
   return lines;
 }

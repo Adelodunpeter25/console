@@ -9,7 +9,10 @@ const lastAction = signal("");
 const header = "diff --git a/big.ts b/big.ts";
 const longDiff =
   header +
-  Array.from({ length: 430 }, (_, i) => `\n@@ line ${i + 1}`).join("");
+  Array.from(
+    { length: 430 },
+    (_, i) => `\n@@ -${i + 1},1 +${i + 1},1 @@\n+line ${i + 1}`,
+  ).join("");
 
 const bigChip = (
   <View

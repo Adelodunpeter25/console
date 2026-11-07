@@ -3,21 +3,24 @@
 // file's recorded diff, or a short "Binary file …" note for binary files
 // with no stored diff; other files without a diff get no popover.
 //
-// The desktop opens the card on hover with show/hide delays and builds the
-// editor diff view (line-number gutter, change bars, tree-sitter
-// highlighting). nsh views have no hover events and the editor diff view is
-// not ported, so the card is nsh's `Popover`, opened by pressing the chip
-// (same surface, same contents otherwise): the preview is the diff's plain
-// lines in a capped, scrolling monospace block.
+// The desktop opens the card on hover with show/hide delays; nsh views have
+// no hover events, so the card is nsh's `Popover`, opened by pressing the
+// chip (same surface, same contents otherwise): the preview renders through
+// the shared `DiffView` (gutter, change bars), capped, with the full diff
+// one press away.
 
 import { Text, View } from "nsh";
 import type { JSX } from "nsh";
 import { Popover } from "nsh/base";
+import { DiffView, parseUnifiedDiff } from "./diff_view";
 import type { TurnChange } from "./change_chips";
 
 /// A hover (here: press) preview only builds this many diff lines. Past it
 /// the card says how much was left out; the full diff is one press away.
-const PREVIEW_MAX_LINES = 400;
+/// 200, not the desktop's 400: each DiffView row is a small tree (gutter,
+/// change bar, text), and the popup renders its first frame headless — 200
+/// rows stay inside one frame's budget.
+const PREVIEW_MAX_LINES = 200;
 /// Longer previews scroll inside this height (`CARD_DIFF_MAX_HEIGHT`).
 const CARD_DIFF_MAX_HEIGHT = 260;
 
@@ -69,23 +72,13 @@ function DiffCardBody(props: {
       </Text>
     );
   }
-  const lines = body.text.split("\n");
-  const preview = lines.slice(0, PREVIEW_MAX_LINES);
-  const leftOut = lines.length - preview.length;
+  const parsed = parseUnifiedDiff(body.text);
+  const preview = parsed.slice(0, PREVIEW_MAX_LINES);
+  const leftOut = parsed.length - preview.length;
   return (
     <View class="w-full flex-col gap-1">
-      <View
-        class="overflow-hidden rounded-md bg-muted p-1.5"
-        style={{ maxHeight: CARD_DIFF_MAX_HEIGHT }}
-      >
-        {preview.map((line, index) => (
-          <Text
-            class="text-[11px] text-foreground"
-            style={{ fontFamily: "monospace" }}
-          >
-            {line === "" ? " " : line}
-          </Text>
-        ))}
+      <View class="overflow-hidden rounded-md border border-border bg-card p-1">
+        <DiffView lines={preview} maxHeight={CARD_DIFF_MAX_HEIGHT} />
       </View>
       {leftOut > 0 ? (
         <View
@@ -97,7 +90,7 @@ function DiffCardBody(props: {
           }
         >
           <Text class="text-[11px] text-muted-foreground">
-            {`Showing the first ${preview.length} of ${lines.length} lines — click the file to open the full diff`}
+            {`Showing the first ${preview.length} of ${parsed.length} lines — click the file to open the full diff`}
           </Text>
         </View>
       ) : null}

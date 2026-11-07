@@ -5,6 +5,7 @@
 import { Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Icon, type IconName } from "../../common/icons";
+import { DiffView } from "../diff_view";
 import {
   EDIT_DIFF_MAX_HEIGHT,
   activityIconForCall,
@@ -126,10 +127,7 @@ export function callRow(
         <View class="flex-col gap-1.5 px-[10px] pb-2">
           {hasDiff
             ? diffs.map((fileDiff) => (
-                <View
-                  class="flex-col gap-0.5 rounded bg-muted px-2 py-1.5"
-                  style={{ maxHeight: EDIT_DIFF_MAX_HEIGHT }}
-                >
+                <View class="flex-col gap-0.5 rounded bg-muted px-2 py-1.5">
                   <View class="flex-row items-center gap-2">
                     <Text class="min-w-0 flex-1 overflow-hidden font-mono text-[11px] text-foreground">
                       {fileDiff.path}
@@ -141,20 +139,7 @@ export function callRow(
                       -{fileDiff.removed}
                     </Text>
                   </View>
-                  {fileDiff.lines.map((line, index) => (
-                    <Text
-                      class="font-mono text-[11px] text-muted-foreground"
-                      style={
-                        line.kind === "+"
-                          ? { color: token("primary") }
-                          : line.kind === "-"
-                            ? { color: token("destructive") }
-                            : undefined
-                      }
-                    >
-                      {`${line.kind} ${line.text}`}
-                    </Text>
-                  ))}
+                  <DiffView lines={fileDiff.lines} maxHeight={EDIT_DIFF_MAX_HEIGHT} />
                 </View>
               ))
             : (
