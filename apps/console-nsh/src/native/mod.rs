@@ -186,6 +186,15 @@ impl Console {
         Sessions::new(&base_url).unsettle(&session_id).await
     }
 
+    /// Forks a chat at one of its messages and returns the forked header.
+    pub async fn fork_session(
+        base_url: String,
+        session_id: String,
+        message_id: String,
+    ) -> Result<String, String> {
+        Sessions::new(&base_url).fork(&session_id, &message_id).await
+    }
+
     /// Saves one chat's composer draft (the desktop's draft sync shape; the
     /// draft JSON carries its own `sessionId`).
     pub async fn save_draft(base_url: String, draft: JsonValue) -> Result<(), String> {

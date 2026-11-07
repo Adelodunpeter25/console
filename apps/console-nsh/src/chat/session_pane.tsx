@@ -41,6 +41,8 @@ export interface ChatController {
   /// Answers the pending question, or skips it.
   answerQuestion(answer: string | string[]): Promise<void>;
   skipQuestion(): Promise<void>;
+  /// Forks the chat at one of its messages; resolves the forked session id.
+  fork(messageId: string): Promise<string | null>;
   error: () => string | null;
   /// The session header row's inputs, from the last canonical load.
   sessionStatus: () => string;
@@ -226,6 +228,18 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     await answerQuestion("");
   }
 
+  async function fork(messageId: string): Promise<string | null> {
+    try {
+      const header = JSON.parse(
+        await Console.forkSession(baseUrl, sessionId, messageId),
+      ) as { id: string };
+      return header.id;
+    } catch (err) {
+      loadError.set(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  }
+
   void load();
 
   return {
@@ -235,6 +249,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     answerPermission,
     answerQuestion,
     skipQuestion,
+    fork,
     error: loadError,
     sessionStatus: sessionStatus,
     sessionModel: sessionModel,
@@ -299,8 +314,12 @@ function QuestionCustomInput(props: { controller: ChatController }): JSX.Element
 
 /// One chat tab's rendered surface: the transcript, the trailing error line,
 /// the pinned interaction cards, and the composer. The controller (created
-/// once per mount) owns the state.
-export function SessionPane(props: { controller: ChatController }) {
+/// once per mount) owns the state. `onOpenSession` opens a forked session
+/// as a new tab (the desktop's fork behaviour).
+export function SessionPane(props: {
+  controller: ChatController;
+  onOpenSession?: (sessionId: string, title: string) => void;
+}) {
   const controller = props.controller;
   const draft = signal("");
   return (
@@ -310,7 +329,15 @@ export function SessionPane(props: { controller: ChatController }) {
           <Text class="text-[11px] text-red-500">{controller.error()}</Text>
         </View>
       ) : null}
-      <TranscriptView state={controller.state} />
+      <TranscriptView
+        state={controller.state}
+        onFork={(messageId: string) => {
+          void (async () => {
+            const forked = await controller.fork(messageId);
+            if (forked != null) props.onOpenSession?.(forked, "Fork");
+          })();
+        }}
+      />
       {(() => {
         const permission = controller.pendingPermission();
         if (permission != null) {

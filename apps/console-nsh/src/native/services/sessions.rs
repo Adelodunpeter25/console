@@ -81,4 +81,15 @@ impl Sessions {
     pub async fn unsettle(&self, id: &str) -> Result<(), String> {
         self.service.unsettle(id).await.map_err(|err| err.to_string())
     }
+
+    /// Forks a chat at one of its messages: the forked header comes back as
+    /// JSON (the transcript's fork button opens it as a new tab).
+    pub async fn fork(&self, id: &str, message_id: &str) -> Result<String, String> {
+        let header = self
+            .service
+            .fork(id, message_id)
+            .await
+            .map_err(|err| err.to_string())?;
+        serde_json::to_string(&header).map_err(|err| err.to_string())
+    }
 }
