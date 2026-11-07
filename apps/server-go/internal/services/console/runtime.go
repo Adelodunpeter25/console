@@ -28,6 +28,7 @@ type Runtime struct {
 	scripts   *projectssvc.ProjectScriptsService
 	sessions  *services.SessionService
 	projects  *projectssvc.ProjectService
+	pulls     *services.PullRequestService
 	mcp       *mcp.Manager
 	active    func(string) bool
 	abort     func(string) bool
@@ -145,6 +146,33 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		}},
 		{Name: "mcp.call", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.mcpCallImpl(ctx, args)
+		}},
+		{Name: "pr.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prList(ctx, args)
+		}},
+		{Name: "pr.read", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prRead(ctx, args)
+		}},
+		{Name: "pr.create", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prCreate(ctx, args)
+		}},
+		{Name: "pr.update", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prUpdate(ctx, args)
+		}},
+		{Name: "pr.comment", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prComment(ctx, args)
+		}},
+		{Name: "pr.merge", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prMerge(ctx, args)
+		}},
+		{Name: "pr.close", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prClose(ctx, args)
+		}},
+		{Name: "pr.reopen", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prReopen(ctx, args)
+		}},
+		{Name: "pr.ready", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.prReady(ctx, args)
 		}},
 	}
 	// Every method refuses keys it does not take, so a typo such as
@@ -670,4 +698,13 @@ var methodArgs = map[string][]string{
 	"mcp.disconnect":        {"id"},
 	"mcp.reset_auth":        {"id"},
 	"mcp.call":              {"id", "tool", "args"},
+	"pr.list":               {"scope", "state", "project_id", "draft"},
+	"pr.read":               {"owner", "repo", "number"},
+	"pr.create":             {"owner", "repo", "project_id", "head", "base", "title", "body", "draft"},
+	"pr.update":             {"owner", "repo", "number", "title", "body", "base", "state"},
+	"pr.comment":            {"owner", "repo", "number", "body"},
+	"pr.merge":              {"owner", "repo", "number", "method", "expected_head"},
+	"pr.close":              {"owner", "repo", "number"},
+	"pr.reopen":             {"owner", "repo", "number"},
+	"pr.ready":              {"owner", "repo", "number"},
 }
