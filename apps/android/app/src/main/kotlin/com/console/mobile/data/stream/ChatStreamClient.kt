@@ -176,6 +176,7 @@ class ChatStreamClient(
                         close()
                         return
                     }
+                    trySend(StreamOutcome.Opened)
                     val responseBody = response.body
                     if (responseBody == null) {
                         response.close()
@@ -235,6 +236,8 @@ class ChatStreamClient(
 }
 
 sealed interface StreamOutcome {
+    /** The server accepted the run request — safe to render the user bubble. */
+    data object Opened : StreamOutcome
     data class Frame(val frame: SseStreamFrame) : StreamOutcome
     data class End(val end: StreamEnd) : StreamOutcome
 }

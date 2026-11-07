@@ -67,6 +67,15 @@ class ChatRepository(
 ) {
     private val controllers = mutableMapOf<String, RunStreamController>()
 
+    /** Prompts shown only after the server accepts the run POST; see startRun. */
+    private val pendingRuns = mutableMapOf<String, PendingRun>()
+
+    private class PendingRun(
+        val message: UserMessage,
+        val prompt: String,
+        val attachments: List<ImageAttachment>,
+    )
+
     init {
         persistence?.let { p ->
             scope.launch(Dispatchers.IO) {
@@ -436,15 +445,20 @@ class ChatRepository(
             com.console.mobile.data.model.ImagePart(data = encodeBase64(it.bytes), mimeType = it.mimeType)
         }
 
+        val userMessage = UserMessage(
+            id = newMessageId(),
+            createdAt = System.currentTimeMillis(),
+            content = prompt,
+            attachments = userMessageAttachments,
+            contextFiles = contextFiles,
+        )
+        // The bubble is held back until the server accepts the run POST — a
+        // rejected prompt (e.g. 409 right after a stop) must not render as a
+        // sent message, or it silently vanishes on the next restart.
+        pendingRuns[sessionId] = PendingRun(userMessage, prompt, attachments)
+
         chats.update(sessionId) {
             it.copy(
-                messages = it.messages + UserMessage(
-                    id = newMessageId(),
-                    createdAt = System.currentTimeMillis(),
-                    content = prompt,
-                    attachments = userMessageAttachments,
-                    contextFiles = contextFiles,
-                ),
                 input = if (clearComposer) "" else it.input,
                 draftUpdatedAt = if (clearComposer) null else it.draftUpdatedAt,
                 streamingText = "",
@@ -484,15 +498,33 @@ class ChatRepository(
             controller.startRun(streamClient)
         } catch (e: Exception) {
             val msg = e.message ?: "Failed to send message. Is the backend running?"
+            pendingRuns.remove(sessionId)
+            restoreFailedSend(sessionId)
             if (!isAbortError(msg)) markError(sessionId, msg)
             finalize(sessionId, !isAbortError(msg))
             persistence?.setSuppress(false)
         }
     }
 
+    /** A run POST that never reached the server: give the prompt back to the composer. */
+    private fun restoreFailedSend(sessionId: String) {
+        val pending = pendingRuns.remove(sessionId) ?: return
+        chats.update(sessionId) { s ->
+            if (s.input.isBlank()) {
+                s.copy(
+                    input = pending.prompt,
+                    attachments = pending.attachments,
+                    draftUpdatedAt = System.currentTimeMillis(),
+                )
+            } else s
+        }
+    }
+
     /** User stop — kill stream/timers, abort server run, mark aborted. */
     fun abort(sessionId: String) {
-        controllers[sessionId]?.cancel()
+        // Remove (not just cancel): a cancelled controller stays inert and a
+        // reused one would swallow the next send's events.
+        controllers.remove(sessionId)?.cancel()
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { api.abortRun(sessionId) }
@@ -500,6 +532,7 @@ class ChatRepository(
             }
             chats.update(sessionId) { abortSessionRun(it) }
             sessions.setStatus(sessionId, SessionStatus.Done)
+            persistence?.setSuppress(false)
         }
     }
 
@@ -710,24 +743,34 @@ class ChatRepository(
      */
     fun discard(sessionId: String) {
         controllers.remove(sessionId)?.cancel()
+        pendingRuns.remove(sessionId)
         chats.remove(sessionId)
     }
 
     private fun getOrCreate(sessionId: String, bodyJson: String): RunStreamController {
-        return controllers.getOrPut(sessionId) {
-            RunStreamController(sessionId, object : RunStreamController.Deps {
-                override fun handleEvent(event: AgentSessionEvent) = this@ChatRepository.handleEvent(sessionId, event)
-                override fun markError(message: String) = markError(sessionId, message)
-                override fun finalize(hadError: Boolean) {
-                    this@ChatRepository.finalize(sessionId, hadError)
-                    controllers.remove(sessionId)
-                }
-                override fun baseUrl(): String = apiClient.baseUrl
-                override fun authToken(): String? = apiClient.authToken
-                override fun runBodyJson(): String = bodyJson
-                override fun scope(): CoroutineScope = this@ChatRepository.scope
-            })
-        }
+        // A finished or user-cancelled controller stays inert (it drops every
+        // event), so it must be replaced rather than reused for a new send.
+        controllers[sessionId]?.takeIf { it.isActive }?.let { return it }
+        val controller = RunStreamController(sessionId, object : RunStreamController.Deps {
+            override fun handleEvent(event: AgentSessionEvent) = this@ChatRepository.handleEvent(sessionId, event)
+            override fun markError(message: String) = markError(sessionId, message)
+            override fun finalize(hadError: Boolean) {
+                this@ChatRepository.finalize(sessionId, hadError)
+                controllers.remove(sessionId)
+            }
+            override fun onRunOpened() = this@ChatRepository.onRunOpened(sessionId)
+            override fun baseUrl(): String = apiClient.baseUrl
+            override fun authToken(): String? = apiClient.authToken
+            override fun runBodyJson(): String = bodyJson
+            override fun scope(): CoroutineScope = this@ChatRepository.scope
+        })
+        controllers[sessionId] = controller
+        return controller
+    }
+
+    private fun onRunOpened(sessionId: String) {
+        val pending = pendingRuns.remove(sessionId) ?: return
+        chats.update(sessionId) { it.copy(messages = it.messages + pending.message) }
     }
 
     private fun markError(sessionId: String, msg: String) {
@@ -745,6 +788,8 @@ class ChatRepository(
     }
 
     private fun finalize(sessionId: String, hadError: Boolean) {
+        // A run that never started (retries exhausted) still holds its prompt back.
+        restoreFailedSend(sessionId)
         chats.update(sessionId) { finalizeSessionRun(it, hadError) }
         sessions.setStatus(sessionId, if (hadError) SessionStatus.NeedsAttention else SessionStatus.Done)
         persistence?.setSuppress(false)

@@ -14,6 +14,8 @@ class RunStreamController(
         fun handleEvent(event: AgentSessionEvent)
         fun markError(message: String)
         fun finalize(hadError: Boolean)
+        /** The server accepted the run request; render the pending prompt now. */
+        fun onRunOpened()
         fun baseUrl(): String
         fun authToken(): String?
         fun runBodyJson(): String
@@ -34,6 +36,8 @@ class RunStreamController(
     private var attempts = 0
     private var lastSeq: Long? = null
     private var stream: ChatStreamClient? = null
+    /** Set once the server accepted the run POST; before that, errors must re-POST, not attach. */
+    private var runStarted = false
 
     val isActive: Boolean get() = !finished && !userCancelled
     val lastSeqValue: Long? get() = lastSeq
@@ -45,6 +49,10 @@ class RunStreamController(
     /** Start a fresh agent run (POST /api/sessions/:id/run). */
     fun startRun(client: ChatStreamClient) {
         stream = client
+        // A stopped controller left in the map must not stay inert for the next send.
+        userCancelled = false
+        finished = false
+        runStarted = false
         open { client.startRun(deps.baseUrl(), sessionId, deps.runBodyJson(), deps.authToken()) }
     }
 
@@ -52,6 +60,7 @@ class RunStreamController(
     fun attach(since: Long? = null, client: ChatStreamClient? = stream) {
         val c = client ?: return
         stream = c
+        runStarted = true
         open { c.attach(deps.baseUrl(), sessionId, since, deps.authToken()) }
     }
 
@@ -79,6 +88,29 @@ class RunStreamController(
 
     fun onError(message: String, statusCode: Int?) {
         if (userCancelled || finished) return
+        if (!runStarted) {
+            // The run POST itself failed — the prompt was never accepted, so
+            // there is nothing to attach to. Re-POST it. A 409 here means the
+            // server still considers an earlier run active (e.g. just aborted);
+            // it must not be treated as a graceful settle.
+            if (attempts < MAX_RECONNECT_ATTEMPTS) {
+                attempts += 1
+                awaitingEndAfterFailure = true
+                val delayMs = RECONNECT_BACKOFF_MS.getOrElse(attempts - 1) { 4_000 }
+                val client = stream ?: return
+                reconnectJob?.cancel()
+                reconnectJob = deps.scope().launch {
+                    delay(delayMs)
+                    if (userCancelled || finished) return@launch
+                    startRun(client)
+                }
+                return
+            }
+            hadError = true
+            deps.markError(message)
+            finish(true)
+            return
+        }
         // 409 = run settled server-side while disconnected -> finish gracefully.
         if (statusCode == 409) {
             finish(hadError)
@@ -117,6 +149,10 @@ class RunStreamController(
             try {
                 flows().collect { outcome ->
                     when (outcome) {
+                        is StreamOutcome.Opened -> {
+                            runStarted = true
+                            deps.onRunOpened()
+                        }
                         is StreamOutcome.Frame -> onEvent(outcome.frame.event, outcome.frame.seq)
                         is StreamOutcome.End -> when (val e = outcome.end) {
                             is StreamEnd.Aborted -> onEnd(true)
