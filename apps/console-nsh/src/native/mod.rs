@@ -146,6 +146,52 @@ impl Console {
         serde_json::to_value(&devices).map_err(|err| err.to_string())
     }
 
+    /// Splits one pasted pairing line into its host and code (`{host, code}`)
+    /// — one line fills both pairing fields, the desktop settings form's
+    /// behaviour.
+    pub fn auth_split_pairing_line(text: String) -> Result<String, String> {
+        let (host, code) = auth::split_pairing_line(&text);
+        serde_json::to_string(&serde_json::json!({ "host": host, "code": code }))
+            .map_err(|err| err.to_string())
+    }
+
+    /// Soft-deletes one chat (trash; restorable for 7 days).
+    pub async fn delete_session(base_url: String, session_id: String) -> Result<(), String> {
+        Sessions::new(&base_url).delete(&session_id).await
+    }
+
+    /// The soft-deleted chats (trash), optionally one project's.
+    pub async fn deleted_sessions(
+        base_url: String,
+        project_id: Option<String>,
+    ) -> Result<Vec<SessionSummary>, String> {
+        Sessions::new(&base_url)
+            .list_deleted(project_id.as_deref())
+            .await
+    }
+
+    /// Brings a soft-deleted chat back.
+    pub async fn restore_session(base_url: String, session_id: String) -> Result<(), String> {
+        Sessions::new(&base_url).restore(&session_id).await
+    }
+
+    /// Marks a finished chat settled (the server refuses while a run is in
+    /// flight or a prompt is queued).
+    pub async fn settle_session(base_url: String, session_id: String) -> Result<(), String> {
+        Sessions::new(&base_url).settle(&session_id).await
+    }
+
+    /// Brings a settled chat back to active.
+    pub async fn unsettle_session(base_url: String, session_id: String) -> Result<(), String> {
+        Sessions::new(&base_url).unsettle(&session_id).await
+    }
+
+    /// Saves one chat's composer draft (the desktop's draft sync shape; the
+    /// draft JSON carries its own `sessionId`).
+    pub async fn save_draft(base_url: String, draft: JsonValue) -> Result<(), String> {
+        catalog::put_draft(&base_url, draft).await
+    }
+
     /// Browses one directory (`null` = the server's default).
     pub async fn fs_browse(base_url: String, path: Option<String>) -> Result<String, String> {
         fs_git::browse(&base_url, path.as_deref()).await

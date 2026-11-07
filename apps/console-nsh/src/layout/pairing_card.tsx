@@ -10,11 +10,30 @@ import { Input } from "nsh/base";
 import { Console } from "console-nsh/native";
 
 export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
+  // One pasted line fills both fields (the desktop settings form): the
+  // whole pairing URL, `host:3000#code`, or a bare address plus a code
+  // typed separately.
+  const paste = signal(props.baseUrl);
   const host = signal(props.baseUrl);
   const code = signal("");
   const deviceName = signal("Console (nsh)");
   const busy = signal(false);
   const error = signal<string | null>(null);
+
+  const parsePaste = (text: string) => {
+    try {
+      const split = JSON.parse(Console.authSplitPairingLine(text)) as {
+        host: string;
+        code: string;
+      };
+      if (split.code !== "") {
+        host.set(split.host);
+        code.set(split.code);
+      }
+    } catch {
+      // Not a parseable line; leave the fields alone.
+    }
+  };
 
   const submit = () => {
     if (busy()) return;
@@ -22,7 +41,7 @@ export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
     error.set(null);
     void (async () => {
       try {
-        await Console.authPairWithCode(host(), code().trim(), deviceName().trim() || "Console (nsh)");
+        await Console.authPairWithCode(host().trim(), code().trim(), deviceName().trim() || "Console (nsh)");
         props.onPaired();
       } catch (err) {
         error.set(err instanceof Error ? err.message : String(err));
@@ -43,9 +62,12 @@ export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
         <Input
           multiline={false}
           class="px-3 py-2 text-[13px] text-foreground"
-          placeholder="Server address (e.g. localhost:2003)"
-          value={host()}
-          onChange={(e: { value: string }) => host.set(e.value)}
+          placeholder="Paste the pairing URL or server address"
+          value={paste()}
+          onChange={(e: { value: string }) => {
+            paste.set(e.value);
+            parsePaste(e.value);
+          }}
         />
         <Input
           multiline={false}

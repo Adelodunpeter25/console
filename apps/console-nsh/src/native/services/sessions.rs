@@ -42,4 +42,43 @@ impl Sessions {
             })
             .collect())
     }
+
+    /// Soft-deletes one chat (trash; restorable for 7 days).
+    pub async fn delete(&self, id: &str) -> Result<(), String> {
+        self.service.delete(id).await.map_err(|err| err.to_string())
+    }
+
+    /// The soft-deleted chats (trash), optionally one project's.
+    pub async fn list_deleted(&self, project_id: Option<&str>) -> Result<Vec<SessionSummary>, String> {
+        Ok(self
+            .service
+            .list_deleted(project_id)
+            .await
+            .map_err(|err| err.to_string())?
+            .into_iter()
+            .map(|s| SessionSummary {
+                id: s.id,
+                title: s.title,
+                status: s.status,
+                updated_at: s.updated_at,
+                project_id: s.project_id,
+            })
+            .collect())
+    }
+
+    /// Brings a soft-deleted chat back.
+    pub async fn restore(&self, id: &str) -> Result<(), String> {
+        self.service.restore(id).await.map_err(|err| err.to_string())
+    }
+
+    /// Marks a finished chat settled. The server refuses while a run is in
+    /// flight or a prompt is queued — the error string surfaces as a message.
+    pub async fn settle(&self, id: &str) -> Result<(), String> {
+        self.service.settle(id).await.map_err(|err| err.to_string())
+    }
+
+    /// Brings a settled chat back to active.
+    pub async fn unsettle(&self, id: &str) -> Result<(), String> {
+        self.service.unsettle(id).await.map_err(|err| err.to_string())
+    }
 }

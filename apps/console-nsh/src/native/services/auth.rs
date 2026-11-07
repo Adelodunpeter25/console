@@ -65,6 +65,14 @@ pub async fn pair_with_code(
     .map_err(|err| err.to_string())
 }
 
+/// Splits one pasted pairing line into its host and code — the desktop's
+/// settings form behaviour, where one line fills both fields. Accepts the
+/// whole pairing URL (`http://host:3000/console/pair#v=1&server=..&code=…`),
+/// `host:3000#code`, or a bare address (empty code).
+pub fn split_pairing_line(text: &str) -> (String, String) {
+    console_core::utils::split_pairing_line(text)
+}
+
 /// Forgets this server's credential (the desktop's unpair).
 pub fn unpair(base_url: &str) -> Result<(), String> {
     server_auth_store::clear(&storage_directory(), base_url)

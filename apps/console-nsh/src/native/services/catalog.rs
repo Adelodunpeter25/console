@@ -5,6 +5,7 @@
 
 use console_core::services::{DraftService, ModelFavoriteService, SettingsService};
 use console_core::{ProviderService, UsageService};
+use nsh_core::JsonValue;
 
 use crate::native::http;
 
@@ -16,6 +17,20 @@ pub async fn draft(base_url: &str, session_id: &str) -> Result<String, String> {
         .await
         .map_err(|err| err.to_string())?;
     serde_json::to_string(&result).map_err(|err| err.to_string())
+}
+
+/// Saves one chat's composer draft. `draft` is the wire JSON of the proto
+/// `ChatDraft` (which carries its own `sessionId`); the desktop's draft
+/// sync writes the same shape.
+pub async fn put_draft(base_url: &str, draft: JsonValue) -> Result<(), String> {
+    let service = DraftService::new(http::transport(base_url));
+    let parsed: console_proto::ChatDraft =
+        serde_json::from_value(draft).map_err(|err| format!("bad draft: {err}"))?;
+    service
+        .put(&parsed)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(())
 }
 
 /// The provider catalog: every provider with its available models (the
