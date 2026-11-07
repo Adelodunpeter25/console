@@ -87,7 +87,9 @@ Server side of Phase 1 done and committed locally; nothing is pushed.
 Remaining (open):
 - [ ] Desktop: connect by node ID
 - [ ] Android: connect by node ID
-- [ ] Pairing QR node-ID format on all three ends
+- [x] Pairing URL `console-iroh://<node-id>/console/pair#v=1&server=..&code=..`:
+      Go emits (only when iroh is on) and parses, Rust parses (Android shares
+      it over JNI, not rebuilt/tested here). Clients cannot dial it yet.
 - [x] Fork `iroh-go` (Adelodunpeter25/iroh-go; upstream rejects contributions
       and lags the latest iroh): forked and bumped to iroh 1.4.1 (iroh-ffi
       still v1.2.0; iroh-services held at 1.0.0 because 2.0.0 is breaking)

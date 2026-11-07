@@ -4,6 +4,12 @@
 // Shape:
 //
 //	https://server.example/console/pair#v=1&server=<server-id>&grant=<one-time-grant>
+//	console-iroh://<node-id>/console/pair#v=1&server=<server-id>&code=<code>
+//
+// The second form is a server reached over iroh: the host is its 64-hex
+// node ID, which the client dials directly instead of sending HTTP to a
+// host. The node ID proves the server's identity, so server= is only a
+// display name there.
 //
 // Two decisions are load-bearing:
 //
@@ -23,8 +29,17 @@ package auth
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
+
+// IrohScheme marks a pairing URL whose host is an iroh node ID.
+const IrohScheme = "console-iroh"
+
+var irohNodeID = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// IrohBaseURL is the base URL for a server reachable at an iroh node ID.
+func IrohBaseURL(nodeID string) string { return IrohScheme + "://" + nodeID }
 
 // PairingURLPath is the path a pairing URL points at. It is never
 // requested over the network (the secret is in the fragment) — it exists
@@ -79,8 +94,12 @@ func ParsePairingURL(raw string) (ParsedPairingURL, error) {
 	if err != nil {
 		return ParsedPairingURL{}, fmt.Errorf("parse pairing URL: %w", err)
 	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return ParsedPairingURL{}, fmt.Errorf("pairing URL must be http or https")
+	if parsed.Scheme == IrohScheme {
+		if !irohNodeID.MatchString(parsed.Host) {
+			return ParsedPairingURL{}, fmt.Errorf("pairing URL host is not an iroh node id")
+		}
+	} else if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ParsedPairingURL{}, fmt.Errorf("pairing URL must be http, https or %s", IrohScheme)
 	}
 	if parsed.Host == "" {
 		return ParsedPairingURL{}, fmt.Errorf("pairing URL has no host")

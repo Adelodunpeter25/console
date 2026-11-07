@@ -122,6 +122,10 @@ func Pairing(dir string) (PairingInfo, error) {
 	if remote, ok := remoteInfo(dir); ok && strings.TrimSpace(os.Getenv("CONSOLE_PUBLIC_URL")) == "" {
 		info.Remote, info.RemoteReady = remote.URL, remote.Ready
 		base = remote.URL
+		if remote.NodeID != "" {
+			base = auth.IrohBaseURL(remote.NodeID)
+			info.Remote = base
+		}
 	}
 	info.URL = auth.PairingURL(base, identity.ID, code)
 	return info, nil

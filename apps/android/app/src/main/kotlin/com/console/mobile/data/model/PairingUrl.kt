@@ -38,6 +38,9 @@ data class PairingUrl(
  * one client accepts the other accepts too. When the shared library is not
  * loaded the paste is refused rather than parsed leniently: this is a
  * credential, and "unavailable" must not read as "valid".
+ *
+ * Also the one place iroh pairing URLs (`console-iroh://<node-id>/...`) are
+ * understood: the shared parser accepts them, so nothing here changes.
  */
 fun parsePairingUrl(raw: String): Result<PairingUrl> =
     SharedNative.pairing(raw).map { PairingUrl(baseUrl = it.baseUrl, serverId = it.serverId, code = it.code) }
