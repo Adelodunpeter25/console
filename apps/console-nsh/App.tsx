@@ -158,8 +158,12 @@ function App() {
           </View>
           <ImagePreviewOverlay />
           {launcherOpen() ? (
-            <FloatingComposer
-              value={launcherDraft()}
+            <View class="absolute right-0 bottom-0 left-0 flex flex-row justify-center px-6 pb-2">
+              <View class="w-full max-w-[768px]">
+                <FloatingComposer
+                  open={launcherOpen()}
+                  onDismiss={() => launcherOpen.set(false)}
+                  value={launcherDraft()}
               onChange={(text: string) => launcherDraft.set(text)}
               onSend={() => {}}
               modelCatalog={{
@@ -209,7 +213,9 @@ function App() {
                   }
                 })();
               }}
-            />
+                />
+              </View>
+            </View>
           ) : null}
         </View>
         </View>

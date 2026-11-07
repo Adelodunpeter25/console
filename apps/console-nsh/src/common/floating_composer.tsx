@@ -52,6 +52,11 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   projects?: ProjectInfo[];
   branches?: GitBranchInfo[];
   repos?: GithubRepo[] | null;
+  /// Controlled visibility: when provided the card shows/hides by it and
+  /// collapses call `onDismiss` (the app's Cmd+N state owns the card).
+  /// Absent = self-managed (the fixture / standalone use).
+  open?: boolean;
+  onDismiss?: () => void;
   /// Called with the draft and the picked checkout when the card submits.
   onLaunch?: (
     draft: string,
@@ -74,6 +79,13 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   };
 }) {
   const open = signal(false);
+  // Controlled mode (the app's launcher state) wins over the internal
+  // signal; collapses route to `onDismiss` there.
+  const isOpen = () => props.open ?? open();
+  function dismiss() {
+    if (props.open != null) props.onDismiss?.();
+    else open.set(false);
+  }
   const selectedProjectId = signal<string | null>(null);
   const checkout = signal<LauncherCheckout>({ kind: "project" });
   // The card's thinking and approval choices (the desktop card's two menus
@@ -88,7 +100,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   // draft keeps the focus (and the escape for the autocomplete).
   function EscapeCollapses() {
     keymap.bind("escape", () => {
-      if (props.value === "") open.set(false);
+      if (props.value === "") dismiss();
     });
     return null;
   }
@@ -117,12 +129,12 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
       thinkingLevel: thinking(),
       approvalMode: approval(),
     });
-    open.set(false);
+    dismiss();
   };
 
   return (
     <View class="w-full">
-      {open() ? (
+      {isOpen() ? (
         <View class="flex-col gap-2 rounded-xl border border-border bg-card p-2">
           <EscapeCollapses />
           <View class="flex-row items-center gap-1.5 px-1">
@@ -329,7 +341,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               class="flex h-6 w-6 items-center justify-center rounded-md hover:bg-accent"
               role="button"
               accessibilityLabel="Close launcher"
-              onPress={() => open.set(false)}
+              onPress={() => dismiss()}
             >
               <Icon name="X" size={12} color={token("muted-foreground")} />
             </View>
