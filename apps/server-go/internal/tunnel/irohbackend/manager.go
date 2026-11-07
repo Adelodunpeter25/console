@@ -198,12 +198,15 @@ func (m *Manager) handleIncoming(incoming *iroh.Incoming) {
 		m.log().Debug("iroh: connect refused", "error", err)
 		return
 	}
-	stream, err := conn.AcceptBi()
-	if err != nil {
-		m.log().Debug("iroh: stream refused", "error", err)
-		return
+	// A client opens one stream per TCP-like connection; serve every one.
+	for {
+		stream, err := conn.AcceptBi()
+		if err != nil {
+			m.log().Debug("iroh: connection ended", "error", err)
+			return
+		}
+		go m.serveStream(conn, stream)
 	}
-	m.serveStream(conn, stream)
 }
 
 // serveStream bridges one bidirectional stream to one loopback TCP

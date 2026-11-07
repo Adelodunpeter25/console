@@ -206,3 +206,13 @@ fn rejects_an_iroh_pairing_url_without_a_node_id() {
         assert!(parse_pairing_url(&bad).is_err(), "{bad}");
     }
 }
+
+#[test]
+fn finds_the_node_id_of_an_iroh_address() {
+    use console_shared::pairing::iroh_node_id;
+    let node = "ab12".repeat(16);
+    assert_eq!(iroh_node_id(&format!("console-iroh://{node}")), Some(node.as_str()));
+    assert_eq!(iroh_node_id(&format!("console-iroh://{node}/console/pair#v=1")), Some(node.as_str()));
+    assert_eq!(iroh_node_id("http://host:3000"), None);
+    assert_eq!(iroh_node_id("console-iroh://example.com"), None);
+}

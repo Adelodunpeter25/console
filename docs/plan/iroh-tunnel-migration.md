@@ -85,7 +85,12 @@ Behind the existing backend switch, so the relay keeps working throughout:
 
 Server side of Phase 1 done and committed locally; nothing is pushed.
 Remaining (open):
-- [ ] Desktop: connect by node ID
+- [x] Desktop: `console-iroh` crate dials a node ID and exposes a loopback
+      port; `HttpTransport`, pairing and the URL normaliser accept
+      `console-iroh://`. Tested against the real Go bridge
+      (`crates/console-iroh/tests/proxy_test.rs`, needs `IROHECHO=<path to
+      go build -tags iroh ./cmd/irohecho>` and internet). The GPUI app itself
+      was only type-checked at the `console-core` level, never run
 - [ ] Android: connect by node ID
 - [x] Pairing URL `console-iroh://<node-id>/console/pair#v=1&server=..&code=..`:
       Go emits (only when iroh is on) and parses, Rust parses (Android shares
@@ -101,8 +106,9 @@ Remaining (open):
 - [ ] Measure hole-punch rate and latency vs the relay
 
 Built: `internal/tunnel/irohbackend`, behind the `iroh` build tag, selected
-with `CONSOLE_RELAY=iroh`. One HTTP request per bidirectional stream on ALPN
-`console-device/1`, bridged to the loopback target. Key and node ID live in
+with `CONSOLE_RELAY=iroh`. One bidirectional stream per TCP-style connection on ALPN
+`console-device/1`, bridged byte for byte to the loopback target (so
+keep-alive, SSE and WebSocket work). Key and node ID live in
 the tunnel dir (`iroh.key`, `iroh.json`). Test:
 `go test -tags iroh ./tests/tunnel/ -run TestIroh` (uses n0's public relay).
 

@@ -117,6 +117,13 @@ pub fn is_node_id(host: &str) -> bool {
     host.len() == 64 && host.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
+/// The node ID of a `console-iroh://<node-id>[/...]` address, if it is one.
+pub fn iroh_node_id(url: &str) -> Option<&str> {
+    let rest = url.trim().strip_prefix("console-iroh://")?;
+    let node = rest.split(['/', '#']).next().unwrap_or_default();
+    is_node_id(node).then_some(node)
+}
+
 /// Parse a pairing URL into its parts.
 ///
 /// Rejects anything it cannot read exactly, rather than repairing it.

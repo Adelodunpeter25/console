@@ -7,6 +7,8 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub struct HttpTransport {
     base_url: Arc<RwLock<String>>,
+    // Keeps the iroh tunnel alive while its loopback port is the base URL.
+    tunnel: Arc<RwLock<Option<Arc<console_iroh::Tunnel>>>>,
     auth_token: Arc<RwLock<Option<String>>>,
     http: reqwest::Client,
 }
@@ -23,14 +25,39 @@ impl HttpTransport {
 
         Self {
             base_url: Arc::new(RwLock::new(resolved_url)),
+            tunnel: Arc::new(RwLock::new(None)),
             auth_token: Arc::new(RwLock::new(auth_token)),
             http: reqwest::Client::builder().build().unwrap(),
         }
     }
 
+    /// Point the transport at a server. A `console-iroh://<node-id>` address
+    /// is reached through a local tunnel: the base URL becomes the tunnel's
+    /// loopback port, so HTTP and WebSocket callers need no changes. If the
+    /// tunnel cannot be built the iroh address is kept, and requests fail
+    /// with a clear connection error rather than reaching a stale server.
     pub async fn set_base_url(&self, url: impl Into<String>) {
-        let mut base = self.base_url.write().await;
-        *base = url.into();
+        let url = url.into();
+        let resolved = match console_shared::pairing::iroh_node_id(&url) {
+            Some(node_id) => match console_iroh::Tunnel::connect(node_id).await {
+                Ok(tunnel) => {
+                    let tunnel = Arc::new(tunnel);
+                    let local = tunnel.base_url();
+                    *self.tunnel.write().await = Some(tunnel);
+                    local
+                }
+                Err(err) => {
+                    log::warn!("iroh tunnel to {node_id} failed: {err:#}");
+                    *self.tunnel.write().await = None;
+                    url
+                }
+            },
+            None => {
+                *self.tunnel.write().await = None;
+                url
+            }
+        };
+        *self.base_url.write().await = resolved;
     }
 
     pub async fn base_url(&self) -> String {
@@ -121,6 +148,18 @@ where
 pub async fn probe_backend(url: &str, timeout: std::time::Duration) -> Result<()> {
     let trimmed = url.trim_end_matches('/');
     anyhow::ensure!(!trimmed.is_empty(), "Backend URL is empty.");
+    // An iroh address is probed through a short-lived tunnel.
+    let _tunnel;
+    let iroh_base;
+    let trimmed = if let Some(node_id) = console_shared::pairing::iroh_node_id(trimmed) {
+        _tunnel = console_iroh::Tunnel::connect(node_id)
+            .await
+            .context("Could not reach the server over iroh.")?;
+        iroh_base = _tunnel.base_url();
+        iroh_base.as_str()
+    } else {
+        trimmed
+    };
     let base = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
         trimmed.to_string()
     } else {
