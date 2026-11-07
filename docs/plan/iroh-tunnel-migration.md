@@ -85,13 +85,20 @@ Behind the existing backend switch, so the relay keeps working throughout:
 
 Server side of Phase 1 done and committed locally; nothing is pushed.
 Remaining (open):
-- [x] Desktop: `console-iroh` crate dials a node ID and exposes a loopback
-      port; `HttpTransport`, pairing and the URL normaliser accept
+- [x] Desktop: `console-iroh` crate exposes a loopback port that dials the node
+      ID on first use and redials if the connection drops; `HttpTransport`, pairing and the URL normaliser accept
       `console-iroh://`. Tested against the real Go bridge
       (`crates/console-iroh/tests/proxy_test.rs`, needs `IROHECHO=<path to
       go build -tags iroh ./cmd/irohecho>` and internet). The GPUI app itself
       was only type-checked at the `console-core` level, never run
-- [ ] Android: connect by node ID
+- [~] Android: connect by node ID. `shared-native` gains `nativeIrohTunnel`
+      (ABI 3) built on the same `console-iroh` crate; `ConsoleApiClient.baseUrl`
+      and the pairing/probe calls resolve `console-iroh://` to the tunnel's
+      loopback port. Only `cargo check` (Linux) and a standalone run of the
+      Kotlin address helpers were done: no Android SDK/NDK here, so the
+      `.so` and the APK were never built and nothing ran on a device or
+      emulator. Needs `shared-native/build.sh` + `:app:assembleDebug` +
+      `IrohUrlTest` on a machine with the SDK
 - [x] Pairing URL `console-iroh://<node-id>/console/pair#v=1&server=..&code=..`:
       Go emits (only when iroh is on) and parses, Rust parses (Android shares
       it over JNI, not rebuilt/tested here). Clients cannot dial it yet.

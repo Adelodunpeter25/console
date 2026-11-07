@@ -19,6 +19,7 @@ import com.console.mobile.data.model.PairingRequest
 import com.console.mobile.data.model.PLATFORM_ANDROID
 import com.console.mobile.data.model.parsePairingUrl
 import com.console.mobile.core.util.normalizeBackendUrl
+import com.console.mobile.core.util.reachableUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -78,7 +79,7 @@ class AuthRepository(
         val baseUrl = normalizeBackendUrl(host)
             ?: throw ApiException("That host cannot be used.")
         val paired = api.pairWithUrl(
-            baseUrl,
+            reachableUrl(baseUrl),
             PairingRequest(
                 grant = code.trim(),
                 device_name = deviceName,
@@ -114,7 +115,7 @@ class AuthRepository(
             throw ApiException(error.message ?: "That is not a pairing URL.")
         }
         val paired = api.pairWithUrl(
-            parsed.baseUrl,
+            reachableUrl(parsed.baseUrl),
             PairingRequest(
                 grant = parsed.code,
                 device_name = deviceName,
@@ -145,7 +146,7 @@ class AuthRepository(
         val normalized = normalizeBackendUrl(url) ?: return@withContext false
         try {
             val request = Request.Builder()
-                .url("${normalized.trimEnd('/')}/api/projects")
+                .url("${reachableUrl(normalized).trimEnd('/')}/api/projects")
                 .get()
                 .apply {
                     tokenStore.tokenFor(normalized)?.let { header("Authorization", "Bearer $it") }
