@@ -4,10 +4,17 @@
 // `chat/toolcalls.rs`.
 
 import type { IconName } from "../../common/icons";
-import type { DiffLine } from "../diff_view";
 
 /// Tallest an edit row's diff grows before it scrolls inside the row.
 export const EDIT_DIFF_MAX_HEIGHT = 240;
+
+/// The language a path's extension names, as the editor's `language` takes
+/// it (an extension works); null for extensionless paths.
+export function pathLanguage(path: string): string | null {
+  const dot = path.lastIndexOf(".");
+  if (dot <= 0) return null;
+  return path.slice(dot + 1) || null;
+}
 
 // Kind flag bits matching the server's tools.ToolKindFlags
 // (apps/server-go/internal/agent/tools/classify.go).
@@ -45,12 +52,14 @@ export type ActivityEvent =
   | { type: "toolCall"; entry: ToolCallEntry };
 
 /// One file's diff inside a file-targeting call (a `batchWrite` yields one
-/// per written file, a `writeFile`/`editFile` a single-element list).
+/// per written file, a `writeFile`/`editFile` a single-element list): the
+/// two texts for nsh's native `DiffView`, plus the counts the row shows.
 export interface FileDiff {
   path: string;
   added: number;
   removed: number;
-  lines: DiffLine[];
+  oldText: string;
+  newText: string;
 }
 
 function kindFlag(call: ToolCall, flag: number): boolean {
@@ -124,30 +133,16 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/// A minimal line diff (common prefix/suffix around a changed middle): the
-/// full editor diff renderer lands with the diff-popover port.
-function lineDiff(oldText: string, newText: string): FileDiff["lines"] {
+/// The changed-line counts between two texts: the changed middle between
+/// their common prefix and suffix of lines (a minimal line diff's counts).
+/// A fresh file has no old side; an emptied one no new side (diffing an
+/// empty text against content would count a phantom change of the empty
+/// line).
+function changeCounts(oldText: string, newText: string): { added: number; removed: number } {
   const oldLines = oldText.split("\n");
   const newLines = newText.split("\n");
-  // A fresh file has no old side; an emptied file has no new side. Calling
-  // lineDiff with an empty string would otherwise yield a phantom removal
-  // (or addition) for the empty text.
-  if (oldText === "") {
-    return newLines.map((text, index) => ({
-      kind: "+" as const,
-      text,
-      oldNo: null,
-      newNo: index + 1,
-    }));
-  }
-  if (newText === "") {
-    return oldLines.map((text, index) => ({
-      kind: "-" as const,
-      text,
-      oldNo: index + 1,
-      newNo: null,
-    }));
-  }
+  if (oldText === "") return { added: newLines.length, removed: 0 };
+  if (newText === "") return { added: 0, removed: oldLines.length };
   let start = 0;
   while (
     start < oldLines.length &&
@@ -166,18 +161,7 @@ function lineDiff(oldText: string, newText: string): FileDiff["lines"] {
     endOld -= 1;
     endNew -= 1;
   }
-  const lines: FileDiff["lines"] = [];
-  // Line numbers are 1-based within each file; the changed middle starts
-  // after `start` unchanged lines on both sides.
-  let oldLine = start;
-  for (const text of oldLines.slice(start, endOld)) {
-    lines.push({ kind: "-", text, oldNo: ++oldLine, newNo: null });
-  }
-  let newLine = start;
-  for (const text of newLines.slice(start, endNew)) {
-    lines.push({ kind: "+", text, oldNo: null, newNo: ++newLine });
-  }
-  return lines;
+  return { added: endNew - start, removed: endOld - start };
 }
 
 /// console-core's `file_call_diffs`: per-file diffs for edit/write calls.
@@ -195,32 +179,32 @@ export function fileCallDiffs(
       const object = file as Record<string, unknown>;
       const path = String(object.path ?? "");
       const content = typeof object.content === "string" ? object.content : "";
-      const lines = lineDiff("", content);
       return {
         path,
-        added: lines.filter((l) => l.kind === "+").length,
-        removed: lines.filter((l) => l.kind === "-").length,
-        lines,
+        ...changeCounts("", content),
+        oldText: "",
+        newText: content,
       };
     });
   }
   const path = argumentPath(arguments_) ?? "";
   if (name === "editFile") {
-    const lines = lineDiff(str("oldText") ?? str("old") ?? "", str("newText") ?? str("new") ?? "");
+    const oldText = str("oldText") ?? str("old") ?? "";
+    const newText = str("newText") ?? str("new") ?? "";
     return [{
       path,
-      added: lines.filter((l) => l.kind === "+").length,
-      removed: lines.filter((l) => l.kind === "-").length,
-      lines,
+      ...changeCounts(oldText, newText),
+      oldText,
+      newText,
     }];
   }
   if (name === "writeFile") {
-    const lines = lineDiff("", str("content") ?? "");
+    const content = str("content") ?? "";
     return [{
       path,
-      added: lines.filter((l) => l.kind === "+").length,
-      removed: lines.filter((l) => l.kind === "-").length,
-      lines,
+      ...changeCounts("", content),
+      oldText: "",
+      newText: content,
     }];
   }
   return [];

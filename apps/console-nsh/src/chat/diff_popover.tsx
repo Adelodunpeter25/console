@@ -3,11 +3,11 @@
 // file's recorded diff, or a short "Binary file …" note for binary files
 // with no stored diff; other files without a diff get no popover.
 //
-// The desktop opens the card on hover with show/hide delays; nsh views have
-// no hover events, so the card is nsh's `Popover`, opened by pressing the
-// chip (same surface, same contents otherwise): the preview renders through
-// the shared `DiffView` (gutter, change bars), capped, with the full diff
-// one press away.
+// The desktop opens the card on hover with show/hide delays; the card here
+// is nsh's `Popover`, opened by pressing the chip (the hover equivalent —
+// nsh's `HoverCard` — is available and can replace this), with the preview
+// rendered through the shared `DiffView` (gutter, change bars), capped,
+// full diff one press away.
 
 import { Text, View } from "nsh";
 import type { JSX } from "nsh";

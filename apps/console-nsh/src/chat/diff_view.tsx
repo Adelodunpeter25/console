@@ -1,9 +1,10 @@
-// The editor diff view, ported from console-ui's `viewer/diff_viewer.rs`:
-// line-number gutter, change bars, and colored lines at the editor's diff
-// row height. The tool-call edit rows, the chip diff popover, and the Diff
-// tab (when it lands) all render diffs through this one component, so they
-// look and behave the same. Syntax highlighting waits for the markdown
-// code-block hooks; everything else is desktop parity.
+// The diff preview renderer for the chip popover, modelled on console-ui's
+// `viewer/diff_viewer.rs`: line-number gutter, change bars, and colored
+// lines at the editor's diff row height. The popover uses this hand-rolled
+// view because nsh's native `DiffView` (which the inline tool-call rows use,
+// `toolcalls/rows.tsx`) does not lay out inside a popup — a large patch
+// renders nothing there, verified headless; in the main tree the native
+// view is strictly better (virtualized, syntax-highlighted).
 
 import { Text, View, token } from "nsh";
 

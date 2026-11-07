@@ -4,12 +4,13 @@
 
 import { Text, View, token } from "nsh";
 import type { JSX } from "nsh";
+import { DiffView } from "nsh/base";
 import { Icon, type IconName } from "../../common/icons";
-import { DiffView } from "../diff_view";
 import {
   EDIT_DIFF_MAX_HEIGHT,
   activityIconForCall,
   argumentPath,
+  pathLanguage,
   argumentSummary,
   displayLabel,
   fileCallDiffs,
@@ -139,7 +140,21 @@ export function callRow(
                       -{fileDiff.removed}
                     </Text>
                   </View>
-                  <DiffView lines={fileDiff.lines} maxHeight={EDIT_DIFF_MAX_HEIGHT} />
+                  <View
+                    class="overflow-hidden rounded-md border border-border"
+                    style={{ maxHeight: EDIT_DIFF_MAX_HEIGHT }}
+                  >
+                    <DiffView
+                      oldValue={fileDiff.oldText}
+                      newValue={fileDiff.newText}
+                      layout="unified"
+                      indicators="bars"
+                      inline="word"
+                      language={pathLanguage(fileDiff.path)}
+                      fontSize={11}
+                      lineHeight={18}
+                    />
+                  </View>
                 </View>
               ))
             : (

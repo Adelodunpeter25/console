@@ -4,9 +4,8 @@
 // always matched by `toolCallId`, never by their position in the transcript.
 //
 // Deviations from the Rust source, until their dependencies are ported:
-// - Edit rows render their diffs through the shared `DiffView`
-//   (`../diff_view`); syntax highlighting waits for the markdown code-block
-//   hooks.
+// - Edit rows render their diffs through nsh's native `DiffView`
+//   (`nsh/base`): virtualized, syntax-highlighted, word-level highlights.
 // - console-core's `argument_summary`/`argument_path` and the markdown
 //   selection/link plumbing are not ported; summary/path/label helpers live
 //   in `model.ts` as local subsets, and selection is dropped.
