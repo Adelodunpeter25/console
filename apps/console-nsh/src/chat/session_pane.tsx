@@ -19,11 +19,13 @@ import { Input } from "nsh/base";
 import { Composer } from "../common/composer";
 import { Icon } from "../common/icons";
 import { TranscriptView } from "./transcript_view";
+import { changesSummaryFrom, changesSummaryIsEmpty } from "./change_chips";
 import {
   PermissionInteractionCard,
   QuestionInteractionCard,
 } from "./interaction_card";
 import type { ChatController } from "../services/chat_controller";
+import { catalogStore } from "../stores/catalog_store";
 
 function decodeArgs(base64: string | undefined): unknown {
   if (base64 == null) return null;
@@ -91,6 +93,7 @@ function QuestionCustomInput(props: { controller: ChatController }): JSX.Element
 /// as a new tab (the desktop's fork behaviour).
 export function SessionPane(props: {
   controller: ChatController;
+  baseUrl: string;
   onOpenSession?: (sessionId: string, title: string) => void;
   /// Opens the diff tab for one changed file (a change chip's press).
   onOpenChange?: (path: string, diffText: string | null) => void;
@@ -101,6 +104,8 @@ export function SessionPane(props: {
 }) {
   const controller = props.controller;
   const draft = signal("");
+  const catalog = catalogStore(props.baseUrl);
+  void catalog.load();
   return (
     <View class="flex-1 flex-col">
       {controller.error() != null ? (
@@ -179,19 +184,39 @@ export function SessionPane(props: {
         return null;
       })()}
       <SessionHeaderRow controller={controller} />
-      {props.onOpenReview != null ? (
-        <View class="flex-none flex-row px-3 pb-1">
-          <View
-            class="flex-row items-center gap-1.5 rounded-[7px] border border-border px-2 py-[3px] hover:bg-accent"
-            role="button"
-            accessibilityLabel="Open changes review"
-            onPress={props.onOpenReview}
-          >
-            <Icon name="ReplaceAll" size={12} color={token("muted-foreground")} />
-            <Text class="text-[12px] text-muted-foreground">Review changes</Text>
+      {/* The turn's changes pill: GPUI's `changes_pill` — "N files changed
+          +A -D" over the raised surface; pressing opens the review tab. */}
+      {(() => {
+        const summary = changesSummaryFrom(controller.state.sessionChanges());
+        if (props.onOpenReview == null || changesSummaryIsEmpty(summary)) {
+          return null;
+        }
+        return (
+          <View class="flex-none flex-row px-3 pb-1">
+            <View
+              class="flex-row items-center gap-1.5 rounded-full bg-popover px-2.5 py-[5px] hover:bg-muted"
+              onPress={props.onOpenReview}
+              accessibilityLabel="Open changes review"
+              role="button"
+            >
+              <Icon name="FileDiff" size={13} color={token("muted-foreground")} />
+              <Text class="text-[12px] font-medium text-muted-foreground">
+                {`${summary.files} file${summary.files === 1 ? "" : "s"} changed`}
+              </Text>
+              {summary.additions > 0 ? (
+                <Text class="text-[12px] font-semibold text-[#62c987]">
+                  {`+${summary.additions}`}
+                </Text>
+              ) : null}
+              {summary.deletions > 0 ? (
+                <Text class="text-[12px] font-semibold text-destructive">
+                  {`-${summary.deletions}`}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-      ) : null}
+        );
+      })()}
       <View class="flex-none border-t border-border">
         <Composer
           value={draft()}
@@ -203,6 +228,15 @@ export function SessionPane(props: {
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
+          providers={catalog.providers() ?? undefined}
+          selectedModel={catalog.selected()}
+          favorites={catalog.favorites()}
+          onModelSelect={(provider: string, modelId: string) =>
+            catalog.selectModel(provider, modelId)
+          }
+          onFavorite={(provider: string, modelId: string) =>
+            void catalog.toggleFavorite(provider, modelId)
+          }
         />
       </View>
     </View>

@@ -94,8 +94,8 @@ export function ModelDropdownMenu(props: {
     (active ? "bg-muted" : "hover:bg-muted");
 
   return (
-    <View class="flex h-[350px] w-[400px] flex-row overflow-hidden rounded-[13px] border border-border bg-popover">
-      <View class="flex w-[50px] flex-none flex-col items-center gap-1 border-r border-border bg-popover p-1">
+    <View class="flex h-[350px] w-[400px] flex-row overflow-hidden rounded-[13px] border border-border bg-background">
+      <View class="flex w-[50px] flex-none flex-col items-center gap-1 border-r border-border bg-background p-1">
         <View
           class={tabClasses(props.activeTab().kind === "favorites")}
           onPress={() => props.onTab({ kind: "favorites" })}

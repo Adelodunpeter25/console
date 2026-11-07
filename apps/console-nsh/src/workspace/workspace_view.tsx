@@ -48,15 +48,16 @@ function tabIcon(tab: WorkspaceTabConfig): Parameters<typeof Icon>[0]["name"] {
 
 function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
   return (
-    <View class="h-9 flex-none flex-row items-center gap-0.5 border-b border-border px-1">
+    <View class="h-[38px] flex-none flex-row items-center gap-0.5 border-b border-border bg-background px-1">
       {props.pane.tabs.map((tab) => {
         const active = props.pane.activeTabId === tabId(tab);
         return (
           <View
             class={
-              "flex-none flex-row items-center gap-1.5 rounded-md px-2 py-1 " +
-              (active ? "bg-muted" : "hover:bg-muted")
+              "flex-none flex-row items-center gap-1.5 border-b-2 px-2.5 " +
+              (active ? "bg-muted" : "border-transparent hover:bg-muted")
             }
+            style={active ? { borderBottomColor: "#e2795b" } : undefined}
             role="tab"
             accessibilityLabel={`Tab ${tabTitle(tab)}`}
             accessibilityState={{ selected: active }}
@@ -69,19 +70,19 @@ function TabStrip(props: { pane: LeafPaneNode; store: WorkspaceStore }) {
             />
             <Text
               class={
-                "max-w-[160px] truncate text-[12px] " +
+                "max-w-[140px] truncate text-[12px] " +
                 (active ? "font-medium text-foreground" : "text-muted-foreground")
               }
             >
               {tabTitle(tab)}
             </Text>
             <View
-              class="rounded p-0.5 hover:bg-accent"
+              class="rounded p-[3px] opacity-0 hover:bg-muted group-hover:opacity-100"
               role="button"
               accessibilityLabel={`Close tab ${tabTitle(tab)}`}
               onPress={() => props.store.closeTab(props.pane.id, tab)}
             >
-              <Icon name="X" size={11} color={token("muted-foreground")} />
+              <Icon name="X" size={12} color={token("muted-foreground")} />
             </View>
           </View>
         );
@@ -128,6 +129,7 @@ function PaneContent(props: {
         if (tab.type === "chat" && tab.sessionId !== "welcome") {
           return (
             <SessionPane
+              baseUrl={props.baseUrl}
               controller={chatController(props.baseUrl, tab.sessionId)}
               onOpenChange={(path) =>
                 props.onOpenDiff?.(props.pane.id, path, tab.projectId ?? null)
