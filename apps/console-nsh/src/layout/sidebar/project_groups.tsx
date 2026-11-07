@@ -24,6 +24,7 @@ export function ProjectGroups(props: {
   onToggleProject: (label: string) => void;
   onSession?: (id: string) => void;
   onToggleSettle?: (id: string) => void;
+  onDeleteSession?: (id: string) => void;
 }) {
   return (
     <View class="flex flex-col gap-1 px-2 pb-3">
@@ -70,6 +71,11 @@ export function ProjectGroups(props: {
                       onToggleSettle={
                         props.onToggleSettle
                           ? () => props.onToggleSettle?.(s.id)
+                          : undefined
+                      }
+                      onDelete={
+                        props.onDeleteSession
+                          ? () => props.onDeleteSession?.(s.id)
                           : undefined
                       }
                     />

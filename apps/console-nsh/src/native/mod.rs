@@ -296,7 +296,7 @@ impl Console {
         model_id: String,
         favorite: bool,
     ) -> Result<(), String> {
-        catalog::set_model_favorite(&base_url, &provider, &model_id, favorite).await
+        catalog::set_model_favorite(&base_url, provider, model_id, favorite).await
     }
 
     /// Usage reports per provider (`null` where a provider has no report).
