@@ -55,14 +55,16 @@ Cloudflare — the relay is a long-lived TCP server, not a Worker workload.
 
 Behind the existing backend switch, so the relay keeps working throughout:
 
-- [ ] Go server: iroh endpoint via `iroh-go`, listens on an ALPN, serves the
+- [x] Go server: iroh endpoint via `iroh-go`, listens on an ALPN, serves the
       existing API over HTTP/1.1-on-iroh. Node ID + keypair stored in the
       tunnel dir alongside today's relay info.
 - [ ] Desktop: connect to the server by node ID, pairing flow works
       end-to-end over iroh.
 - [ ] Android: same, via the Kotlin binding.
 - [ ] Pairing QR emits/consumes the new node-ID format on all three ends.
-- [ ] CF relay backend remains default until the spike proves out.
+- [x] iroh is the default backend; `CONSOLE_RELAY=relay` and
+      `CONSOLE_RELAY=0|opentunnel` override it, and a failed iroh start falls
+      back to OpenTunnel.
 
 ## Decision gate — measure before shipping
 
@@ -83,4 +85,61 @@ Behind the existing backend switch, so the relay keeps working throughout:
 
 ## Status
 
-Planning. No code written yet.
+Server side of Phase 1 done; tracked in PR #96.
+Remaining (open):
+- [x] Desktop: `console-iroh` crate exposes a loopback port that dials the node
+      ID on first use and redials if the connection drops; `HttpTransport`, pairing and the URL normaliser accept
+      `console-iroh://`. Tested against the real Go bridge
+      (`crates/console-iroh/tests/proxy_test.rs`, needs `IROHECHO=<path to
+      go build ./cmd/irohecho>` and internet). The GPUI app itself
+      was only type-checked at the `console-core` level, never run
+- [~] Android: connect by node ID. `shared-native` gains `nativeIrohTunnel`
+      (ABI 3) built on the same `console-iroh` crate; `ConsoleApiClient.baseUrl`
+      and the pairing/probe calls resolve `console-iroh://` to the tunnel's
+      loopback port. Only `cargo check` (Linux) and a standalone run of the
+      Kotlin address helpers were done: no Android SDK/NDK here, so the
+      `.so` and the APK were never built and nothing ran on a device or
+      emulator. Needs `shared-native/build.sh` + `:app:assembleDebug` +
+      `IrohUrlTest` on a machine with the SDK
+- [x] Pairing URL `console-iroh://<node-id>/console/pair#v=1&server=..&code=..`:
+      Go emits (only when iroh is on) and parses, Rust parses (Android shares
+      it over JNI, not rebuilt/tested here). Clients cannot dial it yet.
+- [x] Fork `iroh-go` (Adelodunpeter25/iroh-go; upstream rejects contributions
+      and lags the latest iroh): forked and bumped to iroh 1.4.1 (iroh-ffi
+      still v1.2.0; iroh-services held at 1.0.0 because 2.0.0 is breaking)
+- [x] Fork CI builds static libs for all five platforms (linux x64/arm64,
+      macOS x64/arm64, Windows x64);
+      Intel mac is link-checked only, never run
+- [x] server-go points at the fork; the `iroh` tag now covers linux, macOS
+      and windows-amd64. CI for server-go does not build with the tag yet
+- [~] Measure hole-punch rate and latency vs the relay. Only one number so
+      far: on one machine, a small request through the desktop tunnel to the
+      Go bridge takes p50 0.92 ms / p95 3.03 ms over 200 requests
+      (`latency_through_the_tunnel`, `--ignored`). That is tunnel overhead,
+      not internet latency. Still to do on real networks (home Wi-Fi, mobile
+      data, office NAT): hole-punch success rate, and the same request through
+      the Cloudflare relay for comparison
+
+Built: `internal/tunnel/irohbackend`, compiled by default on linux
+amd64/arm64, macOS amd64/arm64 and windows amd64; `internal/tunnel` selects
+it unless `CONSOLE_RELAY=relay|opentunnel` asks otherwise, and falls back to
+OpenTunnel when the endpoint fails to start. One bidirectional stream per
+TCP-style connection on ALPN `console-device/1`, bridged byte for byte to the
+loopback target (so keep-alive, SSE and WebSocket work). Key and node ID live
+in the tunnel dir (`iroh.key`, `iroh.json`). Test:
+`go test ./tests/tunnel/ -run TestIroh` (uses n0's public relay).
+
+Findings so far (decision gate):
+- `iroh-go` has no tags; pinned to a commit. Upstream has static libs for
+  linux amd64/arm64 (musl) only; our fork adds macOS and Windows. The backend
+  now compiles by default on those platforms; no build tag is needed. Linking
+  the musl lib into a glibc build works here.
+- The module needs `go 1.26.1` (go.mod bumped from 1.25.0) and the module
+  download is ~97 MB (it vendors the libs).
+- Stream EOF is `Read` returning (0 bytes, nil) after the peer's `Finish()`.
+- A fresh endpoint is only dialable after `Online()`; a client that dials
+  before its own `Online()` fails intermittently with an opaque `IrohError`.
+- `Online()` blocks forever with relays disabled; direct dial by address
+  works without it.
+- Errors are opaque; mismatched ALPN gives a bare `IrohError`.
+- Not yet measured: hole-punch rate on real networks, latency vs the relay.

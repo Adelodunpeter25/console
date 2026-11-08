@@ -1,3 +1,5 @@
+github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb h1:irLhikTVKKOcQv485C2TDmju2WiZE5jyynCFI2pnw2w=
+github.com/Adelodunpeter25/iroh-go v0.0.0-20261107173249-9605c02ec0fb/go.mod h1:+ul6B3sMRtSAgZrjqHXg6ZLdNWwhYstLT2MUF7Kh8Bc=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73 h1:MMs4dBDfLY0UUoVkPSF0P6q6h5PRe4xCp/K5caoSFQw=
 github.com/Adelodunpeter25/sim-go v0.0.0-20261105211509-ebadf911bb73/go.mod h1:FDOXO4efJHkjCcl+arWTrk7DxTfXc3qNd6hSTPXeCf0=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=

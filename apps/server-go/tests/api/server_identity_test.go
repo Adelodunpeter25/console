@@ -414,3 +414,19 @@ func TestAuthenticationRecordsLastSeen(t *testing.T) {
 		t.Fatal("last seen must not go backwards")
 	}
 }
+
+func TestPairingURLRoundTripsAnIrohNodeID(t *testing.T) {
+	node := strings.Repeat("ab12", 16)
+	parsed, err := auth.ParsePairingURL(auth.PairingURL(auth.IrohBaseURL(node), "srv1", "code-1"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if parsed.BaseURL != "console-iroh://"+node || parsed.ServerID != "srv1" || parsed.Code != "code-1" {
+		t.Fatalf("parsed = %+v", parsed)
+	}
+	for _, bad := range []string{"console-iroh://example.com", "console-iroh://" + node[:10], "console-iroh://" + strings.ToUpper(node)} {
+		if _, err := auth.ParsePairingURL(auth.PairingURL(bad, "srv1", "c")); err == nil {
+			t.Fatalf("%q must be rejected", bad)
+		}
+	}
+}

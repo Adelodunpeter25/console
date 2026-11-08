@@ -9,6 +9,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 console-proto = { workspace = true }
 console-shared = { workspace = true }
+console-iroh = { workspace = true }
 reqwest = { workspace = true }
 futures-util = { workspace = true }
 tokio = { workspace = true }

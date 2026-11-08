@@ -34,7 +34,7 @@ const VERSION: u16 = 1;
 
 /// Bumped whenever a symbol is added, removed, or changes shape. Kotlin's
 /// `SharedNative.EXPECTED_ABI` must match.
-const ABI_VERSION: jint = 2;
+const ABI_VERSION: jint = 3;
 
 // ── Encoding ──────────────────────────────────────────────────────────────
 
@@ -375,4 +375,49 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_fileCallDiffs(
 #[allow(dead_code)]
 fn _mentions_are_not_shared() {
     let _ = composer::mentions::mentions_from_context_files;
+}
+
+// ── iroh tunnels ──────────────────────────────────────────────────────────
+
+fn runtime() -> &'static tokio::runtime::Runtime {
+    static RT: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .expect("iroh runtime")
+    })
+}
+
+fn tunnels() -> &'static std::sync::Mutex<std::collections::HashMap<String, console_iroh::Tunnel>> {
+    static T: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, console_iroh::Tunnel>>> =
+        std::sync::OnceLock::new();
+    T.get_or_init(Default::default)
+}
+
+/// `SharedNative.nativeIrohTunnel(nodeId)` — the loopback `http://127.0.0.1:<port>`
+/// that reaches the server with that node ID over iroh, or `null` when the ID
+/// is invalid. One tunnel per node ID; repeat calls return the same port. It
+/// does not touch the network: iroh is dialled on the first request.
+#[no_mangle]
+pub extern "system" fn Java_com_console_mobile_SharedNative_nativeIrohTunnel(
+    mut env: JNIEnv,
+    _class: JClass,
+    node_id: JString,
+) -> jstring {
+    crate::init_logging();
+    crate::guard(std::ptr::null_mut(), || {
+        let url = read(&mut env, &node_id).and_then(|id| {
+            let mut map = tunnels().lock().ok()?;
+            if let Some(existing) = map.get(&id) {
+                return Some(existing.base_url());
+            }
+            let tunnel = runtime().block_on(console_iroh::Tunnel::new(&id)).ok()?;
+            let url = tunnel.base_url();
+            map.insert(id, tunnel);
+            Some(url)
+        });
+        text(&mut env, url)
+    })
 }

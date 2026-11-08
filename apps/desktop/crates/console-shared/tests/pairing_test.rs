@@ -183,3 +183,36 @@ fn an_unrelated_path_is_still_dropped() {
         .expect("valid pairing URL");
     assert_eq!(parsed.base_url, "http://host:3000");
 }
+
+#[test]
+fn parses_an_iroh_pairing_url() {
+    let node = "ab12".repeat(16);
+    let parsed = parse_pairing_url(&format!(
+        "console-iroh://{node}/console/pair#v=1&server=srv1&code=abc-123"
+    ))
+    .unwrap();
+    assert_eq!(parsed.base_url, format!("console-iroh://{node}"));
+    assert_eq!(parsed.server_id, "srv1");
+    assert_eq!(parsed.code, "abc-123");
+}
+
+#[test]
+fn rejects_an_iroh_pairing_url_without_a_node_id() {
+    for bad in [
+        "console-iroh://example.com/console/pair#v=1&server=s&code=c".to_string(),
+        format!("console-iroh://{}/console/pair#v=1&server=s&code=c", "AB12".repeat(16)),
+        "console-iroh:///console/pair#v=1&server=s&code=c".to_string(),
+    ] {
+        assert!(parse_pairing_url(&bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn finds_the_node_id_of_an_iroh_address() {
+    use console_shared::pairing::iroh_node_id;
+    let node = "ab12".repeat(16);
+    assert_eq!(iroh_node_id(&format!("console-iroh://{node}")), Some(node.as_str()));
+    assert_eq!(iroh_node_id(&format!("console-iroh://{node}/console/pair#v=1")), Some(node.as_str()));
+    assert_eq!(iroh_node_id("http://host:3000"), None);
+    assert_eq!(iroh_node_id("console-iroh://example.com"), None);
+}

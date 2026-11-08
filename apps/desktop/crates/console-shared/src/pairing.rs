@@ -109,6 +109,21 @@ fn host_of_authority(authority: &str) -> &str {
     split_authority(authority).0
 }
 
+/// The scheme of a pairing URL for a server reached over iroh.
+pub const IROH_SCHEME: &str = "console-iroh";
+
+/// Whether `host` is an iroh node id: 64 lowercase hex characters.
+pub fn is_node_id(host: &str) -> bool {
+    host.len() == 64 && host.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// The node ID of a `console-iroh://<node-id>[/...]` address, if it is one.
+pub fn iroh_node_id(url: &str) -> Option<&str> {
+    let rest = url.trim().strip_prefix("console-iroh://")?;
+    let node = rest.split(['/', '#']).next().unwrap_or_default();
+    is_node_id(node).then_some(node)
+}
+
 /// Parse a pairing URL into its parts.
 ///
 /// Rejects anything it cannot read exactly, rather than repairing it.
@@ -140,8 +155,14 @@ pub fn parse_pairing_url(raw: &str) -> Result<PairingUrl, String> {
         Some((scheme, rest)) => (scheme.to_ascii_lowercase(), rest.to_string()),
         None => (default_scheme(base).to_string(), base.to_string()),
     };
-    if scheme != "http" && scheme != "https" {
-        return Err("A pairing URL must start with http:// or https://.".to_string());
+    if scheme == IROH_SCHEME {
+        // The host is the server's node ID; the client dials it directly.
+        let node = authority.split('/').next().unwrap_or_default();
+        if !is_node_id(node) {
+            return Err("That pairing URL has an invalid iroh node id.".to_string());
+        }
+    } else if scheme != "http" && scheme != "https" {
+        return Err("A pairing URL must start with http://, https:// or console-iroh://.".to_string());
     }
     // The path ends in /console/pair; what precedes it is where the server
     // lives (a relay's /<name>), and is kept.

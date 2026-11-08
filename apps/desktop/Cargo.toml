@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/console-core",
+    "crates/console-iroh",
     "crates/console-proto",
     "crates/console-shared",
     "crates/console-ui",
@@ -24,6 +25,7 @@ gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["fo
 
 # Internal workspace crates
 console-core = { path = "crates/console-core" }
+console-iroh = { path = "crates/console-iroh" }
 console-proto = { path = "crates/console-proto" }
 console-shared = { path = "crates/console-shared" }
 console-ui = { path = "crates/console-ui" }

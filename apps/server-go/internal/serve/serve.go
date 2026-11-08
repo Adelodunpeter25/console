@@ -229,9 +229,11 @@ func remoteAccessDisabled() bool {
 	return false
 }
 
-// startRemoteAccess opens the relay tunnel (or OpenTunnel, with CONSOLE_RELAY=0) to this server and returns a
-// function that closes it. CONSOLE_REMOTE=off skips it; CONSOLE_TUNNEL_API
-// points it at another relay.
+// startRemoteAccess opens the remote-access backend for this server and
+// returns a function that closes it. iroh is the default; CONSOLE_RELAY=relay
+// asks for the Cloudflare relay, CONSOLE_RELAY=0|opentunnel for OpenTunnel,
+// and a failed iroh start falls back to OpenTunnel. CONSOLE_REMOTE=off skips
+// remote access; CONSOLE_TUNNEL_API points OpenTunnel elsewhere.
 func startRemoteAccess(listenAddr string) func() {
 	if remoteAccessDisabled() {
 		slog.Info("remote access is off (CONSOLE_REMOTE)")
@@ -245,9 +247,28 @@ func startRemoteAccess(listenAddr string) func() {
 	}
 	target := net.JoinHostPort("127.0.0.1", port)
 	dir := filepath.Join(utils.ConsoleStorageDir(), "tunnel")
+	if tunnel.IrohSelected() {
+		stop, err := tunnel.StartIroh(dir, target, func(id string) {
+			// Record the backend before announcing readiness, so a pairing
+			// process reads iroh rather than a fallback's stale address.
+			_ = tunnel.SetBackend(dir, tunnel.BackendIroh)
+			slog.Info("remote access ready", "iroh_node_id", id)
+		})
+		if err == nil {
+			return stop
+		}
+		slog.Warn("iroh unavailable, falling back to OpenTunnel", "error", err)
+		return startOpenTunnel(dir, target)
+	}
 	if tunnel.RelayEnabled() {
+		_ = tunnel.SetBackend(dir, tunnel.BackendRelay)
 		return startRelay(dir, target)
 	}
+	return startOpenTunnel(dir, target)
+}
+
+// startOpenTunnel opens the OpenTunnel backend and records it as active.
+func startOpenTunnel(dir, target string) func() {
 	manager := &opentunnel.Manager{
 		API:    os.Getenv("CONSOLE_TUNNEL_API"),
 		Dir:    dir,
@@ -261,6 +282,7 @@ func startRemoteAccess(listenAddr string) func() {
 		slog.Warn("remote access is unavailable", "error", err)
 		return func() {}
 	}
+	_ = tunnel.SetBackend(dir, tunnel.BackendOpenTunnel)
 	slog.Info("remote access starting", "url", manager.URL())
 	return manager.Close
 }

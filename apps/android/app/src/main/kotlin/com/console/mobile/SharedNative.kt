@@ -30,7 +30,7 @@ import java.nio.ByteOrder
  */
 object SharedNative {
     /** Must match `ABI_VERSION` in `shared-native/src/shared.rs`. */
-    const val EXPECTED_ABI = 2
+    const val EXPECTED_ABI = 3
 
     /** Framed payloads start with `"CSHR"` and this version. */
     private const val MAGIC = 0x4353_4852
@@ -55,11 +55,21 @@ object SharedNative {
     private external fun parsePairingUrl(raw: String): ByteArray?
     private external fun splitPairingLine(raw: String): ByteArray?
     private external fun hostPort(address: String): String?
+    private external fun nativeIrohTunnel(nodeId: String): String?
     private external fun diffLines(old: String, new: String, context: Int): ByteArray?
     private external fun parseUnifiedDiff(raw: String): ByteArray?
     private external fun fileCallDiffs(name: String, argumentsJson: String): ByteArray?
     private external fun nativeToolSummary(name: String, argumentsJson: String, cwd: String): String?
     private external fun nativeParseReadFileOutput(raw: String): ByteArray?
+
+    // ── iroh ──────────────────────────────────────────────────────────────
+
+    /**
+     * The loopback `http://127.0.0.1:<port>` that reaches the server with this
+     * iroh node ID, or null when the library is unavailable or the ID is
+     * invalid. Idempotent per node ID; makes no network call itself.
+     */
+    fun irohTunnel(nodeId: String): String? = if (available) nativeIrohTunnel(nodeId) else null
 
     // ── Text ──────────────────────────────────────────────────────────────
 

@@ -55,10 +55,21 @@ impl ServerAuthService {
         device_name: &str,
     ) -> Result<(PairingData, String)> {
         let base_url = normalize_server_url(host);
+        // An iroh address is dialled through a tunnel that lives for this
+        // call; the address itself is what gets stored for later requests.
+        let tunnel = match console_shared::pairing::iroh_node_id(&base_url) {
+            Some(node_id) => Some(
+                console_iroh::Tunnel::connect(node_id)
+                    .await
+                    .context("Failed to reach the server over iroh")?,
+            ),
+            None => None,
+        };
+        let request_base = tunnel.as_ref().map_or(base_url.clone(), |t| t.base_url());
         let response = self
             .transport
             .client()
-            .post(format!("{base_url}/api/auth/pair"))
+            .post(format!("{request_base}/api/auth/pair"))
             .headers(self.transport.build_headers().await)
             .json(&PairingRequest {
                 grant: code.to_string(),
@@ -152,7 +163,10 @@ fn normalize_server_url(host: &str) -> String {
     if trimmed.is_empty() {
         return "http://localhost:3000".to_string();
     }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+    if trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("console-iroh://")
+    {
         return trimmed.to_string();
     }
     format!(
