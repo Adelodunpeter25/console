@@ -88,7 +88,7 @@ export function Sidebar(props: {
   );
 
   return (
-    <View class="flex w-[260px] shrink-0 flex-col border-r border-border bg-card px-3">
+    <View class="flex h-full w-full flex-col bg-card px-3">
       {/* Action rows (New Task & Search) — the unified title bar owns the
           sidebar toggle, so the sidebar starts here, as on desktop. */}
       <View class="flex flex-col gap-1 pb-2 pt-1">

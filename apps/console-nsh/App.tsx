@@ -8,6 +8,7 @@
 // (`src/services/`), never the native bridge directly.
 
 import { effect, mount, signal, View } from "nsh";
+import { ResizablePanel, ResizablePanelGroup } from "nsh/base";
 import { backend } from "./src/services/backend";
 import { chatController } from "./src/services/chat_controller";
 import { resolveBackendUrl } from "./src/services/discovery";
@@ -116,7 +117,13 @@ function App() {
       <WorkspaceShortcuts store={store} onNewChat={() => launcherOpen.set(true)} />
       <TitleBar />
       {paired() ? (
-        <View class="flex flex-1 flex-row">
+        <ResizablePanelGroup
+          axis="horizontal"
+          class="flex-1"
+          handleClass="bg-border"
+          handleAccessibilityLabel="Resize sidebar"
+        >
+        <ResizablePanel size={260} minSize={200} maxSize={480} fixed>
         <Sidebar
           projects={store_.projects()}
           sessions={store_.sessions()}
@@ -128,6 +135,8 @@ function App() {
           onSortMode={(mode) => sortMode.set(mode)}
           onNewChat={() => launcherOpen.set(true)}
         />
+        </ResizablePanel>
+        <ResizablePanel minSize={400}>
         <View class="flex flex-1 flex-col gap-2 p-2">
           <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
             <WorkspaceView
@@ -223,7 +232,8 @@ function App() {
             </View>
           ) : null}
         </View>
-        </View>
+        </ResizablePanel>
+        </ResizablePanelGroup>
       ) : (
         <PairingCard baseUrl={backendUrl()} onPaired={(newUrl) => {
           if (newUrl) {
