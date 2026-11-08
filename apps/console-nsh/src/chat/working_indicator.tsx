@@ -6,7 +6,6 @@
 
 import { effect, signal, Text, untracked, View } from "nsh";
 import { formatWorkingElapsed } from "../utils/time";
-import { CenteredStripe } from "../common/stripe";
 
 const DOT_PHASE_STEP = 0.18;
 
@@ -62,13 +61,11 @@ export function WorkingIndicator(props: {
   });
   const seconds = () => Math.max(0, now() - startedAt);
   return (
-    <CenteredStripe paddingY={6}>
-      <View class="flex-row items-center gap-[7px]">
-        <WorkingWaveDots />
-        <Text class="text-[11.5px] text-muted-foreground">
-          {`Working for ${formatWorkingElapsed(seconds())}`}
-        </Text>
-      </View>
-    </CenteredStripe>
+    <View class="flex-row items-center gap-[7px] py-1.5">
+    <WorkingWaveDots />
+    <Text class="text-[11.5px] text-muted-foreground">
+      {`Working for ${formatWorkingElapsed(seconds())}`}
+    </Text>
+</View>
   );
 }
