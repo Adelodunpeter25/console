@@ -416,6 +416,7 @@ func TestMethodArgsCoverEveryInstalledMethod(t *testing.T) {
 		"sessions.delete", "sessions.abort", "sessions.set_model", "sessions.set_approval",
 		"sessions.prompt", "sessions.queue", "sessions.clear_queue", "sessions.fork",
 		"sessions.wait", "sessions.search",
+		"automation.create", "automation.get", "automation.update", "automation.delete",
 	} {
 		if _, ok := methodArgs[name]; !ok {
 			t.Errorf("%s is not in methodArgs", name)

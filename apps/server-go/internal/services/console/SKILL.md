@@ -90,6 +90,18 @@ when a project action requires inspecting or changing a local port forward.
 
 `console.scripts.stop({run_id})` — stop a running script
 
+### Automations
+
+`console.automation.create({prompt, kind, interval_seconds? | run_at?})` — schedule future work on this session. `kind` is `"once"` (needs `run_at`, an absolute unix timestamp in seconds) or `"interval"` (needs `interval_seconds`). The prompt runs in this same thread with full context when the schedule fires, whether or not a desktop client is connected. One active automation per session: a second create is refused until you delete the first.
+
+`console.automation.get({id?})` — one automation by id, or every automation on this session when `id` is omitted.
+
+`console.automation.update({id, prompt?, kind?, interval_seconds?, run_at?})` — change an automation; absent keys keep their stored value. Re-arms its next run from now.
+
+`console.automation.delete({id})` — delete an automation. Call this when a monitoring task is complete — the harness does not know when your task is done, so "stop checking when the backfill finishes" means you observe done and delete the automation yourself.
+
+Automation firing is best-effort by wall clock (a fire is at most a few seconds late). A one-shot marks itself done after firing; a fire whose session has vanished marks the automation `error` with the reason.
+
 ### MCP servers
 
 Manage the app's MCP server integrations. Configuration methods change

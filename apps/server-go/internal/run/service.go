@@ -234,6 +234,7 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	s.mu.Unlock()
 	if manager != nil {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
+		manager.SetAutomations(s.automationStore())
 	}
 }
 

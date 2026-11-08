@@ -411,10 +411,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	}
 	toolList = append(toolList, tools.NewMemoryTool(projectID, s.memoryRegistry()))
 	toolList = append(toolList, tools.NewReadChatTool(sessionID, s.sessions))
-	toolList = append(toolList, tools.NewAutomationCreateTool(sessionID, s.automations),
-		tools.NewAutomationGetTool(sessionID, s.automations),
-		tools.NewAutomationUpdateTool(sessionID, s.automations),
-		tools.NewAutomationDeleteTool(sessionID, s.automations))
 	// writePlan is offered in plan mode only: it is the sole file write a
 	// read-only run may make, and in every other mode write_file does the job.
 	if mode == permissions.PlanMode {

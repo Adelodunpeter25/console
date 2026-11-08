@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -23,26 +24,29 @@ import (
 
 // Runtime is one session's console kernel.
 type Runtime struct {
-	kernel    *jskernel.Runtime
-	ports     *terminalsvc.PortRegistry
-	scripts   *projectssvc.ProjectScriptsService
-	sessions  *services.SessionService
-	projects  *projectssvc.ProjectService
-	mcp       *mcp.Manager
-	active    func(string) bool
-	abort     func(string) bool
-	prompt    PromptFunc
-	queue     QueueControl
-	ceiling   string
-	start     func(string, string, string, string, string, string) error
-	projectID string
-	cwd       string
-	sessionID string
+	kernel   *jskernel.Runtime
+	ports    *terminalsvc.PortRegistry
+	scripts  *projectssvc.ProjectScriptsService
+	sessions *services.SessionService
+	projects *projectssvc.ProjectService
+	mcp      *mcp.Manager
+	// automations backs the console.automation.* methods (nil-safe: the
+	// methods report unavailable).
+	automations *automations.Service
+	active      func(string) bool
+	abort       func(string) bool
+	prompt      PromptFunc
+	queue       QueueControl
+	ceiling     string
+	start       func(string, string, string, string, string, string) error
+	projectID   string
+	cwd         string
+	sessionID   string
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
-func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScriptsService, sessions *services.SessionService, projects *projectssvc.ProjectService, mcpManager *mcp.Manager, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
-	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, mcp: mcpManager, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
+func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScriptsService, sessions *services.SessionService, projects *projectssvc.ProjectService, mcpManager *mcp.Manager, autos *automations.Service, active func(string) bool, start func(string, string, string, string, string, string) error, abort func(string) bool, prompt PromptFunc, queue QueueControl, projectID, cwd string) (*Runtime, error) {
+	r := &Runtime{ports: ports, scripts: scripts, sessions: sessions, projects: projects, mcp: mcpManager, automations: autos, active: active, abort: abort, prompt: prompt, queue: queue, start: start, projectID: projectID, cwd: cwd}
 	methods := []jskernel.Method{
 		{Name: "ports.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.portsList(ctx, args)
@@ -118,6 +122,18 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		}},
 		{Name: "sessions.fork", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.sessionsFork(ctx, args)
+		}},
+		{Name: "automation.create", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.automationCreate(ctx, args)
+		}},
+		{Name: "automation.get", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.automationGet(ctx, args)
+		}},
+		{Name: "automation.update", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.automationUpdate(ctx, args)
+		}},
+		{Name: "automation.delete", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
+			return r.automationDelete(ctx, args)
 		}},
 		{Name: "mcp.list", Call: func(ctx context.Context, args map[string]any) (*jskernel.Result, error) {
 			return r.mcpListImpl(ctx, args)
@@ -661,6 +677,10 @@ var methodArgs = map[string][]string{
 	"sessions.fork":         {"session_id", "message_id"},
 	"sessions.search":       {"query", "session_id", "project_id", "cwd", "all_projects", "roles", "limit", "per_session", "include_deleted"},
 	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms"},
+	"automation.create":     {"prompt", "kind", "interval_seconds", "run_at"},
+	"automation.get":        {"id"},
+	"automation.update":     {"id", "prompt", "kind", "interval_seconds", "run_at"},
+	"automation.delete":     {"id"},
 	"mcp.list":              {},
 	"mcp.tools":             {"id"},
 	"mcp.add":               {"id", "transport", "url", "command", "args", "env", "label", "auth", "enabled"},

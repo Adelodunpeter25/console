@@ -10,25 +10,27 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
 
 // Manager hands out per-session console kernels.
 type Manager struct {
-	mu       sync.Mutex
-	js       *jskernel.Cache[*Runtime]
-	stopped  bool
-	ports    *terminalsvc.PortRegistry
-	scripts  *projectssvc.ProjectScriptsService
-	sessions *services.SessionService
-	projects *projectssvc.ProjectService
-	mcp      *mcp.Manager
-	active   func(string) bool
-	start    func(string, string, string, string, string, string) error
-	abort    func(string) bool
-	prompt   PromptFunc
-	queue    QueueControl
+	mu          sync.Mutex
+	js          *jskernel.Cache[*Runtime]
+	stopped     bool
+	ports       *terminalsvc.PortRegistry
+	scripts     *projectssvc.ProjectScriptsService
+	sessions    *services.SessionService
+	projects    *projectssvc.ProjectService
+	mcp         *mcp.Manager
+	automations *automations.Service
+	active      func(string) bool
+	start       func(string, string, string, string, string, string) error
+	abort       func(string) bool
+	prompt      PromptFunc
+	queue       QueueControl
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -72,6 +74,20 @@ func (m *Manager) SetMCP(manager *mcp.Manager) {
 	m.mu.Unlock()
 }
 
+// SetAutomations attaches the store behind console.automation.*. Nil (never
+// set, or tests) leaves the methods reporting unavailable.
+func (m *Manager) SetAutomations(store *automations.Service) {
+	m.mu.Lock()
+	m.automations = store
+	m.mu.Unlock()
+}
+
+func (m *Manager) automationStore() *automations.Service {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.automations
+}
+
 func (m *Manager) mcpManager() *mcp.Manager {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -99,7 +115,7 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 		scripts := m.scriptService()
 		mcpManager := m.mcpManager()
 		sessions, projects, active, abort, start, prompt, queue := m.sessionConfig()
-		runtime, err := NewRuntime(ports, scripts, sessions, projects, mcpManager, active, start, abort, prompt, queue, projectID, cwd)
+		runtime, err := NewRuntime(ports, scripts, sessions, projects, mcpManager, m.automationStore(), active, start, abort, prompt, queue, projectID, cwd)
 		if err != nil {
 			return nil, err
 		}
