@@ -4,13 +4,15 @@ import { expect, test } from "nsh/test";
 import {
   groupSessions,
   groupSessionsByProject,
+  partitionSettled,
+  sentenceCaseProjectName,
 } from "./session_groups";
 
 test("groups sessions by pin and recency", () => {
   const now = 1_000_000_000_000;
   const day = 24 * 60 * 60 * 1000;
   const sessions = [
-    { id: "a", title: "Pinned work", status: "pinned", pinned: false, settled: false, updatedAt: now },
+    { id: "a", title: "Pinned work", status: "active", pinned: true, settled: false, updatedAt: now },
     { id: "b", title: "Today's chat", status: "active", pinned: false, settled: false, updatedAt: now - 1000 },
     {
       id: "c",
@@ -60,4 +62,20 @@ test("folds unknown project ids into No Project", () => {
   ];
   const groups = groupSessionsByProject(sessions, () => null);
   expect(groups.map((g) => g.label)).toEqual(["No Project"]);
+});
+
+test("settled chats leave the active sections, newest first", () => {
+  const base = { status: "active", pinned: false };
+  const { active, settled } = partitionSettled([
+    { id: "a", title: "A", updatedAt: 1, settled: false, ...base },
+    { id: "b", title: "B", updatedAt: 2, settled: true, ...base },
+    { id: "c", title: "C", updatedAt: 3, settled: true, ...base },
+  ]);
+  expect(active.map((s) => s.id)).toEqual(["a"]);
+  expect(settled.map((s) => s.id)).toEqual(["c", "b"]);
+});
+
+test("project names show a capitalised first letter", () => {
+  expect(sentenceCaseProjectName("console")).toBe("Console");
+  expect(sentenceCaseProjectName("")).toBe("");
 });

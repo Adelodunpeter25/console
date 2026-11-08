@@ -4,11 +4,16 @@
 // "No tasks yet" empty state. Projects appear as sections (project sort
 // mode), not as a picker; the settings footer waits for the settings screen.
 
-import { signal, View, Text, token } from "nsh";
+import { Scroll, signal, View, Text, token } from "nsh";
 import type { ProjectSummary, SessionSummary } from "console-nsh/native";
 import { GroupHeader, SortModeToggle, type SortMode } from "./group_header";
 import { SessionItem } from "../session/session_item";
-import { groupSessions, groupSessionsByProject } from "../session/session_groups";
+import {
+  groupSessions,
+  groupSessionsByProject,
+  partitionSettled,
+  sentenceCaseProjectName,
+} from "../session/session_groups";
 import { Icon } from "../../common/icons";
 import { Hint } from "../../common/tooltip";
 
@@ -40,6 +45,10 @@ function ActionRow(props: {
   );
 }
 
+const SETTLED_LABEL = "Settled";
+const sentenceCase = (name: string | null) =>
+  name == null ? null : sentenceCaseProjectName(name);
+
 export function Sidebar(props: {
   projects: ProjectSummary[];
   sessions: SessionSummary[];
@@ -57,15 +66,17 @@ export function Sidebar(props: {
 }) {
   // Collapsed section labels; the GPUI app keeps these in the app state,
   // here they live with the sidebar until a second consumer needs them.
-  const collapsedGroups = signal<string[]>([]);
+  // The Settled section starts collapsed, like the desktop.
+  const collapsedGroups = signal<string[]>([SETTLED_LABEL]);
+  const split = () => partitionSettled(props.sessions);
   const projectNameById = () =>
     new Map(props.projects.map((p) => [p.id, p.name] as const));
   const groups = () =>
     props.sortMode === "project"
-      ? groupSessionsByProject(props.sessions, (id) =>
+      ? groupSessionsByProject(split().active, (id) =>
           projectNameById().get(id) ?? null,
         )
-      : groupSessions(props.sessions);
+      : groupSessions(split().active);
   const collapsed = (label: string) => collapsedGroups().includes(label);
   const toggleGroup = (label: string) =>
     collapsedGroups().includes(label)
@@ -79,7 +90,11 @@ export function Sidebar(props: {
       active={props.activeSessionId === s.id}
       settled={s.settled}
       pinned={s.pinned}
-      projectName={s.projectId ? projectNameById().get(s.projectId) ?? null : null}
+      projectName={
+        s.projectId
+          ? sentenceCase(projectNameById().get(s.projectId) ?? null)
+          : null
+      }
       onToggleSettle={
         props.onToggleSettle ? () => props.onToggleSettle?.(s.id) : undefined
       }
@@ -115,25 +130,25 @@ export function Sidebar(props: {
         <View class="flex flex-1 flex-col overflow-hidden">
           {/* The first section's header stays pinned beside the sort
               toggle; the rest scroll. */}
-          {groups()[0] ? (
-            <View class="flex flex-row items-center justify-between">
+          <View class="flex flex-row items-center justify-between">
+            {groups()[0] ? (
               <GroupHeader
                 label={groups()[0].label}
                 collapsed={collapsed(groups()[0].label)}
                 onToggle={() => toggleGroup(groups()[0].label)}
               />
-              <SortModeToggle
-                mode={props.sortMode}
-                onToggle={() =>
-                  props.onSortMode(props.sortMode === "date" ? "project" : "date")
-                }
-              />
-            </View>
-          ) : null}
-          <View class="flex flex-1 flex-col pb-3">
-            {/* The first group's sessions render under its pinned header;
-                the later groups bring their own scrolling headers. */}
-            {!collapsed(groups()[0].label)
+            ) : (
+              <View />
+            )}
+            <SortModeToggle
+              mode={props.sortMode}
+              onToggle={() =>
+                props.onSortMode(props.sortMode === "date" ? "project" : "date")
+              }
+            />
+          </View>
+          <Scroll class="flex-1" contentClass="flex flex-col pb-3">
+            {groups()[0] && !collapsed(groups()[0].label)
               ? groups()[0].sessions.map(renderSession)
               : null}
             {groups().slice(1).map((group) => (
@@ -148,7 +163,19 @@ export function Sidebar(props: {
                   : group.sessions.map(renderSession)}
               </View>
             ))}
-          </View>
+            {split().settled.length > 0 ? (
+              <View class="flex flex-col">
+                <GroupHeader
+                  label={SETTLED_LABEL}
+                  collapsed={collapsed(SETTLED_LABEL)}
+                  onToggle={() => toggleGroup(SETTLED_LABEL)}
+                />
+                {collapsed(SETTLED_LABEL)
+                  ? null
+                  : split().settled.map(renderSession)}
+              </View>
+            ) : null}
+          </Scroll>
         </View>
       )}
     </View>

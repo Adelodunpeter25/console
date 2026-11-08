@@ -7,6 +7,25 @@ import type { SessionSummary } from "console-nsh/native";
 
 export type SessionGroup = { label: string; sessions: SessionSummary[] };
 
+/// Project names show with a capital first letter without changing the
+/// persisted name (console-ui's `sentence_case_project_name`).
+export function sentenceCaseProjectName(name: string): string {
+  return name === "" ? name : name[0].toUpperCase() + name.slice(1);
+}
+
+/// Settled chats leave every active section and gather in their own list at
+/// the bottom, most recent first (`partition_settled`).
+export function partitionSettled(sessions: SessionSummary[]): {
+  active: SessionSummary[];
+  settled: SessionSummary[];
+} {
+  const active = sessions.filter((s) => !s.settled);
+  const settled = sessions
+    .filter((s) => s.settled)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  return { active, settled };
+}
+
 const LABELS = [
   "Today",
   "Yesterday",
@@ -47,7 +66,7 @@ export function groupSessions(
   const pinned: SessionSummary[] = [];
   const buckets: SessionSummary[][] = LABELS.map(() => []);
   for (const session of sessions) {
-    if (session.status === "pinned") {
+    if (session.pinned) {
       pinned.push(session);
       continue;
     }
@@ -100,7 +119,7 @@ export function groupSessionsByProject(
         label:
           projectId === noProjectKey
             ? "No Project"
-            : (projectName(projectId) ?? "No Project"),
+            : sentenceCaseProjectName(projectName(projectId) ?? "No Project"),
         sessions: items,
       },
       latest: items[0]?.updatedAt ?? 0,
