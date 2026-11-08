@@ -62,7 +62,7 @@ test("filterItems ranks and caps like the desktop", () => {
     range: { start: 0, end: 8 },
     query: "overview",
   });
-  expect(file.map((item) => itemInsertText(item))).toEqual(["docs/overview.md "]);
+  expect(file.map((item) => itemInsertText(item))).toEqual(["overview.md "]);
   // Chats: slug prefix outranks a contains, ties break by title.
   const chat = filterItems(commands, files, chats, {
     kind: "chat",

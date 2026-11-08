@@ -22,6 +22,8 @@ export interface SendOptions {
   thinkingLevel?: string | null;
   /// console-core's ApprovalMode wire value ("always-ask", …).
   approvalMode?: string | null;
+  /// Mention paths (files, `skill:`, `chat:`) sent so the bubble redraws chips.
+  contextFiles?: string[] | null;
 }
 
 export interface ChatController {
@@ -158,6 +160,9 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     }
     if (options?.thinkingLevel != null) {
       payload.thinkingLevel = options.thinkingLevel.toLowerCase();
+    }
+    if (options?.contextFiles != null && options.contextFiles.length > 0) {
+      payload.contextFiles = options.contextFiles;
     }
     if (options?.approvalMode != null) {
       payload.approvalMode = options.approvalMode;

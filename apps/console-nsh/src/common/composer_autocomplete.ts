@@ -4,6 +4,8 @@
 // only trigger detection, filtering, and item text; the host passes the
 // candidate lists, keeping backend requests where they are.
 
+import { mentionLabel } from "../utils/mentions";
+
 /// console-core's `SlashCommandInfo`.
 export interface SlashCommand {
   name: string;
@@ -42,15 +44,22 @@ export type AutocompleteItem =
 /// the cap (the desktop's `MAX_AUTOCOMPLETE_ITEMS`).
 const MAX_AUTOCOMPLETE_ITEMS = 80;
 
+/// The path a confirmed item attaches to the prompt: a file's path, `skill:name`
+/// for a command, `chat:slug` for a chat ref (`ComposerMention::path`).
+export function mentionPath(item: AutocompleteItem): string {
+  if (item.kind === "command") return `skill:${item.command.name}`;
+  if (item.kind === "file") return item.file.relativePath || item.file.absolutePath;
+  return `chat:${slugifyChatTitle(item.chat.title) || item.chat.id}`;
+}
+
 /// The text a confirmed item splices over the trigger (`AutocompleteItem::
 /// insert_text`).
 export function itemInsertText(item: AutocompleteItem): string {
   if (item.kind === "command") return `/${item.command.name} `;
   if (item.kind === "file") {
-    // Backend sometimes returns absolute_path only; fall back so a press
-    // never inserts "@ ".
-    const path = item.file.relativePath || item.file.absolutePath;
-    return `${path} `;
+    // The buffer holds the file's basename (the chip label); the path rides
+    // separately as a context file, like the desktop's mention chips.
+    return `${mentionLabel(mentionPath(item))} `;
   }
   const slug = slugifyChatTitle(item.chat.title);
   return `$${slug || item.chat.id} `;

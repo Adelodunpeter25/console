@@ -245,10 +245,10 @@ export function SessionPane(props: {
         <Composer
           value={draft()}
           onChange={(text: string) => draft.set(text)}
-          onSend={() => {
+          onSend={(mentionPaths: string[]) => {
             const text = draft();
             draft.set("");
-            void controller.send(text, { model: picked() });
+            void controller.send(text, { model: picked(), contextFiles: mentionPaths });
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}

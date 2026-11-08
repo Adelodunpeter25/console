@@ -43,11 +43,13 @@ export const composerFocusRequest = signal(0);
 export function focusComposer(): void {
   composerFocusRequest.set(composerFocusRequest() + 1);
 }
+import { FileMentionChip } from "./file_mention_chip";
 import { ComposerAutocompleteRow } from "./composer_autocomplete_row";
 import {
   detectTrigger,
   filterItems,
   itemInsertText,
+  mentionPath,
   type SlashCommand,
   type SuggestionChat,
   type SuggestionFile,
@@ -149,7 +151,8 @@ function HistoryKeys(props: {
 export function Composer(props: {
   value: string;
   onChange: (text: string) => void;
-  onSend: () => void;
+  /// `mentionPaths`: the chips still in the draft, to send with the prompt.
+  onSend: (mentionPaths: string[]) => void;
   runState?: ComposerRunState;
   approvalMode?: ApprovalMode;
   onApprovalMode?: (mode: ApprovalMode) => void;
@@ -223,6 +226,10 @@ export function Composer(props: {
     const trigger = detectTrigger(props.value, selection().start);
     if (!trigger) return;
     const text = itemInsertText(item);
+    picked.set([
+      ...picked(),
+      { path: mentionPath(item), label: text.trim() },
+    ]);
     const value =
       props.value.slice(0, trigger.range.start) +
       text +
@@ -287,8 +294,20 @@ export function Composer(props: {
     tab() ??
     ({ kind: "provider", name: props.providers?.[0]?.name ?? "" } as PickerTab);
 
+  // Mention chips picked from the popup: the buffer holds the label, the
+  // path rides with the prompt. Only chips whose label is still in the draft
+  // count (editing one away drops it).
+  const picked = signal<{ path: string; label: string }[]>([]);
+  const liveMentions = () =>
+    picked().filter((m) =>
+      props.value.split(/\s+/).includes(m.label),
+    );
   const send = () => {
-    if (hasDraft() && !isRunning()) props.onSend();
+    if (hasDraft() && !isRunning()) {
+      const paths = liveMentions().map((m) => m.path);
+      picked.set([]);
+      props.onSend(paths);
+    }
   };
 
   const modelLabel = () =>
@@ -386,6 +405,14 @@ export function Composer(props: {
           </View>
         );
       })()}
+
+      {liveMentions().length > 0 ? (
+        <View class="flex flex-row flex-wrap gap-1.5 px-3 pt-2">
+          {liveMentions().map((mention) => (
+            <FileMentionChip path={mention.path} label={mention.label} />
+          ))}
+        </View>
+      ) : null}
 
       <Input
         multiline

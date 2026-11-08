@@ -54,13 +54,13 @@ test("the model chip opens the picker: search, tabs and favourites", async () =>
   expect(app.texts()).toContain("Selected: openai:gpt-6");
 });
 
-test("typing @ opens the file autocomplete and a press inserts the path", async () => {
+test("typing @ opens the file autocomplete and a press inserts the file name chip", async () => {
   const app = await open("./composer.fixture.tsx");
   await app.type("id:composer-input", "@over");
   // The popup filters to the matching file.
   expect(app.texts()).toContain("overview.md");
   await app.press("label:Autocomplete overview.md");
-  expect(app.texts()).toContain("Draft: docs/overview.md ");
+  expect(app.texts()).toContain("Draft: overview.md ");
 });
 
 test("slash commands autocomplete from the popup", async () => {
