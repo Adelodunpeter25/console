@@ -54,9 +54,8 @@ impl ConsoleDesktopApp {
                         let pane_id = pane_id_owned.clone();
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
+                                let _ = window.update(cx, |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        this.approval_menu.close(window, cx);
                                         if let PickerTab::Provider(name) =
                                             this.pane_picker_tab(&pane_id)
                                         {
@@ -84,7 +83,6 @@ impl ConsoleDesktopApp {
                 }
             }
         });
-        let approval_menu = ContextMenuHandle::new(cx);
         // Opening the project menu fetches the GitHub repo list if it was
         // never loaded for this server, so a token connected elsewhere (or
         // after boot) still shows the repos without a restart.
@@ -272,10 +270,8 @@ impl ConsoleDesktopApp {
                 selected_model: self.selected_model.clone(),
                 active_picker_tab: self.active_picker_tab.clone(),
                 approval_mode: self.approval_mode,
-                approval_mode_history: Vec::new(),
                 thinking_level: self.thinking_level,
                 model_menu,
-                approval_menu,
                 usage_menu,
                 tasks_menu,
                 subagents_menu,
@@ -481,13 +477,6 @@ impl ConsoleDesktopApp {
             .expect("model search field is always present in workspace pane states")
     }
 
-    pub(crate) fn pane_approval_menu(&self, pane_id: &str) -> ContextMenuHandle {
-        self.workspace_pane_states
-            .get(pane_id)
-            .map(|state| state.approval_menu.clone())
-            .unwrap_or_else(|| self.approval_menu.clone())
-    }
-
     pub(crate) fn pane_project_menu(&self, pane_id: &str) -> ContextMenuHandle {
         self.workspace_pane_states
             .get(pane_id)
@@ -690,63 +679,21 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Set a pane's approval mode, recording the outgoing mode in the MRU
-    /// history first. No-ops on identical modes so history only reflects real
-    /// changes. History is capped so it stays a navigation aid, not a log.
-    /// Derived entirely from observed changes — never hardcoded.
     pub(crate) fn set_pane_approval_mode(&mut self, pane_id: &str, mode: ApprovalMode) {
-        const HISTORY_CAP: usize = 8;
         if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-            if state.approval_mode != mode {
-                push_approval_history(&mut state.approval_mode_history, state.approval_mode);
-                state.approval_mode = mode;
-            }
-        } else if self.approval_mode != mode {
-            push_approval_history(&mut self.approval_mode_history, self.approval_mode);
+            state.approval_mode = mode;
+        } else {
             self.approval_mode = mode;
         }
-
-        fn push_approval_history(history: &mut Vec<ApprovalMode>, outgoing: ApprovalMode) {
-            history.retain(|m| *m != outgoing);
-            history.push(outgoing);
-            if history.len() > HISTORY_CAP {
-                history.remove(0);
-            }
-        }
     }
 
-    /// The pane's approval-mode MRU history, newest last. Empty until the
-    /// first mode change; falls back to the global history for panes without
-    /// a state entry.
-    pub(crate) fn pane_approval_mode_history(&self, pane_id: &str) -> &[ApprovalMode] {
-        self.workspace_pane_states
-            .get(pane_id)
-            .map(|state| state.approval_mode_history.as_slice())
-            .unwrap_or(self.approval_mode_history.as_slice())
-    }
-
-    /// Shift+Tab from the composer: jump to the most recently used mode that
-    /// isn't current (a toggle between the last two modes in practice). When
-    /// history is empty or exhausted, advance one step in `ApprovalMode::ALL`
-    /// order — no mode is ever hardcoded or skipped.
+    /// Shift+Tab from the composer: flip between Plan and Full Access.
     pub fn cycle_approval_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let pane_id = self
             .active_pane_id
             .clone()
             .unwrap_or_else(|| "pane-main".to_string());
-        let current = self.pane_approval_mode(&pane_id);
-        let next = self
-            .pane_approval_mode_history(&pane_id)
-            .iter()
-            .rev()
-            .copied()
-            .find(|m| *m != current)
-            .or_else(|| {
-                let all = ApprovalMode::ALL;
-                let pos = all.iter().position(|m| *m == current)?;
-                Some(all[(pos + 1) % all.len()])
-            });
-        let Some(next) = next else { return };
+        let next = self.pane_approval_mode(&pane_id).toggled();
         self.set_pane_approval_mode(&pane_id, next);
         self.update_session_settings_for_pane(
             pane_id,
@@ -762,8 +709,7 @@ impl ConsoleDesktopApp {
             },
             cx,
         );
-        // Keep focus in the composer; the dropdown label re-renders with the
-        // new mode on the next frame.
+        // Keep focus in the composer; the stripes re-render with the new mode.
         let composer = self.active_composer_input();
         composer.update(cx, |input, cx| {
             window.focus(&input.focus_handle(cx), cx);

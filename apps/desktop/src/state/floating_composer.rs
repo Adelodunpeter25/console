@@ -312,7 +312,6 @@ impl ConsoleDesktopApp {
             card.branch_menu.clone(),
             card.model_menu.clone(),
             card.thinking_menu.clone(),
-            card.approval_menu.clone(),
             model_menu,
         )
         .data(data)
@@ -417,10 +416,9 @@ impl ConsoleDesktopApp {
         })
         .on_choose_approval({
             let entity = entity.clone();
-            move |mode: console_core::ApprovalMode, window: &mut Window, cx: &mut App| {
+            move |mode: console_core::ApprovalMode, _window: &mut Window, cx: &mut App| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.floating_composer.approval_menu.close(window, cx);
                         this.floating_composer.approval_mode = mode;
                         cx.notify();
                     });

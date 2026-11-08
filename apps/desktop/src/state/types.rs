@@ -111,11 +111,7 @@ pub struct ConsoleDesktopApp {
     pub favorites: Rc<std::collections::HashSet<String>>,
     pub approval_mode: ApprovalMode,
     pub thinking_level: Option<ThinkingLevel>,
-    /// Global fallback for the per-pane approval-mode MRU history, used when
-    /// a pane has no state entry yet (same pattern as `approval_mode` above).
-    pub(crate) approval_mode_history: Vec<ApprovalMode>,
     pub model_menu: ContextMenuHandle,
-    pub approval_menu: ContextMenuHandle,
     pub usage_menu: ContextMenuHandle,
     /// Anchors the floating task list to this pane's tasks pill.
     pub tasks_menu: ContextMenuHandle,

@@ -1,10 +1,10 @@
 use console_core::types::ChangesScope;
 use console_core::{
-    ApprovalMode, ApproveToolPermissionDto, SelectedModel, SessionHeaderExt, UpdateSessionDto,
+    ApproveToolPermissionDto, SelectedModel, SessionHeaderExt, UpdateSessionDto,
 };
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
-    ApprovalModeDropdown, ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
+    ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
     QuestionInteractionCard, ShellEntry, ShellsPill, SubagentsPill, TasksPill, Theme,
     WorkspaceFooter, centered_stripe, composer_pills, error_banner, notice_banner,
     queued_prompts_stack,
@@ -1112,7 +1112,6 @@ impl ConsoleDesktopApp {
         let pane_thinking_level = self.pane_thinking_level(pane_id);
         let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(pane_id);
         let pane_model_menu = self.pane_model_menu(pane_id);
-        let pane_approval_menu = self.pane_approval_menu(pane_id);
         let pane_model_search = self.pane_model_search(pane_id);
         let pane_model_search_query = pane_model_search.read(cx).content().to_owned();
         let pane_session_id = self.active_session_for_pane(pane_id);
@@ -1200,35 +1199,6 @@ impl ConsoleDesktopApp {
                 }
             },
         );
-
-        let approval_dropdown = ApprovalModeDropdown::new(pane_approval_mode, {
-            let entity = entity.clone();
-            let approval_handle = pane_approval_menu.clone();
-            let pane_id = pane_id.to_string();
-            move |mode: ApprovalMode, window, cx| {
-                approval_handle.close(window, cx);
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.set_pane_approval_mode(&pane_id, mode);
-                        this.update_session_settings_for_pane(
-                            pane_id.clone(),
-                            UpdateSessionDto {
-                                title: None,
-                                cwd: None,
-                                project_id: None,
-                                model_id: None,
-                                provider: None,
-                                approval_mode: Some(mode.value().to_string()),
-                                thinking_level: None,
-                                pinned: None,
-                            },
-                            cx,
-                        );
-                        cx.notify();
-                    });
-                }
-            }
-        });
 
         let composer = ComposerView::new(
             pane_composer.clone(),
@@ -1365,7 +1335,6 @@ impl ConsoleDesktopApp {
             }
         })
         .model_dropdown(model_dropdown, pane_model_menu)
-        .approval_dropdown(approval_dropdown, pane_approval_menu)
         .autocomplete(autocomplete)
         .on_autocomplete_next({
             let entity = entity.clone();

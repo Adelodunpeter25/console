@@ -26,7 +26,7 @@ pub mod usage_meter;
 pub mod usage_panel;
 pub mod workspace_footer;
 
-pub use approval_selector::{ApprovalModeDropdown, ApprovalModeIconExt, ApprovalModeSelector};
+pub use approval_selector::ApprovalModeIconExt;
 pub use attachment::attachment_image;
 pub use autocomplete::{
     AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,

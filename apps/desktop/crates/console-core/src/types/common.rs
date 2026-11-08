@@ -13,28 +13,20 @@ pub struct ApiResponse<T> {
 
 /// How much autonomy an agent run has. Persisted on the session as
 /// `approval_mode` via [`ApprovalMode::value`], so it is a domain value, not a
-/// UI concern; presentation (labels, icons) stays in `console-ui`.
+/// UI concern; presentation (labels, icons) stays in `console-ui`. Plan is the
+/// default; any older stored value (always-ask, accept-edits) reads as Plan.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ApprovalMode {
     #[default]
-    AlwaysAsk,
-    AcceptEdits,
     PlanMode,
     FullAccess,
 }
 
 impl ApprovalMode {
-    pub const ALL: [Self; 4] = [
-        Self::AlwaysAsk,
-        Self::AcceptEdits,
-        Self::PlanMode,
-        Self::FullAccess,
-    ];
+    pub const ALL: [Self; 2] = [Self::PlanMode, Self::FullAccess];
 
     pub fn value(self) -> &'static str {
         match self {
-            Self::AlwaysAsk => "always-ask",
-            Self::AcceptEdits => "accept-edits",
             Self::PlanMode => "plan-mode",
             Self::FullAccess => "full-access",
         }
@@ -42,28 +34,30 @@ impl ApprovalMode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::AlwaysAsk => "Normal",
-            Self::AcceptEdits => "Accept Edits",
-            Self::PlanMode => "Plan Mode",
+            Self::PlanMode => "Plan",
             Self::FullAccess => "Full access",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::AlwaysAsk => "Always ask for confirmation on edit & execute actions",
-            Self::AcceptEdits => "Auto-approve safe edits, confirm shell execution",
             Self::PlanMode => "Read-only mode, no file edits or command execution",
-            Self::FullAccess => "Full autonomy, auto-approve all tools",
+            Self::FullAccess => "Full autonomy, runs everything without asking",
         }
     }
 
     pub fn from_value(val: &str) -> Self {
         match val {
-            "accept-edits" => Self::AcceptEdits,
-            "plan-mode" => Self::PlanMode,
             "full-access" => Self::FullAccess,
-            _ => Self::AlwaysAsk,
+            _ => Self::PlanMode,
+        }
+    }
+
+    /// The other mode: what Shift+Tab flips to.
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::PlanMode => Self::FullAccess,
+            Self::FullAccess => Self::PlanMode,
         }
     }
 }

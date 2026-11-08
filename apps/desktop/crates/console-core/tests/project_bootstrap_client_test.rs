@@ -148,7 +148,7 @@ fn repo_task_decodes_project_and_session() {
         "project": { "id": "p1", "name": "hello", "path": "/home/me/console/projects/hello" },
         "session": { "id": "s1", "title": "Hello", "cwd": "/home/me/console/projects/hello",
                      "projectId": "p1", "modelId": "m", "provider": "p",
-                     "approvalMode": "always-ask", "messageCount": 0, "status": "idle" }
+                     "approvalMode": "plan-mode", "messageCount": 0, "status": "idle" }
     }))
     .unwrap();
     assert_eq!(task.project.id, "p1");

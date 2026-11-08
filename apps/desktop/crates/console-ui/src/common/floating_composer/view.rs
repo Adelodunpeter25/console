@@ -19,7 +19,7 @@ use gpui::{
 
 use super::BranchChoice;
 use crate::common::composer_view::composer_attachment_row;
-use crate::common::{ApprovalModeDropdown, ApprovalModeIconExt};
+use crate::common::ApprovalModeIconExt;
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
     AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
@@ -70,7 +70,6 @@ pub struct FloatingComposerView {
     branch_menu: ContextMenuHandle,
     model_menu: ContextMenuHandle,
     thinking_menu: ContextMenuHandle,
-    approval_menu: ContextMenuHandle,
     model_dropdown: ModelDropdownMenu,
     data: Data,
     on_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -101,7 +100,6 @@ impl FloatingComposerView {
         branch_menu: ContextMenuHandle,
         model_menu: ContextMenuHandle,
         thinking_menu: ContextMenuHandle,
-        approval_menu: ContextMenuHandle,
         model_dropdown: ModelDropdownMenu,
     ) -> Self {
         Self {
@@ -110,7 +108,6 @@ impl FloatingComposerView {
             branch_menu,
             model_menu,
             thinking_menu,
-            approval_menu,
             model_dropdown,
             data: Data {
                 projects: Rc::new(Vec::new()),
@@ -439,12 +436,10 @@ impl FloatingComposerView {
         // creates would otherwise silently inherit whatever the focused pane
         // was set to. Full access is tinted with the warning colour, as in the
         // docked composer.
-        let approval_is_open = self.approval_menu.is_open();
         let approval_trigger = MenuChip::new("floating-approval-chip")
             .height(px(26.0))
             .outlined()
             .background(theme.composer)
-            .selected(approval_is_open)
             .icon(
                 data.approval_mode.icon().path(),
                 if data.approval_mode == ApprovalMode::FullAccess {
@@ -454,19 +449,15 @@ impl FloatingComposerView {
                 },
             )
             .label(data.approval_mode.label());
+        // A one-click flip between the two modes; the docked composer uses
+        // Shift+Tab, which has no pane to act on here.
         let on_choose_approval = self.on_choose_approval.clone();
-        let approval_control = popover(
-            approval_trigger,
-            &self.approval_menu,
-            MenuAlign::AboveLeft,
-            move |_handle, _window, _cx| {
-                ApprovalModeDropdown::new(data.approval_mode, {
-                    let on_choose_approval = on_choose_approval.clone();
-                    move |mode, window, cx| on_choose_approval(mode, window, cx)
-                })
-                .into_any_element()
-            },
-        );
+        let current_approval = data.approval_mode;
+        let approval_control = approval_trigger
+            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                on_choose_approval(current_approval.toggled(), window, cx)
+            })
+            .into_any_element();
 
         let thinking_control = if data.supported_thinking_levels.is_empty() {
             div().into_any_element()

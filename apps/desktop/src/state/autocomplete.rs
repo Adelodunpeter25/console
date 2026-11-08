@@ -378,10 +378,6 @@ impl ConsoleDesktopApp {
                     };
                     input.insert_chat_mention(range, slug, cx);
                 }
-                _ => {
-                    let insert = item.insert_text();
-                    input.replace_range(range, &insert, cx);
-                }
             }
         });
         if let Some(state) = self.autocomplete_states.get_mut(owner) {

@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use crate::common::{
-    ApprovalModeDropdown, ApprovalModeIconExt, AutocompleteConfirm, AutocompleteDismiss,
+    AutocompleteConfirm, AutocompleteDismiss,
     AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, ThinkingStepper,
     attachment_image, file_mention_chip, format_model_name, provider_svg_path,
 };
@@ -118,7 +118,6 @@ pub struct ComposerView {
     floating: bool,
     pub has_queued_prompt: bool,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
-    approval_menu: Option<(ApprovalModeDropdown, ContextMenuHandle)>,
     autocomplete: Option<AutocompleteView>,
     on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_queue: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -147,7 +146,7 @@ impl ComposerView {
             composer_input,
             run_state: ComposerRunState::Ready,
             selected_model: None,
-            approval_mode: ApprovalMode::AlwaysAsk,
+            approval_mode: ApprovalMode::default(),
             thinking_level: None,
             supported_thinking_levels: Vec::new(),
             attachments: Rc::new(Vec::new()),
@@ -156,7 +155,6 @@ impl ComposerView {
             floating: false,
             has_queued_prompt: false,
             model_menu: None,
-            approval_menu: None,
             autocomplete: None,
             on_queue: on_send.clone(),
             on_send,
@@ -229,15 +227,6 @@ impl ComposerView {
         handle: ContextMenuHandle,
     ) -> Self {
         self.model_menu = Some((dropdown, handle));
-        self
-    }
-
-    pub fn approval_dropdown(
-        mut self,
-        dropdown: ApprovalModeDropdown,
-        handle: ContextMenuHandle,
-    ) -> Self {
-        self.approval_menu = Some((dropdown, handle));
         self
     }
 
@@ -573,35 +562,7 @@ impl RenderOnce for ComposerView {
             model_trigger.into_any_element()
         };
 
-        let approval_is_open = self
-            .approval_menu
-            .as_ref()
-            .map(|(_, handle)| handle.is_open())
-            .unwrap_or(false);
-        let approval_trigger = MenuChip::new("approval-mode-chip")
-            .height(px(26.0))
-            .outlined()
-            .background(theme.composer)
-            .selected(approval_is_open)
-            .icon(
-                self.approval_mode.icon().path(),
-                if self.approval_mode == ApprovalMode::FullAccess {
-                    theme.warning
-                } else {
-                    theme.text_tertiary
-                },
-            )
-            .label(self.approval_mode.label());
-        let approval_control = if let Some((dropdown, handle)) = self.approval_menu.clone() {
-            popover(
-                approval_trigger,
-                &handle,
-                MenuAlign::AboveLeft,
-                move |_handle, _window, _cx| dropdown.clone().into_any_element(),
-            )
-        } else {
-            approval_trigger.into_any_element()
-        };
+        let plan_mode = self.approval_mode == ApprovalMode::PlanMode;
 
         let thinking_control = if !self.supported_thinking_levels.is_empty() {
             let on_cycle = self
@@ -654,13 +615,9 @@ impl RenderOnce for ComposerView {
 
         // Over a file/diff the composer rests as a one-line bar and grows to
         // the full card once it is focused or has something staged.
-        // An open model/approval dropdown means the user is still working in
+        // An open model dropdown means the user is still working in
         // the composer, even though the menu holds keyboard focus.
-        let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open())
-            || self
-                .approval_menu
-                .as_ref()
-                .is_some_and(|(_, h)| h.is_open());
+        let menu_open = self.model_menu.as_ref().is_some_and(|(_, h)| h.is_open());
         if floating
             && !focused
             && !menu_open
@@ -786,6 +743,19 @@ impl RenderOnce for ComposerView {
                             .py(px(10.0))
                             .flex()
                             .flex_col()
+                            // Plan mode reads as diagonal stripes over the card.
+                            .when(plan_mode, |el| {
+                                el.child(
+                                    div()
+                                        .absolute()
+                                        .inset_0()
+                                        .bg(gpui::pattern_slash(
+                                            theme.text_tertiary.opacity(0.07),
+                                            1.0,
+                                            9.0,
+                                        )),
+                                )
+                            })
                             // Dropping image files onto the composer stages
                             // them as attachment chips; the card highlights
                             // while a drag hovers over it.
@@ -840,7 +810,6 @@ impl RenderOnce for ComposerView {
                                             )),
                                     )
                                     .child(model_control)
-                                    .child(approval_control)
                                     .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(div().flex_1())
                                     .child(match run_state {

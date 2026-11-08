@@ -284,9 +284,8 @@ impl ConsoleDesktopApp {
                     if let Some(app) = entity.upgrade() {
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
+                                let _ = window.update(cx, |_, _window, cx| {
                                     app.update(cx, |this, cx| {
-                                        this.approval_menu.close(window, cx);
                                         // Lazy: fetch only the active provider's live models.
                                         // Static catalog stays visible as fallback, so we
                                         // avoid N network calls on every open. Favorites
@@ -318,22 +317,6 @@ impl ConsoleDesktopApp {
                             }
                         });
                     });
-                }
-            }
-        });
-        let approval_menu = ContextMenuHandle::new(cx).on_toggle({
-            let entity = entity.clone();
-            move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
-                        cx.defer(move |cx| {
-                            if let Some(window) = cx.active_window() {
-                                let _ = window.update(cx, |_, window, cx| {
-                                    app.update(cx, |this, cx| this.model_menu.close(window, cx));
-                                });
-                            }
-                        });
-                    }
                 }
             }
         });
@@ -617,11 +600,9 @@ impl ConsoleDesktopApp {
             selected_model: None,
             active_picker_tab: PickerTab::Provider("antigravity".to_string()),
             favorites: Rc::new(std::collections::HashSet::new()),
-            approval_mode: ApprovalMode::AlwaysAsk,
-            approval_mode_history: Vec::new(),
-            thinking_level: None,
+            approval_mode: ApprovalMode::default(),
+                thinking_level: None,
             model_menu,
-            approval_menu,
             usage_menu,
             tasks_menu,
             subagents_menu,
@@ -857,10 +838,8 @@ impl ConsoleDesktopApp {
                 selected_model: app.selected_model.clone(),
                 active_picker_tab: app.active_picker_tab.clone(),
                 approval_mode: app.approval_mode,
-                approval_mode_history: Vec::new(),
-                thinking_level: app.thinking_level,
+                        thinking_level: app.thinking_level,
                 model_menu: app.model_menu.clone(),
-                approval_menu: app.approval_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
                 tasks_menu: app.tasks_menu.clone(),
                 subagents_menu: app.subagents_menu.clone(),

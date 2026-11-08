@@ -214,21 +214,6 @@ impl ConsoleDesktopApp {
         self.delete_server_queued_prompt(&session_id, &prompt_id, cx);
     }
 
-    fn queued_prompt_to_run_dto(queued: &console_core::QueuedPrompt) -> RunPromptDto {
-        RunPromptDto {
-            prompt: queued.prompt.clone(),
-            context_files: console_core::queued_strings_from_proto(&queued.context_files),
-            model_id: queued.model_id.clone(),
-            provider: queued.provider.clone(),
-            approval_mode: queued.approval_mode.clone(),
-            thinking_level: console_core::queued_thinking_from_proto(
-                queued.thinking_level.as_deref(),
-            ),
-            attachments: console_core::queued_attachments_from_proto(&queued.attachments),
-            annotations: console_core::queued_annotations_from_proto(&queued.annotations),
-        }
-    }
-
     /// Drop one card from the server's queue so it does not run later too.
     fn delete_server_queued_prompt(
         &mut self,
