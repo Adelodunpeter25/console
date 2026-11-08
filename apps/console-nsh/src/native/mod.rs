@@ -44,20 +44,22 @@ impl Console {
 
     /// Saves one workspace's layout document (the pane-tree JSON, owned by
     /// the TSX store). See `services::workspace` for the persistence
-    /// contract.
-    pub fn save_workspace_layout(key: String, document: String) -> Result<(), String> {
+    /// contract. Async so the body runs as a task: nsh-core's `Storage`
+    /// needs the reactive runtime, which a synchronous bridge call from a
+    /// timer does not have.
+    pub async fn save_workspace_layout(key: String, document: String) -> Result<(), String> {
         WorkspacePersist::save(&key, &document)
     }
 
     /// Loads one workspace's layout document, or `None` when the workspace
     /// was never saved (a fresh project's first launch).
-    pub fn load_workspace_layout(key: String) -> Result<Option<String>, String> {
+    pub async fn load_workspace_layout(key: String) -> Result<Option<String>, String> {
         Ok(WorkspacePersist::load(&key))
     }
 
     /// Deletes one workspace's layout document (the workspace was closed or
     /// its worktree removed). Missing keys are fine.
-    pub fn delete_workspace_layout(key: String) -> Result<(), String> {
+    pub async fn delete_workspace_layout(key: String) -> Result<(), String> {
         WorkspacePersist::delete(&key);
         Ok(())
     }

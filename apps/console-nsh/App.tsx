@@ -79,7 +79,7 @@ const WELCOME_TAB = {
 const startup = () => {
   void (async () => {
     try {
-      const saved = backend.loadWorkspaceLayout(WORKSPACE_KEY);
+      const saved = await backend.loadWorkspaceLayout(WORKSPACE_KEY);
       if (saved != null) store.restoreTree(JSON.parse(saved) as WorkspaceNode);
       else store.openTab(null, WELCOME_TAB);
     } catch {
@@ -106,7 +106,7 @@ effect(() => {
   setTimeout(() => {
     // Fire-and-forget: a failed write (disk full, host gone) leaves the
     // tree in memory; the next successful write catches up.
-    backend.saveWorkspaceLayout(WORKSPACE_KEY, JSON.stringify(store.tree()));
+    void backend.saveWorkspaceLayout(WORKSPACE_KEY, JSON.stringify(store.tree()));
   }, 250);
 });
 

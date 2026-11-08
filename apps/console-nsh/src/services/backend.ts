@@ -123,7 +123,8 @@ export const backend = {
   settings: (baseUrl: string) => text(Console.settings(baseUrl)),
 
   // Workspace layout persistence (local, via the bridge)
-  loadWorkspaceLayout: (key: string): string | null => Console.loadWorkspaceLayout(key),
-  saveWorkspaceLayout: (key: string, document: string) => Console.saveWorkspaceLayout(key, document),
-  deleteWorkspaceLayout: (key: string) => Console.deleteWorkspaceLayout(key),
+  loadWorkspaceLayout: (key: string): Promise<string | null> => Console.loadWorkspaceLayout(key),
+  saveWorkspaceLayout: (key: string, document: string): Promise<void> =>
+    Console.saveWorkspaceLayout(key, document),
+  deleteWorkspaceLayout: (key: string): Promise<void> => Console.deleteWorkspaceLayout(key),
 };
