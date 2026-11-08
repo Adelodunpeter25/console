@@ -69,13 +69,15 @@ impl SettingsWindow {
         });
 
         let new_env_name_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. Production Daemon", cx);
             input
         });
 
+        // Search mode keeps these fields one line: a long host or node ID
+        // slides horizontally instead of wrapping to three rows.
         let new_env_url_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. 192.168.1.50:3000", cx);
             input
         });
@@ -84,7 +86,7 @@ impl SettingsWindow {
         // inputs so its entity identity is stable across renders — rebuilding
         // it each render would drop focus and any half-typed code.
         let new_env_code_input = cx.new(|cx| {
-            let mut input = ComposerInput::new(window, cx);
+            let mut input = ComposerInput::new(window, cx).search_field();
             input.set_placeholder("e.g. abc-123-xyz", cx);
             input
         });
