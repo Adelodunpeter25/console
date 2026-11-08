@@ -1,15 +1,16 @@
-//go:build !(iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)))
+//go:build !((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
 
 package tunnel
 
 import "errors"
 
-// IrohAvailable is false: build with -tags iroh on linux, macOS or windows-amd64.
+// IrohAvailable is false: iroh-go ships static libraries for linux, macOS
+// and windows-amd64 only.
 const IrohAvailable = false
 
-// StartIroh always fails in builds without the iroh backend.
+// StartIroh always fails on platforms without the iroh libraries.
 func StartIroh(dir, target string, onReady func(nodeID string)) (func(), error) {
-	return func() {}, errors.New("this build has no iroh backend (rebuild with -tags iroh)")
+	return func() {}, errors.New("this platform has no iroh backend")
 }
 
 func irohInfo(dir string) (Info, bool) { return Info{}, false }

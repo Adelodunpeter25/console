@@ -1,4 +1,4 @@
-//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
+//go:build (linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)
 
 // The iroh backend end to end: a client dials the server by node ID alone
 // and carries a real HTTP request over a QUIC stream.

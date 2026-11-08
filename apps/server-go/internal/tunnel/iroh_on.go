@@ -1,4 +1,4 @@
-//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
+//go:build (linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)
 
 package tunnel
 
@@ -8,7 +8,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/irohbackend"
 )
 
-// IrohAvailable reports whether this binary was built with the iroh backend.
+// IrohAvailable reports whether this platform has the iroh backend.
 const IrohAvailable = true
 
 // StartIroh serves target over an iroh endpoint and returns its closer.

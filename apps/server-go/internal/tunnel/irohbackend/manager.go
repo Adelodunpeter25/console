@@ -1,4 +1,4 @@
-//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
+//go:build (linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)
 
 // Package irohbackend serves the local HTTP target over an iroh endpoint.
 //
@@ -16,11 +16,10 @@
 // traffic behave as they do over TCP. A client that sends one request and
 // half-closes (Finish) gets the response and then EOF.
 //
-// The package is behind the `iroh` build tag: the iroh-go FFI ships
-// static libraries for linux, macOS and windows-amd64 only (see the
-// Adelodunpeter25/iroh-go fork), so default builds stay free of it. Build with `-tags iroh` to
-// include it; the tunnel switch then picks this backend with
-// CONSOLE_RELAY=iroh.
+// The package compiles on the platforms iroh-go ships static libraries for
+// (linux amd64/arm64, macOS amd64/arm64, windows amd64); the tunnel package
+// uses its stub elsewhere. It is the default remote-access backend, with the
+// Cloudflare relay and OpenTunnel as explicit choices (`CONSOLE_RELAY`).
 package irohbackend
 
 import (

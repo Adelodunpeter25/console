@@ -1,6 +1,6 @@
 //! The desktop tunnel against the real Go iroh bridge.
 //!
-//! Needs a binary built with `go build -tags iroh ./cmd/irohecho` in
+//! Needs a binary built with `go build ./cmd/irohecho` in
 //! apps/server-go, and its path in IROHECHO. Skipped when unset, since it
 //! also needs internet (n0's relays).
 

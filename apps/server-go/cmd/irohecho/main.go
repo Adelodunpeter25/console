@@ -1,4 +1,4 @@
-//go:build iroh && ((linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64))
+//go:build (linux && (amd64 || arm64)) || (darwin && (amd64 || arm64)) || (windows && amd64)
 
 // irohecho serves a tiny HTTP target behind the iroh backend and prints the
 // node ID. It exists so the Rust desktop client can be tested against the
