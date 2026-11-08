@@ -229,7 +229,7 @@ func buildAgent(opts Options, dir string, task Task) (*loop.Agent, []tools.Defin
 		}
 	}
 	registry := tools.NewRegistry(toolList...)
-	agent := loop.New(opts.Provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
+	agent := loop.New(opts.Provider, loop.NewExecutor(registry, permissions.FullAccess), nil)
 	agent.Usage = usage
 	agent.SystemPrompt = prompt.StableSystem
 	agent.Setup = prompt.Setup

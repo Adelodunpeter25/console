@@ -28,7 +28,7 @@ func TestNotificationProtoMatchesFixtures(t *testing.T) {
 	attn := &consolev1.NotificationEvent{
 		Type: "notification", Kind: "needs_attention", SessionId: "s1",
 		Title: "Needs Attention", Subtitle: "Fix the parser",
-		Body: "sh is requesting permission",
+		Body: "Which file should I edit?",
 	}
 	raw, err := protojson.Marshal(attn)
 	if err != nil {
@@ -60,8 +60,8 @@ func TestNotificationProtoMatchesFixtures(t *testing.T) {
 
 	// Builders still produce the documented vocabulary through the bus type.
 	attention := run.AttentionNotification("s1", loop.Event{
-		Kind:       loop.EventPermissionRequest,
-		Permission: nil,
+		Kind: loop.EventAskQuestion,
+		Ask:  nil,
 	}, "Fix the parser")
 	if attention.GetKind() != "needs_attention" || attention.GetSessionId() != "s1" {
 		t.Fatalf("attention builder: %+v", attention)

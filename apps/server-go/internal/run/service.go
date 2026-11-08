@@ -109,10 +109,10 @@ func NewService(sessions *services.SessionService) *Service {
 	s.background.SetListener(s.backgroundWorkListener)
 	s.decisions.Notify = func(ctx context.Context, sessionID string, event loop.Event) {
 		s.notifyEvent(ctx, sessionID, event)
-		// A pending question/approval pauses the run until the user
+		// A pending question pauses the run until the user
 		// answers, so the session reads as needing attention rather than
 		// working. It flips back on resolve — see resolveDecision.
-		if event.Kind == loop.EventAskQuestion || event.Kind == loop.EventPermissionRequest {
+		if event.Kind == loop.EventAskQuestion {
 			s.setStatus(sessionID, "needs_attention")
 		}
 	}
@@ -416,15 +416,6 @@ func (s *Service) resolveDecision(sessionID string) {
 	if s.IsActive(sessionID) {
 		s.setStatus(sessionID, "working")
 	}
-}
-
-// ApprovePermission resolves a pending tool approval for a session.
-func (s *Service) ApprovePermission(sessionID, requestID string, allow bool) bool {
-	if !s.decisions.ApprovePermission(sessionID, requestID, allow) {
-		return false
-	}
-	s.resolveDecision(sessionID)
-	return true
 }
 
 // AnswerQuestion resolves a pending ask-question for a session.

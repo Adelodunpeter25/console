@@ -5,7 +5,6 @@ import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.AskQuestionRequest
 import console.v1.BrowserActionRequest
 import console.v1.ErrorPayload
-import console.v1.PermissionRequest
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -29,17 +28,6 @@ class EventRequestsFixtureTest {
 
     private fun payload(name: String, key: String): String =
         kotlinx.serialization.json.Json.parseToJsonElement(fixture(name)).jsonObject.getValue(key).toString()
-
-    @Test
-    fun decodesGoldenPermissionFrame() {
-        val req = moshi.adapter(PermissionRequest::class.java).fromJson(payload("permission_request.json", "request"))!!
-        assertEquals("r1", req.request_id)
-        assertEquals("c1", req.tool_call_id)
-        assertEquals("sh", req.tool_name)
-        assertEquals("{\"path\":\"a\"}", req.args.utf8())
-        assertEquals("write", req.tier)
-        assertEquals("needs review", req.reason)
-    }
 
     @Test
     fun decodesGoldenAskFrame() {
@@ -72,8 +60,8 @@ class EventRequestsFixtureTest {
 
     @Test
     fun ignoresUnknownFields() {
-        val req = moshi.adapter(PermissionRequest::class.java)
-            .fromJson("{\"requestId\":\"r\",\"toolCallId\":\"c\",\"toolName\":\"n\",\"tier\":\"read\",\"futureField\":1}")!!
+        val req = moshi.adapter(AskQuestionRequest::class.java)
+            .fromJson("{\"requestId\":\"r\",\"question\":\"q\",\"futureField\":1}")!!
         assertEquals("r", req.request_id)
     }
 }

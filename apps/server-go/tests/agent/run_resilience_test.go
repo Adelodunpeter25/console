@@ -18,17 +18,11 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-type failingApprover struct{ err error }
-
-func (f failingApprover) Approve(context.Context, permissions.Request) (bool, error) {
-	return false, f.err
-}
-
 func TestExecutorDecisionFailureIsToolResult(t *testing.T) {
 	failing := tools.NewAskTool(func(context.Context, tools.AskQuestionRequest) (tools.AskAnswer, error) {
 		return tools.AskAnswer{}, errors.New("Question timed out waiting for a decision.")
 	})
-	exec := loop.NewExecutor(tools.NewRegistry(failing), permissions.FullAccess, nil)
+	exec := loop.NewExecutor(tools.NewRegistry(failing), permissions.FullAccess)
 	args, _ := json.Marshal(map[string]any{"question": "?"})
 	res, err := exec.Execute(context.Background(), tools.ToolCall{ID: "q", Name: "ask", Arguments: args})
 	if err != nil {

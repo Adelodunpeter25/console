@@ -18,13 +18,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
-type denyApprover struct{ asked *int }
-
-func (d denyApprover) Approve(context.Context, permissions.Request) (bool, error) {
-	*d.asked++
-	return true, nil
-}
-
 func planCall(t *testing.T, name string, args any) tools.ToolCall {
 	t.Helper()
 	raw, err := json.Marshal(args)
@@ -36,9 +29,8 @@ func planCall(t *testing.T, name string, args any) tools.ToolCall {
 
 func TestPlanModeDeniesWritesAndExecButNeverPrompts(t *testing.T) {
 	dir := t.TempDir()
-	asked := 0
 	registry := tools.NewRegistry(tools.WriteFile, tools.EditFile, tools.BatchWrite, tools.Bash)
-	exec := loop.NewExecutor(registry, permissions.PlanMode, denyApprover{&asked})
+	exec := loop.NewExecutor(registry, permissions.PlanMode)
 
 	for _, call := range []tools.ToolCall{
 		planCall(t, "write_file", map[string]any{"path": filepath.Join(dir, "a.txt"), "content": "x"}),
@@ -54,9 +46,6 @@ func TestPlanModeDeniesWritesAndExecButNeverPrompts(t *testing.T) {
 			t.Errorf("%s: want a plan-mode deny, got %#v", call.Name, res)
 		}
 	}
-	if asked != 0 {
-		t.Fatalf("plan mode must deny, not prompt: approver asked %d times", asked)
-	}
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 0 {
 		t.Fatalf("a denied call still wrote files: %v", entries)
@@ -68,7 +57,7 @@ func TestPlanModeStillRunsReadTools(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	exec := loop.NewExecutor(tools.NewRegistry(tools.ReadFile, tools.ListDir), permissions.PlanMode, nil)
+	exec := loop.NewExecutor(tools.NewRegistry(tools.ReadFile, tools.ListDir), permissions.PlanMode)
 	res, err := exec.Execute(context.Background(), planCall(t, "read_file", map[string]any{"path": filepath.Join(dir, "notes.txt")}))
 	if err != nil || res.IsError {
 		t.Fatalf("read_file must work in plan mode: %v %#v", err, res)
@@ -77,7 +66,7 @@ func TestPlanModeStillRunsReadTools(t *testing.T) {
 
 func TestPlanModeAllowsWritePlanOnly(t *testing.T) {
 	dir := t.TempDir()
-	exec := loop.NewExecutor(tools.NewRegistry(tools.NewWritePlanTool(dir), tools.WriteFile), permissions.PlanMode, nil)
+	exec := loop.NewExecutor(tools.NewRegistry(tools.NewWritePlanTool(dir), tools.WriteFile), permissions.PlanMode)
 
 	res, err := exec.Execute(context.Background(), planCall(t, "writePlan", map[string]any{"name": "Auth Refactor", "content": "# Plan\n1. do it"}))
 	if err != nil || res.IsError {
@@ -229,7 +218,7 @@ func TestMemoryIsAllowedInPlanMode(t *testing.T) {
 // A subagent inherits the parent's mode, so delegating is not a way around the deny.
 func TestPlanModeAppliesToSubagentsToo(t *testing.T) {
 	registry := tools.NewRegistry(tools.WriteFile)
-	exec := loop.NewExecutor(registry, permissions.PlanMode, nil)
+	exec := loop.NewExecutor(registry, permissions.PlanMode)
 	dir := t.TempDir()
 	res, _ := exec.Execute(context.Background(), planCall(t, "write_file", map[string]any{"path": filepath.Join(dir, "s.txt"), "content": "x"}))
 	if !res.IsError {
@@ -241,9 +230,8 @@ func TestPlanModeAppliesToSubagentsToo(t *testing.T) {
 // background jobs, stay denied.
 func TestPlanModeAllowsOnlySandboxedBash(t *testing.T) {
 	dir := t.TempDir()
-	asked := 0
 
-	plain := loop.NewExecutor(tools.NewRegistry(tools.NewBashTool(nil, "")), permissions.PlanMode, denyApprover{&asked})
+	plain := loop.NewExecutor(tools.NewRegistry(tools.NewBashTool(nil, "")), permissions.PlanMode)
 	res, _ := plain.Execute(context.Background(), planCall(t, "bash", map[string]any{"command": "echo x > " + filepath.Join(dir, "p.txt")}))
 	if !res.IsError || !strings.Contains(res.Content.(string), "plan mode is read-only") {
 		t.Fatalf("ordinary bash must stay denied in plan mode: %#v", res)
@@ -252,13 +240,10 @@ func TestPlanModeAllowsOnlySandboxedBash(t *testing.T) {
 		t.Fatal("ordinary bash wrote a file in plan mode")
 	}
 
-	sandboxed := loop.NewExecutor(tools.NewRegistry(tools.NewPlanModeBashTool(nil, "")), permissions.PlanMode, denyApprover{&asked})
+	sandboxed := loop.NewExecutor(tools.NewRegistry(tools.NewPlanModeBashTool(nil, "")), permissions.PlanMode)
 	res, err := sandboxed.Execute(context.Background(), planCall(t, "bash", map[string]any{"command": "echo hello", "cwd": dir}))
 	if err != nil || res.IsError {
 		t.Fatalf("sandboxed bash must run in plan mode: %v %#v", err, res)
-	}
-	if asked != 0 {
-		t.Fatalf("plan mode must not prompt: asked %d times", asked)
 	}
 
 	// Legacy modes fall back to plan mode, never to full access.

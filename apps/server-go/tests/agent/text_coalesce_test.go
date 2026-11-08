@@ -49,7 +49,7 @@ func TestTurnCoalescesConsecutiveTextDeltas(t *testing.T) {
 		},
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess)
 	agent := loop.New(provider, executor, sessions)
 
 	events, err := agent.Run(context.Background(), header.ID, "hi", registry.Definitions())

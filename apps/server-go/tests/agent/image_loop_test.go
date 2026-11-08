@@ -60,7 +60,7 @@ func TestModelSeesImageOnActingTurn(t *testing.T) {
 	provider := &imageProvider{}
 
 	registry := tools.NewRegistry(shotTool())
-	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess)
 	agent := loop.New(provider, executor, sessions)
 
 	events, err := agent.Run(context.Background(), "sess-1", "look at the image", nil)
@@ -109,7 +109,7 @@ func TestStoredCopyAfterImageRunHasNoBytes(t *testing.T) {
 	header := helpers.CreateRunSession(t, sessions)
 
 	registry := tools.NewRegistry(shotTool())
-	executor := loop.NewExecutor(registry, permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(registry, permissions.FullAccess)
 	agent := loop.New(provider, executor, sessions)
 
 	events, err := agent.Run(context.Background(), header.ID, "look at the image", nil)

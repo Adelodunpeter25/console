@@ -2,8 +2,6 @@
 package permissions
 
 import (
-	"fmt"
-
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 )
 
@@ -29,20 +27,9 @@ func Normalize(value string) Mode {
 type Policy string
 
 const (
-	Allow  Policy = "allow"
-	Deny   Policy = "deny"
-	Prompt Policy = "prompt"
+	Allow Policy = "allow"
+	Deny  Policy = "deny"
 )
-
-// Request is emitted when a tool call needs user approval.
-type Request struct {
-	RequestID  string         `json:"requestId"`
-	ToolCallID string         `json:"toolCallId"`
-	ToolName   string         `json:"toolName"`
-	Args       any            `json:"args"`
-	Tier       tools.ToolTier `json:"tier"`
-	Reason     string         `json:"reason,omitempty"`
-}
 
 // Resolve maps (mode, tier) to a policy.
 //
@@ -58,17 +45,4 @@ func Resolve(mode Mode, tier tools.ToolTier) Policy {
 		return Allow
 	}
 	return Deny
-}
-
-// Decision carries the outcome for one tool call.
-type Decision struct {
-	Policy Policy
-	Reason string
-}
-
-func (d Decision) Error() error {
-	if d.Policy == Deny {
-		return tools.NewToolError("Permission denied by approval mode: %s", d.Reason)
-	}
-	return fmt.Errorf("approval required")
 }

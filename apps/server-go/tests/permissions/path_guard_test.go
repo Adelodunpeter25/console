@@ -13,7 +13,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
-	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
 // guardProject builds <tmp>/project with an outside sibling <tmp>/outside,
@@ -243,7 +242,7 @@ func TestPathGuardMalformedArgumentsReachTheTool(t *testing.T) {
 // continues, rather than aborting the turn.
 func TestExecutorGuardBlocksWriteOutright(t *testing.T) {
 	g, project, outside := guardProject(t)
-	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), permissions.FullAccess)
 	executor.Guard = g
 
 	target := filepath.Join(outside, "hijacked.txt")
@@ -280,7 +279,7 @@ func TestExecutorGuardRewritesGrepRoot(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(project, "marker.go"), []byte("package marker\n"), 0o644); err != nil {
 		t.Fatalf("seed file: %v", err)
 	}
-	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), permissions.FullAccess, helpers.AutoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), permissions.FullAccess)
 	executor.Guard = g
 
 	args, _ := json.Marshal(map[string]any{"pattern": "marker"})

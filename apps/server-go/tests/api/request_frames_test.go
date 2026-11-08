@@ -41,15 +41,6 @@ func requestFrame(t *testing.T, kind, key string, msg proto.Message) string {
 }
 
 func TestRequestFramesProtoMatchFixtures(t *testing.T) {
-	reason := "needs review"
-	perm := &consolev1.PermissionRequest{
-		RequestId: "r1", ToolCallId: "c1", ToolName: "sh",
-		Args: []byte(`{"path":"a"}`), Tier: "write", Reason: &reason,
-	}
-	if got := requestFrame(t, "permissionRequest", "request", perm); got != requestFixture(t, "permission_request.json") {
-		t.Fatalf("permission drifted:\n got %s\nwant %s", got, requestFixture(t, "permission_request.json"))
-	}
-
 	skippable := false
 	batch := "b1"
 	ask := &consolev1.AskQuestionRequest{

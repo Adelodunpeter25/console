@@ -14,18 +14,6 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
-// recordingApprover counts prompts and records which tool asked.
-type recordingApprover struct {
-	calls int
-	tools []string
-}
-
-func (r *recordingApprover) Approve(_ context.Context, req permissions.Request) (bool, error) {
-	r.calls++
-	r.tools = append(r.tools, req.ToolName)
-	return true, nil
-}
-
 // execTool returns a TierExec tool that records that it ran.
 func execTool(t *testing.T, ran *bool) tools.Tool {
 	t.Helper()
@@ -40,7 +28,6 @@ func execTool(t *testing.T, ran *bool) tools.Tool {
 // mode an exec-tier tool in a subagent is refused, never run and never asked.
 func TestSubagentInheritsPlanModeDenial(t *testing.T) {
 	var ran bool
-	approver := &recordingApprover{}
 	provider := &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event {
 			args, _ := json.Marshal(map[string]any{})
@@ -53,14 +40,10 @@ func TestSubagentInheritsPlanModeDenial(t *testing.T) {
 		Provider:     provider,
 		Tools:        []tools.Tool{execTool(t, &ran)},
 		ApprovalMode: permissions.PlanMode,
-		Approver:     approver,
 	})
 	_, _ = tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go"))
 	if ran {
 		t.Fatal("exec tool ran in a plan-mode subagent")
-	}
-	if approver.calls != 0 {
-		t.Fatalf("approver called %d times, want 0 (nothing asks any more)", approver.calls)
 	}
 }
 
@@ -68,7 +51,6 @@ func TestSubagentInheritsPlanModeDenial(t *testing.T) {
 // means no prompt, so computer-use work can complete without a human.
 func TestSubagentRunsUnattendedUnderFullAccess(t *testing.T) {
 	var ran bool
-	approver := &recordingApprover{}
 	provider := &helpers.MockProvider{Turns: []func() []loop.Event{
 		func() []loop.Event {
 			args, _ := json.Marshal(map[string]any{})
@@ -81,13 +63,9 @@ func TestSubagentRunsUnattendedUnderFullAccess(t *testing.T) {
 		Provider:     provider,
 		Tools:        []tools.Tool{execTool(t, &ran)},
 		ApprovalMode: permissions.FullAccess,
-		Approver:     approver,
 	})
 	if _, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go")); err != nil {
 		t.Fatalf("subagent call: %v", err)
-	}
-	if approver.calls != 0 {
-		t.Fatalf("approver called %d times under full-access, want 0", approver.calls)
 	}
 	if !ran {
 		t.Fatal("exec tool did not run under full-access")

@@ -1,4 +1,4 @@
-use console_proto::{AskQuestionRequest, BrowserActionRequest, ErrorPayload, PermissionRequest};
+use console_proto::{AskQuestionRequest, BrowserActionRequest, ErrorPayload};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> String {
@@ -15,18 +15,6 @@ fn request_of<T: serde::de::DeserializeOwned>(name: &str) -> T {
     let raw = fixture(name);
     let value: serde_json::Value = serde_json::from_str(raw.trim()).expect("frame json");
     serde_json::from_value(value["request"].clone()).expect("request payload")
-}
-
-#[test]
-fn decodes_golden_permission_frame() {
-    let req: PermissionRequest = request_of("permission_request.json");
-    assert_eq!(req.request_id, "r1");
-    assert_eq!(req.tool_call_id, "c1");
-    assert_eq!(req.tool_name, "sh");
-    // Args cross as raw JSON bytes (base64 on the wire).
-    assert_eq!(req.args, br#"{"path":"a"}"#);
-    assert_eq!(req.tier, "write");
-    assert_eq!(req.reason.as_deref(), Some("needs review"));
 }
 
 #[test]
@@ -67,8 +55,8 @@ fn decodes_golden_error_frame() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let req: PermissionRequest = serde_json::from_str(
-        r#"{"requestId":"r","toolCallId":"c","toolName":"n","tier":"read","futureField":1}"#,
+    let req: AskQuestionRequest = serde_json::from_str(
+        r#"{"requestId":"r","question":"q","futureField":1}"#,
     )
     .expect("unknown fields must be ignored");
     assert_eq!(req.request_id, "r");

@@ -1,5 +1,5 @@
 // Agent run routes: run,
-// attach-to-stream, abort, queue, steer, approve, answer.
+// attach-to-stream, abort, queue, steer, answer.
 package routes
 
 import (
@@ -259,22 +259,6 @@ func RegisterRunRoutes(app *fiber.App, runs *run.Service) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending browser action for requestId '" + body.RequestID + "'."})
 		}
 		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"resolved": true}})
-	})
-
-	// POST /api/sessions/:id/approve — approve or deny a pending tool request.
-	app.Post("/api/sessions/:id/approve", func(c *fiber.Ctx) error {
-		sessionID := c.Params("id")
-		var body struct {
-			RequestID string `json:"requestId"`
-			Allow     bool   `json:"allow"`
-		}
-		if err := c.BodyParser(&body); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "Invalid request body."})
-		}
-		if !runs.ApprovePermission(sessionID, body.RequestID, body.Allow) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "No pending permission for requestId '" + body.RequestID + "'."})
-		}
-		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{"approved": body.Allow}})
 	})
 
 	// POST /api/sessions/:id/queue — add a prompt to the queue; queued

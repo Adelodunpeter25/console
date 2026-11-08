@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
@@ -72,8 +71,6 @@ const (
 	EventAskQuestion EventKind = "askQuestion"
 	// EventBrowserAction carries a BrowserActionRequest awaiting desktop client execution.
 	EventBrowserAction EventKind = "browserAction"
-	// EventPermissionRequest carries a permission Request awaiting approval.
-	EventPermissionRequest EventKind = "permissionRequest"
 	// EventQueueUpdated carries the queued prompts, next to run first.
 	EventQueueUpdated EventKind = "queueUpdated"
 	// EventSessionTitleUpdated carries a freshly generated title.
@@ -131,15 +128,14 @@ type Event struct {
 	Usage      *TurnUsage                  `json:"usage,omitempty"`
 	Ask        *tools.AskQuestionRequest   `json:"ask,omitempty"`
 	Browser    *tools.BrowserActionRequest `json:"browser,omitempty"`
-	Permission *permissions.Request        `json:"permission,omitempty"`
 	Queued     *types.QueuedPrompt         `json:"queuedPrompt,omitempty"`
 	// Drained marks an EventQueueUpdated with no Queued as "the staged prompt
 	// just started running", as opposed to it being cleared.
 	Drained bool `json:"drained,omitempty"`
 	// QueuedAll is the whole queue (next-to-run first) on EventQueueUpdated.
 	QueuedAll []types.QueuedPrompt `json:"queuedPrompts,omitempty"`
-	Title      string                      `json:"title,omitempty"`
-	Subagent   any                         `json:"subagent,omitempty"`
+	Title     string               `json:"title,omitempty"`
+	Subagent  any                  `json:"subagent,omitempty"`
 	// Items/Action carry the session todo list for EventTodoUpdate.
 	Items  []types.TodoItem `json:"items,omitempty"`
 	Action string           `json:"action,omitempty"`

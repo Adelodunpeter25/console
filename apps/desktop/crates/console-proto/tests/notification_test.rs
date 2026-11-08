@@ -20,7 +20,7 @@ fn decodes_golden_attention_fixture() {
     assert_eq!(n.session_id, "s1");
     assert_eq!(n.title, "Needs Attention");
     assert_eq!(n.subtitle, "Fix the parser");
-    assert_eq!(n.body, "sh is requesting permission");
+    assert_eq!(n.body, "Which file should I edit?");
 }
 
 #[test]

@@ -466,7 +466,6 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		// so it must hold the same authority over them.
 		ApprovalMode: mode,
 		Guard:        guard,
-		Approver:     s.decisions.ApproverFor(sessionID, hub),
 		OnEvent:      hub.Broadcast,
 		Usage:        usage,
 	}))
@@ -497,7 +496,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	// readSkill is rebuilt per run so it can see which capabilities are on
 	// and, for the ones the agent may switch on, load their tools mid-turn.
 	registry.Replace(tools.NewReadSkillTool(s.readSkillCapabilities(loadCtx, registry)))
-	executor := loop.NewExecutor(registry, mode, s.decisions.ApproverFor(sessionID, hub))
+	executor := loop.NewExecutor(registry, mode)
 	executor.Guard = guard
 	// Capture the pre-write content of every file a whole-file overwrite
 	// tool is about to touch, so the change diff recorded from the result

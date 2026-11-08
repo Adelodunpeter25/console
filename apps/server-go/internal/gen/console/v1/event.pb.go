@@ -304,94 +304,8 @@ func (x *ContextSnapshot) GetSource() string {
 }
 
 // Interactive requests (Phase 4, fourth slice). Args cross as raw JSON bytes
-// like tool calls. requires_upgrade (desktop permission card) is client-only
-// UI state nothing populates, so it stays out of the schema. skippable is
-// optional but always set — the old shape had no omitempty, and clients
+// like tool calls. skippable is optional but always set — the old shape had no omitempty, and clients
 // distinguish explicit false from absent.
-type PermissionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	ToolCallId    string                 `protobuf:"bytes,2,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Args          []byte                 `protobuf:"bytes,4,opt,name=args,proto3" json:"args,omitempty"`
-	Tier          string                 `protobuf:"bytes,5,opt,name=tier,proto3" json:"tier,omitempty"`
-	Reason        *string                `protobuf:"bytes,6,opt,name=reason,proto3,oneof" json:"reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PermissionRequest) Reset() {
-	*x = PermissionRequest{}
-	mi := &file_console_v1_event_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PermissionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PermissionRequest) ProtoMessage() {}
-
-func (x *PermissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_event_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PermissionRequest.ProtoReflect.Descriptor instead.
-func (*PermissionRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_event_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *PermissionRequest) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
-}
-
-func (x *PermissionRequest) GetToolCallId() string {
-	if x != nil {
-		return x.ToolCallId
-	}
-	return ""
-}
-
-func (x *PermissionRequest) GetToolName() string {
-	if x != nil {
-		return x.ToolName
-	}
-	return ""
-}
-
-func (x *PermissionRequest) GetArgs() []byte {
-	if x != nil {
-		return x.Args
-	}
-	return nil
-}
-
-func (x *PermissionRequest) GetTier() string {
-	if x != nil {
-		return x.Tier
-	}
-	return ""
-}
-
-func (x *PermissionRequest) GetReason() string {
-	if x != nil && x.Reason != nil {
-		return *x.Reason
-	}
-	return ""
-}
-
 type AskQuestionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -406,7 +320,7 @@ type AskQuestionRequest struct {
 
 func (x *AskQuestionRequest) Reset() {
 	*x = AskQuestionRequest{}
-	mi := &file_console_v1_event_proto_msgTypes[4]
+	mi := &file_console_v1_event_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +332,7 @@ func (x *AskQuestionRequest) String() string {
 func (*AskQuestionRequest) ProtoMessage() {}
 
 func (x *AskQuestionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_event_proto_msgTypes[4]
+	mi := &file_console_v1_event_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +345,7 @@ func (x *AskQuestionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskQuestionRequest.ProtoReflect.Descriptor instead.
 func (*AskQuestionRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_event_proto_rawDescGZIP(), []int{4}
+	return file_console_v1_event_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AskQuestionRequest) GetRequestId() string {
@@ -498,7 +412,7 @@ type BrowserActionRequest struct {
 
 func (x *BrowserActionRequest) Reset() {
 	*x = BrowserActionRequest{}
-	mi := &file_console_v1_event_proto_msgTypes[5]
+	mi := &file_console_v1_event_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -510,7 +424,7 @@ func (x *BrowserActionRequest) String() string {
 func (*BrowserActionRequest) ProtoMessage() {}
 
 func (x *BrowserActionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_event_proto_msgTypes[5]
+	mi := &file_console_v1_event_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -523,7 +437,7 @@ func (x *BrowserActionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrowserActionRequest.ProtoReflect.Descriptor instead.
 func (*BrowserActionRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_event_proto_rawDescGZIP(), []int{5}
+	return file_console_v1_event_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *BrowserActionRequest) GetRequestId() string {
@@ -620,7 +534,7 @@ type ErrorPayload struct {
 
 func (x *ErrorPayload) Reset() {
 	*x = ErrorPayload{}
-	mi := &file_console_v1_event_proto_msgTypes[6]
+	mi := &file_console_v1_event_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +546,7 @@ func (x *ErrorPayload) String() string {
 func (*ErrorPayload) ProtoMessage() {}
 
 func (x *ErrorPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_event_proto_msgTypes[6]
+	mi := &file_console_v1_event_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,7 +559,7 @@ func (x *ErrorPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorPayload.ProtoReflect.Descriptor instead.
 func (*ErrorPayload) Descriptor() ([]byte, []int) {
-	return file_console_v1_event_proto_rawDescGZIP(), []int{6}
+	return file_console_v1_event_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ErrorPayload) GetMessage() string {
@@ -684,17 +598,7 @@ const file_console_v1_event_proto_rawDesc = "" +
 	"\x0fthreshold_ratio\x18\x04 \x01(\x01R\x0ethresholdRatio\x12\x19\n" +
 	"\bmodel_id\x18\x05 \x01(\tR\amodelId\x12\x1a\n" +
 	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x16\n" +
-	"\x06source\x18\a \x01(\tR\x06source\"\xc1\x01\n" +
-	"\x11PermissionRequest\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12 \n" +
-	"\ftool_call_id\x18\x02 \x01(\tR\n" +
-	"toolCallId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x12\n" +
-	"\x04args\x18\x04 \x01(\fR\x04args\x12\x12\n" +
-	"\x04tier\x18\x05 \x01(\tR\x04tier\x12\x1b\n" +
-	"\x06reason\x18\x06 \x01(\tH\x00R\x06reason\x88\x01\x01B\t\n" +
-	"\a_reason\"\xef\x01\n" +
+	"\x06source\x18\a \x01(\tR\x06source\"\xef\x01\n" +
 	"\x12AskQuestionRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1a\n" +
@@ -746,15 +650,14 @@ func file_console_v1_event_proto_rawDescGZIP() []byte {
 	return file_console_v1_event_proto_rawDescData
 }
 
-var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_console_v1_event_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_console_v1_event_proto_goTypes = []any{
 	(*ToolCallPreview)(nil),      // 0: console.v1.ToolCallPreview
 	(*ModelStreamPart)(nil),      // 1: console.v1.ModelStreamPart
 	(*ContextSnapshot)(nil),      // 2: console.v1.ContextSnapshot
-	(*PermissionRequest)(nil),    // 3: console.v1.PermissionRequest
-	(*AskQuestionRequest)(nil),   // 4: console.v1.AskQuestionRequest
-	(*BrowserActionRequest)(nil), // 5: console.v1.BrowserActionRequest
-	(*ErrorPayload)(nil),         // 6: console.v1.ErrorPayload
+	(*AskQuestionRequest)(nil),   // 3: console.v1.AskQuestionRequest
+	(*BrowserActionRequest)(nil), // 4: console.v1.BrowserActionRequest
+	(*ErrorPayload)(nil),         // 5: console.v1.ErrorPayload
 }
 var file_console_v1_event_proto_depIdxs = []int32{
 	0, // 0: console.v1.ModelStreamPart.tool_call:type_name -> console.v1.ToolCallPreview
@@ -778,14 +681,13 @@ func file_console_v1_event_proto_init() {
 	}
 	file_console_v1_event_proto_msgTypes[3].OneofWrappers = []any{}
 	file_console_v1_event_proto_msgTypes[4].OneofWrappers = []any{}
-	file_console_v1_event_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_event_proto_rawDesc), len(file_console_v1_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

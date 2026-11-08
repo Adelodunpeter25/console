@@ -39,7 +39,7 @@ func cleanSubtitle(title string) string {
 // IsAttentionKind reports events that need a "needs attention" banner.
 func IsAttentionKind(kind loop.EventKind) bool {
 	switch kind {
-	case loop.EventAskQuestion, loop.EventPermissionRequest, loop.EventError:
+	case loop.EventAskQuestion, loop.EventError:
 		return true
 	default:
 		return false
@@ -59,12 +59,6 @@ func AttentionNotification(sessionID string, event loop.Event, sessionTitle stri
 		body := ""
 		if event.Ask != nil {
 			body = event.Ask.Question
-		}
-		out.Body = TruncateNotificationText(body, notificationBodyMax)
-	case loop.EventPermissionRequest:
-		body := ""
-		if event.Permission != nil {
-			body = event.Permission.ToolName + " is requesting permission"
 		}
 		out.Body = TruncateNotificationText(body, notificationBodyMax)
 	default:

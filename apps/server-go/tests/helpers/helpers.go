@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/stream"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
@@ -34,13 +33,6 @@ func (m *MockProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s *str
 	}
 	s.Complete()
 	return nil
-}
-
-// AutoApprover approves every permission request.
-type AutoApprover struct{}
-
-func (AutoApprover) Approve(ctx context.Context, req permissions.Request) (bool, error) {
-	return true, nil
 }
 
 // MustJSONRaw marshals a value or fails the test.

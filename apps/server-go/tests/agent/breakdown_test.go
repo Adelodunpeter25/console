@@ -94,7 +94,7 @@ func TestBreakdownHookFiresPerTurn(t *testing.T) {
 		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
 	}}
 	registry := tools.NewRegistry(tools.DefaultTools()...)
-	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess, nil), nil)
+	agent := loop.New(provider, loop.NewExecutor(registry, permissions.FullAccess), nil)
 	agent.SystemPrompt = "system prompt"
 	var got []loop.Breakdown
 	agent.OnRequest = func(b loop.Breakdown) { got = append(got, b) }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
@@ -98,15 +97,9 @@ func TestDecisionTimeout(t *testing.T) {
 	d.Timeout = 50 * time.Millisecond
 	hub := run.NewHub()
 	defer hub.Close(run.OutcomeDone)
-	approver := d.ApproverFor("s1", hub)
-	if _, err := approver.Approve(context.Background(), permissions.Request{RequestID: "perm_x", ToolName: "bash"}); err == nil ||
-		!strings.Contains(err.Error(), "timed out") {
-		t.Fatalf("expected timeout, got %v", err)
-	}
 	handler := d.AskHandlerFor("s1", hub)
 	if _, err := handler(context.Background(), tools.AskQuestionRequest{RequestID: "q_x", Question: "?"}); err == nil ||
 		!strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout, got %v", err)
 	}
 }
-

@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/loop"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/permissions"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	backgroundsvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
@@ -143,25 +142,6 @@ func SnapshotToProto(snap loop.ContextSnapshot) *consolev1.ContextSnapshot {
 		PercentUsed: snap.PercentUsed, ThresholdRatio: snap.ThresholdRatio,
 		ModelId: snap.ModelID, Provider: snap.Provider, Source: snap.Source,
 	}
-}
-
-// permissionToProto converts a pending tool approval to the canonical wire
-// type. Args cross as raw JSON bytes; null args stay absent (decodes as
-// null client-side, as before).
-func permissionToProto(r permissions.Request) *consolev1.PermissionRequest {
-	out := &consolev1.PermissionRequest{
-		RequestId: r.RequestID, ToolCallId: r.ToolCallID,
-		ToolName: r.ToolName, Tier: string(r.Tier),
-	}
-	if r.Args != nil {
-		if raw, err := json.Marshal(r.Args); err == nil && string(raw) != "null" {
-			out.Args = raw
-		}
-	}
-	if r.Reason != "" {
-		out.Reason = &r.Reason
-	}
-	return out
 }
 
 // askToProto converts a pending agent question. skippable is always set:
@@ -379,15 +359,6 @@ func WireFrame(e loop.Event) (string, any, bool) {
 			return "", nil, true
 		}
 		return "browserAction", map[string]any{"type": "browserAction", "request": json.RawMessage(raw)}, false
-	case loop.EventPermissionRequest:
-		if e.Permission == nil {
-			return "", nil, true
-		}
-		raw, err := wireProtoMarshal.Marshal(permissionToProto(*e.Permission))
-		if err != nil {
-			return "", nil, true
-		}
-		return "permissionRequest", map[string]any{"type": "permissionRequest", "request": json.RawMessage(raw)}, false
 	case loop.EventTodoUpdate:
 		items := make([]*consolev1.TodoItem, 0, len(e.Items))
 		for _, item := range e.Items {

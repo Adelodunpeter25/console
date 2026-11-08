@@ -28,7 +28,7 @@ class NotificationFixtureTest {
         assertEquals("s1", n.session_id)
         assertEquals("Needs Attention", n.title)
         assertEquals("Fix the parser", n.subtitle)
-        assertEquals("sh is requesting permission", n.body)
+        assertEquals("Which file should I edit?", n.body)
     }
 
     @Test

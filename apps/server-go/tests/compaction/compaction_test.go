@@ -355,7 +355,7 @@ func (p *overflowProvider) RunTurn(ctx context.Context, req loop.TurnRequest, s 
 
 func TestLoopEmergencyRetry(t *testing.T) {
 	provider := &overflowProvider{}
-	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), "full-access", helpers.AutoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), "full-access")
 	agent := loop.New(provider, executor, nil)
 	agent.Compaction = &loop.CompactionHooks{
 		IsOverflow: compaction.IsContextOverflowError,
@@ -390,7 +390,7 @@ func TestLoopEmergencyRetry(t *testing.T) {
 
 func TestLoopNoRetryOnPlainError(t *testing.T) {
 	failing := &failingProvider{err: errors.New("boom: invalid auth (400)")}
-	executor := loop.NewExecutor(tools.NewRegistry(), "full-access", helpers.AutoApprover{})
+	executor := loop.NewExecutor(tools.NewRegistry(), "full-access")
 	agent := loop.New(failing, executor, nil)
 	agent.Compaction = &loop.CompactionHooks{
 		IsOverflow: compaction.IsContextOverflowError,
