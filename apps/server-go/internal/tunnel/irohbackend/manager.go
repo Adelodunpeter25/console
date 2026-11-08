@@ -56,11 +56,12 @@ type Manager struct {
 	// OnReady is called once the endpoint is bound and serving.
 	OnReady func(nodeID string)
 
-	store  Store
-	mu     sync.Mutex
-	nodeID string
-	done   chan struct{}
-	closed bool
+	store    Store
+	mu       sync.Mutex
+	nodeID   string
+	done     chan struct{}
+	closed   bool
+	endpoint *iroh.Endpoint
 }
 
 func (m *Manager) log() *slog.Logger {
@@ -124,6 +125,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	m.mu.Lock()
 	m.nodeID = nodeID
+	m.endpoint = endpoint
 	m.done = make(chan struct{})
 	done := m.done
 	m.mu.Unlock()
@@ -157,7 +159,13 @@ func (m *Manager) Close() {
 	}
 	m.closed = true
 	done := m.done
+	endpoint := m.endpoint
 	m.mu.Unlock()
+	// AcceptNext has no cancellation: closing the endpoint is what makes it
+	// return, and without it Close would wait for the next incoming peer.
+	if endpoint != nil {
+		_ = endpoint.Close()
+	}
 	<-done
 }
 
