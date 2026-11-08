@@ -214,6 +214,15 @@ impl Console {
         Sessions::new(&base_url).unsettle(&session_id).await
     }
 
+    /// Pins or unpins a chat in the sidebar.
+    pub async fn set_session_pinned(
+        base_url: String,
+        session_id: String,
+        pinned: bool,
+    ) -> Result<(), String> {
+        Sessions::new(&base_url).set_pinned(&session_id, pinned).await
+    }
+
     /// Forks a chat at one of its messages and returns the forked header.
     pub async fn fork_session(
         base_url: String,

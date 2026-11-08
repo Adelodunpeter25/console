@@ -17,6 +17,7 @@ export function SessionItem(props: {
   settled?: boolean;
   /** The title is still the server's autotitle placeholder. */
   titlePending?: boolean;
+  pinned?: boolean;
   hasDraft?: boolean;
   /** The project's name; `null` shows the desktop's "General" fallback. */
   projectName?: string | null;
@@ -99,6 +100,7 @@ export function SessionItem(props: {
     props.onOpenInNewWindow != null;
   return hasMenu() ? (
     <SessionContextMenu
+      pinned={props.pinned}
       settled={settled()}
       onOpenInNewWindow={props.onOpenInNewWindow}
       onTogglePin={props.onTogglePin}

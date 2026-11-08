@@ -66,6 +66,8 @@ export const backend = {
     parsed(() => Console.settleSession(baseUrl, sessionId)),
   unsettleSession: (baseUrl: string, sessionId: string) =>
     parsed(() => Console.unsettleSession(baseUrl, sessionId)),
+  setSessionPinned: (baseUrl: string, sessionId: string, pinned: boolean) =>
+    parsed(() => Console.setSessionPinned(baseUrl, sessionId, pinned)),
   forkSession: (baseUrl: string, sessionId: string, messageId: string) =>
     json<{ id: string }>(Console.forkSession(baseUrl, sessionId, messageId)),
   sessionChanges: (baseUrl: string, sessionId: string, turnIndex: number | null) =>

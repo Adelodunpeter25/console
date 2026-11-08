@@ -10,18 +10,18 @@ test("groups sessions by pin and recency", () => {
   const now = 1_000_000_000_000;
   const day = 24 * 60 * 60 * 1000;
   const sessions = [
-    { id: "a", title: "Pinned work", status: "pinned", updatedAt: now },
-    { id: "b", title: "Today's chat", status: "active", updatedAt: now - 1000 },
+    { id: "a", title: "Pinned work", status: "pinned", pinned: false, settled: false, updatedAt: now },
+    { id: "b", title: "Today's chat", status: "active", pinned: false, settled: false, updatedAt: now - 1000 },
     {
       id: "c",
       title: "Yesterday's chat",
-      status: "active",
+      status: "active", pinned: false, settled: false,
       updatedAt: now - day,
     },
     {
       id: "d",
       title: "Old chat",
-      status: "active",
+      status: "active", pinned: false, settled: false,
       updatedAt: now - 30 * day,
     },
   ];
@@ -37,10 +37,10 @@ test("groups sessions by pin and recency", () => {
 
 test("groups sessions by project, none last", () => {
   const sessions = [
-    { id: "a", title: "A", status: "active", updatedAt: 3, projectId: "p1" },
-    { id: "b", title: "B", status: "active", updatedAt: 2, projectId: null },
-    { id: "c", title: "C", status: "active", updatedAt: 1, projectId: "p1" },
-    { id: "d", title: "D", status: "active", updatedAt: 5, projectId: "p2" },
+    { id: "a", title: "A", status: "active", pinned: false, settled: false, updatedAt: 3, projectId: "p1" },
+    { id: "b", title: "B", status: "active", pinned: false, settled: false, updatedAt: 2, projectId: null },
+    { id: "c", title: "C", status: "active", pinned: false, settled: false, updatedAt: 1, projectId: "p1" },
+    { id: "d", title: "D", status: "active", pinned: false, settled: false, updatedAt: 5, projectId: "p2" },
   ];
   const groups = groupSessionsByProject(sessions, (id) =>
     id === "p1" ? "Repo One" : id === "p2" ? "Repo Two" : null,
@@ -56,7 +56,7 @@ test("groups sessions by project, none last", () => {
 
 test("folds unknown project ids into No Project", () => {
   const sessions = [
-    { id: "a", title: "A", status: "active", updatedAt: 3, projectId: "ghost" },
+    { id: "a", title: "A", status: "active", pinned: false, settled: false, updatedAt: 3, projectId: "ghost" },
   ];
   const groups = groupSessionsByProject(sessions, () => null);
   expect(groups.map((g) => g.label)).toEqual(["No Project"]);

@@ -52,6 +52,7 @@ export function Sidebar(props: {
   onNewChat?: () => void;
   onSearch?: () => void;
   onToggleSettle?: (id: string) => void;
+  onTogglePin?: (id: string) => void;
   onDeleteSession?: (id: string) => void;
 }) {
   // Collapsed section labels; the GPUI app keeps these in the app state,
@@ -76,10 +77,13 @@ export function Sidebar(props: {
       title={s.title}
       updatedAt={s.updatedAt}
       active={props.activeSessionId === s.id}
+      settled={s.settled}
+      pinned={s.pinned}
       projectName={s.projectId ? projectNameById().get(s.projectId) ?? null : null}
       onToggleSettle={
         props.onToggleSettle ? () => props.onToggleSettle?.(s.id) : undefined
       }
+      onTogglePin={props.onTogglePin ? () => props.onTogglePin?.(s.id) : undefined}
       onDelete={
         props.onDeleteSession ? () => props.onDeleteSession?.(s.id) : undefined
       }

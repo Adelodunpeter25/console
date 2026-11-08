@@ -58,6 +58,21 @@ function openChat(sessionId: string, title: string) {
   selectedSessionId.set(sessionId);
 }
 
+/// One sidebar context-menu action on a chat, then a reload of the list (the
+/// server's refusal, e.g. settling a running chat, is logged and the list
+/// still reloads).
+async function sessionAction(
+  id: string,
+  action: (baseUrl: string, sessionId: string) => Promise<unknown>,
+): Promise<void> {
+  try {
+    await action(backendUrl(), id);
+  } catch (err) {
+    console.error("session action failed:", errorMessage(err));
+  }
+  await store_.loadSessions(null);
+}
+
 function selectSession(id: string) {
   openChat(id, store_.session(id)?.title ?? id);
 }
@@ -132,6 +147,17 @@ function App() {
           activeSessionId={selectedSessionId()}
           sortMode={sortMode()}
           onSession={selectSession}
+          onToggleSettle={(id) => void sessionAction(id, (url, sid) => {
+            return store_.session(id)?.settled
+              ? backend.unsettleSession(url, sid)
+              : backend.settleSession(url, sid);
+          })}
+          onTogglePin={(id) => void sessionAction(id, (url, sid) =>
+            backend.setSessionPinned(url, sid, !store_.session(id)?.pinned),
+          )}
+          onDeleteSession={(id) => void sessionAction(id, (url, sid) =>
+            backend.deleteSession(url, sid),
+          )}
           onSortMode={(mode) => sortMode.set(mode)}
           onNewChat={() => launcherOpen.set(true)}
         />

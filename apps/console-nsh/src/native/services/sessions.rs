@@ -39,6 +39,8 @@ impl Sessions {
                 status: s.status,
                 updated_at: s.updated_at,
                 project_id: s.project_id,
+                pinned: s.pinned_at.is_some(),
+                settled: s.settled_at.is_some(),
             })
             .collect())
     }
@@ -62,6 +64,8 @@ impl Sessions {
                 status: s.status,
                 updated_at: s.updated_at,
                 project_id: s.project_id,
+                pinned: s.pinned_at.is_some(),
+                settled: s.settled_at.is_some(),
             })
             .collect())
     }
@@ -75,6 +79,19 @@ impl Sessions {
     /// flight or a prompt is queued — the error string surfaces as a message.
     pub async fn settle(&self, id: &str) -> Result<(), String> {
         self.service.settle(id).await.map_err(|err| err.to_string())
+    }
+
+    /// Pins or unpins a chat.
+    pub async fn set_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
+        let dto = console_core::UpdateSessionDto {
+            pinned: Some(pinned),
+            ..Default::default()
+        };
+        self.service
+            .update(id, dto)
+            .await
+            .map(|_| ())
+            .map_err(|err| err.to_string())
     }
 
     /// Brings a settled chat back to active.
