@@ -63,7 +63,7 @@ export function TranscriptView(props: {
   onJumpToPrompt?: (fromEnd: number) => void;
   /// Fetches the page of messages before the first one (the list reached
   /// its start and `state.hasMore()` is set).
-  onLoadOlder?: () => void;
+  onLoadOlder?: () => Promise<void> | void;
 }) {
   const state = props.state;
 
@@ -183,13 +183,27 @@ export function TranscriptView(props: {
   const messageKey = (item: { message: AgentMessage; index: number }): string =>
     messageId(item.message) ?? `idx-${item.index}`;
 
-  // Counted from the newest prompt, like the desktop; a prompt not paged in
-  // yet cannot be reached.
+  // Counted from the newest prompt, like the desktop. A prompt not paged in
+  // yet is reached by loading older pages until it arrives.
+  const userPositions = (): number[] =>
+    visibleMessages().flatMap((item, at) => (item.message.role === "user" ? [at] : []));
   const jumpToPrompt = (fromEnd: number) => {
-    const rows = visibleMessages();
-    const users = rows.flatMap((item, at) => (item.message.role === "user" ? [at] : []));
-    const at = users[users.length - 1 - fromEnd];
-    if (at != null) listRef?.scrollToIndex({ index: at, animated: true });
+    void (async () => {
+      while (userPositions().length <= fromEnd && state.hasMore() && !state.loadingOlder()) {
+        const before = state.messages().length;
+        state.setLoadingOlder(true);
+        await props.onLoadOlder?.();
+        state.setLoadingOlder(false);
+        if (state.messages().length === before) break;
+      }
+      const users = userPositions();
+      const at = users[users.length - 1 - fromEnd];
+      if (at == null) return;
+      const scroll = () => listRef?.scrollToIndex({ index: at, animated: false });
+      scroll();
+      // Re-applied once rows above have been measured.
+      setTimeout(scroll, 60);
+    })();
     props.onJumpToPrompt?.(fromEnd);
   };
 

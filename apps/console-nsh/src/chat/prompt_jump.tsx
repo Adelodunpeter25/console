@@ -50,7 +50,7 @@ function PromptPopupBody(props: {
               const age = formatTimeAgo(prompt.createdAt);
               return (
                 <View
-                  class="h-[34px] min-h-[34px] w-full flex-none flex-row items-center gap-3 overflow-hidden rounded-lg px-3 hover:bg-accent"
+                  class="h-[34px] min-h-[34px] w-full flex-none flex-row items-center gap-3 overflow-hidden rounded-lg px-3 hover:bg-muted"
                   role="button"
                   accessibilityLabel={`Jump to prompt ${prompt.id}`}
                   onPress={() => props.onJump(fromEnd)}

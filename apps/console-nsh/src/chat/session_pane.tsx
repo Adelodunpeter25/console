@@ -149,7 +149,7 @@ export function SessionPane(props: {
           }}
           onOpenChange={props.onOpenChange}
           onPreviewImage={props.onPreviewImage}
-          onLoadOlder={() => void controller.loadOlder()}
+          onLoadOlder={() => controller.loadOlder()}
           onRequestPrompts={() => controller.loadPrompts()}
         />
       </View>
