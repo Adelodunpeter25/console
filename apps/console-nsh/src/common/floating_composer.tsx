@@ -96,6 +96,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   // the launcher card is this app's picker host, so card-local signals do).
   const pickerTab = signal<PickerTab>({ kind: "favorites" });
   const pickerSearch = signal("");
+  const modelOpen = signal(false);
   // Escape over an empty draft collapses the card back to the pill; a
   // draft keeps the focus (and the escape for the autocomplete).
   function EscapeCollapses() {
@@ -235,6 +236,8 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
             ) : null}
             {props.modelCatalog != null ? (
               <Popover
+                open={modelOpen()}
+                onOpenChange={(e) => modelOpen.set(e.open)}
                 placement="bottom"
                 align="start"
                 trigger={
@@ -252,9 +255,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                   favorites={() => props.modelCatalog?.favorites ?? new Set()}
                   searchQuery={() => pickerSearch()}
                   onSearch={(query: string) => pickerSearch.set(query)}
-                  onSelect={(provider: string, modelId: string) =>
-                    props.modelCatalog?.onSelect(provider, modelId)
-                  }
+                  onSelect={(provider: string, modelId: string) => {
+                    props.modelCatalog?.onSelect(provider, modelId);
+                    modelOpen.set(false);
+                  }}
                   onTab={(tab: PickerTab) => pickerTab.set(tab)}
                   onFavorite={(provider: string, modelId: string) =>
                     props.modelCatalog?.onFavorite(provider, modelId)

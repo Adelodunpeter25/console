@@ -274,6 +274,7 @@ export function Composer(props: {
   // so they survive opening and closing the popover (the desktop's `search`
   // entity and `active_tab`).
   const search = signal("");
+  const modelOpen = signal(false);
   const tab = signal<PickerTab | null>(null);
   const activeTab = () =>
     tab() ??
@@ -439,6 +440,8 @@ export function Composer(props: {
         </View>
 
         <Popover
+          open={modelOpen()}
+          onOpenChange={(e) => modelOpen.set(e.open)}
           placement="top"
           align="start"
           popupClass="rounded-[13px]"
@@ -469,7 +472,10 @@ export function Composer(props: {
               favorites={() => props.favorites ?? new Set()}
               searchQuery={() => search()}
               onSearch={(q) => search.set(q)}
-              onSelect={(provider, modelId) => props.onModelSelect?.(provider, modelId)}
+              onSelect={(provider, modelId) => {
+                props.onModelSelect?.(provider, modelId);
+                modelOpen.set(false);
+              }}
               onFavorite={(provider, modelId) => props.onFavorite?.(provider, modelId)}
               onTab={(t) => tab.set(t)}
             />
