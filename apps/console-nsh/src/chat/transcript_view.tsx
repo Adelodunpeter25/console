@@ -77,13 +77,13 @@ export function TranscriptView(props: {
   // indicator row is needed.
   const hasActiveToolActivity = (): boolean => {
     const list = state.messages();
-    const userIndex = list.map((m) => m.type === "user").lastIndexOf(true);
+    const userIndex = list.map((m) => m.role === "user").lastIndexOf(true);
     if (userIndex < 0) return false;
     return list
       .slice(userIndex + 1)
       .some(
         (message) =>
-          message.type === "assistant" &&
+          message.role === "assistant" &&
           message.content.some((part) => part.type === "toolCall"),
       );
   };
@@ -184,9 +184,9 @@ export function TranscriptView(props: {
   const row = (message: AgentMessage, index: number): JSX.Element => (
     <View class="w-full flex justify-center px-5 py-1">
       <View class="w-full max-w-[768px]">
-        {message.type === "user"
+        {message.role === "user"
           ? userRow(message, index)
-          : message.type === "assistant"
+          : message.role === "assistant"
             ? assistantRow(message, index)
             : null}
       </View>

@@ -47,6 +47,7 @@ export interface ChatController {
   sessionStatus: () => string;
   sessionModel: () => string;
   sessionProvider: () => string;
+  sessionThinkingLevel: () => string;
   /// Past prompts, oldest first (the composer's history recall).
   promptHistory: () => string[];
   /// The pinned interaction cards' current requests (null = none pending).
@@ -75,6 +76,7 @@ interface SessionDetailJson {
     status?: string;
     modelId?: string;
     provider?: string;
+    thinkingLevel?: string;
   };
   messages: AgentMessage[];
   hasMore?: boolean;
@@ -87,6 +89,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
   const sessionStatus = signal("idle");
   const sessionModel = signal("");
   const sessionProvider = signal("");
+  const sessionThinkingLevel = signal("");
   const promptHistory = signal<string[]>([]);
   const pendingPermission = signal<PermissionRequestJson | null>(null);
   const pendingQuestion = signal<AskQuestionJson | null>(null);
@@ -100,9 +103,10 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       sessionStatus.set(detail.header?.status ?? "idle");
       sessionModel.set(detail.header?.modelId ?? "");
       sessionProvider.set(detail.header?.provider ?? "");
+      sessionThinkingLevel.set(detail.header?.thinkingLevel ?? "");
       promptHistory.set(
         (detail.messages ?? [])
-          .filter((m): m is UserMessage => m.type === "user")
+          .filter((m): m is UserMessage => m.role === "user")
           .map((m) => m.content)
           .reverse(),
       );
@@ -130,7 +134,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     }
     // Optimistic user row; canonical ids land with the settle refresh.
     state.pushMessage({
-      type: "user",
+      role: "user",
       content: trimmed,
       createdAt: Math.floor(Date.now() / 1000),
     });
@@ -182,7 +186,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       sessionStatus.set(detail.header?.status ?? "idle");
       promptHistory.set(
         (detail.messages ?? [])
-          .filter((m): m is UserMessage => m.type === "user")
+          .filter((m): m is UserMessage => m.role === "user")
           .map((m) => m.content)
           .reverse(),
       );
@@ -250,6 +254,7 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     sessionStatus: sessionStatus,
     sessionModel: sessionModel,
     sessionProvider: sessionProvider,
+    sessionThinkingLevel: sessionThinkingLevel,
     promptHistory: promptHistory,
     pendingPermission: pendingPermission,
     pendingQuestion: pendingQuestion,

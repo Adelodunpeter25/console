@@ -38,21 +38,14 @@ export type PickerTab = { kind: "favorites" } | { kind: "provider"; name: string
 // Provider logos exist for the known set (`provider_svg_path`); anything
 // else gets the sparkle.
 export function providerIconName(provider: string): Parameters<typeof Icon>[0]["name"] {
-  const norm = provider.toLowerCase();
-  if (norm === "antigravity" || norm === "google") return "provider/Antigravity";
-  if (norm === "openai" || norm === "codex" || norm === "chatgpt") return "provider/Openai";
-  if (norm === "opencode") return "provider/Opencode";
-  if (norm === "claude" || norm === "anthropic") return "ProviderClaude";
-  if (norm === "deepseek") return "ProviderDeepseek";
-  if (norm === "grok") return "ProviderGrok";
-  if (norm === "cursor") return "ProviderCursor";
-  if (norm === "amp") return "ProviderAmp";
-  if (norm === "pi") return "ProviderPi";
-
-  const candidate = provider[0].toUpperCase() + provider.slice(1).toLowerCase();
-  return candidate in ICON_ASSETS
-    ? (candidate as Parameters<typeof Icon>[0]["name"])
-    : "Sparkle";
+  // Codex ships OpenAI's logo; every other backend provider name matches an
+  // icon asset directly.
+  const base = provider === "codex" ? "openai" : provider;
+  const name = base[0].toUpperCase() + base.slice(1);
+  for (const candidate of [`Provider${name}`, `provider/${name}`]) {
+    if (candidate in ICON_ASSETS) return candidate as Parameters<typeof Icon>[0]["name"];
+  }
+  return "Sparkle";
 }
 
 /// The dropdown card (`ModelDropdownMenu`): provider tabs on the left,

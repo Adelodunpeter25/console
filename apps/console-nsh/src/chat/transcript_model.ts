@@ -19,7 +19,7 @@ import {
 // ─── Message model (console-core's `AgentMessage`) ──────────────────────────
 
 export interface UserMessage {
-  type: "user";
+  role: "user";
   id?: string | null;
   content: string;
   attachments?: ImageAttachment[] | null;
@@ -29,7 +29,7 @@ export interface UserMessage {
 }
 
 export interface AssistantMessage {
-  type: "assistant";
+  role: "assistant";
   id?: string | null;
   content: AssistantContentPart[];
   stopReason?: string | null;
@@ -38,7 +38,7 @@ export interface AssistantMessage {
 }
 
 export interface ToolResultMessage {
-  type: "toolResult";
+  role: "toolResult";
   results: ToolResult[];
   createdAt?: number | null;
 }
@@ -66,8 +66,8 @@ export interface SessionPrompt {
 /// visual output? Tool-result messages are persistence transport, and an
 /// assistant message with tool calls is fully represented by its run block.
 export function isHiddenToolTransport(message: AgentMessage): boolean {
-  if (message.type === "toolResult") return true;
-  if (message.type === "assistant") {
+  if (message.role === "toolResult") return true;
+  if (message.role === "assistant") {
     return message.content.some((part) => part.type === "toolCall");
   }
   return false;
@@ -75,7 +75,7 @@ export function isHiddenToolTransport(message: AgentMessage): boolean {
 
 /// The message's server-assigned id, when its kind carries one.
 export function messageId(message: AgentMessage): string | null {
-  return message.type === "toolResult" ? null : message.id ?? null;
+  return message.role === "toolResult" ? null : message.id ?? null;
 }
 
 // ─── Run activity (`tool_activity_for_user`) ────────────────────────────────
@@ -114,8 +114,8 @@ export function toolActivityForUser(
   let endedAt: number | null = null;
 
   for (const message of messages.slice(userIndex + 1)) {
-    if (message.type === "user") break;
-    if (message.type === "assistant") {
+    if (message.role === "user") break;
+    if (message.role === "assistant") {
       endedAt = maxTimestamp(
         endedAt,
         message.createdAt != null
@@ -168,10 +168,10 @@ export function toolActivityForUser(
 
   const user = messages[userIndex];
   const userStartedAt =
-    user?.type === "user" && user.createdAt != null
+    user?.role === "user" && user.createdAt != null
       ? normalizeUnixTimestamp(user.createdAt)
       : null;
-  const latestUser = messages.map((m) => m.type === "user").lastIndexOf(true);
+  const latestUser = messages.map((m) => m.role === "user").lastIndexOf(true);
   const working = isStreaming && latestUser === userIndex;
   const startedAt = working ? (streamingStartedAt ?? userStartedAt) : userStartedAt;
   const elapsed = elapsedSecondsBetween(startedAt, endedAt);
@@ -210,12 +210,12 @@ export function turnChangesForAssistant(
 ): TurnChanges | undefined {
   if (turns.size === 0) return undefined;
   const message = messages[index];
-  if (message?.type !== "assistant") return undefined;
+  if (message?.role !== "assistant") return undefined;
   if (isHiddenToolTransport(message)) return undefined;
   const closesTurn = (): boolean => {
     for (const later of messages.slice(index + 1)) {
-      if (later.type === "user") break;
-      if (later.type === "assistant" && !isHiddenToolTransport(later)) {
+      if (later.role === "user") break;
+      if (later.role === "assistant" && !isHiddenToolTransport(later)) {
         return false;
       }
     }
@@ -225,7 +225,7 @@ export function turnChangesForAssistant(
   let userId: string | undefined;
   for (let i = index - 1; i >= 0; i--) {
     const earlier = messages[i];
-    if (earlier.type === "user" && earlier.id != null) {
+    if (earlier.role === "user" && earlier.id != null) {
       userId = earlier.id;
       break;
     }
@@ -245,16 +245,16 @@ export function changesSummary(
 
 /// Whether two messages are the same one seen twice (a page overlap).
 export function messagesMatch(a: AgentMessage, b: AgentMessage): boolean {
-  if (a.type === "user" && b.type === "user") {
+  if (a.role === "user" && b.role === "user") {
     return (
       a.content === b.content &&
       (a.createdAt == null || b.createdAt == null || a.createdAt === b.createdAt)
     );
   }
-  if (a.type === "assistant" && b.type === "assistant") {
+  if (a.role === "assistant" && b.role === "assistant") {
     return a.id != null && b.id != null && a.id === b.id;
   }
-  if (a.type === "toolResult" && b.type === "toolResult") {
+  if (a.role === "toolResult" && b.role === "toolResult") {
     return (
       a.results.length > 0 &&
       b.results.length > 0 &&

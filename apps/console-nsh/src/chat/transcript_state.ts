@@ -26,7 +26,7 @@ export function createTranscriptState() {
 
   const lastAssistant = (list: AgentMessage[]): AssistantMessage | undefined => {
     const last = list[list.length - 1];
-    return last?.type === "assistant" ? last : undefined;
+    return last?.role === "assistant" ? last : undefined;
   };
 
   const upsertToolCall = (list: AgentMessage[], call: ToolCall): void => {
@@ -42,7 +42,7 @@ export function createTranscriptState() {
       }
     } else {
       list.push({
-        type: "assistant",
+        role: "assistant",
         content: [{ type: "toolCall", call }],
         createdAt: Math.floor(Date.now() / 1000),
       });
@@ -98,7 +98,7 @@ export function createTranscriptState() {
     },
 
     pushMessage(message: AgentMessage) {
-      if (message.type === "user") promptsStale.set(true);
+      if (message.role === "user") promptsStale.set(true);
       messages.set([...messages(), message]);
       // A new prompt means the user wants to see its response: the tail
       // follows (automatic here — there is no scroll position to hold).
@@ -139,7 +139,7 @@ export function createTranscriptState() {
         messages.set([
           ...list,
           {
-            type: "assistant",
+            role: "assistant",
             content: [{ type: "text", text }],
             createdAt: Math.floor(Date.now() / 1000),
           },
@@ -164,7 +164,7 @@ export function createTranscriptState() {
       } else {
         messages.set([
           ...list,
-          { type: "assistant", content: [{ type: "thinking", text }] },
+          { role: "assistant", content: [{ type: "thinking", text }] },
         ]);
       }
     },
@@ -186,7 +186,7 @@ export function createTranscriptState() {
           },
         ]);
       } else {
-        messages.set([...list, { type: "assistant", ...message } as AssistantMessage]);
+        messages.set([...list, { role: "assistant", ...message } as AssistantMessage]);
       }
     },
 
@@ -206,7 +206,7 @@ export function createTranscriptState() {
     appendToolResults(results: ToolResult[]) {
       const existingIds = new Set(
         messages().flatMap((message) =>
-          message.type === "toolResult"
+          message.role === "toolResult"
             ? message.results.map((result) => result.toolCallId)
             : [],
         ),
@@ -215,7 +215,7 @@ export function createTranscriptState() {
       if (fresh.length === 0) return;
       messages.set([
         ...messages(),
-        { type: "toolResult", results: fresh, createdAt: Math.floor(Date.now() / 1000) },
+        { role: "toolResult", results: fresh, createdAt: Math.floor(Date.now() / 1000) },
       ]);
     },
 
@@ -225,14 +225,14 @@ export function createTranscriptState() {
     adoptUserMessageIds(canonical: AgentMessage[]) {
       const canonicalIds = [...canonical]
         .reverse()
-        .filter((message): message is UserMessage => message.type === "user")
+        .filter((message): message is UserMessage => message.role === "user")
         .map((message) => message.id);
       const list = [...messages()];
       let changed = false;
       let at = 0;
       for (let i = list.length - 1; i >= 0; i--) {
         const message = list[i];
-        if (message.type !== "user") continue;
+        if (message.role !== "user") continue;
         const canonicalId = canonicalIds[at++];
         if (canonicalId == null) break;
         if (message.id == null && canonicalId != null) {

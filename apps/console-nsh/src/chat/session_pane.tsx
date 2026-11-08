@@ -16,7 +16,7 @@
 
 import { signal, Text, View, token, type JSX } from "nsh";
 import { Input } from "nsh/base";
-import { Composer } from "../common/composer";
+import { Composer, THINKING_LEVELS } from "../common/composer";
 import { Icon } from "../common/icons";
 import { TranscriptView } from "./transcript_view";
 import { changesSummaryFrom, changesSummaryIsEmpty } from "./change_chips";
@@ -83,6 +83,13 @@ export function SessionPane(props: {
   const catalog = catalogStore(props.baseUrl);
   void catalog.load();
   void controller.refresh();
+  // The session's own model wins until the user picks another in this pane.
+  const picked = signal<{ provider: string; modelId: string } | null>(null);
+  const sessionModel = () => {
+    const modelId = controller.sessionModel();
+    const provider = controller.sessionProvider();
+    return modelId !== "" && provider !== "" ? { provider, modelId } : null;
+  };
   // The mention popup's workspace files: one query-less search per session
   // (the desktop searches per trigger; the popup filters client-side, so
   // this covers it — per-query refinement can follow).
@@ -218,16 +225,19 @@ export function SessionPane(props: {
           onSend={() => {
             const text = draft();
             draft.set("");
-            void controller.send(text);
+            void controller.send(text, { model: picked() });
           }}
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
           files={mentionFiles()}
           providers={catalog.providers() ?? undefined}
-          selectedModel={catalog.selected()}
+          selectedModel={picked() ?? sessionModel()}
+          thinkingLevel={THINKING_LEVELS.find(
+            (level) => level.toLowerCase() === controller.sessionThinkingLevel(),
+          )}
           favorites={catalog.favorites()}
           onModelSelect={(provider: string, modelId: string) =>
-            catalog.selectModel(provider, modelId)
+            picked.set({ provider, modelId })
           }
           onFavorite={(provider: string, modelId: string) =>
             void catalog.toggleFavorite(provider, modelId)

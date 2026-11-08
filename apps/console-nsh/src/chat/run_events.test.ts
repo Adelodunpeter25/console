@@ -26,8 +26,8 @@ test("run_events maps stream parts onto the transcript state", () => {
 
   const list = state.messages();
   expect(list.length).toBe(1);
-  const assistant = list[0] as { type: string; content: { type: string; text?: string }[] };
-  expect(assistant.type).toBe("assistant");
+  const assistant = list[0] as { role: string; content: { type: string; text?: string }[] };
+  expect(assistant.role).toBe("assistant");
   expect(assistant.content.map((part) => part.type)).toEqual(["text", "thinking", "toolCall"]);
   expect(assistant.content[0]?.text).toBe("Hello");
 });
@@ -40,7 +40,7 @@ test("run_events appends tool results and ends the run on sessionEnd", () => {
     result: { toolCallId: "t1", content: btoa('{"ok":true}') },
   });
   expect(ended).toBe(false);
-  expect(state.messages().some((m) => m.type === "toolResult")).toBe(true);
+  expect(state.messages().some((m) => m.role === "toolResult")).toBe(true);
 
   expect(applyRunEvent(state, { type: "sessionEnd" })).toBe(true);
   expect(state.isStreaming()).toBe(false);

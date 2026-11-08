@@ -12,13 +12,13 @@ import {
 import type { SessionFileChange } from "./transcript_view";
 
 const user = (content: string, id?: string): AgentMessage => ({
-  type: "user",
+  role: "user",
   id,
   content,
 });
 
 const assistantWithCall = (id: string, callId: string): AgentMessage => ({
-  type: "assistant",
+  role: "assistant",
   id,
   content: [
     { type: "thinking", text: "plan it" },
@@ -28,7 +28,7 @@ const assistantWithCall = (id: string, callId: string): AgentMessage => ({
 });
 
 test("transcript tool-result messages and call-carrying rows are transport", () => {
-  expect(isHiddenToolTransport({ type: "toolResult", results: [] })).toBe(true);
+  expect(isHiddenToolTransport({ role: "toolResult", results: [] })).toBe(true);
   expect(isHiddenToolTransport(assistantWithCall("a1", "c1"))).toBe(true);
   expect(isHiddenToolTransport(user("hi"))).toBe(false);
 });
@@ -37,9 +37,9 @@ test("run activity joins results to calls and stops at the next user message", (
   const messages: AgentMessage[] = [
     user("q1"),
     assistantWithCall("a1", "c1"),
-    { type: "toolResult", results: [{ toolCallId: "c1", content: "done" }] },
+    { role: "toolResult", results: [{ toolCallId: "c1", content: "done" }] },
     user("q2"),
-    { type: "assistant", content: [{ type: "text", text: "final" }] },
+    { role: "assistant", content: [{ type: "text", text: "final" }] },
   ];
   const activity = toolActivityForUser(messages, 0, false, null)!;
   expect(activity.events.length).toBe(3);
@@ -76,7 +76,7 @@ test("turn changes group by user message and land on the turn's last row", () =>
   const messages: AgentMessage[] = [
     user("q", "u1"),
     assistantWithCall("a1", "c1"),
-    { type: "assistant", content: [{ type: "text", text: "done" }] },
+    { role: "assistant", content: [{ type: "text", text: "done" }] },
   ];
   // The hidden transport row does not stop this message from closing the
   // turn; the middle call-carrying row gets nothing.

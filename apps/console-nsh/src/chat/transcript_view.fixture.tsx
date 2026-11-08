@@ -22,7 +22,7 @@ const ScenarioButton = (props: { label: string; onPress: () => void }) => (
 );
 
 const user = (content: string, id?: string): AgentMessage => ({
-  type: "user",
+  role: "user",
   id,
   content,
   createdAt: 1760000000,
@@ -76,17 +76,17 @@ function Fixture() {
             state.setMessages([
               user("First question", "u1"),
               {
-                type: "assistant",
+                role: "assistant",
                 id: "a1",
                 content: [{ type: "text", text: "First answer." }],
               },
               {
-                type: "toolResult",
+                role: "toolResult",
                 results: [{ toolCallId: "transport", content: "" }],
               },
               user("Second question", "u2"),
               {
-                type: "assistant",
+                role: "assistant",
                 id: "a2",
                 content: [{ type: "text", text: "Second answer." }],
               },
