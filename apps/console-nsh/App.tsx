@@ -154,6 +154,10 @@ function App() {
                 })
               }
               onPreviewImage={(uri) => previewImage.set(uri)}
+              onOpenSession={(id, title) => {
+                openChat(id, title);
+                void store_.loadSessions(null);
+              }}
             />
           </View>
           <ImagePreviewOverlay />
@@ -205,6 +209,7 @@ function App() {
                       });
                     }
                     openChat(header.id, draft.slice(0, 48) || "New chat");
+                    void store_.loadSessions(null);
                   } catch (err) {
                     // Session creation failed (backend down): fall back to a
                     // placeholder tab so the draft text is not lost.
