@@ -94,6 +94,8 @@ export const backend = {
     text(Console.authPairWithCode(host, code, deviceName)),
   authSplitPairingLine: (line: string): { host: string; code: string } =>
     JSON.parse(Console.authSplitPairingLine(line)) as { host: string; code: string },
+  activeServerUrl: (): string => Console.activeServerUrl(),
+  setActiveServerUrl: (url: string) => Console.setActiveServerUrl(url),
 
   // Files and git
   fsBrowse: (baseUrl: string, path: string | null) => text(Console.fsBrowse(baseUrl, path)),

@@ -25,7 +25,8 @@ export type SelectedModel = {
   modelId: string;
 };
 
-export function createCatalogStore(baseUrl: string) {
+export function createCatalogStore(baseUrl: string | (() => string)) {
+  const getBaseUrl = typeof baseUrl === "function" ? baseUrl : () => baseUrl;
   const providers = signal<CatalogProvider[] | null>(null);
   const providersError = signal<string | null>(null);
   const loading = signal(false);
@@ -46,9 +47,10 @@ export function createCatalogStore(baseUrl: string) {
     if (providers() != null || loading()) return;
     loading.set(true);
     try {
+      const url = getBaseUrl();
       const [catalog, favoriteModels] = await Promise.all([
-        backend.providers(baseUrl),
-        backend.modelFavorites(baseUrl),
+        backend.providers(url),
+        backend.modelFavorites(url),
       ]);
       providers.set(JSON.parse(catalog) as CatalogProvider[]);
       const favs = JSON.parse(favoriteModels) as { provider: string; modelId: string }[];
@@ -73,7 +75,7 @@ export function createCatalogStore(baseUrl: string) {
     else next.delete(key);
     favorites.set(next);
     try {
-      await backend.setModelFavorite(baseUrl, provider, modelId, nowFavorite);
+      await backend.setModelFavorite(getBaseUrl(), provider, modelId, nowFavorite);
     } catch (err) {
       favorites.set(previous);
       providersError.set(errorMessage(err));

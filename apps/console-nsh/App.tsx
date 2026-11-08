@@ -27,11 +27,11 @@ import type { GitBranchInfo } from "./src/common/workspace_footer";
 import { approvalModeValue } from "./src/common/approval_selector";
 
 // The Go dev server's port; resolved like the desktop (`CONSOLE_BACKEND_URL`
-// env, else localhost:3000).
-export const backendUrl = resolveBackendUrl();
+// env, desktop state.json / server-auth.json, else localhost:3000).
+export const backendUrl = signal(resolveBackendUrl());
 
-const store_ = createSessionsStore(backendUrl);
-const catalog = createCatalogStore(backendUrl);
+const store_ = createSessionsStore(() => backendUrl());
+const catalog = createCatalogStore(() => backendUrl());
 const selectedSessionId = signal<string | null>(null);
 const sortMode = signal<SortMode>("date");
 
@@ -88,7 +88,7 @@ const startup = () => {
   })();
   // Startup pairing check: an unpaired app boots onto the pairing card and
   // only loads data once paired (the desktop's bootstrap does the same).
-  paired.set(backend.authPaired(backendUrl));
+  paired.set(backend.authPaired(backendUrl()));
   if (paired()) {
     void store_.loadProjects();
     void store_.loadSessions(null);
@@ -132,7 +132,7 @@ function App() {
           <View class="flex flex-1 flex-col border border-border rounded-lg overflow-hidden">
             <WorkspaceView
               store={store}
-              baseUrl={backendUrl}
+              baseUrl={backendUrl()}
               projectPath={(projectId) =>
                 store_.projects().find((p) => p.id === projectId)?.path ?? null
               }
@@ -190,7 +190,7 @@ function App() {
                     // console-core). The card's project choice wins over
                     // the sidebar's selection.
                     const header = await backend.createSession(
-                      backendUrl,
+                      backendUrl(),
                       launch.projectId ?? store_.selectedProjectId() ?? "",
                       null,
                     );
@@ -198,7 +198,7 @@ function App() {
                       // The card's choices ride with the first run (the
                       // desktop pushes the card's model, thinking and
                       // approval onto the prompt).
-                      void chatController(backendUrl, header.id).send(draft, {
+                      void chatController(backendUrl(), header.id).send(draft, {
                         model: launch.model,
                         thinkingLevel: launch.thinkingLevel,
                         approvalMode: approvalModeValue(launch.approvalMode),
@@ -220,7 +220,11 @@ function App() {
         </View>
         </View>
       ) : (
-        <PairingCard baseUrl={backendUrl} onPaired={() => {
+        <PairingCard baseUrl={backendUrl()} onPaired={(newUrl) => {
+          if (newUrl) {
+            backendUrl.set(newUrl);
+            backend.setActiveServerUrl(newUrl);
+          }
           paired.set(true);
           void store_.loadProjects();
           void store_.loadSessions(null);

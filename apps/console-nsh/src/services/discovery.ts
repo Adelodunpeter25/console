@@ -1,13 +1,16 @@
 // Server discovery: which Console backend this app talks to. The desktop's
-// `HttpTransport` resolves `CONSOLE_BACKEND_URL` from the environment and
-// falls back to localhost:3000; the nsh app resolves the same way so both
-// apps hit the same server with the same precedence.
+// `HttpTransport` resolves `CONSOLE_BACKEND_URL` from the environment,
+// then reads the desktop's active environment or paired server store,
+// and falls back to localhost:3000.
+
+import { backend } from "./backend";
 
 const DESKTOP_DEFAULT = "http://localhost:3000";
 
 /// The backend base URL for this run. Reads `CONSOLE_BACKEND_URL` once at
 /// startup (the env does not change under a running app); a trailing slash
-/// is trimmed so URL joins stay predictable.
+/// is trimmed so URL joins stay predictable. Falls back to the desktop state's
+/// active paired server.
 export function resolveBackendUrl(): string {
   try {
     const env =
@@ -18,6 +21,14 @@ export function resolveBackendUrl(): string {
     }
   } catch {
     // No process/env in this runtime (some nsh hosts); fall through.
+  }
+  try {
+    const active = backend.activeServerUrl();
+    if (active != null && active.trim() !== "") {
+      return active.trim().replace(/\/+$/, "");
+    }
+  } catch {
+    // Bridge call failed; fall through.
   }
   return DESKTOP_DEFAULT;
 }

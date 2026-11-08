@@ -127,6 +127,17 @@ impl Console {
         auth::paired(&base_url)
     }
 
+    /// The active backend server URL (from `CONSOLE_BACKEND_URL`, desktop's
+    /// `state.json`, or `server-auth.json`).
+    pub fn active_server_url() -> String {
+        auth::resolve_active_server_url()
+    }
+
+    /// Sets the active backend server URL in the desktop's `state.json`.
+    pub fn set_active_server_url(url: String) -> Result<(), String> {
+        auth::adopt_server(&url, None)
+    }
+
     /// Exchanges a one-time pairing grant (the code the server shows) for
     /// this device's long-lived credential, stores it for the normalized
     /// server URL, and returns the paired device and server identity.

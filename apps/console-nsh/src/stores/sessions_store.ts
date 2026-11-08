@@ -8,7 +8,8 @@ import { signal } from "nsh";
 import type { ProjectSummary, SessionSummary } from "console-nsh/native";
 import { backend } from "../services/backend";
 
-export function createSessionsStore(baseUrl: string) {
+export function createSessionsStore(baseUrl: string | (() => string)) {
+  const getBaseUrl = typeof baseUrl === "function" ? baseUrl : () => baseUrl;
   const loading = signal(true);
   const projects = signal<ProjectSummary[]>([]);
   const projectsError = signal<string | null>(null);
@@ -24,7 +25,7 @@ export function createSessionsStore(baseUrl: string) {
   async function loadProjects(): Promise<void> {
     loading.set(true);
     try {
-      projects.set(await backend.projects(baseUrl));
+      projects.set(await backend.projects(getBaseUrl()));
       projectsError.set(null);
     } catch (err) {
       projects.set([]);
@@ -37,7 +38,7 @@ export function createSessionsStore(baseUrl: string) {
   async function loadSessions(projectId: string | null): Promise<void> {
     sessionsLoading.set(true);
     try {
-      sessions.set(await backend.sessions(baseUrl, projectId ?? ""));
+      sessions.set(await backend.sessions(getBaseUrl(), projectId ?? ""));
       sessionsError.set(null);
     } catch (err) {
       sessions.set([]);

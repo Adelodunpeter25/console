@@ -9,7 +9,7 @@ import { signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
 import { backend } from "../services/backend";
 
-export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
+export function PairingCard(props: { baseUrl: string; onPaired: (pairedUrl?: string) => void }) {
   // One pasted line fills both fields (the desktop settings form): the
   // whole pairing URL, `host:3000#code`, or a bare address plus a code
   // typed separately.
@@ -38,8 +38,19 @@ export function PairingCard(props: { baseUrl: string; onPaired: () => void }) {
     error.set(null);
     void (async () => {
       try {
-        await backend.authPairWithCode(host().trim(), code().trim(), deviceName().trim() || "Console (nsh)");
-        props.onPaired();
+        const res = await backend.authPairWithCode(
+          host().trim(),
+          code().trim(),
+          deviceName().trim() || "Console (nsh)"
+        );
+        let pairedUrl = host().trim();
+        try {
+          const parsed = JSON.parse(res) as { baseUrl?: string };
+          if (parsed.baseUrl) pairedUrl = parsed.baseUrl;
+        } catch {
+          // Fall through with host
+        }
+        props.onPaired(pairedUrl);
       } catch (err) {
         error.set(err instanceof Error ? err.message : String(err));
       } finally {
