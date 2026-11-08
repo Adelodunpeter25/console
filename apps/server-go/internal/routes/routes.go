@@ -2,6 +2,7 @@
 package routes
 
 import (
+	"context"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/git"
 	"log/slog"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers/usage"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
@@ -112,6 +114,8 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	runSvc.SetPorts(cfg.Ports)
 	runSvc.SetProjectScripts(scriptsSvc)
 	runSvc.SetConsoleServices(projects)
+	runSvc.SetAutomations(automations.New(cfg.DB.Global()))
+	go runSvc.RunAutomationScanner(context.Background())
 	mcpManager := mcp.NewManager(mcp.NewConfigStore(""), mcp.NewCredentialStore(""), nil)
 	runSvc.SetMCP(mcpManager)
 	go mcpManager.AutoConnect()
