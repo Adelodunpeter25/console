@@ -62,10 +62,10 @@ export function WorkingIndicator(props: {
   const seconds = () => Math.max(0, now() - startedAt);
   return (
     <View class="flex-row items-center gap-[7px] py-1.5">
-    <WorkingWaveDots />
-    <Text class="text-[11.5px] text-muted-foreground">
-      {`Working for ${formatWorkingElapsed(seconds())}`}
-    </Text>
-</View>
+      <WorkingWaveDots />
+      <Text class="text-[11.5px] text-muted-foreground">
+        {`Working for ${formatWorkingElapsed(seconds())}`}
+      </Text>
+    </View>
   );
 }
