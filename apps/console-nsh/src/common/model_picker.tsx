@@ -6,7 +6,7 @@
 // its catalog snapshot as props.
 
 import { Input } from "nsh/base";
-import { Text, View, token } from "nsh";
+import { List, Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Icon } from "./icons";
 import { ICON_ASSETS } from "./icons.generated";
@@ -24,7 +24,7 @@ export type CatalogModel = {
 export type CatalogProvider = {
   name: string;
   displayName: string;
-  models: CatalogModel[];
+  models?: CatalogModel[];
 };
 
 /// The provider/model pair a session runs on (`SelectedModel`).
@@ -38,6 +38,17 @@ export type PickerTab = { kind: "favorites" } | { kind: "provider"; name: string
 // Provider logos exist for the known set (`provider_svg_path`); anything
 // else gets the sparkle.
 export function providerIconName(provider: string): Parameters<typeof Icon>[0]["name"] {
+  const norm = provider.toLowerCase();
+  if (norm === "antigravity" || norm === "google") return "provider/Antigravity";
+  if (norm === "openai" || norm === "codex" || norm === "chatgpt") return "provider/Openai";
+  if (norm === "opencode") return "provider/Opencode";
+  if (norm === "claude" || norm === "anthropic") return "ProviderClaude";
+  if (norm === "deepseek") return "ProviderDeepseek";
+  if (norm === "grok") return "ProviderGrok";
+  if (norm === "cursor") return "ProviderCursor";
+  if (norm === "amp") return "ProviderAmp";
+  if (norm === "pi") return "ProviderPi";
+
   const candidate = provider[0].toUpperCase() + provider.slice(1).toLowerCase();
   return candidate in ICON_ASSETS
     ? (candidate as Parameters<typeof Icon>[0]["name"])
@@ -77,7 +88,7 @@ export function ModelDropdownMenu(props: {
     let rows =
       activeTab.kind === "favorites"
         ? props.providers.flatMap((p) =>
-            p.models
+            (p.models ?? [])
               .filter((m) => favorites.has(`${p.name}:${m.id}`))
               .map((m) => ({ provider: p, model: m })),
           )
@@ -145,7 +156,7 @@ export function ModelDropdownMenu(props: {
             testID="model-search"
           />
         </View>
-        <View class="flex flex-1 flex-col gap-0.5 p-2">
+        <View class="flex flex-1 flex-col overflow-hidden p-2">
           {visibleModels().length === 0 ? (
             <View class="flex flex-1 flex-col items-center justify-center gap-1">
               {props.activeTab().kind !== "favorites" ? (
@@ -158,55 +169,62 @@ export function ModelDropdownMenu(props: {
               </Text>
             </View>
           ) : (
-            visibleModels().map(({ provider, model }) => {
-              const selected = props.selected();
-              const isSelected =
-                selected?.provider === provider.name &&
-                selected?.modelId === model.id;
-              const isFav = props.favorites().has(`${provider.name}:${model.id}`);
-              return (
-                <View
-                  class={
-                    "flex h-[54px] min-h-[54px] flex-none flex-row items-center justify-between rounded-lg px-3 " +
-                    (isSelected ? "bg-muted" : "hover:bg-muted")
-                  }
-                  onPress={() => props.onSelect(provider.name, model.id)}
-                  accessibilityLabel={formatModelName(model.id)}
-                  role="button"
-                >
-                  <View class="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <Text class="truncate text-[13px] font-semibold text-foreground">
-                      {formatModelName(model.id)}
-                    </Text>
-                    <View class="flex flex-row items-center gap-1">
-                      <Icon
-                        name={providerIconName(provider.name)}
-                        size={10.5}
-                        mono={false}
-                      />
-                      <Text class="truncate text-[11px] text-muted-foreground">
-                        {provider.displayName} ·{" "}
-                        {formatContextWindow(model.contextWindow)} context
-                      </Text>
-                    </View>
-                  </View>
+            <List
+              class="h-full w-full"
+              each={visibleModels()}
+              keyExtractor={(item) => `${item.provider.name}:${item.model.id}`}
+            >
+              {(row) => {
+                const { provider, model } = row();
+                const selected = props.selected();
+                const isSelected =
+                  selected?.provider === provider.name &&
+                  selected?.modelId === model.id;
+                const isFav = props.favorites().has(`${provider.name}:${model.id}`);
+                return (
                   <View
-                    class="rounded p-1 hover:bg-muted"
-                    onPress={() => props.onFavorite(provider.name, model.id)}
-                    accessibilityLabel={
-                      isFav ? "Unfavourite" : "Favourite"
+                    class={
+                      "flex h-[54px] min-h-[54px] flex-none flex-row items-center justify-between rounded-lg px-3 " +
+                      (isSelected ? "bg-muted" : "hover:bg-muted")
                     }
+                    onPress={() => props.onSelect(provider.name, model.id)}
+                    accessibilityLabel={formatModelName(model.id)}
                     role="button"
                   >
-                    <Icon
-                      name={isFav ? "StarFilled" : "Star"}
-                      size={13}
-                      color={isFav ? token("primary") : token("muted-foreground")}
-                    />
+                    <View class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <Text class="truncate text-[13px] font-semibold text-foreground">
+                        {formatModelName(model.id)}
+                      </Text>
+                      <View class="flex flex-row items-center gap-1">
+                        <Icon
+                          name={providerIconName(provider.name)}
+                          size={10.5}
+                          mono={false}
+                        />
+                        <Text class="truncate text-[11px] text-muted-foreground">
+                          {provider.displayName} ·{" "}
+                          {formatContextWindow(model.contextWindow)} context
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      class="rounded p-1 hover:bg-muted"
+                      onPress={() => props.onFavorite(provider.name, model.id)}
+                      accessibilityLabel={
+                        isFav ? "Unfavourite" : "Favourite"
+                      }
+                      role="button"
+                    >
+                      <Icon
+                        name={isFav ? "StarFilled" : "Star"}
+                        size={13}
+                        color={isFav ? token("primary") : token("muted-foreground")}
+                      />
+                    </View>
                   </View>
-                </View>
-              );
-            })
+                );
+              }}
+            </List>
           )}
         </View>
       </View>

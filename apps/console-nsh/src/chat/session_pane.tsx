@@ -82,6 +82,7 @@ export function SessionPane(props: {
   const draft = signal("");
   const catalog = catalogStore(props.baseUrl);
   void catalog.load();
+  void controller.refresh();
   // The mention popup's workspace files: one query-less search per session
   // (the desktop searches per trigger; the popup filters client-side, so
   // this covers it — per-query refinement can follow).
