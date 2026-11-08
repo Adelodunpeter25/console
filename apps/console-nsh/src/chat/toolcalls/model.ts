@@ -37,6 +37,8 @@ export interface ToolResult {
   toolCallId: string;
   content: unknown;
   isError?: boolean | null;
+  /// Client-rendered artifact (`visualize`), beside `content`.
+  visual?: { version: number; spec: unknown } | null;
 }
 
 /// A tool call and the result, when the backend has returned one.

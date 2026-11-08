@@ -109,24 +109,11 @@ export function TranscriptView(props: {
     // Visual artifacts render as their own item after the run block, so
     // folding the run never hides the card.
     const visuals: { callId: string; visual: VisualArtifact }[] = activity
-      ? activity.events.flatMap((event) => {
-          if (event.type !== "toolCall" || event.entry.result == null) return [];
-          const content = event.entry.result.content;
-          if (
-            content != null &&
-            typeof content === "object" &&
-            !Array.isArray(content) &&
-            "visual" in (content as Record<string, unknown>)
-          ) {
-            return [
-              {
-                callId: event.entry.call.id,
-                visual: (content as Record<string, unknown>).visual as VisualArtifact,
-              },
-            ];
-          }
-          return [];
-        })
+      ? activity.events.flatMap((event) =>
+          event.type === "toolCall" && event.entry.result?.visual != null
+            ? [{ callId: event.entry.call.id, visual: event.entry.result.visual }]
+            : [],
+        )
       : [];
     return (
       <View class="w-full flex-col gap-1.5">
