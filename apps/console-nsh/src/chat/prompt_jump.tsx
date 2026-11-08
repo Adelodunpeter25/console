@@ -4,12 +4,76 @@
 // `Popover` owns visibility); the press also refetches the prompt list when
 // stale, like the desktop's toggle handler did.
 
-import { Scroll, signal, Text, View, token } from "nsh";
+import { List, signal, Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Popover } from "nsh/base";
 import { Icon } from "../common/icons";
 import { formatTimeAgo } from "../utils/time";
 import type { TranscriptState } from "./transcript_state";
+
+const PROMPT_ROW_HEIGHT = 34;
+const PROMPT_MAX_ROWS = 7;
+
+/// The popup's content, its own component so every branch reads its signals
+/// inside JSX (the popover mounts its content once). The list mounts only
+/// once prompts exist, so `initialScrollIndex` lands on the newest.
+function PromptPopupBody(props: {
+  state: TranscriptState;
+  loading: () => boolean;
+  onJump: (fromEnd: number) => void;
+}) {
+  const state = props.state;
+  return (
+    <View class="flex-col">
+      {state.prompts().length === 0 ? (
+        <View class="px-3 py-[7px]">
+          <Text class="text-[13px] text-muted-foreground">
+            {props.loading() ? "Loading…" : "No prompts"}
+          </Text>
+        </View>
+      ) : (
+        <View
+          style={{
+            height:
+              Math.min(state.prompts().length, PROMPT_MAX_ROWS) * PROMPT_ROW_HEIGHT,
+          }}
+        >
+          <List
+            class="h-full w-full"
+            each={state.prompts()}
+            keyExtractor={(prompt) => prompt.id}
+            initialScrollIndex={state.prompts().length - 1}
+          >
+            {(item, index) => {
+              const prompt = item();
+              const fromEnd = state.prompts().length - 1 - index();
+              const age = formatTimeAgo(prompt.createdAt);
+              return (
+                <View
+                  class="h-[34px] min-h-[34px] w-full flex-none flex-row items-center gap-3 overflow-hidden rounded-lg px-3 hover:bg-accent"
+                  role="button"
+                  accessibilityLabel={`Jump to prompt ${prompt.id}`}
+                  onPress={() => props.onJump(fromEnd)}
+                >
+                  <View class="min-w-0 flex-1 overflow-hidden">
+                    <Text class="truncate text-[13px] text-foreground">
+                      {prompt.preview.replace(/\s+/g, " ").trim()}
+                    </Text>
+                  </View>
+                  {prompt.createdAt > 0 ? (
+                    <Text class="flex-none text-[12px] text-muted-foreground">
+                      {age.includes(" ") ? age : `${age} ago`}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            }}
+          </List>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export function PromptJump(props: {
   state: TranscriptState;
@@ -38,38 +102,6 @@ export function PromptJump(props: {
     })();
   };
 
-  const promptRows = (): JSX.Element[] => {
-    const list = state.prompts();
-    return list
-      .map((prompt, at) => ({ prompt, fromEnd: list.length - 1 - at }))
-      .map(({ prompt, fromEnd }) => (
-        <View
-          class="h-[34px] min-h-[34px] w-full flex-none flex-row items-center gap-3 overflow-hidden rounded-lg px-3 hover:bg-accent"
-          role="button"
-          accessibilityLabel={`Jump to prompt ${prompt.id}`}
-          onPress={() => {
-            state.promptsOpen.set(false);
-            props.onJumpToPrompt?.(fromEnd);
-          }}
-        >
-          <View class="min-w-0 flex-1 overflow-hidden">
-            <Text class="truncate text-[13px] text-foreground">
-              {prompt.preview.replace(/\s+/g, " ").trim()}
-            </Text>
-          </View>
-          {(() => {
-            // "just now" and dates already read fine; only "3h" needs "ago".
-            const age = formatTimeAgo(prompt.createdAt);
-            return prompt.createdAt > 0 ? (
-              <Text class="flex-none text-[12px] text-muted-foreground">
-                {age.includes(" ") ? age : `${age} ago`}
-              </Text>
-            ) : null;
-          })()}
-        </View>
-      ));
-  };
-
   const hasPrompts = () => state.messages().length > 0;
   // The pill shows when the chat has messages; the guard reads inside JSX
   // so the pill appears when the first message arrives (the component runs
@@ -88,7 +120,7 @@ export function PromptJump(props: {
         align="end"
         offset={6}
         popupClass="rounded-[10px] border border-border bg-popover p-1 shadow-md"
-        popupStyle={{ width: 300, maxHeight: 7 * 34 }}
+        popupStyle={{ width: 340 }}
         open={state.promptsOpen()}
         onOpenChange={(e) => {
           state.promptsOpen.set(e.open);
@@ -104,15 +136,14 @@ export function PromptJump(props: {
           </View>
         }
       >
-        {loading() && state.prompts().length === 0 ? (
-          <View class="px-3 py-[7px]">
-            <Text class="text-[13px] text-muted-foreground">Loading…</Text>
-          </View>
-        ) : (
-          <Scroll class="max-h-[238px]" contentClass="flex flex-col">
-            {promptRows()}
-          </Scroll>
-        )}
+        <PromptPopupBody
+          state={state}
+          loading={loading}
+          onJump={(fromEnd) => {
+            state.promptsOpen.set(false);
+            props.onJumpToPrompt?.(fromEnd);
+          }}
+        />
         </Popover>
         {props.showScrollToBottom?.() ? (
           <View class="flex-row items-center">
