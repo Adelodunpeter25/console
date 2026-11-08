@@ -145,6 +145,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
           <View class="flex-row items-center gap-1.5 px-1">
             {props.projects != null ? (
               <Popover
+                popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md"
                 open={projectOpen()}
                 onOpenChange={(e) => projectOpen.set(e.open)}
                 placement="bottom"
@@ -172,6 +173,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
             ) : null}
             {props.branches != null ? (
               <Popover
+                popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md"
                 open={branchOpen()}
                 onOpenChange={(e) => branchOpen.set(e.open)}
                 placement="bottom"
@@ -232,6 +234,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
             ) : null}
             {props.repos != null ? (
               <Popover
+                popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md"
                 placement="bottom"
                 align="start"
                 trigger={
@@ -287,6 +290,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               </Popover>
             ) : null}
             <Popover
+              popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md"
               open={thinkingOpen()}
               onOpenChange={(e) => thinkingOpen.set(e.open)}
               placement="bottom"
@@ -324,6 +328,7 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               </View>
             </Popover>
             <Popover
+              popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md"
               open={approvalOpen()}
               onOpenChange={(e) => approvalOpen.set(e.open)}
               placement="bottom"

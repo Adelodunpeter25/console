@@ -40,7 +40,7 @@ export function SessionContextMenu(props: {
 }) {
   const settled = () => props.settled ?? false;
   return (
-    <ContextMenu trigger={props.children}>
+    <ContextMenu trigger={props.children} popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md">
       {props.onOpenInNewWindow ? (
         <Entry
           label="Open in New Window"
@@ -85,7 +85,7 @@ export function DraftContextMenu(props: {
   children: JSX.Element;
 }) {
   return (
-    <ContextMenu trigger={props.children}>
+    <ContextMenu trigger={props.children} popupClass="min-w-[180px] rounded-xl border border-border bg-popover p-1 shadow-md">
       <Entry
         label="Delete Draft"
         icon="TrashBinMinimalistic"
