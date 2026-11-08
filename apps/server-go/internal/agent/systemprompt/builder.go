@@ -21,10 +21,8 @@ import (
 type ApprovalMode string
 
 const (
-	AlwaysAsk   ApprovalMode = "always-ask"
-	AcceptEdits ApprovalMode = "accept-edits"
-	PlanMode    ApprovalMode = "plan-mode"
-	FullAccess  ApprovalMode = "full-access"
+	PlanMode   ApprovalMode = "plan-mode"
+	FullAccess ApprovalMode = "full-access"
 )
 
 const defaultIdentity = `You are a coding agent.
@@ -301,19 +299,6 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 	tag := "<approval-mode-instructions>"
 
 	switch mode {
-	case AlwaysAsk:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Normal mode. Use tools freely, including writes and commands; restricted actions trigger an approval dialog automatically.",
-			"Never pause or use the ask tool to request permission; don't claim an action ran before it's approved, and if approval is denied, report it and stop.",
-			"</approval-mode-instructions>",
-		}, "\n")
-	case AcceptEdits:
-		return strings.Join([]string{
-			heading, tag,
-			"You are in Accept Edits mode. Read, write, and edit files directly; commands and higher-risk operations trigger an approval dialog — never pause to ask permission yourself.",
-			"</approval-mode-instructions>",
-		}, "\n")
 	case PlanMode:
 		return strings.Join([]string{
 			heading, tag,
@@ -321,13 +306,13 @@ func renderApprovalModeInstruction(mode ApprovalMode) string {
 			"- You may read files, search the codebase, and ask clarifying questions to shape the design.",
 			"- Shell commands still run via bash, sandboxed read-only: reads (git log, git diff, ls, grep) work; anything that writes to disk fails. Don't run builds, tests, or dev servers.",
 			"- Plans live in chat. When the user asks for a plan file, save it with the writePlan tool (it writes docs/plan/<name>.md and never overwrites an existing file); it is the only way to write a file in this mode.",
-			"- If the user asks you to implement, tell them to switch agents. Do not silently start implementing.",
+			"- If the user asks you to implement, tell them to switch agents so you can implement. Do not silently start implementing.",
 			"</approval-mode-instructions>",
 		}, "\n")
 	case FullAccess:
 		return strings.Join([]string{
 			heading, tag,
-			"You are in Bypass Permissions mode. Execute all necessary tools directly without asking for approval.",
+			"You are in Full Access mode. Execute all necessary tools directly without asking for approval.",
 			"You remain responsible for avoiding unrelated or destructive work; freedom is not a license to be careless.",
 			"Report every action you take accurately so the user can audit what happened.",
 			"</approval-mode-instructions>",

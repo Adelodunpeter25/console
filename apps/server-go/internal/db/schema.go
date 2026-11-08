@@ -41,7 +41,7 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			provider TEXT NOT NULL,
 			message_count INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'idle',
-			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			approval_mode TEXT NOT NULL DEFAULT 'plan-mode',
 			thinking_level TEXT,
 			pinned_at INTEGER,
 			settled_at INTEGER,
@@ -153,6 +153,9 @@ func InitGlobalDB(db *sql.DB, path string) error {
 			return err
 		}
 	}
+	if _, err := db.Exec(`UPDATE sessions SET approval_mode = 'plan-mode' WHERE approval_mode NOT IN ('plan-mode', 'full-access')`); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -168,7 +171,7 @@ func InitSessionDB(db *sql.DB, path string) error {
 			project_id TEXT,
 			model_id TEXT NOT NULL,
 			provider TEXT NOT NULL,
-			approval_mode TEXT NOT NULL DEFAULT 'always-ask',
+			approval_mode TEXT NOT NULL DEFAULT 'plan-mode',
 			thinking_level TEXT,
 			repaired INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL,
@@ -338,6 +341,16 @@ func InitSessionDB(db *sql.DB, path string) error {
 	}
 	if thinkingCount == 0 {
 		if _, err := db.Exec(`ALTER TABLE session_meta ADD COLUMN thinking_level TEXT`); err != nil {
+			return err
+		}
+	}
+
+	// Only Plan and Full Access remain; legacy modes fall back to Plan.
+	for _, stmt := range []string{
+		`UPDATE session_meta SET approval_mode = 'plan-mode' WHERE approval_mode NOT IN ('plan-mode', 'full-access')`,
+		`UPDATE session_queued_prompt SET approval_mode = 'plan-mode' WHERE approval_mode IS NOT NULL AND approval_mode NOT IN ('plan-mode', 'full-access')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
 			return err
 		}
 	}

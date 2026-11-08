@@ -52,7 +52,7 @@ func waitNotification(t *testing.T, ch chan *consolev1.NotificationEvent, kind s
 	}
 }
 
-func TestNotifyApprovalAndDone(t *testing.T) {
+func TestNotifyDone(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	bus := services.NewNotificationService()
@@ -71,17 +71,9 @@ func TestNotifyApprovalAndDone(t *testing.T) {
 		}}, nil
 	}
 	header := helpers.CreateRunSession(t, sessions)
-	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write", Provider: "mock", ModelID: "m"})
+	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write", Provider: "mock", ModelID: "m", ApprovalMode: "full-access"})
 	if err != nil {
 		t.Fatal(err)
-	}
-	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
-	attention := waitNotification(t, notes, "needs_attention")
-	if !strings.Contains(attention.GetBody(), "write_file") {
-		t.Fatalf("attention body: %q", attention.GetBody())
-	}
-	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
-		t.Fatal("approve must resolve")
 	}
 	helpers.WaitSettled(t, hub)
 	done := waitNotification(t, notes, "done")

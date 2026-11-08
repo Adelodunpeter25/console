@@ -326,15 +326,11 @@ func (r *Runtime) approvalModes(context.Context, map[string]any) (*jskernel.Resu
 	return marshalResult(map[string]any{
 		"ordering": []string{
 			string(permissions.PlanMode),
-			string(permissions.AlwaysAsk),
-			string(permissions.AcceptEdits),
 			string(permissions.FullAccess),
 		},
 		"modes": []approvalMode{
 			{Mode: string(permissions.PlanMode), Rank: 0, Description: "Read-only: writes and command execution are refused."},
-			{Mode: string(permissions.AlwaysAsk), Rank: 1, Description: "Reads run freely; writes and commands ask for approval."},
-			{Mode: string(permissions.AcceptEdits), Rank: 2, Description: "File edits run freely; commands ask for approval."},
-			{Mode: string(permissions.FullAccess), Rank: 3, Description: "Everything runs without approval."},
+			{Mode: string(permissions.FullAccess), Rank: 1, Description: "Everything runs without approval."},
 		},
 	})
 }

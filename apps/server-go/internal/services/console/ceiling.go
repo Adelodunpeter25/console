@@ -9,10 +9,8 @@ import (
 // approvalRank orders the approval modes from most restrictive to least. It
 // is the scale the permission ceiling clamps on.
 var approvalRank = map[permissions.Mode]int{
-	permissions.PlanMode:    0,
-	permissions.AlwaysAsk:   1,
-	permissions.AcceptEdits: 2,
-	permissions.FullAccess:  3,
+	permissions.PlanMode:   0,
+	permissions.FullAccess: 1,
 }
 
 // clampApproval applies the permission ceiling: the effective mode is the
@@ -27,7 +25,7 @@ func clampApproval(ceiling, requested string) (effective string, clamped bool, n
 	req := permissions.Mode(requested)
 	reqRank, ok := approvalRank[req]
 	if !ok {
-		return "", false, "", fmt.Errorf("unknown approval mode %q; valid modes: plan-mode, always-ask, accept-edits, full-access (see console.approvalModes())", requested)
+		return "", false, "", fmt.Errorf("unknown approval mode %q; valid modes: plan-mode, full-access (see console.approvalModes())", requested)
 	}
 	ceil := permissions.Mode(ceiling)
 	ceilRank, ok := approvalRank[ceil]

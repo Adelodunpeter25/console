@@ -57,7 +57,7 @@ func TestPlanModeRunOffersWritePlanAndNotTheOrdinaryWrites(t *testing.T) {
 }
 
 func TestOtherModesDoNotOfferWritePlan(t *testing.T) {
-	for _, mode := range []string{"always-ask", "accept-edits", "full-access"} {
+	for _, mode := range []string{"full-access"} {
 		if got := toolNamesSent(t, mode); got["writePlan"] {
 			t.Errorf("%s: writePlan is for plan mode only, but it was offered", mode)
 		}
@@ -145,7 +145,7 @@ func TestPlanModeRunActuallyWritesAPlanFile(t *testing.T) {
 // `console`, `computer` and `writePlan` being left out of the table.
 func TestEveryToolARunOffersHasALabel(t *testing.T) {
 	seen := map[string]bool{}
-	for _, mode := range []string{"plan-mode", "always-ask", "full-access"} {
+	for _, mode := range []string{"plan-mode", "full-access"} {
 		for name := range toolNamesSent(t, mode) {
 			seen[name] = true
 		}

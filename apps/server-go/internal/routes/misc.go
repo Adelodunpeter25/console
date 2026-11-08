@@ -10,10 +10,8 @@ import (
 )
 
 var approvalModes = []fiber.Map{
-	{"value": "always-ask", "label": "Normal", "description": "Ask for every action"},
-	{"value": "accept-edits", "label": "Accept Edits", "description": "Auto-approve file edits"},
-	{"value": "plan-mode", "label": "Plan Mode", "description": "Plan only, no execution"},
-	{"value": "full-access", "label": "Bypass Permissions", "description": "Run everything without asking"},
+	{"value": "plan-mode", "label": "Plan", "description": "Plan only, no execution"},
+	{"value": "full-access", "label": "Full Access", "description": "Run everything without asking"},
 }
 
 func registerMiscRoutes(app *fiber.App, notifications *services.NotificationService) {

@@ -9,12 +9,22 @@ import (
 
 type Mode string
 
+// Two modes: Plan (read-only, the default) and Full Access (everything runs,
+// nothing asks). Older stored values (always-ask, accept-edits) are not modes
+// any more; Normalize maps them to PlanMode.
 const (
-	AlwaysAsk   Mode = "always-ask"
-	AcceptEdits Mode = "accept-edits"
-	PlanMode    Mode = "plan-mode"
-	FullAccess  Mode = "full-access"
+	PlanMode   Mode = "plan-mode"
+	FullAccess Mode = "full-access"
 )
+
+// Normalize returns the mode for a stored or requested value, falling back to
+// PlanMode for empty and legacy values: failing closed, never open.
+func Normalize(value string) Mode {
+	if Mode(value) == FullAccess {
+		return FullAccess
+	}
+	return PlanMode
+}
 
 type Policy string
 
@@ -41,31 +51,13 @@ type Request struct {
 // plan-mode run can make are tools that declare themselves tools.PlanSafe
 // (writePlan), which the executor lets through before consulting this table.
 func Resolve(mode Mode, tier tools.ToolTier) Policy {
-	switch mode {
-	case FullAccess:
+	if mode == FullAccess {
 		return Allow
-	case PlanMode:
-		if tier == tools.TierRead {
-			return Allow
-		}
-		return Deny
-	case AcceptEdits:
-		switch tier {
-		case tools.TierWrite:
-			return Allow
-		case tools.TierExec:
-			return Prompt
-		default:
-			return Allow
-		}
-	default: // always-ask
-		switch tier {
-		case tools.TierRead:
-			return Allow
-		default:
-			return Prompt
-		}
 	}
+	if tier == tools.TierRead {
+		return Allow
+	}
+	return Deny
 }
 
 // Decision carries the outcome for one tool call.

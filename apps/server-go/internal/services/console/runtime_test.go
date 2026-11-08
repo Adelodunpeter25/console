@@ -39,16 +39,16 @@ func TestApprovalModesListsClampOrder(t *testing.T) {
 	}
 	payload := evalJSON(t, runtime, `console.approvalModes()`).(map[string]any)
 	ordering, ok := payload["ordering"].([]any)
-	if !ok || len(ordering) != 4 {
+	if !ok || len(ordering) != 2 {
 		t.Fatalf("ordering = %#v", payload["ordering"])
 	}
-	for i, want := range []string{"plan-mode", "always-ask", "accept-edits", "full-access"} {
+	for i, want := range []string{"plan-mode", "full-access"} {
 		if ordering[i] != want {
 			t.Fatalf("ordering[%d] = %v, want %q", i, ordering[i], want)
 		}
 	}
 	modes, ok := payload["modes"].([]any)
-	if !ok || len(modes) != 4 {
+	if !ok || len(modes) != 2 {
 		t.Fatalf("modes = %#v", payload["modes"])
 	}
 	first, _ := modes[0].(map[string]any)

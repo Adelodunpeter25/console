@@ -72,7 +72,7 @@ func (s *Service) Create(opts types.CreateSessionOptions) (types.SessionHeader, 
 	}
 	approvalMode := opts.ApprovalMode
 	if approvalMode == "" {
-		approvalMode = "always-ask"
+		approvalMode = "plan-mode"
 	}
 
 	cwd := opts.Cwd

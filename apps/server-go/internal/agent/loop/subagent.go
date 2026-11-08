@@ -37,7 +37,7 @@ type SubagentContext struct {
 	// ApprovalMode is the parent run's permission mode. A subagent inherits its
 	// parent's tools, so it must inherit the parent's authority too: it may not
 	// act with more permission than the run that spawned it. Zero value means
-	// always-ask, which is the safe default for a run that did not say.
+	// plan mode, which is the safe default for a run that did not say.
 	ApprovalMode permissions.Mode
 	// Guard is the parent run's path guard. A subagent holds the same tools,
 	// so it must be confined to the same project root; nil means unguarded.
@@ -221,7 +221,7 @@ func (c *SubagentContext) run(ctx context.Context, parentCallID, prompt, name, r
 	}
 	mode := c.ApprovalMode
 	if mode == "" {
-		mode = permissions.AlwaysAsk
+		mode = permissions.PlanMode
 	}
 	executor := NewExecutor(registry, mode, c.Approver)
 	executor.Guard = c.Guard

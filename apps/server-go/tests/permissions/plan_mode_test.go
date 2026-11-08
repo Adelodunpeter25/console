@@ -261,9 +261,9 @@ func TestPlanModeAllowsOnlySandboxedBash(t *testing.T) {
 		t.Fatalf("plan mode must not prompt: asked %d times", asked)
 	}
 
-	// Outside plan mode the sandboxed flag grants nothing special.
-	if permissions.Resolve(permissions.AlwaysAsk, tools.TierExec) != permissions.Prompt {
-		t.Fatal("always-ask still prompts for exec")
+	// Legacy modes fall back to plan mode, never to full access.
+	if permissions.Normalize("always-ask") != permissions.PlanMode {
+		t.Fatal("a legacy mode must normalize to plan mode")
 	}
 }
 

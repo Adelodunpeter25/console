@@ -291,12 +291,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 	if approval == "" {
 		approval = header.ApprovalMode
 	}
-	mode := permissions.Mode(approval)
-	switch mode {
-	case permissions.AlwaysAsk, permissions.AcceptEdits, permissions.PlanMode, permissions.FullAccess:
-	default:
-		mode = permissions.AlwaysAsk
-	}
+	mode := permissions.Normalize(approval)
 
 	if providerID != *currentID {
 		switched, err := s.Lookup(providerID)

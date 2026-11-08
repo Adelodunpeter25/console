@@ -5,10 +5,7 @@ package tests
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -60,80 +57,6 @@ func writeCallArgs(t *testing.T, path, content string) json.RawMessage {
 	return raw
 }
 
-func TestApprovalAllowRunsTool(t *testing.T) {
-	sessions := helpers.NewRunSessions(t)
-	svc := run.NewService(sessions)
-	header := helpers.CreateRunSession(t, sessions)
-	target := filepath.Join(header.Cwd, "hello.txt")
-	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &helpers.MockProvider{Turns: []func() []loop.Event{
-			func() []loop.Event {
-				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
-					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
-				}}}
-			},
-			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
-		}}, nil
-	}
-	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// always-ask (session default) prompts for write-tier tools.
-	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
-	if req.Permission == nil || req.Permission.ToolName != "write_file" {
-		t.Fatalf("permission request: %+v", req.Permission)
-	}
-	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
-		t.Fatal("approve must resolve")
-	}
-	select {
-	case <-hub.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("run did not settle")
-	}
-	if hub.Outcome != run.OutcomeDone {
-		t.Fatalf("outcome: %s", hub.Outcome)
-	}
-	data, err := os.ReadFile(target)
-	if err != nil || string(data) != "hi" {
-		t.Fatalf("file: %v %q", err, data)
-	}
-}
-
-func TestApprovalDenyFailsTool(t *testing.T) {
-	sessions := helpers.NewRunSessions(t)
-	svc := run.NewService(sessions)
-	target := filepath.Join(t.TempDir(), "nope.txt")
-	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &helpers.MockProvider{Turns: []func() []loop.Event{
-			func() []loop.Event {
-				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
-					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
-				}}}
-			},
-			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "ok"}} },
-		}}, nil
-	}
-	header := helpers.CreateRunSession(t, sessions)
-	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
-	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, false) {
-		t.Fatal("deny must resolve")
-	}
-	select {
-	case <-hub.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("run did not settle")
-	}
-	if _, err := os.Stat(target); !os.IsNotExist(err) {
-		t.Fatal("denied write must not create the file")
-	}
-}
-
 func TestAskQuestionAnswered(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
@@ -170,56 +93,6 @@ func TestAskQuestionAnswered(t *testing.T) {
 	}
 }
 
-// A pending approval marks the session needs_attention; answering it must
-// flip the session back to working while the run continues, so the session
-// list stops advertising an unanswered prompt.
-func TestDecisionResolvesBackToWorking(t *testing.T) {
-	sessions := helpers.NewRunSessions(t)
-	svc := run.NewService(sessions)
-	release := make(chan struct{})
-	var releaseOnce sync.Once
-	open := func() { releaseOnce.Do(func() { close(release) }) }
-	defer open() // unblock the held turn even if the test fails early
-	target := filepath.Join(t.TempDir(), "held.txt")
-	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &helpers.MockProvider{Turns: []func() []loop.Event{
-			func() []loop.Event {
-				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{
-					ID: "c1", Name: "write_file", Arguments: writeCallArgs(t, target, "hi"),
-				}}}
-			},
-			// Hold the follow-up turn open so the run is still active when
-			// the status is read after the decision resolves.
-			func() []loop.Event {
-				<-release
-				return []loop.Event{{Kind: loop.EventText, Text: "done"}}
-			},
-		}}, nil
-	}
-	header := helpers.CreateRunSession(t, sessions)
-	hub, err := svc.StartRun(header.ID, run.Prompt{Text: "write hi", Provider: "mock", ModelID: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := waitHubFrame(t, hub, loop.EventPermissionRequest, 10*time.Second)
-	// The request frame is broadcast before the notify callback writes the
-	// status, so poll rather than racing the first read.
-	if got := waitSessionStatus(t, sessions, header.ID, "needs_attention"); got != "needs_attention" {
-		t.Fatalf("awaiting approval status: %q, want needs_attention", got)
-	}
-	if !svc.ApprovePermission(header.ID, req.Permission.RequestID, true) {
-		t.Fatal("approve must resolve")
-	}
-	if got := waitSessionStatus(t, sessions, header.ID, "working"); got != "working" {
-		t.Fatalf("after approval status: %q, want working", got)
-	}
-	open()
-	helpers.WaitSettled(t, hub)
-	if got := sessionStatus(t, sessions, header.ID); got != "done" {
-		t.Fatalf("settled status: %q, want done", got)
-	}
-}
-
 func TestDecisionTimeout(t *testing.T) {
 	d := run.NewDecisions()
 	d.Timeout = 50 * time.Millisecond
@@ -237,54 +110,3 @@ func TestDecisionTimeout(t *testing.T) {
 	}
 }
 
-func TestRejectAllIsSessionScoped(t *testing.T) {
-	sessions := helpers.NewRunSessions(t)
-	svc := run.NewService(sessions)
-	svc.Lookup = func(id string) (loop.Provider, error) {
-		return &helpers.MockProvider{Turns: []func() []loop.Event{
-			func() []loop.Event {
-				args, _ := json.Marshal(map[string]any{"path": filepath.Join(t.TempDir(), "x.txt"), "content": "hi"})
-				return []loop.Event{{Kind: loop.EventToolCall, Call: &tools.ToolCall{ID: "c1", Name: "write_file", Arguments: args}}}
-			},
-			func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
-		}}, nil
-	}
-	headerA := helpers.CreateRunSession(t, sessions)
-	headerB := helpers.CreateRunSession(t, sessions)
-	hubA, err := svc.StartRun(headerA.ID, run.Prompt{Text: "a", Provider: "mock", ModelID: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	hubB, err := svc.StartRun(headerB.ID, run.Prompt{Text: "b", Provider: "mock", ModelID: "m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitHubFrame(t, hubA, loop.EventPermissionRequest, 10*time.Second)
-	reqB := waitHubFrame(t, hubB, loop.EventPermissionRequest, 10*time.Second)
-	// Aborting A must not resolve B's pending approval.
-	if !svc.Abort(headerA.ID) {
-		t.Fatal("abort A must succeed")
-	}
-	select {
-	case <-hubA.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("run A did not settle")
-	}
-	if hubA.Outcome != run.OutcomeAborted {
-		t.Fatalf("outcome A: %s", hubA.Outcome)
-	}
-	if !svc.IsActive(headerB.ID) {
-		t.Fatal("run B must still be active")
-	}
-	if !svc.ApprovePermission(headerB.ID, reqB.Permission.RequestID, true) {
-		t.Fatal("run B approval must still resolve")
-	}
-	select {
-	case <-hubB.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("run B did not settle")
-	}
-	if hubB.Outcome != run.OutcomeDone {
-		t.Fatalf("outcome B: %s", hubB.Outcome)
-	}
-}

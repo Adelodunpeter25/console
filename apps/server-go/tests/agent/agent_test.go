@@ -278,13 +278,13 @@ func TestPermissionMatrix(t *testing.T) {
 		want permissions.Policy
 	}{
 		{permissions.FullAccess, tools.TierExec, permissions.Allow},
-		{permissions.AcceptEdits, tools.TierWrite, permissions.Allow},
-		{permissions.AcceptEdits, tools.TierExec, permissions.Prompt},
+		{permissions.FullAccess, tools.TierWrite, permissions.Allow},
 		{permissions.PlanMode, tools.TierExec, permissions.Deny},
 		{permissions.PlanMode, tools.TierWrite, permissions.Deny},
 		{permissions.PlanMode, tools.TierRead, permissions.Allow},
-		{permissions.AlwaysAsk, tools.TierRead, permissions.Allow},
-		{permissions.AlwaysAsk, tools.TierWrite, permissions.Prompt},
+		{permissions.Normalize("always-ask"), tools.TierWrite, permissions.Deny},
+		{permissions.Normalize("accept-edits"), tools.TierExec, permissions.Deny},
+		{permissions.Normalize(""), tools.TierExec, permissions.Deny},
 	}
 	for _, c := range cases {
 		if got := permissions.Resolve(c.mode, c.tier); got != c.want {

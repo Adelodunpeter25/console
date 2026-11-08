@@ -74,7 +74,7 @@ func TestSetupCarriesOnlyCapabilitiesThatAreOn(t *testing.T) {
 func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 	svc, id := newCapService(t)
 	registry := tools.NewRegistry()
-	lc := &loadContext{sessionID: id, cwd: t.TempDir(), mode: "always-ask"}
+	lc := &loadContext{sessionID: id, cwd: t.TempDir(), mode: "full-access"}
 	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, registry))
 	read := func(name string) string {
 		out, err := tool.Execute(t.Context(), []byte(`{"name":"`+name+`"}`))
@@ -113,7 +113,7 @@ func TestReadSkillSwitchesOnWhatTheAgentMayEnable(t *testing.T) {
 func TestReadSkillListsCapabilitiesWithTheirState(t *testing.T) {
 	svc, id := newCapService(t)
 	svc.activateInvoked(id, "/visualize")
-	lc := &loadContext{sessionID: id}
+	lc := &loadContext{sessionID: id, mode: "full-access"}
 	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(lc, tools.NewRegistry()))
 	out, err := tool.Execute(t.Context(), []byte(`{}`))
 	if err != nil {
@@ -129,7 +129,7 @@ func TestReadSkillListsCapabilitiesWithTheirState(t *testing.T) {
 
 func TestReadSkillUnknownNameListsCapabilities(t *testing.T) {
 	svc, id := newCapService(t)
-	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(&loadContext{sessionID: id}, tools.NewRegistry()))
+	tool := tools.NewReadSkillTool(svc.readSkillCapabilities(&loadContext{sessionID: id, mode: "full-access"}, tools.NewRegistry()))
 	_, err := tool.Execute(t.Context(), []byte(`{"name":"nope"}`))
 	if err == nil || !strings.Contains(err.Error(), "visualize") {
 		t.Fatalf("err = %v, want the built-ins listed", err)
@@ -137,10 +137,10 @@ func TestReadSkillUnknownNameListsCapabilities(t *testing.T) {
 }
 
 func TestBuiltinSkillsListFollowsTheMode(t *testing.T) {
-	build := builtinSkillsSetup("always-ask")
+	build := builtinSkillsSetup("full-access")
 	for _, want := range []string{"browser-use", "console", "visualize", "computer-use", "/computer-use", "readSkill"} {
 		if !strings.Contains(build, want) {
-			t.Errorf("always-ask list missing %q:\n%s", want, build)
+			t.Errorf("full-access list missing %q:\n%s", want, build)
 		}
 	}
 	plan := builtinSkillsSetup("plan-mode")

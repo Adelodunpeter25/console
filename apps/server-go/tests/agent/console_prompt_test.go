@@ -19,7 +19,7 @@ func TestPromptSessionStartsAnIdleSession(t *testing.T) {
 	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("done"), nil }
 	header := helpers.CreateRunSession(t, sessions)
 
-	queued, err := svc.PromptSession(header.ID, "hello", "m", "mock", "always-ask", "")
+	queued, err := svc.PromptSession(header.ID, "hello", "m", "mock", "plan-mode", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestPromptSessionQueuesWhileBusyAndDrains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	queued, err := svc.PromptSession(header.ID, "follow-up", "", "", "always-ask", "")
+	queued, err := svc.PromptSession(header.ID, "follow-up", "", "", "plan-mode", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestPromptSessionQueuesBehindAQueuedPrompt(t *testing.T) {
 	if _, err := svc.QueuePrompt(header.ID, run.Prompt{Text: "users own"}); err != nil {
 		t.Fatal(err)
 	}
-	if queued, err := svc.PromptSession(header.ID, "agent", "", "", "always-ask", ""); err != nil || !queued {
+	if queued, err := svc.PromptSession(header.ID, "agent", "", "", "plan-mode", ""); err != nil || !queued {
 		t.Fatalf("queued = %v, err = %v", queued, err)
 	}
 	queue, err := svc.QueuedPrompts(header.ID)
@@ -100,7 +100,7 @@ func TestPromptSessionUnknownSession(t *testing.T) {
 	sessions := helpers.NewRunSessions(t)
 	svc := run.NewService(sessions)
 	svc.Lookup = func(string) (loop.Provider, error) { return queueMock("x"), nil }
-	_, err := svc.PromptSession("ghost", "hi", "m", "mock", "always-ask", "")
+	_, err := svc.PromptSession("ghost", "hi", "m", "mock", "plan-mode", "")
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("err = %v, want not found", err)
 	}
@@ -123,7 +123,7 @@ func TestAbortAndClearDiscardsTheQueuedPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-entered
-	if queued, err := svc.PromptSession(header.ID, "follow-up", "", "", "always-ask", ""); err != nil || !queued {
+	if queued, err := svc.PromptSession(header.ID, "follow-up", "", "", "plan-mode", ""); err != nil || !queued {
 		t.Fatalf("queue: %v %v", queued, err)
 	}
 	if !svc.AbortAndClear(header.ID) {

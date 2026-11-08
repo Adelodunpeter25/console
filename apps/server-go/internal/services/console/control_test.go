@@ -38,12 +38,10 @@ func TestClampApprovalNeverRaises(t *testing.T) {
 		ceiling, req, want string
 		clamped            bool
 	}{
-		{"always-ask", "full-access", "always-ask", true},
-		{"always-ask", "accept-edits", "always-ask", true},
-		{"accept-edits", "full-access", "accept-edits", true},
+		{"plan-mode", "full-access", "plan-mode", true},
 		{"full-access", "full-access", "full-access", false},
 		{"full-access", "plan-mode", "plan-mode", false},
-		{"always-ask", "plan-mode", "plan-mode", false},
+		{"plan-mode", "plan-mode", "plan-mode", false},
 		// No run behind the kernel fails closed, never open.
 		{"", "full-access", "plan-mode", true},
 	}
@@ -63,25 +61,25 @@ func TestClampApprovalNeverRaises(t *testing.T) {
 
 func TestCreateClampsToCeilingAndReportsIt(t *testing.T) {
 	var aborted []string
-	runtime, _ := newControlRuntime(t, "always-ask", &aborted)
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
 	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", approval_mode:"full-access"})`).(map[string]any)
-	if out["approval_mode"] != "always-ask" {
-		t.Fatalf("approval_mode = %v, want always-ask", out["approval_mode"])
+	if out["approval_mode"] != "plan-mode" {
+		t.Fatalf("approval_mode = %v, want plan-mode", out["approval_mode"])
 	}
-	if note, _ := out["clamped"].(string); !strings.Contains(note, "clamped to always-ask") {
+	if note, _ := out["clamped"].(string); !strings.Contains(note, "clamped to plan-mode") {
 		t.Fatalf("clamp not reported: %#v", out)
 	}
 	header := out["session"].(map[string]any)
-	if header["approvalMode"] != "always-ask" {
+	if header["approvalMode"] != "plan-mode" {
 		t.Fatalf("stored mode = %v", header["approvalMode"])
 	}
 }
 
 func TestCreateOmittedModeInheritsCeiling(t *testing.T) {
 	var aborted []string
-	runtime, _ := newControlRuntime(t, "accept-edits", &aborted)
+	runtime, _ := newControlRuntime(t, "plan-mode", &aborted)
 	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
-	if out["approval_mode"] != "accept-edits" {
+	if out["approval_mode"] != "plan-mode" {
 		t.Fatalf("approval_mode = %v", out["approval_mode"])
 	}
 	if _, has := out["clamped"]; has {
@@ -143,15 +141,15 @@ func TestSetModelAcceptsCatalogModel(t *testing.T) {
 
 func TestSetApprovalClampedToCallingRun(t *testing.T) {
 	var aborted []string
-	runtime, sessions := newControlRuntime(t, "accept-edits", &aborted)
+	runtime, sessions := newControlRuntime(t, "plan-mode", &aborted)
 	created := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", approval_mode:"plan-mode"})`).(map[string]any)
 	id := created["session"].(map[string]any)["id"].(string)
 
 	out := evalJSON(t, runtime, `console.sessions.set_approval({session_id:"`+id+`", mode:"full-access"})`).(map[string]any)
-	if out["approval_mode"] != "accept-edits" || out["clamped"] == nil {
+	if out["approval_mode"] != "plan-mode" || out["clamped"] == nil {
 		t.Fatalf("set_approval = %#v", out)
 	}
-	if h, _ := sessions.Header(id); h.ApprovalMode != "accept-edits" {
+	if h, _ := sessions.Header(id); h.ApprovalMode != "plan-mode" {
 		t.Fatalf("stored mode = %q", h.ApprovalMode)
 	}
 	// Moving down is always allowed.
@@ -192,7 +190,7 @@ func TestSetModelRejectsUnknownModel(t *testing.T) {
 
 func TestForkClampsInheritedApproval(t *testing.T) {
 	var aborted []string
-	runtime, sessions := newControlRuntime(t, "always-ask", &aborted)
+	runtime, sessions := newControlRuntime(t, "plan-mode", &aborted)
 	// The source was created by someone with more authority than this run.
 	src, err := sessions.Create(newSource("full-access"))
 	if err != nil {
@@ -205,13 +203,13 @@ func TestForkClampsInheritedApproval(t *testing.T) {
 	}
 	out := evalJSON(t, runtime, `console.sessions.fork({session_id:"`+src.ID+`", message_id:"m1"})`).(map[string]any)
 	forked := out["session"].(map[string]any)
-	if forked["approvalMode"] != "always-ask" {
-		t.Fatalf("forked approvalMode = %v, want always-ask", forked["approvalMode"])
+	if forked["approvalMode"] != "plan-mode" {
+		t.Fatalf("forked approvalMode = %v, want plan-mode", forked["approvalMode"])
 	}
 	if out["clamped"] == nil {
 		t.Fatalf("clamp not reported: %#v", out)
 	}
-	if h, _ := sessions.Header(forked["id"].(string)); h == nil || h.ApprovalMode != "always-ask" {
+	if h, _ := sessions.Header(forked["id"].(string)); h == nil || h.ApprovalMode != "plan-mode" {
 		t.Fatalf("stored fork mode = %+v", h)
 	}
 	// The source is untouched.
@@ -230,13 +228,13 @@ func TestForkClampsInheritedApproval(t *testing.T) {
 func TestForkWithinCeilingIsNotClamped(t *testing.T) {
 	var aborted []string
 	runtime, sessions := newControlRuntime(t, "full-access", &aborted)
-	src, _ := sessions.Create(newSource("accept-edits"))
+	src, _ := sessions.Create(newSource("plan-mode"))
 	_ = sessions.AppendMessage(src.ID, types.AgentMessage{ID: "m1", Role: "user", Data: []byte(`{"user":{"content":"hi"}}`)})
 	out := evalJSON(t, runtime, `console.sessions.fork({session_id:"`+src.ID+`", message_id:"m1"})`).(map[string]any)
 	if out["clamped"] != nil {
 		t.Fatalf("unexpected clamp: %#v", out)
 	}
-	if out["session"].(map[string]any)["approvalMode"] != "accept-edits" {
+	if out["session"].(map[string]any)["approvalMode"] != "plan-mode" {
 		t.Fatalf("fork mode = %v", out["session"])
 	}
 }
@@ -263,7 +261,7 @@ func newPromptRuntime(t *testing.T, ceiling string, queued bool, calls *[]prompt
 func TestPromptStartsIdleSession(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	target, _ := sessions.Create(newSource("accept-edits"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"also add tests"})`).(map[string]any)
 	if out["queued"] != false || out["note"] != nil {
 		t.Fatalf("idle prompt = %#v", out)
@@ -272,15 +270,15 @@ func TestPromptStartsIdleSession(t *testing.T) {
 		t.Fatalf("calls = %+v", calls)
 	}
 	// Omitted mode means the session's own.
-	if calls[0].approval != "accept-edits" {
-		t.Fatalf("approval = %q, want the session's accept-edits", calls[0].approval)
+	if calls[0].approval != "plan-mode" {
+		t.Fatalf("approval = %q, want the session's plan-mode", calls[0].approval)
 	}
 }
 
 func TestPromptReportsQueueingWhenBusy(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", true, &calls)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"next"})`).(map[string]any)
 	if out["queued"] != true {
 		t.Fatalf("busy prompt must report queued: %#v", out)
@@ -294,15 +292,15 @@ func TestPromptReportsQueueingWhenBusy(t *testing.T) {
 // must not let a restricted run act with that higher mode.
 func TestPromptCannotBorrowTheTargetsHigherMode(t *testing.T) {
 	var calls []promptCall
-	runtime, sessions := newPromptRuntime(t, "always-ask", false, &calls)
+	runtime, sessions := newPromptRuntime(t, "plan-mode", false, &calls)
 	target, _ := sessions.Create(newSource("full-access"))
 	out := evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go"})`).(map[string]any)
-	if calls[0].approval != "always-ask" || out["clamped"] == nil {
+	if calls[0].approval != "plan-mode" || out["clamped"] == nil {
 		t.Fatalf("approval = %q out = %#v", calls[0].approval, out)
 	}
 	// Explicitly asking for more is clamped too.
 	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"go", approval_mode:"full-access"})`)
-	if calls[1].approval != "always-ask" {
+	if calls[1].approval != "plan-mode" {
 		t.Fatalf("explicit request approval = %q", calls[1].approval)
 	}
 	// The turn cap never rewrites the session's stored mode.
@@ -314,7 +312,7 @@ func TestPromptCannotBorrowTheTargetsHigherMode(t *testing.T) {
 func TestPromptRefusals(t *testing.T) {
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	for name, code := range map[string]string{
 		"missing session":  `console.sessions.prompt({session_id:"ghost", prompt:"x"})`,
 		"missing prompt":   `console.sessions.prompt({session_id:"` + target.ID + `"})`,
@@ -335,7 +333,7 @@ func TestPromptValidatesThinkingAgainstTheSessionsModel(t *testing.T) {
 	withCatalog(t)
 	var calls []promptCall
 	runtime, sessions := newPromptRuntime(t, "full-access", false, &calls)
-	opts := newSource("always-ask")
+	opts := newSource("plan-mode")
 	opts.ModelID, opts.Provider = "thinker", "claude"
 	target, _ := sessions.Create(opts)
 	evalJSON(t, runtime, `console.sessions.prompt({session_id:"`+target.ID+`", prompt:"x", thinking_level:"high"})`)
@@ -538,7 +536,7 @@ func newWaitRuntime(t *testing.T, ceiling string, active *activeSet) (*Runtime, 
 func TestWaitReturnsImmediatelyWhenAlreadyFinished(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`"})`).(map[string]any)
 	if out["done"] != true || out["timed_out"] != false {
 		t.Fatalf("a finished session must return done: %#v", out)
@@ -623,7 +621,7 @@ func TestWaitAnyVersusAll(t *testing.T) {
 func TestWaitRefusals(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	many := make([]string, 25)
 	for i := range many {
 		many[i] = fmt.Sprintf("%q", fmt.Sprintf("s%d", i))
@@ -669,7 +667,7 @@ func TestWaitTimeoutIsCapped(t *testing.T) {
 func TestWaitDeduplicatesIDs(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`", session_ids:["`+target.ID+`","`+target.ID+`"]})`).(map[string]any)
 	if n := len(out["sessions"].([]any)); n != 1 {
 		t.Fatalf("a repeated id must be reported once, got %d entries", n)
@@ -679,7 +677,7 @@ func TestWaitDeduplicatesIDs(t *testing.T) {
 func TestWaitReturnsTheLastReply(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	for _, m := range []types.AgentMessage{
 		{ID: "u1", Role: "user", Data: []byte(`{"user":{"content":"run the tests"}}`)},
 		{ID: "a1", Role: "assistant", Data: []byte(`{"assistant":{"id":"a1","content":[{"text":{"text":"All 42 tests passed."}}],"stopReason":"stop"}}`)},
@@ -700,7 +698,7 @@ func TestWaitReturnsTheLastReply(t *testing.T) {
 func TestWaitCutsAVeryLongReply(t *testing.T) {
 	active := newActiveSet()
 	runtime, sessions := newWaitRuntime(t, "full-access", active)
-	target, _ := sessions.Create(newSource("always-ask"))
+	target, _ := sessions.Create(newSource("plan-mode"))
 	long := strings.Repeat("word ", replyMaxText) // far over the cap
 	data, _ := json.Marshal(map[string]any{"assistant": map[string]any{
 		"id": "a1", "stopReason": "stop",

@@ -28,7 +28,7 @@ func TestExecutorDecisionFailureIsToolResult(t *testing.T) {
 	failing := tools.NewAskTool(func(context.Context, tools.AskQuestionRequest) (tools.AskAnswer, error) {
 		return tools.AskAnswer{}, errors.New("Question timed out waiting for a decision.")
 	})
-	exec := loop.NewExecutor(tools.NewRegistry(failing), permissions.AlwaysAsk, nil)
+	exec := loop.NewExecutor(tools.NewRegistry(failing), permissions.FullAccess, nil)
 	args, _ := json.Marshal(map[string]any{"question": "?"})
 	res, err := exec.Execute(context.Background(), tools.ToolCall{ID: "q", Name: "ask", Arguments: args})
 	if err != nil {
@@ -36,19 +36,6 @@ func TestExecutorDecisionFailureIsToolResult(t *testing.T) {
 	}
 	if !res.IsError || !strings.Contains(res.Content.(string), "timed out") {
 		t.Fatalf("result: %+v", res)
-	}
-
-	write := loop.NewExecutor(tools.NewRegistry(tools.DefaultTools()...), permissions.AlwaysAsk, failingApprover{errors.New("Permission request timed out waiting for a decision.")})
-	res, err = write.Execute(context.Background(), tools.ToolCall{ID: "w", Name: "write_file", Arguments: writeCallArgs(t, t.TempDir()+"/x", "x")})
-	if err != nil || !res.IsError || !strings.Contains(res.Content.(string), "timed out") {
-		t.Fatalf("approval failure: %v %+v", err, res)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	res, err = write.Execute(ctx, tools.ToolCall{ID: "w2", Name: "write_file", Arguments: writeCallArgs(t, t.TempDir()+"/y", "y")})
-	if err != nil || !res.IsError || res.Content != "Tool execution cancelled by user abort." {
-		t.Fatalf("aborted approval: %v %+v", err, res)
 	}
 }
 

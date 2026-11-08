@@ -36,9 +36,9 @@ func execTool(t *testing.T, ran *bool) tools.Tool {
 		})
 }
 
-// TestSubagentPromptsWhenParentModePrompts proves the mode is inherited: under
-// always-ask an exec-tier tool in a subagent must reach the approver.
-func TestSubagentPromptsWhenParentModePrompts(t *testing.T) {
+// TestSubagentInheritsPlanModeDenial proves the mode is inherited: under plan
+// mode an exec-tier tool in a subagent is refused, never run and never asked.
+func TestSubagentInheritsPlanModeDenial(t *testing.T) {
 	var ran bool
 	approver := &recordingApprover{}
 	provider := &helpers.MockProvider{Turns: []func() []loop.Event{
@@ -52,20 +52,15 @@ func TestSubagentPromptsWhenParentModePrompts(t *testing.T) {
 	tool := loop.NewSubagentTool(&loop.SubagentContext{
 		Provider:     provider,
 		Tools:        []tools.Tool{execTool(t, &ran)},
-		ApprovalMode: permissions.AlwaysAsk,
+		ApprovalMode: permissions.PlanMode,
 		Approver:     approver,
 	})
-	if _, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go")); err != nil {
-		t.Fatalf("subagent call: %v", err)
+	_, _ = tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go"))
+	if ran {
+		t.Fatal("exec tool ran in a plan-mode subagent")
 	}
-	if approver.calls != 1 {
-		t.Fatalf("approver called %d times, want 1 (subagent bypassed the parent mode)", approver.calls)
-	}
-	if len(approver.tools) != 1 || approver.tools[0] != "dangerous_exec" {
-		t.Fatalf("prompted for %v, want dangerous_exec", approver.tools)
-	}
-	if !ran {
-		t.Fatal("approved exec tool did not run")
+	if approver.calls != 0 {
+		t.Fatalf("approver called %d times, want 0 (nothing asks any more)", approver.calls)
 	}
 }
 
@@ -99,34 +94,10 @@ func TestSubagentRunsUnattendedUnderFullAccess(t *testing.T) {
 	}
 }
 
-// TestSubagentDeniedToolIsNotRetriedSilently: with no approver configured and a
-// prompting mode, the subagent cannot escalate to full-access on its own.
-func TestSubagentCannotEscalateWithoutApprover(t *testing.T) {
-	var ran bool
-	provider := &helpers.MockProvider{Turns: []func() []loop.Event{
-		func() []loop.Event {
-			args, _ := json.Marshal(map[string]any{})
-			call := tools.ToolCall{ID: "inner", Name: "dangerous_exec", Arguments: args}
-			return []loop.Event{{Kind: loop.EventToolCall, Call: &call}}
-		},
-		func() []loop.Event { return []loop.Event{{Kind: loop.EventText, Text: "done"}} },
-	}}
-	tool := loop.NewSubagentTool(&loop.SubagentContext{
-		Provider:     provider,
-		Tools:        []tools.Tool{execTool(t, &ran)},
-		ApprovalMode: permissions.AlwaysAsk,
-		// Approver deliberately nil.
-	})
-	out, err := tool.(tools.CallAwareTool).ExecuteCall(context.Background(), subagentCall(t, "go"))
-	if err == nil && ran {
-		t.Fatalf("subagent ran an exec tool with no approver available (output %v)", out)
-	}
-}
-
-// TestSubagentDefaultsToAlwaysAsk: an unset mode must not be treated as
+// TestSubagentDefaultsToPlan: an unset mode must not be treated as
 // full-access. This is the regression guard for the original bug.
-func TestSubagentDefaultsToAlwaysAsk(t *testing.T) {
-	if got := permissions.Resolve("", tools.TierExec); got != permissions.Prompt {
-		t.Fatalf("empty mode resolves to %v, want prompt", got)
+func TestSubagentDefaultsToPlan(t *testing.T) {
+	if got := permissions.Resolve(permissions.Normalize(""), tools.TierExec); got != permissions.Deny {
+		t.Fatalf("empty mode resolves to %v, want deny", got)
 	}
 }
