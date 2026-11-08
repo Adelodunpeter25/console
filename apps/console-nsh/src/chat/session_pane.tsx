@@ -82,7 +82,6 @@ export function SessionPane(props: {
   const draft = signal("");
   const catalog = catalogStore(props.baseUrl);
   void catalog.load();
-  void controller.refresh();
   // The session's own model wins until the user picks another in this pane.
   const picked = signal<{ provider: string; modelId: string } | null>(null);
   const sessionModel = () => {
