@@ -743,7 +743,6 @@ impl ConsoleDesktopApp {
             provider_credential_forms_open: std::collections::HashSet::new(),
             provider_credential_error: None,
             server_device: None,
-            server_devices: Vec::new(),
             server_pairing_grant: None,
             server_auth_busy: false,
             server_auth_error: None,

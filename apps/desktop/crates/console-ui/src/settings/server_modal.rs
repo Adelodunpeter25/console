@@ -10,20 +10,11 @@ use crate::input::ComposerInput;
 use crate::theme::Theme;
 use gpui::prelude::FluentBuilder;
 use gpui::{
-    App, ElementId, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    App, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, px,
 };
 use std::rc::Rc;
 use std::sync::Arc;
-
-/// A device's name, or its platform when it has no name.
-fn device_label(device: &console_core::services::ServerDevice) -> String {
-    if device.name.trim().is_empty() {
-        device.platform.clone()
-    } else {
-        device.name.clone()
-    }
-}
 
 /// The add/edit server modal.
 #[derive(IntoElement)]
@@ -254,22 +245,17 @@ impl RenderOnce for ServerModal {
     }
 }
 
-/// The "pair a phone" modal: a QR code the phone scans, and the devices
-/// already paired with this server.
+/// The "pair a phone" modal: a QR code the phone scans.
 #[derive(IntoElement)]
 pub struct PairDeviceModal {
     /// The grant waiting to be redeemed, with its QR code.
     pub grant: Option<console_core::services::PairingGrantData>,
     /// This device's record on the server, when it is paired.
     pub this_device: Option<console_core::services::ServerDevice>,
-    /// Every device paired with the server.
-    pub devices: Vec<console_core::services::ServerDevice>,
     /// The server's failure text, shown verbatim.
     pub error: Option<String>,
     pub on_close: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_refresh: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    /// Revoke another device by id.
-    pub on_revoke: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     /// Forget this device's own credential.
     pub on_unpair: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
@@ -279,7 +265,6 @@ impl RenderOnce for PairDeviceModal {
         let theme = Theme::current(cx);
         let on_close = self.on_close.clone();
         let on_refresh = self.on_refresh.clone();
-        let on_revoke = self.on_revoke.clone();
         let on_unpair = self.on_unpair.clone();
 
         let qr = self.grant.as_ref().and_then(|grant| {
@@ -291,9 +276,8 @@ impl RenderOnce for PairDeviceModal {
             })
         });
 
-        // The card is bounded by the window and its middle scrolls: a
-        // server with a dozen paired devices must not push the buttons
-        // off the bottom of the screen.
+        // The card is bounded by the window and its middle scrolls, so the
+        // buttons never leave the screen.
         let mut body = div()
             .id("pair-modal-body")
             .flex_1()
@@ -353,67 +337,6 @@ impl RenderOnce for PairDeviceModal {
                     .text_color(theme.text_secondary)
                     .child("Making a code..."),
             );
-        }
-
-        // The devices already paired with this server. The QR code above
-        // adds one more.
-        let others: Vec<_> = self
-            .devices
-            .iter()
-            .filter(|device| {
-                self.this_device
-                    .as_ref()
-                    .map(|this| device.id != this.id)
-                    .unwrap_or(true)
-            })
-            .collect();
-        if !others.is_empty() {
-            body = body.child(
-                div()
-                    .text_size(px(11.5))
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(theme.text_secondary)
-                    .child("Paired devices"),
-            );
-            for device in others {
-                let id = device.id.clone();
-                let on_revoke_click = on_revoke.clone();
-                body = body.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(
-                            div()
-                                .text_size(px(12.5))
-                                .text_color(theme.text)
-                                .child(device_label(device)),
-                        )
-                        .child(
-                            div()
-                                .id(ElementId::from(format!("btn-revoke-device-{id}")))
-                                .flex_shrink_0()
-                                .px(px(8.0))
-                                .py(px(4.0))
-                                .rounded(px(5.0))
-                                .border_1()
-                                .border_color(theme.border_strong)
-                                .bg(theme.raised)
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.overlay))
-                                .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
-                                    cx.stop_propagation();
-                                    (on_revoke_click)(id.clone(), window, cx);
-                                })
-                                .child(
-                                    div()
-                                        .text_size(px(11.5))
-                                        .text_color(theme.text_secondary)
-                                        .child("Revoke"),
-                                ),
-                        ),
-                );
-            }
         }
 
         if let Some(error) = self.error.clone() {

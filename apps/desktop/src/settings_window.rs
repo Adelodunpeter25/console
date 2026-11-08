@@ -699,7 +699,6 @@ impl Render for SettingsWindow {
         let pairing_grant = app.server_pairing_grant.clone();
         let pairing_error = app.server_auth_error.clone();
         let this_device = app.server_device.clone();
-        let paired_devices = app.server_devices.clone();
 
         let content = match active_tab {
             SettingsTab::Providers => {
@@ -1335,7 +1334,6 @@ impl Render for SettingsWindow {
         let pair_modal = console_ui::settings::PairDeviceModal {
             grant: pairing_grant,
             this_device,
-            devices: paired_devices,
             error: pairing_error,
             on_close: {
                 let entity = cx.entity().clone();
@@ -1344,16 +1342,6 @@ impl Render for SettingsWindow {
                         this.pair_modal_open = false;
                         cx.notify();
                     });
-                })
-            },
-            on_revoke: {
-                let app_handle = self.app.clone();
-                Rc::new(move |device_id: String, _w: &mut Window, cx: &mut App| {
-                    if let Some(app) = app_handle.upgrade() {
-                        app.update(cx, |app_state, cx| {
-                            app_state.revoke_server_device(device_id, cx);
-                        });
-                    }
                 })
             },
             on_unpair: {

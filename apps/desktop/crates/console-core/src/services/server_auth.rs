@@ -107,40 +107,6 @@ impl ServerAuthService {
         serde_json::from_value(data).context("Failed to parse pairing grant response")
     }
 
-    /// The devices paired with this server.
-    pub async fn devices(&self) -> Result<Vec<ServerDevice>> {
-        let response = self
-            .transport
-            .client()
-            .get(&self.transport.url("/api/auth/devices").await)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to list devices")?;
-        let data = decode_data(response)
-            .await
-            .context("Failed to list devices")?;
-        let list: ServerDevicesResponse =
-            serde_json::from_value(data).context("Failed to parse devices")?;
-        Ok(list.devices)
-    }
-
-    /// Revoke a paired device. Idempotent on the server.
-    pub async fn revoke_device(&self, id: &str) -> Result<()> {
-        let response = self
-            .transport
-            .client()
-            .delete(&self.transport.url(&format!("/api/auth/devices/{id}")).await)
-            .headers(self.transport.build_headers().await)
-            .send()
-            .await
-            .context("Failed to revoke device")?;
-        if !response.status().is_success() {
-            return Err(anyhow!("Failed to revoke device"));
-        }
-        Ok(())
-    }
-
     /// Put a freshly issued device token on the shared transport, so every
     /// later request is authenticated.
     pub async fn apply_pairing(&self, data: &PairingData) -> Result<()> {
