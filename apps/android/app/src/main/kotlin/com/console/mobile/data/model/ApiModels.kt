@@ -144,9 +144,6 @@ data class OAuthCallbackDto(val provider: String, val code: String, val state: S
 @Serializable
 data class AnswerQuestionDto(val requestId: String, val answer: JsonElement)
 
-@Serializable
-data class ApproveToolPermissionDto(val requestId: String, val allow: Boolean)
-
 // SlashCommandInfo and FileSearchResponse moved to the shared protobuf schema
 // (console.v1 from proto/console/v1/assist.proto): SlashCommandInfo is now
 // console.v1.SlashCommandInfo and the search envelope console.v1.AssistFileSearchResponse.

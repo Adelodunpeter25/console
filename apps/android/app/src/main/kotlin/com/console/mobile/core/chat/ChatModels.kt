@@ -3,7 +3,6 @@ package com.console.mobile.core.chat
 import com.console.mobile.data.model.AgentMessage
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.ImageAttachment
-import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.AskQuestionRequest
 import console.v1.ContextSnapshot
 import console.v1.SubagentInfo
@@ -13,7 +12,6 @@ import com.console.mobile.data.model.ToolResult
 import kotlinx.serialization.Serializable
 
 data class PendingQuestion(val request: AskQuestionRequest)
-data class PendingPermission(val request: PermissionRequest)
 
 enum class RunStatus { Working, Completed, Aborted, Failed }
 
@@ -44,7 +42,6 @@ data class ChatSessionState(
     val streamingText: String = "",
     val streamingThinking: String = "",
     val pendingQuestions: List<PendingQuestion> = emptyList(),
-    val pendingPermissions: List<PendingPermission> = emptyList(),
     val activeToolCalls: List<ToolCall> = emptyList(),
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),
@@ -70,9 +67,7 @@ data class ChatSnapshot(
     val streamingThinking: String = "",
     val activeToolCalls: List<ToolCall> = emptyList(),
     val liveToolResults: List<ToolResult> = emptyList(),
-    val pendingPermission: PendingPermission? = null,
     val pendingQuestion: PendingQuestion? = null,
-    val pendingPermissions: List<PendingPermission> = emptyList(),
     val pendingQuestions: List<PendingQuestion> = emptyList(),
     val todoItems: List<TodoItem> = emptyList(),
     val subagents: List<SubagentInfo> = emptyList(),

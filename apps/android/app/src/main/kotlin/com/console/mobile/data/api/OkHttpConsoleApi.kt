@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.console.mobile.data.model.toUi
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.AuthStatusResponse
@@ -361,15 +360,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
             http.encodeBody(AnswerQuestionDto.serializer(), payload),
         )
         ensureOk(raw, "answer question")
-    }
-
-    override suspend fun approvePermission(sessionId: String, payload: ApproveToolPermissionDto): Boolean {
-        val raw = http.post(
-            "/api/sessions/${enc(sessionId)}/approve",
-            http.encodeBody(ApproveToolPermissionDto.serializer(), payload),
-        )
-        ensureOk(raw, "approve permission")
-        return payload.allow
     }
 
     override suspend fun getProjects(): List<ProjectInfo> {

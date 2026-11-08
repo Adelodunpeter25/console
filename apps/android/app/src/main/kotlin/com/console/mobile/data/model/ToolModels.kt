@@ -3,9 +3,6 @@ package com.console.mobile.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class ToolTier { read, write, exec }
-
-@Serializable
 enum class ApprovalMode(val value: String) {
     @kotlinx.serialization.SerialName("plan-mode") PlanMode("plan-mode"),
     @kotlinx.serialization.SerialName("full-access") FullAccess("full-access");
@@ -21,20 +18,6 @@ data class ApprovalModeOption(
     val value: ApprovalMode,
     val label: String,
     val description: String,
-)
-
-@Serializable
-enum class ApprovalPolicy { allow, deny, prompt }
-
-@Serializable
-data class PermissionRequest(
-    val requestId: String,
-    val toolCallId: String,
-    val toolName: String,
-    val args: kotlinx.serialization.json.JsonElement? = null,
-    val tier: ToolTier? = null,
-    val reason: String? = null,
-    val requiresUpgrade: Boolean = false,
 )
 
 @Serializable

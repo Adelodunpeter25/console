@@ -224,7 +224,6 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             commitStreamingBuffer(finalized.copy(running = false, activeToolCalls = emptyList()))
         }
-        "permissionRequest" -> session // structured payload handled at store layer; keep reducer total
         "askQuestion" -> session
         "todoUpdate" -> session.copy(todoItems = event.items?.mapNotNull { runCatching { todoJson.fromJson(it.toString()) }.getOrNull() } ?: emptyList())
         "contextUpdate" -> {
@@ -361,9 +360,7 @@ fun toChatSnapshot(session: ChatSessionState): ChatSnapshot {
         streamingThinking = session.streamingThinking,
         activeToolCalls = session.activeToolCalls,
         liveToolResults = live,
-        pendingPermission = session.pendingPermissions.lastOrNull(),
         pendingQuestion = session.pendingQuestions.lastOrNull(),
-        pendingPermissions = session.pendingPermissions,
         pendingQuestions = session.pendingQuestions,
         todoItems = session.todoItems,
         subagents = session.subagents,

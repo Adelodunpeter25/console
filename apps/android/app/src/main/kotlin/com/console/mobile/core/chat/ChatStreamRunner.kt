@@ -41,7 +41,6 @@ fun abortSessionRun(session: ChatSessionState, nowMs: Long = System.currentTimeM
         session.copy(
             running = false,
             pendingQuestions = emptyList(),
-            pendingPermissions = emptyList(),
             activeToolCalls = emptyList(),
             runs = runs,
         ),

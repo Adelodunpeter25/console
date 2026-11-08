@@ -2,7 +2,6 @@ package com.console.mobile.data.api
 
 import com.console.mobile.data.model.AnswerQuestionDto
 import com.console.mobile.data.model.ApprovalModeOption
-import com.console.mobile.data.model.ApproveToolPermissionDto
 import com.console.mobile.data.model.BackgroundWork
 import com.console.mobile.data.model.BackgroundWorkOutput
 import console.v1.ConsoleSettings
@@ -77,7 +76,6 @@ interface ConsoleApi {
     // run
     suspend fun abortRun(sessionId: String)
     suspend fun answerQuestion(sessionId: String, payload: AnswerQuestionDto)
-    suspend fun approvePermission(sessionId: String, payload: ApproveToolPermissionDto): Boolean
     // fs
     suspend fun getProjects(): List<ProjectInfo>
     suspend fun addProject(path: String): ProjectInfo

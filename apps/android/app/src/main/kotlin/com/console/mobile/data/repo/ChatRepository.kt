@@ -1,7 +1,6 @@
 package com.console.mobile.data.repo
 
 import com.console.mobile.core.chat.ChatSessionState
-import com.console.mobile.core.chat.PendingPermission
 import com.console.mobile.core.chat.PendingQuestion
 import com.console.mobile.core.chat.abortSessionRun
 import com.console.mobile.core.chat.applyChatEvent
@@ -27,10 +26,8 @@ import com.console.mobile.data.model.AskQuestionRequest
 import com.console.mobile.data.model.AssistantMessage
 import com.console.mobile.data.model.BackgroundWorkOutputFrame
 import com.console.mobile.data.model.ImageAttachment
-import com.console.mobile.data.model.PermissionRequest
 import com.console.mobile.data.model.RunPromptDto
 import com.console.mobile.data.model.SessionStatus
-import com.console.mobile.data.model.ToolTier
 import com.squareup.moshi.Moshi
 import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.SubagentInfo
@@ -342,7 +339,6 @@ class ChatRepository(
                     streamingThinking = "",
                     activeToolCalls = emptyList(),
                     pendingQuestions = emptyList(),
-                    pendingPermissions = emptyList(),
                     runs = reconstructRuns(withIds),
                 )
             }
@@ -370,7 +366,7 @@ class ChatRepository(
     }
 
     fun handleEvent(sessionId: String, event: AgentSessionEvent) {
-        if (event.type == "askQuestion" || event.type == "permissionRequest") {
+        if (event.type == "askQuestion") {
             sessions.setStatus(sessionId, SessionStatus.NeedsAttention)
         }
         when (event.type) {
@@ -378,13 +374,6 @@ class ChatRepository(
                 val req = parseQuestion(event) ?: return
                 chats.update(sessionId) {
                     it.copy(pendingQuestions = it.pendingQuestions + PendingQuestion(req))
-                }
-                return
-            }
-            "permissionRequest" -> {
-                val req = parsePermission(event) ?: return
-                chats.update(sessionId) {
-                    it.copy(pendingPermissions = it.pendingPermissions + PendingPermission(req))
                 }
                 return
             }
@@ -719,20 +708,6 @@ class ChatRepository(
         }
     }
 
-    fun approvePermission(sessionId: String, requestId: String, allow: Boolean) {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    api.approvePermission(sessionId, com.console.mobile.data.model.ApproveToolPermissionDto(requestId, allow))
-                }
-            } catch (_: Exception) {
-            }
-            chats.update(sessionId) { s ->
-                s.copy(pendingPermissions = s.pendingPermissions.filterNot { it.request.requestId == requestId })
-            }
-        }
-    }
-
     fun clear(sessionId: String) = chats.clear(sessionId)
 
     /**
@@ -799,7 +774,6 @@ class ChatRepository(
     // decoded with Moshi; the hand types stay as the UI render models.
     private val wireMoshi: Moshi = Moshi.Builder().add(WireJsonAdapterFactory()).build()
     private val askAdapter = wireMoshi.adapter(console.v1.AskQuestionRequest::class.java)
-    private val permissionAdapter = wireMoshi.adapter(console.v1.PermissionRequest::class.java)
 
     private fun parseQuestion(event: AgentSessionEvent): AskQuestionRequest? {
         val raw = event.request?.toString() ?: return null
@@ -814,22 +788,6 @@ class ChatRepository(
             // it to true, so default to true when the key is missing.
             skippable = req.skippable ?: true,
             batchId = req.batch_id,
-        )
-    }
-
-    private fun parsePermission(event: AgentSessionEvent): PermissionRequest? {
-        val raw = event.request?.toString() ?: return null
-        val req = runCatching { permissionAdapter.fromJson(raw) }.getOrNull() ?: return null
-        if (req.request_id.isBlank()) return null
-        return PermissionRequest(
-            requestId = req.request_id,
-            toolCallId = req.tool_call_id,
-            toolName = req.tool_name,
-            args = req.args.utf8().takeIf { it.isNotEmpty() }?.let {
-                runCatching { ConsoleJson.parseToJsonElement(it) }.getOrNull()
-            },
-            tier = runCatching { ToolTier.valueOf(req.tier) }.getOrNull(),
-            reason = req.reason,
         )
     }
 

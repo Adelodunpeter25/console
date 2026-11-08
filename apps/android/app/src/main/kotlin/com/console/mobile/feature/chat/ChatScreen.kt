@@ -164,7 +164,7 @@ fun ChatScreen(
         displayMessages.indexOfLast { it is com.console.mobile.data.model.UserMessage }
     }
     val isStreaming = chat.running && (chat.streamingText.isNotEmpty() || chat.streamingThinking.isNotEmpty() || chat.activeToolCalls.isNotEmpty())
-    val hasPending = chat.pendingPermissions.isNotEmpty() || chat.pendingQuestions.isNotEmpty()
+    val hasPending = chat.pendingQuestions.isNotEmpty()
     val hasMessages = messages.isNotEmpty()
 
     val todos = chat.todoItems
@@ -348,7 +348,7 @@ fun ChatScreen(
                     )
                 }
                 if (hasPending) {
-                    InteractionPanel(sessionId = sessionId, permissions = chat.pendingPermissions, questions = chat.pendingQuestions)
+                    InteractionPanel(sessionId = sessionId, questions = chat.pendingQuestions)
                 } else {
                     Composer(
                         sessionId = sessionId,
