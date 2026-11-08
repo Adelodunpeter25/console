@@ -695,7 +695,6 @@ impl RenderOnce for ComposerView {
             .px(if floating { px(24.0) } else { px(20.0) })
             .pt(px(if floating { 12.0 } else { 4.0 }))
             .pb(px(if floating { 18.0 } else { 9.0 }))
-            .when(!floating, |el| el.bg(theme.composer))
             .flex()
             .flex_col()
             .items_center()
