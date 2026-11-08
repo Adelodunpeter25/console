@@ -35,6 +35,10 @@ export interface ChatController {
   /// Reloads the tail page (the canonical history after a settle or an
   /// external change).
   refresh(): Promise<void>;
+  /// Fetches the page of messages before the oldest loaded one.
+  loadOlder(): Promise<void>;
+  /// Fetches the session's full prompt list for the jump popup.
+  loadPrompts(): Promise<void>;
   /// Answers the pending permission (allow) or denies it.
   answerPermission(allow: boolean): Promise<void>;
   /// Answers the pending question, or skips it.
@@ -112,6 +116,32 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
       );
       loadError.set(null);
     } catch (err) {
+      loadError.set(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function loadOlder(): Promise<void> {
+    const cursor = state.nextCursor();
+    if (cursor == null) {
+      state.setLoadingOlder(false);
+      return;
+    }
+    try {
+      const detail = JSON.parse(
+        await backend.chatMessagesBefore(baseUrl, sessionId, cursor),
+      ) as SessionDetailJson;
+      state.prependMessages(detail.messages ?? [], detail.hasMore ?? false, detail.nextCursor ?? null);
+    } catch (err) {
+      state.setLoadingOlder(false);
+      loadError.set(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function loadPrompts(): Promise<void> {
+    try {
+      state.setPrompts(JSON.parse(await backend.chatPrompts(baseUrl, sessionId)));
+    } catch (err) {
+      state.promptsStale.set(true);
       loadError.set(err instanceof Error ? err.message : String(err));
     }
   }
@@ -246,6 +276,8 @@ export function createChatController(baseUrl: string, sessionId: string): ChatCo
     sessionId,
     send,
     refresh: load,
+    loadOlder,
+    loadPrompts,
     answerPermission,
     answerQuestion,
     skipQuestion,

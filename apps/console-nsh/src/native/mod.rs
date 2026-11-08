@@ -92,6 +92,20 @@ impl Console {
         Chat::messages(&base_url, &session_id).await
     }
 
+    /// The page of messages older than the `before` cursor.
+    pub async fn chat_messages_before(
+        base_url: String,
+        session_id: String,
+        before: i64,
+    ) -> Result<String, String> {
+        Chat::messages_before(&base_url, &session_id, before).await
+    }
+
+    /// Every user prompt of one session, oldest first.
+    pub async fn chat_prompts(base_url: String, session_id: String) -> Result<String, String> {
+        Chat::prompts(&base_url, &session_id).await
+    }
+
     /// Creates a session (the launcher's submit) and returns its header.
     pub async fn create_session(
         base_url: String,

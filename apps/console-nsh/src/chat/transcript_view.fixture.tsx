@@ -97,8 +97,8 @@ function Fixture() {
           label="Set prompts"
           onPress={() =>
             state.setPrompts([
-              { id: "p1", prompt: "Oldest prompt", createdAt: 1760000000 },
-              { id: "p2", prompt: "Newest prompt", createdAt: 1760000000 },
+              { id: "p1", preview: "Oldest prompt", createdAt: 1760000000 },
+              { id: "p2", preview: "Newest prompt", createdAt: 1760000000 },
             ])
           }
         />

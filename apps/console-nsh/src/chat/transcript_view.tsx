@@ -57,7 +57,7 @@ export function TranscriptView(props: {
   onOpenChange?: (path: string, diffText: string | null) => void;
   onPreviewImage?: (uri: string) => void;
   /// Fetches the chat's full prompt list when the popup opens stale.
-  onRequestPrompts?: () => void;
+  onRequestPrompts?: () => Promise<void> | void;
   /// Jumps to a prompt, given as its position counted from the newest
   /// (0 = newest).
   onJumpToPrompt?: (fromEnd: number) => void;
@@ -196,6 +196,16 @@ export function TranscriptView(props: {
   const messageKey = (item: { message: AgentMessage; index: number }): string =>
     messageId(item.message) ?? `idx-${item.index}`;
 
+  // Counted from the newest prompt, like the desktop; a prompt not paged in
+  // yet cannot be reached.
+  const jumpToPrompt = (fromEnd: number) => {
+    const rows = visibleMessages();
+    const users = rows.flatMap((item, at) => (item.message.role === "user" ? [at] : []));
+    const at = users[users.length - 1 - fromEnd];
+    if (at != null) listRef?.scrollToIndex({ index: at, animated: true });
+    props.onJumpToPrompt?.(fromEnd);
+  };
+
   const loadOlder = () => {
     if (!state.hasMore() || state.loadingOlder()) return;
     state.setLoadingOlder(true);
@@ -244,26 +254,15 @@ export function TranscriptView(props: {
       >
         {(item, index) => row(item().message, item().index)}
       </List>
-      {(() => {
-        if (atEnd() || state.messages().length === 0) return null;
-        return (
-          <View
-            class="absolute bottom-3 left-4 flex-row items-center justify-center rounded-full border border-border bg-popover"
-            role="button"
-            accessibilityLabel="Scroll to bottom"
-            onPress={() => {
-              atEnd.set(true);
-              listRef?.scrollToEnd({ animated: true });
-            }}
-          >
-            <Icon name="ChevronDown" size={14} color={token("muted-foreground")} />
-          </View>
-        );
-      })()}
       <PromptJump
         state={state}
         onRequestPrompts={props.onRequestPrompts}
-        onJumpToPrompt={props.onJumpToPrompt}
+        onJumpToPrompt={jumpToPrompt}
+        showScrollToBottom={() => !atEnd()}
+        onScrollToBottom={() => {
+          atEnd.set(true);
+          listRef?.scrollToEnd({ animated: true });
+        }}
       />
     </View>
   );

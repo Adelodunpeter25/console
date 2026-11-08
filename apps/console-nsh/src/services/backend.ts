@@ -54,6 +54,10 @@ export const backend = {
     json<{ id: string }>(Console.createSession(baseUrl, projectId, title)),
   chatMessages: (baseUrl: string, sessionId: string) =>
     text(Console.chatMessages(baseUrl, sessionId)),
+  chatMessagesBefore: (baseUrl: string, sessionId: string, before: number) =>
+    text(Console.chatMessagesBefore(baseUrl, sessionId, before)),
+  chatPrompts: (baseUrl: string, sessionId: string) =>
+    text(Console.chatPrompts(baseUrl, sessionId)),
   deleteSession: (baseUrl: string, sessionId: string) =>
     parsed(() => Console.deleteSession(baseUrl, sessionId)),
   restoreSession: (baseUrl: string, sessionId: string) =>

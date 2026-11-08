@@ -102,6 +102,31 @@ impl Chat {
         serde_json::to_string(&detail).map_err(|err| err.to_string())
     }
 
+    /// The page of messages older than `before` (a previous response's
+    /// `nextCursor`), as the server serializes it.
+    pub async fn messages_before(
+        base_url: &str,
+        session_id: &str,
+        before: i64,
+    ) -> Result<String, String> {
+        let service = SessionService::new(http::transport(base_url));
+        let detail = service
+            .get_paginated(session_id, None, Some(before))
+            .await
+            .map_err(|err| err.to_string())?;
+        serde_json::to_string(&detail).map_err(|err| err.to_string())
+    }
+
+    /// Every user prompt of the session, oldest first (the jump popup's list).
+    pub async fn prompts(base_url: &str, session_id: &str) -> Result<String, String> {
+        let service = SessionService::new(http::transport(base_url));
+        let prompts = service
+            .prompts(session_id)
+            .await
+            .map_err(|err| err.to_string())?;
+        serde_json::to_string(&prompts).map_err(|err| err.to_string())
+    }
+
     /// Creates a session (the launcher's submit) and returns its header.
     pub async fn create_session(
         base_url: &str,

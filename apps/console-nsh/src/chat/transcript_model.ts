@@ -58,7 +58,7 @@ export interface SessionFileChange {
 /// console-core's `SessionPrompt`.
 export interface SessionPrompt {
   id: string;
-  prompt: string;
+  preview: string;
   createdAt: number;
 }
 
