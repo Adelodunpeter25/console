@@ -4,7 +4,7 @@
 // `Popover` owns visibility); the press also refetches the prompt list when
 // stale, like the desktop's toggle handler did.
 
-import { signal, Text, View, token } from "nsh";
+import { Scroll, signal, Text, View, token } from "nsh";
 import type { JSX } from "nsh";
 import { Popover } from "nsh/base";
 import { Icon } from "../common/icons";
@@ -44,7 +44,7 @@ export function PromptJump(props: {
       .map((prompt, at) => ({ prompt, fromEnd: list.length - 1 - at }))
       .map(({ prompt, fromEnd }) => (
         <View
-          class="h-[34px] w-full flex-none flex-row items-center gap-3 rounded-lg px-3 hover:bg-accent"
+          class="h-[34px] min-h-[34px] w-full flex-none flex-row items-center gap-3 overflow-hidden rounded-lg px-3 hover:bg-accent"
           role="button"
           accessibilityLabel={`Jump to prompt ${prompt.id}`}
           onPress={() => {
@@ -53,7 +53,9 @@ export function PromptJump(props: {
           }}
         >
           <View class="min-w-0 flex-1 overflow-hidden">
-            <Text class="text-[13px] text-foreground">{prompt.preview}</Text>
+            <Text class="truncate text-[13px] text-foreground">
+              {prompt.preview.replace(/\s+/g, " ").trim()}
+            </Text>
           </View>
           {(() => {
             // "just now" and dates already read fine; only "3h" needs "ago".
@@ -107,7 +109,9 @@ export function PromptJump(props: {
             <Text class="text-[13px] text-muted-foreground">Loading…</Text>
           </View>
         ) : (
-          <View class="flex-col">{promptRows()}</View>
+          <Scroll class="max-h-[238px]" contentClass="flex flex-col">
+            {promptRows()}
+          </Scroll>
         )}
         </Popover>
         {props.showScrollToBottom?.() ? (
