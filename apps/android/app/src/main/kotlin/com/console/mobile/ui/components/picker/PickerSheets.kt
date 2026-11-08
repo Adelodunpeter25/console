@@ -372,31 +372,6 @@ private fun ModelPlaceholder(message: String) {
     }
 }
 
-@Composable
-fun ApprovalModePickerSheet(current: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
-    val providerState by AppContainer.providerStateHolder.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { AppContainer.providerRepository.loadApprovalModes() }
-    BaseSheet(onDismiss = onDismiss, title = "Approval Mode") {
-        if (providerState.loadingApprovalModes && providerState.approvalModes.isEmpty()) {
-            LoadingState()
-        } else {
-            val modes = providerState.approvalModes.ifEmpty {
-                ApprovalMode.entries.map { ApprovalModeOption(it, it.value, "") }
-            }
-            SectionCard {
-                modes.forEachIndexed { index, m ->
-                    OptionRow(
-                        title = m.label.ifBlank { m.value.value },
-                        subtitle = m.description.takeIf { it.isNotBlank() },
-                        selected = m.value.value == current,
-                    ) { onSelect(m.value.value) }
-                    if (index < modes.lastIndex) SectionDivider()
-                }
-            }
-        }
-    }
-}
-
 /**
  * Thinking-level picker for the composer's brain button. One row per level
  * the model declares, each with a brain glyph in desktop's per-level color.

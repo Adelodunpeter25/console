@@ -26,9 +26,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ApprovalMode
 import com.console.mobile.data.model.UpdateSessionDto
-import com.console.mobile.ui.components.picker.ApprovalModePickerSheet
 import com.console.mobile.ui.components.picker.ThinkingLevelPickerSheet
 import com.console.mobile.ui.components.picker.PickerChip
+import com.console.mobile.ui.components.picker.PlanChip
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Brain
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
@@ -37,9 +37,8 @@ import kotlinx.coroutines.launch
 import com.console.mobile.ui.theme.NewTheme
 
 /**
- * Approval mode on the left, context ring on the right. Everything else that
- * used to live here moved up (project, branch) or into the composer's action
- * row (model + thinking), which is what keeps approval on screen on a narrow phone.
+ * Plan toggle on the left, context ring on the right. Plan and Full Access are
+ * the only modes: the chip lights up while Plan is on and a tap flips it.
  */
 @Composable
 fun ComposerBottomStrip(sessionId: String) {
@@ -47,45 +46,31 @@ fun ComposerBottomStrip(sessionId: String) {
     val chatSessions by AppContainer.chatStateHolder.sessions.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val view = sessionViews[sessionId]
-    var approvalSheet by remember { mutableStateOf(false) }
     var usageSheet by remember { mutableStateOf(false) }
-    HoldComposerOpen(approvalSheet || usageSheet)
+    HoldComposerOpen(usageSheet)
 
     // A value before the first live update, so the ring isn't blank on entry.
     LaunchedEffect(sessionId) { AppContainer.chatRepository.loadContext(sessionId) }
 
-    val modeLabel = when (ApprovalMode.fromValue(view?.approvalMode ?: "")) {
-        ApprovalMode.AlwaysAsk -> "Always Ask"
-        ApprovalMode.AcceptEdits -> "Accept Edits"
-        ApprovalMode.PlanMode -> "Plan Mode"
-        ApprovalMode.FullAccess -> "Full Access"
-    }
+    val planOn = ApprovalMode.fromValue(view?.approvalMode) == ApprovalMode.PlanMode
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 6.dp, end = 6.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        PickerChip(icon = TablerIcons.Outline.Shield, label = modeLabel) { approvalSheet = true }
+        PlanChip(on = planOn) {
+            val next = if (planOn) ApprovalMode.FullAccess else ApprovalMode.PlanMode
+            scope.launch {
+                AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = next.value))
+                AppContainer.sessionRepository.refreshHeader(sessionId)
+            }
+        }
         ContextRing(snapshot = chatSessions[sessionId]?.context, onClick = { usageSheet = true })
     }
 
     if (usageSheet) {
         UsageSheet(sessionId = sessionId, onDismiss = { usageSheet = false })
-    }
-
-    if (approvalSheet) {
-        ApprovalModePickerSheet(
-            current = view?.approvalMode ?: ApprovalMode.AlwaysAsk.value,
-            onDismiss = { approvalSheet = false },
-            onSelect = { mode ->
-                approvalSheet = false
-                scope.launch {
-                    AppContainer.projectRepository.updateSession(sessionId, UpdateSessionDto(approvalMode = mode))
-                    AppContainer.sessionRepository.refreshHeader(sessionId)
-                }
-            },
-        )
     }
 }
 

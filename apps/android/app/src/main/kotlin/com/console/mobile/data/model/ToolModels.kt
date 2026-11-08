@@ -7,13 +7,12 @@ enum class ToolTier { read, write, exec }
 
 @Serializable
 enum class ApprovalMode(val value: String) {
-    @kotlinx.serialization.SerialName("always-ask") AlwaysAsk("always-ask"),
-    @kotlinx.serialization.SerialName("accept-edits") AcceptEdits("accept-edits"),
     @kotlinx.serialization.SerialName("plan-mode") PlanMode("plan-mode"),
     @kotlinx.serialization.SerialName("full-access") FullAccess("full-access");
 
     companion object {
-        fun fromValue(v: String?): ApprovalMode = entries.firstOrNull { it.value == v } ?: AlwaysAsk
+        /** Unknown or legacy wire values (always-ask, accept-edits) fall back to Plan, as the server does. */
+        fun fromValue(v: String?): ApprovalMode = entries.firstOrNull { it.value == v } ?: PlanMode
     }
 }
 

@@ -227,7 +227,7 @@ class SessionRepository(
                 sessionModelId = header.model_id,
                 sessionProvider = header.provider,
                 sessionCwd = header.cwd,
-                approvalMode = header.approval_mode ?: ApprovalMode.AlwaysAsk.value,
+                approvalMode = header.approval_mode ?: ApprovalMode.PlanMode.value,
                 thinkingLevel = header.thinking_level?.takeIf { it.isNotBlank() },
                 worktreeBranch = header.worktree?.branch?.takeIf { it.isNotBlank() },
                 projectId = header.project_id?.takeIf { it.isNotBlank() },

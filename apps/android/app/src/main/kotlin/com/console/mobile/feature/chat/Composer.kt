@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -469,9 +470,29 @@ private fun ComposerInput(
     // Pill when collapsed, the rounded rect when expanded; radii larger than half
     // the height are clamped, so 26dp reads as a full pill at any font scale.
     val bubbleShape = RoundedCornerShape(androidx.compose.ui.unit.lerp(26.dp, 20.dp, expansion))
+    val sessionViews by AppContainer.sessionStateHolder.views.collectAsStateWithLifecycle()
+    val planOn = com.console.mobile.data.model.ApprovalMode.fromValue(sessionViews[sessionId]?.approvalMode) ==
+        com.console.mobile.data.model.ApprovalMode.PlanMode
     Box(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(NewTheme.Card)
+            // Plan mode reads at a glance: faint diagonal stripes over the bubble.
+            .then(
+                if (planOn) Modifier.drawBehind {
+                    val step = 14.dp.toPx()
+                    val stroke = 1.dp.toPx()
+                    var x = -size.height
+                    while (x < size.width) {
+                        drawLine(
+                            color = NewTheme.Primary.copy(alpha = 0.07f),
+                            start = androidx.compose.ui.geometry.Offset(x, size.height),
+                            end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
+                            strokeWidth = stroke,
+                        )
+                        x += step
+                    }
+                } else Modifier,
+            )
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }

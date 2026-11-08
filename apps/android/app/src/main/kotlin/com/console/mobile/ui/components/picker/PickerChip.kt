@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.icons.getProviderIconKey
 import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.theme.NewTheme
+import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Shield
 
 /**
  * Compact chip that opens a picker — shows the provider logo instead of the
@@ -54,6 +56,26 @@ fun PickerChip(
         Text(
             label, color = NewTheme.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 5.dp),
+        )
+    }
+}
+
+/** Tap-to-toggle Plan chip: lit while Plan mode is on. */
+@Composable
+fun PlanChip(on: Boolean, onClick: () -> Unit) {
+    val tint = if (on) NewTheme.Primary else NewTheme.TextSecondary
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(NewTheme.ChipRadius))
+            .background(if (on) NewTheme.Primary.copy(alpha = 0.16f) else NewTheme.Card)
+            .clickable(onClickLabel = if (on) "Turn Plan mode off" else "Turn Plan mode on", onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+        Text(
+            "Plan", color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(start = 5.dp),
         )
     }

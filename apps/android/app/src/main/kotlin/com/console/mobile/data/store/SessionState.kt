@@ -10,7 +10,7 @@ data class SessionViewState(
     val sessionModelId: String? = null,
     val sessionProvider: String? = null,
     val sessionCwd: String? = null,
-    val approvalMode: String = "always-ask",
+    val approvalMode: String = "plan-mode",
     val thinkingLevel: String? = null,
     // Set when the chat lives in a worktree; null for a plain checkout.
     val worktreeBranch: String? = null,
@@ -57,7 +57,7 @@ class SessionStateHolder {
     fun getView(id: String): SessionViewState = _views.value[id] ?: EMPTY_SESSION_VIEW
     fun setView(id: String, view: SessionViewState) { _views.value = _views.value + (id to view) }
     fun applyHeader(id: String, modelId: String?, provider: String?, cwd: String?, approvalMode: String?, status: SessionStatus?) {
-        setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "always-ask"))
+        setView(id, SessionViewState(modelId, provider, cwd, approvalMode ?: "plan-mode"))
         if (status != null) setStatus(id, status)
     }
 }
