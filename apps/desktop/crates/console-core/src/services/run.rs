@@ -146,40 +146,6 @@ impl RunService {
         }
     }
 
-    pub async fn approve_permission(
-        &self,
-        session_id: &str,
-        payload: ApproveToolPermissionDto,
-    ) -> Result<bool> {
-        let url = self
-            .transport
-            .url(&format!("/api/sessions/{}/approve", session_id))
-            .await;
-        let resp = self
-            .transport
-            .client()
-            .post(&url)
-            .headers(self.transport.build_headers().await)
-            .json(&payload)
-            .send()
-            .await
-            .context("Failed to approve tool permission")?;
-
-        let body: ApiResponse<serde_json::Value> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .context("Failed to parse permission response")?;
-        if body.success {
-            Ok(payload.allow)
-        } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to approve permission".into())
-            ))
-        }
-    }
-
     /// Start a run and stream its events over SSE.
     ///
     /// Returns an owned stream so the transport switch in

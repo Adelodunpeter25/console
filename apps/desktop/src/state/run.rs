@@ -840,19 +840,11 @@ impl ConsoleDesktopApp {
                     }
                 }
             }
-            AgentSessionEvent::PermissionRequest { request } => {
-                self.set_pending_permission_for_session(
-                    run_session_id,
-                    Some(console_core::PermissionRequest::from_proto(&request)),
-                );
-                self.set_pending_question_for_session(run_session_id, None);
-            }
             AgentSessionEvent::AskQuestion { request } => {
                 self.set_pending_question_for_session(
                     run_session_id,
                     Some(console_core::AskQuestionRequest::from_proto(&request)),
                 );
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);
             }
@@ -1042,7 +1034,6 @@ impl ConsoleDesktopApp {
                 cx.notify();
             }
             AgentSessionEvent::TurnEnd { .. } => {
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.maybe_refresh_inspector(cx);
@@ -1054,7 +1045,6 @@ impl ConsoleDesktopApp {
                 // `is_session_running` is false and would miss the queued
                 // turn's events, leaving the UI stale until the tab reloads.
                 let chained = !self.queued_prompts_for_session(run_session_id).is_empty();
-                self.set_pending_permission_for_session(run_session_id, None);
                 self.set_pending_question_for_session(run_session_id, None);
                 self.clear_question_selected_for_session(run_session_id);
                 self.clear_question_inputs_for_session(run_session_id, cx);

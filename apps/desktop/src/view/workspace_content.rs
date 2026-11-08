@@ -1,10 +1,8 @@
 use console_core::types::ChangesScope;
-use console_core::{
-    ApproveToolPermissionDto, SelectedModel, SessionHeaderExt, UpdateSessionDto,
-};
+use console_core::{SelectedModel, SessionHeaderExt, UpdateSessionDto};
 use console_ui::workspace::EmptyChatState;
 use console_ui::{
-    ComposerView, ModelDropdownMenu, PermissionInteractionCard, PickerTab,
+    ComposerView, ModelDropdownMenu, PickerTab,
     QuestionInteractionCard, ShellEntry, ShellsPill, SubagentsPill, TasksPill, Theme,
     WorkspaceFooter, centered_stripe, composer_pills, error_banner, notice_banner,
     queued_prompts_stack,
@@ -599,7 +597,6 @@ impl ConsoleDesktopApp {
 
         let theme = Theme::current(cx);
         let entity = cx.entity().downgrade();
-        let client = self.client.clone();
         let queued_prompts = self.queued_prompts_for_pane(&pane_id);
         let error_message = self
             .error_for_pane(&pane_id)
@@ -860,62 +857,6 @@ impl ConsoleDesktopApp {
                 }
             });
             el.child(centered_stripe(question_card, 8.0))
-        })
-        .when_some(self.pending_permission_for_pane(&pane_id), |el, perm| {
-            let client = client.clone();
-            let entity = entity.clone();
-            // Approve against the session that rendered this card, never the
-            // globally selected one: focus can sit in another split while the
-            // user clicks, and clearing by the wrong id would strand the run.
-            let active_sid = selected_sid.clone().unwrap_or_default();
-
-            el.child(centered_stripe(
-                PermissionInteractionCard::new(
-                    perm.clone(),
-                    false,
-                    move |allow, _window, cx| {
-                        let client = client.clone();
-                        let sid = active_sid.clone();
-                        let req_id = perm.request_id.clone();
-                        let entity = entity.clone();
-
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.set_pending_permission_for_session(&sid, None);
-                                cx.notify();
-
-                                let entity_for_error = entity.clone();
-                                cx.spawn(async move |_entity, cx| {
-                                    if let Err(error) = client
-                                        .runs
-                                        .approve_permission(
-                                            &sid,
-                                            ApproveToolPermissionDto {
-                                                request_id: req_id,
-                                                allow,
-                                            },
-                                        )
-                                        .await
-                                    {
-                                        let message = format!(
-                                            "Unable to update tool permission: {error}"
-                                        );
-                                        cx.update(|cx| {
-                                            if let Some(app) = entity_for_error.upgrade() {
-                                                app.update(cx, |this, cx| {
-                                                    this.set_error_for_session(&sid, message, cx)
-                                                });
-                                            }
-                                        });
-                                    }
-                                })
-                                .detach();
-                            });
-                        }
-                    },
-                ),
-                8.0,
-            ))
         })
         .when(selected_sid.is_some(), |el| {
             el.child({

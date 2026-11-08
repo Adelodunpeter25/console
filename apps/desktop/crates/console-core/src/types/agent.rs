@@ -15,7 +15,7 @@ pub use console_proto::{
     AskQuestionRequest as ProtoAskQuestionRequest, AssistantContentPart as ProtoContentPart,
     BrowserActionRequest as ProtoBrowserActionRequest, BrowserAnnotation as ProtoBrowserAnnotation,
     BrowserAnnotationRect as ProtoBrowserAnnotationRect, ErrorPayload as ProtoErrorPayload,
-    ImageAttachment as ProtoImageAttachment, PermissionRequest as ProtoPermissionRequest,
+    ImageAttachment as ProtoImageAttachment,
     ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
 };
 
@@ -390,35 +390,6 @@ impl ToolResult {
             content: decode_json_bytes(&msg.content),
             is_error: msg.is_error,
             visual: visual_from_proto(msg),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PermissionRequest {
-    pub request_id: String,
-    pub tool_call_id: String,
-    pub tool_name: String,
-    pub args: serde_json::Value,
-    pub tier: String,
-    pub reason: Option<String>,
-    /// Client-only UI state nothing populates; kept for the card shape,
-    /// always None from the wire.
-    pub requires_upgrade: Option<bool>,
-}
-
-impl PermissionRequest {
-    /// Decode from the canonical wire shape (args arrive as raw JSON bytes).
-    pub fn from_proto(msg: &ProtoPermissionRequest) -> Self {
-        PermissionRequest {
-            request_id: msg.request_id.clone(),
-            tool_call_id: msg.tool_call_id.clone(),
-            tool_name: msg.tool_name.clone(),
-            args: decode_json_bytes(&msg.args),
-            tier: msg.tier.clone(),
-            reason: msg.reason.clone(),
-            requires_upgrade: None,
         }
     }
 }

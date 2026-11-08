@@ -877,7 +877,6 @@ impl Render for ConsoleDesktopApp {
                                         // Drop all run-derived state for the deleted
                                         // session, now keyed by session id.
                                         this.running_sessions.remove(&id);
-                                        this.pending_permissions.remove(&id);
                                         this.pending_questions.remove(&id);
                                         this.question_selected.remove(&id);
                                         this.todo_items.remove(&id);

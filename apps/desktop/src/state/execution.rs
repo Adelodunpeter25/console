@@ -1,5 +1,5 @@
 use console_core::ImageAttachment;
-use console_core::types::agent::{AskQuestionRequest, PermissionRequest};
+use console_core::types::agent::AskQuestionRequest;
 use gpui::Context;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -85,23 +85,6 @@ impl ConsoleDesktopApp {
             self.stream_render_pending.insert(pane_id.to_string(), true);
         } else {
             self.stream_render_pending.remove(pane_id);
-        }
-    }
-
-    pub(crate) fn pending_permission_for_pane(&self, pane_id: &str) -> Option<PermissionRequest> {
-        self.active_session_for_pane(pane_id)
-            .and_then(|sid| self.pending_permissions.get(&sid).cloned())
-    }
-
-    pub(crate) fn set_pending_permission_for_session(
-        &mut self,
-        session_id: &str,
-        perm: Option<PermissionRequest>,
-    ) {
-        if let Some(p) = perm {
-            self.pending_permissions.insert(session_id.to_string(), p);
-        } else {
-            self.pending_permissions.remove(session_id);
         }
     }
 
@@ -252,12 +235,10 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Sessions waiting for a permission or question response, for the sidebar
-    /// to highlight each waiting chat independently.
+    /// Sessions waiting for a question response, for the sidebar to highlight
+    /// each waiting chat independently.
     pub(crate) fn waiting_sessions_snapshot(&self) -> HashSet<String> {
-        let mut out: HashSet<String> = self.pending_permissions.keys().cloned().collect();
-        out.extend(self.pending_questions.keys().cloned());
-        out
+        self.pending_questions.keys().cloned().collect()
     }
 
     pub(crate) fn queued_prompts_for_session(

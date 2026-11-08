@@ -50,13 +50,6 @@ pub struct PasteResult {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ApproveToolPermissionDto {
-    pub request_id: String,
-    pub allow: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct BackgroundWork {
     pub id: String,
     pub session_id: String,
@@ -216,9 +209,6 @@ pub enum AgentSessionEvent {
     },
     ToolExecutionStart {
         calls: Vec<console_proto::ToolCall>,
-    },
-    PermissionRequest {
-        request: console_proto::PermissionRequest,
     },
     AskQuestion {
         request: console_proto::AskQuestionRequest,

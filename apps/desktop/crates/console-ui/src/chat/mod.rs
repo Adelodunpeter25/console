@@ -11,7 +11,7 @@ pub mod working_indicator;
 
 pub use change_chips::ChangesSummary;
 pub use console_core::{ActivityEvent, ToolCallEntry};
-pub use interaction_card::{PermissionInteractionCard, QuestionInteractionCard};
+pub use interaction_card::QuestionInteractionCard;
 pub use message_bubble::{AssistantMessageBubble, UserMessageBubble};
 pub use thinking_block::ThinkingBlock;
 pub use toolcalls::{ToolCalls, ToolCallsAction, ToolCallsState};

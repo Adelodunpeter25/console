@@ -5,7 +5,7 @@
 
 use console_core::{
     ApprovalMode, AskQuestionRequest, ConsoleClient, GitBranchInfo, ImageAttachment, Model,
-    PermissionRequest, ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel,
+    ProjectInfo, ProviderCatalogEntry, QueuedPrompt, SelectedModel,
     SessionHeader, ThinkingLevel, TodoItem, WorkspaceNode,
 };
 use console_ui::markdown::render::TranscriptSelection;
@@ -163,11 +163,10 @@ pub struct ConsoleDesktopApp {
     pub(crate) history_draft_annotations:
         std::collections::HashMap<String, Rc<Vec<console_core::BrowserElementAnnotation>>>,
     /// Run-derived interactive and display state. All of these are keyed by
-    /// session id (not pane id) so a run's permission prompt, question, todos,
+    /// session id (not pane id) so a run's question, todos,
     /// and notices stay attached to the chat that owns the run. Switching a
     /// pane to another chat surfaces that chat's state instead of leaking the
     /// background run's state onto it.
-    pub pending_permissions: std::collections::HashMap<String, PermissionRequest>,
     pub pending_questions: std::collections::HashMap<String, AskQuestionRequest>,
     pub question_selected: std::collections::HashMap<String, std::collections::HashSet<String>>,
     pub todo_items: std::collections::HashMap<String, Vec<TodoItem>>,

@@ -627,7 +627,6 @@ impl ConsoleDesktopApp {
             browser_annotations: std::collections::HashMap::new(),
             history_draft_attachments: std::collections::HashMap::new(),
             history_draft_annotations: std::collections::HashMap::new(),
-            pending_permissions: std::collections::HashMap::new(),
             pending_questions: std::collections::HashMap::new(),
             question_selected: std::collections::HashMap::new(),
             todo_items: std::collections::HashMap::new(),
