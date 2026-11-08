@@ -12,7 +12,7 @@ test("an unpaired app boots onto the pairing card", async () => {
   // localhost:2003) boots straight into the shell.
   const texts = app.texts();
   const unpaired = texts.includes("Pair with Console server");
-  expect(unpaired || texts.includes("PROJECTS")).toBe(true);
+  expect(unpaired || texts.includes("New Task")).toBe(true);
 });
 
 test("Console.health rejects when the backend is unreachable", async () => {
