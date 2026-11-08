@@ -1,14 +1,5 @@
 # AGENTS.md — Working Rules
 
-## Branches & Pull Requests (NSH desktop migration)
-- All changes related to the NSH desktop migration (`apps/console-nsh/`) go on
-  the **`desktop-migration`** branch. Never push that work to `main` directly.
-- That branch's work lands through a **draft PR** (`desktop-migration` →
-  `main`). The PR must **not** be merged automatically — a human decides when
-  it leaves draft and merges.
-- Do not create other long-lived branches; delete feature branches after
-  their PR lands.
-
 ## Commits
 - Commit after every task with a **single-line commit message**.
 - Stage only the files the task touched; never commit unrelated changes.
