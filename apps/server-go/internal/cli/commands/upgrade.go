@@ -75,7 +75,7 @@ func resolveUpgradeTarget() (upgradeTarget, error) {
 		libFile = "libfff_c.dll"
 		cuaAsset = "cua_driver_sdk-" + suffix + ".dll"
 		cuaFile = "cua_driver_sdk.dll"
-	case "darwin":
+	case "macos":
 		libAsset = "libfff_c-" + suffix + ".dylib"
 		libFile = "libfff_c.dylib"
 		cuaAsset = "libcua_driver_sdk-" + suffix + ".dylib"
