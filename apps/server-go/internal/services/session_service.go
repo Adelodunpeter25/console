@@ -205,6 +205,10 @@ func (s *SessionService) LoadIncludingDeleted(sessionID string, limit int64, bef
 	return s.inner.LoadIncludingDeleted(sessionID, limit, before)
 }
 
+func (s *SessionService) LoadSplit(sessionID string) ([]session.StoredSplit, error) {
+	return s.inner.LoadSplit(sessionID)
+}
+
 // Cross-chat reference operations (see services/session/reference.go).
 func (s *SessionService) ParseDollarRefs(text string) []string {
 	return session.ParseDollarRefs(text)

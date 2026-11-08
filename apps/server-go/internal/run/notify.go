@@ -135,8 +135,8 @@ func (s *Service) notifyEvent(ctx context.Context, sessionID string, event loop.
 		return
 	}
 	title := ""
-	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
-		title = loaded.Header.Title
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		title = header.Title
 	}
 	bus.Push(AttentionNotification(sessionID, event, title))
 }
@@ -148,8 +148,8 @@ func (s *Service) notifyDone(sessionID string) {
 		return
 	}
 	title := ""
-	if loaded, err := s.sessions.Load(sessionID, 0, 0); err == nil && loaded != nil {
-		title = loaded.Header.Title
+	if header, err := s.sessions.Header(sessionID); err == nil && header != nil {
+		title = header.Title
 	}
 	bus.Push(DoneNotification(sessionID, title, lastAssistantExcerpt(s.sessions, sessionID)))
 }
@@ -157,7 +157,8 @@ func (s *Service) notifyDone(sessionID string) {
 // lastAssistantExcerpt returns the latest assistant text turn for
 // done-banner previews.
 func lastAssistantExcerpt(sessions *services.SessionService, sessionID string) string {
-	loaded, err := sessions.Load(sessionID, 0, 0)
+	// Probe the newest 10 messages first to avoid a full transcript rebuild.
+	loaded, err := sessions.Load(sessionID, 10, 0)
 	if err != nil || loaded == nil {
 		return ""
 	}
@@ -165,6 +166,16 @@ func lastAssistantExcerpt(sessions *services.SessionService, sessionID string) s
 		msg, ok := decodeAssistantText(loaded.Messages[i])
 		if ok && msg != "" {
 			return msg
+		}
+	}
+	// Fall back to full history only if the last 10 had no assistant text.
+	if loaded.HasMore {
+		if full, err := sessions.Load(sessionID, 0, 0); err == nil && full != nil {
+			for i := len(full.Messages) - 1; i >= 0; i-- {
+				if msg, ok := decodeAssistantText(full.Messages[i]); ok && msg != "" {
+					return msg
+				}
+			}
 		}
 	}
 	return ""

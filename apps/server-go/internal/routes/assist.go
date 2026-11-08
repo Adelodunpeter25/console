@@ -107,9 +107,9 @@ func resolveSessionCwd(c *fiber.Ctx, sessions *services.SessionService) string {
 		sessionID = c.Query("sessionId")
 	}
 	if sessionID != "" {
-		if loaded, err := sessions.Load(sessionID, 0, 0); err == nil && loaded != nil && loaded.Header.Cwd != "" {
-			if _, err := os.Stat(loaded.Header.Cwd); err == nil {
-				return loaded.Header.Cwd
+		if header, err := sessions.Header(sessionID); err == nil && header != nil && header.Cwd != "" {
+			if _, err := os.Stat(header.Cwd); err == nil {
+				return header.Cwd
 			}
 		}
 	}

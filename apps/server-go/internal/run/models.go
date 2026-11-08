@@ -36,8 +36,8 @@ func (s *Service) generateTitle(sessionID, prompt, providerID, modelID string, h
 	if title == "" {
 		title = titles.FallbackTitle(prompt)
 	}
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
-	if err != nil || loaded == nil || !titles.IsGenericTitle(loaded.Header.Title) {
+	header, err := s.sessions.Header(sessionID)
+	if err != nil || header == nil || !titles.IsGenericTitle(header.Title) {
 		return
 	}
 	if err := s.sessions.UpdateTitle(sessionID, title); err != nil {

@@ -317,11 +317,11 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	}
 	s.mu.Unlock()
 
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if loaded == nil {
+	if header == nil {
 		return nil, ErrNoSession
 	}
 	// The send itself is the un-settle: it happens before the run starts, so
@@ -332,7 +332,7 @@ func (s *Service) StartRun(sessionID string, dto Prompt) (*Hub, error) {
 	// re-resolve only when the staged prompt switches provider.
 	providerID := dto.Provider
 	if providerID == "" {
-		providerID = loaded.Header.Provider
+		providerID = header.Provider
 	}
 	firstProvider, err := s.Lookup(providerID)
 	if err != nil {

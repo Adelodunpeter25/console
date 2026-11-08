@@ -250,17 +250,16 @@ func withoutTool(list []tools.Tool, name string) []tools.Tool {
 // hub, returning the terminal error (nil on success). The provider instance
 // is reused unless the prompt switches provider id.
 func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto Prompt, hub *Hub, current *loop.Provider, currentID *string, pins *accountPins) error {
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-	if loaded == nil {
+	if header == nil {
 		err := ErrNoSession
 		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
 		return err
 	}
-	header := loaded.Header
 
 	// A synthetic turn is the server waking an idle session for finished
 	// background work. The claimed results become the (hidden) user message;
@@ -349,7 +348,11 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		}
 	}
 
-	history := DecodeHistory(loaded.Messages)
+	history, err := s.LoadHistory(sessionID)
+	if err != nil {
+		hub.Broadcast(loop.Event{Kind: loop.EventError, Text: err.Error()})
+		return err
+	}
 	// A turn is one user message: its index is how many user messages the
 	// session already holds (compaction never rewrites stored history).
 	turn := turnRef{Index: countUserMessages(history), UserMessageID: "msg_" + randomHex(16)}

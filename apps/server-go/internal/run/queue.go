@@ -23,11 +23,11 @@ func (s *Service) QueuePrompt(sessionID string, dto Prompt) (*types.QueuedPrompt
 // stage queues dto at the back, or at the front when it must run next.
 // Steer stages at the front.
 func (s *Service) stage(sessionID string, dto Prompt, front bool) (*types.QueuedPrompt, error) {
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		return nil, err
 	}
-	if loaded == nil {
+	if header == nil {
 		return nil, ErrNoSession
 	}
 	// A queued prompt is a send too: it unsettles (and Steer inherits this).

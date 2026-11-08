@@ -52,7 +52,6 @@ The saving is real but modest in absolute terms on this data. The larger win is 
 ## What is NOT done
 
 - **In-chat find (Cmd+F, and the Android equivalent).** The server half exists: `session.Service.Search` returns every match with character offsets for highlighting. Not built: the HTTP route (`GET /api/sessions/:id/search`) and the two clients (a find bar, highlighting inside the message renderers, next/previous). Chats load 50 messages at a time, so match locally over what is loaded first and fall back to the server for older pages.
-- **Runs still load whole transcripts** through `Load`, so they pay for the rebuild. Measured in Python on the worst real session, a full rebuild cost roughly 2x a plain read; a run that bypasses the JSON and hands parts straight to the model would be faster than today, but that second read path is not written.
 - **Linux/other platforms:** nothing here is platform specific, but it has only been run on macOS.
 
 ## Known limits

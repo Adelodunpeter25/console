@@ -24,6 +24,31 @@ func DecodeHistory(stored []json.RawMessage) []any {
 	return out
 }
 
+// LoadHistory reads session history directly through the split storage path,
+// bypassing monolithic JSON reassembly and redundant base64 conversions.
+func (s *Service) LoadHistory(sessionID string) ([]any, error) {
+	splits, err := s.sessions.LoadSplit(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]any, 0, len(splits))
+	for _, row := range splits {
+		if row.Content != "" {
+			if msg, err := loop.MessageFromProtoBytes([]byte(row.Content)); err == nil {
+				out = append(out, msg)
+			}
+			continue
+		}
+		if row.Skeleton == "" {
+			continue
+		}
+		if msg, err := loop.MessageFromSplit([]byte(row.Skeleton), row.Parts); err == nil {
+			out = append(out, msg)
+		}
+	}
+	return out, nil
+}
+
 // decodeAssistantText extracts concatenated non-blank text parts from a
 // stored assistant message (for done-banner previews).
 func decodeAssistantText(raw json.RawMessage) (string, bool) {

@@ -32,14 +32,13 @@ type contextCache struct {
 // model window) yields a zero snapshot, never an error for missing rows —
 // callers map unknown sessions to 404 themselves.
 func (s *Service) ContextUsage(ctx context.Context, sessionID string) (loop.ContextSnapshot, error) {
-	loaded, err := s.sessions.Load(sessionID, 0, 0)
+	header, err := s.sessions.Header(sessionID)
 	if err != nil {
 		return loop.ContextSnapshot{}, err
 	}
-	if loaded == nil {
+	if header == nil {
 		return loop.ContextSnapshot{}, ErrNoSession
 	}
-	header := loaded.Header
 
 	s.ctxCache.mu.Lock()
 	if entry, ok := s.ctxCache.entries[sessionID]; ok && entry.messageCount == header.MessageCount {
@@ -55,7 +54,10 @@ func (s *Service) ContextUsage(ctx context.Context, sessionID string) (loop.Cont
 		Model:        header.ModelID,
 		ApprovalMode: systemprompt.ApprovalMode(header.ApprovalMode),
 	})
-	history := DecodeHistory(loaded.Messages)
+	history, err := s.LoadHistory(sessionID)
+	if err != nil {
+		return loop.ContextSnapshot{}, err
+	}
 	defs := tools.NewRegistry(tools.DefaultTools()...).Definitions()
 	est := compaction.EstimatePayloadTokens(history, prompt.SystemPrompt, defs)
 
