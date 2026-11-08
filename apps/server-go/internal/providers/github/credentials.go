@@ -29,6 +29,9 @@ import (
 type Credential struct {
 	Token     string    `json:"token"`
 	Username  string    `json:"username,omitempty"`
+	ID        int64     `json:"id,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Email     string    `json:"email,omitempty"`
 	Scopes    []string  `json:"scopes,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -75,7 +78,10 @@ func SaveCredential(cred Credential) error {
 	if err := os.Chmod(filepath.Dir(CredentialPath()), 0o700); err != nil {
 		return err
 	}
-	return shared.SaveCredentialFile(CredentialPath(), cred)
+	if err := shared.SaveCredentialFile(CredentialPath(), cred); err != nil {
+		return err
+	}
+	return writeGitConfig(cred)
 }
 
 // CredentialExists reports whether a usable token is stored. A file holding an
@@ -92,5 +98,5 @@ func ClearCredential() error {
 	if err := os.Remove(CredentialPath()); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return nil
+	return removeGitConfig()
 }

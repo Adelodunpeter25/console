@@ -252,11 +252,12 @@ func (s *AuthService) ValidateGitHubPAT(ctx context.Context, token string) (GitH
 	if err != nil {
 		return GitHubAuthStatus{}, err
 	}
-	if err := github.SaveCredential(github.Credential{
-		Token:    token,
-		Username: login,
-		Scopes:   scopes,
-	}); err != nil {
+	cred := github.Credential{Token: token, Username: login, Scopes: scopes}
+	// Best effort: without the profile there is simply no git identity.
+	if id, name, email, err := github.FetchIdentity(ctx, nil, token); err == nil {
+		cred.ID, cred.Name, cred.Email = id, name, email
+	}
+	if err := github.SaveCredential(cred); err != nil {
 		return GitHubAuthStatus{}, err
 	}
 	return GitHubStatus(), nil

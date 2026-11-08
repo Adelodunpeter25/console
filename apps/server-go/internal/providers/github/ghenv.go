@@ -10,7 +10,10 @@
 // with RedactSecrets on anything echoed back to the model.
 package github
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 // Only GH_TOKEN is set. gh reads GH_TOKEN first, so GITHUB_TOKEN is
 // deliberately left alone — it carries an Actions-ephemeral-token convention
@@ -24,17 +27,19 @@ const ghTokenKey = "GH_TOKEN"
 // stored one — exec duplicate keys resolve first-match-wins, so appending a
 // second entry could never override anyway, only confuse.
 func AppendToEnv(env []string) []string {
-	if hasGHVar(env) {
-		return env
-	}
 	cred, err := LoadCredential()
-	if err != nil {
+	if err != nil || strings.TrimSpace(cred.Token) == "" {
 		return env
 	}
-	if strings.TrimSpace(cred.Token) == "" {
-		return env
+	if !hasGHVar(env) {
+		env = append(env, ghTokenKey+"="+strings.TrimSpace(cred.Token))
 	}
-	return append(env, ghTokenKey+"="+strings.TrimSpace(cred.Token))
+	if !hasEnvKey(env, gitConfigGlobalKey) {
+		if _, err := os.Stat(gitConfigPath()); err == nil {
+			env = append(env, gitConfigGlobalKey+"="+gitConfigPath())
+		}
+	}
+	return env
 }
 
 func hasGHVar(env []string) bool {
@@ -68,4 +73,13 @@ func RedactSecrets(s string) string {
 		return s
 	}
 	return strings.ReplaceAll(s, token, "[redacted]")
+}
+
+func hasEnvKey(env []string, key string) bool {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, key+"=") {
+			return true
+		}
+	}
+	return false
 }
