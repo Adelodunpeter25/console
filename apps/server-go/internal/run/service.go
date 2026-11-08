@@ -256,6 +256,7 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	if manager != nil {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
 		manager.SetBackgroundWork(s.BackgroundWorkManager)
+		manager.SetAutomations(s.automationStore())
 	}
 }
 

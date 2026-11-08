@@ -142,6 +142,27 @@ func consoleCatalog() []methodDef {
 			"mode":       str(true, "plan-mode or full-access"),
 		}, handler: (*Runtime).sessionsSetApproval},
 
+		// Automations
+		{name: "automation.create", description: "Schedule future work on this session (once or interval); runs in this same thread with full context.", args: map[string]ArgSpec{
+			"prompt":           str(true, "prompt to run when the schedule fires"),
+			"kind":             str(true, "once or interval"),
+			"interval_seconds": integer(false, "repeat interval in seconds (required when kind is interval)"),
+			"run_at":           integer(false, "unix timestamp in seconds to fire (required when kind is once)"),
+		}, handler: (*Runtime).automationCreate},
+		{name: "automation.get", description: "Read one automation by id, or list this session's automations when id is omitted.", args: map[string]ArgSpec{
+			"id": str(false, "automation id"),
+		}, handler: (*Runtime).automationGet},
+		{name: "automation.update", description: "Update an active or paused automation and re-arm its next run from now.", args: map[string]ArgSpec{
+			"id":               str(true, "automation id"),
+			"prompt":           str(false, "new prompt"),
+			"kind":             str(false, "once or interval"),
+			"interval_seconds": integer(false, "new interval in seconds"),
+			"run_at":           integer(false, "new unix timestamp in seconds"),
+		}, handler: (*Runtime).automationUpdate},
+		{name: "automation.delete", description: "Delete an automation (call when a monitoring task is complete).", args: map[string]ArgSpec{
+			"id": str(true, "automation id"),
+		}, handler: (*Runtime).automationDelete},
+
 		// MCP servers
 		{name: "mcp.list", description: "List configured MCP servers with their live connection status.", handler: (*Runtime).mcpListImpl},
 		{name: "mcp.tools", description: "One server's tool list and status.", args: map[string]ArgSpec{"id": str(true, "server id")}, handler: (*Runtime).mcpToolsImpl},

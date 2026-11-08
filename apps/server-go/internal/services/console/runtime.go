@@ -9,6 +9,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
@@ -23,8 +24,9 @@ type Runtime struct {
 	scripts   *projectssvc.ProjectScriptsService
 	sessions  *services.SessionService
 	projects  *projectssvc.ProjectService
-	mcp       *mcp.Manager
-	active    func(string) bool
+	mcp         *mcp.Manager
+	automations *automations.Service
+	active      func(string) bool
 	abort     func(string) bool
 	prompt    PromptFunc
 	queue     QueueControl

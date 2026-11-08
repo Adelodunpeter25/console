@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
@@ -17,20 +18,21 @@ import (
 
 // Manager hands out per-session console kernels.
 type Manager struct {
-	mu       sync.Mutex
-	js       *jskernel.Cache[*Runtime]
-	stopped  bool
-	ports    *terminalsvc.PortRegistry
-	scripts  *projectssvc.ProjectScriptsService
-	sessions *services.SessionService
-	projects *projectssvc.ProjectService
-	mcp      *mcp.Manager
-	active   func(string) bool
-	start    func(string, string, string, string, string, string) error
-	abort    func(string) bool
-	prompt   PromptFunc
-	queue    QueueControl
-	work     func() *background.Manager
+	mu          sync.Mutex
+	js          *jskernel.Cache[*Runtime]
+	stopped     bool
+	ports       *terminalsvc.PortRegistry
+	scripts     *projectssvc.ProjectScriptsService
+	sessions    *services.SessionService
+	projects    *projectssvc.ProjectService
+	mcp         *mcp.Manager
+	automations *automations.Service
+	active      func(string) bool
+	start       func(string, string, string, string, string, string) error
+	abort       func(string) bool
+	prompt      PromptFunc
+	queue       QueueControl
+	work        func() *background.Manager
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -72,6 +74,20 @@ func (m *Manager) SetMCP(manager *mcp.Manager) {
 	m.mu.Lock()
 	m.mcp = manager
 	m.mu.Unlock()
+}
+
+// SetAutomations attaches the store behind console.automation.*. Nil (never
+// set, or tests) leaves the methods reporting unavailable.
+func (m *Manager) SetAutomations(store *automations.Service) {
+	m.mu.Lock()
+	m.automations = store
+	m.mu.Unlock()
+}
+
+func (m *Manager) automationStore() *automations.Service {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.automations
 }
 
 func (m *Manager) mcpManager() *mcp.Manager {
@@ -122,6 +138,7 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 		}
 		runtime.sessionID = sessionID
 		runtime.work = m.backgroundWork()
+		runtime.automations = m.automationStore()
 		runtime.SetCancel(m.Stopped)
 		return runtime, nil
 	})
