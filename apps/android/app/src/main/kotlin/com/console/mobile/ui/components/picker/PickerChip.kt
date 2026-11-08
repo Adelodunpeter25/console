@@ -1,7 +1,9 @@
 package com.console.mobile.ui.components.picker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +25,7 @@ import com.console.mobile.core.icons.getProviderIconKey
 import com.console.mobile.ui.components.ProviderIcon
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
-import io.github.lyxnx.compose.ui.tablericons.outline.Shield
+import io.github.lyxnx.compose.ui.tablericons.outline.Check
 
 /**
  * Compact chip that opens a picker — shows the provider logo instead of the
@@ -73,7 +75,16 @@ fun PlanChip(on: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(TablerIcons.Outline.Shield, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+        Box(
+            modifier = Modifier
+                .size(15.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(if (on) NewTheme.Primary else Color.Transparent)
+                .border(1.5.dp, tint, RoundedCornerShape(4.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (on) Icon(TablerIcons.Outline.Check, contentDescription = null, tint = NewTheme.OnPrimary, modifier = Modifier.size(11.dp))
+        }
         Text(
             "Plan", color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(start = 5.dp),
