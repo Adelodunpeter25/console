@@ -142,7 +142,8 @@ func serverIdentityProto(info auth.ServerIdentity) *consolev1.ServerIdentity {
 // The caller reports the address it is talking to, but that is often the
 // LAN address, useless to a phone on another network. The tunnel reaches
 // the server from anywhere, so it is preferred whenever one exists and its
-// certificate is issued — the same preference `console pair` applies. A
+// certificate is issued (or the iroh endpoint is up) — the same preference
+// `console pair` applies. A
 // CONSOLE_PUBLIC_URL override means the operator has already stated the
 // address clients use, so the caller's answer stands.
 func qrBaseURL(requested string) string {
@@ -150,7 +151,14 @@ func qrBaseURL(requested string) string {
 		return requested
 	}
 	if remote, ok := tunnel.ReadInfo(filepath.Join(utils.ConsoleStorageDir(), "tunnel")); ok && remote.Ready {
-		return remote.URL
+		// iroh has a node id, not a URL; an empty address would make the QR
+		// fall back to localhost, which no phone can reach.
+		if remote.NodeID != "" {
+			return auth.IrohBaseURL(remote.NodeID)
+		}
+		if remote.URL != "" {
+			return remote.URL
+		}
 	}
 	return requested
 }
