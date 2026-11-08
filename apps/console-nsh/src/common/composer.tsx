@@ -275,6 +275,7 @@ export function Composer(props: {
   // entity and `active_tab`).
   const search = signal("");
   const modelOpen = signal(false);
+  const approvalOpen = signal(false);
   const tab = signal<PickerTab | null>(null);
   const activeTab = () =>
     tab() ??
@@ -489,6 +490,8 @@ export function Composer(props: {
         </Popover>
 
         <Popover
+          open={approvalOpen()}
+          onOpenChange={(e) => approvalOpen.set(e.open)}
           placement="top"
           align="start"
           popupClass="rounded-xl"
@@ -517,7 +520,10 @@ export function Composer(props: {
         >
           <ApprovalModeDropdown
             selected={approvalMode()}
-            onSelect={(mode) => props.onApprovalMode?.(mode)}
+            onSelect={(mode) => {
+              props.onApprovalMode?.(mode);
+              approvalOpen.set(false);
+            }}
           />
         </Popover>
 

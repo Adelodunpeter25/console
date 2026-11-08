@@ -97,6 +97,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
   const pickerTab = signal<PickerTab>({ kind: "favorites" });
   const pickerSearch = signal("");
   const modelOpen = signal(false);
+  const projectOpen = signal(false);
+  const branchOpen = signal(false);
+  const thinkingOpen = signal(false);
+  const approvalOpen = signal(false);
   // Escape over an empty draft collapses the card back to the pill; a
   // draft keeps the focus (and the escape for the autocomplete).
   function EscapeCollapses() {
@@ -141,6 +145,8 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
           <View class="flex-row items-center gap-1.5 px-1">
             {props.projects != null ? (
               <Popover
+                open={projectOpen()}
+                onOpenChange={(e) => projectOpen.set(e.open)}
                 placement="bottom"
                 align="start"
                 trigger={
@@ -156,13 +162,18 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                     projects: props.projects,
                     selectedId: selectedProjectId(),
                     withIcons: false,
-                    onSelect: (id) => selectedProjectId.set(id),
+                    onSelect: (id) => {
+                      selectedProjectId.set(id);
+                      projectOpen.set(false);
+                    },
                   })}
                 </View>
               </Popover>
             ) : null}
             {props.branches != null ? (
               <Popover
+                open={branchOpen()}
+                onOpenChange={(e) => branchOpen.set(e.open)}
                 placement="bottom"
                 align="start"
                 trigger={
@@ -180,11 +191,17 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                       const choice = checkout();
                       return choice.kind === "branch" && choice.name === b.name;
                     },
-                    onSelect: (name) => checkout.set({ kind: "branch", name }),
+                    onSelect: (name) => {
+                      checkout.set({ kind: "branch", name });
+                      branchOpen.set(false);
+                    },
                     withIcons: false,
                     newWorktree: {
                       label: "New worktree",
-                      onNewWorktree: () => checkout.set({ kind: "newWorktree" }),
+                      onNewWorktree: () => {
+                        checkout.set({ kind: "newWorktree" });
+                        branchOpen.set(false);
+                      },
                     },
                   })}
                   <View class="px-2 py-1">
@@ -195,7 +212,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                         selected: checkout().kind === "project",
                       }}
                       accessibilityLabel="Project folder"
-                      onPress={() => checkout.set({ kind: "project" })}
+                      onPress={() => {
+                        checkout.set({ kind: "project" });
+                        branchOpen.set(false);
+                      }}
                     >
                       <Icon
                         name="Folder"
@@ -267,6 +287,8 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               </Popover>
             ) : null}
             <Popover
+              open={thinkingOpen()}
+              onOpenChange={(e) => thinkingOpen.set(e.open)}
               placement="bottom"
               align="start"
               trigger={
@@ -284,7 +306,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                     role="menuitemradio"
                     accessibilityState={{ selected: thinking() === level }}
                     accessibilityLabel={`Thinking ${level}`}
-                    onPress={() => thinking.set(level)}
+                    onPress={() => {
+                      thinking.set(level);
+                      thinkingOpen.set(false);
+                    }}
                   >
                     <View class="w-4">
                       {thinking() === level ? (
@@ -299,6 +324,8 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
               </View>
             </Popover>
             <Popover
+              open={approvalOpen()}
+              onOpenChange={(e) => approvalOpen.set(e.open)}
               placement="bottom"
               align="start"
               trigger={
@@ -316,7 +343,10 @@ export function FloatingComposer(props: Parameters<typeof Composer>[0] & {
                     role="menuitemradio"
                     accessibilityState={{ selected: approval() === mode }}
                     accessibilityLabel={`Approval ${approvalModeLabel(mode)}`}
-                    onPress={() => approval.set(mode)}
+                    onPress={() => {
+                      approval.set(mode);
+                      approvalOpen.set(false);
+                    }}
                   >
                     <View class="flex-row items-center gap-1.5">
                       <View class="w-4">
