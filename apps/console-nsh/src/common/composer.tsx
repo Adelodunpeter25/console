@@ -172,6 +172,8 @@ export function Composer(props: {
   commands?: SlashCommand[];
   files?: SuggestionFile[];
   chats?: SuggestionChat[];
+  /// The `@` query being typed, for the host's per-query file search.
+  onFileQuery?: (query: string) => void;
   /// Past prompts, oldest first. With an empty input, Up recalls them.
   promptHistory?: string[];
   placeholder?: string;
@@ -194,6 +196,10 @@ export function Composer(props: {
   let inputRef: InputRef | null = null;
   effect(() => {
     if (composerFocusRequest() > 0) inputRef?.focus();
+  });
+  effect(() => {
+    const trigger = detectTrigger(props.value, selection().start);
+    if (trigger?.kind === "file") props.onFileQuery?.(trigger.query);
   });
   // The highlighted suggestion row; reset whenever the open set changes.
   const highlighted = signal(0);

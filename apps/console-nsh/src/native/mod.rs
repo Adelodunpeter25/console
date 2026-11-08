@@ -303,6 +303,14 @@ impl Console {
         .await
     }
 
+    /// The composer's slash commands for a session (global when empty).
+    pub async fn assist_commands(
+        base_url: String,
+        session_id: Option<String>,
+    ) -> Result<String, String> {
+        assist::list_commands(&base_url, session_id.as_deref().filter(|s| !s.is_empty())).await
+    }
+
     /// The git status summary for a working tree (the repo path is required
     /// by the server).
     pub async fn git_status(base_url: String, path: String) -> Result<String, String> {

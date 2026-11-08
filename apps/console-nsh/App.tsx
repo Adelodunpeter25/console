@@ -189,6 +189,13 @@ function App() {
                 })
               }
               onPreviewImage={(uri) => previewImage.set(uri)}
+              chatCandidates={(sessionId) => {
+                const projectId = store_.session(sessionId)?.projectId ?? null;
+                return store_
+                  .sessions()
+                  .filter((s) => s.id !== sessionId && (s.projectId ?? null) === projectId)
+                  .map((s) => ({ id: s.id, title: s.title }));
+              }}
               onOpenSession={(id, title) => {
                 openChat(id, title);
                 void store_.loadSessions(null);

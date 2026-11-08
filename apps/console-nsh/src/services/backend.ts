@@ -113,6 +113,8 @@ export const backend = {
     root: string | null,
     includeDirs: boolean,
   ) => text(Console.fileSearch(baseUrl, sessionId, query, root, includeDirs)),
+  assistCommands: (baseUrl: string, sessionId: string | null) =>
+    text(Console.assistCommands(baseUrl, sessionId)),
   gitStatus: (baseUrl: string, repoPath: string) => text(Console.gitStatus(baseUrl, repoPath)),
   gitDiff: (baseUrl: string, repoPath: string, filePath: string | null) =>
     text(Console.gitDiff(baseUrl, repoPath, filePath)),

@@ -26,7 +26,7 @@ import {
 } from "./interaction_card";
 import type { ChatController } from "../services/chat_controller";
 import { backend } from "../services/backend";
-import type { SuggestionFile } from "../common/composer_autocomplete";
+import type { SlashCommand, SuggestionChat, SuggestionFile } from "../common/composer_autocomplete";
 import { catalogStore } from "../stores/catalog_store";
 
 function decodeArgs(base64: string | undefined): unknown {
@@ -77,6 +77,8 @@ export function SessionPane(props: {
   onOpenReview?: () => void;
   /// Previews a message image full-screen (the bubble's press).
   onPreviewImage?: (uri: string) => void;
+  /// The `$` popup's chats for one session (its project's other chats).
+  chatCandidates?: (sessionId: string) => SuggestionChat[];
 }) {
   const controller = props.controller;
   const draft = signal("");
@@ -89,22 +91,42 @@ export function SessionPane(props: {
     const provider = controller.sessionProvider();
     return modelId !== "" && provider !== "" ? { provider, modelId } : null;
   };
-  // The mention popup's workspace files: one query-less search per session
-  // (the desktop searches per trigger; the popup filters client-side, so
-  // this covers it — per-query refinement can follow).
+  // The popup's candidates, loaded the way the desktop does: slash commands
+  // once per session, files per `@` query (directories included).
   const mentionFiles = signal<SuggestionFile[]>([]);
+  const commands = signal<SlashCommand[]>([]);
+  let fileQuerySeq = 0;
+  const searchFiles = (query: string) => {
+    const seq = ++fileQuerySeq;
+    // Deferred off the reactive pass: the bridge rejects calls made from a
+    // running effect.
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const res = JSON.parse(
+            await backend.fileSearch(props.baseUrl, controller.sessionId, query, null, true),
+          ) as { items?: { relativePath?: string; absolutePath?: string }[] };
+          if (seq !== fileQuerySeq) return;
+          mentionFiles.set(
+            (res.items ?? [])
+              .filter((i) => i.relativePath != null && i.absolutePath != null)
+              .map((i) => ({ relativePath: i.relativePath!, absolutePath: i.absolutePath! })),
+          );
+        } catch {
+          if (seq === fileQuerySeq) mentionFiles.set([]);
+        }
+      })();
+    }, 0);
+  };
   void (async () => {
     try {
-      const res = JSON.parse(
-        await backend.fileSearch(props.baseUrl, controller.sessionId, "", null, false),
-      ) as { items?: { relativePath?: string; absolutePath?: string }[] };
-      mentionFiles.set(
-        (res.items ?? [])
-          .filter((i) => i.relativePath != null && i.absolutePath != null)
-          .map((i) => ({ relativePath: i.relativePath!, absolutePath: i.absolutePath! })),
+      commands.set(
+        JSON.parse(
+          await backend.assistCommands(props.baseUrl, controller.sessionId),
+        ) as SlashCommand[],
       );
     } catch {
-      mentionFiles.set([]);
+      commands.set([]);
     }
   })();
   return (
@@ -231,6 +253,9 @@ export function SessionPane(props: {
           runState={controller.state.isStreaming() ? "running" : "ready"}
           promptHistory={controller.promptHistory()}
           files={mentionFiles()}
+          commands={commands()}
+          chats={props.chatCandidates?.(controller.sessionId) ?? []}
+          onFileQuery={searchFiles}
           providers={catalog.providers() ?? undefined}
           selectedModel={picked() ?? sessionModel()}
           thinkingLevel={THINKING_LEVELS.find(

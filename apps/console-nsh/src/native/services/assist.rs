@@ -20,3 +20,14 @@ pub async fn search_files(
         .map_err(|err| err.to_string())?;
     serde_json::to_string(&result).map_err(|err| err.to_string())
 }
+
+/// The slash commands (`SlashCommandInfo` JSON) for a session, or the global
+/// set when there is none.
+pub async fn list_commands(base_url: &str, session_id: Option<&str>) -> Result<String, String> {
+    let service = AssistService::new(http::transport(base_url));
+    let commands = service
+        .list_commands(session_id)
+        .await
+        .map_err(|err| err.to_string())?;
+    serde_json::to_string(&commands).map_err(|err| err.to_string())
+}

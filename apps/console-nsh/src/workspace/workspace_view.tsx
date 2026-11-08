@@ -113,6 +113,7 @@ function PaneContent(props: {
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
   onPreviewImage?: (uri: string) => void;
   onOpenSession?: (sessionId: string, title: string) => void;
+  chatCandidates?: (sessionId: string) => { id: string; title: string }[];
 }) {
   return (
     <View class="flex-1 flex-col">
@@ -140,6 +141,7 @@ function PaneContent(props: {
               }
               onPreviewImage={props.onPreviewImage}
               onOpenSession={props.onOpenSession}
+                chatCandidates={props.chatCandidates}
             />
           );
         }
@@ -179,6 +181,7 @@ function NodeView(props: {
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
   onPreviewImage?: (uri: string) => void;
   onOpenSession?: (sessionId: string, title: string) => void;
+  chatCandidates?: (sessionId: string) => { id: string; title: string }[];
 }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
@@ -203,6 +206,7 @@ function NodeView(props: {
                 onOpenReview={props.onOpenReview}
                 onPreviewImage={props.onPreviewImage}
                 onOpenSession={props.onOpenSession}
+                chatCandidates={props.chatCandidates}
               />
             </View>
           );
@@ -225,6 +229,7 @@ function NodeView(props: {
                 onOpenReview={props.onOpenReview}
                 onPreviewImage={props.onPreviewImage}
                 onOpenSession={props.onOpenSession}
+                chatCandidates={props.chatCandidates}
               />
             </ResizablePanel>
             <ResizablePanel size={node.sizes[1]} minSize={10}>
@@ -237,6 +242,7 @@ function NodeView(props: {
                 onOpenReview={props.onOpenReview}
                 onPreviewImage={props.onPreviewImage}
                 onOpenSession={props.onOpenSession}
+                chatCandidates={props.chatCandidates}
               />
             </ResizablePanel>
           </ResizablePanelGroup>
@@ -257,6 +263,7 @@ export function WorkspaceView(props: {
   onOpenReview?: (paneId: string, sessionId: string, projectId: string | null) => void;
   onPreviewImage?: (uri: string) => void;
   onOpenSession?: (sessionId: string, title: string) => void;
+  chatCandidates?: (sessionId: string) => { id: string; title: string }[];
 }) {
   return (
     <View class="flex-1 flex-col overflow-hidden">
@@ -273,6 +280,7 @@ export function WorkspaceView(props: {
             onOpenReview={props.onOpenReview}
             onPreviewImage={props.onPreviewImage}
             onOpenSession={props.onOpenSession}
+                chatCandidates={props.chatCandidates}
           />
         );
       })()}
