@@ -1,4 +1,3 @@
-pub mod approval_selector;
 pub mod attachment;
 pub mod autocomplete;
 pub mod composer_pills;
@@ -26,7 +25,6 @@ pub mod usage_meter;
 pub mod usage_panel;
 pub mod workspace_footer;
 
-pub use approval_selector::ApprovalModeIconExt;
 pub use attachment::attachment_image;
 pub use autocomplete::{
     AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,
@@ -36,6 +34,7 @@ pub use autocomplete::{
 };
 pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
+pub(crate) use composer_view::plan_mode_stripes;
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use file_browser::FileBrowser;

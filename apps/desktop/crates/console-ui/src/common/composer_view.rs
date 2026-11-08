@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
-    App, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
+    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 
@@ -100,6 +100,15 @@ impl ComposerRunState {
 /// are the same data concepts used by `console-core`; the component never
 /// invents a parallel transport model. The parent remains responsible for
 /// turning a submitted draft into `RunPromptDto` and for calling `RunService`.
+/// Plan mode reads as faint accent stripes laid over a composer card. It sits
+/// first among the card's children, so everything else paints above it.
+pub(crate) fn plan_mode_stripes(theme: Theme) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .bg(gpui::pattern_slash(theme.accent.opacity(0.14), 1.5, 7.0))
+}
+
 #[derive(IntoElement)]
 pub struct ComposerView {
     pub composer_input: Entity<ComposerInput>,
@@ -743,19 +752,7 @@ impl RenderOnce for ComposerView {
                             .py(px(10.0))
                             .flex()
                             .flex_col()
-                            // Plan mode reads as diagonal stripes over the card.
-                            .when(plan_mode, |el| {
-                                el.child(
-                                    div()
-                                        .absolute()
-                                        .inset_0()
-                                        .bg(gpui::pattern_slash(
-                                            theme.text_tertiary.opacity(0.07),
-                                            1.0,
-                                            9.0,
-                                        )),
-                                )
-                            })
+                            .when(plan_mode, |el| el.child(plan_mode_stripes(theme)))
                             // Dropping image files onto the composer stages
                             // them as attachment chips; the card highlights
                             // while a drag hovers over it.

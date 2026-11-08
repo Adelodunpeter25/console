@@ -414,17 +414,6 @@ impl ConsoleDesktopApp {
                 }
             }
         })
-        .on_choose_approval({
-            let entity = entity.clone();
-            move |mode: console_core::ApprovalMode, _window: &mut Window, cx: &mut App| {
-                if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        this.floating_composer.approval_mode = mode;
-                        cx.notify();
-                    });
-                }
-            }
-        })
         .on_pick_image({
             let entity = entity.clone();
             move |_window: &mut Window, cx: &mut App| {

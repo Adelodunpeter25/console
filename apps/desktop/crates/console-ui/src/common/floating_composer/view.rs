@@ -19,7 +19,7 @@ use gpui::{
 
 use super::BranchChoice;
 use crate::common::composer_view::composer_attachment_row;
-use crate::common::ApprovalModeIconExt;
+use crate::common::plan_mode_stripes;
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
     AutocompleteView, ModelDropdownMenu, PickerTab, format_model_name, provider_svg_path,
@@ -80,7 +80,6 @@ pub struct FloatingComposerView {
     on_choose_branch: Rc<dyn Fn(BranchChoice, &mut Window, &mut App) + 'static>,
     on_choose_model: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
     on_choose_thinking: Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>,
-    on_choose_approval: Rc<dyn Fn(ApprovalMode, &mut Window, &mut App) + 'static>,
     on_submit: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_drop_files: Rc<dyn Fn(&ExternalPaths, &mut Window, &mut App) + 'static>,
@@ -140,7 +139,6 @@ impl FloatingComposerView {
             on_choose_branch: Rc::new(|_, _, _| {}),
             on_choose_model: Rc::new(|_, _, _, _| {}),
             on_choose_thinking: Rc::new(|_, _, _| {}),
-            on_choose_approval: Rc::new(|_, _, _| {}),
             on_submit: Rc::new(|_, _, _| {}),
             on_pick_image: Rc::new(|_, _| {}),
             on_drop_files: Rc::new(|_, _, _| {}),
@@ -219,14 +217,6 @@ impl FloatingComposerView {
         self
     }
 
-    pub fn on_choose_approval(
-        mut self,
-        f: impl Fn(ApprovalMode, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.on_choose_approval = Rc::new(f);
-        self
-    }
-
     pub fn on_submit(mut self, f: impl Fn(String, &mut Window, &mut App) + 'static) -> Self {
         self.on_submit = Rc::new(f);
         self
@@ -291,6 +281,7 @@ impl FloatingComposerView {
         // Cloned out of `self` so the menu closures below can be `'static`
         // without borrowing the view.
         let data = self.data;
+        let plan_mode = data.approval_mode == ApprovalMode::PlanMode;
 
         // Pulled out before the menu closures below, which move the `Rc`s.
         let selected_project_id = data.selected_project_id.clone();
@@ -430,34 +421,6 @@ impl FloatingComposerView {
             MenuAlign::AboveLeft,
             move |_handle, _window, _cx| model_dropdown.clone().into_any_element(),
         );
-
-        // ---- footer: approval + model + thinking selectors ----
-        // Approval mode is a real choice at launch time: the session the card
-        // creates would otherwise silently inherit whatever the focused pane
-        // was set to. Full access is tinted with the warning colour, as in the
-        // docked composer.
-        let approval_trigger = MenuChip::new("floating-approval-chip")
-            .height(px(26.0))
-            .outlined()
-            .background(theme.composer)
-            .icon(
-                data.approval_mode.icon().path(),
-                if data.approval_mode == ApprovalMode::FullAccess {
-                    theme.warning
-                } else {
-                    theme.text_tertiary
-                },
-            )
-            .label(data.approval_mode.label());
-        // A one-click flip between the two modes; the docked composer uses
-        // Shift+Tab, which has no pane to act on here.
-        let on_choose_approval = self.on_choose_approval.clone();
-        let current_approval = data.approval_mode;
-        let approval_control = approval_trigger
-            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                on_choose_approval(current_approval.toggled(), window, cx)
-            })
-            .into_any_element();
 
         let thinking_control = if data.supported_thinking_levels.is_empty() {
             div().into_any_element()
@@ -636,6 +599,7 @@ impl FloatingComposerView {
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
+                    .when(plan_mode, |el| el.child(plan_mode_stripes(theme)))
                     // header
                     .child(
                         div()
@@ -725,7 +689,6 @@ impl FloatingComposerView {
                             .gap(px(6.0))
                             .child(attach_button)
                             .child(model_control)
-                            .child(approval_control)
                             .child(thinking_control)
                             .child(div().flex_1())
                             // Spinner replaces nothing — it sits just before

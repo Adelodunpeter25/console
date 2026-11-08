@@ -687,8 +687,15 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Shift+Tab from the composer: flip between Plan and Full Access.
+    /// Shift+Tab from the composer: flip between Plan and Full Access. While
+    /// the floating composer is open it flips that card's mode instead — the
+    /// session it creates is the one the keypress is about.
     pub fn cycle_approval_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.floating_composer.open {
+            self.floating_composer.approval_mode = self.floating_composer.approval_mode.toggled();
+            cx.notify();
+            return;
+        }
         let pane_id = self
             .active_pane_id
             .clone()
