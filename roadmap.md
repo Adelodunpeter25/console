@@ -24,4 +24,4 @@ High-level direction only — implementation details live in `docs/`.
 
 ## Remote access
 
-- [x] iroh tunnel — encrypted peer-to-peer connection between desktop/Android and the server, the default, with the relay as fallback (`docs/plan/iroh-tunnel-migration.md`)
+- [x] iroh tunnel — encrypted peer-to-peer connection between desktop/Android and the server, the default, with the relay as fallback
