@@ -786,7 +786,7 @@ impl RenderOnce for AssistantMessageBubble {
         // fragmented text parts (from mid-stream reasoning or legacy sessions)
         // merge into an unbroken markdown span.
         let mut coalesced_parts: Vec<AssistantContentPart> = Vec::new();
-        for part in content_parts {
+        for part in content_parts.iter() {
             match part {
                 AssistantContentPart::Thinking { text } => {
                     if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
