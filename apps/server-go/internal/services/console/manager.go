@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 )
@@ -29,6 +30,7 @@ type Manager struct {
 	abort    func(string) bool
 	prompt   PromptFunc
 	queue    QueueControl
+	work     func() *background.Manager
 }
 
 // maxConsoleRuntimes caps live session kernels.
@@ -92,6 +94,21 @@ func (m *Manager) sessionConfig() (*services.SessionService, *projectssvc.Projec
 	return m.sessions, m.projects, m.active, m.abort, m.start, m.prompt, m.queue
 }
 
+// SetBackgroundWork attaches the background-work manager used by
+// console.sessions.wait({background: true}). It takes a getter because the
+// run service can swap its manager.
+func (m *Manager) SetBackgroundWork(work func() *background.Manager) {
+	m.mu.Lock()
+	m.work = work
+	m.mu.Unlock()
+}
+
+func (m *Manager) backgroundWork() func() *background.Manager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.work
+}
+
 // sessionRuntime returns the session's console kernel, creating it on first use.
 func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, error) {
 	return m.js.Get(sessionID, func() (*Runtime, error) {
@@ -104,6 +121,7 @@ func (m *Manager) sessionRuntime(sessionID, projectID, cwd string) (*Runtime, er
 			return nil, err
 		}
 		runtime.sessionID = sessionID
+		runtime.work = m.backgroundWork()
 		runtime.SetCancel(m.Stopped)
 		return runtime, nil
 	})

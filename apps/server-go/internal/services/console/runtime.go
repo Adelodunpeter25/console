@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/jskernel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
@@ -38,6 +39,7 @@ type Runtime struct {
 	projectID string
 	cwd       string
 	sessionID string
+	work      func() *background.Manager
 }
 
 // NewRuntime builds a console kernel with the console API methods installed.
