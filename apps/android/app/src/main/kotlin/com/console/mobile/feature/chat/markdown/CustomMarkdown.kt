@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,26 +41,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalTextToolbar
-import androidx.compose.ui.platform.TextToolbar
-import androidx.compose.ui.platform.TextToolbarStatus
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
-import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBackUp
-import kotlin.math.roundToInt
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
@@ -109,26 +97,6 @@ internal fun formatCiteQuote(text: String): String {
     return trimmed.lines().joinToString("\n") { "> $it" } + "\n\n"
 }
 
-@Composable
-private fun CitePillButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Icon(icon, contentDescription = label, tint = NewTheme.TextSecondary, modifier = Modifier.size(13.dp))
-        Text(label, color = NewTheme.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
 /** Native markdown renderer used by chat, tools, subagents, and the file viewer. */
 @Composable
 fun CustomMarkdown(
@@ -138,123 +106,28 @@ fun CustomMarkdown(
     onReply: ((String) -> Unit)? = null,
 ) {
     if (content.isBlank()) return
-    val defaultToolbar = LocalTextToolbar.current
+    val view = LocalView.current
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
-    var toolbarRect by remember { mutableStateOf<Rect?>(null) }
-    var copyAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    val customToolbar = remember(onReply) {
-        object : TextToolbar {
-            override val status: TextToolbarStatus
-                get() = if (toolbarRect != null) TextToolbarStatus.Shown else TextToolbarStatus.Hidden
-
-            override fun hide() {
-                toolbarRect = null
-                copyAction = null
-            }
-
-            override fun showMenu(
-                rect: Rect,
-                onCopyRequested: (() -> Unit)?,
-                onPasteRequested: (() -> Unit)?,
-                onCutRequested: (() -> Unit)?,
-                onSelectAllRequested: (() -> Unit)?,
-            ) {
-                toolbarRect = rect
-                copyAction = onCopyRequested
-            }
-        }
+    val toolbar = remember(view, onReply) {
+        SelectionActionToolbar(view, onReply) { clipboardManager.getText()?.text.orEmpty() }
     }
+    DisposableEffect(toolbar) { onDispose { toolbar.hide() } }
 
-    CompositionLocalProvider(LocalTextToolbar provides customToolbar) {
-        Box {
-            SelectionContainer(modifier = modifier) {
-                // The parser object survives token updates. Streaming updates only replace
-                // the unstable tail when possible; completed blocks retain their model.
-                val parser = remember { StreamingMarkdownParser() }
-                // A title arriving later must rebuild blocks that were parsed without it.
-                val blocks = parser.update(content, streaming, PageTitles.version)
-                // Only settled text is looked up, so a URL still streaming in is never fetched.
-                LaunchedEffect(content, streaming) {
-                    if (!streaming) bareWebUrls(content).forEach(PageTitles::request)
-                }
-                Column(Modifier.fillMaxWidth()) {
-                    MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
-                    if (streaming) Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
-                }
+    CompositionLocalProvider(LocalTextToolbar provides toolbar) {
+        SelectionContainer(modifier = modifier) {
+            // The parser object survives token updates. Streaming updates only replace
+            // the unstable tail when possible; completed blocks retain their model.
+            val parser = remember { StreamingMarkdownParser() }
+            // A title arriving later must rebuild blocks that were parsed without it.
+            val blocks = parser.update(content, streaming, PageTitles.version)
+            // Only settled text is looked up, so a URL still streaming in is never fetched.
+            LaunchedEffect(content, streaming) {
+                if (!streaming) bareWebUrls(content).forEach(PageTitles::request)
             }
-
-            toolbarRect?.let { rect ->
-                val density = LocalDensity.current
-                val popupPositionProvider = remember(rect, density) {
-                    object : PopupPositionProvider {
-                        override fun calculatePosition(
-                            anchorBounds: IntRect,
-                            windowSize: IntSize,
-                            layoutDirection: LayoutDirection,
-                            popupContentSize: IntSize,
-                        ): IntOffset {
-                            val marginPx = with(density) { 8.dp.roundToPx() }
-                            val gapPx = with(density) { 8.dp.roundToPx() }
-                            val popupWidth = popupContentSize.width
-                            val popupHeight = popupContentSize.height
-
-                            val preferredX = (rect.center.x - popupWidth / 2f).roundToInt()
-                            val x = preferredX.coerceIn(marginPx, maxOf(marginPx, windowSize.width - popupWidth - marginPx))
-
-                            val spaceAbove = rect.top - popupHeight - gapPx
-                            val y = if (spaceAbove >= marginPx) {
-                                spaceAbove.roundToInt()
-                            } else {
-                                (rect.bottom + gapPx).roundToInt()
-                            }
-                            return IntOffset(x, y)
-                        }
-                    }
-                }
-                Popup(
-                    popupPositionProvider = popupPositionProvider,
-                    onDismissRequest = { customToolbar.hide() },
-                    properties = PopupProperties(
-                        focusable = false,
-                        dismissOnBackPress = true,
-                        dismissOnClickOutside = false,
-                    ),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .shadow(6.dp, RoundedCornerShape(8.dp))
-                            .background(NewTheme.Raised, RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                            .padding(3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        if (onReply != null) {
-                            CitePillButton(
-                                icon = TablerIcons.Outline.ArrowBackUp,
-                                label = "Reply",
-                                onClick = {
-                                    copyAction?.invoke()
-                                    val text = clipboardManager.getText()?.text.orEmpty()
-                                    if (text.isNotBlank()) {
-                                        onReply(formatCiteQuote(text))
-                                    }
-                                    customToolbar.hide()
-                                },
-                            )
-                        }
-                        CitePillButton(
-                            icon = TablerIcons.Outline.Copy,
-                            label = "Copy",
-                            onClick = {
-                                copyAction?.invoke()
-                                customToolbar.hide()
-                            },
-                        )
-                    }
-                }
+            Column(Modifier.fillMaxWidth()) {
+                MdBlocks(blocks, NewTheme.TextPrimary, 15.sp, 22.sp, 6.dp)
+                if (streaming) Text("▍", color = NewTheme.TextMuted, fontSize = 14.sp)
             }
         }
     }
