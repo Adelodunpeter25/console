@@ -338,7 +338,14 @@ impl RenderOnce for WorkspaceTabBar {
                                     } else {
                                         FontWeight::NORMAL
                                     })
-                                    .child(title),
+                                    .child(
+                                        title
+                                            .lines()
+                                            .find(|l| !l.trim().is_empty())
+                                            .unwrap_or(&title)
+                                            .trim()
+                                            .to_string(),
+                                    ),
                             )
                             // Close Tab Button: hidden until the tab is hovered.
                             .child(

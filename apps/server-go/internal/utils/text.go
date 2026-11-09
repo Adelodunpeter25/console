@@ -31,7 +31,16 @@ func CapitalizeFirst(s string) string {
 }
 
 // TitleFirst is CapitalizeFirst after a trim: the shape session titles are
-// stored in (no surrounding whitespace, first letter capitalized).
+// stored in (no surrounding whitespace, single line, first letter capitalized).
 func TitleFirst(s string) string {
+	if idx := strings.IndexAny(s, "\r\n"); idx >= 0 {
+		for _, line := range strings.Split(s, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				s = line
+				break
+			}
+		}
+	}
 	return CapitalizeFirst(strings.TrimSpace(s))
 }

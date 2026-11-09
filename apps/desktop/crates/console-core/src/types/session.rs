@@ -34,7 +34,12 @@ impl SessionHeaderExt for SessionHeader {
     fn display_title(&self) -> &str {
         // The server guarantees a non-empty stored title (Create/UpdateTitle
         // default it), so there is no client-side fallback to keep in sync.
-        self.title.trim()
+        let trimmed = self.title.trim();
+        if let Some(first_line) = trimmed.lines().find(|l| !l.trim().is_empty()) {
+            first_line.trim()
+        } else {
+            trimmed
+        }
     }
 
     fn sort_timestamp(&self) -> i64 {

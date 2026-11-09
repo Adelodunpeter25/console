@@ -282,9 +282,14 @@ impl Render for ConsoleDesktopApp {
                                 }
                             })
                     });
+                    let clean_title = title
+                        .lines()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or(title)
+                        .trim();
                     match folder {
-                        Some(f) if !f.is_empty() => Some(format!("{} — {}", title, f)),
-                        _ => Some(title.clone()),
+                        Some(f) if !f.is_empty() => Some(format!("{} — {}", clean_title, f)),
+                        _ => Some(clean_title.to_string()),
                     }
                 }
                 None => None,

@@ -153,6 +153,12 @@ impl RenderOnce for TitleBar {
             .child(div().flex_1().flex().justify_center().min_w_0().when_some(
                 title,
                 |el, title| {
+                    let single_line = title
+                        .lines()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
                     el.child(
                         div()
                             .truncate()
@@ -160,7 +166,7 @@ impl RenderOnce for TitleBar {
                             .text_size(px(12.0))
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .text_color(theme.text_secondary)
-                            .child(title),
+                            .child(single_line),
                     )
                 },
             ))
