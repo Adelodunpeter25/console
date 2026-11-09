@@ -81,10 +81,20 @@ class PreferencesStore(context: Context) {
         prefs.edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
     }
 
+    /** Home section keys the user collapsed. Settled is collapsed until the
+     * user first toggles something. */
+    fun loadCollapsedSections(): Set<String> =
+        prefs.getStringSet(KEY_COLLAPSED_SECTIONS, null)?.toSet() ?: setOf("settled")
+
+    fun saveCollapsedSections(sections: Set<String>) {
+        prefs.edit().putStringSet(KEY_COLLAPSED_SECTIONS, sections).apply()
+    }
+
     companion object {
         const val KEY_BACKEND_URL = "backend_url"
         const val KEY_ENVIRONMENTS = "environments_data"
         const val KEY_ONBOARDING_DISMISSED = "onboarding_dismissed"
         const val KEY_ONBOARDING_SEEN = "onboarding_seen"
+        const val KEY_COLLAPSED_SECTIONS = "home_collapsed_sections"
     }
 }

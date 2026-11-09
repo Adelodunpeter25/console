@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -83,13 +82,12 @@ fun HomeScreen(
     var creatingSession by remember { mutableStateOf(false) }
     var activeSession by remember { mutableStateOf<SessionHeader?>(null) }
     var branches by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    // Section keys whose sessions are hidden (Pinned/Drafts/project ids).
-    // Survives navigating into a chat and back; resets on process death,
-    // like the rest of Home's transient UI state.
-    // Settled starts collapsed on every entry; expanding it lasts for the session.
-    var collapsedSections by rememberSaveable { mutableStateOf(setOf("settled")) }
+    // Section keys whose sessions are hidden (Pinned/Drafts/Settled/project ids),
+    // persisted across app restarts.
+    var collapsedSections by remember { mutableStateOf(AppContainer.preferencesStore.loadCollapsedSections()) }
     val toggleSection: (String) -> Unit = { key ->
         collapsedSections = if (key in collapsedSections) collapsedSections - key else collapsedSections + key
+        AppContainer.preferencesStore.saveCollapsedSections(collapsedSections)
     }
 
     LaunchedEffect(Unit) {
