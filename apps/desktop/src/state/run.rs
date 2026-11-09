@@ -722,6 +722,7 @@ impl ConsoleDesktopApp {
                                         }
                                     });
                                     this.refresh_turn_changes_for_pane(&run_pane_id, &session_id, cx);
+                                    this.load_background_work(session_id.clone(), cx);
                                 }
                                 cx.notify();
                             });
@@ -1011,9 +1012,10 @@ impl ConsoleDesktopApp {
                 // transcript itself is untouched.
                 self.upsert_background_work(run_session_id, work, cx);
             }
-            AgentSessionEvent::BackgroundWorkContinue { .. } => {
-                // The server resumed an idle session; the wake turn is hidden
-                // and its output streams like any other turn.
+            AgentSessionEvent::BackgroundWorkContinue { work, .. } => {
+                for item in work {
+                    self.upsert_background_work(run_session_id, item, cx);
+                }
             }
             AgentSessionEvent::Compaction { summary, .. } => {
                 self.set_agent_notice_for_session(
