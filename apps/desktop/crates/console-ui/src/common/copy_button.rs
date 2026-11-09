@@ -13,6 +13,7 @@ use gpui::{
     IntoElement, ParentElement, SharedString, StatefulInteractiveElement, Styled, div, px,
 };
 
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -90,6 +91,7 @@ pub fn copy_button_with_action(
         .justify_center()
         .cursor_default()
         .hover(|element| element.bg(theme.overlay_strong))
+        .tooltip(Tooltip::text(if copied { "Copied!" } else { "Copy" }))
         .on_click(move |_, _, cx| {
             cx.write_to_clipboard(ClipboardItem::new_string(content.to_string()));
             if let Some(callback) = &on_copied {

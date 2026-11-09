@@ -11,6 +11,7 @@ use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
 use crate::common::{InlineFileMention, InlineFileMentionText, attachment_image, copy_button};
 use crate::markdown::render::{LinkHandler, MarkdownView, Palette, TranscriptSelection};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use crate::utils::{format_message_time, format_tokens_per_second};
@@ -981,6 +982,7 @@ fn fork_button(
         .justify_center()
         .cursor_default()
         .hover(|element| element.bg(theme.overlay_strong))
+        .tooltip(Tooltip::text("Fork from this message"))
         .on_click(move |_, window, cx| {
             (on_fork)(message_id.clone(), window, cx);
             cx.stop_propagation();
