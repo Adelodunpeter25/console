@@ -72,7 +72,23 @@ object PageTitles {
                 buffer.append(String(chunk, 0, n, Charsets.UTF_8))
                 if (buffer.contains("</title", ignoreCase = true)) break
             }
-            return SharedNative.pageTitle(buffer.toString())
+            val html = buffer.toString()
+            return SharedNative.pageTitle(html) ?: extractHtmlTitleFallback(html)
         }
     }
+}
+
+internal fun extractHtmlTitleFallback(html: String): String? {
+    val lower = html.lowercase()
+    val open = lower.indexOf("<title")
+    if (open < 0) return null
+    val startTagEnd = lower.indexOf('>', open)
+    if (startTagEnd < 0) return null
+    val contentStart = startTagEnd + 1
+    val contentEnd = lower.indexOf("</title", contentStart)
+    if (contentEnd < 0) return null
+    val raw = html.substring(contentStart, contentEnd)
+    val collapsed = raw.replace(Regex("\\s+"), " ").trim()
+    if (collapsed.isEmpty()) return null
+    return if (collapsed.length > 90) collapsed.substring(0, 89).trimEnd() + "…" else collapsed
 }

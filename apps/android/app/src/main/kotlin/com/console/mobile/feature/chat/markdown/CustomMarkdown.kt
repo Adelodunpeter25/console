@@ -560,7 +560,16 @@ private fun appendInlineLink(builder: AnnotatedString.Builder, n: ASTNode, src: 
     val dest = n.children.firstOrNull { it.type == MarkdownElementTypes.LINK_DESTINATION }
     val url = dest?.text(src)?.trim()?.removeSurrounding("<", ">") ?: ""
     val inner = label?.children?.filterNot { it.type == MarkdownTokenTypes.LBRACKET || it.type == MarkdownTokenTypes.RBRACKET }.orEmpty()
-    if (linked) builder.appendInline(inner, src, refs, true) else builder.link(url) { builder.appendInline(inner, src, refs, true) }
+    if (linked) {
+        builder.appendInline(inner, src, refs, true)
+    } else {
+        val labelText = inner.joinToString("") { it.text(src) }.trim()
+        val isBare = labelText == url || labelText == url.trimEnd('/') || labelText == url.removePrefix("https://").removePrefix("http://").trimEnd('/')
+        val title = if (isBare) PageTitles.get(url) else null
+        builder.link(url) {
+            if (title != null) builder.append(title) else builder.appendInline(inner, src, refs, true)
+        }
+    }
 }
 
 private fun imageInfo(n: ASTNode, src: String, refs: Map<String, String>): Pair<String, String>? {
