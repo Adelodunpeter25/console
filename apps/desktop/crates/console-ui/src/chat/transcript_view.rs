@@ -712,8 +712,9 @@ impl TranscriptView {
         if (!has_prompts && !show_down) || !(self.hovered || self.prompts_open) {
             return div().into_any_element();
         }
-        let button = |id: &'static str, icon: IconName| {
-            div()
+        let both = has_prompts && show_down;
+        let button = |id: &'static str, icon: IconName, is_left: bool| {
+            let mut el = div()
                 .id(id)
                 .w(px(32.0))
                 .h(px(32.0))
@@ -722,7 +723,17 @@ impl TranscriptView {
                 .justify_center()
                 .cursor_pointer()
                 .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 12.0, theme.text_secondary))
+                .child(app_icon(icon, 12.0, theme.text_secondary));
+            if both {
+                if is_left {
+                    el = el.rounded_tl(px(16.0)).rounded_bl(px(16.0));
+                } else {
+                    el = el.rounded_tr(px(16.0)).rounded_br(px(16.0));
+                }
+            } else {
+                el = el.rounded(px(16.0));
+            }
+            el
         };
         let mut pill = div()
             .flex()
@@ -734,7 +745,7 @@ impl TranscriptView {
             .bg(theme.raised);
         if has_prompts {
             pill = pill.child(
-                button("transcript-prompts", IconName::List)
+                button("transcript-prompts", IconName::List, true)
                     .tooltip(Tooltip::text("Jump to prompt"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.prompts_open = !this.prompts_open;
@@ -759,7 +770,7 @@ impl TranscriptView {
                 pill = pill.child(div().w(px(1.0)).h(px(16.0)).flex_none().bg(theme.border));
             }
             pill = pill.child(
-                button("transcript-scroll-bottom", IconName::ArrowDown)
+                button("transcript-scroll-bottom", IconName::ArrowDown, false)
                     .tooltip(Tooltip::text("Scroll to bottom"))
                     .on_click(cx.listener(|this, _, _, cx| this.scroll_to_bottom(cx))),
             );
