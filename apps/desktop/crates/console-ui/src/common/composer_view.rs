@@ -853,6 +853,9 @@ impl RenderOnce for ComposerView {
                                                 theme.text_tertiary,
                                             )),
                                     )
+                                    .child(model_control)
+                                    .when_some(thinking_control, |el, thinking| el.child(thinking))
+                                    .child(div().flex_1())
                                     .child({
                                         // Speech-to-text dictation. Idle: the mic
                                         // starts a take. Recording: the stop
@@ -940,9 +943,6 @@ impl RenderOnce for ComposerView {
                                                 .child(error),
                                         )
                                     })
-                                    .child(model_control)
-                                    .when_some(thinking_control, |el, thinking| el.child(thinking))
-                                    .child(div().flex_1())
                                     .child(match run_state {
                                         ComposerRunState::Preparing => div()
                                             .id("btn-composer-preparing")

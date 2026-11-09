@@ -47,11 +47,6 @@ impl RenderOnce for SttSection {
         // than panicking on an unwrap.
         let configured = self.status.as_ref().and_then(|s| s.configured) == Some(true);
         let from_env = self.status.as_ref().and_then(|s| s.source.as_deref()) == Some("env");
-        let account_id = self
-            .status
-            .as_ref()
-            .and_then(|s| s.account_id.clone())
-            .filter(|a| !a.trim().is_empty());
         let model = self
             .status
             .as_ref()
@@ -65,10 +60,7 @@ impl RenderOnce for SttSection {
         let status_text = if busy {
             "Working...".to_string()
         } else if configured {
-            match &account_id {
-                Some(id) => format!("Connected — account {id}"),
-                None => "Connected".to_string(),
-            }
+            "Connected".to_string()
         } else {
             "Not connected".to_string()
         };
