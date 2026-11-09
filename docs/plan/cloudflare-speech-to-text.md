@@ -2,6 +2,19 @@
 
 *Written: 2026-11-09. Context: relay folder being deleted; STT will be called directly from server-go.*
 
+## Status — Phase 1 & 2 implemented (backend + API only)
+
+- **Credential:** one Cloudflare account per machine. Account ID + API token live **server-side** in `<console storage>/stt.json` (dir `0700`, file `0600`); `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` env pair overrides the file (a partial env pair falls through to the file). No client keystore; every paired client shares the machine's account.
+- **Store:** `apps/server-go/internal/services/stt/` (`stt.go` config/resolve/status, `client.go` Workers AI client). Token never appears in status responses or error messages.
+- **Routes** (`internal/routes/stt.go`, registered after `RequireDeviceToken` in `routes.go`):
+  - `GET /api/stt/status` → `{ configured, source?, accountId?, model, updatedAt?, maxAudioBytes }` (proto `console.v1.SttStatus` in `proto/console/v1/stt.proto`)
+  - `PUT /api/stt/config` — `{ accountId, apiToken }`, both required; blank → 400
+  - `DELETE /api/stt/config` — idempotent; env pair still wins after delete
+  - `POST /api/stt/transcribe` — multipart field `audio`, capped at 4 MB (HTTP body limit raised to 8 MB for framing); returns `{ text, model }`; 400 when unconfigured/missing audio, 413 when oversized, 502 for upstream failures
+- **Wire:** `proto/console/v1/stt.proto` (`SttStatus`, `SetSttConfigResponse`, `SttTranscript`), generated with protoc into `internal/gen/console/v1/stt.pb.go`.
+- **Tests:** `apps/server-go/tests/stt/stt_test.go` (14 tests: store perms, env override, client request shape, route surface, against a fake Cloudflare upstream). Live-verified 2026-11-09 with a real 6.5s clip via `cf ai run`, raw REST (same shape as the Go client), and the Go client itself; bad token returns a clean 401 error.
+- Desktop/Android recording + settings UI are not yet built — the API is ready for them.
+
 ## Goal
 
 Add voice transcription to the desktop (Rust) + Android (Kotlin) apps: the user records speech, the audio is transcribed to text, and the transcript is returned to the caller (for voice notes / dictation into the composer).

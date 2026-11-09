@@ -21,6 +21,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/mcp"
 	projectssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/projects"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/stt"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 )
 
@@ -52,6 +53,9 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 		// get overwritten by later requests; run goroutines outlive their
 		// handler, so a mutated session id silently dropped persistence.
 		Immutable: true,
+		// Speech-to-text uploads are multipart. Fiber's 4 MB default leaves
+		// no room for framing around a near-limit 4 MB audio file.
+		BodyLimit: 8 << 20,
 	})
 	app.Use(recover.New())
 
@@ -102,6 +106,7 @@ func New(cfg Config) (*fiber.App, *run.Service, func()) {
 	// The old freely-mintable token endpoint is intentionally removed. Device
 	// tokens can only be issued through a consumed pairing grant.
 	RegisterIntegrationRoutes(app)
+	RegisterSttRoutes(app, stt.NewClient(""))
 	RegisterGitHubRoutes(app)
 	registerProviderRoutes(app, services.NewFavoriteService(cfg.DB))
 	runSvc := run.NewService(services.NewSessionService(cfg.DB))
