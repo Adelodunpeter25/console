@@ -4,6 +4,7 @@ pub mod element;
 pub mod history;
 pub mod ime;
 pub use console_shared::composer::mentions;
+pub mod native_menu;
 pub mod text_runs;
 
 use std::ops::Range;
@@ -15,6 +16,10 @@ pub use boundaries::*;
 use element::{InputElement, visual_row_count, visual_row_offset_for_x};
 pub use history::*;
 pub use mentions::*;
+use native_menu::{
+    NativeContextMenuAction, NativeContextMenuParams, NativeContextMenuResult,
+    execute_native_action, show_native_context_menu,
+};
 pub use text_runs::*;
 
 use crate::primitives::menu::{ContextMenuHandle, MenuItem, context_menu};
@@ -1566,11 +1571,66 @@ impl ComposerInput {
 
     fn on_context_mouse_down(
         &mut self,
-        _: &MouseDownEvent,
+        event: &MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let click_offset = self.index_for_mouse_position(event.position);
+        if self.selected_range.is_empty() || !self.selected_range.contains(&click_offset) {
+            self.move_to(click_offset, cx);
+        }
         window.focus(&self.focus_handle, cx);
+
+        let has_selection = !self.selected_range.is_empty();
+        let selected_text = if has_selection {
+            Some(self.content[self.selected_range.clone()].to_string())
+        } else {
+            None
+        };
+        let has_content = !self.content.is_empty();
+        let all_selected = has_content
+            && self.selected_range.start == 0
+            && self.selected_range.end == self.content.len();
+
+        let can_paste = cx.read_from_clipboard().is_some_and(|item| {
+            item.text().is_some() || attachment_paste_entries(&item).is_some()
+        });
+
+        let params = NativeContextMenuParams {
+            has_selection,
+            selected_text: selected_text.clone(),
+            can_cut: has_selection && !self.read_only,
+            can_copy: has_selection,
+            can_paste: can_paste && !self.read_only,
+            can_select_all: has_content && !all_selected,
+            total_text: self.content.to_string(),
+        };
+
+        match show_native_context_menu(params) {
+            NativeContextMenuResult::Action(action) => {
+                cx.stop_propagation();
+                window.prevent_default();
+                match action {
+                    NativeContextMenuAction::Cut => self.cut(&Cut, window, cx),
+                    NativeContextMenuAction::Copy => self.copy(&Copy, window, cx),
+                    NativeContextMenuAction::Paste => self.paste(&Paste, window, cx),
+                    NativeContextMenuAction::SelectAll => self.select_all(&SelectAll, window, cx),
+                    ref action @ (NativeContextMenuAction::LookUp(_)
+                    | NativeContextMenuAction::SearchGoogle(_)
+                    | NativeContextMenuAction::Speak(_)
+                    | NativeContextMenuAction::StopSpeaking) => {
+                        execute_native_action(action);
+                    }
+                }
+            }
+            NativeContextMenuResult::Dismissed => {
+                cx.stop_propagation();
+                window.prevent_default();
+            }
+            NativeContextMenuResult::NotSupported => {
+                // Not on macOS: let the event bubble to GPUI's context_menu wrapper
+            }
+        }
     }
 
     fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
