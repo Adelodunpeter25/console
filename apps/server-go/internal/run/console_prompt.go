@@ -44,7 +44,9 @@ func (s *Service) promptSession(sessionID, text, modelID, provider, approval, th
 
 func mapPromptErr(sessionID string, err error) error {
 	if errors.Is(err, ErrNoSession) {
-		return fmt.Errorf("session %q not found", sessionID)
+		// %w keeps the sentinel so automation fires can tell a deleted
+		// session (permanent) from a transient failure.
+		return fmt.Errorf("session %q not found: %w", sessionID, ErrNoSession)
 	}
 	return err
 }

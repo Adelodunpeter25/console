@@ -8,7 +8,7 @@ import (
 )
 
 func TestRuntimeScriptMethodsAreInstalled(t *testing.T) {
-	r, err := NewRuntime(nil, nil, nil, nil, nil, nil, nil, nil, nil, QueueControl{}, "project", "")
+	r, err := NewRuntime(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, QueueControl{}, "project", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestMarshalResult(t *testing.T) {
 }
 
 func TestApprovalModesListsClampOrder(t *testing.T) {
-	runtime, err := NewRuntime(nil, nil, nil, nil, nil, nil, nil, nil, nil, QueueControl{}, "", "")
+	runtime, err := NewRuntime(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, QueueControl{}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

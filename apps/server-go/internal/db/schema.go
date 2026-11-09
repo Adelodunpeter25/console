@@ -58,6 +58,26 @@ func InitGlobalDB(db *sql.DB, path string) error {
 		CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 		CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
 
+		-- Automations: server-side schedules an agent created for its own
+		-- session (console.automation.* tools). Global, not per-session: the
+		-- scanner sweeps due rows across all sessions in one query, and
+		-- schedules must survive server restarts independent of session DBs.
+		CREATE TABLE IF NOT EXISTS automations (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK (kind IN ('once', 'interval')),
+			interval_seconds INTEGER,
+			run_at INTEGER,
+			next_run_at INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'done', 'error')),
+			last_fired_at INTEGER,
+			last_error TEXT,
+			created_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_automations_due ON automations(status, next_run_at);
+		CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_id);
+
 		CREATE TABLE IF NOT EXISTS model_favorites (
 			provider TEXT NOT NULL,
 			model_id TEXT NOT NULL,

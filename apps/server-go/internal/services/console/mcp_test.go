@@ -15,7 +15,7 @@ func newMCPRuntime(t *testing.T, ceiling string) *Runtime {
 	t.Helper()
 	dir := t.TempDir()
 	manager := mcp.NewManager(mcp.NewConfigStore(dir), mcp.NewCredentialStore(dir), nil)
-	runtime, err := NewRuntime(nil, nil, nil, nil, manager, nil, nil, nil, nil, QueueControl{}, "", "")
+	runtime, err := NewRuntime(nil, nil, nil, nil, manager, nil, nil, nil, nil, nil, QueueControl{}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

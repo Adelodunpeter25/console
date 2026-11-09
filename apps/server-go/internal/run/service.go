@@ -15,6 +15,7 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/agent/tools"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/providers"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/automations"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/browseruse"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/console"
@@ -74,11 +75,14 @@ type Service struct {
 	memories   *memory.Registry
 	bashJobs   *terminalsvc.BashJobManager
 	background *background.Manager
-	ports      *terminalsvc.PortRegistry
-	scripts    *projectssvc.ProjectScriptsService
-	mcp        *mcp.Manager
-	prompts    promptCache
-	groups     toolGroups
+	// automations backs the console.automation.* tools and the fire scanner
+	// (nil-safe: tools report unavailable and the scanner does nothing).
+	automations *automations.Service
+	ports       *terminalsvc.PortRegistry
+	scripts     *projectssvc.ProjectScriptsService
+	mcp         *mcp.Manager
+	prompts     promptCache
+	groups      toolGroups
 	// cuaManager owns the computer-use driver runtime (nil-safe when the
 	// library is absent: runs simply never activate computer use).
 	cuaManager *cua.Manager
@@ -230,6 +234,7 @@ func (s *Service) SetConsoleServices(projects *projectssvc.ProjectService) {
 	s.mu.Unlock()
 	if manager != nil {
 		manager.SetSessions(sessions, projects, s.IsActive, s.abortAndClear, s.startConsoleSession, s.promptSession, console.QueueControl{Get: s.consoleQueued, Clear: s.ClearQueuedPrompt})
+		manager.SetAutomations(s.automationStore())
 	}
 }
 
