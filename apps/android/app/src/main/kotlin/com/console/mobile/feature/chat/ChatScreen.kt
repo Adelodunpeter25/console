@@ -285,6 +285,16 @@ fun ChatScreen(
                             }
                         }
                     },
+                    onReply = { quote ->
+                        val current = chat.input
+                        val next = if (current.isBlank()) {
+                            quote
+                        } else {
+                            val prefix = if (current.endsWith("\n")) "\n" else "\n\n"
+                            "$current$prefix$quote"
+                        }
+                        AppContainer.chatRepository.setInput(sessionId, next)
+                    },
                 )
                 ScrollThumb(
                     state = transcriptScroll.listState,

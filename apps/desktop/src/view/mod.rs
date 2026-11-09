@@ -527,7 +527,7 @@ impl Render for ConsoleDesktopApp {
             .on_action(cx.listener(Self::copy_selection_action))
             .on_key_down({
                 let entity = entity.clone();
-                move |event: &KeyDownEvent, _, cx| {
+                move |event: &KeyDownEvent, window, cx| {
                     if event.keystroke.key == "escape" {
                         // Close the image preview first — it sits above
                         // everything else, so it owns Escape while open.
@@ -543,6 +543,9 @@ impl Render for ConsoleDesktopApp {
                                     if trans.is_prompts_open() {
                                         trans.close_prompts(cx);
                                         true
+                                    } else if trans.has_active_cite_popup() {
+                                        trans.clear_selection(window);
+                                        true
                                     } else {
                                         false
                                     }
@@ -553,6 +556,32 @@ impl Render for ConsoleDesktopApp {
                             }
                         }
                         cancel_workspace_drags();
+                    } else if (event.keystroke.key == "r" || event.keystroke.key == "R")
+                        && !event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.platform
+                    {
+                        if let Some(app) = entity.upgrade() {
+                            let handled = app.update(cx, |this, cx| {
+                                let transcript = this.active_transcript_view();
+                                transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx))
+                            });
+                            if handled {
+                                return;
+                            }
+                        }
+                    } else if (event.keystroke.key == "c" || event.keystroke.key == "C")
+                        && (!event.keystroke.modifiers.control && !event.keystroke.modifiers.alt)
+                    {
+                        if let Some(app) = entity.upgrade() {
+                            let handled = app.update(cx, |this, cx| {
+                                let transcript = this.active_transcript_view();
+                                transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx))
+                            });
+                            if handled {
+                                return;
+                            }
+                        }
                     } else if event.keystroke.modifiers.platform
                         && event.keystroke.modifiers.shift
                         && event.keystroke.key.eq_ignore_ascii_case("n")

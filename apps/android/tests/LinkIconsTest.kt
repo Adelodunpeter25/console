@@ -94,4 +94,11 @@ class LinkIconsTest {
         val link = links.first().item as androidx.compose.ui.text.LinkAnnotation.Url
         assertEquals("https://docs.rs/gpui", link.url)
     }
+
+    @Test
+    fun formatsCiteQuoteForMobile() {
+        assertEquals("> hello\n\n", com.console.mobile.feature.chat.markdown.formatCiteQuote("hello"))
+        assertEquals("> first\n> second\n\n", com.console.mobile.feature.chat.markdown.formatCiteQuote("first\nsecond"))
+        assertEquals("", com.console.mobile.feature.chat.markdown.formatCiteQuote("   "))
+    }
 }

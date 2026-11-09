@@ -17,6 +17,7 @@ fun MessageBubbleItem(
     fileChanges: List<SessionFileChange> = emptyList(),
     onOpenChange: ((SessionFileChange) -> Unit)? = null,
     onFork: ((String) -> Unit)? = null,
+    onReply: ((String) -> Unit)? = null,
 ) {
     when (item) {
         is UserMessage -> UserBubble(content = item.content, createdAt = item.createdAt, attachments = item.attachments)
@@ -37,6 +38,7 @@ fun MessageBubbleItem(
                 messageId = item.id,
                 onFork = onFork,
                 tokPerSec = item.tokPerSec,
+                onReply = onReply,
             )
         }
     }

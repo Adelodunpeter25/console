@@ -401,6 +401,55 @@ impl TranscriptView {
         }
     }
 
+    pub fn has_active_cite_popup(&self) -> bool {
+        let state = self.selection.selection.borrow();
+        if state.is_empty() || state.is_dragging() {
+            return false;
+        }
+        let Some(head) = state.head_span() else {
+            return false;
+        };
+        if head.key.row.starts_with("user-") {
+            return false;
+        }
+        self.selection.cite_handler().is_some()
+    }
+
+    pub fn clear_selection(&mut self, window: &mut Window) {
+        self.selection.selection.borrow_mut().clear();
+        window.refresh();
+    }
+
+    pub fn trigger_cite(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !self.has_active_cite_popup() {
+            return false;
+        }
+        let text = self.selected_text();
+        self.clear_selection(window);
+        if let Some(text) = text {
+            if let Some(quote) = crate::markdown::selection::format_cite_quote(&text) {
+                if let Some(cite) = self.selection.cite_handler() {
+                    cite(quote, window, cx);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn trigger_copy(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !self.has_active_cite_popup() {
+            return false;
+        }
+        let text = self.selected_text();
+        self.clear_selection(window);
+        if let Some(text) = text {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            return true;
+        }
+        false
+    }
+
     /// Scroll so the user prompt `from_end` prompts back from the newest (0 =
     /// newest) is at the top of the viewport. Counting from the end needs no
     /// message id, which prompts sent this session do not have yet. Returns
@@ -1412,10 +1461,34 @@ impl Render for TranscriptView {
             }))
             .key_context("TranscriptView")
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if this.prompts_open && event.keystroke.key == "escape" {
                     this.close_prompts(cx);
                     cx.stop_propagation();
+                    return;
+                }
+                if this.has_active_cite_popup() {
+                    let key = event.keystroke.key.as_str();
+                    let no_mods = !event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.platform;
+                    if (key == "r" || key == "R") && no_mods {
+                        if this.trigger_cite(window, cx) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+                    if (key == "c" || key == "C") && (no_mods || event.keystroke.modifiers.platform) {
+                        if this.trigger_copy(window, cx) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+                    if key == "escape" {
+                        this.clear_selection(window);
+                        cx.stop_propagation();
+                        return;
+                    }
                 }
             }))
             .relative()

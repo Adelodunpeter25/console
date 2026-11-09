@@ -34,6 +34,7 @@ internal fun ChatTranscript(
     cwd: String?,
     onOpenChange: (SessionFileChange) -> Unit,
     onFork: (String) -> Unit,
+    onReply: ((String) -> Unit)? = null,
 ) {
     LazyColumn(
         state = listState,
@@ -46,6 +47,7 @@ internal fun ChatTranscript(
                 fileChanges = assistantTurnChanges[index].orEmpty(),
                 onOpenChange = onOpenChange,
                 onFork = onFork,
+                onReply = onReply,
             )
             val runIdx = userRunMap[index]
             if (runIdx != null && runIdx < runs.size) {
@@ -60,6 +62,7 @@ internal fun ChatTranscript(
                     thinkingContent = streamingThinking.ifBlank { null },
                     isStreaming = true,
                     createdAt = null,
+                    onReply = onReply,
                 )
             }
         } else if (latestUserIndex == -1 && runs.isNotEmpty() && running) {

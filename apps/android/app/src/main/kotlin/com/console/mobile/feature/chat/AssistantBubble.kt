@@ -32,6 +32,7 @@ import com.console.mobile.feature.chat.markdown.CustomMarkdown
 import com.console.mobile.ui.theme.NewTheme
 import console.v1.SessionFileChange
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBackUp
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBearRight2
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 
@@ -48,6 +49,7 @@ fun AssistantBubble(
     messageId: String? = null,
     onFork: ((String) -> Unit)? = null,
     tokPerSec: Double? = null,
+    onReply: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val hasContent = !textContent.isNullOrEmpty() || !thinkingContent.isNullOrEmpty()
@@ -60,7 +62,7 @@ fun AssistantBubble(
             ThinkingBlock(text = thinkingContent, isStreaming = isStreaming)
         }
         if (!textContent.isNullOrEmpty()) {
-            CustomMarkdown(content = textContent, streaming = isStreaming)
+            CustomMarkdown(content = textContent, streaming = isStreaming, onReply = onReply)
         }
         if (!isStreaming && !showTyping && textContent.isNullOrEmpty() && thinkingContent.isNullOrEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -99,6 +101,9 @@ fun AssistantBubble(
                 formatTokensPerSecond(tokPerSec)?.let { rate ->
                     Text(rate, color = NewTheme.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
                 }
+                if (onReply != null && !textContent.isNullOrEmpty()) {
+                    ReplyButton(onClick = { onReply.invoke(com.console.mobile.feature.chat.markdown.formatCiteQuote(textContent)) })
+                }
                 if (onFork != null && messageId != null) ForkButton(onClick = { onFork.invoke(messageId) })
                 val copyable = buildList {
                     if (!thinkingContent.isNullOrEmpty()) add("Thought:\n$thinkingContent")
@@ -107,6 +112,13 @@ fun AssistantBubble(
                 if (copyable.isNotEmpty()) CopyButton(text = copyable, context = context)
             }
         }
+    }
+}
+
+@Composable
+private fun ReplyButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(24.dp)) {
+        Icon(TablerIcons.Outline.ArrowBackUp, contentDescription = "Reply to message", tint = NewTheme.TextMuted, modifier = Modifier.size(13.dp))
     }
 }
 

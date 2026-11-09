@@ -55,22 +55,22 @@ pub fn cite_popup(
     }
     strip_x = strip_x.clamp(0.0, (container_w - strip_w).max(0.0));
     y = y.clamp(0.0, (container_h - strip_h).max(0.0));
-    let copy_x = strip_x + STRIP_PAD;
-    let cite_x = copy_x + PILL_SIZE + PILL_GAP;
+    let cite_x = strip_x + STRIP_PAD;
+    let copy_x = cite_x + PILL_SIZE + PILL_GAP;
     // Record both hit rects at render time, from the same placement math
     // that positions the strip — deliberately generous so clicks near the
     // rounded edges still count. No paint-time probe: how Taffy sizes an
     // absolute probe inside a pill is exactly what we would be guessing at.
     {
         let mut state = selection.selection.borrow_mut();
-        state.set_copy_button(Some([
-            container_x + copy_x - HIT_PAD,
+        state.set_cite_button(Some([
+            container_x + cite_x - HIT_PAD,
             container_y + y + STRIP_PAD - HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
         ]));
-        state.set_cite_button(Some([
-            container_x + cite_x - HIT_PAD,
+        state.set_copy_button(Some([
+            container_x + copy_x - HIT_PAD,
             container_y + y + STRIP_PAD - HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
             PILL_SIZE + 2.0 * HIT_PAD,
@@ -91,13 +91,8 @@ pub fn cite_popup(
         .flex()
         .items_center()
         .gap(px(PILL_GAP))
-        .child(popup_pill(
-            "copy-popup",
-            IconName::Copy,
-            "Copy",
-            theme.clone(),
-        ))
-        .child(popup_pill("cite-popup", IconName::Reply, "Quote selection", theme))
+        .child(popup_pill("cite-popup", IconName::Reply, "Reply  r", theme.clone()))
+        .child(popup_pill("copy-popup", IconName::Copy, "Copy  c", theme))
 }
 
 /// One icon button inside the popup strip. Activation lives in the selection
