@@ -831,6 +831,9 @@ impl ConsoleDesktopApp {
         }
 
         app.refresh_auth_status(cx);
+        // The composer's mic button reads configured straight from app state,
+        // so it must be loaded without a trip through the Providers page.
+        app.refresh_stt_status(cx);
         app.init_notifications(cx);
 
         app.wire_palette_callbacks(cx);

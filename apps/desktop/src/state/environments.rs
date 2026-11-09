@@ -265,6 +265,8 @@ impl ConsoleDesktopApp {
                                 this.load_providers(cx);
                                 this.load_projects(cx);
                                 this.refresh_auth_status(cx);
+                                this.stt_status = None;
+                                this.refresh_stt_status(cx);
                                 // The URL changed: the repo list belongs to
                                 // the old server until refetched.
                                 this.github_repos = None;
@@ -373,6 +375,11 @@ impl ConsoleDesktopApp {
                         this.load_providers(cx);
                         this.load_projects(cx);
                         this.refresh_auth_status(cx);
+                        // STT status belongs to the old server; reset it so the
+                        // mic button doesn't claim the new server is configured
+                        // before the refresh lands.
+                        this.stt_status = None;
+                        this.refresh_stt_status(cx);
                         this.fetch_usage(cx);
                         this.init_port_stream(cx);
                         // Point the device viewer at the new backend origin so

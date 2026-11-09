@@ -15,6 +15,9 @@ impl ConsoleDesktopApp {
             self.init_environments(Some(persisted), self.active_env_id.clone(), cx);
         }
         self.refresh_auth_status(cx);
+        // The composer's mic button reads this without the Providers page, so
+        // it loads here too, not only from the settings tab.
+        self.refresh_stt_status(cx);
         self.refresh_deleted_sessions(cx);
         self.load_projects(cx);
         self.load_sessions(cx);
