@@ -231,7 +231,7 @@ private fun ListView(block: MdBlock.ListBlock, color: Color) {
     }
 }
 
-private enum class TableAlign { LEFT, CENTER, RIGHT }
+internal enum class TableAlign { LEFT, CENTER, RIGHT }
 
 @Composable
 private fun TableView(block: MdBlock.Table) {
@@ -309,7 +309,7 @@ private fun CodeBlock(language: String, code: String) {
 }
 
 @Immutable
-private sealed interface MdBlock {
+internal sealed interface MdBlock {
     @Immutable data class Code(val language: String, val code: String) : MdBlock
     @Immutable data class Image(val url: String, val alt: String) : MdBlock
     @Immutable data class Math(val expression: String, val display: Boolean) : MdBlock
@@ -321,7 +321,7 @@ private sealed interface MdBlock {
     @Immutable data class Table(val header: List<AnnotatedString>, val rows: List<List<AnnotatedString>>, val align: List<TableAlign>) : MdBlock
 }
 
-@Immutable private data class MdListItem(val checked: Boolean?, val blocks: List<MdBlock>)
+@Immutable internal data class MdListItem(val checked: Boolean?, val blocks: List<MdBlock>)
 
 private val PARSER = MarkdownParser(GFMFlavourDescriptor())
 private val ATX_LEVELS = mapOf(
@@ -370,7 +370,7 @@ private class StreamingMarkdownParser {
     }
 }
 
-private fun parseBlocks(src: String): List<MdBlock> {
+internal fun parseBlocks(src: String): List<MdBlock> {
     val root = PARSER.buildMarkdownTreeFromString(src)
     val refs = root.children.filter { it.type == MarkdownElementTypes.LINK_DEFINITION }.associate { definitionKey(it, src) to definitionUrl(it, src) }
     return blocksOf(root.children, src, refs)
@@ -513,7 +513,7 @@ private fun AnnotatedString.Builder.appendInline(nodes: List<ASTNode>, src: Stri
     for (n in nodes) when (n.type) {
         MarkdownTokenTypes.WHITE_SPACE -> append(src, n.startOffset, n.endOffset)
         MarkdownTokenTypes.EOL -> append('\n')
-        MarkdownTokenTypes.TEXT -> appendUnescaped(src, n.startOffset, n.endOffset)
+        MarkdownTokenTypes.TEXT -> if (linked) appendUnescaped(src, n.startOffset, n.endOffset) else appendLinkifiedText(src, n.startOffset, n.endOffset)
         MarkdownTokenTypes.HARD_LINE_BREAK -> Unit
         MarkdownTokenTypes.BLOCK_QUOTE -> Unit
         MarkdownElementTypes.EMPH -> styled(ITALIC_SPAN) { appendInline(withoutMarkers(n.children), src, refs, linked) }
@@ -587,6 +587,61 @@ private fun formatMath(text: String): String {
     listOf("\\rightarrow" to "→", "\\leftarrow" to "←", "\\Rightarrow" to "⇒", "\\Leftarrow" to "⇐", "\\leftrightarrow" to "↔", "\\to" to "→", "\\leq" to "≤", "\\geq" to "≥", "\\neq" to "≠", "\\approx" to "≈", "\\times" to "×", "\\cdot" to "·", "\\pm" to "±", "\\dots" to "…", "\\infty" to "∞").forEach { (from, to) -> out = out.replace(from, to) }
     return out
 }
+private val BARE_WEB_URL_REGEX = Regex("https?://[^\\s<>\"`]+")
+
+private fun trimmedBareUrl(raw: String): String {
+    var end = raw.length
+    var parens = raw.count { it == '(' } - raw.count { it == ')' }
+    var brackets = raw.count { it == '[' } - raw.count { it == ']' }
+    var braces = raw.count { it == '{' } - raw.count { it == '}' }
+    while (end > 0) {
+        val last = raw[end - 1]
+        val shouldTrim = when (last) {
+            '.', ',', ':', ';', '?', '!', '\'', '"' -> true
+            ')' -> if (parens < 0) { parens++; true } else false
+            ']' -> if (brackets < 0) { brackets++; true } else false
+            '}' -> if (braces < 0) { braces++; true } else false
+            else -> false
+        }
+        if (!shouldTrim) break
+        end--
+    }
+    return raw.substring(0, end)
+}
+
+private fun AnnotatedString.Builder.appendLinkifiedText(src: String, start: Int, end: Int) {
+    val slice = src.substring(start, end)
+    var cursor = start
+    for (match in BARE_WEB_URL_REGEX.findAll(slice)) {
+        val raw = match.value
+        val trimmed = trimmedBareUrl(raw)
+        val rest = when {
+            trimmed.startsWith("https://", ignoreCase = true) -> trimmed.substring(8)
+            trimmed.startsWith("http://", ignoreCase = true) -> trimmed.substring(7)
+            else -> ""
+        }
+        if (rest.isEmpty()) continue
+
+        val matchStart = start + match.range.first
+        val matchEnd = matchStart + trimmed.length
+        val rawEnd = start + match.range.last + 1
+
+        if (matchStart > cursor) {
+            appendUnescaped(src, cursor, matchStart)
+        }
+        link(trimmed) {
+            append(PageTitles.get(trimmed) ?: trimmed)
+        }
+        if (rawEnd > matchEnd) {
+            append(src, matchEnd, rawEnd)
+        }
+        cursor = rawEnd
+    }
+    if (cursor < end) {
+        appendUnescaped(src, cursor, end)
+    }
+}
+
 private fun AnnotatedString.Builder.appendUnescaped(src: String, start: Int, end: Int) {
     var run = start; var i = start
     while (i < end) { if (src[i] == '\\' && i + 1 < end && isAsciiPunctuation(src[i + 1])) { append(src, run, i); append(src[i + 1]); i += 2; run = i } else i++ }

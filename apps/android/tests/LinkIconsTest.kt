@@ -8,6 +8,8 @@ import com.console.mobile.core.util.filePathFromLink
 import com.console.mobile.core.util.resolveFilePath
 import com.console.mobile.core.util.faviconUrl
 import com.console.mobile.core.util.filePathOrNull
+import com.console.mobile.feature.chat.markdown.MdBlock
+import com.console.mobile.feature.chat.markdown.parseBlocks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assume.assumeTrue
@@ -77,5 +79,19 @@ class LinkIconsTest {
         assertEquals("Makefile", filePathOrNull("Makefile"))
         assertEquals("LICENSE", filePathOrNull("LICENSE"))
         assertNull(filePathOrNull("hello"))
+    }
+
+    @Test
+    fun bareWebUrlsInMarkdownTextGetFavicons() {
+        val blocks = parseBlocks("Here is a link https://docs.rs/gpui and some text.")
+        val p = blocks.first() as MdBlock.Paragraph
+        val icons = p.text.getStringAnnotations("icon", 0, p.text.length)
+        assertEquals(1, icons.size)
+        assertEquals("favicon:docs.rs", icons.first().item)
+
+        val links = p.text.getLinkAnnotations(0, p.text.length)
+        assertEquals(1, links.size)
+        val link = links.first().item as androidx.compose.ui.text.LinkAnnotation.Url
+        assertEquals("https://docs.rs/gpui", link.url)
     }
 }
