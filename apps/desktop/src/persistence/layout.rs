@@ -23,6 +23,8 @@ pub struct PersistedLayoutState {
     /// Collapsed project sections (project id, or "none") in project sort mode.
     #[serde(default)]
     pub collapsed_projects: Vec<String>,
+    #[serde(default)]
+    pub pinned_collapsed: bool,
     /// Auxiliary inspector tabs mounted in the right-sidebar tab strip.
     #[serde(default)]
     pub open_auxiliary_tabs: Vec<console_ui::AuxiliaryTab>,
@@ -84,6 +86,7 @@ impl Default for PersistedLayoutState {
             collapsed_groups: Vec::new(),
             sidebar_sort_mode: String::new(),
             collapsed_projects: Vec::new(),
+            pinned_collapsed: false,
             open_auxiliary_tabs: Vec::new(),
         }
     }

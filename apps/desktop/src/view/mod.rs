@@ -815,8 +815,7 @@ impl Render for ConsoleDesktopApp {
                             move |_w, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.pinned_collapsed = !this.pinned_collapsed;
-                                        cx.notify();
+                                        this.toggle_sidebar_pinned(cx);
                                     });
                                 }
                             }

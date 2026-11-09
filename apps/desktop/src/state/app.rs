@@ -789,7 +789,7 @@ impl ConsoleDesktopApp {
             drafts,
             sidebar_draft_ids,
             drafts_collapsed: false,
-            pinned_collapsed: false,
+            pinned_collapsed: layout.pinned_collapsed,
             settled_collapsed: true,
             collapsed_groups: Rc::new(
                 layout

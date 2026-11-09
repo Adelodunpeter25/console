@@ -73,6 +73,7 @@ impl ConsoleDesktopApp {
                 .collect(),
             sidebar_sort_mode: self.sidebar_sort_mode.label().to_string(),
             collapsed_projects: self.collapsed_projects.iter().cloned().collect(),
+            pinned_collapsed: self.pinned_collapsed,
             open_auxiliary_tabs: self.inspector_open_auxiliary_tabs.clone(),
         });
         let cur_wid = self
@@ -335,6 +336,12 @@ impl ConsoleDesktopApp {
         if !collapsed.remove(&project_key) {
             collapsed.insert(project_key);
         }
+        self.persist_layout();
+        cx.notify();
+    }
+
+    pub fn toggle_sidebar_pinned(&mut self, cx: &mut Context<Self>) {
+        self.pinned_collapsed = !self.pinned_collapsed;
         self.persist_layout();
         cx.notify();
     }
