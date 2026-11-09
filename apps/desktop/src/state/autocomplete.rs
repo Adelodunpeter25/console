@@ -354,15 +354,19 @@ impl ConsoleDesktopApp {
                 ..trigger.range.end.min(input.content().len());
             match &item {
                 AutocompleteItem::File(file) => {
-                    let path = if file.relative_path.is_empty() {
+                    let mut path = if file.relative_path.is_empty() {
                         file.absolute_path
                             .rsplit('/')
                             .next()
                             .unwrap_or(&file.absolute_path)
+                            .to_string()
                     } else {
-                        &file.relative_path
+                        file.relative_path.clone()
                     };
-                    input.insert_file_mention(range, path, cx);
+                    if file.is_dir && !path.ends_with('/') {
+                        path.push('/');
+                    }
+                    input.insert_file_mention(range, &path, cx);
                 }
                 AutocompleteItem::Command(command) => {
                     input.insert_skill_mention(range, &command.name, cx);

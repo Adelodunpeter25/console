@@ -405,24 +405,59 @@ func (s *FsService) DeleteDirectory(path string) (bool, error) {
 	return true, nil
 }
 
+func (s *FsService) searchDirs(resolved, query string, maxDirs int) []types.FileSearchResult {
+	cleanQuery := strings.Trim(strings.ToLower(query), "/. ")
+	var dirs []types.FileSearchResult
+	_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path == resolved {
+			return nil
+		}
+		name := d.Name()
+		if utils.IsPathIgnored(name) || utils.IsHiddenName(name) {
+			return filepath.SkipDir
+		}
+		rel, err := filepath.Rel(resolved, path)
+		if err != nil {
+			return nil
+		}
+		matches := false
+		if cleanQuery == "" {
+			// For an empty query, list direct and shallow subdirectories
+			depth := strings.Count(rel, string(filepath.Separator))
+			if depth <= 1 {
+				matches = true
+			}
+		} else {
+			relLower := strings.ToLower(rel)
+			nameLower := strings.ToLower(name)
+			matches = strings.Contains(relLower, cleanQuery) || strings.Contains(nameLower, cleanQuery)
+		}
+		if matches {
+			dirs = append(dirs, types.FileSearchResult{
+				RelativePath: rel,
+				AbsolutePath: path,
+				IsDir:        true,
+			})
+			if len(dirs) >= maxDirs {
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	return dirs
+}
+
 // SearchFiles serves /api/fs/search. When the fff C library is available the
 // fuzzy search runs through its index (much faster, frecency-ranked); until
 // the index is warm — and always when fff is absent — it falls back to a
 // substring walk. Items carry relative/absolute paths plus a score.
 func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool) ([]types.FileSearchResult, error) {
-	if manager != nil && manager.Enabled() {
-		if items, ok := manager.SearchAsync(root, query, limit); ok {
-			resolved, _ := filepath.Abs(root)
-			out := make([]types.FileSearchResult, 0, len(items))
-			for _, item := range items {
-				full := filepath.Join(resolved, item.RelPath)
-				out = append(out, types.FileSearchResult{
-					RelativePath: item.RelPath, AbsolutePath: full, IsDir: item.IsDir,
-				})
-			}
-			return out, nil
-		}
-	}
 	resolved, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -430,62 +465,90 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 	if limit <= 0 {
 		limit = 20
 	}
-	q := strings.ToLower(query)
-	out := make([]types.FileSearchResult, 0)
-	addItem := func(abs string, isDir bool) bool {
-		rel, err := filepath.Rel(resolved, abs)
-		if err != nil {
-			rel = abs
+
+	var dirs []types.FileSearchResult
+	if includeDirs {
+		maxDirs := limit / 2
+		if maxDirs < 10 {
+			maxDirs = 10
 		}
-		out = append(out, types.FileSearchResult{RelativePath: rel, AbsolutePath: abs, IsDir: isDir})
-		return len(out) >= limit
+		dirs = s.searchDirs(resolved, query, maxDirs)
 	}
-	_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if path != resolved && (utils.IsPathIgnored(d.Name()) || (!includeDirs && false)) {
-				return filepath.SkipDir
-			}
-			if utils.IsHiddenName(d.Name()) && path != resolved {
-				return filepath.SkipDir
-			}
-			if includeDirs && q != "" && strings.Contains(strings.ToLower(d.Name()), q) && path != resolved {
-				if addItem(path, true) {
-					return filepath.SkipAll
+
+	var files []types.FileSearchResult
+	if manager != nil && manager.Enabled() {
+		if items, ok := manager.SearchAsync(root, query, limit); ok {
+			files = make([]types.FileSearchResult, 0, len(items))
+			for _, item := range items {
+				if item.IsDir {
+					continue
 				}
+				full := filepath.Join(resolved, item.RelPath)
+				files = append(files, types.FileSearchResult{
+					RelativePath: item.RelPath, AbsolutePath: full, IsDir: false,
+				})
 			}
-			return nil
 		}
-		if utils.IsPathIgnored(d.Name()) {
-			return nil
+	}
+
+	if files == nil {
+		q := strings.Trim(strings.ToLower(query), "/. ")
+		addItem := func(abs string) bool {
+			rel, err := filepath.Rel(resolved, abs)
+			if err != nil {
+				rel = abs
+			}
+			files = append(files, types.FileSearchResult{RelativePath: rel, AbsolutePath: abs, IsDir: false})
+			return len(files) >= limit
 		}
-		if q != "" {
-			// Separator-insensitive comparison so fallback still matches
-			// camel/underscore queries like "ptymanager" -> pty_manager.go.
-			lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
-			lq = strings.Map(func(r rune) rune {
-				if r == '_' || r == '-' || r == '/' || r == '.' {
-					return -1
-				}
-				return r
-			}, lq)
-			lp = strings.Map(func(r rune) rune {
-				if r == '_' || r == '-' || r == '/' || r == '.' {
-					return -1
-				}
-				return r
-			}, lp)
-			if !strings.Contains(lp, lq) {
+		_ = filepath.WalkDir(resolved, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
 				return nil
 			}
+			if d.IsDir() {
+				if path != resolved && (utils.IsPathIgnored(d.Name()) || utils.IsHiddenName(d.Name())) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if utils.IsPathIgnored(d.Name()) || utils.IsHiddenName(d.Name()) {
+				return nil
+			}
+			if q != "" {
+				// Separator-insensitive comparison so fallback still matches
+				// camel/underscore queries like "ptymanager" -> pty_manager.go.
+				lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
+				lq = strings.Map(func(r rune) rune {
+					if r == '_' || r == '-' || r == '/' || r == '.' {
+						return -1
+					}
+					return r
+				}, lq)
+				lp = strings.Map(func(r rune) rune {
+					if r == '_' || r == '-' || r == '/' || r == '.' {
+						return -1
+					}
+					return r
+				}, lp)
+				if !strings.Contains(lp, lq) {
+					return nil
+				}
+			}
+			if addItem(path) {
+				return filepath.SkipAll
+			}
+			return nil
+		})
+	}
+
+	out := make([]types.FileSearchResult, 0, len(dirs)+len(files))
+	out = append(out, dirs...)
+	for _, f := range files {
+		if len(out) >= limit+len(dirs) {
+			break
 		}
-		if addItem(path, false) {
-			return filepath.SkipAll
-		}
-		return nil
-	})
+		out = append(out, f)
+	}
 	return out, nil
 }
 

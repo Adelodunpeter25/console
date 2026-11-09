@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.console.mobile.core.util.FileMention
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 import com.console.mobile.ui.theme.NewTheme
@@ -41,7 +42,8 @@ internal val MentionAccent = NewTheme.Accent
  * Desktop parity (file_mention_chip.rs).
  */
 @Composable
-fun FileMentionChip(path: String, label: String = path.substringAfterLast('/')) {
+fun FileMentionChip(path: String, label: String = path.trimEnd('/').substringAfterLast('/')) {
+    val isDir = path.endsWith('/')
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
@@ -50,7 +52,16 @@ fun FileMentionChip(path: String, label: String = path.substringAfterLast('/')) 
             .padding(horizontal = 6.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FileIcon(filename = label, sizeDp = 11, modifier = Modifier.size(11.dp))
+        if (isDir) {
+            androidx.compose.material3.Icon(
+                TablerIcons.Outline.Folder,
+                contentDescription = null,
+                tint = MentionAccent,
+                modifier = Modifier.size(11.dp),
+            )
+        } else {
+            FileIcon(filename = label, sizeDp = 11, modifier = Modifier.size(11.dp))
+        }
         Text(
             label,
             color = MentionAccent,
@@ -74,7 +85,7 @@ fun mentionAnnotatedString(
     chatMentions: List<com.console.mobile.core.util.ChatMention> = emptyList(),
 ): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val items = mutableListOf<MentionItem>()
-    for (m in fileMentions) items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
+    for (m in fileMentions) items += MentionItem(m.range, m.path, m.path.trimEnd('/').substringAfterLast('/'), MentionKind.File)
     for (s in skillMentions) items += MentionItem(s.range, "/${s.name}", s.name, MentionKind.Skill)
     for (c in chatMentions) items += MentionItem(c.range, "\$${c.slug}", c.slug, MentionKind.Chat)
     items.sortBy { it.range.first }
@@ -89,6 +100,13 @@ fun mentionAnnotatedString(
             } else if (item.kind == MentionKind.Chat) {
                 androidx.compose.material3.Icon(
                     TablerIcons.Outline.MessageChatbot,
+                    contentDescription = null,
+                    tint = MentionAccent,
+                    modifier = Modifier.size(12.dp),
+                )
+            } else if (item.text.endsWith('/')) {
+                androidx.compose.material3.Icon(
+                    TablerIcons.Outline.Folder,
                     contentDescription = null,
                     tint = MentionAccent,
                     modifier = Modifier.size(12.dp),
@@ -172,7 +190,7 @@ internal fun buildMentionVisual(
 ): MentionVisual {
     val items = mutableListOf<MentionItem>()
     for (m in fileMentions) {
-        items += MentionItem(m.range, m.path, m.path.substringAfterLast('/'), MentionKind.File)
+        items += MentionItem(m.range, m.path, m.path.trimEnd('/').substringAfterLast('/'), MentionKind.File)
     }
     // The `$`/`/` prefixes are payload, not display: the chip shows just
     // the slug/name while the underlying text keeps the prefix.

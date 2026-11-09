@@ -63,6 +63,7 @@ import com.console.mobile.core.util.detectComposerTrigger
 import com.console.mobile.core.util.filterChatRefs
 import com.console.mobile.core.util.parseFileMentions
 import com.console.mobile.core.util.slugifyChatTitle
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
 import console.v1.FileSearchResult
 import console.v1.SessionHeader
 import console.v1.SlashCommandInfo
@@ -266,8 +267,9 @@ fun Composer(
     }
 
     fun applyFileSuggestion(file: console.v1.FileSearchResult, replaceFrom: Int) {
-        confirmedPaths = confirmedPaths + file.relative_path
-        applySuggestion("@${file.relative_path} ", replaceFrom)
+        val path = if (file.is_dir && !file.relative_path.endsWith('/')) "${file.relative_path}/" else file.relative_path
+        confirmedPaths = confirmedPaths + path
+        applySuggestion("@$path ", replaceFrom)
     }
 
     fun applySkillSuggestion(command: SlashCommandInfo, replaceFrom: Int) {
@@ -687,6 +689,13 @@ private fun ComposerInput(
                                     TablerIcons.Outline.MessageChatbot,
                                     contentDescription = null,
                                     tint = MentionAccent,
+                                )
+                            } else if (seg.path.endsWith('/')) {
+                                androidx.compose.material3.Icon(
+                                    TablerIcons.Outline.Folder,
+                                    contentDescription = null,
+                                    tint = MentionAccent,
+                                    modifier = Modifier.size(12.dp),
                                 )
                             } else {
                                 FileIcon(filename = seg.path.substringAfterLast('/'), sizeDp = 12)

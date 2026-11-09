@@ -76,6 +76,13 @@ pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
             theme.accent,
         )
         .into_any_element()
+    } else if path.ends_with('/') || path.ends_with('\\') || std::path::Path::new(path).is_dir() {
+        crate::primitives::app_icon(
+            crate::primitives::IconName::Folder,
+            FILE_MENTION_ICON_SIZE,
+            theme.accent,
+        )
+        .into_any_element()
     } else {
         crate::primitives::file_type_icon(path, FILE_MENTION_ICON_SIZE).into_any_element()
     }

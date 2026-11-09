@@ -609,10 +609,11 @@ impl ComposerInput {
     /// Insert an accepted file mention as an inline chip.
     /// Inserts the filename into the text buffer and tracks the full path in the mention.
     pub fn insert_file_mention(&mut self, range: Range<usize>, path: &str, cx: &mut Context<Self>) {
-        let label = std::path::Path::new(path)
+        let clean = path.trim_end_matches(['/', '\\']);
+        let label = std::path::Path::new(clean)
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or(path)
+            .unwrap_or(clean)
             .to_string();
         self.insert_mention_chip(range, label, path.to_string(), cx);
     }

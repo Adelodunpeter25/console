@@ -38,6 +38,8 @@ import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.MessageChatbot
+import io.github.lyxnx.compose.ui.tablericons.outline.Folder
+import androidx.compose.foundation.layout.size
 import com.console.mobile.ui.theme.ConsoleMonoFamily
 
 /** Floating suggestion list anchored above [anchor] (the composer input), with a real dp gap. */
@@ -133,7 +135,16 @@ fun FileMentionSuggestionRow(file: FileSearchResult, onClick: () -> Unit) {
                 .padding(horizontal = 6.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FileIcon(filename = filename, sizeDp = 12)
+            if (file.is_dir) {
+                androidx.compose.material3.Icon(
+                    TablerIcons.Outline.Folder,
+                    contentDescription = null,
+                    tint = MentionAccent,
+                    modifier = Modifier.size(12.dp),
+                )
+            } else {
+                FileIcon(filename = filename, sizeDp = 12)
+            }
             Text(filename, color = MentionAccent, fontSize = 12.sp, fontFamily = ConsoleMonoFamily, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp))
         }
         if (file.relative_path != filename) {

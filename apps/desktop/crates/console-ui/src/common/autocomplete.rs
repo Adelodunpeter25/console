@@ -300,25 +300,25 @@ pub fn filter_items(
                 .collect()
         }
         AutocompleteKind::File => {
-            if query.is_empty() {
-                return files
+            let mut matched: Vec<_> = if query.is_empty() {
+                files.to_vec()
+            } else {
+                files
                     .iter()
-                    .take(MAX_AUTOCOMPLETE_ITEMS)
+                    .filter(|f| f.relative_path.to_ascii_lowercase().contains(&query))
                     .cloned()
-                    .map(AutocompleteItem::File)
-                    .collect();
-            }
-            let mut out = Vec::new();
-            out.reserve(MAX_AUTOCOMPLETE_ITEMS.min(files.len()));
-            for file in files {
-                if file.relative_path.to_ascii_lowercase().contains(&query) {
-                    out.push(AutocompleteItem::File(file.clone()));
-                    if out.len() >= MAX_AUTOCOMPLETE_ITEMS {
-                        break;
-                    }
-                }
-            }
-            out
+                    .collect()
+            };
+            matched.sort_by(|a, b| {
+                b.is_dir
+                    .cmp(&a.is_dir)
+                    .then_with(|| a.relative_path.cmp(&b.relative_path))
+            });
+            matched
+                .into_iter()
+                .take(MAX_AUTOCOMPLETE_ITEMS)
+                .map(AutocompleteItem::File)
+                .collect()
         }
     }
 }

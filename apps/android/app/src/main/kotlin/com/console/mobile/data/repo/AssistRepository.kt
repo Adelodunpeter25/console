@@ -14,7 +14,11 @@ class AssistRepository(private val api: ConsoleApi) {
     }
 
     suspend fun searchMentionFiles(sessionId: String, query: String, root: String?): List<FileSearchResult> = withContext(Dispatchers.IO) {
-        try { api.assistSearchFiles(sessionId, query, root).items } catch (_: Exception) { emptyList() }
+        try {
+            api.assistSearchFiles(sessionId, query, root).items.sortedWith(
+                compareByDescending<FileSearchResult> { it.is_dir }.thenBy { it.relative_path }
+            )
+        } catch (_: Exception) { emptyList() }
     }
 
     /**

@@ -126,10 +126,11 @@ pub fn mention_label(path: &str) -> String {
     } else if let Some(slug) = path.strip_prefix(CHAT_PATH_PREFIX) {
         format!("${slug}")
     } else {
-        std::path::Path::new(path)
+        let clean = path.trim_end_matches(['/', '\\']);
+        std::path::Path::new(clean)
             .file_name()
             .and_then(|name| name.to_str())
-            .unwrap_or(path)
+            .unwrap_or(clean)
             .to_string()
     }
 }
