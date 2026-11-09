@@ -29,13 +29,12 @@ static BARE_FILE_URL: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Bare file paths (`apps/server/index.ts`, `./src/foo.rs:12:3`,
-/// `/abs/path/file.md`, `~/proj/My Shot.png`). Absolute paths may contain
-/// spaces (macOS screenshots, `~/Desktop/...`) so they match greedily up to
-/// the last extension; relatives stay space-free to avoid matching prose like
-/// `v1.2`. An optional `:line` / `:line:col` suffix is included so the text
+/// `/abs/path/file.md`, `~/proj/file.png`). Paths must not contain spaces;
+/// complex paths with spaces belong in backticks (`path`).
+/// An optional `:line` / `:line:col` suffix is included so the text
 /// stays intact; opening strips it for now.
 static BARE_FILE_PATH: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?:(?:~/|/)[^<>"`\\\n]*\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?|(?:\./|\.\./)(?:[\w\-.]+/)*[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?|\b(?:[\w\-.]+/)+[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?)"#)
+    Regex::new(r#"(?:(?:~/|/|\.\./|\./|\.[\w\-.]+/)(?:[\w\-.]+/)*[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?|\b(?:[\w\-.]+/)+[\w\-.]*[\w]\.[A-Za-z0-9]{1,10}(?::\d+(?::\d+)?)?)"#)
         .expect("bare file path regex should compile")
 });
 
@@ -807,11 +806,11 @@ fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<Inli
     let mut cursor = 0;
     for candidate in BARE_FILE_PATH.find_iter(text) {
         let matched = candidate.as_str();
-        if !is_bare_file_path_match(matched) {
-            continue;
-        }
         let start = candidate.start();
         let end = candidate.end();
+        if !is_bare_file_path_match(text, start, matched) {
+            continue;
+        }
         if cursor < start {
             pieces.push(InlinePiece::Run(InlineRun {
                 text: text[cursor..start].to_owned(),
@@ -837,15 +836,25 @@ fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<Inli
     }
 }
 
-/// Guard against prose like `v1.2`: a bare match only counts when it looks
-/// like a path — a `/` somewhere, or an explicit `~/`, `/`, `./`, `../`
-/// prefix that the regex already captured.
-fn is_bare_file_path_match(matched: &str) -> bool {
-    matched.starts_with("~/")
-        || matched.starts_with('/')
-        || matched.starts_with("./")
-        || matched.starts_with("../")
-        || matched.contains('/')
+/// Guard against prose and punctuation false positives:
+/// 1. An absolute, home, or hidden path (`/`, `~/`, `.`) must be at the start
+///    of a token (preceded by whitespace or standard opening delimiters), not
+///    glued to a word like `env/settings` or `$0.0005/audio-minute`.
+/// 2. Must be recognized as a valid file link with an extension containing
+///    letters.
+fn is_bare_file_path_match(text: &str, start: usize, matched: &str) -> bool {
+    if matched.starts_with('/') || matched.starts_with("~/") || matched.starts_with('.') {
+        if start > 0 {
+            if let Some(prev) = text[..start].chars().next_back() {
+                if !prev.is_whitespace()
+                    && !matches!(prev, '(' | '[' | '{' | '<' | '"' | '\'' | '`')
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    super::file_links::is_file_link(matched)
 }
 
 /// Coalesce neighbouring runs that share a style, so shaping sees the fewest

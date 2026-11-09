@@ -17,6 +17,8 @@ fn detects_paths() {
     assert!(is_file_link("./src/foo.rs:12:3"));
     assert!(is_file_link("file:///tmp/a.md"));
     assert!(!is_file_link("just words"));
+    assert!(!is_file_link("1.2.3"));
+    assert!(!is_file_link("46.63"));
 }
 
 #[test]

@@ -56,7 +56,10 @@ pub fn is_file_link(link: &str) -> bool {
     match file.rfind('.') {
         Some(dot) if dot + 1 < file.len() => {
             let ext = &file[dot + 1..];
-            !ext.is_empty() && ext.len() <= 10 && ext.chars().all(|c| c.is_ascii_alphanumeric())
+            !ext.is_empty()
+                && ext.len() <= 10
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+                && ext.chars().any(|c| c.is_ascii_alphabetic())
         }
         _ => false,
     }
