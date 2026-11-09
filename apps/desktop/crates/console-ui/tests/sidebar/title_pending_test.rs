@@ -1,5 +1,5 @@
 use console_core::SessionHeader;
-use console_ui::layout::sidebar_loading::{is_generic_title, title_is_pending};
+use console_ui::layout::sidebar_loading::{SidebarLoadingState, is_generic_title, title_is_pending};
 
 fn header(title: &str, message_count: u64) -> SessionHeader {
     // Only title + message_count feed the predicate; the rest are defaults.
@@ -26,18 +26,31 @@ fn header(title: &str, message_count: u64) -> SessionHeader {
 #[test]
 fn placeholder_remain_but_not_pending() {
     // Placeholder title with no messages yet: empty new chat, nothing running.
-    assert!(!title_is_pending(&header("New Session", 0)));
+    assert!(!title_is_pending(&header("New Session", 0), None));
+}
+
+#[test]
+fn placeholder_while_working_is_pending() {
+    // Session is working immediately on prompt submit even before message count reflects.
+    assert!(title_is_pending(
+        &header("New Session", 0),
+        Some(SidebarLoadingState::Working { started_at: 100 })
+    ));
 }
 
 #[test]
 fn placeholder_after_first_prompt_is_pending() {
-    assert!(title_is_pending(&header("New Session", 1)));
-    assert!(title_is_pending(&header("New Chat", 2)));
+    assert!(title_is_pending(&header("New Session", 1), None));
+    assert!(title_is_pending(&header("New Chat", 2), None));
 }
 
 #[test]
 fn generated_titles_are_never_pending() {
-    assert!(!title_is_pending(&header("Fix flaky spec", 1)));
+    assert!(!title_is_pending(&header("Fix flaky spec", 1), None));
+    assert!(!title_is_pending(
+        &header("Fix flaky spec", 1),
+        Some(SidebarLoadingState::Working { started_at: 100 })
+    ));
     // Rough check that generated-titles-specific placeholders are not generic.
     assert!(!is_generic_title("Rename all over"));
 }

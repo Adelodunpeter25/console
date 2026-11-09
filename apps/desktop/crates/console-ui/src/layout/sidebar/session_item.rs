@@ -130,7 +130,7 @@ impl RenderOnce for SidebarSessionItem {
                 .unwrap_or_else(|| crate::utils::format_folder_display_name(&session.cwd))
         };
 
-        let title_pending = sidebar::title_is_pending(session);
+        let title_pending = sidebar::title_is_pending(session, loading_state);
         let display_title = if title_pending {
             "Generating title…".to_string()
         } else {

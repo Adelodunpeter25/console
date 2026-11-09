@@ -507,6 +507,13 @@ impl ConsoleDesktopApp {
         // id is resolved after creation inside the spawned run.
         let run_started_at = chrono::Utc::now().timestamp();
         let initial_run_token = if let Some(ref sid) = active_sid {
+            if let Some(session) = Rc::make_mut(&mut self.sessions)
+                .iter_mut()
+                .find(|s| &s.id == sid)
+            {
+                let count = session.message_count.unwrap_or(0);
+                session.message_count = Some(count + 1);
+            }
             self.set_session_running(sid, Some(run_started_at));
             self.next_run_token_for_session(sid)
         } else {
@@ -535,7 +542,8 @@ impl ConsoleDesktopApp {
                     }).await {
                         Ok(s) => {
                             let sid = s.id.clone();
-                            let new_session = s;
+                            let mut new_session = s;
+                            new_session.message_count = Some(1);
                             let mut assigned_token = 0;
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {

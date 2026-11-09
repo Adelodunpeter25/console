@@ -74,11 +74,16 @@ pub fn is_generic_title(title: &str) -> bool {
 }
 
 /// The session's title is still the placeholder but the first prompt is
-/// already sent, so the server is generating a real one: show a loading
+/// already running or sent, so the server is generating a real one: show a loading
 /// label instead of the placeholder text. The same update that delivers the
 /// generated title clears the state, so no event link is needed.
-pub fn title_is_pending(session: &SessionHeader) -> bool {
-    is_generic_title(session.display_title()) && session.message_count.unwrap_or(0) >= 1
+pub fn title_is_pending(
+    session: &SessionHeader,
+    loading_state: Option<SidebarLoadingState>,
+) -> bool {
+    let is_active = loading_state.is_some();
+    let has_messages = session.message_count.unwrap_or(0) >= 1;
+    is_generic_title(session.display_title()) && (is_active || has_messages)
 }
 
 /// Render the live elapsed label for a working row. Waiting rows deliberately
