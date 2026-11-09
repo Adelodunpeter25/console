@@ -40,7 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +70,7 @@ import com.console.mobile.ui.components.FileIcon
 import com.console.mobile.ui.components.common.new.BlurredBottomBar
 import com.console.mobile.ui.theme.NewTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
+import io.github.lyxnx.compose.ui.tablericons.outline.Microphone
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Plus
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
@@ -100,6 +103,81 @@ fun Composer(
     val projectState by AppContainer.projectStateHolder.state.collectAsStateWithLifecycle()
     val sessionCwd = sessionViews[sessionId]?.sessionCwd
     val projectRoot = projectState.projects.firstOrNull { p -> sessionCwd != null && (p.path == sessionCwd || sessionCwd.startsWith(p.path + "/")) }?.path ?: sessionCwd
+    // Speech-to-text dictation. Enabled only when the server has a
+    // credential; the status loads at app start, never only from Providers.
+    val authState by AppContainer.authStateHolder.state.collectAsStateWithLifecycle()
+    val dictationEnabled = authState.sttStatus?.configured == true
+    var dictationRecording by remember(sessionId) { mutableStateOf(false) }
+    var dictationTranscribing by remember(sessionId) { mutableStateOf(false) }
+    var dictationElapsedSecs by remember(sessionId) { mutableStateOf(0) }
+    var dictationError by remember(sessionId) { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val recorder = remember(sessionId) { com.console.mobile.core.audio.DictationRecorder(context.applicationContext) }
+    androidx.compose.runtime.DisposableEffect(sessionId) {
+        onDispose { recorder.cancel() }
+    }
+    fun startDictation() {
+        dictationError = null
+        try {
+            recorder.start()
+            dictationRecording = true
+            dictationElapsedSecs = 0
+        } catch (e: Exception) {
+            dictationError = "Couldn't start recording. ${e.message.orEmpty().trim()} In Settings, allow microphone access for Console."
+        }
+    }
+    fun finishDictation() {
+        dictationRecording = false
+        val bytes = try {
+            recorder.stop()
+        } catch (e: Exception) {
+            dictationError = e.message ?: "Recording failed."
+            return
+        }
+        if (bytes.isEmpty()) {
+            dictationError = "Nothing was recorded — check the microphone and try again."
+            return
+        }
+        dictationTranscribing = true
+        val draft = value
+        scope.launch {
+            try {
+                val text = AppContainer.authRepository.transcribeStt(bytes, "dictation.m4a", "audio/mp4").trim()
+                if (text.isEmpty()) {
+                    dictationError = "I couldn't hear anything — try again."
+                } else {
+                    val separator = if (draft.isBlank()) "" else " "
+                    onChange((draft + separator + text).trimEnd())
+                }
+            } catch (e: Exception) {
+                dictationError = "Transcription failed: ${e.message.orEmpty().ifBlank { "Couldn't reach the server." }}"
+            } finally {
+                dictationTranscribing = false
+            }
+        }
+    }
+    val micPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) startDictation()
+        else dictationError = "Microphone access denied. Allow it in Settings → Apps → Console → Permissions."
+    }
+    // The elapsed label ticks while a take runs; at 120s the take ends on its
+    // own, since longer audio would exceed the server's 4 MB cap.
+    androidx.compose.runtime.LaunchedEffect(dictationRecording) {
+        if (!dictationRecording) return@LaunchedEffect
+        val startedAt = System.currentTimeMillis()
+        while (true) {
+            kotlinx.coroutines.delay(250)
+            val secs = ((System.currentTimeMillis() - startedAt) / 1000).toInt()
+            dictationElapsedSecs = secs
+            if (secs >= com.console.mobile.core.audio.MAX_RECORD_SECONDS) {
+                finishDictation()
+                break
+            }
+        }
+    }
 
     var fieldValue by remember(sessionId) { mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length))) }
     if (fieldValue.text != value) {
@@ -381,7 +459,23 @@ fun Composer(
             focusRequester = focusRequester,
             onFocusChange = onFieldFocusChange,
             onTapBubble = ::focusField,
+            dictationEnabled = dictationEnabled,
+            dictationRecording = dictationRecording,
+            dictationTranscribing = dictationTranscribing,
+            dictationElapsedSecs = dictationElapsedSecs,
+            onMicClick = {
+                if (dictationRecording) finishDictation()
+                else if (!dictationTranscribing) micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+            },
         )
+        if (dictationError != null) {
+            Text(
+                dictationError!!,
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
         val anchor = fieldCoordinates
         if (anchor != null) {
             when (val t = trigger) {
@@ -452,6 +546,12 @@ private fun ComposerInput(
     focusRequester: FocusRequester,
     onFocusChange: (Boolean) -> Unit,
     onTapBubble: () -> Unit,
+    // Speech-to-text dictation (see DictationButton); owned by Composer.
+    dictationEnabled: Boolean,
+    dictationRecording: Boolean,
+    dictationTranscribing: Boolean,
+    dictationElapsedSecs: Int,
+    onMicClick: () -> Unit,
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     // Derived from the text's own line height so everything tracks the system font size.
@@ -627,6 +727,15 @@ private fun ComposerInput(
         // Pinned bottom-end: beside the text when collapsed, at the end of the
         // action row when expanded. The bubble's height animates and the button
         // rides its bottom edge, so it slides into place with no separate animation.
+        DictationButton(
+            enabled = dictationEnabled,
+            recording = dictationRecording,
+            transcribing = dictationTranscribing,
+            elapsedSecs = dictationElapsedSecs,
+            onMicClick = onMicClick,
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .offset(x = -(SEND_SIZE + 8.dp)),
+        )
         SendStopButton(
             running = running,
             canSend = canSend,
@@ -638,6 +747,95 @@ private fun ComposerInput(
 }
 
 private val SEND_SIZE = 35.dp
+
+/**
+ * Voice dictation control, pinned just left of the send button. Idle: the
+ * mic starts a take. Recording: the red stop control takes its place with
+ * the live elapsed label. Unconfigured: dimmed and inert.
+ */
+@Composable
+private fun DictationButton(
+    enabled: Boolean,
+    recording: Boolean,
+    transcribing: Boolean,
+    elapsedSecs: Int,
+    onMicClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp, Alignment.End),
+    ) {
+        if (recording) {
+            Text(
+                text = "%d:%02d".format(elapsedSecs / 60, elapsedSecs % 60),
+                color = NewTheme.Danger,
+                fontSize = 12.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                modifier = Modifier.padding(end = 2.dp),
+            )
+        }
+        when {
+            recording -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Danger)
+                        .clickable(onClickLabel = "Stop recording", onClick = onMicClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.PlayerStop,
+                        contentDescription = "Stop recording",
+                        tint = NewTheme.OnPrimary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+            transcribing -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        color = NewTheme.TextSecondary,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            }
+            !enabled -> {
+                // Dim and inert until the server has a credential: a button
+                // that fails on tap is worse than a visibly disabled one.
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape)
+                        .background(NewTheme.Card),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.Microphone,
+                        contentDescription = "Set up Speech to Text in Settings",
+                        tint = NewTheme.TextMuted.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+            else -> {
+                Box(
+                    modifier = Modifier.size(SEND_SIZE).clip(CircleShape).background(NewTheme.Card)
+                        .clickable(onClickLabel = "Record dictation", onClick = onMicClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        TablerIcons.Outline.Microphone,
+                        contentDescription = "Record dictation",
+                        tint = NewTheme.TextSecondary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SendStopButton(
