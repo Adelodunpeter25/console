@@ -61,12 +61,17 @@ impl ConsoleDesktopApp {
                                 if event.kind == "session_deleted" {
                                     // Silent signal: the chat was deleted (here or on
                                     // another device or by the retention sweep). Its
-                                    // agent browser tabs go with it; the notification
-                                    // is a no-op when none are open.
+                                    // sidebar row, chat tabs and agent browser tabs go
+                                    // with it; a no-op for a chat already dropped here.
                                     if !session_id.is_empty() {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
+                                                    if this.sessions.iter().any(|s| s.id == session_id) {
+                                                        std::rc::Rc::make_mut(&mut this.sessions)
+                                                            .retain(|s| s.id != session_id);
+                                                        this.close_session_chat_tabs(&session_id, cx);
+                                                    }
                                                     this.close_session_browser_tabs(&session_id, cx);
                                                 });
                                             }

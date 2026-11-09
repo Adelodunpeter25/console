@@ -192,6 +192,10 @@ impl ConsoleDesktopApp {
             } else {
                 None
             };
+            // Pinned and settled are mutually exclusive: pinning unsettles.
+            if pinned {
+                session.settled_at = None;
+            }
         }
         cx.notify();
 
@@ -224,6 +228,7 @@ impl ConsoleDesktopApp {
                                     .find(|session| session.id == session_id)
                                 {
                                     session.pinned_at = header.pinned_at;
+                                    session.settled_at = header.settled_at;
                                 }
                                 cx.notify();
                             });
@@ -262,7 +267,7 @@ impl ConsoleDesktopApp {
             .sessions
             .iter()
             .find(|session| session.id == session_id)
-            .map(|session| session.settled_at)
+            .map(|session| (session.settled_at, session.pinned_at))
         else {
             return;
         };
@@ -275,6 +280,10 @@ impl ConsoleDesktopApp {
             } else {
                 None
             };
+            // Pinned and settled are mutually exclusive: settling unpins.
+            if settled {
+                session.pinned_at = None;
+            }
         }
         // Settling a chat closes its tab(s), active or not. The optimistic
         // mark lands first so the pane sync below sees the settled session.
@@ -304,7 +313,7 @@ impl ConsoleDesktopApp {
                                     .iter_mut()
                                     .find(|session| session.id == session_id)
                                 {
-                                    session.settled_at = previous;
+                                    (session.settled_at, session.pinned_at) = previous;
                                 }
                                 this.set_error_for_session(&session_id, message, cx)
                             });

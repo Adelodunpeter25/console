@@ -33,10 +33,14 @@ import (
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
-// startDeletedChatSweep purges soft-deleted chats past retention once
-// immediately, then daily. It returns a stop func for shutdown.
+// startDeletedChatSweep soft-deletes chats settled past retention and purges
+// soft-deleted chats past retention, once immediately, then daily. It returns
+// a stop func for shutdown.
 func startDeletedChatSweep(runs *run.Service) func() {
 	sweep := func() {
+		if deleted := runs.DeleteExpiredSettledSessions(); len(deleted) > 0 {
+			slog.Info("deleted chats settled for more than 7 days", "count", len(deleted))
+		}
 		purged := runs.PurgeExpiredDeletedSessions()
 		if len(purged) > 0 {
 			slog.Info("purged deleted chats older than 7 days", "count", len(purged))
@@ -146,8 +150,9 @@ func Run() error {
 		TokenIssuer: tokenIssuer, Identity: identity,
 	})
 
-	// Deleted chats stay restorable for 7 days, then the backend purges
-	// them permanently. The sweep runs once at startup plus once a day.
+	// Chats settled for 7 days are soft-deleted; deleted chats stay
+	// restorable for 7 days, then the backend purges them permanently. The
+	// sweep runs once at startup plus once a day.
 	stopSweep := startDeletedChatSweep(runs)
 	defer stopSweep()
 

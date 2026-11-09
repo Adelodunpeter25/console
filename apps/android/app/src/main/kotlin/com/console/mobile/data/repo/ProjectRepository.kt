@@ -144,7 +144,8 @@ class ProjectRepository(
         withContext(Dispatchers.Main.immediate) {
             projectState.state.value.sessions.firstOrNull { it.id == id }?.let { header ->
                 val patch = if (settled) {
-                    header.copy(settled_at = System.currentTimeMillis())
+                    // Pinned and settled are mutually exclusive: settling unpins.
+                    header.copy(settled_at = System.currentTimeMillis(), pinned_at = null)
                 } else {
                     header.copy(settled_at = null)
                 }
@@ -161,15 +162,22 @@ class ProjectRepository(
             // and its draft are all that's left, and those still need clearing.
             if (e.code != "404") throw e
         }
-        withContext(Dispatchers.Main.immediate) {
-            projectState.removeSession(id)
-            sessionState.clearStatus(id)
-            onSessionGone(id)
-            if (appState.state.value.selectedSessionId == id) {
-                appState.setSelectedSessionId(null)
-                if (appState.state.value.activeTab == com.console.mobile.data.store.MobileTab.Chat) {
-                    appState.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
-                }
+        withContext(Dispatchers.Main.immediate) { forgetSession(id) }
+    }
+
+    /** The server deleted a chat (another device, or the settled-chat sweep). Main thread only. */
+    fun onSessionDeletedRemotely(id: String) {
+        if (projectState.state.value.sessions.any { it.id == id }) forgetSession(id)
+    }
+
+    private fun forgetSession(id: String) {
+        projectState.removeSession(id)
+        sessionState.clearStatus(id)
+        onSessionGone(id)
+        if (appState.state.value.selectedSessionId == id) {
+            appState.setSelectedSessionId(null)
+            if (appState.state.value.activeTab == com.console.mobile.data.store.MobileTab.Chat) {
+                appState.setActiveTab(com.console.mobile.data.store.MobileTab.Home)
             }
         }
     }

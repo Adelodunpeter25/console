@@ -417,6 +417,12 @@ object AppContainer {
                             }
                             return@collect
                         }
+                        if (event.kind == "session_deleted") {
+                            // Silent: the chat was deleted elsewhere or by the
+                            // settled-chat sweep. Drop it locally, no banner.
+                            projectRepository.onSessionDeletedRemotely(event.session_id)
+                            return@collect
+                        }
                         val viewingSame = appStateHolder.state.value.activeTab == MobileTab.Chat &&
                             appStateHolder.state.value.selectedSessionId == event.session_id
                         if (!viewingSame) {

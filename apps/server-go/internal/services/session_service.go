@@ -274,6 +274,10 @@ func (s *SessionService) Unsettle(sessionID string) (bool, error) {
 	return s.inner.Unsettle(sessionID)
 }
 
+func (s *SessionService) ExpiredSettledSessions(cutoffMillis int64) ([]string, error) {
+	return s.inner.ExpiredSettledSessions(cutoffMillis)
+}
+
 func (s *SessionService) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
 	return s.inner.ExpiredDeletedSessions(cutoffMillis)
 }

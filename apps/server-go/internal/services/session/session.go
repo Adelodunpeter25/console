@@ -420,7 +420,8 @@ func (s *Service) SoftDelete(sessionID string) (bool, error) {
 // its original settled_at, so its position in the section does not jump — and
 // settling does not touch updated_at, because settling is not activity. A
 // session with a run in flight or a queued prompt is refused with
-// ErrSessionBusy: settling is for finished work.
+// ErrSessionBusy: settling is for finished work. Settling unpins: pinned and
+// settled are mutually exclusive.
 func (s *Service) Settle(sessionID string) (bool, error) {
 	if s.isBusy != nil && s.isBusy(sessionID) {
 		return false, ErrSessionBusy
@@ -429,7 +430,7 @@ func (s *Service) Settle(sessionID string) (bool, error) {
 		return false, ErrSessionBusy
 	}
 	res, err := s.manager.Global().Exec(
-		`UPDATE sessions SET settled_at = COALESCE(settled_at, ?) WHERE id = ?`,
+		`UPDATE sessions SET settled_at = COALESCE(settled_at, ?), pinned_at = NULL WHERE id = ?`,
 		utils.NowMillis(), sessionID)
 	if err != nil {
 		return false, err

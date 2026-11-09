@@ -35,6 +35,32 @@ func (s *Service) ExpiredDeletedSessions(cutoffMillis int64) ([]string, error) {
 	return ids, rows.Err()
 }
 
+// ExpiredSettledSessions lists live session ids settled at or before the
+// cutoff (unix millis), oldest first. A chat touched since the cutoff is
+// skipped, and so is a pinned one: rows pinned and settled before the two
+// became mutually exclusive are kept rather than swept.
+func (s *Service) ExpiredSettledSessions(cutoffMillis int64) ([]string, error) {
+	rows, err := s.manager.Global().Query(
+		`SELECT id FROM sessions
+		 WHERE settled_at IS NOT NULL AND deleted_at IS NULL AND pinned_at IS NULL
+		   AND settled_at <= ? AND updated_at <= ?
+		 ORDER BY settled_at ASC`,
+		cutoffMillis, cutoffMillis)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // Restore clears the soft-delete mark. It succeeds for any known id, even
 // one that was not deleted.
 func (s *Service) Restore(sessionID string) (bool, error) {
@@ -467,11 +493,12 @@ func (s *Service) UpdateThinkingLevel(sessionID, thinkingLevel string) error {
 }
 
 // SetPinned pins (now) or unpins (NULL) a session. Pinning reorders the
-// list without touching updated_at.
+// list without touching updated_at, and unsettles: pinned and settled are
+// mutually exclusive.
 func (s *Service) SetPinned(sessionID string, pinned bool) error {
 	if pinned {
 		_, err := s.manager.Global().Exec(
-			`UPDATE sessions SET pinned_at = ? WHERE id = ?`,
+			`UPDATE sessions SET pinned_at = ?, settled_at = NULL WHERE id = ?`,
 			utils.NowMillis(), sessionID)
 		return err
 	}
