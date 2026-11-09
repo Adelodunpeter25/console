@@ -419,6 +419,7 @@ fun Composer(
                     ) {
                         val mentions = parseFileMentions(old.text)
                         val skills = com.console.mobile.core.util.parseSkillMentions(old.text)
+                        val chats = com.console.mobile.core.util.parseChatMentions(old.text)
                         var targetStart: Int? = null
                         var targetEnd: Int? = null
 
@@ -433,6 +434,13 @@ fun Composer(
                             if (skillTarget != null) {
                                 targetStart = skillTarget.range.first
                                 targetEnd = if (old.text[deletedAt].isWhitespace() && skillTarget.range.last + 1 == deletedAt) deletedAt + 1 else skillTarget.range.last + 1
+                            } else {
+                                val chatTarget = chats.firstOrNull { deletedAt in it.range && it.slug in confirmedChatRefs }
+                                    ?: if (old.text[deletedAt].isWhitespace()) chats.firstOrNull { it.range.last + 1 == deletedAt && it.slug in confirmedChatRefs } else null
+                                if (chatTarget != null) {
+                                    targetStart = chatTarget.range.first
+                                    targetEnd = if (old.text[deletedAt].isWhitespace() && chatTarget.range.last + 1 == deletedAt) deletedAt + 1 else chatTarget.range.last + 1
+                                }
                             }
                         }
 
@@ -445,6 +453,7 @@ fun Composer(
                 // Prune confirmations whose text is gone.
                 confirmedPaths = confirmedPaths.filter { "@$it" in nextText }.toSet()
                 confirmedSkills = confirmedSkills.filter { "/$it" in nextText }.toSet()
+                confirmedChatRefs = confirmedChatRefs.filter { "\$$it" in nextText }.toSet()
                 fieldValue = if (nextSelection != null) {
                     TextFieldValue(text = nextText, selection = nextSelection)
                 } else {
