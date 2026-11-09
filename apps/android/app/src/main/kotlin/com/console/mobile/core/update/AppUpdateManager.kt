@@ -67,6 +67,11 @@ object AppUpdateManager {
                 if (manifest != null) {
                     _state.value = UpdateState.Available(manifest)
                     _prompt.value = UpdatePrompt.Available(manifest)
+                } else {
+                    // A leftover download is this version or older; installPendingUpdate would offer it again.
+                    withContext(Dispatchers.IO) {
+                        File(File(AppContainer.appContext.cacheDir, "updates"), "app-release.apk").delete()
+                    }
                 }
             } catch (_: Exception) {
             }
@@ -161,7 +166,7 @@ object AppUpdateManager {
     }
 
     fun handleLaunchIntent(intent: Intent?): Boolean {
-        val isUpdateLaunch = intent?.getBooleanExtra(EXTRA_INSTALL_UPDATE, false) ?: return false
+        if (intent?.getBooleanExtra(EXTRA_INSTALL_UPDATE, false) != true) return false
         intent.removeExtra(EXTRA_INSTALL_UPDATE)
         cancelUpdateNotification(AppContainer.appContext)
         dismissPrompt()
