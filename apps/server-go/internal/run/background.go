@@ -45,6 +45,9 @@ func (s *Service) renderBackgroundWork(sessionID string, completed []background.
 		if name := item.Metadata["name"]; name != "" {
 			lines = append(lines, "Name: "+name)
 		}
+		if ids := item.Metadata["session_ids"]; ids != "" {
+			lines = append(lines, "Sessions: "+ids)
+		}
 		if jobID := item.Metadata["job_id"]; jobID != "" {
 			if jobs := s.bashJobManager(); jobs != nil {
 				if output, err := jobs.Output(jobID, sessionID, 0, backgroundContextOutputLimit); err == nil {
@@ -96,20 +99,17 @@ func (s *Service) wakeContext(sessionID string) (string, []background.Work, bool
 // wakeMessage is the short human label carried on the wake event so clients
 // can say what resumed the agent.
 func wakeMessage(items []background.Work) string {
-	shell, sub := false, false
+	kinds := map[background.Kind]bool{}
 	for _, item := range items {
-		switch item.Kind {
-		case background.KindShell:
-			shell = true
-		case background.KindSubagent:
-			sub = true
-		}
+		kinds[item.Kind] = true
 	}
 	switch {
-	case shell && sub:
+	case len(kinds) > 1:
 		return "Background work completed, continuing agent"
-	case sub:
+	case kinds[background.KindSubagent]:
 		return "Subagent completed, continuing agent"
+	case kinds[background.KindSession]:
+		return "Session finished, continuing agent"
 	default:
 		return "Bash tool completed, continuing agent"
 	}

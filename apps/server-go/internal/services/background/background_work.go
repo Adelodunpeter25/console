@@ -15,6 +15,7 @@ type Kind string
 const (
 	KindShell    Kind = "shell"
 	KindSubagent Kind = "subagent"
+	KindSession  Kind = "session"
 )
 
 // Status is the durable lifecycle state exposed to callbacks and
