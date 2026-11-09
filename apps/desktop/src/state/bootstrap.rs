@@ -21,8 +21,8 @@ impl ConsoleDesktopApp {
         self._subscriptions.push(cx.subscribe(
             &input,
             |this, _input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(prompt, _) => {
-                    this.submit_floating_composer(prompt.clone(), cx);
+                ComposerEvent::Submit(prompt, context_files) => {
+                    this.submit_floating_composer(prompt.clone(), context_files.clone(), cx);
                 }
                 ComposerEvent::BackspaceOnEmpty => {
                     let count = this.attachments_for_pane(FLOATING_KEY).len();
@@ -44,7 +44,9 @@ impl ConsoleDesktopApp {
         self._subscriptions.push(cx.subscribe(
             &input,
             |this, _input, event: &ComposerLargePaste, cx| {
-                this.stage_large_paste(FLOATING_KEY, event.text.clone(), cx);
+                this.floating_composer
+                    .stage_pending_paste(event.text.clone(), cx);
+                cx.notify();
             },
         ));
     }

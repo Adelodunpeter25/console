@@ -182,7 +182,15 @@ impl ConsoleDesktopApp {
     }
 
     /// Submit the card: create the session it described and run the prompt.
-    pub fn submit_floating_composer(&mut self, text: String, cx: &mut Context<Self>) -> bool {
+    ///
+    /// `context_files` are the prompt's mention paths, passed in because an
+    /// Enter submit has already cleared the field by the time this runs.
+    pub fn submit_floating_composer(
+        &mut self,
+        text: String,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) -> bool {
         // A repo clone in flight selects its project when it lands; launching
         // before that would silently use the previous selection.
         if self.repo_task_cloning.is_some() {
@@ -191,7 +199,7 @@ impl ConsoleDesktopApp {
         let Some(submit) = self.floating_composer.submit(text, cx) else {
             return false;
         };
-        self.create_session_from_floating(submit, cx);
+        self.create_session_from_floating(submit, context_files, cx);
         true
     }
 
@@ -483,7 +491,11 @@ impl ConsoleDesktopApp {
             move |prompt: String, _window: &mut Window, cx: &mut App| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.submit_floating_composer(prompt, cx);
+                        let context_files =
+                            console_shared::composer::mentions::submitted_mention_paths(
+                                this.floating_composer.input.read(cx).mentions(),
+                            );
+                        this.submit_floating_composer(prompt, context_files, cx);
                     });
                 }
             }
@@ -521,7 +533,12 @@ impl ConsoleDesktopApp {
 
     /// Create the session the launcher described, then run its prompt. Mirrors
     /// `create_new_chat`'s post-create bookkeeping.
-    fn create_session_from_floating(&mut self, submit: FloatingSubmit, cx: &mut Context<Self>) {
+    fn create_session_from_floating(
+        &mut self,
+        submit: FloatingSubmit,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         let pane_id = self
             .active_pane_id
             .clone()
@@ -541,8 +558,13 @@ impl ConsoleDesktopApp {
         let staged_attachments = (*submit.attachments).clone();
         self.set_attachments_for_pane(FLOATING_KEY, Vec::new());
         self.autocomplete_states.remove(FLOATING_AUTOCOMPLETE_KEY);
-        let context_files: Vec<String> =
-            console_shared::composer::mentions::submitted_mention_paths(&submit.mentions);
+        // Only pastes whose chip is still in the prompt are uploaded.
+        let live_pastes: Vec<_> = submit
+            .pending_pastes
+            .iter()
+            .filter(|paste| context_files.contains(&paste.path))
+            .cloned()
+            .collect();
         let mentions = submit.mentions.clone();
         let _ = &mentions;
         // The card's choices, not the pane's: `submit_prompt_with_context`
@@ -599,6 +621,29 @@ impl ConsoleDesktopApp {
                 })
                 .await;
 
+            // The paste endpoint is per-session, so the card's pastes upload
+            // only now that the session exists; a failed one goes inline.
+            let mut prompt = prompt;
+            let mut context_files = context_files;
+            let mut paste_error = None;
+            if let Ok(session) = &result
+                && !live_pastes.is_empty()
+            {
+                let mut resolved = Vec::with_capacity(live_pastes.len());
+                for paste in live_pastes {
+                    let path = match client.runs.create_paste(&session.id, &paste.text).await {
+                        Ok(uploaded) => Some(uploaded.path),
+                        Err(error) => {
+                            paste_error = Some(error.to_string());
+                            None
+                        }
+                    };
+                    resolved.push((paste, path));
+                }
+                (prompt, context_files) =
+                    console_ui::common::resolve_pending_pastes(&prompt, &context_files, &resolved);
+            }
+
             cx.update(|cx| {
                 let Some(app) = entity.upgrade() else { return };
                 app.update(cx, |this, cx| match result {
@@ -648,6 +693,9 @@ impl ConsoleDesktopApp {
                             context_files.clone(),
                             cx,
                         );
+                        if let Some(error) = paste_error.as_ref() {
+                            this.set_error(format!("Paste upload failed: {error}"), cx);
+                        }
                         cx.notify();
                     }
                     Err(error) => {

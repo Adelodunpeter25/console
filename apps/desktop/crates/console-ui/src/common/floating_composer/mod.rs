@@ -90,6 +90,60 @@ impl BranchChoice {
     }
 }
 
+/// A large paste held in the card until launch. The upload endpoint is
+/// per-session and the card has no session before submit, so the chip points
+/// at a placeholder `path` that is swapped for the server path at launch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingPaste {
+    pub path: String,
+    pub label: String,
+    pub text: String,
+}
+
+const PENDING_PASTE_PREFIX: &str = "pending-paste:";
+
+/// Swap each pending paste's placeholder for its upload result: an uploaded
+/// paste keeps its label in the prompt and contributes the server path; a
+/// failed one has its label replaced by the raw text. Labels are matched in
+/// context-file order, which is their order in the prompt.
+pub fn resolve_pending_pastes(
+    prompt: &str,
+    context_files: &[String],
+    resolved: &[(PendingPaste, Option<String>)],
+) -> (String, Vec<String>) {
+    let mut prompt = prompt.to_string();
+    let mut files = Vec::with_capacity(context_files.len());
+    let mut cursor = 0;
+    for path in context_files {
+        if !path.starts_with(PENDING_PASTE_PREFIX) {
+            files.push(path.clone());
+            continue;
+        }
+        let Some((paste, uploaded)) = resolved.iter().find(|(paste, _)| &paste.path == path)
+        else {
+            continue;
+        };
+        let found = prompt[cursor..].find(&paste.label).map(|at| cursor + at);
+        match (uploaded, found) {
+            (Some(real), Some(at)) => {
+                files.push(real.clone());
+                cursor = at + paste.label.len();
+            }
+            (Some(real), None) => files.push(real.clone()),
+            (None, Some(at)) => {
+                prompt.replace_range(at..at + paste.label.len(), &paste.text);
+                cursor = at + paste.text.len();
+            }
+            (None, None) => {
+                prompt.push('\n');
+                prompt.push_str(&paste.text);
+                cursor = prompt.len();
+            }
+        }
+    }
+    (prompt, files)
+}
+
 /// Everything the app needs to create the session the user described.
 #[derive(Clone, Default)]
 pub struct FloatingSubmit {
@@ -100,6 +154,7 @@ pub struct FloatingSubmit {
     /// Staged images, carried onto the new session so the launch doesn't
     /// silently drop a pasted screenshot.
     pub attachments: Rc<Vec<ImageAttachment>>,
+    pub pending_pastes: Vec<PendingPaste>,
     pub project_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: BranchChoice,
@@ -187,6 +242,8 @@ pub struct FloatingComposerState {
     pub approval_mode: ApprovalMode,
     /// Staged images, mirrored from the app so the card can paint chips.
     pub attachments: Rc<Vec<ImageAttachment>>,
+    pub pending_pastes: Vec<PendingPaste>,
+    next_paste_id: usize,
     /// The @-file / slash-command popup for the prompt field, if any.
     pub autocomplete: Option<AutocompleteView>,
     /// Content identity of `autocomplete`, so a per-frame rebuild that yields
@@ -243,9 +300,24 @@ impl FloatingComposerState {
             supported_thinking_levels: Vec::new(),
             approval_mode: ApprovalMode::default(),
             attachments: Rc::new(Vec::new()),
+            pending_pastes: Vec::new(),
+            next_paste_id: 0,
             autocomplete: None,
             autocomplete_key: None,
         }
+    }
+
+    /// Collapse a large paste into a chip at the caret and hold its text for
+    /// upload at launch.
+    pub fn stage_pending_paste(&mut self, text: String, cx: &mut App) {
+        let lines = text.split('\n').count() - usize::from(text.ends_with('\n'));
+        let label = format!("pasted {} lines", crate::input::thousands(lines));
+        self.next_paste_id += 1;
+        let path = format!("{PENDING_PASTE_PREFIX}{}", self.next_paste_id);
+        self.input.update(cx, |input, cx| {
+            input.insert_paste_mention(0..0, &path, label.clone(), cx);
+        });
+        self.pending_pastes.push(PendingPaste { path, label, text });
     }
 
     /// Push an app-state snapshot in and show the card. Called fresh on every
@@ -288,6 +360,7 @@ impl FloatingComposerState {
         self.autocomplete = None;
         self.autocomplete_key = None;
         self.attachments = Rc::new(Vec::new());
+        self.pending_pastes.clear();
         self.open = true;
 
         self.input.update(cx, |input, cx| {
@@ -413,6 +486,7 @@ impl FloatingComposerState {
             prompt: text,
             mentions,
             attachments: self.attachments.clone(),
+            pending_pastes: self.pending_pastes.clone(),
             project_id: Some(project_id),
             cwd,
             branch: self.branch.clone(),

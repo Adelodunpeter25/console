@@ -4,7 +4,40 @@
 //! decisions that decide what a launch actually creates.
 
 use console_core::SlashCommandInfo;
-use console_ui::common::{AutocompleteItem, AutocompleteView, BranchChoice};
+use console_ui::common::{
+    AutocompleteItem, AutocompleteView, BranchChoice, PendingPaste, resolve_pending_pastes,
+};
+
+fn pending(id: usize, lines: usize, text: &str) -> PendingPaste {
+    PendingPaste {
+        path: format!("pending-paste:{id}"),
+        label: format!("pasted {lines} lines"),
+        text: text.to_string(),
+    }
+}
+
+#[test]
+fn uploaded_paste_swaps_placeholder_for_server_path() {
+    let files = vec!["src/main.rs".to_string(), "pending-paste:1".to_string()];
+    let resolved = vec![(pending(1, 30, "raw"), Some("/p/pastes/s/pasted-1.txt".into()))];
+    let (prompt, files) =
+        resolve_pending_pastes("see main.rs and pasted 30 lines please", &files, &resolved);
+    assert_eq!(prompt, "see main.rs and pasted 30 lines please");
+    assert_eq!(files, vec!["src/main.rs", "/p/pastes/s/pasted-1.txt"]);
+}
+
+#[test]
+fn failed_paste_goes_inline_and_keeps_later_pastes_aligned() {
+    let files = vec!["pending-paste:1".to_string(), "pending-paste:2".to_string()];
+    let resolved = vec![
+        (pending(1, 30, "RAW ONE"), None),
+        (pending(2, 30, "RAW TWO"), Some("/p/pastes/s/pasted-2.txt".into())),
+    ];
+    let (prompt, files) =
+        resolve_pending_pastes("pasted 30 lines then pasted 30 lines", &files, &resolved);
+    assert_eq!(prompt, "RAW ONE then pasted 30 lines");
+    assert_eq!(files, vec!["/p/pastes/s/pasted-2.txt"]);
+}
 
 #[test]
 fn default_branch_choice_is_the_project_itself() {

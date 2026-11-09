@@ -46,6 +46,7 @@ pub(crate) use file_mention_chip::{InlineFileMention, InlineFileMentionText};
 /// surface's keys.
 pub use floating_composer::init as init_floating_composer_keybindings;
 pub use floating_composer::{
+    PendingPaste, resolve_pending_pastes,
     BranchChoice, FloatingComposerData, FloatingComposerState, FloatingComposerView,
     FloatingSnapshot, FloatingSubmit,
 };
