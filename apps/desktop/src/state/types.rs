@@ -442,6 +442,17 @@ pub struct ConsoleDesktopApp {
     pub provider_credential_forms_open: std::collections::HashSet<String>,
     /// Server-authored failure text for the key fields, shown verbatim.
     pub provider_credential_error: Option<String>,
+    /// Speech-to-text credential state. Separate from provider credentials
+    /// because it is a pair (account ID + API token) for a server-side Whisper
+    /// model, not a chat provider key. See state/stt.rs.
+    pub stt_status: Option<console_core::types::SttStatus>,
+    /// True while the pair is being saved or removed, so the row can disable
+    /// its buttons rather than firing duplicate requests.
+    pub stt_busy: bool,
+    /// Whether the credentials form is showing.
+    pub stt_form_open: bool,
+    /// Server-authored failure text, shown verbatim. Cleared on any new action.
+    pub stt_error: Option<String>,
     // Server device pairing.
     /// The device this app is paired as on the active server. `None` means
     /// "not paired" — the server rejects every request in that state.

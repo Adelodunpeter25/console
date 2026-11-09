@@ -18,6 +18,7 @@ pub mod run;
 pub mod server_auth;
 pub mod session;
 pub mod settings;
+pub mod stt;
 pub mod terminal;
 pub mod transport;
 pub mod update;
@@ -49,6 +50,7 @@ pub use server_auth::{
 };
 pub use session::SessionService;
 pub use settings::{PatchRoleMapping, PatchSettingsBody, SettingsService};
+pub use stt::SttService;
 pub use terminal::TerminalService;
 pub use transport::{ChatEventStream, Transport};
 pub use usage::UsageService;

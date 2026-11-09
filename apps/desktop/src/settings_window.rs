@@ -36,6 +36,14 @@ pub struct SettingsWindow {
     pub(crate) model_error: Option<String>,
     pub(crate) mcp: crate::settings::mcp::McpTabState,
     github_token_input: Entity<ComposerInput>,
+    /// Cloudflare account ID for the speech-to-text form. Created up front
+    /// like the other settings inputs, so entity identity is stable across
+    /// renders and a half-typed id survives keystrokes.
+    stt_account_input: Entity<ComposerInput>,
+    /// Cloudflare API token for the speech-to-text form. Cleared the moment
+    /// the pair is submitted (see on_stt_submit), which is what keeps the
+    /// credential from lingering client-side.
+    stt_token_input: Entity<ComposerInput>,
     rename_input: Entity<ComposerInput>,
     /// One key field per key-taking provider, created lazily: the catalog
     /// arrives from the server, so the set is not known when the window is
@@ -220,6 +228,29 @@ impl SettingsWindow {
             },
         ));
 
+        // Speech-to-text pair fields, created up front for the same reason:
+        // stable entities keep focus and half-typed values across renders.
+        let stt_account_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("Cloudflare account ID"));
+        subscriptions.push(cx.subscribe(
+            &stt_account_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
+        let stt_token_input =
+            cx.new(|cx| ComposerInput::new(window, cx).placeholder("API token"));
+        subscriptions.push(cx.subscribe(
+            &stt_token_input,
+            |_this, _input, event: &console_ui::input::ComposerEvent, cx| match event {
+                console_ui::input::ComposerEvent::Edited
+                | console_ui::input::ComposerEvent::Focus => cx.notify(),
+                _ => {}
+            },
+        ));
+
         // Account rename field. Created up front for the same reason as the
         // others: a stable entity keeps focus and half-typed names across
         // renders. Seeded with the account's display name when the form opens.
@@ -241,6 +272,8 @@ impl SettingsWindow {
             editing_env_id: None,
             new_env_name_input,
             github_token_input,
+            stt_account_input,
+            stt_token_input,
             rename_input,
             api_key_inputs: std::collections::HashMap::new(),
             rename_form_open: false,
@@ -535,6 +568,7 @@ impl Render for SettingsWindow {
                     if let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
                             app_state.refresh_github_status(cx);
+                            app_state.refresh_stt_status(cx);
                         });
                     }
                 }
@@ -749,6 +783,48 @@ impl Render for SettingsWindow {
                     })
                 };
 
+                let on_stt_toggle: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| {
+                                let next = !app_state.stt_form_open;
+                                app_state.set_stt_form_open(next, cx);
+                            });
+                        }
+                    })
+                };
+                let on_stt_submit: Rc<
+                    dyn Fn(String, String, &mut Window, &mut App) + 'static,
+                > = {
+                    let app_handle = self.app.clone();
+                    let account_input = self.stt_account_input.clone();
+                    let token_input = self.stt_token_input.clone();
+                    Rc::new(
+                        move |account_id: String, token: String, _w: &mut Window, cx: &mut App| {
+                            if let Some(app) = app_handle.upgrade() {
+                                // Clear both fields as soon as the pair is
+                                // handed off: the token is a credential, and
+                                // nothing should keep a copy client-side.
+                                account_input.update(cx, |input, cx| input.set_content("", cx));
+                                token_input.update(cx, |input, cx| input.set_content("", cx));
+                                app.update(cx, |app_state, cx| {
+                                    app_state.save_stt_config(account_id, token, cx);
+                                    app_state.set_stt_form_open(false, cx);
+                                });
+                            }
+                        },
+                    )
+                };
+                let on_stt_disconnect: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
+                    let app_handle = self.app.clone();
+                    Rc::new(move |_w: &mut Window, cx: &mut App| {
+                        if let Some(app) = app_handle.upgrade() {
+                            app.update(cx, |app_state, cx| app_state.disconnect_stt(cx));
+                        }
+                    })
+                };
+
                 ProvidersPage {
                     providers: app.providers.clone(),
                     auth_status: app.auth_status.clone(),
@@ -820,6 +896,17 @@ impl Render for SettingsWindow {
                         on_toggle_form: on_github_toggle,
                         on_submit: on_github_submit,
                         on_disconnect: on_github_disconnect,
+                    }),
+                    stt: Some(console_ui::settings::SttSection {
+                        status: app.stt_status.clone(),
+                        busy: app.stt_busy,
+                        form_open: app.stt_form_open,
+                        error: app.stt_error.clone(),
+                        account_input: Some(self.stt_account_input.clone()),
+                        token_input: Some(self.stt_token_input.clone()),
+                        on_toggle_form: on_stt_toggle,
+                        on_submit: on_stt_submit,
+                        on_disconnect: on_stt_disconnect,
                     }),
                 }
                 .into_any_element()

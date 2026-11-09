@@ -15,6 +15,7 @@ pub mod providers_page;
 pub mod server_modal;
 pub mod servers_page;
 pub mod settings_shell;
+pub mod stt_section;
 pub mod updates_page;
 pub mod usage_page;
 
@@ -33,6 +34,7 @@ pub use providers_page::*;
 pub use server_modal::*;
 pub use servers_page::*;
 pub use settings_shell::*;
+pub use stt_section::*;
 pub use updates_page::*;
 pub use usage_page::*;
 

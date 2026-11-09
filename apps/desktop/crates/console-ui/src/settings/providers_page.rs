@@ -1,5 +1,5 @@
 use crate::input::ComposerInput;
-use crate::settings::GitHubSection;
+use crate::settings::{GitHubSection, SttSection};
 use crate::theme::Theme;
 use console_core::types::{
     AuthStatusResponse, ProviderAccount, ProviderCatalogEntry, auth_status_for,
@@ -46,6 +46,9 @@ pub struct ProvidersPage {
     /// sibling section — GitHub is not a chat provider and authenticates by
     /// token, not OAuth.
     pub github: Option<GitHubSection>,
+    /// Speech-to-text credential state. Rendered below GitHub as a sibling
+    /// section — it is a server-side Whisper credential, not a chat provider.
+    pub stt: Option<SttSection>,
     /// Providers that authenticate by a pasted API key, in catalog order.
     /// Each carries its own form state and callbacks, keyed by provider id.
     pub api_keys: Vec<crate::settings::ApiKeyProviderSection>,
@@ -575,6 +578,12 @@ impl RenderOnce for ProvidersPage {
             // among the catalog entries above.
             .child(match self.github {
                 Some(github) => div().mt(px(8.0)).child(github).into_any_element(),
+                None => div().into_any_element(),
+            })
+            // Speech-to-text sits below GitHub as a sibling section for the
+            // same reason.
+            .child(match self.stt {
+                Some(stt) => div().mt(px(8.0)).child(stt).into_any_element(),
                 None => div().into_any_element(),
             })
             .into_any_element()

@@ -44,6 +44,7 @@ mod server_auth;
 mod session_titles;
 mod sessions;
 mod settings;
+mod stt;
 mod transcript_scroll;
 mod transcript_wiring;
 mod usage;

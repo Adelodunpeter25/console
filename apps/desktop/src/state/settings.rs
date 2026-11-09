@@ -129,6 +129,7 @@ impl ConsoleDesktopApp {
             console_ui::settings::SettingsTab::Providers => {
                 self.refresh_github_status(cx);
                 self.refresh_provider_credentials(cx);
+                self.refresh_stt_status(cx);
             }
             _ => {}
         }
