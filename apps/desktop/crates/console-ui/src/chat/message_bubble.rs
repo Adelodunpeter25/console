@@ -782,6 +782,50 @@ impl RenderOnce for AssistantMessageBubble {
             )
         });
 
+        // Coalesce content parts for display so reasoning precedes text and any
+        // fragmented text parts (from mid-stream reasoning or legacy sessions)
+        // merge into an unbroken markdown span.
+        let mut coalesced_parts: Vec<AssistantContentPart> = Vec::new();
+        for part in content_parts {
+            match part {
+                AssistantContentPart::Thinking { text } => {
+                    if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
+                        AssistantContentPart::Thinking { text: t } => Some(t),
+                        _ => None,
+                    }) {
+                        if !existing.is_empty() && !text.is_empty() && !existing.ends_with('\n') {
+                            existing.push('\n');
+                        }
+                        existing.push_str(text);
+                    } else {
+                        let text_pos = coalesced_parts
+                            .iter()
+                            .position(|p| matches!(p, AssistantContentPart::Text { .. }));
+                        let p = AssistantContentPart::Thinking { text: text.clone() };
+                        if let Some(pos) = text_pos {
+                            coalesced_parts.insert(pos, p);
+                        } else {
+                            coalesced_parts.push(p);
+                        }
+                    }
+                }
+                AssistantContentPart::Text { text, thought_signature } => {
+                    if let Some(existing) = coalesced_parts.iter_mut().find_map(|p| match p {
+                        AssistantContentPart::Text { text: t, .. } => Some(t),
+                        _ => None,
+                    }) {
+                        existing.push_str(text);
+                    } else {
+                        coalesced_parts.push(AssistantContentPart::Text {
+                            text: text.clone(),
+                            thought_signature: thought_signature.clone(),
+                        });
+                    }
+                }
+                other => coalesced_parts.push(other.clone()),
+            }
+        }
+
         div()
             .w_full()
             .flex()
@@ -789,7 +833,7 @@ impl RenderOnce for AssistantMessageBubble {
             .gap(px(6.0))
             .group(group_name.clone())
             .children(
-                content_parts
+                coalesced_parts
                     .iter()
                     .enumerate()
                     .map(|(index, part)| match part {

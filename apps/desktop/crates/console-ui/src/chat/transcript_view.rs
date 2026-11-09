@@ -1081,7 +1081,10 @@ impl TranscriptView {
 
     pub fn append_assistant_text(&mut self, text: &str, _cx: &mut Context<Self>) {
         if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-            if let Some(AssistantContentPart::Text { text: existing, .. }) = content.last_mut() {
+            if let Some(existing) = content.iter_mut().find_map(|part| match part {
+                AssistantContentPart::Text { text, .. } => Some(text),
+                _ => None,
+            }) {
                 existing.push_str(text);
             } else {
                 content.push(AssistantContentPart::Text {
@@ -1109,12 +1112,23 @@ impl TranscriptView {
 
     pub fn append_assistant_thinking(&mut self, text: &str, _cx: &mut Context<Self>) {
         if let Some(AgentMessage::Assistant { content, .. }) = self.messages.last_mut() {
-            if let Some(AssistantContentPart::Thinking { text: existing }) = content.last_mut() {
+            if let Some(existing) = content.iter_mut().find_map(|part| match part {
+                AssistantContentPart::Thinking { text } => Some(text),
+                _ => None,
+            }) {
                 existing.push_str(text);
             } else {
-                content.push(AssistantContentPart::Thinking {
+                let text_pos = content
+                    .iter()
+                    .position(|p| matches!(p, AssistantContentPart::Text { .. }));
+                let part = AssistantContentPart::Thinking {
                     text: text.to_string(),
-                });
+                };
+                if let Some(pos) = text_pos {
+                    content.insert(pos, part);
+                } else {
+                    content.push(part);
+                }
             }
             self.bump_last_content_revision();
             self.invalidate_latest_activity_cache();

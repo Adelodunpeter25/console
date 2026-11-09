@@ -413,33 +413,53 @@ func (a *Agent) turnOnce(ctx context.Context, sessionID string, history []any, t
 			if event.Text == "" {
 				break
 			}
-			// Coalesce consecutive text deltas into a single TextPart.
-			// Without this each streamed word persists as its own part,
-			// and clients render every part as a separate vertical
-			// markdown block (one word per line).
-			if n := len(assistant.Content); n > 0 {
-				if last, ok := assistant.Content[n-1].(TextPart); ok {
+			// Coalesce text deltas into TextPart. If thinking intervened mid-stream,
+			// append to the existing TextPart so words and markdown spans stay intact.
+			coalesced := false
+			for i := len(assistant.Content) - 1; i >= 0; i-- {
+				if last, ok := assistant.Content[i].(TextPart); ok {
 					last.Text += event.Text
 					if event.ThoughtSignature != "" {
 						last.ThoughtSignature = event.ThoughtSignature
 					}
-					assistant.Content[n-1] = last
+					assistant.Content[i] = last
+					coalesced = true
 					break
 				}
 			}
-			assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text, ThoughtSignature: event.ThoughtSignature})
+			if !coalesced {
+				assistant.Content = append(assistant.Content, TextPart{Type: "text", Text: event.Text, ThoughtSignature: event.ThoughtSignature})
+			}
 		case EventThinking:
 			if event.Text == "" {
 				break
 			}
-			if n := len(assistant.Content); n > 0 {
-				if last, ok := assistant.Content[n-1].(ThinkingPart); ok {
+			// Coalesce thinking deltas into ThinkingPart.
+			coalesced := false
+			for i := len(assistant.Content) - 1; i >= 0; i-- {
+				if last, ok := assistant.Content[i].(ThinkingPart); ok {
 					last.Text += event.Text
-					assistant.Content[n-1] = last
+					assistant.Content[i] = last
+					coalesced = true
 					break
 				}
 			}
-			assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
+			if !coalesced {
+				insertIdx := 0
+				for idx, part := range assistant.Content {
+					if _, ok := part.(TextPart); ok {
+						insertIdx = idx
+						break
+					}
+					insertIdx = idx + 1
+				}
+				if insertIdx < len(assistant.Content) {
+					assistant.Content = append(assistant.Content[:insertIdx+1], assistant.Content[insertIdx:]...)
+					assistant.Content[insertIdx] = ThinkingPart{Type: "thinking", Text: event.Text}
+				} else {
+					assistant.Content = append(assistant.Content, ThinkingPart{Type: "thinking", Text: event.Text})
+				}
+			}
 		case EventToolCall:
 			if event.Call != nil {
 				assistant.Content = append(assistant.Content, ToolCallPart{Type: "toolCall", Call: *event.Call})
