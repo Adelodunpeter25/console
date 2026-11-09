@@ -321,9 +321,14 @@ fun applyChatEvent(session: ChatSessionState, event: AgentSessionEvent): ChatSes
             }
             session.copy(subagents = updatedList)
         }
-        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled" -> {
-            val work = event.work ?: return session
-            session.copy(backgroundWork = upsertBackgroundWork(session.backgroundWork, work))
+        "backgroundWorkStarted", "backgroundWorkProgress", "backgroundWorkCompleted", "backgroundWorkFailed", "backgroundWorkCancelled", "backgroundWorkContinue" -> {
+            val items = event.works
+            if (items.isEmpty()) return session
+            var updated = session.backgroundWork
+            for (w in items) {
+                updated = upsertBackgroundWork(updated, w)
+            }
+            session.copy(backgroundWork = updated)
         }
         "streamReset" -> session.copy(streamingText = "", streamingThinking = "", activeToolCalls = emptyList())
         "error" -> {

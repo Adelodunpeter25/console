@@ -1,7 +1,12 @@
 package com.console.mobile.data.model
 
+import com.console.mobile.data.api.ConsoleJson
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class AskQuestionRequest(
@@ -120,8 +125,10 @@ data class AgentSessionEvent(
     // The whole queue, next to run first; the first entry is what the chat shows.
     val queuedPrompts: List<JsonElement>? = null,
     val reason: String? = null,
-    // Background work lifecycle events use a stable nested work record.
-    val work: BackgroundWork? = null,
+    // Background work lifecycle events: a single record on start/progress/completed/cancelled,
+    // or a list on backgroundWorkContinue.
+    @SerialName("work")
+    val workElement: JsonElement? = null,
     // subagent fields (flattened)
     val subagentId: String? = null,
     val parentToolCallId: String? = null,
@@ -134,7 +141,31 @@ data class AgentSessionEvent(
     val args: JsonElement? = null,
     val status: String? = null,
     val totalTurns: Int? = null,
-)
+) {
+    val work: BackgroundWork?
+        get() = when (val el = workElement) {
+            is JsonObject -> try {
+                ConsoleJson.decodeFromJsonElement(BackgroundWork.serializer(), el)
+            } catch (_: Exception) {
+                null
+            }
+            else -> null
+        }
+
+    val works: List<BackgroundWork>
+        get() = when (val el = workElement) {
+            is JsonArray -> try {
+                ConsoleJson.decodeFromJsonElement(
+                    ListSerializer(BackgroundWork.serializer()),
+                    el,
+                )
+            } catch (_: Exception) {
+                emptyList()
+            }
+            is JsonObject -> listOfNotNull(work)
+            else -> emptyList()
+        }
+}
 
 @Serializable
 data class EventError(val message: String, val data: JsonElement? = null)

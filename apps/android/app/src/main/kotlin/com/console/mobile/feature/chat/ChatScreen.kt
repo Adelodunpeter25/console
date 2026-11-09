@@ -121,10 +121,11 @@ fun ChatScreen(
         }
     }
 
-    // Refresh file changes when an active run settles.
+    // Refresh file changes and background work when an active run settles.
     LaunchedEffect(chat.running) {
         if (!chat.running) {
             AppContainer.sessionRepository.loadSessionChanges(sessionId)
+            AppContainer.chatRepository.loadBackgroundWork(sessionId)
         }
     }
 
