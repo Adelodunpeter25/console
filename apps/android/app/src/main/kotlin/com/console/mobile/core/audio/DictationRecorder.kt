@@ -20,7 +20,14 @@ class DictationRecorder(private val context: Context) {
 
     fun start() {
         val file = File(context.cacheDir, "dictation-${System.currentTimeMillis()}.m4a")
-        val next = MediaRecorder().apply {
+        // The no-arg constructor is deprecated on API 31+, but minSdk is 26,
+        // where the Context constructor doesn't exist — gate on the version.
+        val next = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            MediaRecorder(context)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
+        }.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)

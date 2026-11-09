@@ -46,12 +46,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBackUp
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.AnnotatedString
@@ -181,14 +186,34 @@ fun CustomMarkdown(
 
             toolbarRect?.let { rect ->
                 val density = LocalDensity.current
-                val offset = with(density) {
-                    IntOffset(
-                        x = (rect.center.x).roundToInt(),
-                        y = (rect.top).roundToInt() - 44.dp.roundToPx(),
-                    )
+                val popupPositionProvider = remember(rect, density) {
+                    object : PopupPositionProvider {
+                        override fun calculatePosition(
+                            anchorBounds: IntRect,
+                            windowSize: IntSize,
+                            layoutDirection: LayoutDirection,
+                            popupContentSize: IntSize,
+                        ): IntOffset {
+                            val marginPx = with(density) { 8.dp.roundToPx() }
+                            val gapPx = with(density) { 8.dp.roundToPx() }
+                            val popupWidth = popupContentSize.width
+                            val popupHeight = popupContentSize.height
+
+                            val preferredX = (rect.center.x - popupWidth / 2f).roundToInt()
+                            val x = preferredX.coerceIn(marginPx, maxOf(marginPx, windowSize.width - popupWidth - marginPx))
+
+                            val spaceAbove = rect.top - popupHeight - gapPx
+                            val y = if (spaceAbove >= marginPx) {
+                                spaceAbove.roundToInt()
+                            } else {
+                                (rect.bottom + gapPx).roundToInt()
+                            }
+                            return IntOffset(x, y)
+                        }
+                    }
                 }
                 Popup(
-                    offset = offset,
+                    popupPositionProvider = popupPositionProvider,
                     onDismissRequest = { customToolbar.hide() },
                 ) {
                     Row(
