@@ -9,8 +9,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture test for the shared protobuf schema
- * (docs/plan/shared-protobuf-schema.md §8). The fixture lives in
+ * Golden-fixture test for the shared protobuf schema. The fixture lives in
  * proto/testdata and is shared by Go, Rust, and Kotlin.
  */
 class VersionFixtureTest {

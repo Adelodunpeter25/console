@@ -125,7 +125,7 @@ android {
     // Pin Compose compiler to the Kotlin version via the plugin
 }
 
-// Shared protobuf schema (docs/plan/shared-protobuf-schema.md §3): Wire reads
+// Shared protobuf schema: Wire reads
 // .proto directly; generated Kotlin lands in build/generated/source/wire and
 // is never committed. oneof -> sealed class matches ChatModels' ActivityEvent.
 wire {

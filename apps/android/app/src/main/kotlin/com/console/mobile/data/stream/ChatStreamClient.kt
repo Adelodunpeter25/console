@@ -26,14 +26,13 @@ import java.io.IOException
 import java.io.InputStreamReader
 
 /**
- * SSE frame emitted by the server. Mirrors the NativeStreamModule Kotlin
- * implementation in apps/mobile/modules/native-stream: `id:` lines feed
- * `seq` (resume cursor for `?since=`), `data:` lines carry AgentSessionEvent
- * JSON. Heartbeat comments (`:`) and blank lines are skipped.
+ * SSE frame emitted by the server. `id:` lines feed `seq` (the resume cursor
+ * for `?since=`) and `data:` lines carry AgentSessionEvent JSON. Heartbeat
+ * comments (`:`) and blank lines are skipped.
  */
 data class SseStreamFrame(val seq: Long?, val event: AgentSessionEvent)
 
-/** Terminal state for a stream — mirrors onStreamEnd/onStreamError contract. */
+/** Terminal state for a stream. */
 sealed interface StreamEnd {
     data object Completed : StreamEnd
     data object Aborted : StreamEnd

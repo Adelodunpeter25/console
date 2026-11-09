@@ -13,8 +13,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the git migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the git migration. Fixtures live in
  * proto/testdata/git and are shared by Go, Rust, and Kotlin.
  */
 class GitFixtureTest {

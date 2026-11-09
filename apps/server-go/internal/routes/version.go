@@ -1,5 +1,5 @@
-// API version gate (shared-protobuf-schema §6). Single global integer,
-// exact match: clients compare against the version they generated against.
+// API version gate. Single global integer, exact match: clients compare
+// against the version they generated against.
 package routes
 
 import (

@@ -12,8 +12,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Golden-fixture tests for the assist migration
- * (docs/plan/shared-protobuf-schema.md §8). Fixtures live in
+ * Golden-fixture tests for the assist migration. Fixtures live in
  * proto/testdata/assist and are shared by Go, Rust, and Kotlin.
  */
 class AssistFixtureTest {

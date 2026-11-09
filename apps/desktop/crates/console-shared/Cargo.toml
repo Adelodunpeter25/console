@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 # Pure logic shared by the desktop (Rust/GPUI) and the Android app (over JNI,
-# via apps/android/rust-wt). No runtime, no network, no UI: keep it that way —
+# via apps/android/shared-native). No runtime, no network, no UI: keep it that way —
 # see docs/plan/console-shared.md §2 and §4.2.
 [dependencies]
 serde_json = { workspace = true }
