@@ -1138,6 +1138,10 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.pull_draft(session_id.clone(), cx);
+        // Start the changes request with the initial session request so the
+        // transcript and its turn metadata arrive together instead of making
+        // the first paint stale and updating it a moment later.
+        self.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
         cx.spawn(async move |entity, cx| {
@@ -1164,7 +1168,6 @@ impl ConsoleDesktopApp {
                                     return;
                                 }
                                 this.apply_session_header_for_pane(&pane_id, &detail.header, cx);
-                                this.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
                                 if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
                                     state.loaded_session_id = Some(session_id.clone());
                                 }

@@ -60,6 +60,14 @@ internal class ChatTranscriptScroll(
         following = true
     }
 
+    internal suspend fun restoreRememberedPosition(position: ScrollMemory.Position) {
+        settledInitialPage = true
+        following = false
+        try {
+            listState.scrollToItem(position.index, position.offset)
+        } catch (_: Exception) {}
+    }
+
     internal fun captureAnchor(sizeBefore: Int) {
         anchor = ListAnchor(
             index = listState.firstVisibleItemIndex,
@@ -89,6 +97,7 @@ internal class ChatTranscriptScroll(
 @Composable
 internal fun rememberChatTranscriptScroll(
     sessionId: String,
+    sessionReady: Boolean,
     messagesLoaded: Boolean,
     displaySize: Int,
     hasMoreMessages: Boolean,
@@ -98,20 +107,13 @@ internal fun rememberChatTranscriptScroll(
 ): ChatTranscriptScroll {
     // Only trust the remembered position when the messages are still loaded;
     // otherwise a fresh load should start at the bottom as usual.
-    val restored = remember(sessionId) {
-        ScrollMemory.get(sessionId)?.takeIf { messagesLoaded }
-    }
-    val listState = key(sessionId) {
-        rememberLazyListState(
-            initialFirstVisibleItemIndex = restored?.index ?: 0,
-            initialFirstVisibleItemScrollOffset = restored?.offset ?: 0,
-        )
-    }
+    val restored = remember(sessionId) { ScrollMemory.get(sessionId) }
+    val listState = key(sessionId) { rememberLazyListState() }
     val scroll = remember(sessionId, listState) {
         ChatTranscriptScroll(
             listState = listState,
             following = restored?.atEnd ?: true,
-            settled = restored != null,
+            settled = false,
         )
     }
 
@@ -160,10 +162,15 @@ internal fun rememberChatTranscriptScroll(
         }
     }
 
-    LaunchedEffect(sessionId, displaySize, scroll) {
-        if (scroll.settledInitialPage || displaySize <= 0) return@LaunchedEffect
-        scroll.settleAtBottom()
-        try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
+    LaunchedEffect(sessionId, sessionReady, messagesLoaded, displaySize, scroll) {
+        if (scroll.settledInitialPage || !sessionReady || displaySize <= 0) return@LaunchedEffect
+        val remembered = restored
+        if (remembered != null && !remembered.atEnd) {
+            scroll.restoreRememberedPosition(remembered)
+        } else {
+            scroll.settleAtBottom()
+            try { scroll.listState.scrollToBottom() } catch (_: Exception) {}
+        }
     }
 
     // Older-message pagination.

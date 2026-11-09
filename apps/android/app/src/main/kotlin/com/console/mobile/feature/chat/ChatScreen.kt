@@ -92,7 +92,11 @@ fun ChatScreen(
     }
 
     val chat: ChatSessionState = chatSessions[sessionId] ?: createChatSessionState()
-    var loadingMessages by remember(sessionId) { mutableStateOf(chat.messages.isEmpty()) }
+    // The session-detail request owns the initial transcript load. Auxiliary
+    // requests may update the surrounding UI, but must not decide when the
+    // initial skeleton is replaced.
+    var sessionDetailLoaded by remember(sessionId) { mutableStateOf(false) }
+    var loadingMessages by remember(sessionId) { mutableStateOf(true) }
     var todoSheet by remember { mutableStateOf(false) }
     var subagentPanelOpen by remember(sessionId) { mutableStateOf(false) }
     var selectedSubagentId by remember(sessionId) { mutableStateOf<String?>(null) }
@@ -105,7 +109,6 @@ fun ChatScreen(
 
     // Load detail + hydrate todos/subagents/changes on entry; attach to server run if working.
     LaunchedEffect(sessionId) {
-        loadingMessages = AppContainer.chatStateHolder.get(sessionId).messages.isEmpty()
         val header = coroutineScope {
             val detail = async { AppContainer.sessionRepository.loadDetail(sessionId) }
             launch { AppContainer.chatRepository.loadDraft(sessionId) }
@@ -115,6 +118,10 @@ fun ChatScreen(
             launch { AppContainer.sessionRepository.loadSessionChanges(sessionId) }
             detail.await()
         }
+        // Do not infer completion from the shared chat state: loadDetail owns
+        // applying the initial page, while the other requests can update it in
+        // any order.
+        sessionDetailLoaded = true
         loadingMessages = false
         if (header?.status == "working") {
             AppContainer.chatRepository.attachServerRun(sessionId)
@@ -222,7 +229,8 @@ fun ChatScreen(
     val displaySize = displayMessages.size
     val transcriptScroll = rememberChatTranscriptScroll(
         sessionId = sessionId,
-        messagesLoaded = chat.messages.isNotEmpty(),
+        sessionReady = sessionDetailLoaded,
+        messagesLoaded = sessionDetailLoaded && chat.messages.isNotEmpty(),
         displaySize = displaySize,
         hasMoreMessages = chat.hasMoreMessages,
         loadingOlder = chat.loadingOlder,
