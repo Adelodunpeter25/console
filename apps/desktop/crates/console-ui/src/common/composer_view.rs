@@ -106,7 +106,7 @@ pub(crate) fn plan_mode_stripes(theme: Theme) -> Div {
     div()
         .absolute()
         .inset_0()
-        .bg(gpui::pattern_slash(theme.accent.opacity(0.14), 1.5, 7.0))
+        .bg(gpui::pattern_slash(theme.accent.opacity(0.24), 1.5, 7.0))
 }
 
 #[derive(IntoElement)]
