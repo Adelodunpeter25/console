@@ -31,6 +31,11 @@ sealed interface UpdateState {
     data class Failed(val message: String) : UpdateState
 }
 
+sealed interface UpdatePrompt {
+    data class Available(val manifest: UpdateManifest) : UpdatePrompt
+    data class ReadyToInstall(val manifest: UpdateManifest, val apk: File) : UpdatePrompt
+}
+
 object AppUpdateManager {
     const val UPDATE_NOTIFICATION_ID = 8888
     const val EXTRA_INSTALL_UPDATE = "extra_install_update"
@@ -40,8 +45,33 @@ object AppUpdateManager {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
 
+    private val _prompt = MutableStateFlow<UpdatePrompt?>(null)
+    val prompt: StateFlow<UpdatePrompt?> = _prompt.asStateFlow()
+
+    @Volatile
+    private var hasCheckedOnStartup = false
+
     @Volatile
     private var pendingInstallApk: File? = null
+
+    fun dismissPrompt() {
+        _prompt.value = null
+    }
+
+    fun checkOnStartup() {
+        if (com.console.mobile.BuildConfig.DEBUG || hasCheckedOnStartup) return
+        hasCheckedOnStartup = true
+        scope.launch {
+            try {
+                val manifest = withContext(Dispatchers.IO) { AppUpdater.checkForUpdate() }
+                if (manifest != null) {
+                    _state.value = UpdateState.Available(manifest)
+                    _prompt.value = UpdatePrompt.Available(manifest)
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     fun checkForUpdate() {
         if (_state.value is UpdateState.Checking || _state.value is UpdateState.Downloading) return
@@ -78,11 +108,7 @@ object AppUpdateManager {
 
                 if (AppForegroundTracker.isForeground.value) {
                     cancelUpdateNotification(context)
-                    val launched = AppUpdater.install(apk)
-                    if (!launched) {
-                        pendingInstallApk = apk
-                        _state.value = UpdateState.AllowInstalls
-                    }
+                    _prompt.value = UpdatePrompt.ReadyToInstall(manifest, apk)
                 } else {
                     pendingInstallApk = apk
                     showDownloadCompleteNotification(context, manifest)
@@ -95,6 +121,7 @@ object AppUpdateManager {
     }
 
     fun installPendingUpdate(): Boolean {
+        dismissPrompt()
         val apk = when (val current = _state.value) {
             is UpdateState.ReadyToInstall -> current.apk
             else -> pendingInstallApk ?: File(File(AppContainer.appContext.cacheDir, "updates"), "app-release.apk")
@@ -118,11 +145,10 @@ object AppUpdateManager {
         if (apk != null && apk.exists()) {
             pendingInstallApk = null
             cancelUpdateNotification(context)
-            val success = AppUpdater.install(apk)
-            if (!success) {
-                pendingInstallApk = apk
-                _state.value = UpdateState.AllowInstalls
-            }
+            val manifest = (_state.value as? UpdateState.ReadyToInstall)?.manifest
+                ?: (_state.value as? UpdateState.Available)?.manifest
+                ?: UpdateManifest(0, "")
+            _prompt.value = UpdatePrompt.ReadyToInstall(manifest, apk)
             return
         }
 
@@ -138,6 +164,7 @@ object AppUpdateManager {
         val isUpdateLaunch = intent?.getBooleanExtra(EXTRA_INSTALL_UPDATE, false) ?: return false
         intent.removeExtra(EXTRA_INSTALL_UPDATE)
         cancelUpdateNotification(AppContainer.appContext)
+        dismissPrompt()
         return installPendingUpdate()
     }
 
