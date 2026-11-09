@@ -709,6 +709,17 @@ private fun ComposerInput(
                     ) {
                         androidx.compose.material3.Icon(TablerIcons.Outline.Plus, contentDescription = null, tint = NewTheme.TextSecondary, modifier = Modifier.size(20.dp))
                     }
+                    // The mic lives in this row when expanded so it pushes the
+                    // model picker aside instead of floating over it.
+                    if (expansion > 0.5f) {
+                        DictationButton(
+                            enabled = dictationEnabled,
+                            recording = dictationRecording,
+                            transcribing = dictationTranscribing,
+                            elapsedSecs = dictationElapsedSecs,
+                            onMicClick = onMicClick,
+                        )
+                    }
                     // Fills the gap so the chips stay clear of the send button; the model
                     // chip truncates rather than pushing anything off a narrow screen.
                     ThinkingChip(sessionId = sessionId, running = running)
@@ -727,15 +738,20 @@ private fun ComposerInput(
         // Pinned bottom-end: beside the text when collapsed, at the end of the
         // action row when expanded. The bubble's height animates and the button
         // rides its bottom edge, so it slides into place with no separate animation.
-        DictationButton(
-            enabled = dictationEnabled,
-            recording = dictationRecording,
-            transcribing = dictationTranscribing,
-            elapsedSecs = dictationElapsedSecs,
-            onMicClick = onMicClick,
-            modifier = Modifier.align(Alignment.BottomEnd)
-                .offset(x = -(SEND_SIZE + 8.dp)),
-        )
+        // While collapsed the mic pins next to send; once expanded it moves
+        // into the action row above (see the row) so it can't cover the model
+        // picker.
+        if (expansion <= 0.5f) {
+            DictationButton(
+                enabled = dictationEnabled,
+                recording = dictationRecording,
+                transcribing = dictationTranscribing,
+                elapsedSecs = dictationElapsedSecs,
+                onMicClick = onMicClick,
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .offset(x = -(SEND_SIZE + 8.dp)),
+            )
+        }
         SendStopButton(
             running = running,
             canSend = canSend,
