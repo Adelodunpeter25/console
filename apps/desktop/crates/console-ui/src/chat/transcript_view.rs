@@ -6,8 +6,8 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
-    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, canvas, div,
-    list, prelude::*, px, uniform_list,
+    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div,
+    list, prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -15,16 +15,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::chat::change_chips::{ChangesSummary, TurnChange, TurnChanges};
-use crate::chat::{
-    ActivityEvent, AssistantMessageBubble, ToolCallEntry, ToolCalls, ToolCallsAction,
-    ToolCallsState, UserMessageBubble, WorkingIndicator,
-};
+use crate::chat::change_chips::{ChangesSummary, TurnChanges};
+use crate::chat::{ActivityEvent, ToolCallEntry, ToolCallsAction, ToolCallsState};
 use crate::markdown::file_links::{is_file_link, is_http_url};
 use crate::markdown::render::{self, LinkHandler, MarkdownView, TranscriptSelection};
 use crate::primitives::scrollbar::{self, ScrollbarState};
-use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
 type MarkdownViewCache = Rc<RefCell<HashMap<(usize, usize), Rc<RefCell<MarkdownView>>>>>;
@@ -35,9 +30,9 @@ type MarkdownViewCache = Rc<RefCell<HashMap<(usize, usize), Rc<RefCell<MarkdownV
 const ESTIMATED_TRANSCRIPT_ROW_HEIGHT: f32 = 120.0;
 
 #[derive(Clone)]
-struct AssistantPresentation {
-    content_parts: Rc<Vec<AssistantContentPart>>,
-    copy_content: SharedString,
+pub(crate) struct AssistantPresentation {
+    pub(crate) content_parts: Rc<Vec<AssistantContentPart>>,
+    pub(crate) copy_content: SharedString,
 }
 
 pub struct TranscriptView {
@@ -52,35 +47,35 @@ pub struct TranscriptView {
     /// its copy string; a revision changes only when that message mutates.
     presentation_cache: RefCell<HashMap<usize, (u64, AssistantPresentation)>>,
     content_revisions: Vec<u64>,
-    list_state: ListState,
+    pub(crate) list_state: ListState,
     scrollbar_state: std::rc::Rc<ScrollbarState>,
-    prompts_open: bool,
-    prompts_focus: FocusHandle,
-    prompts: Rc<Vec<console_core::SessionPrompt>>,
+    pub(crate) prompts_open: bool,
+    pub(crate) prompts_focus: FocusHandle,
+    pub(crate) prompts: Rc<Vec<console_core::SessionPrompt>>,
     /// The pointer is over the transcript: the floating controls show only then.
-    hovered: bool,
-    prompts_scroll: UniformListScrollHandle,
+    pub(crate) hovered: bool,
+    pub(crate) prompts_scroll: UniformListScrollHandle,
     /// The fetched prompt list no longer matches the chat (new prompt, or a
     /// different chat); reopening the popup refetches only then.
-    prompts_stale: bool,
-    on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    pub(crate) prompts_stale: bool,
+    pub(crate) on_request_prompts: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_jump_to_prompt: Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>>,
     focus_handle: FocusHandle,
-    selection: TranscriptSelection,
-    is_streaming: bool,
+    pub(crate) selection: TranscriptSelection,
+    pub(crate) is_streaming: bool,
     /// Unix seconds when the current run started streaming; the live
     /// "Working for Ns" indicator ticks from this.
-    streaming_started_at: Option<i64>,
+    pub(crate) streaming_started_at: Option<i64>,
     /// Invalidates deferred scroll restores from older chat switches.
     scroll_restore_generation: u64,
     /// Disclosure state for grouped tool-call activity. This belongs to the
     /// transcript entity so virtualization does not reset it when rows remount.
-    tool_calls_state: Rc<RefCell<ToolCallsState>>,
+    pub(crate) tool_calls_state: Rc<RefCell<ToolCallsState>>,
     /// IDs of thinking blocks the user has expanded. Thinking is collapsed by
     /// default, but the choice survives virtualized row remounts.
-    thinking_expanded: Rc<RefCell<HashSet<String>>>,
+    pub(crate) thinking_expanded: Rc<RefCell<HashSet<String>>>,
     /// The active session's working directory, for relative tool paths.
-    session_cwd: Option<String>,
+    pub(crate) session_cwd: Option<String>,
     /// Cache for run activity derived from messages. Keyed by user_index,
     /// invalidated when messages or streaming state changes.
     tool_activity_cache:
@@ -94,11 +89,11 @@ pub struct TranscriptView {
     on_load_older: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     /// Opens the image preview modal with the decoded image when the user
     /// clicks an image inside a message bubble.
-    on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
-    link_handler: Option<LinkHandler>,
+    pub(crate) link_handler: Option<LinkHandler>,
     /// The session's recorded file changes grouped by the user message that
     /// started each turn, built once per fetch. A turn's chip row under its
     /// final assistant message is a lookup here, never a scan or a copy.
@@ -107,9 +102,9 @@ pub struct TranscriptView {
     /// the whole-session totals in the pinned summary pill.
     session_changes: Rc<Vec<SessionFileChange>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
-    on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
-    on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     /// Window-space bounds of this transcript's container, recorded by a
     /// paint-time canvas probe each frame. The Cite popup's window-space
     /// anchor converts to container-relative coordinates through it; a
@@ -118,7 +113,7 @@ pub struct TranscriptView {
     /// Turns (by their user message id) whose changed-file row is expanded
     /// past the collapsed chip count. Lives here so virtualized rows that
     /// remount keep their state.
-    expanded_turn_changes: Rc<RefCell<HashSet<String>>>,
+    pub(crate) expanded_turn_changes: Rc<RefCell<HashSet<String>>>,
     /// User messages (by server id, falling back to the row key) whose
     /// folded text is expanded via Show more. Same lifetime as the other
     /// per-row disclosure state above.
@@ -177,7 +172,7 @@ impl TranscriptView {
     }
 
     /// Expand or collapse one turn's changed-file row and re-measure it.
-    fn toggle_turn_changes(&mut self, row: usize, turn_id: String, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_turn_changes(&mut self, row: usize, turn_id: String, cx: &mut Context<Self>) {
         {
             let mut expanded = self.expanded_turn_changes.borrow_mut();
             if !expanded.remove(&turn_id) {
@@ -196,7 +191,7 @@ impl TranscriptView {
     }
 
     /// Expand or collapse one user message's folded text and re-measure it.
-    fn toggle_user_message_expanded(&mut self, key: String, row: usize, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_user_message_expanded(&mut self, key: String, row: usize, cx: &mut Context<Self>) {
         {
             let mut expanded = self.expanded_user_messages.borrow_mut();
             if !expanded.remove(&key) {
@@ -234,24 +229,7 @@ impl TranscriptView {
     /// messages from the tail, since the canonical page always ends at the
     /// same latest message. Per-turn file changes are keyed by that id.
     pub fn adopt_user_message_ids(&mut self, canonical: &[AgentMessage], cx: &mut Context<Self>) {
-        let mut canonical_ids = canonical.iter().rev().filter_map(|message| match message {
-            AgentMessage::User { id, .. } => Some(id.clone()),
-            _ => None,
-        });
-        let mut changed = false;
-        for message in self.messages.iter_mut().rev() {
-            let AgentMessage::User { id, .. } = message else {
-                continue;
-            };
-            let Some(canonical_id) = canonical_ids.next() else {
-                break;
-            };
-            if id.is_none() && canonical_id.is_some() {
-                *id = canonical_id;
-                changed = true;
-            }
-        }
-        if changed {
+        if crate::chat::turn_changes::adopt_user_ids(&mut self.messages, canonical) {
             cx.notify();
         }
     }
@@ -265,7 +243,7 @@ impl TranscriptView {
     ) {
         let before: Vec<usize> = self.rows_with_turn_changes();
         self.session_changes = changes;
-        self.turn_changes = group_turn_changes(&self.session_changes);
+        self.turn_changes = crate::chat::turn_changes::group_turn_changes(&self.session_changes);
         let after: Vec<usize> = self.rows_with_turn_changes();
         if before.is_empty() && after.is_empty() {
             // No chip row to re-measure, but the pinned summary pill still
@@ -291,43 +269,23 @@ impl TranscriptView {
     }
 
     fn rows_with_turn_changes(&self) -> Vec<usize> {
-        (0..self.messages.len())
-            .filter(|&index| self.turn_changes_for_assistant(index).is_some())
-            .collect()
+        crate::chat::turn_changes::rows_with_turn_changes(
+            &self.messages,
+            &self.turn_changes,
+            crate::chat::row::is_hidden_tool_transport,
+        )
     }
 
     /// File changes of the turn a settled assistant message closes. Only the
     /// turn's last visible assistant message carries them: a turn is one user
     /// message and everything the agent did until the next one.
-    fn turn_changes_for_assistant(&self, index: usize) -> Option<Rc<TurnChanges>> {
-        if self.turn_changes.is_empty() {
-            return None;
-        }
-        let Some(AgentMessage::Assistant { .. }) = self.messages.get(index) else {
-            return None;
-        };
-        if is_hidden_tool_transport(&self.messages[index]) {
-            return None;
-        }
-        let closes_turn = self.messages[index + 1..]
-            .iter()
-            .take_while(|message| !matches!(message, AgentMessage::User { .. }))
-            .all(|message| {
-                !matches!(message, AgentMessage::Assistant { .. })
-                    || is_hidden_tool_transport(message)
-            });
-        if !closes_turn {
-            return None;
-        }
-        let user_id = self.messages[..index]
-            .iter()
-            .rev()
-            .find_map(|message| match message {
-                AgentMessage::User { id, .. } => Some(id.clone()),
-                _ => None,
-            })
-            .flatten();
-        self.turn_changes.get(&user_id?).cloned()
+    pub(crate) fn turn_changes_for_assistant(&self, index: usize) -> Option<Rc<TurnChanges>> {
+        crate::chat::turn_changes::turn_changes_for_assistant(
+            &self.messages,
+            &self.turn_changes,
+            index,
+            crate::chat::row::is_hidden_tool_transport,
+        )
     }
 
     /// Wire the image-preview opener (the app opens its modal with the
@@ -712,160 +670,10 @@ impl TranscriptView {
     }
 
     /// Jump to the newest message and resume following the run.
-    fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
         self.list_state.set_follow_mode(FollowMode::Tail);
         self.list_state.scroll_to_end();
         cx.notify();
-    }
-
-    /// Floating pill at the bottom-right: a prompt list button (opens the jump
-    /// popup) and, while scrolled away from the tail, a scroll-to-bottom arrow.
-    fn render_scroll_controls(&self, theme: Theme, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let has_prompts = !self.messages.is_empty();
-        let show_down = !self.list_state.is_following_tail();
-        if (!has_prompts && !show_down) || !(self.hovered || self.prompts_open) {
-            return div().into_any_element();
-        }
-        let both = has_prompts && show_down;
-        let button = |id: &'static str, icon: IconName, is_left: bool| {
-            let mut el = div()
-                .id(id)
-                .w(px(32.0))
-                .h(px(32.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .cursor_pointer()
-                .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 12.0, theme.text_secondary));
-            if both {
-                if is_left {
-                    el = el.rounded_tl(px(16.0)).rounded_bl(px(16.0));
-                } else {
-                    el = el.rounded_tr(px(16.0)).rounded_br(px(16.0));
-                }
-            } else {
-                el = el.rounded(px(16.0));
-            }
-            el
-        };
-        let mut pill = div()
-            .flex()
-            .items_center()
-            .overflow_hidden()
-            .rounded(px(17.0))
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.raised);
-        if has_prompts {
-            pill = pill.child(
-                button("transcript-prompts", IconName::List, true)
-                    .tooltip(Tooltip::text("Jump to prompt"))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.prompts_open = !this.prompts_open;
-                        if this.prompts_open {
-                            window.focus(&this.prompts_focus, cx);
-                            if let Some(last) = this.prompts.len().checked_sub(1) {
-                                this.prompts_scroll
-                                    .scroll_to_item_strict(last, ScrollStrategy::Bottom);
-                            }
-                            if this.prompts_stale || this.prompts.is_empty() {
-                                this.prompts_stale = false;
-                                if let Some(request) = this.on_request_prompts.clone() {
-                                    request(window, cx);
-                                }
-                            }
-                        }
-                        cx.notify();
-                    })),
-            );
-        }
-        if show_down {
-            if has_prompts {
-                pill = pill.child(div().w(px(1.0)).h(px(16.0)).flex_none().bg(theme.border));
-            }
-            pill = pill.child(
-                button("transcript-scroll-bottom", IconName::ArrowDown, false)
-                    .tooltip(Tooltip::text("Scroll to bottom"))
-                    .on_click(cx.listener(|this, _, _, cx| this.scroll_to_bottom(cx))),
-            );
-        }
-        let mut layer = div().absolute().inset_0();
-        if self.prompts_open && has_prompts {
-            let prompts = self.prompts.clone();
-            let entity = cx.entity().downgrade();
-            let total = prompts.len();
-            let visible_rows = total.min(PROMPT_POPUP_MAX_ROWS);
-            let body = if prompts.is_empty() {
-                div()
-                    .px(px(12.0))
-                    .py(px(7.0))
-                    .text_size(px(13.0))
-                    .text_color(theme.text_tertiary)
-                    .child("Loading…")
-                    .into_any_element()
-            } else {
-                // Virtualized: only the visible rows are built, however long the chat is.
-                uniform_list(
-                    "transcript-prompts-list",
-                    prompts.len(),
-                    move |range, _window, _cx| {
-                        range
-                            .map(|ix| prompt_row(&prompts[ix], total - 1 - ix, theme, entity.clone()))
-                            .collect::<Vec<_>>()
-                    },
-                )
-                .track_scroll(&self.prompts_scroll)
-                .size_full()
-                .into_any_element()
-            };
-            layer = layer
-                // Click-away backdrop.
-                .child(
-                    div()
-                        .id("transcript-prompts-backdrop")
-                        .absolute()
-                        .inset_0()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.prompts_open = false;
-                            cx.notify();
-                        })),
-                )
-                .child(
-                    div()
-                        .id("transcript-prompts-popup")
-                        .track_focus(&self.prompts_focus)
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                            if event.keystroke.key == "escape" {
-                                this.close_prompts(cx);
-                                cx.stop_propagation();
-                            }
-                        }))
-                        .absolute()
-                        .right(px(16.0))
-                        .bottom(px(54.0))
-                        .w(px(340.0))
-                        .max_w_full()
-                        .h(px(visible_rows.max(1) as f32 * PROMPT_ROW_HEIGHT + 8.0))
-                        .occlude()
-                        .on_scroll_wheel(|_, _, cx| cx.stop_propagation())
-                        .p(px(4.0))
-                        .rounded(px(12.0))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.raised)
-                        .child(body),
-                );
-        }
-        layer
-            .child(
-                div()
-                    .absolute()
-                    .right(px(16.0))
-                    .bottom(px(10.0))
-                    .child(pill),
-            )
-            .into_any_element()
     }
 
     /// The currently selected transcript text, if the user has a selection.
@@ -873,7 +681,11 @@ impl TranscriptView {
         self.selection.selection.borrow().selected_text()
     }
 
-    fn markdown_view_for(
+    pub(crate) fn jump_callback(&self) -> Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>> {
+        self.on_jump_to_prompt.clone()
+    }
+
+    pub(crate) fn markdown_view_for(
         &self,
         message_index: usize,
         part_index: usize,
@@ -885,7 +697,7 @@ impl TranscriptView {
             .clone()
     }
 
-    fn assistant_presentation(
+    pub(crate) fn assistant_presentation(
         &self,
         message_index: usize,
         content: &[AssistantContentPart],
@@ -1338,7 +1150,7 @@ impl TranscriptView {
     /// assistant run after a user message, in chronological content order. The
     /// desktop client uses the same boundary: a new user message starts the
     /// next run, and thinking/text between tool calls stay in the timeline.
-    fn tool_activity_for_user(
+    pub(crate) fn tool_activity_for_user(
         &self,
         user_index: usize,
     ) -> Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)> {
@@ -1459,7 +1271,7 @@ impl TranscriptView {
         Some((events, started_at, elapsed, working))
     }
 
-    fn apply_thinking_toggle(
+    pub(crate) fn apply_thinking_toggle(
         &mut self,
         thinking_id: String,
         expanded: bool,
@@ -1475,7 +1287,7 @@ impl TranscriptView {
         cx.notify();
     }
 
-    fn apply_tool_calls_action(
+    pub(crate) fn apply_tool_calls_action(
         &mut self,
         action: ToolCallsAction,
         window: &mut Window,
@@ -1538,7 +1350,7 @@ impl Render for TranscriptView {
             let first_visible_ix = self
                 .messages
                 .iter()
-                .position(|m| !is_hidden_tool_transport(m))
+                .position(|m| !crate::chat::row::is_hidden_tool_transport(m))
                 .unwrap_or(0);
             if top.item_ix <= first_visible_ix.saturating_add(5) {
                 self.loading_older = true;
@@ -1610,9 +1422,9 @@ impl Render for TranscriptView {
             .size_full()
             .bg(theme.chat_canvas)
             .child(render::frame_reset(selection.clone()))
-            .child(cite_origin_probe(cite_origin.clone()))
+            .child(crate::chat::cite_overlay::cite_origin_probe(cite_origin.clone()))
             .child(if self.messages.is_empty() && !is_streaming {
-                empty_state(theme.clone()).into_any_element()
+                crate::chat::row::empty_state(theme.clone()).into_any_element()
             } else {
                 div()
                     .size_full()
@@ -1620,7 +1432,7 @@ impl Render for TranscriptView {
                     .flex_col()
                     .child(
                         list(self.list_state.clone(), move |index, _window, cx| {
-                            transcript_row(entity.clone(), index, cx)
+                            crate::chat::row::transcript_row(entity.clone(), index, cx)
                         })
                         // Room at the tail for the floating composer pills:
                         // list padding is part of the scroll content, so the
@@ -1632,13 +1444,13 @@ impl Render for TranscriptView {
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
                     .into_any_element()
             })
-            .child(selection_input(selection.clone(), cite_origin.clone()))
+            .child(crate::chat::cite_overlay::selection_input(selection.clone(), cite_origin.clone()))
             .child(self.render_scroll_controls(theme.clone(), cx));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
             return root
-                .child(cite_popup(
+                .child(crate::chat::cite_overlay::cite_popup(
                     line,
                     container,
                     selection.clone(),
@@ -1648,440 +1460,6 @@ impl Render for TranscriptView {
         }
         root.into_any_element()
     }
-}
-
-/// Records the transcript container's window-space bounds every frame so the
-/// Cite popup's window-space anchor can be converted to container-relative
-/// coordinates. Paints beneath everything and registers no hitbox.
-fn cite_origin_probe(cell: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>) -> impl IntoElement {
-    canvas(
-        move |probe: gpui::Bounds<gpui::Pixels>, _, _| {
-            *cell.borrow_mut() = Some(probe);
-        },
-        |_, _, _, _| (),
-    )
-    .absolute()
-    .inset_0()
-}
-
-/// The floating Copy + Cite strip shown just above an active selection: one
-/// card holding both icon buttons. It is purely visual: the selection mouse
-/// handlers (render.rs) detect a press and release on the recorded hit rects
-/// and fire the actions, so no click handler here can race the
-/// selection-clearing mouse-down.
-fn cite_popup(
-    line: [f32; 4],
-    container: gpui::Bounds<gpui::Pixels>,
-    selection: TranscriptSelection,
-    theme: Theme,
-) -> impl IntoElement {
-    const PILL_SIZE: f32 = 24.0;
-    const PILL_GAP: f32 = 2.0;
-    const STRIP_PAD: f32 = 3.0;
-    const SELECTION_GAP: f32 = 2.0;
-    const HIT_PAD: f32 = 6.0;
-    let container_x = f32::from(container.origin.x);
-    let container_y = f32::from(container.origin.y);
-    let container_w = f32::from(container.size.width);
-    let container_h = f32::from(container.size.height);
-    let strip_w = STRIP_PAD * 2.0 + PILL_SIZE * 2.0 + PILL_GAP;
-    let strip_h = STRIP_PAD * 2.0 + PILL_SIZE;
-    // Right edge anchored past the selection's last line; flip below when
-    // that would poke past the container's top edge.
-    let row_right = line[0] + line[2] - container_x + SELECTION_GAP;
-    let mut strip_x = row_right - strip_w;
-    let mut y = line[1] - container_y - strip_h - 2.0;
-    if y < 0.0 {
-        y = line[1] + line[3] - container_y + 2.0;
-    }
-    strip_x = strip_x.clamp(0.0, (container_w - strip_w).max(0.0));
-    y = y.clamp(0.0, (container_h - strip_h).max(0.0));
-    let copy_x = strip_x + STRIP_PAD;
-    let cite_x = copy_x + PILL_SIZE + PILL_GAP;
-    // Record both hit rects at render time, from the same placement math
-    // that positions the strip — deliberately generous so clicks near the
-    // rounded edges still count. No paint-time probe: how Taffy sizes an
-    // absolute probe inside a pill is exactly what we would be guessing at.
-    {
-        let mut state = selection.selection.borrow_mut();
-        state.set_copy_button(Some([
-            container_x + copy_x - HIT_PAD,
-            container_y + y + STRIP_PAD - HIT_PAD,
-            PILL_SIZE + 2.0 * HIT_PAD,
-            PILL_SIZE + 2.0 * HIT_PAD,
-        ]));
-        state.set_cite_button(Some([
-            container_x + cite_x - HIT_PAD,
-            container_y + y + STRIP_PAD - HIT_PAD,
-            PILL_SIZE + 2.0 * HIT_PAD,
-            PILL_SIZE + 2.0 * HIT_PAD,
-        ]));
-    }
-    div()
-        .id("cite-popup-strip")
-        .absolute()
-        .left(px(strip_x))
-        .top(px(y))
-        .px(px(STRIP_PAD))
-        .py(px(STRIP_PAD))
-        .rounded(px(8.0))
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.raised)
-        .shadow_sm()
-        .flex()
-        .items_center()
-        .gap(px(PILL_GAP))
-        .child(popup_pill(
-            "copy-popup",
-            IconName::Copy,
-            "Copy",
-            theme.clone(),
-        ))
-        .child(popup_pill("cite-popup", IconName::Reply, "Quote selection", theme))
-}
-
-/// One icon button inside the popup strip. Activation lives in the selection
-/// mouse handlers, so this is styling and hover only.
-fn popup_pill(id: &'static str, icon: IconName, tooltip: &'static str, theme: Theme) -> impl IntoElement {
-    div()
-        .id(gpui::ElementId::Name(id.into()))
-        .size(px(24.0))
-        .rounded(px(6.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_pointer()
-        .hover(|element| element.bg(theme.overlay_strong))
-        .tooltip(Tooltip::text(tooltip))
-        .child(app_icon(icon, 12.0, theme.text_secondary))
-}
-
-/// Fixed row height so the popup virtualizes without measuring, and so its
-/// height is exactly `PROMPT_POPUP_MAX_ROWS` rows when the chat has more.
-const PROMPT_ROW_HEIGHT: f32 = 34.0;
-const PROMPT_POPUP_MAX_ROWS: usize = 7;
-
-fn prompt_row(
-    prompt: &console_core::SessionPrompt,
-    from_end: usize,
-    theme: Theme,
-    entity: gpui::WeakEntity<TranscriptView>,
-) -> gpui::AnyElement {
-    div()
-        .id(gpui::ElementId::Name(format!("prompt-jump-{}", prompt.id).into()))
-        // Full width, or the row sizes to its text and never truncates.
-        .w_full()
-        .h(px(PROMPT_ROW_HEIGHT))
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(px(12.0))
-        .px(px(12.0))
-        .rounded(px(8.0))
-        .cursor_pointer()
-        .hover(|element| element.bg(theme.overlay_strong))
-        .on_click(move |_, window, cx| {
-            let Some(view) = entity.upgrade() else {
-                return;
-            };
-            let jump = view.update(cx, |this, cx| {
-                this.prompts_open = false;
-                cx.notify();
-                this.on_jump_to_prompt.clone()
-            });
-            if let Some(jump) = jump {
-                jump(from_end, window, cx);
-            }
-        })
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(13.0))
-                .text_color(theme.text)
-                .child(prompt.preview.clone()),
-        )
-        .when(prompt.created_at > 0, |element| {
-            // "just now" and dates ("Oct 29") already read fine; only "3h" needs "ago".
-            let age = crate::utils::format_time_ago(prompt.created_at);
-            let age = if age.contains(' ') {
-                age
-            } else {
-                format!("{age} ago")
-            };
-            element.child(
-                div()
-                    .flex_none()
-                    .text_size(px(12.0))
-                    .text_color(theme.text_tertiary)
-                    .child(age),
-            )
-        })
-        .into_any_element()
-}
-
-fn transcript_row(
-    entity: gpui::WeakEntity<TranscriptView>,
-    index: usize,
-    cx: &mut gpui::App,
-) -> gpui::AnyElement {
-    let Some(view) = entity.upgrade() else {
-        return div().into_any_element();
-    };
-    let view_ref = view.read(cx);
-
-    // While a run is streaming, the trailing row is the live working
-    // indicator — pulsing dots plus "Working for Ns" — pinned right below
-    // whatever content has arrived.
-    if index >= view_ref.messages.len() {
-        let theme = Theme::current(cx);
-        let started_at = view_ref
-            .streaming_started_at
-            .unwrap_or_else(|| chrono::Utc::now().timestamp());
-        return div()
-            .w_full()
-            .px(px(20.0))
-            .py(px(4.0))
-            .flex()
-            .justify_center()
-            .child(
-                div()
-                    .w_full()
-                    .max_w(px(768.0))
-                    .child(WorkingIndicator::new(started_at, theme)),
-            )
-            .into_any_element();
-    }
-
-    let Some(message) = view_ref.messages.get(index) else {
-        return div().into_any_element();
-    };
-
-    // These messages are transport-only after RunActivity takes ownership of
-    // their visual output. Return before the normal row padding is applied;
-    // rendering an empty child inside the wrapper still reserves vertical
-    // space, which creates a gap between the run summary and final response.
-    if is_hidden_tool_transport(message) {
-        return div().into_any_element();
-    }
-
-    let preview_handler = view_ref.on_preview_image.clone();
-    let link_handler = view_ref.link_handler.clone();
-    let row = match message {
-        AgentMessage::User {
-            id,
-            content,
-            attachments,
-            annotations,
-            context_files,
-            created_at,
-            ..
-        } => {
-            let expand_key = id.clone().unwrap_or_else(|| format!("message-{index}"));
-            let user_expanded = view_ref.user_message_expanded(&expand_key);
-            let expand_entity = entity.clone();
-            let mut bubble = UserMessageBubble::new(content.clone())
-                .created_at(*created_at)
-                .selection(view_ref.selection.clone(), format!("user-{index}"))
-                .expanded(user_expanded)
-                .on_toggle_expand(move |_window, cx| {
-                    if let Some(view) = expand_entity.upgrade() {
-                        let expand_key = expand_key.clone();
-                        view.update(cx, |view, cx| {
-                            view.toggle_user_message_expanded(expand_key, index, cx)
-                        });
-                    }
-                });
-            if let Some(attachments) = attachments {
-                bubble = bubble.attachments(attachments.clone());
-            }
-            if let Some(annotations) = annotations {
-                bubble = bubble.annotations(annotations.clone());
-            }
-            if let Some(files) = context_files {
-                bubble = bubble.context_files(files.clone());
-            }
-            if let Some(handler) = &preview_handler {
-                bubble = bubble.on_preview_image(handler.clone());
-            }
-            let activity = view_ref.tool_activity_for_user(index);
-            let activity_state = view_ref.tool_calls_state.clone();
-            let activity_entity = entity.clone();
-            div()
-                .w_full()
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .child(bubble)
-                .when_some(
-                    activity,
-                    move |element, (entries, started_at, elapsed, working)| {
-                        // Visual artifacts render as their own item after the
-                        // run block, so folding the run never hides the card.
-                        let visuals: Vec<_> = entries
-                            .iter()
-                            .filter_map(|event| match event {
-                                ActivityEvent::ToolCall(entry) => entry
-                                    .result
-                                    .as_ref()
-                                    .and_then(|result| result.visual.clone())
-                                    .map(|visual| (entry.call.id.clone(), visual)),
-                                _ => None,
-                            })
-                            .collect();
-                        let visual_selection = view_ref.selection.clone();
-                        let activity = ToolCalls::new(
-                            format!("run-{index}"),
-                            entries,
-                            working,
-                            started_at,
-                            elapsed,
-                            activity_state,
-                        )
-                        .cwd(view_ref.session_cwd.clone())
-                        .selection(view_ref.selection.clone())
-                        .link_handler(link_handler.clone())
-                        .on_action(move |action, window, cx| {
-                            if let Some(view) = activity_entity.upgrade() {
-                                view.update(cx, |view, cx| {
-                                    view.apply_tool_calls_action(action, window, cx);
-                                });
-                            }
-                        });
-                        element.child(activity).children(visuals.into_iter().map(
-                            |(call_id, visual)| {
-                                crate::chat::visual::VisualCard::new(
-                                    call_id,
-                                    visual,
-                                    visual_selection.clone(),
-                                )
-                            },
-                        ))
-                    },
-                )
-                .into_any_element()
-        }
-        AgentMessage::Assistant {
-            content,
-            created_at,
-            id,
-            tok_per_sec,
-            ..
-        } => {
-            let presentation = view_ref.assistant_presentation(index, content);
-            let markdown_views = presentation
-                .content_parts
-                .iter()
-                .enumerate()
-                .map(|(part_index, part)| match part {
-                    AssistantContentPart::Text { .. } | AssistantContentPart::Thinking { .. } => {
-                        Some(view_ref.markdown_view_for(index, part_index))
-                    }
-                    AssistantContentPart::ToolCall { .. } | AssistantContentPart::Image { .. } => {
-                        None
-                    }
-                })
-                .collect();
-            let thinking_state = view_ref.thinking_expanded.clone();
-            let thinking_entity = entity.clone();
-            let turn_changes = view_ref.turn_changes_for_assistant(index);
-            let turn_id = turn_changes
-                .as_ref()
-                .map(|turn| turn.user_message_id.clone())
-                .unwrap_or_default();
-            let changes_expanded = view_ref.expanded_turn_changes.borrow().contains(&turn_id);
-            let on_open_change = view_ref.on_open_change.clone();
-            let on_fork = view_ref.on_fork.clone();
-            let toggle_entity = entity.clone();
-            AssistantMessageBubble::new(presentation.content_parts)
-                .file_changes(turn_changes)
-                .changes_expanded(changes_expanded)
-                .on_toggle_changes(move |_window, cx| {
-                    if let Some(view) = toggle_entity.upgrade() {
-                        let turn_id = turn_id.clone();
-                        view.update(cx, |view, cx| view.toggle_turn_changes(index, turn_id, cx));
-                    }
-                })
-                .on_open_change(on_open_change)
-                .fork_message_id(id.clone())
-                .on_fork(on_fork)
-                .copy_content(presentation.copy_content)
-                .link_handler(link_handler.clone())
-                .thinking_expanded(thinking_state)
-                .on_thinking_toggle(move |thinking_id, expanded, _window, cx| {
-                    if let Some(view) = thinking_entity.upgrade() {
-                        view.update(cx, |view, cx| {
-                            view.apply_thinking_toggle(thinking_id, expanded, cx);
-                        });
-                    }
-                })
-                .created_at(*created_at)
-                .tok_per_sec(*tok_per_sec)
-                .selection(view_ref.selection.clone(), format!("message-{index}"))
-                .markdown_views(markdown_views)
-                .streaming(view_ref.is_streaming && index + 1 == view_ref.messages.len())
-                .when_some(preview_handler.clone(), |bubble, handler| {
-                    bubble.on_preview_image(handler)
-                })
-                .into_any_element()
-        }
-        // Tool-result messages are persistence transport. Their results are
-        // joined to the calls and rendered in the owning user's run activity.
-        AgentMessage::ToolResult { .. } => div().into_any_element(),
-    };
-
-    div()
-        .w_full()
-        .px(px(20.0))
-        .py(px(4.0))
-        .flex()
-        .justify_center()
-        .child(div().w_full().max_w(px(768.0)).child(row))
-        .into_any_element()
-}
-
-fn is_hidden_tool_transport(message: &AgentMessage) -> bool {
-    match message {
-        AgentMessage::ToolResult { .. } => true,
-        AgentMessage::Assistant { content, .. } => content
-            .iter()
-            .any(|part| matches!(part, AssistantContentPart::ToolCall { .. })),
-        AgentMessage::User { .. } => false,
-    }
-}
-
-fn selection_input(
-    selection: TranscriptSelection,
-    viewport: Rc<RefCell<Option<gpui::Bounds<gpui::Pixels>>>>,
-) -> impl IntoElement {
-    canvas(
-        |_, _, _| (),
-        move |_, _, window, _| {
-            render::install_selection_input(window, &selection, Some(viewport.clone()));
-        },
-    )
-    .absolute()
-    .w(px(0.0))
-    .h(px(0.0))
-}
-
-fn empty_state(theme: Theme) -> impl IntoElement {
-    div()
-        .size_full()
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(8.0))
-        .child(app_icon(IconName::Bot, 32.0, theme.text_ghost))
-        .child(
-            div()
-                .text_size(px(14.0))
-                .text_color(theme.text_ghost)
-                .child("Start a conversation"),
-        )
 }
 
 fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
@@ -2108,33 +1486,4 @@ fn messages_match(a: &AgentMessage, b: &AgentMessage) -> bool {
         ) => !r1.is_empty() && !r2.is_empty() && r1[0].tool_call_id == r2[0].tool_call_id,
         _ => false,
     }
-}
-
-/// Group the session's file changes by the user message that started their
-/// turn. The server sends rows most recently updated first; each turn's files
-/// are reversed so chips read in the order the agent touched them. Rows with
-/// no user message id (nothing links them to a turn) are dropped.
-fn group_turn_changes(changes: &[SessionFileChange]) -> HashMap<String, Rc<TurnChanges>> {
-    let mut grouped: HashMap<String, Vec<TurnChange>> = HashMap::new();
-    for change in changes.iter().rev() {
-        if change.user_message_id.is_empty() {
-            continue;
-        }
-        grouped
-            .entry(change.user_message_id.clone())
-            .or_default()
-            .push(TurnChange::from_change(change));
-    }
-    grouped
-        .into_iter()
-        .map(|(user_message_id, files)| {
-            (
-                user_message_id.clone(),
-                Rc::new(TurnChanges {
-                    user_message_id,
-                    files,
-                }),
-            )
-        })
-        .collect()
 }
