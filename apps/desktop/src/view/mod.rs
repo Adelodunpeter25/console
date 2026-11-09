@@ -532,16 +532,23 @@ impl Render for ConsoleDesktopApp {
                         // Close the image preview first — it sits above
                         // everything else, so it owns Escape while open.
                         if let Some(app) = entity.upgrade() {
-                            let had_preview = app.update(cx, |this, cx| {
+                            let handled = app.update(cx, |this, cx| {
                                 if this.zoomed_image.is_some() {
                                     this.zoomed_image = None;
                                     cx.notify();
-                                    true
-                                } else {
-                                    false
+                                    return true;
                                 }
+                                let transcript = this.active_transcript_view();
+                                transcript.update(cx, |trans, cx| {
+                                    if trans.is_prompts_open() {
+                                        trans.close_prompts(cx);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                })
                             });
-                            if had_preview {
+                            if handled {
                                 return;
                             }
                         }

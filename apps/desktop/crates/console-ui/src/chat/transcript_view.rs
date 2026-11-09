@@ -5,8 +5,9 @@ use console_core::{
     AgentMessage, AssistantContentPart, AssistantMessage, ImageAttachment, ToolResult,
 };
 use gpui::{
-    App, Context, FocusHandle, FollowMode, IntoElement, ListAlignment, ListOffset, ListState,
-    Render, SharedString, Window, ScrollStrategy, UniformListScrollHandle, canvas, div, list, prelude::*, px, uniform_list,
+    App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
+    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, canvas, div,
+    list, prelude::*, px, uniform_list,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -54,6 +55,7 @@ pub struct TranscriptView {
     list_state: ListState,
     scrollbar_state: std::rc::Rc<ScrollbarState>,
     prompts_open: bool,
+    prompts_focus: FocusHandle,
     prompts: Rc<Vec<console_core::SessionPrompt>>,
     /// The pointer is over the transcript: the floating controls show only then.
     hovered: bool,
@@ -138,6 +140,7 @@ impl TranscriptView {
             list_state,
             scrollbar_state: ScrollbarState::new(),
             prompts_open: false,
+            prompts_focus: cx.focus_handle(),
             prompts: Rc::new(Vec::new()),
             hovered: false,
             prompts_scroll: UniformListScrollHandle::new(),
@@ -427,6 +430,17 @@ impl TranscriptView {
         }
         self.prompts = Rc::new(prompts);
         cx.notify();
+    }
+
+    pub fn is_prompts_open(&self) -> bool {
+        self.prompts_open
+    }
+
+    pub fn close_prompts(&mut self, cx: &mut Context<Self>) {
+        if self.prompts_open {
+            self.prompts_open = false;
+            cx.notify();
+        }
     }
 
     /// Scroll so the user prompt `from_end` prompts back from the newest (0 =
@@ -750,6 +764,7 @@ impl TranscriptView {
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.prompts_open = !this.prompts_open;
                         if this.prompts_open {
+                            window.focus(&this.prompts_focus, cx);
                             if let Some(last) = this.prompts.len().checked_sub(1) {
                                 this.prompts_scroll
                                     .scroll_to_item_strict(last, ScrollStrategy::Bottom);
@@ -819,6 +834,13 @@ impl TranscriptView {
                 .child(
                     div()
                         .id("transcript-prompts-popup")
+                        .track_focus(&self.prompts_focus)
+                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                            if event.keystroke.key == "escape" {
+                                this.close_prompts(cx);
+                                cx.stop_propagation();
+                            }
+                        }))
                         .absolute()
                         .right(px(16.0))
                         .bottom(px(54.0))
@@ -1578,6 +1600,12 @@ impl Render for TranscriptView {
             }))
             .key_context("TranscriptView")
             .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                if this.prompts_open && event.keystroke.key == "escape" {
+                    this.close_prompts(cx);
+                    cx.stop_propagation();
+                }
+            }))
             .relative()
             .size_full()
             .bg(theme.chat_canvas)
