@@ -203,7 +203,11 @@ impl FloatingComposerState {
         // docked panes wire onto their own menu handles.
         on_project_menu_open: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
-        let input = cx.new(|cx| ComposerInput::new(window, cx).placeholder("Describe a task…"));
+        let input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .enable_large_paste_chip()
+                .placeholder("Describe a task…")
+        });
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
 
         Self {

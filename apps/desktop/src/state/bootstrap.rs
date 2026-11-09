@@ -16,7 +16,7 @@ impl ConsoleDesktopApp {
     /// submits, a paste stages images, Backspace on an empty field drops the
     /// last attachment.
     pub(crate) fn wire_floating_composer_input(&mut self, cx: &mut Context<Self>) {
-        use console_ui::input::{ComposerAttachmentPaste, ComposerEvent};
+        use console_ui::input::{ComposerAttachmentPaste, ComposerEvent, ComposerLargePaste};
         let input = self.floating_composer.input.clone();
         self._subscriptions.push(cx.subscribe(
             &input,
@@ -39,6 +39,12 @@ impl ConsoleDesktopApp {
             |this, _input, event: &ComposerAttachmentPaste, cx| {
                 this.stage_clipboard_attachments(FLOATING_KEY, event.0.clone(), cx);
                 cx.notify();
+            },
+        ));
+        self._subscriptions.push(cx.subscribe(
+            &input,
+            |this, _input, event: &ComposerLargePaste, cx| {
+                this.stage_large_paste(FLOATING_KEY, event.text.clone(), cx);
             },
         ));
     }
