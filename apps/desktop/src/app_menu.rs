@@ -67,17 +67,25 @@ fn with_key_window(body: impl FnOnce(&objc2_app_kit::NSWindow)) {
 /// Register the native application menu bar and its application-level actions.
 pub fn init(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| {
-        if crate::window::any_agent_running(cx) {
-            if let Some(handle) = cx.active_window() {
+        if !crate::window::any_agent_running(cx) {
+            cx.quit();
+            return;
+        }
+        // Deferred: this action is dispatched from inside an update of the
+        // active window, and GPUI cannot update a window re-entrantly, so
+        // asking for the confirmation here would fail and swallow the quit.
+        cx.defer(|cx| {
+            let asked = cx.active_window().is_some_and(|handle| {
                 handle
                     .update(cx, |_, window, cx| {
                         crate::window::confirm_then(window, cx, "Quit Console?", |_, cx| cx.quit());
                     })
-                    .ok();
-                return;
+                    .is_ok()
+            });
+            if !asked {
+                cx.quit();
             }
-        }
-        cx.quit();
+        });
     });
 
     cx.on_action(|_: &About, _| {
