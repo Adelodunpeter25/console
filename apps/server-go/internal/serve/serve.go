@@ -29,7 +29,6 @@ import (
 	fssvc "github.com/Adelodunpeter25/console/apps/server-go/internal/services/fs"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/terminal"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/cfrelay"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/tunnel/opentunnel"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
@@ -230,10 +229,10 @@ func remoteAccessDisabled() bool {
 }
 
 // startRemoteAccess opens the remote-access backend for this server and
-// returns a function that closes it. iroh is the default; CONSOLE_RELAY=relay
-// asks for the Cloudflare relay, CONSOLE_RELAY=0|opentunnel for OpenTunnel,
-// and a failed iroh start falls back to OpenTunnel. CONSOLE_REMOTE=off skips
-// remote access; CONSOLE_TUNNEL_API points OpenTunnel elsewhere.
+// returns a function that closes it. iroh is the default; CONSOLE_RELAY=0
+// (or opentunnel, off, false, no, disabled) asks for OpenTunnel, and a failed
+// iroh start falls back to it. CONSOLE_REMOTE=off skips remote access;
+// CONSOLE_TUNNEL_API points OpenTunnel elsewhere.
 func startRemoteAccess(listenAddr string) func() {
 	if remoteAccessDisabled() {
 		slog.Info("remote access is off (CONSOLE_REMOTE)")
@@ -258,11 +257,6 @@ func startRemoteAccess(listenAddr string) func() {
 			return stop
 		}
 		slog.Warn("iroh unavailable, falling back to OpenTunnel", "error", err)
-		return startOpenTunnel(dir, target)
-	}
-	if tunnel.RelayEnabled() {
-		_ = tunnel.SetBackend(dir, tunnel.BackendRelay)
-		return startRelay(dir, target)
 	}
 	return startOpenTunnel(dir, target)
 }
@@ -283,31 +277,6 @@ func startOpenTunnel(dir, target string) func() {
 		return func() {}
 	}
 	_ = tunnel.SetBackend(dir, tunnel.BackendOpenTunnel)
-	slog.Info("remote access starting", "url", manager.URL())
-	return manager.Close
-}
-
-// startRelay opens the relay Worker tunnel, the default backend. CONSOLE_RELAY_API
-// points it at another relay, and CONSOLE_RELAY_NAME asks for a name on the
-// first run, such as "peter-dev".
-func startRelay(dir, target string) func() {
-	manager := &cfrelay.Manager{
-		API:    os.Getenv("CONSOLE_RELAY_API"),
-		Name:   os.Getenv("CONSOLE_RELAY_NAME"),
-		Dir:    dir,
-		Target: target,
-		Logger: slog.Default(),
-		OnReady: func(url string) {
-			slog.Info("remote access ready", "url", url)
-		},
-		OnFailure: func(err error) {
-			slog.Warn("remote access stopped", "error", err)
-		},
-	}
-	if err := manager.Start(context.Background()); err != nil {
-		slog.Warn("remote access is unavailable", "error", err)
-		return func() {}
-	}
 	slog.Info("remote access starting", "url", manager.URL())
 	return manager.Close
 }

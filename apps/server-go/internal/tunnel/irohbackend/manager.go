@@ -2,8 +2,8 @@
 
 // Package irohbackend serves the local HTTP target over an iroh endpoint.
 //
-// Instead of dialing out to a public relay and speaking its frame protocol
-// (the cfrelay shape), the server binds an iroh endpoint. Clients reach it
+// Instead of dialing out to a public relay and speaking its frame protocol,
+// the server binds an iroh endpoint. Clients reach it
 // by its node ID — the public half of a 32-byte keypair kept on disk —
 // over QUIC. Every byte between the endpoints is encrypted by iroh itself;
 // no relay in the path can read traffic. n0's public relays still exist
@@ -18,8 +18,8 @@
 //
 // The package compiles on the platforms iroh-go ships static libraries for
 // (linux amd64/arm64, macOS amd64/arm64, windows amd64); the tunnel package
-// uses its stub elsewhere. It is the default remote-access backend, with the
-// Cloudflare relay and OpenTunnel as explicit choices (`CONSOLE_RELAY`).
+// uses its stub elsewhere. It is the default remote-access backend, with
+// OpenTunnel as the fallback (`CONSOLE_RELAY`).
 package irohbackend
 
 import (
