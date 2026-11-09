@@ -242,7 +242,7 @@ fun ChangesScreen(onBack: () -> Unit) {
                                     row = row,
                                     onOpen = { selectedPath = row.path },
                                     onToggleReviewed = {
-                                        sessionId?.let { sid ->
+                                        sessionId.let { sid ->
                                             AppContainer.sessionRepository.toggleChangeReviewed(sid, row.path, row.turnIndex, !row.reviewed)
                                         }
                                     },

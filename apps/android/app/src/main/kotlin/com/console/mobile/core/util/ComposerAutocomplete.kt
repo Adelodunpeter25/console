@@ -90,21 +90,21 @@ fun filterChatRefs(
         .filter { it.id != currentSessionId }
         .filter { s ->
             q.isEmpty() ||
-                slugifyChatTitle(s.title ?: "").contains(q) ||
-                (s.title ?: "").lowercase().contains(q) ||
+                slugifyChatTitle(s.title).contains(q) ||
+                s.title.lowercase().contains(q) ||
                 s.id.lowercase().startsWith(q)
         }
         .sortedWith(
             compareByDescending<console.v1.SessionHeader> { s ->
-                val slug = slugifyChatTitle(s.title ?: "")
+                val slug = slugifyChatTitle(s.title)
                 when {
                     q.isEmpty() -> 0
                     slug.startsWith(q) -> 3
                     s.id.lowercase().startsWith(q) -> 2
-                    (s.title ?: "").lowercase().startsWith(q) -> 1
+                    s.title.lowercase().startsWith(q) -> 1
                     else -> 0
                 }
-            }.thenBy { it.title ?: "" },
+            }.thenBy { it.title },
         )
 }
 

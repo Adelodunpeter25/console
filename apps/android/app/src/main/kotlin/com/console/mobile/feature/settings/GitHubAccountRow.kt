@@ -61,7 +61,7 @@ fun GitHubAccountSection() {
             Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text("GitHub", color = NewTheme.TextPrimary, fontSize = 17.sp, maxLines = 1)
                 Text(
-                    if (connected) github?.username?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "Connected" else "Not connected",
+                    if (connected) github.username?.takeIf { it.isNotBlank() }?.let { "@$it" } ?: "Connected" else "Not connected",
                     color = if (connected) NewTheme.Success else NewTheme.TextMuted,
                     fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 1.dp),

@@ -633,7 +633,7 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
         // Wire synthesizes the map field as a nullable property even though
         // protojson omits an empty map entirely, so an absent map reads as
         // null rather than {}.
-        return statuses.providers ?: emptyMap()
+        return statuses.providers
     }
 
     override suspend fun setProviderCredential(provider: String, apiKey: String): SetProviderCredentialResponse {

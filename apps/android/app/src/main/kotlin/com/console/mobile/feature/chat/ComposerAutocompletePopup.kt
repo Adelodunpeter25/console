@@ -104,7 +104,7 @@ fun SlashCommandSuggestionRow(command: SlashCommandInfo, onClick: () -> Unit) {
 /** `$` chat-ref suggestion row — only the chat title shows; the `$slug` is injected but never displayed. */
 @Composable
 fun ChatRefSuggestionRow(session: SessionHeader, onClick: () -> Unit) {
-    val title = session.title?.takeIf { it.isNotBlank() } ?: session.id
+    val title = session.title.takeIf { it.isNotBlank() } ?: session.id
     Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

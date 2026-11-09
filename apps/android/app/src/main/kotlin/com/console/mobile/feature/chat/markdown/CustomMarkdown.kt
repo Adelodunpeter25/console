@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowBackUp
 import kotlin.math.roundToInt
 import androidx.compose.ui.text.AnnotatedString
@@ -138,19 +139,19 @@ fun CustomMarkdown(
 ) {
     if (content.isBlank()) return
     val defaultToolbar = LocalTextToolbar.current
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     var toolbarRect by remember { mutableStateOf<Rect?>(null) }
     var copyAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    val customToolbar = remember(defaultToolbar, onReply) {
+    val customToolbar = remember(onReply) {
         object : TextToolbar {
             override val status: TextToolbarStatus
-                get() = if (toolbarRect != null) TextToolbarStatus.Shown else defaultToolbar.status
+                get() = if (toolbarRect != null) TextToolbarStatus.Shown else TextToolbarStatus.Hidden
 
             override fun hide() {
                 toolbarRect = null
                 copyAction = null
-                defaultToolbar.hide()
             }
 
             override fun showMenu(
@@ -215,6 +216,11 @@ fun CustomMarkdown(
                 Popup(
                     popupPositionProvider = popupPositionProvider,
                     onDismissRequest = { customToolbar.hide() },
+                    properties = PopupProperties(
+                        focusable = false,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = false,
+                    ),
                 ) {
                     Row(
                         modifier = Modifier
@@ -429,6 +435,7 @@ private fun TableRowView(cells: List<AnnotatedString>, widths: List<Dp>, align: 
 
 @Composable
 private fun CodeBlock(language: String, code: String) {
+    @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
@@ -474,6 +481,7 @@ internal sealed interface MdBlock {
 
 @Immutable internal data class MdListItem(val checked: Boolean?, val blocks: List<MdBlock>)
 
+@Suppress("DEPRECATION")
 private val PARSER = MarkdownParser(GFMFlavourDescriptor())
 private val ATX_LEVELS = mapOf(
     MarkdownElementTypes.ATX_1 to 1, MarkdownElementTypes.ATX_2 to 2, MarkdownElementTypes.ATX_3 to 3,
@@ -522,7 +530,7 @@ private class StreamingMarkdownParser {
 }
 
 internal fun parseBlocks(src: String): List<MdBlock> {
-    val root = PARSER.buildMarkdownTreeFromString(src)
+    val root = PARSER.buildMarkdownTreeFromString(src as CharSequence)
     val refs = root.children.filter { it.type == MarkdownElementTypes.LINK_DEFINITION }.associate { definitionKey(it, src) to definitionUrl(it, src) }
     return blocksOf(root.children, src, refs)
 }
@@ -548,12 +556,12 @@ private fun blocksOf(nodes: List<ASTNode>, src: String, refs: Map<String, String
                         var cursor = n.startOffset
                         for (image in images) {
                             val before = src.substring(cursor, image.startOffset)
-                            if (before.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(before).children.flatMap { it.children }, before, refs))
+                            if (before.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(before as CharSequence).children.flatMap { it.children }, before, refs))
                             imageInfo(image, src, refs)?.let { out += MdBlock.Image(it.first, it.second) }
                             cursor = image.endOffset
                         }
                         val after = src.substring(cursor, n.endOffset)
-                        if (after.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(after).children.flatMap { it.children }, after, refs))
+                        if (after.isNotBlank()) out += MdBlock.Paragraph(inlineOf(PARSER.buildMarkdownTreeFromString(after as CharSequence).children.flatMap { it.children }, after, refs))
                     }
                 }
             }

@@ -263,7 +263,7 @@ fun Composer(
     }
 
     fun applyChatSuggestion(session: SessionHeader, replaceFrom: Int) {
-        val slug = slugifyChatTitle(session.title ?: "").ifBlank { session.id }
+        val slug = slugifyChatTitle(session.title).ifBlank { session.id }
         confirmedChatRefs = confirmedChatRefs + slug
         applySuggestion("\$$slug ", replaceFrom)
     }
