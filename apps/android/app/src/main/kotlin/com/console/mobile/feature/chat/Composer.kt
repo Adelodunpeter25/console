@@ -238,8 +238,10 @@ fun Composer(
         }
     }
     var chatRefSessions by remember(sessionId) { mutableStateOf<List<SessionHeader>>(emptyList()) }
-    LaunchedEffect(sessionId) {
-        chatRefSessions = AppContainer.assistRepository.listChatRefs(sessionId)
+    LaunchedEffect(sessionId, trigger is ComposerTrigger.Chat) {
+        if (chatRefSessions.isEmpty() || trigger is ComposerTrigger.Chat) {
+            chatRefSessions = AppContainer.assistRepository.listChatRefs(sessionId)
+        }
     }
     var mentionResults by remember { mutableStateOf<List<FileSearchResult>>(emptyList()) }
     LaunchedEffect(trigger) {

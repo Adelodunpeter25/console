@@ -185,7 +185,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		id := c.Params("id")
 		limit, before, ok := parsePageParams(c)
 		if !ok {
-			return sessionError(c, fiber.StatusBadRequest, "'limit' and 'before' must be positive integers.")
+			return sessionError(c, fiber.StatusBadRequest, "'limit' and 'before' must be non-negative integers.")
 		}
 		result, err := sessions.Load(id, limit, before)
 		if err != nil {
@@ -610,12 +610,12 @@ func sessionError(c *fiber.Ctx, code int, message string) error {
 }
 
 // parsePageParams reads get-session pagination: default limit 50,
-// both values positive integers when present.
+// limit non-negative (0 returns just header, no messages), before positive when present.
 func parsePageParams(c *fiber.Ctx) (limit, before int64, ok bool) {
 	limit = 50
 	if raw := c.Query("limit"); raw != "" {
 		v, err := strconv.Atoi(raw)
-		if err != nil || v < 1 {
+		if err != nil || v < 0 {
 			return 0, 0, false
 		}
 		limit = int64(v)

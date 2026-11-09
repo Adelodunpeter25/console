@@ -28,11 +28,17 @@ class AssistRepository(private val api: ConsoleApi) {
      */
     suspend fun listChatRefs(sessionId: String): List<SessionHeader> = withContext(Dispatchers.IO) {
         try {
-            val header = api.getSession(sessionId, limit = 0).header
-            val siblings = if (!header.project_id.isNullOrBlank()) {
+            val header = try {
+                api.getSession(sessionId, limit = 0).header
+            } catch (_: Exception) {
+                null
+            }
+            val siblings = if (header != null && !header.project_id.isNullOrBlank()) {
                 api.getSessions(projectId = header.project_id)
-            } else {
+            } else if (header != null && !header.cwd.isNullOrBlank()) {
                 api.getSessions(cwd = header.cwd)
+            } else {
+                api.getSessions()
             }
             siblings.filter { it.id != sessionId }
         } catch (_: Exception) {
