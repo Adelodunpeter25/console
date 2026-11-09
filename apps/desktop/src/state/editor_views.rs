@@ -61,6 +61,11 @@ impl ConsoleDesktopApp {
                         }
                     });
                 }
+                if let Some(line) = self.pending_file_line.remove(path) {
+                    view.update(cx, |view, cx| {
+                        view.select_line(line, cx);
+                    });
+                }
                 return view.clone();
             }
             state.update(cx, |editor, cx| {
@@ -76,6 +81,11 @@ impl ConsoleDesktopApp {
                 }
             });
             let view_clone = view.clone();
+            if let Some(line) = self.pending_file_line.remove(path) {
+                view.update(cx, |view, cx| {
+                    view.select_line(line, cx);
+                });
+            }
             self.viewer_editor_views.insert(
                 path.to_string(),
                 (len, hash, state.clone(), view_clone.clone()),
@@ -104,6 +114,11 @@ impl ConsoleDesktopApp {
             s
         });
         let view = cx.new(|cx| editor_ui::EditorView::new(&state, cx));
+        if let Some(line) = self.pending_file_line.remove(path) {
+            view.update(cx, |view, cx| {
+                view.select_line(line, cx);
+            });
+        }
         self.viewer_editor_views
             .insert(path.to_string(), (len, hash, state, view.clone()));
         view

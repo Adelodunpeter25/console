@@ -83,7 +83,7 @@ impl ConsoleDesktopApp {
         let entity = cx.entity().downgrade();
         self.global_search_panel.update(cx, |panel, cx| {
             panel.set_on_open_match(
-                move |rel_path, _line_number, _window, cx| {
+                move |rel_path, line_number, window, cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let pane_id = this
@@ -95,7 +95,13 @@ impl ConsoleDesktopApp {
                                 .map(|project| project.path.clone());
                             let Some(root) = root else { return };
                             let absolute = console_ui::utils::join_path_lexical(&root, rel_path);
-                            this.open_file_tab_in_pane(&pane_id, absolute, cx);
+                            this.open_file_tab_at_line(
+                                &pane_id,
+                                absolute,
+                                line_number,
+                                Some(window),
+                                cx,
+                            );
                         });
                     }
                 },

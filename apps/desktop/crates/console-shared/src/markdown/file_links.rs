@@ -91,6 +91,20 @@ pub fn strip_line_suffix(link: &str) -> &str {
     }
 }
 
+/// Parse an optional 1-based line number from a trailing `:line` or `:line:col` suffix.
+pub fn parse_line_suffix(link: &str) -> Option<u32> {
+    let trimmed = link.trim();
+    let stripped = strip_line_suffix(trimmed);
+    if stripped.len() >= trimmed.len() {
+        return None;
+    }
+    let suffix = &trimmed[stripped.len()..];
+    let suffix = suffix.strip_prefix(':')?;
+    let mut parts = suffix.split(':');
+    let line_str = parts.next()?;
+    line_str.parse::<u32>().ok().filter(|&l| l > 0)
+}
+
 /// Resolve a file link to an absolute path for `open_file_tab`.
 /// Absolute paths pass through; relatives join the session cwd first, then the
 /// pane project path. `~` expands against `$HOME`.

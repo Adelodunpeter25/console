@@ -297,6 +297,8 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
+    /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
+    pub pending_file_line: std::collections::HashMap<String, u32>,
     /// Comment-gutter selections from editor views. The editor reports through
     /// a plain callback (no app context), so handlers push here and a spawned
     /// task opens the card on the app's behalf.

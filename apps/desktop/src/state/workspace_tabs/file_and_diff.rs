@@ -6,10 +6,10 @@ use crate::state::app::{ConsoleDesktopApp, ImageFileState};
 
 impl ConsoleDesktopApp {
     /// Resolve a clicked transcript file link against the session cwd with a
-    /// pane project-path fallback, then open it as a workspace tab. Phase 1
-    /// opens the file only; `:line:col` suffixes are stripped by the resolver.
+    /// pane project-path fallback, then open it as a workspace tab.
     pub fn open_file_link(&mut self, link: String, pane_id: &str, cx: &mut Context<Self>) {
         use console_shared::markdown::file_links as links;
+        let line = links::parse_line_suffix(&link);
         let cwd = self.transcript_for_pane(pane_id).read(cx).session_cwd();
         let project_path = self
             .selected_project_for_pane(pane_id)
@@ -21,7 +21,11 @@ impl ConsoleDesktopApp {
         // the project for the name instead of opening a path that is not there.
         let direct_exists = std::path::Path::new(&resolved).is_file();
         if !links::is_bare_file_name(&link) || direct_exists {
-            self.open_file_tab_in_pane(pane_id, resolved, cx);
+            if let Some(line) = line {
+                self.open_file_tab_at_line(pane_id, resolved, line, None, cx);
+            } else {
+                self.open_file_tab_in_pane(pane_id, resolved, cx);
+            }
             return;
         }
         let name = links::strip_line_suffix(link.trim()).to_owned();
@@ -53,7 +57,11 @@ impl ConsoleDesktopApp {
             cx.update(|cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.open_file_tab_in_pane(&pane_id, chosen, cx);
+                        if let Some(line) = line {
+                            this.open_file_tab_at_line(&pane_id, chosen, line, None, cx);
+                        } else {
+                            this.open_file_tab_in_pane(&pane_id, chosen, cx);
+                        }
                     });
                 }
             });
@@ -67,6 +75,29 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| "pane-main".into());
         self.open_file_tab_in_pane(&pane_id, path, cx);
+    }
+
+    /// Open a file tab and select/scroll to a 1-based line number.
+    pub fn open_file_tab_at_line(
+        &mut self,
+        pane_id: &str,
+        path: String,
+        line: u32,
+        window: Option<&mut gpui::Window>,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_file_tab_in_pane(pane_id, path.clone(), cx);
+        if let Some((_, _, _, view)) = self.viewer_editor_views.get(&path) {
+            view.update(cx, |view, cx| {
+                view.select_line(line, cx);
+            });
+            if let Some(window) = window {
+                let focus_handle = view.read(cx).focus_handle();
+                window.focus(&focus_handle, cx);
+            }
+        } else {
+            self.pending_file_line.insert(path, line);
+        }
     }
 
     pub fn open_file_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {

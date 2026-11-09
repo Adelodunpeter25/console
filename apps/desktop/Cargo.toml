@@ -34,8 +34,8 @@ console-ui = { path = "crates/console-ui" }
 # Pinned to c5d1749: first release line with edit mode (EditorState::editable,
 # typing/caret/motion/undo/clipboard input). Update together with the zed gpui
 # rev in Cargo.lock — see the gpui note above.
-syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "c5d1749" }
-editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "c5d1749" }
+syntax = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "65d8541" }
+editor-ui = { git = "https://github.com/Adelodunpeter25/gpui-editor.git", rev = "65d8541" }
 
 # UI components (command palette, dialogs, dock). Uses the same pinned zed gpui,
 # so cargo unifies sources. Must call gpui_component::init(cx) at startup and wrap

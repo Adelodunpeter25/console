@@ -692,6 +692,7 @@ impl ConsoleDesktopApp {
             viewer_list_states: std::collections::HashMap::new(),
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
+            pending_file_line: std::collections::HashMap::new(),
             file_comment_tx,
             viewer_diff_views: std::collections::HashMap::new(),
             viewer_cached_markdown_views: std::collections::HashMap::new(),

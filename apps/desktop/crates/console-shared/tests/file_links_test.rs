@@ -2,7 +2,7 @@
 
 use console_shared::markdown::file_links::{
     closest_match, is_bare_file_name, is_file_link, is_http_url, is_known_bare_name,
-    resolve_file_link, strip_line_suffix,
+    parse_line_suffix, resolve_file_link, strip_line_suffix,
 };
 
 #[test]
@@ -33,6 +33,14 @@ fn strips_lines() {
     assert_eq!(strip_line_suffix("a/b.ts:12:3"), "a/b.ts");
     assert_eq!(strip_line_suffix("a/b.ts:12"), "a/b.ts");
     assert_eq!(strip_line_suffix("a/b.ts"), "a/b.ts");
+}
+
+#[test]
+fn parses_line_suffixes() {
+    assert_eq!(parse_line_suffix("a/b.ts:12:3"), Some(12));
+    assert_eq!(parse_line_suffix("a/b.ts:42"), Some(42));
+    assert_eq!(parse_line_suffix("a/b.ts"), None);
+    assert_eq!(parse_line_suffix("a/b.ts:0"), None);
 }
 
 #[test]
