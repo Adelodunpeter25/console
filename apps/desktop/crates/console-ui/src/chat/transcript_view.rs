@@ -936,6 +936,9 @@ impl TranscriptView {
         if matches!(msg, AgentMessage::User { .. }) {
             self.prompts_stale = true;
         }
+        // The previous latest user's cached run may still say "working"; once
+        // a newer prompt exists (e.g. a steer) that run is no longer live.
+        self.invalidate_latest_activity_cache();
         self.messages.push(msg);
         self.content_revisions.push(0);
         // A new prompt means the user wants to see its response: re-engage
