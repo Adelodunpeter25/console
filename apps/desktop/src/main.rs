@@ -13,6 +13,7 @@ mod menubar;
 mod new_project_dialog;
 mod persistence;
 mod picker;
+mod recording;
 mod settings;
 mod settings_window;
 mod single_instance;

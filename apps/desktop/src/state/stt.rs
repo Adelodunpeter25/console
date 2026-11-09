@@ -1,4 +1,5 @@
-//! Speech-to-text credential state for the Providers settings page.
+//! Speech-to-text credential state for the Providers settings page, and the
+//! composer dictation flow that records and transcribes.
 //!
 //! Separate from state/provider_credentials.rs, which is the single pasted
 //! key for LLM providers. Speech-to-text needs a pair (Cloudflare account ID
@@ -12,6 +13,7 @@
 
 use super::ConsoleDesktopApp;
 use gpui::Context;
+use std::time::Duration;
 
 impl ConsoleDesktopApp {
     /// Ask the server for the stored speech-to-text credential state.
@@ -134,5 +136,159 @@ impl ConsoleDesktopApp {
             self.stt_error = None;
         }
         cx.notify();
+    }
+
+    /// The composer's mic button is enabled only when the server can actually
+    /// transcribe — an unconfigured button that fails on tap is worse than a
+    /// visibly disabled one.
+    pub fn stt_enabled(&self) -> bool {
+        self.stt_status.as_ref().and_then(|s| s.configured) == Some(true)
+    }
+
+    /// Mic button click: start a take when idle, stop + transcribe when
+    /// recording. While a transcription is in flight the button is inert.
+    pub fn toggle_stt_recording(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        if self.stt_transcribing {
+            return;
+        }
+        if self.stt_recorder.is_some() {
+            self.stop_speech_recording(cx);
+            return;
+        }
+        if !self.stt_enabled() {
+            return;
+        }
+        self.start_speech_recording(pane_id, cx);
+    }
+
+    fn start_speech_recording(&mut self, pane_id: String, cx: &mut Context<Self>) {
+        self.stt_mic_error = None;
+        let recorder = match crate::recording::Recorder::start() {
+            Ok(recorder) => recorder,
+            Err(error) => {
+                self.stt_mic_error = Some(format!(
+                    "Couldn't access the microphone. {error} In System Settings, allow microphone access for Console."
+                ));
+                cx.notify();
+                return;
+            }
+        };
+        self.stt_recorder = Some(recorder);
+        self.stt_recording_pane = Some(pane_id);
+        self.stt_recording_started_at = Some(std::time::Instant::now());
+        self.stt_recording_secs = 0;
+        cx.notify();
+        self.tick_speech_recording(cx);
+    }
+
+    /// Keep the elapsed label repainting while a take is running. The loop
+    /// exits on its own when the recorder is gone — no thread handle to join.
+    fn tick_speech_recording(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |entity, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_millis(250)).await;
+                let keep_going = cx
+                    .update(|cx| {
+                        entity.upgrade().map(|this| {
+                            this.update(cx, |this, cx| {
+                                if this.stt_recorder.is_none() {
+                                    return false;
+                                }
+                                let elapsed = this
+                                    .stt_recording_started_at
+                                    .map(|at| at.elapsed().as_secs() as u32)
+                                    .unwrap_or(0);
+                                // The server rejects >4 MB audio; 120s at
+                                // 16 kHz mono 16-bit is ~3.8 MB.
+                                if u64::from(elapsed) >= crate::recording::MAX_RECORD_SECONDS {
+                                    this.stt_recording_secs = elapsed;
+                                    this.stop_speech_recording(cx);
+                                    return false;
+                                }
+                                if elapsed != this.stt_recording_secs {
+                                    this.stt_recording_secs = elapsed;
+                                    cx.notify();
+                                }
+                                true
+                            })
+                        })
+                    })
+                    .unwrap_or(false);
+                if !keep_going {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Stop the take and transcribe it. The audio never touches disk: it is
+    /// encoded to WAV in memory, sent once, and dropped.
+    fn stop_speech_recording(&mut self, cx: &mut Context<Self>) {
+        let Some(recorder) = self.stt_recorder.take() else {
+            return;
+        };
+        let pane_id = self.stt_recording_pane.take();
+        self.stt_recording_started_at = None;
+        self.stt_recording_secs = 0;
+
+        let wav = match recorder.stop_into_wav() {
+            Ok(wav) if !wav.is_empty() => wav,
+            Ok(_) => {
+                self.stt_mic_error =
+                    Some("Nothing was recorded — check the microphone and try again.".to_string());
+                cx.notify();
+                return;
+            }
+            Err(error) => {
+                self.stt_mic_error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+
+        self.stt_transcribing = true;
+        cx.notify();
+        let client = self.client.clone();
+        cx.spawn(async move |entity, cx| {
+            let result = client.stt.transcribe(&wav).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.stt_transcribing = false;
+                        match (result, pane_id.as_deref()) {
+                            (Ok(transcript), Some(pane)) if !transcript.text.trim().is_empty() => {
+                                this.insert_transcript(pane, &transcript.text, cx);
+                                this.stt_mic_error = None;
+                            }
+                            (Ok(_), _) => {
+                                this.stt_mic_error =
+                                    Some("I couldn't hear anything — try again.".to_string());
+                            }
+                            (Err(error), _) => {
+                                this.stt_mic_error =
+                                    Some(format!("Transcription failed: {error}"));
+                            }
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Append the transcript to the pane's draft. Existing text is kept, so
+    /// dictating mid-draft composes rather than clobbers.
+    fn insert_transcript(&mut self, pane_id: &str, text: &str, cx: &mut Context<Self>) {
+        let text = text.trim();
+        let composer = self.composer_for_pane(pane_id);
+        let existing = composer.read(cx).content().to_string();
+        let body = if existing.trim().is_empty() {
+            text.to_string()
+        } else {
+            format!("{} {}", existing, text)
+        };
+        composer.update(cx, |input, cx| input.set_content(body, cx));
     }
 }

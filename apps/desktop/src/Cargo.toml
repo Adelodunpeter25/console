@@ -34,6 +34,7 @@ base64 = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = { workspace = true }
 futures = { workspace = true }
+cpal = { workspace = true }
 
 # Compiles console.rc into the exe so Windows has an icon; see build.rs.
 [target.'cfg(windows)'.build-dependencies]

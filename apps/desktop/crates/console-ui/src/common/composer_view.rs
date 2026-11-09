@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
-    App, Div, ElementId, Entity, ExternalPaths, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
+    App, Div, ElementId, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement,
+    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
 };
 
 use crate::common::{
@@ -126,6 +126,17 @@ pub struct ComposerView {
     /// A floating overlay (file/diff tabs) rather than the docked chat footer.
     floating: bool,
     pub has_queued_prompt: bool,
+    /// Speech-to-text dictation button. `mic_enabled` is false until the
+    /// server has a credential, so the button renders disabled rather than
+    /// failing on tap; `mic_recording` swaps it for the stop control with
+    /// the live elapsed label, and `mic_transcribing` for the spinner.
+    pub mic_enabled: bool,
+    pub mic_recording: bool,
+    pub mic_transcribing: bool,
+    pub mic_elapsed_secs: u32,
+    /// Failure text for the dictation flow (mic denied, transcribe failed),
+    /// shown next to the button.
+    pub mic_error: Option<String>,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
     autocomplete: Option<AutocompleteView>,
     on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -133,6 +144,7 @@ pub struct ComposerView {
     on_abort: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_cycle_thinking: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_mic_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_remove_annotation: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
@@ -163,6 +175,11 @@ impl ComposerView {
             annotations: Rc::new(Vec::new()),
             floating: false,
             has_queued_prompt: false,
+            mic_enabled: false,
+            mic_recording: false,
+            mic_transcribing: false,
+            mic_elapsed_secs: 0,
+            mic_error: None,
             model_menu: None,
             autocomplete: None,
             on_queue: on_send.clone(),
@@ -170,6 +187,7 @@ impl ComposerView {
             on_abort: Rc::new(on_abort),
             on_pick_image: Rc::new(on_pick_image),
             on_cycle_thinking: None,
+            on_mic_click: None,
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_remove_annotation: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
@@ -227,6 +245,36 @@ impl ComposerView {
 
     pub fn on_cycle_thinking(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_cycle_thinking = Some(Rc::new(handler));
+        self
+    }
+
+    pub fn mic_enabled(mut self, enabled: bool) -> Self {
+        self.mic_enabled = enabled;
+        self
+    }
+
+    pub fn mic_recording(mut self, recording: bool) -> Self {
+        self.mic_recording = recording;
+        self
+    }
+
+    pub fn mic_transcribing(mut self, transcribing: bool) -> Self {
+        self.mic_transcribing = transcribing;
+        self
+    }
+
+    pub fn mic_elapsed_secs(mut self, secs: u32) -> Self {
+        self.mic_elapsed_secs = secs;
+        self
+    }
+
+    pub fn mic_error(mut self, error: Option<String>) -> Self {
+        self.mic_error = error;
+        self
+    }
+
+    pub fn on_mic_click(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_mic_click = Some(Rc::new(handler));
         self
     }
 
@@ -805,6 +853,93 @@ impl RenderOnce for ComposerView {
                                                 theme.text_tertiary,
                                             )),
                                     )
+                                    .child({
+                                        // Speech-to-text dictation. Idle: the mic
+                                        // starts a take. Recording: the stop
+                                        // control takes its place with the live
+                                        // elapsed label. Unconfigured: disabled
+                                        // with a tooltip naming the fix.
+                                        let on_mic = self.on_mic_click.clone();
+                                        if self.mic_recording {
+                                            div()
+                                                .id("btn-mic-stop")
+                                                .flex()
+                                                .items_center()
+                                                .gap(px(4.0))
+                                                .p(px(4.0))
+                                                .rounded(px(6.0))
+                                                .bg(theme.danger_soft)
+                                                .cursor_default()
+                                                .hover(|style| style.opacity(0.8))
+                                                .on_click(move |_, window, cx| {
+                                                    if let Some(on_mic) = &on_mic {
+                                                        (on_mic)(window, cx);
+                                                    }
+                                                })
+                                                .child(app_icon(
+                                                    IconName::StopFilled,
+                                                    13.0,
+                                                    theme.danger,
+                                                ))
+                                                .child(
+                                                    div()
+                                                        .text_size(px(11.5))
+                                                        .font_weight(FontWeight::MEDIUM)
+                                                        .text_color(theme.danger)
+                                                        .child(format!(
+                                                            "{}:{:02}",
+                                                            self.mic_elapsed_secs / 60,
+                                                            self.mic_elapsed_secs % 60
+                                                        )),
+                                                )
+                                                .into_any_element()
+                                        } else if self.mic_transcribing {
+                                            div()
+                                                .id("btn-mic-transcribing")
+                                                .p(px(5.0))
+                                                .rounded(px(6.0))
+                                                .child(crate::primitives::motion::spin(app_icon(
+                                                    IconName::LoaderCircle,
+                                                    13.0,
+                                                    theme.text_tertiary,
+                                                )))
+                                                .into_any_element()
+                                        } else {
+                                            let button = div()
+                                                .id("btn-mic")
+                                                .p(px(5.0))
+                                                .rounded(px(6.0))
+                                                .when(self.mic_enabled, |el| {
+                                                    el.cursor_default()
+                                                        .hover(|style| style.bg(theme.overlay))
+                                                        .on_click(move |_, window, cx| {
+                                                            if let Some(on_mic) = &on_mic {
+                                                                (on_mic)(window, cx);
+                                                            }
+                                                        })
+                                                })
+                                                .when(!self.mic_enabled, |el| {
+                                                    el.opacity(0.35)
+                                                        .tooltip(Tooltip::text(
+                                                            "Set up Speech to Text in Settings › Providers",
+                                                        ))
+                                                })
+                                                .child(app_icon(
+                                                    IconName::Mic,
+                                                    13.0,
+                                                    theme.text_tertiary,
+                                                ));
+                                            button.into_any_element()
+                                        }
+                                    })
+                                    .when_some(self.mic_error.clone(), |el, error| {
+                                        el.child(
+                                            div()
+                                                .text_size(px(11.5))
+                                                .text_color(theme.danger)
+                                                .child(error),
+                                        )
+                                    })
                                     .child(model_control)
                                     .when_some(thinking_control, |el, thinking| el.child(thinking))
                                     .child(div().flex_1())

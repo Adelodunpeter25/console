@@ -453,6 +453,21 @@ pub struct ConsoleDesktopApp {
     pub stt_form_open: bool,
     /// Server-authored failure text, shown verbatim. Cleared on any new action.
     pub stt_error: Option<String>,
+    /// The live microphone capture. `Some` while recording; the stream keeps
+    /// running until `stop_speech_recording` takes it.
+    pub stt_recorder: Option<crate::recording::Recorder>,
+    /// The pane the take will be dictated into when it is transcribed.
+    pub stt_recording_pane: Option<String>,
+    /// When the current take started, for the elapsed-time display.
+    pub stt_recording_started_at: Option<std::time::Instant>,
+    /// Elapsed seconds of the current take, ticked by a spawn loop so the
+    /// composer can repaint the `0:07` label.
+    pub stt_recording_secs: u32,
+    /// True while a finished take is being transcribed.
+    pub stt_transcribing: bool,
+    /// Failure text for the recording flow, shown by the composer. Cleared
+    /// on any new action.
+    pub stt_mic_error: Option<String>,
     // Server device pairing.
     /// The device this app is paired as on the active server. `None` means
     /// "not paired" — the server rejects every request in that state.

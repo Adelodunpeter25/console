@@ -110,4 +110,39 @@ impl SttService {
             ))
         }
     }
+
+    /// `POST /api/stt/transcribe` — transcribe one recorded WAV clip. The
+    /// audio lives only for this request: it is sent once and dropped, and
+    /// nothing here retains it.
+    pub async fn transcribe(&self, wav: &[u8]) -> Result<SttTranscript> {
+        let url = self.transport.url("/api/stt/transcribe").await;
+        let part = reqwest::multipart::Part::bytes(wav.to_vec())
+            .file_name("dictation.wav")
+            .mime_str("audio/wav")
+            .context("Unsupported audio type")?;
+        let form = reqwest::multipart::Form::new().part("audio", part);
+        let resp = self
+            .transport
+            .client()
+            .post(&url)
+            .headers(self.transport.build_headers().await)
+            .multipart(form)
+            .send()
+            .await
+            .context("Failed to transcribe recording")?;
+
+        let body: ApiResponse<SttTranscript> = self
+            .transport
+            .decode_json(resp)
+            .await
+            .context("Failed to parse transcription response")?;
+        if body.success {
+            Ok(body.data.unwrap_or_default())
+        } else {
+            Err(anyhow!(
+                body.error
+                    .unwrap_or_else(|| "Transcription failed".into())
+            ))
+        }
+    }
 }

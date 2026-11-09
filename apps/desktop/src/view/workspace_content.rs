@@ -1324,6 +1324,22 @@ impl ConsoleDesktopApp {
         .attachments(attachments)
         .comments(comments)
         .annotations(annotations)
+        .mic_enabled(self.stt_enabled())
+        .mic_recording(self.stt_recorder.is_some())
+        .mic_transcribing(self.stt_transcribing)
+        .mic_elapsed_secs(self.stt_recording_secs)
+        .mic_error(self.stt_mic_error.clone())
+        .on_mic_click({
+            let entity = entity.clone();
+            let pane_id = pane_id.to_string();
+            move |_w, cx| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.toggle_stt_recording(pane_id.clone(), cx);
+                    });
+                }
+            }
+        })
         .floating(floating)
         .on_remove_attachment({
             let entity = entity.clone();

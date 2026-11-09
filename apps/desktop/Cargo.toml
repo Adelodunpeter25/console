@@ -52,7 +52,10 @@ prost-build = "0.14"
 pbjson = "0.9"
 pbjson-build = "0.9"
 protoc-bin-vendored = "3.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "multipart"] }
+# Microphone capture for speech-to-text dictation; cpal (CoreAudio on macOS,
+# WASAPI on Windows) over HAL. WAV is encoded in memory (see recording.rs).
+cpal = "0.15"
 futures-util = "0.3"
 tokio = { version = "1.0", features = ["full"] }
 tokio-stream = "0.1"
