@@ -378,6 +378,9 @@ object AppContainer {
                 usageRepository.loadAllUsage()
                 sessionRepository.refresh()
                 authRepository.loadStatus()
+                // STT status is per-server state the composer's mic reads, so
+                // it loads with everything else — not only from Providers.
+                backgroundScope.launch { authRepository.loadSttStatus() }
             },
         )
 

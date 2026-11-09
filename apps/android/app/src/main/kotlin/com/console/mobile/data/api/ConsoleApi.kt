@@ -133,6 +133,14 @@ interface ConsoleApi {
     suspend fun getProviderCredentials(): Map<String, console.v1.ProviderCredentialStatus>
     suspend fun setProviderCredential(provider: String, apiKey: String): console.v1.SetProviderCredentialResponse
     suspend fun clearProviderCredential(provider: String): console.v1.SetProviderCredentialResponse
+    // speech-to-text (server-side Whisper credential, /api/stt). One account
+    // per machine lives on the server; the token is sent once and never
+    // read back, so status is the only observable.
+    suspend fun getSttStatus(): console.v1.SttStatus
+    suspend fun setSttConfig(accountId: String, apiToken: String): console.v1.SetSttConfigResponse
+    suspend fun clearSttConfig(): console.v1.SetSttConfigResponse
+    /** POST /api/stt/transcribe — one recorded audio clip, multipart `audio`. */
+    suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): console.v1.SttTranscript
     // binary integrations (gh CLI, ...): what the server box has installed
     suspend fun getIntegrations(): console.v1.IntegrationsResponse
     // install gh the official way for the server's platform; answers the full list

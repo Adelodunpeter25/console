@@ -98,6 +98,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
         AppContainer.providerRepository.loadProviders()
         AppContainer.authRepository.loadStatus()
         AppContainer.authRepository.loadProviderCredentials()
+        AppContainer.authRepository.loadSttStatus()
     }
 
     // Reload on resume: returning from the OAuth Custom Tab after a successful
@@ -108,7 +109,10 @@ fun ProvidersSettings(onBack: () -> Unit) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 AppContainer.authRepository.loadStatus()
-                scope.launch { AppContainer.authRepository.loadProviderCredentials() }
+                scope.launch {
+                    AppContainer.authRepository.loadProviderCredentials()
+                    AppContainer.authRepository.loadSttStatus()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -125,6 +129,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 AppContainer.authRepository.loadStatus()
                 scope.launch {
                     AppContainer.authRepository.loadProviderCredentials()
+                    AppContainer.authRepository.loadSttStatus()
                     refreshing = false
                 }
             },
@@ -191,6 +196,7 @@ fun ProvidersSettings(onBack: () -> Unit) {
                 }
             }
             GitHubAccountSection()
+            SttAccountSection()
             val err = authState.error
             if (err != null) {
                 Text(err, color = NewTheme.Danger, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp))

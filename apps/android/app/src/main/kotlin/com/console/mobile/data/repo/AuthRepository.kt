@@ -385,6 +385,55 @@ class AuthRepository(
         }
     }
 
+    /**
+     * Read whether speech-to-text is configured. The response reports only
+     * that a pair exists and where it came from — the token lives on the
+     * server and no endpoint will hand it back.
+     */
+    suspend fun loadSttStatus() {
+        try {
+            val status = withContext(Dispatchers.IO) { api.getSttStatus() }
+            authState.patch { it.copy(sttStatus = status) }
+        } catch (e: Exception) {
+            // Decorative like provider credentials below: a failed fetch must
+            // not block the page, and the composer simply stays disabled.
+            authState.patch { it.copy(error = e.message ?: "Couldn't read speech-to-text status") }
+        }
+    }
+
+    /**
+     * Store the Cloudflare account pair on the server. Both halves are
+     * required every time: the token is never returned, so a partial update
+     * cannot preserve it. The pair is handed straight to the server and
+     * dropped, like the GitHub token above.
+     */
+    suspend fun setSttConfig(accountId: String, apiToken: String) {
+        authState.patch { it.copy(sttBusy = true) }
+        try {
+            val response = withContext(Dispatchers.IO) { api.setSttConfig(accountId, apiToken) }
+            authState.patch { it.copy(sttBusy = false, sttStatus = response.status ?: it.sttStatus) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(sttBusy = false) }
+            throw e
+        }
+    }
+
+    /** Remove the stored pair. An environment-supplied pair survives this. */
+    suspend fun clearSttConfig() {
+        authState.patch { it.copy(sttBusy = true) }
+        try {
+            withContext(Dispatchers.IO) { api.clearSttConfig() }
+            authState.patch { it.copy(sttBusy = false, sttStatus = null) }
+        } catch (e: Exception) {
+            authState.patch { it.copy(sttBusy = false) }
+            throw e
+        }
+    }
+
+    /** Transcribe one recorded clip. The audio is sent once and dropped. */
+    suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): String =
+        withContext(Dispatchers.IO) { api.transcribeStt(audio, fileName, contentType).text }
+
     suspend fun saveProjectId(provider: String, projectId: String?) {
         authState.patch { it.copy(savingProjectId = true, error = null) }
         try {

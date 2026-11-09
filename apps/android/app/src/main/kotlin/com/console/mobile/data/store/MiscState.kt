@@ -5,6 +5,7 @@ import console.v1.GitHubAuthStatus
 import console.v1.McpServerStatus as McpServerEntry
 import console.v1.ProviderAuthStatus
 import console.v1.ProviderCredentialStatus
+import console.v1.SttStatus
 import console.v1.UsageReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,14 @@ data class AuthState(
     val credentialsBusy: Set<String> = emptySet(),
     /** The (provider, id) account Use/Remove action in flight, if any. */
     val accountBusy: Pair<String, String>? = null,
+    /**
+     * Speech-to-text credential state. A pair (Cloudflare account ID + API
+     * token) for a server-side Whisper model, not a chat provider key. The
+     * status carries no token — one API read can't leak it.
+     */
+    val sttStatus: SttStatus? = null,
+    /** True while the pair is being saved or removed. */
+    val sttBusy: Boolean = false,
 )
 
 class AuthStateHolder(initial: AuthState = AuthState()) {

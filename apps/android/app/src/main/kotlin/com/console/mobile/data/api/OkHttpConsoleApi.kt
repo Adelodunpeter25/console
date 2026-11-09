@@ -122,6 +122,9 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val githubStatusAdapter by lazy { wireMoshi.adapter(console.v1.GitHubAuthStatus::class.java) }
     private val providerCredentialsAdapter by lazy { wireMoshi.adapter(console.v1.ProviderCredentialStatuses::class.java) }
     private val setProviderCredentialAdapter by lazy { wireMoshi.adapter(console.v1.SetProviderCredentialResponse::class.java) }
+    private val sttStatusAdapter by lazy { wireMoshi.adapter(console.v1.SttStatus::class.java) }
+    private val setSttConfigAdapter by lazy { wireMoshi.adapter(console.v1.SetSttConfigResponse::class.java) }
+    private val sttTranscriptAdapter by lazy { wireMoshi.adapter(console.v1.SttTranscript::class.java) }
     private val integrationsAdapter by lazy { wireMoshi.adapter(console.v1.IntegrationsResponse::class.java) }
     private val deviceAdapter by lazy { wireMoshi.adapter(DeviceDescriptor::class.java) }
     private val forwardedPortAdapter by lazy { wireMoshi.adapter(ForwardedPort::class.java) }
@@ -644,6 +647,32 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     override suspend fun clearProviderCredential(provider: String): SetProviderCredentialResponse {
         val raw = http.delete("/api/providers/$provider/credential")
         return http.unwrapOrRawAdapter(raw, setProviderCredentialAdapter, "clear provider credential")
+    }
+
+    override suspend fun getSttStatus(): console.v1.SttStatus {
+        val raw = http.get("/api/stt/status")
+        return http.unwrapOrRawAdapter(raw, sttStatusAdapter, "get speech-to-text status")
+    }
+
+    override suspend fun setSttConfig(accountId: String, apiToken: String): console.v1.SetSttConfigResponse {
+        // The pair is sent once and dropped: the response reports only
+        // whether one is configured and where it came from.
+        val body = buildJsonObject {
+            put("accountId", accountId)
+            put("apiToken", apiToken)
+        }.toString()
+        val raw = http.put("/api/stt/config", body)
+        return http.unwrapOrRawAdapter(raw, setSttConfigAdapter, "set speech-to-text config")
+    }
+
+    override suspend fun clearSttConfig(): console.v1.SetSttConfigResponse {
+        val raw = http.delete("/api/stt/config")
+        return http.unwrapOrRawAdapter(raw, setSttConfigAdapter, "clear speech-to-text config")
+    }
+
+    override suspend fun transcribeStt(audio: ByteArray, fileName: String, contentType: String): console.v1.SttTranscript {
+        val raw = http.postMultipart("/api/stt/transcribe", "audio", fileName, audio, contentType)
+        return http.unwrapOrRawAdapter(raw, sttTranscriptAdapter, "transcribe recording")
     }
 
     override suspend fun getIntegrations(): console.v1.IntegrationsResponse {

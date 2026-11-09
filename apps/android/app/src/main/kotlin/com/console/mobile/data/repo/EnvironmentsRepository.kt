@@ -187,7 +187,7 @@ class EnvironmentsRepository(
         sessionState.clearAll()
         projectState.clear()
         providerState.clear()
-        authState.patch { it.copy(status = null, projectIds = emptyMap(), error = null) }
+        authState.patch { it.copy(status = null, projectIds = emptyMap(), error = null, sttStatus = null) }
         fsState.patch { it.copy(treesByPath = emptyMap(), fileContentsByPath = emptyMap(), busyPaths = emptySet(), error = null) }
         usageState.invalidate()
         terminalState.clear()

@@ -111,6 +111,24 @@ class HttpTransport(
         return execute(b.build())
     }
 
+    /**
+     * POST one file as a multipart field — the only call in the app that
+     * sends binary (dictation audio). The file lives only for this request;
+     * nothing here retains it.
+     */
+    fun postMultipart(path: String, fieldName: String, fileName: String, bytes: ByteArray, contentType: String): String {
+        val part = okhttp3.MultipartBody.Part.createFormData(
+            fieldName,
+            fileName,
+            bytes.toRequestBody(contentType.toMediaType()),
+        )
+        val body = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addPart(part)
+            .build()
+        return execute(requestBuilder(url(path)).post(body).build())
+    }
+
     /** Decode `{ success, data }` — throws ApiException on failure envelope. */
     fun <T> unwrap(raw: String, dataSerializer: KSerializer<T>, action: String): T {
         val root = try {
