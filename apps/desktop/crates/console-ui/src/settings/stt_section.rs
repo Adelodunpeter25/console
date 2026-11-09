@@ -6,38 +6,35 @@
 //! The two flows have nothing else in common, and merging them would imply
 //! a browser round-trip that a pasted pair does not need.
 //!
-//! Neither half is held anywhere after submission: the account ID is not a
-//! secret, but the token is. Both inputs are cleared the moment Save is
-//! clicked, and the status payload never carries the token.
+//! The pair is entered in [`SttConfigModal`] — a modal, not an inline form —
+//! because two labelled fields read better as a dialog than crammed into the
+//! row. Neither half is held anywhere after submission: both inputs are
+//! cleared the moment Connect is clicked, and the status payload never
+//! carries the token.
 //!
 //! An environment-supplied pair is not ours to remove — the row hides
 //! Disconnect in that case, like the API-key rows do.
 
+use super::Modal;
+use crate::input::ComposerInput;
 use crate::theme::Theme;
 use console_core::types::SttStatus;
+use gpui::prelude::FluentBuilder;
 use gpui::{
     App, Entity, InteractiveElement, IntoElement, MouseButton, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
 use std::rc::Rc;
 
-use crate::input::ComposerInput;
-
 #[derive(IntoElement)]
 pub struct SttSection {
     pub status: Option<SttStatus>,
     /// True while the pair is being saved or removed.
     pub busy: bool,
-    /// Whether the credentials form is showing.
-    pub form_open: bool,
-    /// Server-authored failure text, displayed verbatim.
+    /// Server-authored failure text for a disconnect, shown verbatim.
+    /// Submit errors render inside the modal instead.
     pub error: Option<String>,
-    /// Present only while the form is open.
-    pub account_input: Option<Entity<ComposerInput>>,
-    /// Present only while the form is open.
-    pub token_input: Option<Entity<ComposerInput>>,
-    pub on_toggle_form: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    pub on_submit: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
+    pub on_connect: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     pub on_disconnect: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
 }
 
@@ -62,8 +59,7 @@ impl RenderOnce for SttSection {
             .unwrap_or_default();
 
         let busy = self.busy;
-        let form_open = self.form_open;
-        let on_toggle_form = self.on_toggle_form.clone();
+        let on_connect = self.on_connect.clone();
         let on_disconnect = self.on_disconnect.clone();
 
         let status_text = if busy {
@@ -165,7 +161,7 @@ impl RenderOnce for SttSection {
                             )
                             // A stored pair gets Disconnect; an env pair is
                             // not ours to remove, so it gets no button at all.
-                            // Otherwise Connect toggles the credentials form.
+                            // Otherwise Connect opens the credentials modal.
                             .child({
                                 if busy || (configured && from_env) {
                                     div().into_any_element()
@@ -186,13 +182,7 @@ impl RenderOnce for SttSection {
                                                 .text_size(px(12.0))
                                                 .font_weight(gpui::FontWeight::MEDIUM)
                                                 .text_color(theme.text)
-                                                .child(if configured {
-                                                    "Disconnect"
-                                                } else if form_open {
-                                                    "Cancel"
-                                                } else {
-                                                    "Connect"
-                                                }),
+                                                .child(if configured { "Disconnect" } else { "Connect" }),
                                         )
                                         .on_mouse_down(
                                             MouseButton::Left,
@@ -201,7 +191,7 @@ impl RenderOnce for SttSection {
                                                 if configured {
                                                     (on_disconnect)(window, cx);
                                                 } else {
-                                                    (on_toggle_form)(window, cx);
+                                                    (on_connect)(window, cx);
                                                 }
                                             },
                                         );
@@ -210,109 +200,154 @@ impl RenderOnce for SttSection {
                             }),
                     ),
             )
-            .child(build_form_area(
-                form_open && !configured,
-                self.account_input.clone(),
-                self.token_input.clone(),
-                self.error.clone(),
-                self.on_submit.clone(),
-                &theme,
-            ))
-            // Outside the form, errors still surface (e.g. a failed
-            // disconnect) — otherwise the failure would be silent.
-            .child(match (form_open, self.error.clone()) {
-                (false, Some(error)) => div()
+            // Disconnect failures surface under the row — otherwise a failed
+            // remove would be silent. Submit errors live in the modal.
+            .child(match self.error.clone() {
+                Some(error) => div()
                     .text_size(px(11.5))
                     .text_color(theme.text_secondary)
                     .child(error)
                     .into_any_element(),
-                _ => div().into_any_element(),
+                None => div().into_any_element(),
             })
             .into_any_element()
     }
 }
 
-/// Account ID + token inputs + save button, shown only while the form is
-/// open.
+/// The Connect dialog, rendered in the shared settings modal shell above the
+/// whole window (like the rename dialog). The two inputs arrive empty each
+/// time it opens; on Connect the caller reads them, hands the pair to the
+/// server, and clears both fields.
 ///
-/// Built as a standalone element rather than via a conditional style method:
-/// gpui's Div in this version has no `if_else`, so the branch has to be an
-/// ordinary `if` that picks between two already-built elements.
-fn build_form_area(
-    show: bool,
-    account_input: Option<Entity<ComposerInput>>,
-    token_input: Option<Entity<ComposerInput>>,
-    error: Option<String>,
-    on_submit: Rc<dyn Fn(String, String, &mut Window, &mut App) + 'static>,
-    theme: &Theme,
-) -> gpui::AnyElement {
-    if !show {
-        return div().into_any_element();
-    }
+/// `busy` keeps the dialog up with its error on a failed save, so the pair
+/// the user typed is still there to fix and resubmit.
+#[derive(IntoElement)]
+pub struct SttConfigModal {
+    pub account_input: Option<Entity<ComposerInput>>,
+    pub token_input: Option<Entity<ComposerInput>>,
+    /// True while the pair is being saved: Connect reads "Connecting...".
+    pub busy: bool,
+    /// Server-authored failure text for the last save attempt, verbatim.
+    pub error: Option<String>,
+    pub on_close: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    pub on_save: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+}
 
-    let mut body = div().flex().flex_col().gap(px(8.0));
-    if let (Some(account_input), Some(token_input)) = (account_input, token_input) {
-        body = body.child(
-            div()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.canvas)
-                .rounded(px(6.0))
-                .px(px(8.0))
-                .py(px(6.0))
-                .child(account_input.clone()),
-        );
-        body = body.child(
-            div()
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.canvas)
-                .rounded(px(6.0))
-                .px(px(8.0))
-                .py(px(6.0))
-                .child(token_input.clone()),
-        );
+impl RenderOnce for SttConfigModal {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = Theme::current(cx);
+        let busy = self.busy;
 
-        let submit_account = account_input;
-        let submit_token = token_input;
-        body = body.child(
+        let field = |label: &'static str, input: Option<Entity<ComposerInput>>| {
             div()
-                .id("btn-stt-connect")
-                .px(px(10.0))
-                .py(px(5.0))
-                .rounded(px(6.0))
-                .bg(theme.accent)
-                .cursor_pointer()
-                .hover(|s| s.opacity(0.9))
+                .flex()
+                .flex_col()
+                .gap(px(4.0))
                 .child(
                     div()
-                        .text_size(px(12.0))
+                        .text_size(px(11.5))
                         .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(theme.on_inverse)
-                        .child("Connect"),
+                        .text_color(theme.text_secondary)
+                        .child(label),
                 )
-                .on_mouse_down(
-                    MouseButton::Left,
-                    move |_event, window, cx| {
+                .child(
+                    div()
+                        .p(px(6.0))
+                        .rounded(px(6.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.canvas)
+                        .child(match input {
+                            Some(input) => input.into_any_element(),
+                            None => div().into_any_element(),
+                        }),
+                )
+        };
+
+        let content = div()
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .child(field("Cloudflare account ID", self.account_input.clone()))
+            .child(field("API token", self.token_input.clone()))
+            .child(
+                div()
+                    .text_size(px(11.0))
+                    .text_color(theme.text_tertiary)
+                    .child(
+                        "Stored on this server only. The token is never shown again — to replace it, disconnect and connect with the new pair.",
+                    ),
+            )
+            .when_some(self.error.clone(), |el, error| {
+                el.child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(theme.danger)
+                        .child(error),
+                )
+            });
+
+        let footer = div()
+            .flex()
+            .items_center()
+            .justify_end()
+            .gap(px(8.0))
+            .child({
+                let on_close = self.on_close.clone();
+                div()
+                    .px(px(10.0))
+                    .py(px(4.0))
+                    .rounded(px(5.0))
+                    .border_1()
+                    .border_color(theme.border_strong)
+                    .bg(theme.raised)
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.overlay))
+                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
                         cx.stop_propagation();
-                        // Read both halves out of their inputs at click time
-                        // and hand ownership to the caller, which drops them
-                        // once the request completes. Nothing here keeps a
-                        // copy.
-                        let account_id = submit_account.read(cx).content().to_string();
-                        let api_token = submit_token.read(cx).content().to_string();
-                        (on_submit)(account_id, api_token, window, cx);
-                    },
-                ),
-        );
+                        (on_close)(window, cx);
+                    })
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(theme.text_secondary)
+                            .child("Cancel"),
+                    )
+            })
+            .child({
+                let on_save = self.on_save.clone();
+                div()
+                    .id("btn-stt-modal-connect")
+                    .px(px(10.0))
+                    .py(px(4.0))
+                    .rounded(px(5.0))
+                    .when(!busy, |el| {
+                        el.bg(theme.accent)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.9))
+                    })
+                    .on_mouse_down(MouseButton::Left, move |_event, window, cx| {
+                        if busy {
+                            return;
+                        }
+                        cx.stop_propagation();
+                        (on_save)(window, cx);
+                    })
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(theme.on_inverse)
+                            .child(if busy { "Connecting..." } else { "Connect" }),
+                    )
+            });
+
+        Modal {
+            title: "Connect Speech to Text".to_string(),
+            width: 420.0,
+            content: content.into_any_element(),
+            footer: footer.into_any_element(),
+            on_close: self.on_close.clone(),
+        }
     }
-    if let Some(error) = error {
-        body = body.child(
-            div()
-                .text_size(px(11.5))
-                .text_color(theme.text_secondary)
-                .child(error),
-        );
-    }
-    body.into_any_element()
 }
