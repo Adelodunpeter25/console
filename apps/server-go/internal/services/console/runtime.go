@@ -659,7 +659,7 @@ var methodArgs = map[string][]string{
 	"sessions.clear_queue":  {"session_id"},
 	"sessions.fork":         {"session_id", "message_id"},
 	"sessions.search":       {"query", "session_id", "project_id", "cwd", "all_projects", "roles", "limit", "per_session", "include_deleted"},
-	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms"},
+	"sessions.wait":         {"session_id", "session_ids", "mode", "timeout_ms", "background"},
 	"mcp.list":              {},
 	"mcp.tools":             {"id"},
 	"mcp.add":               {"id", "transport", "url", "command", "args", "env", "label", "auth", "enabled"},

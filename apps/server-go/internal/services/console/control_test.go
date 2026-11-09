@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/background"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -734,6 +735,173 @@ func TestWaitStopsWhenTheCallIsCancelled(t *testing.T) {
 	}
 	if time.Since(start) > 10*time.Second {
 		t.Fatalf("cancellation took %v; the wait ignored it", time.Since(start))
+	}
+}
+
+// ---- sessions.wait, background
+
+func newBackgroundWaitRuntime(t *testing.T, active *activeSet) (*Runtime, *services.SessionService, *background.Manager) {
+	t.Helper()
+	runtime, sessions := newWaitRuntime(t, "full-access", active)
+	manager := background.NewManager()
+	runtime.work = func() *background.Manager { return manager }
+	return runtime, sessions, manager
+}
+
+// waitForWork polls until the caller's only background work leaves running.
+func waitForWork(t *testing.T, manager *background.Manager) background.Work {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		works := manager.List("caller")
+		if len(works) == 1 && works[0].Status != background.StatusRunning {
+			return works[0]
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("background wait never finished: %#v", manager.List("caller"))
+	return background.Work{}
+}
+
+func appendReply(t *testing.T, sessions *services.SessionService, id, text string) {
+	t.Helper()
+	data, _ := json.Marshal(map[string]any{"assistant": map[string]any{
+		"id": "a1", "stopReason": "stop",
+		"content": []any{map[string]any{"text": map[string]any{"text": text}}},
+	}})
+	if err := sessions.AppendMessage(id, types.AgentMessage{ID: "a1", Role: "assistant", Data: data}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWaitBackgroundReturnsATicketThenDeliversTheReply(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+
+	start := time.Now()
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"busy", background: true})`).(map[string]any)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("a background wait must return at once, took %v", elapsed)
+	}
+	workID, _ := out["work_id"].(string)
+	if out["background"] != true || workID == "" || out["max_wait_ms"] != float64(waitBackgroundMax.Milliseconds()) {
+		t.Fatalf("expected a ticket with the default lifetime: %#v", out)
+	}
+	works := manager.List("caller")
+	if len(works) != 1 || works[0].ID != workID || works[0].Kind != background.KindSession || works[0].Status != background.StatusRunning {
+		t.Fatalf("expected one running session work owned by the caller: %#v", works)
+	}
+	if works[0].Metadata["session_ids"] != "busy" || works[0].Metadata["mode"] != "all" {
+		t.Fatalf("metadata = %#v", works[0].Metadata)
+	}
+
+	appendReply(t, sessions, "busy", "All 42 tests passed.")
+	active.finish("busy")
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCompleted || !strings.Contains(done.Summary, "All 42 tests passed.") || !strings.Contains(done.Summary, "busy: ") {
+		t.Fatalf("completed work must carry the reply: %#v", done)
+	}
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a completed wait must be waiting to wake the caller")
+	}
+}
+
+func TestWaitBackgroundTimesOutAndNamesWhatIsStillRunning(t *testing.T) {
+	active := newActiveSet("forever")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "forever", Title: "f", Cwd: "/tmp"})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"forever", background: true, timeout_ms: 300})`).(map[string]any)
+	if out["max_wait_ms"] != float64(300) {
+		t.Fatalf("max_wait_ms = %#v", out["max_wait_ms"])
+	}
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusTimedOut || !strings.Contains(done.Summary, "forever: working") || !strings.Contains(done.Error, "still running") {
+		t.Fatalf("expected a timeout naming the running session: %#v", done)
+	}
+	if !manager.HasUndelivered("caller") {
+		t.Fatal("a timed-out wait must still wake the caller")
+	}
+}
+
+func TestWaitBackgroundCancelStopsTheWatcher(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"busy", background: true})`).(map[string]any)
+	if _, err := manager.Cancel(out["work_id"].(string), "caller"); err != nil {
+		t.Fatal(err)
+	}
+	active.finish("busy")
+	time.Sleep(2 * waitPoll)
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCancelled || done.Summary != "" {
+		t.Fatalf("a cancelled wait must stay cancelled: %#v", done)
+	}
+	if manager.HasUndelivered("caller") {
+		t.Fatal("a cancelled wait must not wake the caller")
+	}
+}
+
+func TestWaitBackgroundAlreadyFinishedAnswersDirectly(t *testing.T) {
+	active := newActiveSet()
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	target, _ := sessions.Create(newSource("plan-mode"))
+	appendReply(t, sessions, target.ID, "Nothing to do.")
+	out := evalJSON(t, runtime, `console.sessions.wait({session_id:"`+target.ID+`", background: true})`).(map[string]any)
+	if out["done"] != true || out["background"] != nil {
+		t.Fatalf("a finished session needs no background work: %#v", out)
+	}
+	if first := out["sessions"].([]any)[0].(map[string]any); first["last_reply"] != "Nothing to do." {
+		t.Fatalf("last_reply = %#v", first["last_reply"])
+	}
+	if works := manager.List("caller"); len(works) != 0 {
+		t.Fatalf("no work should be registered: %#v", works)
+	}
+}
+
+func TestWaitBackgroundAnyCompletesOnTheFirstSession(t *testing.T) {
+	active := newActiveSet("a", "b")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	for _, id := range []string{"a", "b"} {
+		_, _ = sessions.Create(types.CreateSessionOptions{ID: id, Title: id, Cwd: "/tmp"})
+	}
+	evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], mode:"any", background: true})`)
+	active.finish("a")
+	done := waitForWork(t, manager)
+	if done.Status != background.StatusCompleted || !strings.Contains(done.Summary, "b: working") {
+		t.Fatalf("mode any must complete with b still working: %#v", done)
+	}
+}
+
+func TestWaitBackgroundSummaryFitsTheManagerLimit(t *testing.T) {
+	active := newActiveSet("a", "b")
+	runtime, sessions, manager := newBackgroundWaitRuntime(t, active)
+	for _, id := range []string{"a", "b"} {
+		_, _ = sessions.Create(types.CreateSessionOptions{ID: id, Title: id, Cwd: "/tmp"})
+		appendReply(t, sessions, id, id+"-reply "+strings.Repeat("word ", 2000))
+	}
+	evalJSON(t, runtime, `console.sessions.wait({session_ids:["a","b"], background: true})`)
+	active.finish("a")
+	active.finish("b")
+	done := waitForWork(t, manager)
+	for _, want := range []string{"a-reply", "b-reply", "[cut]", "console.sessions.read."} {
+		if !strings.Contains(done.Summary, want) {
+			t.Fatalf("summary missing %q (len %d): %s", want, len(done.Summary), done.Summary)
+		}
+	}
+}
+
+func TestWaitBackgroundRejectsBadInput(t *testing.T) {
+	active := newActiveSet("busy")
+	runtime, sessions, _ := newBackgroundWaitRuntime(t, active)
+	_, _ = sessions.Create(types.CreateSessionOptions{ID: "busy", Title: "b", Cwd: "/tmp"})
+	if err := evalErr(runtime, `console.sessions.wait({session_id:"busy", background:"yes"})`); err == nil || !strings.Contains(err.Error(), "true or false") {
+		t.Fatalf("a non-boolean background must be rejected: %v", err)
+	}
+	runtime.work = nil
+	if err := evalErr(runtime, `console.sessions.wait({session_id:"busy", background:true})`); err == nil || !strings.Contains(err.Error(), "not available") {
+		t.Fatalf("background without a manager must be rejected: %v", err)
 	}
 }
 
