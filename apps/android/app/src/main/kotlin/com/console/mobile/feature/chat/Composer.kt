@@ -583,12 +583,12 @@ private fun ComposerInput(
             // Plan mode reads at a glance: faint diagonal stripes over the bubble.
             .then(
                 if (planOn) Modifier.drawBehind {
-                    val step = 10.dp.toPx()
-                    val stroke = 1.5.dp.toPx()
+                    val step = 11.dp.toPx()
+                    val stroke = 1.2.dp.toPx()
                     var x = -size.height
                     while (x < size.width) {
                         drawLine(
-                            color = NewTheme.Accent.copy(alpha = 0.24f),
+                            color = NewTheme.Accent.copy(alpha = 0.14f),
                             start = androidx.compose.ui.geometry.Offset(x, size.height),
                             end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
                             strokeWidth = stroke,
