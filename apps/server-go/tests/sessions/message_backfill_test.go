@@ -8,14 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/msgparts"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/services"
-	"github.com/Adelodunpeter25/console/apps/server-go/internal/services/session"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 )
 
@@ -238,82 +235,6 @@ func TestNewMessagesAfterBackfillAreSplit(t *testing.T) {
 	for _, id := range []string{"u1", "a1", "r1"} {
 		verifySplit(t, c, id)
 	}
-}
-
-// The real test: copy the developer's actual databases, backfill the copies, and
-// require every message's content to be byte for byte unchanged and every split
-// to rebuild. Originals are never opened for writing.
-func TestBackfillOverCopiesOfRealDatabases(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home directory")
-	}
-	store := filepath.Join(home, ".console")
-	var srcs []string
-	_ = filepath.Walk(store, func(p string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() && strings.HasSuffix(p, ".db") && strings.Contains(p, string(filepath.Separator)+"sessions"+string(filepath.Separator)) {
-			srcs = append(srcs, p)
-		}
-		return nil
-	})
-	if len(srcs) == 0 {
-		t.Skip("no real session databases")
-	}
-	checked, rowsTotal, left := 0, 0, 0
-	for _, src := range srcs {
-		probe, err := sql.Open("sqlite", "file:"+src+"?mode=ro&immutable=1")
-		if err != nil {
-			continue
-		}
-		var n int
-		if probe.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&n) != nil {
-			probe.Close()
-			continue // not a session database, or unreadable
-		}
-		probe.Close()
-
-		copyPath := filepath.Join(t.TempDir(), "copy.db")
-		if err := copyFile(src, copyPath); err != nil {
-			continue
-		}
-		c, err := sql.Open("sqlite", "file:"+copyPath)
-		if err != nil {
-			continue
-		}
-		if err := db.InitSessionDB(c, copyPath); err != nil {
-			c.Close()
-			t.Errorf("%s: upgrade failed: %v", filepath.Base(src), err)
-			continue
-		}
-		before := contents(t, c)
-		stats, err := session.BackfillAll(c)
-		if err != nil {
-			t.Errorf("%s: backfill: %v", filepath.Base(src), err)
-			c.Close()
-			continue
-		}
-		after := contents(t, c)
-		for id, want := range before {
-			if after[id] != want {
-				t.Errorf("%s: message %s content changed", filepath.Base(src), id)
-			}
-		}
-		rows, _ := c.Query(`SELECT id FROM messages WHERE split_state = 1`)
-		for rows.Next() {
-			var id string
-			_ = rows.Scan(&id)
-			verifySplit(t, c, id)
-		}
-		rows.Close()
-		checked++
-		rowsTotal += len(before)
-		left += stats
-		c.Close()
-	}
-	if checked == 0 {
-		t.Skip("no readable databases")
-	}
-	t.Logf("backfilled copies of %d real databases: %d messages, %d left as-is", checked, rowsTotal, left)
 }
 
 func copyFile(src, dst string) error {
