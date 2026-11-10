@@ -330,6 +330,37 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		return okProto(c, &consolev1.FileWriteResponse{Path: body.Path, Message: msg})
 	})
 
+	// POST /api/fs/save
+	// Separate from POST /api/fs/file above, which stays a plain truncating
+	// write for the mobile clients. This one is atomic, keeps the target's
+	// permissions, and refuses a stale buffer via the ETag conflict check.
+	h.Post("/save", func(c *fiber.Ctx) error {
+		var body consolev1.SaveFileRequest
+		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil || body.Path == "" {
+			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Field 'path' is required."))
+		}
+		result, err := fs.SaveFileContent(body.Path, body.Content, body.GetBaseEtag())
+		if err != nil {
+			var changed *fssvc.FileChangedError
+			if asErrAlias(err, &changed) {
+				resp := fiber.Map{
+					"success": false,
+					"error":   err.Error(),
+					"code":    "FILE_CHANGED",
+					"etag":    changed.CurrentEtag,
+				}
+				return c.Status(fiber.StatusConflict).JSON(resp)
+			}
+			return fail(c, fiber.StatusBadRequest, err)
+		}
+		return okProto(c, &consolev1.SaveFileResponse{
+			Path:      result.Path,
+			Etag:      result.Etag,
+			SizeBytes: uint64(result.SizeBytes),
+			MtimeMs:   result.MtimeMs,
+		})
+	})
+
 	// DELETE /api/fs/file
 	h.Delete("/file", func(c *fiber.Ctx) error {
 		filePath := c.Query("path")
@@ -418,6 +449,15 @@ func asErr(err error, target **fssvc.PreviewBlocked) bool {
 	var b *fssvc.PreviewBlocked
 	if ok := errorsAs(err, &b); ok {
 		*target = b
+		return true
+	}
+	return false
+}
+
+func asErrAlias[T any](err error, target **T) bool {
+	var typed *T
+	if ok := errorsAs(err, &typed); ok {
+		*target = typed
 		return true
 	}
 	return false
