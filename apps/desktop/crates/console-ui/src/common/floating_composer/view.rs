@@ -31,7 +31,9 @@ use crate::primitives::{
 use crate::theme::Theme;
 
 use super::super::github_menu::github_menu_section;
-use super::super::picker_menus::{BranchModeRow, branch_menu_section, project_menu_section};
+use super::super::picker_menus::{
+    BranchModeRow, ProjectMenuExtras, branch_menu_section, project_menu_section,
+};
 
 /// One frame of state to paint.
 pub struct Data {
@@ -74,6 +76,8 @@ pub struct FloatingComposerView {
     data: Data,
     on_dismiss: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_project: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    on_no_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
+    on_new_project: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_choose_github_repo: Rc<dyn Fn(GithubRepo, &mut Window, &mut App) + 'static>,
     on_refresh_github_repos: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_connect_github: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -133,6 +137,8 @@ impl FloatingComposerView {
             },
             on_dismiss: Rc::new(|_, _| {}),
             on_choose_project: Rc::new(|_, _, _| {}),
+            on_no_project: Rc::new(|_, _| {}),
+            on_new_project: Rc::new(|_, _| {}),
             on_choose_github_repo: Rc::new(|_, _, _| {}),
             on_refresh_github_repos: Rc::new(|_, _| {}),
             on_connect_github: Rc::new(|_, _| {}),
@@ -170,6 +176,16 @@ impl FloatingComposerView {
         f: impl Fn(String, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.on_choose_project = Rc::new(f);
+        self
+    }
+
+    pub fn on_no_project(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_no_project = Rc::new(f);
+        self
+    }
+
+    pub fn on_new_project(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_new_project = Rc::new(f);
         self
     }
 
@@ -293,17 +309,32 @@ impl FloatingComposerView {
         // ---- header: project + branch selectors on the left ----
         // Both answer "where does this work happen", so they sit together
         // above the prompt; the footer keeps the behavioural choices.
-        let project_label = data
+        let (project_label, project_is_none) = match data
             .projects
             .iter()
             .find(|p| Some(&p.id) == selected_project_id.as_ref())
-            .map(|p| p.name.clone())
-            .unwrap_or_else(|| "Select project".to_owned());
+        {
+            Some(p) => (p.name.clone(), false),
+            None => match selected_project_id.as_ref() {
+                Some(_) => ("Select project".to_owned(), false),
+                None => ("No project".to_owned(), true),
+            },
+        };
         let project_trigger = MenuChip::new("floating-project-chip")
             .height(px(28.0))
-            .icon(IconName::Folder.path(), theme.text_tertiary)
+            .icon(
+                if project_is_none {
+                    IconName::X
+                } else {
+                    IconName::Folder
+                }
+                .path(),
+                theme.text_tertiary,
+            )
             .label(project_label);
         let on_choose_project = self.on_choose_project.clone();
+        let on_no_project = self.on_no_project.clone();
+        let on_new_project = self.on_new_project.clone();
         let on_choose_github_repo = self.on_choose_github_repo.clone();
         let on_refresh_github_repos = self.on_refresh_github_repos.clone();
         let on_connect_github = self.on_connect_github.clone();
@@ -321,7 +352,11 @@ impl FloatingComposerView {
                     selected_project_id.clone(),
                     true,
                     &on_choose_project,
-                    None,
+                    Some(&ProjectMenuExtras {
+                        on_new_project: on_new_project.clone(),
+                        on_no_project: on_no_project.clone(),
+                        none_selected: selected_project_id.is_none(),
+                    }),
                 );
                 let github_repos = data.github_repos.clone();
                 let github_repos_loading = data.github_repos_loading;
@@ -467,7 +502,7 @@ impl FloatingComposerView {
         // button reflects the live input even though this struct is built
         // per frame.
         let can_submit =
-            has_project && !submitting && !self.input.read(cx).content().trim().is_empty();
+            !submitting && !self.input.read(cx).content().trim().is_empty();
         let on_submit = self.on_submit.clone();
         // Captured so the click reads the live text instead of a per-frame copy.
         let submit_input = self.input.clone();
@@ -611,7 +646,7 @@ impl FloatingComposerView {
                             .border_b_1()
                             .border_color(theme.border)
                             .child(project_control)
-                            .child(branch_control)
+                            .when(has_project, |el| el.child(branch_control))
                             .child(div().flex_1()),
                     )
                     // staged images

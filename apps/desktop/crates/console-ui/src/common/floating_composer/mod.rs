@@ -473,12 +473,13 @@ impl FloatingComposerState {
         if text.trim().is_empty() {
             return None;
         }
-        let project_id = self.selected_project_id.clone()?;
-        let cwd = self
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-            .map(|p| p.path.clone());
+        let project_id = self.selected_project_id.clone();
+        let cwd = project_id.as_ref().and_then(|id| {
+            self.projects
+                .iter()
+                .find(|p| &p.id == id)
+                .map(|p| p.path.clone())
+        });
         // Mentions and staged images are read here, before the field is
         // cleared, so the created session inherits what the user attached.
         let mentions = self.input.read(cx).mentions().to_vec();
@@ -487,7 +488,7 @@ impl FloatingComposerState {
             mentions,
             attachments: self.attachments.clone(),
             pending_pastes: self.pending_pastes.clone(),
-            project_id: Some(project_id),
+            project_id,
             cwd,
             branch: self.branch.clone(),
             model: self.selected_model.clone(),
@@ -515,6 +516,12 @@ impl FloatingComposerState {
         if matches!(self.branch, BranchChoice::FromBranch(_)) {
             self.branch = BranchChoice::default();
         }
+    }
+
+    pub fn choose_no_project(&mut self) {
+        self.selected_project_id = None;
+        self.branches = Rc::new(Vec::new());
+        self.branch = BranchChoice::default();
     }
 
     /// Hand the card a freshly fetched branch list, for after a project switch.

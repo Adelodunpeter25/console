@@ -52,6 +52,8 @@ impl ConsoleDesktopApp {
         // refresh the branch list for whatever project it's about to show.
         if let Some(project_id) = project_id.clone() {
             self.refresh_branches_for_project(&project_id, cx);
+        } else {
+            self.branches = Rc::new(Vec::new());
         }
 
         let snapshot = FloatingSnapshot {
@@ -157,6 +159,13 @@ impl ConsoleDesktopApp {
     pub fn floating_project_changed(&mut self, project_id: String, cx: &mut Context<Self>) {
         self.floating_composer.choose_project(project_id.clone());
         self.refresh_branches_for_project(&project_id, cx);
+        cx.notify();
+    }
+
+    /// Explicitly select "No project": drop project scope and branch state.
+    pub fn floating_no_project_chosen(&mut self, cx: &mut Context<Self>) {
+        self.floating_composer.choose_no_project();
+        self.branches = Rc::new(Vec::new());
         cx.notify();
     }
 
@@ -346,6 +355,29 @@ impl ConsoleDesktopApp {
                     app.update(cx, |this, cx| {
                         this.floating_composer.project_menu.close(window, cx);
                         this.floating_project_changed(id, cx);
+                    });
+                }
+            }
+        })
+        .on_no_project({
+            let entity = entity.clone();
+            move |window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.floating_composer.project_menu.close(window, cx);
+                        this.floating_no_project_chosen(cx);
+                    });
+                }
+            }
+        })
+        .on_new_project({
+            let entity = entity.clone();
+            move |window: &mut Window, cx: &mut App| {
+                if let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.floating_composer.project_menu.close(window, cx);
+                        this.close_floating_composer(cx);
+                        this.open_project_browse(window, cx);
                     });
                 }
             }
@@ -652,35 +684,37 @@ impl ConsoleDesktopApp {
                             this.selected_session_id = Some(new_session.id.clone());
                         }
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
+                        this.switch_workspace_for_session(&new_session.id, &pane_id, cx);
+                        let target_pane = this.active_pane_id.clone().unwrap_or(pane_id);
                         this.open_chat_tab_in_pane(
-                            &pane_id,
+                            &target_pane,
                             new_session.id.clone(),
                             "Generating title…",
                         );
                         // The project folder's branch just changed, so the
                         // footer's branch list is stale until it reloads.
                         if let Some((_, cwd)) = checkout.clone() {
-                            this.reload_branches_for_pane(pane_id.clone(), cwd, cx);
+                            this.reload_branches_for_pane(target_pane.clone(), cwd, cx);
                         }
                         this.sync_workspace_webviews(cx);
-                        this.transcript_for_pane(&pane_id).update(cx, |t, cx| {
+                        this.transcript_for_pane(&target_pane).update(cx, |t, cx| {
                             t.set_messages(Vec::new(), cx);
                         });
                         // Adopt the card's selections for this pane so the run
                         // below — and the composer it leaves behind — agree
                         // with what the user chose in the card.
                         if let Some(model) = card_model.clone() {
-                            this.set_pane_model(&pane_id, Some(model));
+                            this.set_pane_model(&target_pane, Some(model));
                         }
-                        this.set_pane_thinking_level(&pane_id, card_thinking);
+                        this.set_pane_thinking_level(&target_pane, card_thinking);
                         // Same for approval mode: the composer the launch
                         // leaves behind must show the mode the session is
                         // actually running in, not the pane's previous one.
-                        this.set_pane_approval_mode(&pane_id, approval_mode);
+                        this.set_pane_approval_mode(&target_pane, approval_mode);
                         // The run targets the active pane, so make sure the
                         // pane the session just opened in is the active one.
-                        this.active_pane_id = Some(pane_id.clone());
-                        this.selected_session_id = this.active_session_for_pane(&pane_id);
+                        this.active_pane_id = Some(target_pane.clone());
+                        this.selected_session_id = this.active_session_for_pane(&target_pane);
                         // Auto-send: the prompt that described the task *is*
                         // the task, so it goes straight to the agent instead of
                         // waiting for a second Enter. This also clears the

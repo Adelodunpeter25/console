@@ -118,6 +118,49 @@ fn empty_autocomplete_pops_share_a_key() {
     assert_eq!(empty.content_key(), empty.content_key());
 }
 
+#[test]
+fn project_menu_section_renders_no_project_row() {
+    use console_core::ProjectInfo;
+    use console_ui::common::{ProjectMenuExtras, project_menu_section};
+    use console_ui::primitives::MenuItem;
+    use std::rc::Rc;
+
+    let projects = Rc::new(vec![ProjectInfo {
+        id: "p1".into(),
+        name: "Project 1".into(),
+        path: "/path/to/p1".into(),
+        created_at: 0,
+        updated_at: 0,
+    }]);
+
+    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> =
+        Rc::new(|_, _, _| {});
+    let on_new: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
+    let on_none: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
+
+    let items = project_menu_section(
+        projects,
+        None,
+        true,
+        &on_select,
+        Some(&ProjectMenuExtras {
+            on_new_project: on_new,
+            on_no_project: on_none,
+            none_selected: true,
+        }),
+    );
+
+    let no_project_item = items.iter().find(|item| match item {
+        MenuItem::Entry { label, .. } => label == "No project",
+        _ => false,
+    });
+
+    assert!(no_project_item.is_some(), "No project item should be present");
+    if let Some(MenuItem::Entry { selected, .. }) = no_project_item {
+        assert!(*selected, "No project should be marked selected when none_selected is true");
+    }
+}
+
 /// Build a popup of command rows. The `ComposerInput` isn't needed —
 /// `content_key` only reads the items and the highlight/loading flags.
 fn view_of(rows: &[(&str, &str)]) -> AutocompleteView {
