@@ -204,13 +204,10 @@ impl Render for FileBrowser {
             .on_key_down(cx.listener({
                 // Cloned: the listener must own it, and it outlives render.
                 let on_cancel = on_cancel.clone();
-                move |_this, event: &KeyDownEvent, window, cx| match event
-                    .keystroke
-                    .key
-                    .as_str()
-                {
-                    "escape" => on_cancel(window, cx),
-                    _ => {}
+                move |_this, event: &KeyDownEvent, window, cx| {
+                    if event.keystroke.key == "escape" {
+                        on_cancel(window, cx);
+                    }
                 }
             }))
             .child(

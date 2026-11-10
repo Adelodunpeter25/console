@@ -330,8 +330,8 @@ impl ConsoleDesktopApp {
                         let client = client_clone.clone();
                         let entity = entity.clone();
                         cx.spawn(async move |cx| {
-                            match client.git.list_branches(Some(&path)).await {
-                                Ok(branches) => cx.update(|cx| {
+                            if let Ok(branches) = client.git.list_branches(Some(&path)).await {
+                                cx.update(|cx| {
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             this.branches = Rc::new(branches.branches.clone());
@@ -350,8 +350,7 @@ impl ConsoleDesktopApp {
                                             cx.notify();
                                         });
                                     }
-                                }),
-                                Err(_) => {}
+                                });
                             }
                         })
                         .detach();

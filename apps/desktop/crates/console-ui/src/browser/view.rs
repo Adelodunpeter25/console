@@ -176,11 +176,10 @@ impl BrowserView {
 
         let annotation_subscription = cx.subscribe(
             &annotation_input,
-            move |this: &mut Self, _input, event: &ComposerEvent, cx| match event {
-                ComposerEvent::Submit(text, _) => {
+            move |this: &mut Self, _input, event: &ComposerEvent, cx| {
+                if let ComposerEvent::Submit(text, _) = event {
                     this.commit_annotation(text.clone(), cx);
                 }
-                _ => {}
             },
         );
         let focus_handle = cx.focus_handle();

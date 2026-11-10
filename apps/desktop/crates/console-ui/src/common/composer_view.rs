@@ -480,7 +480,7 @@ impl ComposerView {
             .gap(px(6.0))
             .px(px(12.0))
             .pb(px(7.0))
-            .children(comments.iter().cloned().map(move |comment| {
+            .children(comments.iter().map(move |comment| {
                 let edit = comment.on_edit.clone();
                 let remove = comment.on_remove.clone();
                 let chip_path = comment.path.clone();

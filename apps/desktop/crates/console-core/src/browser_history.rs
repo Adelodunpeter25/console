@@ -129,7 +129,7 @@ pub fn set_title(&mut self, url: &str, title: &str) {
     }
 
     fn sort_and_cap(&mut self) {
-        self.entries.sort_by(|a, b| b.visit_count.cmp(&a.visit_count));
+        self.entries.sort_by_key(|b| std::cmp::Reverse(b.visit_count));
         if self.entries.len() > MAX_ENTRIES {
             self.entries.truncate(MAX_ENTRIES);
         }

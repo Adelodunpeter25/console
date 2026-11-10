@@ -4,34 +4,30 @@ use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum McpTransportType {
     Http,
+    #[default]
     Stdio,
 }
 
-impl Default for McpTransportType {
-    fn default() -> Self {
-        Self::Stdio
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum McpAuthType {
+    #[default]
     None,
     Static,
     Oauth2,
 }
 
-impl Default for McpAuthType {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum McpConnectionStatus {
+    #[default]
     Disconnected,
     Connecting,
     Connected,
@@ -39,11 +35,6 @@ pub enum McpConnectionStatus {
     Error(String),
 }
 
-impl Default for McpConnectionStatus {
-    fn default() -> Self {
-        Self::Disconnected
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct McpToolInfo {

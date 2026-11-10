@@ -266,7 +266,7 @@ pub mod cookies {
         let refs: Vec<&AnyObject> = objects.iter().map(|o| &**o).collect();
 
         let properties = NSDictionary::<NSString, AnyObject>::from_slices(&keys, &refs);
-        unsafe { NSHTTPCookie::cookieWithProperties(&properties) }.into()
+        unsafe { NSHTTPCookie::cookieWithProperties(&properties) }
     }
 
     /// Bridge a typed Foundation object to the dictionary's `AnyObject`

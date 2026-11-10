@@ -73,9 +73,7 @@ impl RenderOnce for SttSection {
             "Add a Cloudflare account ID and API token to dictate recordings into text.".to_string()
         };
 
-        let status_color = if busy {
-            theme.accent
-        } else if configured {
+        let status_color = if busy || configured {
             theme.accent
         } else {
             theme.text_ghost

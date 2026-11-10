@@ -24,15 +24,14 @@ pub fn to_relative_path(path: &str, cwd: Option<&str>) -> String {
         return path;
     };
     let cwd = cwd.trim_end_matches('/');
-    if !cwd.is_empty() {
-        if let Some(rest) = path.strip_prefix(cwd) {
+    if !cwd.is_empty()
+        && let Some(rest) = path.strip_prefix(cwd) {
             return rest.trim_start_matches('/').to_owned();
         }
-    }
     path
 }
 
-pub fn argument_path<'a>(arguments: &'a Value) -> Option<&'a str> {
+pub fn argument_path(arguments: &Value) -> Option<&str> {
     let object = arguments.as_object()?;
     PATH_KEYS
         .into_iter()

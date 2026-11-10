@@ -505,7 +505,7 @@ impl TranscriptView {
         let old_len = self.messages.len();
         // Prepend older messages
         let mut new_messages = older;
-        new_messages.extend(self.messages.drain(..));
+        new_messages.append(&mut self.messages);
         self.messages = new_messages;
         // Rebuild revisions for new messages (simple: reset all)
         self.content_revisions = vec![0; self.messages.len()];

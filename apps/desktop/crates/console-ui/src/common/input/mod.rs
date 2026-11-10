@@ -190,7 +190,7 @@ pub fn is_large_paste(text: &str) -> bool {
 pub fn thousands(n: usize) -> String {
     let raw = n.to_string();
     let mut out = String::with_capacity(raw.len() + raw.len() / 3);
-    let first = if raw.len() % 3 == 0 { 3 } else { raw.len() % 3 };
+    let first = if raw.len().is_multiple_of(3) { 3 } else { raw.len() % 3 };
     let (head, rest) = raw.split_at(first);
     out.push_str(head);
     for chunk in rest.as_bytes().chunks(3) {
@@ -691,9 +691,7 @@ impl ComposerInput {
                 .chars()
                 .next_back()
                 .is_some_and(|c| c.is_whitespace());
-        let prefix = if start == 0 {
-            "     "
-        } else if prev_is_whitespace {
+        let prefix = if start == 0 || prev_is_whitespace {
             "     "
         } else {
             "      "

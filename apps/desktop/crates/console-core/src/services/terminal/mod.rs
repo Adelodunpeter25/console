@@ -133,11 +133,10 @@ impl TerminalService {
         if candidates.is_empty() {
             return None;
         }
-        if let Some(c) = cwd {
-            if let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c)) {
+        if let Some(c) = cwd
+            && let Some(exact) = candidates.iter().find(|r| r.cwd.as_deref() == Some(c)) {
                 return Some(exact);
             }
-        }
         candidates.into_iter().next()
     }
 }
@@ -235,7 +234,7 @@ impl TerminalHandle {
             let mut b = backend.lock().await;
             if b.is_alt_screen() {
                 let key = if delta > 0 { "\x1b[A" } else { "\x1b[B" };
-                let count = (delta.abs() as usize).min(10);
+                let count = (delta.unsigned_abs() as usize).min(10);
                 let input = key.repeat(count);
                 drop(b);
                 let _ = sender.send(crate::types::client_input(input));

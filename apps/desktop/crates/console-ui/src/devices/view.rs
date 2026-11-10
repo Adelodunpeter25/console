@@ -369,22 +369,19 @@ impl DeviceViewer {
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
-            match value.get("type").and_then(|t| t.as_str()) {
-                Some("status") => {
-                    let status = value
-                        .get("status")
-                        .and_then(|s| s.as_str())
-                        .map(|s| s.to_string());
-                    // Any post-start status proves the start script executed
-                    // ("ready" is the page's own boot report), so the retry
-                    // loop can stop.
-                    if status.as_deref().is_some_and(|s| s != "ready") {
-                        self.start_reported = Some(self.start_generation);
-                    }
-                    self.stream_status = status;
-                    cx.notify();
+            if value.get("type").and_then(|t| t.as_str()) == Some("status") {
+                let status = value
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string());
+                // Any post-start status proves the start script executed
+                // ("ready" is the page's own boot report), so the retry
+                // loop can stop.
+                if status.as_deref().is_some_and(|s| s != "ready") {
+                    self.start_reported = Some(self.start_generation);
                 }
-                _ => {}
+                self.stream_status = status;
+                cx.notify();
             }
         }
     }

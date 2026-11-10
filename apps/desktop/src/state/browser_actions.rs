@@ -556,32 +556,29 @@ impl ConsoleDesktopApp {
                         if started_check.is_err() {
                             return;
                         }
-                        match poll_script_result_within(&this, cx, &view, &check_id, WAIT_FOR_CHECK_POLLS).await {
-                            Ok(outcome) => {
-                                let ScriptOutcome { value, url, title } = outcome;
-                                last_url = url;
-                                last_title = title;
-                                match value {
-                                    Ok(value) if value.contains("WF_OK") => {
-                                        met = true;
-                                        break;
-                                    }
-                                    Ok(value) if value.contains("WF_ERR") => {
-                                        last_problem = Some(value);
-                                        break;
-                                    }
-                                    Ok(value) if value.contains("WF_HIDDEN") => {
-                                        hidden = true;
-                                    }
-                                    Ok(value) if value.contains("WF_NO") => {
-                                        hidden = false;
-                                    }
-                                    Ok(_) => {}
-                                    // No result usually means the page is mid-navigation; keep waiting.
-                                    Err(_) => {}
+                        if let Ok(outcome) = poll_script_result_within(&this, cx, &view, &check_id, WAIT_FOR_CHECK_POLLS).await {
+                            let ScriptOutcome { value, url, title } = outcome;
+                            last_url = url;
+                            last_title = title;
+                            match value {
+                                Ok(value) if value.contains("WF_OK") => {
+                                    met = true;
+                                    break;
                                 }
+                                Ok(value) if value.contains("WF_ERR") => {
+                                    last_problem = Some(value);
+                                    break;
+                                }
+                                Ok(value) if value.contains("WF_HIDDEN") => {
+                                    hidden = true;
+                                }
+                                Ok(value) if value.contains("WF_NO") => {
+                                    hidden = false;
+                                }
+                                Ok(_) => {}
+                                // No result usually means the page is mid-navigation; keep waiting.
+                                Err(_) => {}
                             }
-                            Err(_) => {}
                         }
                         if started.elapsed() >= timeout {
                             break;

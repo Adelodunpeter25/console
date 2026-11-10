@@ -225,13 +225,8 @@ pub fn describe_chart(chart: &VisualChart) -> String {
         .max()
         .unwrap_or(0);
     let mut out = format!(
-        "{kind} chart{title}. {} {}, {} {}.",
+        "{kind} chart{title}. {} series, {} {}.",
         chart.series.len(),
-        if chart.series.len() == 1 {
-            "series"
-        } else {
-            "series"
-        },
         per_series,
         if per_series == 1 { "point" } else { "points" },
     );

@@ -320,7 +320,7 @@ impl ToolCall {
     }
 
     fn kind_flag(&self, flag: u32) -> bool {
-        self.kind_flags.map_or(false, |f| f & flag != 0)
+        self.kind_flags.is_some_and(|f| f & flag != 0)
     }
 
     pub fn is_edit(&self) -> bool {

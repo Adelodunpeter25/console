@@ -373,11 +373,11 @@ impl ToolCalls {
                             );
                         }
                     })
-                    .child(if entry.call.is_file_target() && file_path.is_some() {
+                    .child(if let Some(path) = file_path.as_deref().filter(|_| entry.call.is_file_target()) {
                         // File-targeting calls show the file's real type icon
                         // (multicolor, like mobile) instead of the generic
                         // monochrome tool glyph.
-                        file_type_icon(file_path.as_ref().unwrap(), 13.0).into_any_element()
+                        file_type_icon(path, 13.0).into_any_element()
                     } else {
                         icon(
                             activity_icon_for_call(&entry.call),

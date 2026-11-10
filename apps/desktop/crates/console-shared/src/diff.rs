@@ -67,7 +67,7 @@ impl FileDiff {
 /// The `context` parameter controls how many unchanged lines of context to
 /// keep around each changed region. Pass `0` to show only added/removed lines.
 pub fn diff_lines(old: &str, new: &str, context: usize) -> DiffResult {
-    fn split_file_lines<'a>(s: &'a str) -> Vec<&'a str> {
+    fn split_file_lines(s: &str) -> Vec<&str> {
         if s.is_empty() {
             return Vec::new();
         }
@@ -190,9 +190,7 @@ fn apply_context_window(lines: Vec<DiffLine>, context: usize) -> Vec<DiffLine> {
         for &idx in &changed {
             let start = idx.saturating_sub(context);
             let end = (idx + context + 1).min(lines.len());
-            for k in start..end {
-                keep[k] = true;
-            }
+            keep[start..end].fill(true);
         }
         keep
     };

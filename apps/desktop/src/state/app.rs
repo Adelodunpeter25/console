@@ -833,7 +833,7 @@ impl ConsoleDesktopApp {
             new_project_dialog_handle: None,
             file_browser_window_handle: None,
             new_project_dialog_view: None,
-            main_window_handle: Some(window.window_handle().into()),
+            main_window_handle: Some(window.window_handle()),
             is_main_window: matches!(&target, crate::window::WindowLaunchTarget::RestorePersisted),
             drafts,
             sidebar_draft_ids,

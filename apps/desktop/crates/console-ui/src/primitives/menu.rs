@@ -959,7 +959,7 @@ impl RenderOnce for MenuCard {
             })
             .min_w(px(if context_style { 200.0 } else { 176.0 }))
             .max_w(px(if context_style { 300.0 } else { 320.0 }))
-            .py(px(if context_style { 4.0 } else { 4.0 }))
+            .py(px(4.0))
             .rounded(px(if context_style { 10.0 } else { 9.0 }))
             .border_1()
             .border_color(theme.border_strong)

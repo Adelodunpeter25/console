@@ -5,24 +5,18 @@ use serde::{Deserialize, Serialize};
 /// One Chrome profile folder plus its human-readable name.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct ChromeProfile {
     pub id: String,
     pub name: String,
 }
 
-impl Default for ChromeProfile {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            name: String::new(),
-        }
-    }
-}
 
 /// One decrypted cookie from the server, ready for webview injection.
 /// Values never touch disk here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct ChromeCookie {
     pub domain: String,
     pub path: String,
@@ -34,16 +28,3 @@ pub struct ChromeCookie {
     pub http_only: bool,
 }
 
-impl Default for ChromeCookie {
-    fn default() -> Self {
-        Self {
-            domain: String::new(),
-            path: String::new(),
-            name: String::new(),
-            value: String::new(),
-            expires_at_ms: 0,
-            secure: false,
-            http_only: false,
-        }
-    }
-}
