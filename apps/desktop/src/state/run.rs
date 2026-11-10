@@ -121,6 +121,12 @@ impl ConsoleDesktopApp {
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         self.add_queued_prompt_for_session(&session_id, queued_item);
+        if let Some(session) = Rc::make_mut(&mut self.sessions)
+            .iter_mut()
+            .find(|s| s.id == session_id)
+        {
+            session.settled_at = None;
+        }
 
         self.composer_for_pane(&pane_id)
             .update(cx, |input, cx| input.clear(cx));
@@ -514,6 +520,7 @@ impl ConsoleDesktopApp {
             {
                 let count = session.message_count.unwrap_or(0);
                 session.message_count = Some(count + 1);
+                session.settled_at = None;
             }
             self.set_session_running(sid, Some(run_started_at));
             self.next_run_token_for_session(sid)
