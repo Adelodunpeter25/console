@@ -60,6 +60,19 @@ pub(crate) struct FileCommentRequest {
     pub end_line: u32,
 }
 
+/// A save handed off by an editor's save handler.
+///
+/// The handler itself is synchronous (the package's `SaveHandler` contract),
+/// so it only enqueues here and returns `SaveStatus::Deferred`; the host task
+/// owns the API call and reports back with `EditorState::mark_saved`. `text`
+/// already carries the document's line ending — send it verbatim.
+#[derive(Clone, Debug)]
+pub(crate) struct FileSaveRequest {
+    pub path: String,
+    pub text: String,
+    pub revision: u64,
+}
+
 pub struct ConsoleDesktopApp {
     pub client: ConsoleClient,
     /// Streaming plumbing shared by every surface (start/attach run, watch
@@ -298,6 +311,21 @@ pub struct ConsoleDesktopApp {
         ),
     >,
     pub viewer_editor_subscriptions: std::collections::HashMap<String, gpui::Subscription>,
+    /// The ETag each open file's content was loaded at. Sent as `base_etag`
+    /// on save so the server refuses a buffer that went stale behind us.
+    /// Kept unchanged while a dirty buffer survives an external content change
+    /// precisely so that save is caught.
+    pub viewer_file_etags: std::collections::HashMap<String, String>,
+    /// Editor saves waiting on the API, consumed by the host task. The save
+    /// handler is synchronous, so it only enqueues and reports `Deferred`.
+    pub(crate) file_save_tx: tokio::sync::mpsc::UnboundedSender<FileSaveRequest>,
+    /// Set while a save for that path is in flight, so two quick cmd-s presses
+    /// land at the server in order and the later one reuses the etag the
+    /// earlier one returned.
+    pub(crate) file_saves_in_flight: std::collections::HashSet<String>,
+    /// Paths with a save queued behind the in-flight one, so a burst of cmd-s
+    /// collapses into one follow-up save rather than an unbounded queue.
+    pub(crate) file_saves_pending: std::collections::HashSet<String>,
     /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
     pub pending_file_line: std::collections::HashMap<String, u32>,
     /// Comment-gutter selections from editor views. The editor reports through

@@ -22,6 +22,7 @@ mod environments;
 mod errors;
 mod execution;
 mod file_comments;
+mod file_saves;
 mod floating_composer;
 mod github;
 mod global_actions;

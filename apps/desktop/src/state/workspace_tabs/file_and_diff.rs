@@ -160,21 +160,34 @@ impl ConsoleDesktopApp {
         let kind = console_core::file_kind_for_path(&path);
         match kind {
             console_core::FileKind::Markdown | console_core::FileKind::Text => {
-                if let Ok(content) = std::fs::read_to_string(&path) {
-                    self.open_file_contents.insert(path, content);
-                    cx.notify();
-                    return;
-                }
-
+                // Content comes only from the API: this client never reads
+                // workspace files off its own disk.
                 let client = self.client.clone();
                 let file_path = path;
                 cx.spawn(
-                    async move |entity, cx| match client.fs.read_file(&file_path).await {
-                        Ok(resp) => {
+                    async move |entity, cx| match client.fs.read_file_with_etag(&file_path).await {
+                        Ok(file) => {
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.open_file_contents.insert(file_path, resp.content);
+                                        this.open_file_contents
+                                            .insert(file_path.clone(), file.content.content);
+                                        if let Some(etag) = file.etag {
+                                            // A dirty buffer deliberately keeps the
+                                            // OLD etag: the load path must not
+                                            // launder a stale buffer into looking
+                                            // current, or the conflict check on the
+                                            // next save would pass and clobber the
+                                            // change that arrived meanwhile.
+                                            let dirty = this
+                                                .viewer_editor_views
+                                                .get(&file_path)
+                                                .is_some_and(|(_, _, state, _)| state.read(cx).is_dirty());
+                                            if !dirty {
+                                                this.viewer_file_etags
+                                                    .insert(file_path, etag);
+                                            }
+                                        }
                                         cx.notify();
                                     });
                                 }
@@ -581,6 +594,8 @@ impl ConsoleDesktopApp {
         self.svg_preview_mode.remove(path);
         self.open_diff_contents.remove(path);
         self.viewer_editor_views.remove(path);
+        self.viewer_editor_subscriptions.remove(path);
+        self.viewer_file_etags.remove(path);
         self.viewer_diff_views.remove(path);
         self.viewer_cached_markdown_views.remove(path);
         for key in [

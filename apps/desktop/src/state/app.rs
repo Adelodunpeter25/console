@@ -575,6 +575,9 @@ impl ConsoleDesktopApp {
         // A single card is open at a time; the shared prompt field is reused so
         // opening one comment never leaves a stale focus handle behind.
         let (file_comment_tx, file_comment_rx) = tokio::sync::mpsc::unbounded_channel();
+        // Editor saves go out through the API; the channel keeps the
+        // package's synchronous save handler from blocking on I/O.
+        let (file_save_tx, file_save_rx) = tokio::sync::mpsc::unbounded_channel();
         // The browser suggestion source starts from the persisted history.
         crate::state::chrome_import::init_from_disk();
         let mut app = Self {
@@ -693,6 +696,10 @@ impl ConsoleDesktopApp {
             viewer_scrollbar_states: std::collections::HashMap::new(),
             viewer_editor_views: std::collections::HashMap::new(),
             viewer_editor_subscriptions: std::collections::HashMap::new(),
+            viewer_file_etags: std::collections::HashMap::new(),
+            file_save_tx,
+            file_saves_in_flight: std::collections::HashSet::new(),
+            file_saves_pending: std::collections::HashSet::new(),
             pending_file_line: std::collections::HashMap::new(),
             file_comment_tx,
             viewer_diff_views: std::collections::HashMap::new(),
@@ -841,6 +848,7 @@ impl ConsoleDesktopApp {
         app.wire_palette_callbacks(cx);
         app.wire_floating_composer_input(cx);
         app.init_file_comments(file_comment_rx, cx);
+        app.init_file_saves(file_save_rx, cx);
 
         app.workspace_pane_states.insert(
             "pane-main".to_string(),

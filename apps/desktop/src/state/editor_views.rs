@@ -101,17 +101,14 @@ impl ConsoleDesktopApp {
         let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
         let comment_tx = self.file_comment_tx.clone();
         let comment_path = path.to_string();
+        let save_tx = self.file_save_tx.clone();
+        let save_path = path.to_string();
         let state = cx.new(|cx| {
             // Editable mode: typing, caret motion, undo/redo, clipboard. The
-            // comment gutter still works alongside editing.
-            let mut s = if std::path::Path::new(path).is_file() {
-                editor_ui::EditorState::editable(content, lang).with_path(path)
-            } else {
-                // The client filesystem has a write API, but its async save
-                // handler needs an editor context; keep remote files readonly
-                // until that host bridge can report completion safely.
-                editor_ui::EditorState::readonly(content, lang)
-            };
+            // comment gutter still works alongside editing. No `with_path`:
+            // this client never writes workspace files on its own disk, so
+            // every save goes through the API handler below.
+            let mut s = editor_ui::EditorState::editable(content, lang);
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
@@ -122,6 +119,16 @@ impl ConsoleDesktopApp {
                     start_line: target.start_line,
                     end_line: target.end_line,
                 });
+            })));
+            // The handler must not block, so it only enqueues the API write and
+            // reports it as deferred; the host task owns the outcome.
+            s.set_save_handler(Some(Box::new(move |request: editor_ui::SaveRequest| {
+                let _ = save_tx.send(super::types::FileSaveRequest {
+                    path: save_path.clone(),
+                    text: request.text,
+                    revision: request.revision,
+                });
+                Ok(editor_ui::SaveStatus::Deferred)
             })));
             s
         });
@@ -136,20 +143,32 @@ impl ConsoleDesktopApp {
         let file_path = path.to_string();
         let subscription = cx.subscribe(&state, move |app, _state, event: &editor_ui::EditorEvent, cx| {
             match event {
+                // `mark_saved` emits this after the API write lands, so the
+                // cache is refreshed from the editor's own text. The text is
+                // `\n`-normalized, so apply the document's line ending to get
+                // the bytes the file actually holds; hashing the normalized
+                // form instead would make every CRLF file look changed on the
+                // next render.
                 editor_ui::EditorEvent::Saved => {
-                    let text = std::fs::read_to_string(&file_path).unwrap_or_else(|_| {
-                        app.viewer_editor_views.get(&file_path)
-                            .map(|(_, _, state, _)| state.read(cx).text())
-                            .unwrap_or_default()
-                    });
+                    let (text, line_ending) = app
+                        .viewer_editor_views
+                        .get(&file_path)
+                        .map(|(_, _, state, _)| {
+                            let state = state.read(cx);
+                            (state.text(), state.line_ending())
+                        })
+                        .unwrap_or_default();
+                    let saved = line_ending.apply(&text).into_owned();
                     let mut hasher = DefaultHasher::new();
-                    text.hash(&mut hasher);
+                    saved.hash(&mut hasher);
                     if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
-                        entry.0 = text.len();
+                        entry.0 = saved.len();
                         entry.1 = hasher.finish();
                     }
-                    app.open_file_contents.insert(file_path.clone(), text);
+                    app.open_file_contents.insert(file_path.clone(), saved);
                 }
+                // Only the package's own on-disk writer emits this; API saves
+                // report through the host task instead.
                 editor_ui::EditorEvent::SaveFailed(message) => {
                     log::error!("Failed to save {}: {}", file_path, message);
                 }
