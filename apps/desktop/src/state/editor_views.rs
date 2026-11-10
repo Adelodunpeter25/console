@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use gpui::{App, Entity, Subscription, prelude::*, px};
+use gpui::{App, Entity, prelude::*, px};
 
 use super::app::ConsoleDesktopApp;
 
@@ -32,7 +32,7 @@ impl ConsoleDesktopApp {
         path: &str,
         content: &str,
         theme: &console_ui::Theme,
-        cx: &mut App,
+        cx: &mut gpui::Context<Self>,
     ) -> Entity<editor_ui::EditorView> {
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
@@ -134,19 +134,19 @@ impl ConsoleDesktopApp {
         self.viewer_editor_views
             .insert(path.to_string(), (len, hash, state.clone(), view.clone()));
         let file_path = path.to_string();
-        let subscription = cx.subscribe(&state, move |app, state, event: &editor_ui::EditorEvent, cx| {
+        let subscription = cx.subscribe(&state, move |app, _state, event: &editor_ui::EditorEvent, cx| {
             match event {
                 editor_ui::EditorEvent::Saved => {
-                    let text = state.read(cx).text();
+                    let text = app.viewer_editor_views.get(&file_path)
+                        .map(|(_, _, state, _)| state.read(cx).text())
+                        .unwrap_or_default();
                     let mut hasher = DefaultHasher::new();
                     text.hash(&mut hasher);
-                    let hash = hasher.finish();
-                    app.open_file_contents.insert(file_path.clone(), text.clone());
                     if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
                         entry.0 = text.len();
-                        entry.1 = hash;
+                        entry.1 = hasher.finish();
                     }
-                    cx.notify();
+                    app.open_file_contents.insert(file_path.clone(), text);
                 }
                 editor_ui::EditorEvent::SaveFailed(message) => {
                     log::error!("Failed to save {}: {}", file_path, message);
