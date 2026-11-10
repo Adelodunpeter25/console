@@ -480,11 +480,10 @@ impl ConsoleDesktopApp {
 
         cx.spawn(async move |entity, cx| {
             let mut diff_raw = session_change_diff.unwrap_or_default();
-            if diff_raw.trim().is_empty() {
-                if let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
+            if diff_raw.trim().is_empty()
+                && let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
                     diff_raw = resp.diff;
                 }
-            }
 
             let diff_result = if !diff_raw.trim().is_empty() {
                 console_core::utils::diff::parse_unified_diff(&diff_raw)

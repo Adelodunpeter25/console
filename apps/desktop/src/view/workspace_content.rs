@@ -116,8 +116,7 @@ impl ConsoleDesktopApp {
                 kind,
                 console_core::FileKind::Markdown | console_core::FileKind::Text
             ) && !self.open_file_contents.contains_key(path)
-            {
-                if let Some(message) = self.open_file_errors.get(path).cloned() {
+                && let Some(message) = self.open_file_errors.get(path).cloned() {
                     let retry_path = path.clone();
                     let entity = cx.entity().downgrade();
                     return console_ui::BlockedFilePanel::new("Couldn't open file", message)
@@ -133,7 +132,6 @@ impl ConsoleDesktopApp {
                         })
                         .into_any_element();
                 }
-            }
 
             match kind {
                 console_core::FileKind::RasterImage => {

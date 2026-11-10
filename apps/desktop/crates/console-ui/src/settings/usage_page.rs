@@ -126,7 +126,7 @@ impl RenderOnce for UsagePage {
                         let is_logged_in = if uses_api_key {
                             key_configured
                         } else {
-                            prov_status.map_or(false, |s| s.logged_in)
+                            prov_status.is_some_and(|s| s.logged_in)
                         };
                         let user_email = prov_status.and_then(|s| s.email.clone());
 

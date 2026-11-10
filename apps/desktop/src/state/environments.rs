@@ -49,8 +49,8 @@ impl ConsoleDesktopApp {
         // Only write back when something actually changed: this runs on every
         // launch and a save is a full store read + rewrite.
         let mut mutated = false;
-        if let Some(state) = persisted {
-            if !state.environments.is_empty() {
+        if let Some(state) = persisted
+            && !state.environments.is_empty() {
                 let mut fixed_legacy_url = false;
                 self.environments = state
                     .environments
@@ -84,7 +84,6 @@ impl ConsoleDesktopApp {
                     .or_else(|| self.environments.first().map(|e| e.id.clone()));
                 mutated = fixed_legacy_url;
             }
-        }
         if self.environments.is_empty() {
             if let Some(def) = def {
                 self.active_env_id = Some(def.id.clone());

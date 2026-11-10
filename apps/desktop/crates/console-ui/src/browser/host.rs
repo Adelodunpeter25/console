@@ -286,7 +286,7 @@ mod macos_host {
                 builder = builder.with_html(html);
             }
             if let Some(allow_navigation) = content.allow_navigation {
-                builder = builder.with_navigation_handler(move |url| allow_navigation(url));
+                builder = builder.with_navigation_handler(allow_navigation);
             }
             if let Some(on_ipc) = content.on_ipc {
                 builder = builder.with_ipc_handler(move |request: wry::http::Request<String>| {
@@ -294,7 +294,7 @@ mod macos_host {
                 });
             }
             if let Some(on_title) = content.on_title {
-                builder = builder.with_document_title_changed_handler(move |title| on_title(title));
+                builder = builder.with_document_title_changed_handler(on_title);
             }
             if let Some(on_new_window_url) = content.on_new_window_url {
                 builder = builder.with_new_window_req_handler(move |url, _features| {
@@ -569,7 +569,7 @@ mod macos_host {
                             full_png: full_png_clone,
                         }));
                     }
-                    return Ok(());
+                    Ok(())
                 })();
                 // Success is written by the background thread; surface the
                 // synchronous failures from the handler itself.

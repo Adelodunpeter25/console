@@ -18,5 +18,5 @@ pub struct ToolCallEntry {
 pub enum ActivityEvent {
     Text { id: String, text: String },
     Thinking { id: String, text: String },
-    ToolCall(ToolCallEntry),
+    ToolCall(Box<ToolCallEntry>),
 }

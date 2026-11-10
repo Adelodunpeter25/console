@@ -62,13 +62,11 @@ fn account_display(account: &ProviderAccount) -> String {
     if let Some(label) = label {
         return label;
     }
-    if let Some(email) = account.email.clone().filter(|e| !e.is_empty()) {
-        if let Some(local) = email.split('@').next() {
-            if !local.is_empty() {
+    if let Some(email) = account.email.clone().filter(|e| !e.is_empty())
+        && let Some(local) = email.split('@').next()
+            && !local.is_empty() {
                 return local.to_string();
             }
-        }
-    }
     account.id.clone()
 }
 
@@ -255,7 +253,7 @@ impl RenderOnce for ProvidersPage {
                                 .and_then(|st| auth_status_for(st, &provider_id))
                                 .cloned();
 
-                            let is_logged_in = prov_status.as_ref().map_or(false, |s| s.logged_in);
+                            let is_logged_in = prov_status.as_ref().is_some_and(|s| s.logged_in);
                             // "Connected as …" shows the account's display
                             // name (label or email local part), never the raw
                             // email.

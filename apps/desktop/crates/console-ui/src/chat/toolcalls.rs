@@ -275,11 +275,10 @@ impl ToolCalls {
         theme: &Theme,
         cx: &mut App,
     ) -> Vec<EditorDiff> {
-        if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id) {
-            if cached_args == arguments && cached.len() == diffs.len() {
+        if let Some((cached_args, cached)) = self.state.borrow().editor_diffs.get(call_id)
+            && cached_args == arguments && cached.len() == diffs.len() {
                 return cached.clone();
             }
-        }
         let built: Vec<EditorDiff> = diffs
             .iter()
             .map(|file_diff| {
@@ -724,7 +723,7 @@ impl ToolCalls {
                     }
                     children.push(self.text_row(id, text, theme, is_streaming));
                 }
-                ActivityEvent::ToolCall(entry) => pending.push(entry.clone()),
+                ActivityEvent::ToolCall(entry) => pending.push((**entry).clone()),
             }
         }
         children.extend(self.flush_tool_groups(&mut pending, theme, window, cx));

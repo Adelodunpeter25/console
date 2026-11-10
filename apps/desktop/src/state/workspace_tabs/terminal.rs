@@ -69,7 +69,7 @@ impl ConsoleDesktopApp {
         }
 
         let view = cx.new(|cx| {
-            TerminalView::with_cwd(cwd, self.client.clone(), self.transport.clone(), window, cx)
+            TerminalView::with_cwd(cwd, self.client.clone(), self.transport, window, cx)
         });
 
         let tid = terminal_id.to_string();
@@ -92,14 +92,11 @@ impl ConsoleDesktopApp {
                         title,
                         ..
                     } = tab
-                    {
-                        if id == &tid {
-                            if *title != new_title {
+                        && id == &tid
+                            && *title != new_title {
                                 *title = new_title.clone();
                                 changed = true;
                             }
-                        }
-                    }
                 }
             }
             for root in this.project_workspace_roots.values_mut() {
@@ -110,14 +107,11 @@ impl ConsoleDesktopApp {
                             title,
                             ..
                         } = tab
-                        {
-                            if id == &tid {
-                                if *title != new_title {
+                            && id == &tid
+                                && *title != new_title {
                                     *title = new_title.clone();
                                     changed = true;
                                 }
-                            }
-                        }
                     }
                 }
             }

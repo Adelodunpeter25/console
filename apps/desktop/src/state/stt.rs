@@ -3,7 +3,7 @@
 //!
 //! Separate from state/provider_credentials.rs, which is the single pasted
 //! key for LLM providers. Speech-to-text needs a pair (Cloudflare account ID
-//! + API token) for a server-side Whisper model — not chat credentials — so
+//! and API token) for a server-side Whisper model — not chat credentials — so
 //! it gets its own section and its own state, modeled on GitHub's section
 //! (state/github.rs).
 //!

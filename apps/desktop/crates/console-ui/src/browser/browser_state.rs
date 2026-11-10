@@ -152,9 +152,9 @@ pub mod cookies {
                     // being ignored/misread. Values never logged.
                     log::info!(
                         "cookie build check: name={} domain={} path={} secure={} http_only={} expires={:?}",
-                        cookie_obj.name().to_string(),
-                        cookie_obj.domain().to_string(),
-                        cookie_obj.path().to_string(),
+                        cookie_obj.name(),
+                        cookie_obj.domain(),
+                        cookie_obj.path(),
                         cookie_obj.isSecure(),
                         cookie_obj.isHTTPOnly(),
                         cookie_obj.expiresDate().map(|d| d.timeIntervalSince1970() as i64),

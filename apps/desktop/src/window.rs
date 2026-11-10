@@ -57,9 +57,9 @@ pub enum WindowLaunchTarget {
 }
 
 thread_local! {
-    static LAST_WINDOW_BOUNDS: RefCell<Option<Bounds<Pixels>>> = RefCell::new(None);
+    static LAST_WINDOW_BOUNDS: RefCell<Option<Bounds<Pixels>>> = const { RefCell::new(None) };
     static WORKSPACE_WINDOWS: RefCell<Vec<(AnyWindowHandle, WeakEntity<ConsoleDesktopApp>)>> =
-        RefCell::new(Vec::new());
+        const { RefCell::new(Vec::new()) };
 }
 
 pub fn update_active_window_bounds(bounds: Bounds<Pixels>) {
@@ -115,13 +115,11 @@ pub fn get_active_window(
         list.retain(|(handle, app)| app.upgrade().is_some() && live_handles.contains(handle));
 
         // 1. Ask GPUI's platform layer which window is currently focused.
-        if let Some(active_handle) = cx.active_window() {
-            if let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle) {
-                if let Some(upgraded) = app.upgrade() {
+        if let Some(active_handle) = cx.active_window()
+            && let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle)
+                && let Some(upgraded) = app.upgrade() {
                     return Some((active_handle, upgraded));
                 }
-            }
-        }
 
         // 2. Fallback to the most recent known window in our list.
         for (handle, app) in list.iter().rev() {

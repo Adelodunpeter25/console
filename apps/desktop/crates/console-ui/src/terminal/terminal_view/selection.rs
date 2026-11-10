@@ -20,11 +20,10 @@ impl TerminalView {
 
             let mut line_str = String::new();
             for col_idx in start_c..=end_c {
-                if let Some(cell) = row.get(col_idx as usize) {
-                    if !cell.flags.wide_char_spacer {
+                if let Some(cell) = row.get(col_idx as usize)
+                    && !cell.flags.wide_char_spacer {
                         line_str.push(cell.c);
                     }
-                }
             }
             lines.push(line_str.trim_end().to_string());
         }

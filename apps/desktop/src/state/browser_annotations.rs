@@ -51,8 +51,8 @@ impl ConsoleDesktopApp {
     }
 
     pub(crate) fn remove_annotation(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
-        if let Some(staged) = self.browser_annotations.get_mut(pane_id) {
-            if index < staged.len() {
+        if let Some(staged) = self.browser_annotations.get_mut(pane_id)
+            && index < staged.len() {
                 let removed = Rc::make_mut(staged).remove(index);
                 let _ = removed;
                 if staged.is_empty() {
@@ -61,7 +61,6 @@ impl ConsoleDesktopApp {
                 self.schedule_drafts_save(cx);
                 cx.notify();
             }
-        }
     }
 
 
@@ -79,14 +78,13 @@ impl ConsoleDesktopApp {
                 _ => false,
             })
         };
-        if let Some(active) = &self.active_pane_id {
-            if leaves
+        if let Some(active) = &self.active_pane_id
+            && leaves
                 .iter()
                 .any(|leaf| &leaf.id == active && hosts(leaf))
             {
                 return Some(active.clone());
             }
-        }
         leaves
             .iter()
             .find(|leaf| hosts(leaf))

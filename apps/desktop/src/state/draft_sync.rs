@@ -72,11 +72,10 @@ impl ConsoleDesktopApp {
 
     /// The pane whose chat is `session_id`, preferring the focused one.
     fn pane_showing_session(&self, session_id: &str) -> Option<String> {
-        if let Some(active) = self.active_pane_id.as_deref() {
-            if self.active_session_for_pane(active).as_deref() == Some(session_id) {
+        if let Some(active) = self.active_pane_id.as_deref()
+            && self.active_session_for_pane(active).as_deref() == Some(session_id) {
                 return Some(active.to_string());
             }
-        }
         self.workspace_root
             .leaves()
             .into_iter()

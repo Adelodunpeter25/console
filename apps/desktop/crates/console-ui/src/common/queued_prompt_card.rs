@@ -126,10 +126,7 @@ pub fn queued_prompt_row(
                             .border_color(theme.border)
                             .text_size(px(10.5))
                             .text_color(theme.text_secondary)
-                            .child(format!(
-                                "{}",
-                                ann.component_name.as_deref().unwrap_or(&ann.selector)
-                            )),
+                            .child(ann.component_name.as_deref().unwrap_or(&ann.selector).to_string()),
                     )
                 })
                 .child(

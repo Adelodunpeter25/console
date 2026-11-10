@@ -304,7 +304,7 @@ impl RenderOnce for ModelDropdownMenu {
                             })
                             .children(visible_models.into_iter().map(
                                 |(prov_name, prov_display, m)| {
-                                    let is_selected = selected_model.as_ref().map_or(false, |s| {
+                                    let is_selected = selected_model.as_ref().is_some_and(|s| {
                                         s.provider == prov_name && s.model_id == m.id
                                     });
                                     let is_fav =

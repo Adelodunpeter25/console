@@ -58,12 +58,11 @@ struct FileGroup {
 fn group_matches(matches: Vec<GrepMatch>) -> Vec<FileGroup> {
     let mut groups: Vec<FileGroup> = Vec::new();
     for m in matches {
-        if let Some(last) = groups.last_mut() {
-            if last.rel_path == m.rel_path {
+        if let Some(last) = groups.last_mut()
+            && last.rel_path == m.rel_path {
                 last.matches.push(m);
                 continue;
             }
-        }
         groups.push(FileGroup {
             rel_path: m.rel_path.clone(),
             file_name: base_name(&m.rel_path).to_string(),
@@ -352,8 +351,8 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
         if start < cursor || start > end {
             continue;
         }
-        if start > cursor {
-            if let Some(text) = clean_content.get(cursor..start) {
+        if start > cursor
+            && let Some(text) = clean_content.get(cursor..start) {
                 segments.push(
                     div()
                         .text_color(theme.text_secondary)
@@ -362,7 +361,6 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
                         .into_any_element(),
                 );
             }
-        }
         if let Some(text) = clean_content.get(start..end) {
             segments.push(
                 div()
@@ -376,8 +374,8 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
         }
         cursor = end;
     }
-    if cursor < clean_content.len() {
-        if let Some(text) = clean_content.get(cursor..) {
+    if cursor < clean_content.len()
+        && let Some(text) = clean_content.get(cursor..) {
             segments.push(
                 div()
                     .text_color(theme.text_secondary)
@@ -386,7 +384,6 @@ fn render_highlighted_line(m: &GrepMatch, theme: &Theme) -> gpui::AnyElement {
                     .into_any_element(),
             );
         }
-    }
 
     div()
         .flex()

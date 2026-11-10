@@ -188,15 +188,14 @@ impl ConsoleDesktopApp {
         // change immediately; persist the cwd change on the backend.
         // Use the pre-move session id: after the workspace switch the old
         // pane id may no longer exist in the active tree.
-        if let Some(sid) = session_id.clone() {
-            if let Some(session) = Rc::make_mut(&mut self.sessions)
+        if let Some(sid) = session_id.clone()
+            && let Some(session) = Rc::make_mut(&mut self.sessions)
                 .iter_mut()
                 .find(|s| s.id == sid)
             {
                 session.project_id = Some(project.id.clone());
                 session.cwd = project.path.clone();
             }
-        }
 
         let path = project.path.clone();
         self.transcript_for_pane(&effective_pane)
@@ -550,12 +549,11 @@ impl ConsoleDesktopApp {
     /// the branch name) and opens it in this pane, mirroring
     /// `create_new_chat`.
     pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
-        if !self.session_has_messages(&pane_id) {
-            if let Some(session_id) = self.active_session_for_pane(&pane_id) {
+        if !self.session_has_messages(&pane_id)
+            && let Some(session_id) = self.active_session_for_pane(&pane_id) {
                 self.attach_worktree_for_pane(pane_id, session_id, cx);
                 return;
             }
-        }
 
         let Some(path) = self
             .selected_project_for_pane(&pane_id)

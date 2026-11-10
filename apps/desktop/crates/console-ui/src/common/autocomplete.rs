@@ -72,7 +72,7 @@ pub struct AutocompleteTrigger {
 pub enum AutocompleteItem {
     Command(SlashCommandInfo),
     File(FileSearchResult),
-    Chat(SessionHeader),
+    Chat(Box<SessionHeader>),
 }
 
 /// Comparable identity of an [`AutocompleteView`]'s content. See
@@ -253,8 +253,7 @@ pub fn filter_items(
                     .map(AutocompleteItem::Command)
                     .collect();
             }
-            let mut out = Vec::new();
-            out.reserve(MAX_AUTOCOMPLETE_ITEMS.min(commands.len()));
+            let mut out = Vec::with_capacity(MAX_AUTOCOMPLETE_ITEMS.min(commands.len()));
             for command in commands {
                 if command.name.to_ascii_lowercase().starts_with(&query)
                     || command.description.to_ascii_lowercase().contains(&query)
@@ -296,7 +295,7 @@ pub fn filter_items(
             scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.title.cmp(&b.1.title)));
             scored
                 .into_iter()
-                .map(|(_, session)| AutocompleteItem::Chat(session.clone()))
+                .map(|(_, session)| AutocompleteItem::Chat(Box::new(session.clone())))
                 .collect()
         }
         AutocompleteKind::File => {

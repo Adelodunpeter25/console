@@ -101,9 +101,7 @@ impl ConsoleDesktopApp {
             state.highlighted = 0;
             state.dismissed = false;
         }
-        let Some(trigger) = trigger else {
-            return None;
-        };
+        let trigger = trigger?;
         if state.dismissed {
             return None;
         }

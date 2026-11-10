@@ -293,9 +293,7 @@ impl PromptHistory {
             return None;
         }
         if next {
-            let Some(index) = self.index else {
-                return None;
-            };
+            let index = self.index?;
             if index + 1 < self.entries.len() {
                 let next = index + 1;
                 self.index = Some(next);

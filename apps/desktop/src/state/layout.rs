@@ -34,11 +34,10 @@ fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::Works
                     | console_core::WorkspaceTabConfig::ChangesReview { .. }
             )
         });
-        if let Some(active) = &leaf.active_tab_id {
-            if active.starts_with("diff:") || active.starts_with("changesReview:") {
+        if let Some(active) = &leaf.active_tab_id
+            && (active.starts_with("diff:") || active.starts_with("changesReview:")) {
                 leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
             }
-        }
     }
     root
 }

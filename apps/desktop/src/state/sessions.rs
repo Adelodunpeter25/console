@@ -370,8 +370,8 @@ impl ConsoleDesktopApp {
         };
 
         // Optimistically sync provider changes to open chat tabs, local session state, and usage meter
-        if let Some(ref prov) = payload.provider {
-            if !prov.is_empty() {
+        if let Some(ref prov) = payload.provider
+            && !prov.is_empty() {
                 console_ui::workspace::ops::sync_chat_provider(
                     &mut self.workspace_root,
                     |tab| {
@@ -410,7 +410,6 @@ impl ConsoleDesktopApp {
                 self.fetch_context_usage(&session_id, cx);
                 cx.notify();
             }
-        }
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -691,7 +690,7 @@ impl ConsoleDesktopApp {
                 header
                     .project_id
                     .as_deref()
-                    .and_then(|id| self.projects.iter().find(|project| &project.id == id))
+                    .and_then(|id| self.projects.iter().find(|project| project.id == id))
             });
         let target_id = resolved.map(|project| {
             match console_core::session_checkout_path(header, Some(&project.path)) {
@@ -736,22 +735,17 @@ impl ConsoleDesktopApp {
         // A pending user pick beats a possibly stale server header. `None`
         // (cleared to No project) resolves to no project immediately.
         if let Some(override_project) = self.pending_project_override.get(session_id) {
-            match override_project {
-                None => return None,
-                Some(pid) => {
-                    if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
-                        return Some(p.clone());
-                    }
-                    // Project gone (deleted?): fall through to normal order.
-                }
-            }
-        }
-        let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
-        if let Some(pid) = &target_session.project_id {
+            let pid = override_project.as_ref()?;
             if let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
                 return Some(p.clone());
             }
+            // Project gone (deleted?): fall through to normal order.
         }
+        let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
+        if let Some(pid) = &target_session.project_id
+            && let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
+                return Some(p.clone());
+            }
         self.projects
             .iter()
             .find(|p| !target_session.cwd.is_empty() && p.path == target_session.cwd)

@@ -559,13 +559,12 @@ impl BrowserView {
         }
         self.refocus_page_pending = true;
         // Resume inspect so the next pick works.
-        if self.inspecting {
-            if let Some(host) = &self.host {
+        if self.inspecting
+            && let Some(host) = &self.host {
                 host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
             }
-        }
         cx.notify();
     }
 
@@ -581,13 +580,12 @@ impl BrowserView {
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
-        if self.inspecting {
-            if let Some(host) = &self.host {
+        if self.inspecting
+            && let Some(host) = &self.host {
                 host.evaluate_script(
                     "if (typeof window.__consoleSetInspectPaused === 'function') { window.__consoleSetInspectPaused(false); }",
                 );
             }
-        }
         cx.notify();
     }
 
@@ -605,7 +603,7 @@ impl BrowserView {
                 if done {
                     let result = slot.lock().unwrap().take();
                     if matches!(result, Some(Err(_))) {
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 if this.active_inspection.is_some() {
                                     this.annotation_capture_failed = true;
@@ -620,7 +618,7 @@ impl BrowserView {
                         use base64::Engine as _;
                         let b64 =
                             base64::engine::general_purpose::STANDARD.encode(&captured.png);
-                        let _ = cx.update(|cx| {
+                        cx.update(|cx| {
                             let _ = view.update(cx, |this, cx| {
                                 // Only fill the popover that asked for it.
                                 if this.active_inspection.is_some() {
@@ -651,7 +649,7 @@ impl BrowserView {
                         flag
                     });
                 if !still_open {
-                    let _ = cx.update(|cx| {
+                    cx.update(|cx| {
                         let _ = view.update(cx, |this, _| {
                             this.snapshot_pending = false;
                         });
@@ -659,7 +657,7 @@ impl BrowserView {
                     break;
                 }
             }
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 let _ = view.update(cx, |this, cx| {
                     if this.snapshot_pending && this.active_inspection.is_some() {
                         this.annotation_capture_failed = true;
@@ -772,11 +770,10 @@ impl BrowserView {
         if let Some(title) = self.page_title.as_deref().filter(|t| !t.trim().is_empty()) {
             return Some(title.to_owned());
         }
-        if let Some(url) = self.current_url.as_deref() {
-            if !url.is_empty() {
+        if let Some(url) = self.current_url.as_deref()
+            && !url.is_empty() {
                 return Some(default_browser_title(url));
             }
-        }
         None
     }
 
@@ -1012,7 +1009,7 @@ impl BrowserView {
                                 gpui::ImageFormat::Png,
                                 bytes,
                             ));
-                            let _ = cx.update(|cx| {
+                            cx.update(|cx| {
                                 let _ = view.update(cx, |this, cx| {
                                     if this.snapshot_epoch == epoch && this.occluded {
                                         this.snapshot = Some(image);
@@ -1023,7 +1020,7 @@ impl BrowserView {
                                 });
                             });
                         } else {
-                            let _ = cx.update(|cx| {
+                            cx.update(|cx| {
                                 let _ = view.update(cx, |this, cx| {
                                     if this.snapshot_epoch == epoch {
                                         this.snapshot_pending = false;
@@ -1104,23 +1101,21 @@ impl BrowserView {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         if let Some(url) = self.current_url.clone() {
             self.navigate_to_url(url, cx);
-        } else if let Some(host) = &self.host {
-            if self.navigation_requested {
+        } else if let Some(host) = &self.host
+            && self.navigation_requested {
                 host.reload();
                 self.loading = true;
                 cx.notify();
             }
-        }
     }
 
     pub fn hard_reload(&mut self, cx: &mut Context<Self>) {
-        if let Some(host) = &self.host {
-            if self.navigation_requested {
+        if let Some(host) = &self.host
+            && self.navigation_requested {
                 host.hard_reload();
                 self.loading = true;
                 cx.notify();
             }
-        }
     }
 
     pub fn stop_loading(&mut self, cx: &mut Context<Self>) {

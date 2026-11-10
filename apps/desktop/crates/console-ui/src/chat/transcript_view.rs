@@ -426,14 +426,12 @@ impl TranscriptView {
         }
         let text = self.selected_text();
         self.clear_selection(window);
-        if let Some(text) = text {
-            if let Some(quote) = crate::markdown::selection::format_cite_quote(&text) {
-                if let Some(cite) = self.selection.cite_handler() {
+        if let Some(text) = text
+            && let Some(quote) = crate::markdown::selection::format_cite_quote(&text)
+                && let Some(cite) = self.selection.cite_handler() {
                     cite(quote, window, cx);
                     return true;
                 }
-            }
-        }
         false
     }
 
@@ -1218,16 +1216,15 @@ impl TranscriptView {
         user_index: usize,
     ) -> Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)> {
         let version = self.tool_activity_cache_version.get();
-        if let Some((cached_version, cached)) = self.tool_activity_cache.borrow().get(&user_index) {
-            if *cached_version == version {
+        if let Some((cached_version, cached)) = self.tool_activity_cache.borrow().get(&user_index)
+            && *cached_version == version {
                 return cached.clone();
             }
-        }
         let computed = self.compute_tool_activity_for_user(user_index);
         self.tool_activity_cache
             .borrow_mut()
             .insert(user_index, (version, computed.clone()));
-        return computed;
+        computed
     }
 
     fn compute_tool_activity_for_user(
@@ -1274,10 +1271,10 @@ impl TranscriptView {
                                 });
                             }
                             AssistantContentPart::ToolCall { call } => {
-                                events.push(ActivityEvent::ToolCall(ToolCallEntry {
+                                events.push(ActivityEvent::ToolCall(Box::new(ToolCallEntry {
                                     call: call.clone(),
                                     result: None,
-                                }));
+                                })));
                             }
                             _ => {}
                         }
@@ -1486,22 +1483,19 @@ impl Render for TranscriptView {
                     let no_mods = !event.keystroke.modifiers.control
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.platform;
-                    if (key == "r" || key == "R") && no_mods {
-                        if this.trigger_cite(window, cx) {
+                    if (key == "r" || key == "R") && no_mods
+                        && this.trigger_cite(window, cx) {
                             cx.stop_propagation();
                             return;
                         }
-                    }
-                    if (key == "c" || key == "C") && (no_mods || event.keystroke.modifiers.platform) {
-                        if this.trigger_copy(window, cx) {
+                    if (key == "c" || key == "C") && (no_mods || event.keystroke.modifiers.platform)
+                        && this.trigger_copy(window, cx) {
                             cx.stop_propagation();
                             return;
                         }
-                    }
                     if key == "escape" {
                         this.clear_selection(window);
                         cx.stop_propagation();
-                        return;
                     }
                 }
             }))
@@ -1511,7 +1505,7 @@ impl Render for TranscriptView {
             .child(render::frame_reset(selection.clone()))
             .child(crate::chat::cite_overlay::cite_origin_probe(cite_origin.clone()))
             .child(if self.messages.is_empty() && !is_streaming {
-                crate::chat::row::empty_state(theme.clone()).into_any_element()
+                crate::chat::row::empty_state(theme).into_any_element()
             } else {
                 div()
                     .size_full()
@@ -1532,7 +1526,7 @@ impl Render for TranscriptView {
                     .into_any_element()
             })
             .child(crate::chat::cite_overlay::selection_input(selection.clone(), cite_origin.clone()))
-            .child(self.render_scroll_controls(theme.clone(), cx));
+            .child(self.render_scroll_controls(theme, cx));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()
         {
@@ -1541,7 +1535,7 @@ impl Render for TranscriptView {
                     line,
                     container,
                     selection.clone(),
-                    theme.clone(),
+                    theme,
                 ))
                 .into_any_element();
         }

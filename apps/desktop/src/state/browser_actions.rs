@@ -271,11 +271,9 @@ impl ConsoleDesktopApp {
                                 msg.push_str(&format!("\n{header}"));
                                 if let Ok(outcome) =
                                     poll_script_result(&this, cx, &view, &rid).await
-                                {
-                                    if let Ok(text) = outcome.value {
+                                    && let Ok(text) = outcome.value {
                                         msg.push_str(&format!("\nText loaded so far:\n{text}"));
                                     }
-                                }
                             }
                             (Some(msg), None)
                         }
@@ -959,7 +957,7 @@ impl ConsoleDesktopApp {
                 continue;
             }
             let ts = self.browser_tab_last_active_ms(id).unwrap_or(0);
-            if best.as_ref().map_or(true, |(b, _)| ts > *b) {
+            if best.as_ref().is_none_or(|(b, _)| ts > *b) {
                 best = Some((ts, id.clone()));
             }
         }
@@ -1018,11 +1016,9 @@ impl ConsoleDesktopApp {
                 browser_id,
                 ..
             } = tab
-            {
-                if owner == session_id {
+                && owner == session_id {
                     ids.push(browser_id.clone());
                 }
-            }
         };
         for leaf in self.workspace_root.leaves() {
             for tab in &leaf.tabs {
@@ -1117,6 +1113,7 @@ impl ConsoleDesktopApp {
     ///   error listing it (a tab that isn't loaded yet falls through).
     /// - otherwise a tab matching `url` (when `allow_url_match`), else the
     ///   chat's agent target, else this workspace's most recently used tab.
+    ///
     /// `Ok(None)` means no tab exists yet in this workspace.
     fn pick_browser_view(
         &self,
@@ -1139,22 +1136,19 @@ impl ConsoleDesktopApp {
                 None => Ok(None),
             };
         }
-        if allow_url_match {
-            if let Some(entry) =
+        if allow_url_match
+            && let Some(entry) =
                 url.and_then(|u| self.find_matching_browser_view(session_id, u, cx))
             {
                 return Ok(Some(entry));
             }
-        }
         // Prefer the tab the agent last worked in: `navigate` opens tabs in the
         // background, so the visible tab is often not the one the agent means.
-        if let Some(id) = self.agent_browser_tabs.get(session_id) {
-            if visible.iter().any(|o| o == id) {
-                if let Some(view) = self.browser_views.get(id) {
+        if let Some(id) = self.agent_browser_tabs.get(session_id)
+            && visible.iter().any(|o| o == id)
+                && let Some(view) = self.browser_views.get(id) {
                     return Ok(Some((id.clone(), view.clone())));
                 }
-            }
-        }
         // Fall back to this workspace's most recent tab.
         Ok(self
             .most_recent_tab(visible)

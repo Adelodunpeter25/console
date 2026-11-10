@@ -619,8 +619,8 @@ impl ConsoleDesktopApp {
             .zip(submit.cwd.clone());
 
         cx.spawn(async move |entity, cx| {
-            if let Some((branch, cwd)) = checkout.as_ref() {
-                if let Err(error) = client.git.checkout_branch(Some(cwd), branch).await {
+            if let Some((branch, cwd)) = checkout.as_ref()
+                && let Err(error) = client.git.checkout_branch(Some(cwd), branch).await {
                     // Keep the card open with the prompt intact; nothing was
                     // created, and the project folder stays on its branch.
                     let message = format!("Unable to switch to {branch}: {error}");
@@ -634,7 +634,6 @@ impl ConsoleDesktopApp {
                     });
                     return;
                 }
-            }
             let result = client
                 .sessions
                 .create(CreateSessionDto {

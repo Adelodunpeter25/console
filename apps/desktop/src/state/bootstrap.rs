@@ -230,11 +230,9 @@ impl ConsoleDesktopApp {
                                     }
                                     if let Some(state) =
                                         this.workspace_pane_states.get_mut("pane-main")
-                                    {
-                                        if state.selected_model.is_none() {
+                                        && state.selected_model.is_none() {
                                             state.selected_model = first_model;
                                         }
-                                    }
                                     cx.notify();
                                 });
                             }
@@ -310,12 +308,10 @@ impl ConsoleDesktopApp {
                                     .clone()
                                     .unwrap_or_else(|| "pane-main".into());
                                 if let Some(state) = this.workspace_pane_states.get_mut(&active_id)
-                                {
-                                    if state.selected_project_id.is_none() {
+                                    && state.selected_project_id.is_none() {
                                         state.selected_project_id =
                                             this.selected_project_id.clone();
                                     }
-                                }
                                 let path = this
                                     .selected_project_for_pane(&active_id)
                                     .map(|project| project.path.clone());

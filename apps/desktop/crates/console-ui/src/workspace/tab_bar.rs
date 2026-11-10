@@ -200,7 +200,7 @@ impl RenderOnce for WorkspaceTabBar {
                     })
                     .children(self.pane.tabs.into_iter().map(|tab| {
                         let tab_id = tab.id();
-                        let is_active = active_id.as_deref() == Some(&tab_id.as_str());
+                        let is_active = active_id.as_deref() == Some(tab_id.as_str());
                         let title = tab.title().to_string();
                         let is_dirty = match &tab {
                             console_core::WorkspaceTabConfig::File { path, .. } => {

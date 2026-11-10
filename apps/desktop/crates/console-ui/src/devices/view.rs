@@ -221,11 +221,10 @@ impl DeviceViewer {
                         this.auth_token = auth_token;
                         match result {
                             Ok(devices) => {
-                                if let Some(selected) = &this.selected_id {
-                                    if !devices.iter().any(|d| &d.id == selected) {
+                                if let Some(selected) = &this.selected_id
+                                    && !devices.iter().any(|d| &d.id == selected) {
                                         this.selected_id = None;
                                     }
-                                }
                                 this.devices = Rc::new(devices);
                                 if this.selected_id.is_some() {
                                     this.start_selected_stream(cx);
@@ -368,8 +367,8 @@ impl DeviceViewer {
     }
 
     fn player_event(&mut self, body: String, cx: &mut Context<Self>) {
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) {
-            if value.get("type").and_then(|t| t.as_str()) == Some("status") {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&body)
+            && value.get("type").and_then(|t| t.as_str()) == Some("status") {
                 let status = value
                     .get("status")
                     .and_then(|s| s.as_str())
@@ -383,7 +382,6 @@ impl DeviceViewer {
                 self.stream_status = status;
                 cx.notify();
             }
-        }
     }
 
     fn send_action(&mut self, action: &str, cx: &mut Context<Self>) {
@@ -391,12 +389,11 @@ impl DeviceViewer {
             return;
         };
         // Hardware buttons ride the live stream socket when it is up.
-        if action != "appearance" && self.stream_status.as_deref() == Some("streaming") {
-            if let Some(host) = self.host.clone() {
+        if action != "appearance" && self.stream_status.as_deref() == Some("streaming")
+            && let Some(host) = self.host.clone() {
                 host.evaluate_script(&PlayerConfig::button_script(&action.replace('_', "-")));
                 return;
             }
-        }
         let client = self.client.clone();
         let view = cx.entity().downgrade();
         let platform = device_platform(&device).as_str().to_string();
@@ -507,11 +504,10 @@ impl DeviceViewer {
                             })
                         });
                         let finished = target.is_none() || booted.is_some();
-                        if let Some(device) = booted {
-                            if this.selected_id == target {
+                        if let Some(device) = booted
+                            && this.selected_id == target {
                                 this.selected_id = Some(device.id.clone());
                             }
-                        }
                         this.devices = Rc::new(devices);
                         if finished {
                             this.booting_id = None;
@@ -837,8 +833,8 @@ impl DeviceViewer {
                             let id = device.id.clone();
                             let label = format!(
                                 "{} · {} · {}",
-                                device_display_name(&device),
-                                device_platform(&device).label(),
+                                device_display_name(device),
+                                device_platform(device).label(),
                                 device_state_label(&device.state)
                             );
                             let selected = selected_id.as_deref() == Some(&device.id);

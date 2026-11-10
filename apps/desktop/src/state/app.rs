@@ -77,11 +77,10 @@ impl ConsoleDesktopApp {
             // The settings took over the window; a Settings tab saved by an
             // older build must not come back as one.
             console_ui::workspace::ops::retain_non_settings_tabs(&mut root);
-            if let Some(pane_id) = ws.active_pane_id {
-                if root.leaves().iter().any(|leaf| leaf.id == pane_id) {
+            if let Some(pane_id) = ws.active_pane_id
+                && root.leaves().iter().any(|leaf| leaf.id == pane_id) {
                     project_active_panes.insert(ws.project_id.clone(), pane_id);
                 }
-            }
             project_workspace_roots.insert(ws.project_id, root);
             if let Some(cwd) = ws.cwd {
                 if let (Some(count), Some(active_idx)) =
@@ -178,7 +177,7 @@ impl ConsoleDesktopApp {
                     rsb_bottom_collapsed,
                     proj_id,
                     root,
-                    store_doc.window.clone(),
+                    store_doc.window,
                 )
             }
             crate::window::WindowLaunchTarget::Fresh { .. }
@@ -234,7 +233,7 @@ impl ConsoleDesktopApp {
             .filter(|id| initial_root.leaves().iter().any(|leaf| &leaf.id == id))
             .or_else(|| initial_root.first_leaf().map(|l| l.id.clone()))
             .or_else(|| Some("pane-main".into()));
-        let transcript_view = cx.new(|cx| TranscriptView::new(cx));
+        let transcript_view = cx.new(TranscriptView::new);
         let composer_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
@@ -323,8 +322,8 @@ impl ConsoleDesktopApp {
         let project_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
+                if open
+                    && let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| this.ensure_github_repos(cx));
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
@@ -334,14 +333,13 @@ impl ConsoleDesktopApp {
                             }
                         });
                     }
-                }
             }
         });
         let branch_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
+                if open
+                    && let Some(app) = entity.upgrade() {
                         cx.defer(move |cx| {
                             if let Some(window) = cx.active_window() {
                                 let _ = window.update(cx, |_, window, cx| {
@@ -350,14 +348,13 @@ impl ConsoleDesktopApp {
                             }
                         });
                     }
-                }
             }
         });
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
+                if open
+                    && let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let session_id = this
                                 .active_session_for_pane("pane-main")
@@ -366,7 +363,6 @@ impl ConsoleDesktopApp {
                             this.fetch_context_usage(&session_id, cx);
                         });
                     }
-                }
             }
         });
 
@@ -420,8 +416,8 @@ impl ConsoleDesktopApp {
                     .map(|(id, _)| id.clone())
             });
         let initial_draft_key = initial_main_session.as_deref().unwrap_or("new_chat");
-        if let Some(initial_draft) = drafts.get(initial_draft_key) {
-            if !initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty() {
+        if let Some(initial_draft) = drafts.get(initial_draft_key)
+            && (!initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty()) {
                 let mentions = initial_draft
                     .mentions
                     .iter()
@@ -444,7 +440,6 @@ impl ConsoleDesktopApp {
                     cx.notify();
                 });
             }
-        }
 
         // Flush unsaved drafts when the app quits: the 500ms debounced save
         // can be cut short by an exit, losing the last edit (e.g. a
@@ -621,7 +616,7 @@ impl ConsoleDesktopApp {
         crate::state::chrome_import::init_from_disk();
         let mut app = Self {
             client,
-            transport: console_core::services::Transport::default(),
+            transport: console_core::services::Transport,
             sessions: Rc::new(Vec::new()),
             selected_session_id: None,
             session_rename_id: None,

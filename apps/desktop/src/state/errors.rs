@@ -115,12 +115,11 @@ impl ConsoleDesktopApp {
 
     /// Clear whichever banner `pane_id` is currently showing.
     pub(crate) fn clear_error_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        if let Some(session_id) = self.active_session_for_pane(pane_id) {
-            if self.session_errors.contains_key(&session_id) {
+        if let Some(session_id) = self.active_session_for_pane(pane_id)
+            && self.session_errors.contains_key(&session_id) {
                 self.clear_error_for_session(&session_id, cx);
                 return;
             }
-        }
         self.clear_error(cx);
     }
 

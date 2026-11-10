@@ -492,7 +492,7 @@ impl ConsoleDesktopApp {
             .selected_project_for_pane(&run_pane_id)
             .map(|project| project.path.clone());
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
 
         if !keep_draft {
             self.composer_for_pane(&run_pane_id)
@@ -842,13 +842,11 @@ impl ConsoleDesktopApp {
                 if let Some(turn) = turn
                     .as_ref()
                     .map(console_core::AssistantMessage::from_proto_assistant)
-                {
-                    if pane_shows_run {
+                    && pane_shows_run {
                         self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
                             t.finalize_assistant_message(turn, cx);
                         });
                     }
-                }
             }
             AgentSessionEvent::AskQuestion { request } => {
                 self.set_pending_question_for_session(
@@ -1007,7 +1005,7 @@ impl ConsoleDesktopApp {
                             subagent.error = error;
                         }
                         if total_turns > 0 {
-                            subagent.current_turn = total_turns as i32;
+                            subagent.current_turn = total_turns;
                         }
                     }
                 }
@@ -1232,7 +1230,7 @@ impl ConsoleDesktopApp {
         let run_token = self.next_run_token_for_session(&session_id);
 
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let entity = cx.entity().downgrade();
         let run_pane_id = pane_id.clone();
         let run_session_id = session_id.clone();

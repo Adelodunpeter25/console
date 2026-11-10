@@ -11,7 +11,7 @@ use super::macos_notifications;
 impl ConsoleDesktopApp {
     pub fn init_notifications(&mut self, cx: &mut Context<Self>) {
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let entity = cx.entity().downgrade();
 
         // Native center delegate + authorization. Clicks arrive as session ids.

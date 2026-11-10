@@ -395,8 +395,8 @@ pub fn flatten_sized(
                 links.last(),
                 Some((range, last)) if range.end == start && last == url
             );
-            if !continues {
-                if let Some(kind) = link_icon_kind(url) {
+            if !continues
+                && let Some(kind) = link_icon_kind(url) {
                     text.push_str(ICON_GAP);
                     gap = ICON_GAP.len();
                     icons.push(IconSlot {
@@ -406,7 +406,6 @@ pub fn flatten_sized(
                         wants_title,
                     });
                 }
-            }
         }
         let gap_start = start;
         start = text.len();
@@ -541,7 +540,7 @@ pub fn highlighted_code(code: impl Into<SharedString>, lang_tag: &str, ctx: &Ctx
         .for_name(lang_tag)
         .or_else(|| reg.for_extension(lang_tag));
     let key = ctx.next_key();
-    let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, &ctx.palette));
+    let flat = ctx.flat(key.index, || flatten_code(code.into(), lang, ctx.palette));
     text_element(&flat, key, ctx)
 }
 
@@ -969,11 +968,10 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 };
                 if slot.wants_title {
                     // Keeps frames coming until the title lands (or fails).
-                    if let IconKind::Favicon(url) = &slot.kind {
-                        if page_title_state(url) == TitleState::Loading {
+                    if let IconKind::Favicon(url) = &slot.kind
+                        && page_title_state(url) == TitleState::Loading {
                             window.request_animation_frame();
                         }
-                    }
                 }
                 // A formula is painted at its own size from the gap's left edge;
                 // an icon is a small square nudged in from it.

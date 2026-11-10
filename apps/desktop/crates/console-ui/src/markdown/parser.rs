@@ -843,17 +843,14 @@ fn push_file_path_segment(text: &str, style: &InlineStyle, pieces: &mut Vec<Inli
 /// 2. Must be recognized as a valid file link with an extension containing
 ///    letters.
 fn is_bare_file_path_match(text: &str, start: usize, matched: &str) -> bool {
-    if matched.starts_with('/') || matched.starts_with("~/") || matched.starts_with('.') {
-        if start > 0 {
-            if let Some(prev) = text[..start].chars().next_back() {
-                if !prev.is_whitespace()
+    if (matched.starts_with('/') || matched.starts_with("~/") || matched.starts_with('.'))
+        && start > 0
+            && let Some(prev) = text[..start].chars().next_back()
+                && !prev.is_whitespace()
                     && !matches!(prev, '(' | '[' | '{' | '<' | '"' | '\'' | '`')
                 {
                     return false;
                 }
-            }
-        }
-    }
     super::file_links::is_file_link(matched)
 }
 
@@ -1001,10 +998,6 @@ impl IncrementalParser {
                 .collect(),
         )
     }
-
-    /// The whole tree as it should be displayed. The renderer works from
-    /// [`Self::display_tail`] to avoid this clone; this exists so the mending
-    /// contract can be asserted directly.
 
     /// All blocks but the last are settled: markdown block structure only ever
     /// extends the final block, so everything before it is immune to appends.

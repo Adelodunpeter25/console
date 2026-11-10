@@ -320,8 +320,9 @@ fn copy_selection_to_clipboard(lines: &[CodeViewerLine], selection: CodeSelectio
     let end = selection.end();
 
     let mut result = String::new();
-    for line_idx in start.line..=min(end.line, lines.len().saturating_sub(1)) {
-        let line_text = &lines[line_idx].text;
+    let end_line = min(end.line, lines.len().saturating_sub(1));
+    for (line_idx, line) in lines.iter().enumerate().take(end_line + 1).skip(start.line) {
+        let line_text = &line.text;
         let line_len = line_text.len();
 
         let s_col = if line_idx == start.line {

@@ -91,7 +91,7 @@ pub fn cite_popup(
         .flex()
         .items_center()
         .gap(px(PILL_GAP))
-        .child(popup_pill("cite-popup", IconName::Reply, "Reply  r", theme.clone()))
+        .child(popup_pill("cite-popup", IconName::Reply, "Reply  r", theme))
         .child(popup_pill("copy-popup", IconName::Copy, "Copy  c", theme))
 }
 

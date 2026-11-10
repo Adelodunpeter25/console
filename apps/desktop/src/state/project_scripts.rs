@@ -73,9 +73,7 @@ impl ConsoleDesktopApp {
         // panel shows its empty state — mirroring the inspector's
         // files/changes tabs. The pane-project fallback below is only for
         // a live tab that resolves to no project itself.
-        let Some(active_tab) = active_tab else {
-            return None;
-        };
+        let active_tab = active_tab?;
         let from_tab = match active_tab {
             console_core::WorkspaceTabConfig::Chat {
                 session_id,
@@ -286,12 +284,11 @@ impl ConsoleDesktopApp {
                 if term_state.script_logs.len() != prev_len {
                     changed = true;
                 }
-                if let Some(active_id) = &term_state.active_script_log {
-                    if !valid_ids.contains(active_id.as_str()) {
+                if let Some(active_id) = &term_state.active_script_log
+                    && !valid_ids.contains(active_id.as_str()) {
                         term_state.active_script_log = term_state.script_logs.first().cloned();
                         changed = true;
                     }
-                }
             }
 
             if let Some(persisted) = self.persisted_script_tabs.get_mut(cwd) {
@@ -302,12 +299,11 @@ impl ConsoleDesktopApp {
                 if persisted.open_script_ids.len() != prev_len {
                     changed = true;
                 }
-                if let Some(active_id) = &persisted.active_script_id {
-                    if !valid_ids.contains(active_id.as_str()) {
+                if let Some(active_id) = &persisted.active_script_id
+                    && !valid_ids.contains(active_id.as_str()) {
                         persisted.active_script_id = persisted.open_script_ids.first().cloned();
                         changed = true;
                     }
-                }
             }
         }
 
@@ -533,7 +529,7 @@ impl ConsoleDesktopApp {
         self.project_script_stream_seq += 1;
         let seq = self.project_script_stream_seq;
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let project_id_owned = project_id.to_string();
         let (server_project_id, _) = Self::scripts_server_target(project_id);
         let script_id_owned = script_id.to_string();

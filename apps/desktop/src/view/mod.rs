@@ -576,7 +576,6 @@ impl Render for ConsoleDesktopApp {
                                 transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx))
                             });
                             if handled {
-                                return;
                             }
                         }
                     } else if (event.keystroke.key == "c" || event.keystroke.key == "C")
@@ -588,7 +587,6 @@ impl Render for ConsoleDesktopApp {
                                 transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx))
                             });
                             if handled {
-                                return;
                             }
                         }
                     } else if event.keystroke.modifiers.platform
@@ -597,8 +595,7 @@ impl Render for ConsoleDesktopApp {
                     {
                         let environment_id = entity
                             .upgrade()
-                            .map(|app| app.read(cx).active_env_id.clone())
-                            .flatten();
+                            .and_then(|app| app.read(cx).active_env_id.clone());
                         crate::window::open_workspace_window(
                             cx,
                             crate::window::WindowLaunchTarget::Fresh { environment_id },

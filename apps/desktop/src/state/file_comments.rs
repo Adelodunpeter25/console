@@ -55,14 +55,13 @@ impl ConsoleDesktopApp {
                 |tab| matches!(tab, console_core::WorkspaceTabConfig::File { path: tab_path, .. } if tab_path == path),
             )
         };
-        if let Some(active) = &self.active_pane_id {
-            if leaves
+        if let Some(active) = &self.active_pane_id
+            && leaves
                 .iter()
-                .any(|leaf| &leaf.id == active && shows_path(&leaf))
+                .any(|leaf| &leaf.id == active && shows_path(leaf))
             {
                 return active.clone();
             }
-        }
         leaves
             .iter()
             .find(|leaf| shows_path(leaf))
@@ -195,11 +194,10 @@ impl ConsoleDesktopApp {
         });
 
         self.sync_comment_selections(&pane_id, &request.path, cx);
-        if let Some((_, old_path)) = stale_draft {
-            if old_path != request.path {
+        if let Some((_, old_path)) = stale_draft
+            && old_path != request.path {
                 self.sync_comment_selections(&pane_id, &old_path, cx);
             }
-        }
         cx.notify();
     }
 

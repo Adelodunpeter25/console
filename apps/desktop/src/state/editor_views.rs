@@ -331,7 +331,7 @@ impl ConsoleDesktopApp {
     pub fn viewer_scrollbar_state(&mut self, id: &str) -> std::rc::Rc<console_ui::ScrollbarState> {
         self.viewer_scrollbar_states
             .entry(id.to_string())
-            .or_insert_with(console_ui::ScrollbarState::new)
+            .or_default()
             .clone()
     }
 
@@ -345,11 +345,10 @@ impl ConsoleDesktopApp {
         let hash = hasher.finish();
         let len = content.len();
 
-        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path) {
-            if *cached_len == len && *cached_hash == hash {
+        if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path)
+            && *cached_len == len && *cached_hash == hash {
                 return view.clone();
             }
-        }
 
         let mut view = console_ui::MarkdownView::new();
         view.set_text(content, false);

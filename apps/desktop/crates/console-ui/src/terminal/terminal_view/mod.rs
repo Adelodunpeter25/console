@@ -586,8 +586,8 @@ impl Render for TerminalView {
                 )
                 .on_mouse_move(
                     cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
-                        if this.scrollbar_dragging {
-                            if let Some(bounds) = this.scrollbar_bounds {
+                        if this.scrollbar_dragging
+                            && let Some(bounds) = this.scrollbar_bounds {
                                 let height = f32::from(bounds.size.height);
                                 if height > 0.0 {
                                     let frac = (f32::from(event.position.y)
@@ -597,7 +597,6 @@ impl Render for TerminalView {
                                     cx.notify();
                                 }
                             }
-                        }
                     }),
                 )
                 .on_mouse_up(
@@ -692,15 +691,13 @@ impl Render for TerminalView {
                             && event.keystroke.modifiers.shift
                             && event.keystroke.key == "v");
                     if is_paste {
-                        if let Some(clipboard) = cx.read_from_clipboard() {
-                            if let Some(h) = &handle_for_key {
-                                if let Some(input) =
+                        if let Some(clipboard) = cx.read_from_clipboard()
+                            && let Some(h) = &handle_for_key
+                                && let Some(input) =
                                     paste_input_for_clipboard(&clipboard, bracketed_paste)
                                 {
                                     h.send_input(input);
                                 }
-                            }
-                        }
                         view_for_key.update(cx, |view, cx| {
                             view.scroll_to_bottom();
                             cx.notify();
@@ -873,23 +870,21 @@ impl Render for TerminalView {
                                         }
                                         // Nothing word-like under the cursor — fall
                                         // through to a fresh single-click selection.
-                                    } else if count == 3 {
-                                        if this.select_line_at_row(pos.row) {
+                                    } else if count == 3
+                                        && this.select_line_at_row(pos.row) {
                                             cx.notify();
                                             return;
                                         }
-                                    }
 
                                     // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
                                     // it in the default browser instead of selecting.
-                                    if event.modifiers.platform || event.modifiers.control {
-                                        if let Some(url) = this.link_target_at(pos) {
+                                    if (event.modifiers.platform || event.modifiers.control)
+                                        && let Some(url) = this.link_target_at(pos) {
                                             this.clear_selection();
                                             cx.notify();
                                             cx.open_url(&url);
                                             return;
                                         }
-                                    }
 
                                     this.selection_anchor = Some(pos);
                                     this.selection_head = Some(pos);

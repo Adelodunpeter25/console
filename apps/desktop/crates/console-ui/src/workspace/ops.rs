@@ -68,8 +68,8 @@ pub fn replace_or_open_tab(
     let leaf = active_leaf(root, Some(pane_id));
     let new_tab_id = new_tab.id();
 
-    if let Some(target_id) = replace_tab_id {
-        if let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
+    if let Some(target_id) = replace_tab_id
+        && let Some(pos) = leaf.tabs.iter().position(|t| t.id() == target_id) {
             let same_kind =
                 std::mem::discriminant(&leaf.tabs[pos]) == std::mem::discriminant(&new_tab);
             if same_kind {
@@ -78,7 +78,6 @@ pub fn replace_or_open_tab(
                 return new_tab_id;
             }
         }
-    }
 
     if !leaf.tabs.iter().any(|t| t.id() == new_tab_id) {
         leaf.tabs.push(new_tab);
@@ -95,16 +94,13 @@ pub fn move_tab_to_pane(
     target_pane_id: &str,
     tab: WorkspaceTabConfig,
 ) -> Option<String> {
-    if root.leaf_mut(target_pane_id).is_none() {
-        return None;
-    }
+    root.leaf_mut(target_pane_id)?;
 
     let tab_id = tab.id();
-    if source_pane_id != Some(target_pane_id) {
-        if let Some(source_pane_id) = source_pane_id {
+    if source_pane_id != Some(target_pane_id)
+        && let Some(source_pane_id) = source_pane_id {
             let _ = close_tab(root, source_pane_id, &tab_id);
         }
-    }
     open_tab(root, target_pane_id, tab);
     Some(target_pane_id.to_string())
 }
@@ -170,11 +166,10 @@ pub fn close_pane(root: &mut WorkspaceNode, pane_id: &str) -> bool {
 
 /// Activate a tab in a pane.
 pub fn select_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) {
-    if let Some(leaf) = root.leaf_mut(pane_id) {
-        if leaf.tabs.iter().any(|t| t.id() == tab_id) {
+    if let Some(leaf) = root.leaf_mut(pane_id)
+        && leaf.tabs.iter().any(|t| t.id() == tab_id) {
             leaf.active_tab_id = Some(tab_id.to_string());
         }
-    }
 }
 
 /// Update the stored project of every tab with `tab_id` across the tree.
@@ -323,11 +318,10 @@ pub fn sync_chat_provider(
 ) {
     for leaf in root.leaves_mut() {
         for tab in &mut leaf.tabs {
-            if predicate(tab) {
-                if let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab {
+            if predicate(tab)
+                && let console_core::WorkspaceTabConfig::Chat { provider: p, .. } = tab {
                     *p = Some(provider.clone());
                 }
-            }
         }
     }
 }
@@ -416,9 +410,7 @@ pub fn move_tab_to_split(
     direction: SplitDirection,
     insert_first: bool,
 ) -> Option<String> {
-    if root.leaf_mut(target_pane_id).is_none() {
-        return None;
-    }
+    root.leaf_mut(target_pane_id)?;
 
     let tab_id = tab.id();
     if let Some(source_pane_id) = source_pane_id {

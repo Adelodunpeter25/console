@@ -180,7 +180,7 @@ impl SettingsWindow {
                     console_ui::input::ComposerEvent::Edited
                     | console_ui::input::ComposerEvent::Focus => {
                         let text = input.read(cx).content();
-                        let (address, code) = console_core::utils::split_pairing_line(&text);
+                        let (address, code) = console_core::utils::split_pairing_line(text);
                         if code.is_empty() {
                             return;
                         }
@@ -548,43 +548,39 @@ impl Render for SettingsWindow {
             let entity = cx.entity().clone();
             let app_handle = self.app.clone();
             Rc::new(move |tab: SettingsTab, _w: &mut Window, cx: &mut App| {
-                if tab == SettingsTab::Usage {
-                    if let Some(app) = app_handle.upgrade() {
+                if tab == SettingsTab::Usage
+                    && let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
                             app_state.fetch_usage(cx);
                         });
                     }
-                }
                 if tab == SettingsTab::Mcp {
                     entity.update(cx, |this, cx| {
                         this.fetch_mcp_servers(cx);
                     });
                 }
-                if tab == SettingsTab::Browser {
-                    if let Some(app) = app_handle.upgrade() {
+                if tab == SettingsTab::Browser
+                    && let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
                             app_state.fetch_chrome_profiles(cx);
                         });
                     }
-                }
                 // Sidebar clicks bypass set_tab, and without this the GitHub
                 // row never re-reads: one failed load stuck it on
                 // "Not connected" until the whole window reopened.
-                if tab == SettingsTab::Providers {
-                    if let Some(app) = app_handle.upgrade() {
+                if tab == SettingsTab::Providers
+                    && let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
                             app_state.refresh_github_status(cx);
                             app_state.refresh_stt_status(cx);
                         });
                     }
-                }
-                if tab == SettingsTab::Integrations {
-                    if let Some(app) = app_handle.upgrade() {
+                if tab == SettingsTab::Integrations
+                    && let Some(app) = app_handle.upgrade() {
                         app.update(cx, |app_state, cx| {
                             app_state.refresh_integrations(cx);
                         });
                     }
-                }
                 entity.update(cx, |this, cx| {
                     this.active_tab = tab;
                     // The modals belong to the servers tab. Leaving it
@@ -597,15 +593,14 @@ impl Render for SettingsWindow {
                     }
                     // The rename dialog belongs to the providers tab the
                     // same way.
-                    if tab != SettingsTab::Providers {
-                        if let Some(app) = app_handle.upgrade() {
+                    if tab != SettingsTab::Providers
+                        && let Some(app) = app_handle.upgrade() {
                             app.update(cx, |app_state, cx| {
                                 if app_state.rename_form.take().is_some() {
                                     cx.notify();
                                 }
                             });
                         }
-                    }
                     cx.notify();
                 });
             })
@@ -1542,7 +1537,6 @@ impl Render for SettingsWindow {
                         this.editing_env_id = None;
                         cx.stop_propagation();
                         cx.notify();
-                        return;
                     }
                     // Otherwise the event is left to bubble: the window root
                     // closes the settings and gives the workspace back.

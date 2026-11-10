@@ -29,11 +29,10 @@ impl ConsoleDesktopApp {
 
         let view = cx.new(|cx| {
             let mut view = BrowserView::new(window, cx);
-            if let Some(url) = initial_url.clone() {
-                if !url.is_empty() {
+            if let Some(url) = initial_url.clone()
+                && !url.is_empty() {
                     view.navigate_to_url(url, cx);
                 }
-            }
             view
         });
         let handler_bid = browser_id.to_string();
@@ -68,15 +67,12 @@ impl ConsoleDesktopApp {
                         url,
                         ..
                     } = tab
-                    {
-                        if id == &bid {
-                            if *title != new_title || *url != new_url {
+                        && id == &bid
+                            && (*title != new_title || *url != new_url) {
                                 *title = new_title.clone();
                                 *url = new_url.clone();
                                 changed = true;
                             }
-                        }
-                    }
                 }
             }
             for root in this.project_workspace_roots.values_mut() {
@@ -88,15 +84,12 @@ impl ConsoleDesktopApp {
                             url,
                             ..
                         } = tab
-                        {
-                            if id == &bid {
-                                if *title != new_title || *url != new_url {
+                            && id == &bid
+                                && (*title != new_title || *url != new_url) {
                                     *title = new_title.clone();
                                     *url = new_url.clone();
                                     changed = true;
                                 }
-                            }
-                        }
                     }
                 }
             }
@@ -134,11 +127,9 @@ impl ConsoleDesktopApp {
         if self.right_sidebar_visible
             && self.inspector_active_tab
                 == console_ui::InspectorTab::Auxiliary(console_ui::AuxiliaryTab::Browser)
-        {
-            if let Some(id) = &self.inspector_browser_tab_id {
+            && let Some(id) = &self.inspector_browser_tab_id {
                 active_browser_ids.insert(id.clone());
             }
-        }
 
         let palettes_open = self.any_palette_open(cx);
 
@@ -365,9 +356,7 @@ impl ConsoleDesktopApp {
                 workspace_ops::open_tab_in_background(&mut self.workspace_root, &pane_id, tab);
             }
             Target::Stashed { key, .. } => {
-                let Some(root) = self.project_workspace_roots.get_mut(key) else {
-                    return None;
-                };
+                let root = self.project_workspace_roots.get_mut(key)?;
                 workspace_ops::open_tab_in_background(root, &pane_id, tab);
             }
         }

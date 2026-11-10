@@ -165,7 +165,7 @@ impl ConsoleDesktopApp {
             // picker re-enters GPUI's dispatcher and double-borrows the App
             // RefCell. Decoding the image afterwards is real work and stays
             // on the background executor.
-            let picked = cx.update(|cx| crate::picker::pick_image_file(cx));
+            let picked = cx.update(crate::picker::pick_image_file);
             let Some(path) = crate::picker::resolve_single_path(picked).await else {
                 return;
             };
@@ -221,15 +221,14 @@ impl ConsoleDesktopApp {
     /// staging path — the chip row for `pane_id` renders that pane's list,
     /// so removal must hit the same pane.
     pub fn remove_attachment(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
-        if let Some(staged) = self.attachments.get_mut(pane_id) {
-            if index < staged.len() {
+        if let Some(staged) = self.attachments.get_mut(pane_id)
+            && index < staged.len() {
                 Rc::make_mut(staged).remove(index);
                 if staged.is_empty() {
                     self.attachments.remove(pane_id);
                 }
                 cx.notify();
             }
-        }
     }
 
     /// Open the image preview modal for a staged attachment.
@@ -239,12 +238,10 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .and_then(|v| v.get(index))
             .cloned()
-        {
-            if let Some(image) = attachment_image(&attachment) {
+            && let Some(image) = attachment_image(&attachment) {
                 self.zoomed_image = Some(image);
                 cx.notify();
             }
-        }
     }
 
     /// Open the image preview modal for a decoded message image.
@@ -300,7 +297,7 @@ impl ConsoleDesktopApp {
     ) {
         match uploaded {
             Ok(result) => {
-                let input = self.composer_for_pane(&pane_id);
+                let input = self.composer_for_pane(pane_id);
                 input.update(cx, |input, cx| {
                     input.insert_paste_mention(
                         0..0,
@@ -312,7 +309,7 @@ impl ConsoleDesktopApp {
                 cx.notify();
             }
             Err(error) => {
-                self.set_error(&format!("Paste upload failed: {error}"), cx);
+                self.set_error(format!("Paste upload failed: {error}"), cx);
                 self.paste_text_inline(pane_id, text, cx);
             }
         }

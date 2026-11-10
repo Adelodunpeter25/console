@@ -26,7 +26,7 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let transcript_view = cx.new(|cx| TranscriptView::new(cx));
+        let transcript_view = cx.new(TranscriptView::new);
         let composer_input = cx.new(|cx| {
             ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
@@ -89,11 +89,10 @@ impl ConsoleDesktopApp {
         let project_menu = {
             let entity = entity.clone();
             ContextMenuHandle::new(cx).on_toggle(move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
+                if open
+                    && let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| this.ensure_github_repos(cx));
                     }
-                }
             })
         };
         let branch_menu = ContextMenuHandle::new(cx);
@@ -104,8 +103,8 @@ impl ConsoleDesktopApp {
         let usage_menu = ContextMenuHandle::new(cx).on_toggle({
             let entity = entity.clone();
             move |open, _window, cx| {
-                if open {
-                    if let Some(app) = entity.upgrade() {
+                if open
+                    && let Some(app) = entity.upgrade() {
                         let pane_id = usage_pane_id.clone();
                         app.update(cx, |this, cx| {
                             let session_id =
@@ -114,7 +113,6 @@ impl ConsoleDesktopApp {
                             this.fetch_context_usage(&session_id, cx);
                         });
                     }
-                }
             }
         });
         transcript_view.update(cx, |transcript, _| {
@@ -548,17 +546,15 @@ impl ConsoleDesktopApp {
         }
 
         // Check active session header
-        if let Some(session_id) = self.active_session_for_pane(pane_id) {
-            if let Some(session) = self.sessions.iter().find(|s| s.id == session_id) {
-                if let Some(level) = session
+        if let Some(session_id) = self.active_session_for_pane(pane_id)
+            && let Some(session) = self.sessions.iter().find(|s| s.id == session_id)
+                && let Some(level) = session
                     .thinking_level
                     .as_deref()
                     .and_then(ThinkingLevel::from_str)
                 {
                     return Some(level);
                 }
-            }
-        }
 
         // Default based on active model
         let supported = self.supported_thinking_levels_for_pane(pane_id);
@@ -595,24 +591,22 @@ impl ConsoleDesktopApp {
 
         // Check live fetched models first. Levels cross as plain strings;
         // unknown values are skipped (console_core::model_thinking_levels).
-        if let Some(models) = self.models_by_provider.get(&selected.provider) {
-            if let Some(m) = models.iter().find(|m| m.id == selected.model_id) {
+        if let Some(models) = self.models_by_provider.get(&selected.provider)
+            && let Some(m) = models.iter().find(|m| m.id == selected.model_id) {
                 let levels = console_core::model_thinking_levels(m);
                 if !levels.is_empty() {
                     return levels;
                 }
             }
-        }
 
         // Check static catalog models
-        if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider) {
-            if let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id) {
+        if let Some(entry) = self.providers.iter().find(|p| p.name == selected.provider)
+            && let Some(m) = entry.models.iter().find(|m| m.id == selected.model_id) {
                 let levels = console_core::model_thinking_levels(m);
                 if !levels.is_empty() {
                     return levels;
                 }
             }
-        }
 
         // Standard defaults per provider
         match selected.provider.to_ascii_lowercase().as_str() {
@@ -843,14 +837,12 @@ impl ConsoleDesktopApp {
             .leaves()
             .iter()
             .find(|l| l.id == pane_id)
-        {
-            if leaf.tabs.iter().any(|t| t.id() == tab_id) {
+            && leaf.tabs.iter().any(|t| t.id() == tab_id) {
                 workspace_ops::select_tab(&mut self.workspace_root, pane_id, &tab_id);
                 self.active_pane_id = Some(pane_id.to_string());
                 self.persist_workspaces();
                 return tab_id;
             }
-        }
 
         // A known session stamps its project and provider verbatim — including explicit
         // None (No project) — so reopening never inherits the pane's project.
@@ -861,11 +853,10 @@ impl ConsoleDesktopApp {
             .clone()
             .unwrap_or_else(|| self.pane_project_id(pane_id));
         let provider = known_session.map(|s| s.provider.clone());
-        if known_project_id.is_some() {
-            if let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
+        if known_project_id.is_some()
+            && let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
                 state.selected_project_id = project_id.clone();
             }
-        }
 
         let tab = WorkspaceTabConfig::Chat {
             session_id: session_id.clone(),

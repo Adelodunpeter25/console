@@ -397,7 +397,7 @@ impl McpTabState {
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {
-                    if let Ok(_) = client.mcp.delete_server(&id).await {
+                    if client.mcp.delete_server(&id).await.is_ok() {
                         let updated_list = client.mcp.list_servers().await.unwrap_or_default();
                         let _ = cx.update(|cx| {
                             entity_clone.update(cx, |this, cx| {
@@ -592,7 +592,7 @@ impl McpTabState {
                 let client = app.read(cx).client.clone();
                 let entity_clone = entity.clone();
                 cx.spawn(async move |cx| {
-                    if let Ok(_) = client.mcp.disconnect_server(&id).await {
+                    if client.mcp.disconnect_server(&id).await.is_ok() {
                         let _ = cx.update(|cx| {
                             entity_clone.update(cx, |this, cx| {
                                 if let Some(s) = this.mcp.servers.iter_mut().find(|s| s.id == id) {
@@ -699,8 +699,8 @@ fn serve_mcp_callback_once(
         let mut err_msg = None;
         for line in request.lines() {
             if line.starts_with("GET ") {
-                if let Some(path_and_query) = line.split_whitespace().nth(1) {
-                    if let Some(query) = path_and_query.split('?').nth(1) {
+                if let Some(path_and_query) = line.split_whitespace().nth(1)
+                    && let Some(query) = path_and_query.split('?').nth(1) {
                         for part in query.split('&') {
                             let mut kv = part.splitn(2, '=');
                             match (kv.next(), kv.next()) {
@@ -723,7 +723,6 @@ fn serve_mcp_callback_once(
                             }
                         }
                     }
-                }
                 break;
             }
         }
@@ -740,11 +739,10 @@ fn serve_mcp_callback_once(
         );
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
-        if let Some(s) = state {
-            if code.is_some() || err_msg.is_some() {
+        if let Some(s) = state
+            && (code.is_some() || err_msg.is_some()) {
                 return Some((s, code, err_msg));
             }
-        }
     }
     None
 }

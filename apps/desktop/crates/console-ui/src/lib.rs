@@ -1,3 +1,9 @@
+#![allow(
+    clippy::type_complexity,
+    clippy::let_unit_value,
+    clippy::too_many_arguments
+)]
+
 pub mod browser;
 pub mod chat;
 pub mod common;

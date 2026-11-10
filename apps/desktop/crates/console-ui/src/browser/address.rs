@@ -152,11 +152,10 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
         return FaviconState::Unavailable;
     };
 
-    if let Ok(cache) = favicon_cache().lock() {
-        if let Some(img) = cache.get(&host) {
+    if let Ok(cache) = favicon_cache().lock()
+        && let Some(img) = cache.get(&host) {
             return FaviconState::Ready(img.clone());
         }
-    }
     if favicon_failed()
         .lock()
         .is_ok_and(|failed| failed.contains(&host))
@@ -209,11 +208,10 @@ pub fn favicon_state(url_or_host: &str) -> FaviconState {
                     }
                 }
             }
-            if !loaded {
-                if let Ok(mut failed) = favicon_failed().lock() {
+            if !loaded
+                && let Ok(mut failed) = favicon_failed().lock() {
                     failed.insert(host_for_task.clone());
                 }
-            }
             if let Ok(mut in_flight) = favicon_in_flight().lock() {
                 in_flight.remove(&host_for_task);
             }

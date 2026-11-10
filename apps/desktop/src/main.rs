@@ -4,6 +4,11 @@
     all(target_os = "windows", not(debug_assertions)),
     windows_subsystem = "windows"
 )]
+#![allow(
+    clippy::type_complexity,
+    clippy::let_unit_value,
+    clippy::too_many_arguments
+)]
 
 mod app_menu;
 mod assets;
@@ -44,15 +49,14 @@ fn log_panics_to_file() {
             "==== panic in thread '{thread_name}' ====\n{info}\nbacktrace:\n{backtrace}\n\n"
         );
         eprint!("{text}");
-        if let Some(dir) = panic_log_dir() {
-            if std::fs::create_dir_all(&dir).is_ok() {
+        if let Some(dir) = panic_log_dir()
+            && std::fs::create_dir_all(&dir).is_ok() {
                 let _ = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(dir.join("panic.log"))
                     .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
             }
-        }
     }));
 }
 

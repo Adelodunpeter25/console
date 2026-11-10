@@ -268,7 +268,7 @@ pub fn estimated_text_lines(text: &str) -> usize {
     text.split('\n')
         .map(|line| {
             let wrapped =
-                (line.chars().count() + USER_FOLD_CHARS_PER_LINE - 1) / USER_FOLD_CHARS_PER_LINE;
+                line.chars().count().div_ceil(USER_FOLD_CHARS_PER_LINE);
             wrapped.max(1)
         })
         .sum()
@@ -898,9 +898,9 @@ impl RenderOnce for AssistantMessageBubble {
                             // Decode the payload; skip the part when the format is not
                             // supported by gpui rather than rendering a blank tile.
                             let image =
-                                gpui::ImageFormat::from_mime_type(&mime_type).and_then(|format| {
+                                gpui::ImageFormat::from_mime_type(mime_type).and_then(|format| {
                                     base64::engine::general_purpose::STANDARD
-                                        .decode(&data)
+                                        .decode(data)
                                         .ok()
                                         .map(|bytes| {
                                             Arc::new(gpui::Image::from_bytes(format, bytes))
@@ -963,12 +963,12 @@ impl RenderOnce for AssistantMessageBubble {
                             )
                         })
                         .when_some(fork_action, |element, (message_id, on_fork)| {
-                            element.child(fork_button(message_id, on_fork, theme.clone(), cx))
+                            element.child(fork_button(message_id, on_fork, theme, cx))
                         })
                         .child(copy_button(
                             format!("copy-assistant-message-{}", self.selection_row),
                             content_for_copy,
-                            theme.clone(),
+                            theme,
                             cx,
                         )),
                 ),

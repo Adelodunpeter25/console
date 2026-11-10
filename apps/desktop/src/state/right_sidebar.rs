@@ -237,7 +237,7 @@ impl ConsoleDesktopApp {
         state.next_id += 1;
 
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let terminal = cx.new(|cx| {
             let params = console_core::types::terminal::TerminalSpawnParams {
                 cwd,
@@ -388,14 +388,13 @@ impl ConsoleDesktopApp {
     }
 
     pub fn close_auxiliary_tab(&mut self, tab: AuxiliaryTab, cx: &mut Context<Self>) {
-        if tab == AuxiliaryTab::Devices {
-            if let Some(device) = self.device_view.take() {
+        if tab == AuxiliaryTab::Devices
+            && let Some(device) = self.device_view.take() {
                 device.update(cx, |view, cx| view.close(cx));
             }
             // Closing the tab must not power off devices: each device has its
             // own stop button (device power toolbar button) and they keep
             // running for other viewers.
-        }
         self.inspector_open_auxiliary_tabs
             .retain(|open| *open != tab);
         if self.inspector_active_tab == InspectorTab::Auxiliary(tab) {
@@ -510,7 +509,7 @@ impl ConsoleDesktopApp {
                 let id = state.next_id;
                 state.next_id += 1;
                 let client = client.clone();
-                let transport = self.transport.clone();
+                let transport = self.transport;
                 let cwd_clone = cwd.clone();
                 let terminal = cx.new(|cx| {
                     let params = console_core::types::terminal::TerminalSpawnParams {
@@ -678,15 +677,14 @@ impl ConsoleDesktopApp {
         // One stream per target: reuse the live watcher unless the inspector
         // target changed. Dropping the previous task cancels its SSE loop, so
         // repeated refreshes never accumulate duplicate streams.
-        if let Some((watched_cwd, _)) = &self.inspector_fs_watch {
-            if watched_cwd == &cwd {
+        if let Some((watched_cwd, _)) = &self.inspector_fs_watch
+            && watched_cwd == &cwd {
                 return;
             }
-        }
         self.inspector_fs_watch = None;
 
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let watch_cwd = cwd.clone();
         let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
@@ -721,15 +719,14 @@ impl ConsoleDesktopApp {
 
         // One stream per target: reuse the live watcher unless the inspector
         // target changed (dropping the previous task cancels its SSE loop).
-        if let Some((watched_cwd, _)) = &self.inspector_git_watch {
-            if watched_cwd == &cwd {
+        if let Some((watched_cwd, _)) = &self.inspector_git_watch
+            && watched_cwd == &cwd {
                 return;
             }
-        }
         self.inspector_git_watch = None;
 
         let client = self.client.clone();
-        let transport = self.transport.clone();
+        let transport = self.transport;
         let watch_cwd = cwd.clone();
         let task = cx.spawn(async move |entity, cx| {
             use futures_util::StreamExt;
