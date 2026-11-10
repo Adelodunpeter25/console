@@ -1549,6 +1549,7 @@ dependencies = [
  "tiny-skia",
  "tokio",
  "unicode-segmentation",
+ "urlencoding",
  "usvg 0.46.0",
  "wry",
 ]

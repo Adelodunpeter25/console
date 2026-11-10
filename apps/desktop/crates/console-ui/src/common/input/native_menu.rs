@@ -48,13 +48,12 @@ pub use macos::{execute_native_action, show_native_context_menu};
 #[cfg(target_os = "macos")]
 mod macos {
     use std::cell::RefCell;
-    use std::rc::Rc;
 
     use objc2::rc::Retained;
-    use objc2::runtime::{AnyObject, ProtocolObject, Sel};
-    use objc2::{ClassType, define_class, msg_send, sel};
-    use objc2_app_kit::{NSApplication, NSEvent, NSMenu, NSMenuItem, NSView, NSWindow};
-    use objc2_foundation::{MainThreadMarker, NSString, NSURL};
+    use objc2::runtime::{AnyObject, Sel};
+    use objc2::{AnyThread, ClassType, DefinedClass, MainThreadOnly, define_class, msg_send, sel};
+    use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
+    use objc2_foundation::{MainThreadMarker, NSObjectProtocol, NSString, NSURL};
 
     use super::{NativeContextMenuAction, NativeContextMenuParams, NativeContextMenuResult};
 
@@ -78,7 +77,7 @@ mod macos {
             }
         }
 
-        unsafe impl objc2_foundation::NSObjectProtocol for NativeMenuTarget {}
+        unsafe impl NSObjectProtocol for NativeMenuTarget {}
     );
 
     impl NativeMenuTarget {
