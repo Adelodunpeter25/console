@@ -538,7 +538,7 @@ impl RenderOnce for UserMessageBubble {
                                 // Fainter than the composer's: these sit under dense text.
                                 .when(self.plan_mode, |el| {
                                     el.child(
-                                        crate::common::plan_mode_stripes_with_opacity(theme, 0.14)
+                                        crate::common::plan_mode_stripes_with_opacity(theme, 0.22)
                                             .rounded(px(11.0)),
                                     )
                                 })
