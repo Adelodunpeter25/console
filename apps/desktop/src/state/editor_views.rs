@@ -3,7 +3,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use gpui::{App, Entity, prelude::*, px};
+use gpui::{App, Entity, Subscription, prelude::*, px};
 
 use super::app::ConsoleDesktopApp;
 
@@ -132,7 +132,28 @@ impl ConsoleDesktopApp {
             });
         }
         self.viewer_editor_views
-            .insert(path.to_string(), (len, hash, state, view.clone()));
+            .insert(path.to_string(), (len, hash, state.clone(), view.clone()));
+        let file_path = path.to_string();
+        let subscription = cx.subscribe(&state, move |app, state, event: &editor_ui::EditorEvent, cx| {
+            match event {
+                editor_ui::EditorEvent::Saved => {
+                    let text = state.read(cx).text();
+                    let mut hasher = DefaultHasher::new();
+                    text.hash(&mut hasher);
+                    let hash = hasher.finish();
+                    app.open_file_contents.insert(file_path.clone(), text.clone());
+                    if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
+                        entry.0 = text.len();
+                        entry.1 = hash;
+                    }
+                    cx.notify();
+                }
+                editor_ui::EditorEvent::SaveFailed(message) => {
+                    log::error!("Failed to save {}: {}", file_path, message);
+                }
+            }
+        });
+        self.viewer_editor_subscriptions.insert(path.to_string(), subscription);
         view
     }
 

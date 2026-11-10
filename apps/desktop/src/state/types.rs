@@ -297,6 +297,7 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
+    pub viewer_editor_subscriptions: std::collections::HashMap<String, gpui::Subscription>,
     /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
     pub pending_file_line: std::collections::HashMap<String, u32>,
     /// Comment-gutter selections from editor views. The editor reports through
