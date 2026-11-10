@@ -450,7 +450,6 @@ func (r *Runtime) sessionsCreate(ctx context.Context, args map[string]any) (*jsk
 	if r.sessions == nil {
 		return nil, fmt.Errorf("session service is unavailable")
 	}
-	title, _ := args["title"].(string)
 	prompt, _ := args["prompt"].(string)
 	model, _ := args["model"].(string)
 	provider, _ := args["provider"].(string)
@@ -494,7 +493,7 @@ func (r *Runtime) sessionsCreate(ctx context.Context, args map[string]any) (*jsk
 		worktree.Branch, _ = raw["branch"].(string)
 		worktree.BaseBranch, _ = raw["base_branch"].(string)
 	}
-	header, err := r.sessions.Create(types.CreateSessionOptions{Title: title, Cwd: cwd, ProjectID: projectPtr, ModelID: model, Provider: provider, ApprovalMode: approval, ThinkingLevel: thinkingPtr, Worktree: worktree})
+	header, err := r.sessions.Create(types.CreateSessionOptions{Title: "", Cwd: cwd, ProjectID: projectPtr, ModelID: model, Provider: provider, ApprovalMode: approval, ThinkingLevel: thinkingPtr, Worktree: worktree})
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +648,7 @@ var methodArgs = map[string][]string{
 	"projects.add":          {"directory", "name"},
 	"sessions.list":         {"project_id", "cwd"},
 	"sessions.read":         {"session_id", "limit", "before", "include_deleted"},
-	"sessions.create":       {"title", "prompt", "project_id", "cwd", "model", "provider", "thinking_level", "approval_mode", "worktree"},
+	"sessions.create":       {"prompt", "project_id", "cwd", "model", "provider", "thinking_level", "approval_mode", "worktree"},
 	"sessions.delete":       {"session_id"},
 	"sessions.abort":        {"session_id"},
 	"sessions.set_model":    {"session_id", "model", "provider"},

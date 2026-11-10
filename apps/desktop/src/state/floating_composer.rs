@@ -549,10 +549,6 @@ impl ConsoleDesktopApp {
         // happened to be set to.
         let approval_mode = submit.approval_mode;
         let prompt = submit.prompt.clone();
-        // The prompt is the *local tab label* until the server's autotitle
-        // lands. Sending it as the stored title would make the server keep
-        // it (non-generic) and never generate a real one.
-        let label = title_from_prompt(&prompt);
         // Attachments staged in the card move onto the new session; the card's
         // own copy is dropped so reopening starts clean.
         let staged_attachments = (*submit.attachments).clone();
@@ -656,7 +652,11 @@ impl ConsoleDesktopApp {
                             this.selected_session_id = Some(new_session.id.clone());
                         }
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
-                        this.open_chat_tab_in_pane(&pane_id, new_session.id.clone(), &label);
+                        this.open_chat_tab_in_pane(
+                            &pane_id,
+                            new_session.id.clone(),
+                            "Generating title…",
+                        );
                         // The project folder's branch just changed, so the
                         // footer's branch list is stale until it reloads.
                         if let Some((_, cwd)) = checkout.clone() {
@@ -711,22 +711,4 @@ impl ConsoleDesktopApp {
         })
         .detach();
     }
-}
-
-/// First non-empty line of the prompt, trimmed to a title-sized string.
-fn title_from_prompt(prompt: &str) -> String {
-    let line = prompt.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-    let trimmed = line.trim();
-    if trimmed.is_empty() {
-        return "New Chat".to_owned();
-    }
-    let mut out = String::new();
-    for ch in trimmed.chars() {
-        if out.chars().count() >= 60 {
-            out.push('…');
-            break;
-        }
-        out.push(ch);
-    }
-    out
 }

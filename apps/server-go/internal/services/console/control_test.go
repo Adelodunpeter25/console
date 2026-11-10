@@ -437,11 +437,6 @@ func TestCreateWithPromptReportsRunning(t *testing.T) {
 		t.Fatalf("title = %v, want New Session to allow autotitling", title)
 	}
 
-	withTitle := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp", title:"custom title", prompt:"go"})`).(map[string]any)
-	if title := withTitle["session"].(map[string]any)["title"]; title != "Custom title" {
-		t.Fatalf("title = %v, want Custom title", title)
-	}
-
 	// No prompt: nothing started, still idle.
 	idle := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
 	if idle["started"] != false || idle["session"].(map[string]any)["status"] != "idle" {
