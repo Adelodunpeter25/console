@@ -1143,12 +1143,10 @@ impl ConsoleDesktopApp {
                         // record of (e.g. the optimistic entry was replaced by
                         // id). Stay marked running and refresh from canonical
                         // state so the new turn paints live instead of only
-                        // after a tab reload.
-                        let started_at = self
-                            .running_sessions
-                            .get(run_session_id)
-                            .copied()
-                            .unwrap_or_else(|| chrono::Utc::now().timestamp());
+                        // after a tab reload. A drained prompt is a new turn
+                        // (e.g. a steer), so its timer starts from zero rather
+                        // than inheriting the previous prompt's start.
+                        let started_at = chrono::Utc::now().timestamp();
                         self.set_session_running(run_session_id, Some(started_at));
                         if pane_shows_run {
                             self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
