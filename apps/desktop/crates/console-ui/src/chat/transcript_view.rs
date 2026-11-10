@@ -549,6 +549,17 @@ impl TranscriptView {
         self.messages.len()
     }
 
+    /// When the newest user prompt was sent, in unix seconds. A run attached
+    /// after a restart has no live start time; this is the closest persisted one.
+    pub fn latest_user_prompt_at(&self) -> Option<i64> {
+        self.messages.iter().rev().find_map(|message| match message {
+            AgentMessage::User { created_at, .. } => {
+                created_at.and_then(crate::utils::time::normalize_unix_timestamp)
+            }
+            _ => None,
+        })
+    }
+
     /// The image attachments carried by the user message with this id.
     ///
     /// Composer history recall holds a message id rather than the image bytes

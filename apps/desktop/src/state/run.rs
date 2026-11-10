@@ -1219,7 +1219,15 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let now = chrono::Utc::now().timestamp();
+        // Resume the elapsed timer from the prompt's persisted send time so a
+        // run attached after a restart does not restart from zero.
+        let now = if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str())
+        {
+            self.transcript_for_pane(&pane_id).read(cx).latest_user_prompt_at()
+        } else {
+            None
+        }
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
         self.set_session_running(&session_id, Some(now));
         let run_token = self.next_run_token_for_session(&session_id);
 
