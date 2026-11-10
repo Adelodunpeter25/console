@@ -12,9 +12,8 @@ var ports = console.ports.list();
 print(ports);
 ```
 
-Calls are synchronous: no `async`, no `await`, no `.then` — every method
-already waits for its result, and async completions are refused rather than
-left hanging. **Every method takes a single object, never positional values**:
+Methods already wait for their result. Modern JavaScript features such as `async`,
+`await`, and Promises are supported. **Every method takes a single object, never positional values**:
 `console.sessions.read({session_id: id})`, not `read(id)`. A method with no
 arguments takes none. Unknown keys and wrong types are refused with the names
 the method accepts, so a typo such as `{projectId: ...}` fails instead of being

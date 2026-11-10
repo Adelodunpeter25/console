@@ -162,7 +162,6 @@ func NewRuntime(ports *terminalsvc.PortRegistry, scripts *projectssvc.ProjectScr
 		Root:             "console",
 		PlainResults:     true,
 		InterruptMessage: "console stopped (timed out or cancelled); any call that was already in flight may have taken effect, but variables from earlier calls are kept. Check what happened before retrying: console.sessions.list() or console.sessions.read({session_id}) for sessions, console.scripts.status() for scripts, console.ports.list() for ports.",
-		AsyncMessage:     "async code is not supported: call console methods directly, they already wait for the result",
 	}, methods)
 	if err != nil {
 		return nil, err

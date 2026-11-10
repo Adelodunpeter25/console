@@ -15,8 +15,7 @@ var apps = cua.list_apps();
 print(apps.content[0].text);
 ```
 
-Do not use `async`, `await`, or promises. Every method waits for its result.
-Arguments are one object; methods without arguments take none. Results have
+Every method waits for its result. Arguments are one object; methods without arguments take none. Results have
 `{content, structuredContent, isError}`. Successful action results include a
 confirmation when the driver can identify the target. If `isError` is true, read the
 structured refusal or message before deciding what to do next. Keep native

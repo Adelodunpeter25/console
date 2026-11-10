@@ -67,7 +67,6 @@ func NewJSRuntime(caller JSCaller) (*JSRuntime, error) {
 	kernel, err := jskernel.New(jskernel.Options{
 		Root:             "cua",
 		InterruptMessage: "computer stopped; action completion is unknown. Inspect fresh state before retrying.",
-		AsyncMessage:     "async code is not supported: call cua methods directly, they already wait for the result",
 	}, methods)
 	if err != nil {
 		return nil, err

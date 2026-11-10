@@ -240,17 +240,15 @@ func TestJSHandBuiltGarbageImageFailsLoudly(t *testing.T) {
 	}
 }
 
-func TestJSAsyncCompletionFailsLoudly(t *testing.T) {
+func TestJSAsyncCompletionSucceeds(t *testing.T) {
 	runtime := newTestRuntime(t, screenSizeCaller())
-	// Without a microtask pump a .then callback never runs, so a promise
-	// completion would be a silent no-op. Fail instead of letting the model
-	// believe an action happened.
-	_, err := runtime.Eval(context.Background(), `Promise.resolve(1).then(x => x)`, 0)
-	if err == nil {
-		t.Fatal("expected async completion to be refused")
+	res, err := runtime.Eval(context.Background(), `Promise.resolve(42).then(x => x)`, 0)
+	if err != nil {
+		t.Fatalf("expected async completion to succeed, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "async") {
-		t.Fatalf("got %v", err)
+	parts, ok := res.([]map[string]any)
+	if !ok || len(parts) == 0 || parts[0]["text"] != "42" {
+		t.Fatalf("expected 42, got: %#v", res)
 	}
 }
 

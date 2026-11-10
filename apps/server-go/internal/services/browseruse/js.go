@@ -4,9 +4,8 @@
 // The shape is the console kernel's: plain results (a call returns its data
 // directly), one object argument per method, unknown members named in the
 // error, and the API documented once in the /browser-use skill instead of as
-// schema on every turn. Methods are synchronous — goja has no microtask pump,
-// so a Promise would never settle — and every one blocks on the desktop
-// client answering the underlying low-level action.
+// schema on every turn. Methods block on the desktop client answering the
+// underlying low-level action.
 //
 // The desktop stays the source of truth for tabs, URLs and titles; this
 // runtime tracks only what the desktop cannot know: which tabs the kernel
@@ -114,7 +113,6 @@ func NewJSRuntime(manager *Manager, sessionID string, handler tools.BrowserHandl
 		Root:             "browser",
 		PlainResults:     true,
 		InterruptMessage: "execution stopped; a browser action in flight may already have taken effect. Inspect fresh state before retrying.",
-		AsyncMessage:     "async code is not supported: call browser methods directly, they already wait for the result",
 	}, r.methods())
 	if err != nil {
 		return nil, err

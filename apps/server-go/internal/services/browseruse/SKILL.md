@@ -8,8 +8,8 @@ actions too, since every low-level operation is a method here.
 
 ## Rules
 
-- Calls are **synchronous**. No `async`, `await`, `.then`, or Promises — the
-  call blocks and returns the result.
+- Methods wait for their result, and modern JavaScript features such as
+  `async`, `await`, and Promises are supported.
 - The **final expression is the result**. No top-level `return`; `print()`
   narrates intermediate values.
 - **Never** complete a purchase, send a message or email, change

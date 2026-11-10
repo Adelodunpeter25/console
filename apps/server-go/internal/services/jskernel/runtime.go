@@ -15,12 +15,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dop251/goja"
+	"github.com/MoeForge/moejs"
+	"github.com/MoeForge/moejs/eventloop"
 )
 
 // Error is a model-visible runtime failure: bad code, an interrupted
@@ -100,9 +102,10 @@ type Options struct {
 	// that returned only text or images still gets the wrapper, so nothing is
 	// lost. Off by default: computer use relies on the wrapper for images.
 	PlainResults bool
-	// AsyncMessage is reported when a script returns a Promise. No microtask
-	// pump runs between evaluations, so a promise would silently never settle.
+	// AsyncMessage is deprecated and unused. Async code and Promises are supported.
 	AsyncMessage string
+	// MemoryLimit caps JavaScript heap allocation in bytes. 0 means unbounded.
+	MemoryLimit int64
 }
 
 // Defaults applied by New.
@@ -132,101 +135,87 @@ func (o Options) withDefaults() Options {
 	if o.InterruptMessage == "" {
 		o.InterruptMessage = "execution stopped; completion is unknown. Inspect fresh state before retrying."
 	}
-	if o.AsyncMessage == "" {
-		o.AsyncMessage = "async code is not supported: call methods directly, they already wait for the result"
-	}
 	return o
 }
 
 // Runtime is one persistent JavaScript interpreter with a preinstalled root
-// object. goja runtimes are not safe for concurrent use, so every entry takes
-// mu — including the interrupt path, which goja documents as safe to call from
-// another goroutine.
+// object. Runtimes are guarded by mu for serialized evaluation.
 type Runtime struct {
-	mu     sync.Mutex
-	rt     *goja.Runtime
-	opts   Options
-	method map[string]Method
-	output []string
-	// evalCtx is the context of the evaluation currently running on the Eval
-	// goroutine; methods read it without locking because only that goroutine
-	// touches it.
+	mu      sync.Mutex
+	rt      *moejs.Runtime
+	loop    *eventloop.Loop
+	opts    Options
+	method  map[string]Method
+	output  []string
 	evalCtx context.Context
-	// cancel is polled while a method call is in flight, so an external stop
-	// interrupts admitted work. nil means no external stop source.
-	cancel    func() bool
-	isPromise func(goja.Value, ...goja.Value) (goja.Value, error)
+	cancel  func() bool
 }
 
 // New builds a runtime and installs print plus the root object from methods.
 func New(opts Options, methods []Method) (*Runtime, error) {
 	opts = opts.withDefaults()
-	r := &Runtime{rt: goja.New(), opts: opts, method: make(map[string]Method, len(methods))}
-	r.rt.Set("print", r.print)
+	moeOpts := moejs.Options{}
+	if opts.MemoryLimit > 0 {
+		moeOpts.MemoryLimit = opts.MemoryLimit
+	}
+	rt := moejs.NewRuntime(moeOpts)
+	loop, err := eventloop.New(rt, eventloop.Options{})
+	if err != nil {
+		return nil, err
+	}
+	r := &Runtime{
+		rt:     rt,
+		loop:   loop,
+		opts:   opts,
+		method: make(map[string]Method, len(methods)),
+	}
 
-	root := r.rt.NewObject()
+	if err := r.rt.SetGlobal("print", moejs.NativeFunc(r.print)); err != nil {
+		return nil, err
+	}
+
+	rootMap := make(map[string]any)
 	for _, method := range methods {
 		if strings.TrimSpace(method.Name) == "" || method.Call == nil {
 			continue
 		}
 		name := method.Name
 		r.method[name] = method
-		if err := installMethod(r.rt, root, name, func(call goja.FunctionCall) goja.Value {
-			return r.callMethod(name, call)
-		}); err != nil {
-			return nil, fmt.Errorf("install %s.%s: %w", opts.Root, name, err)
-		}
-	}
-	if err := r.rt.Set(opts.Root, root); err != nil {
-		return nil, err
-	}
-	// A call to a method that does not exist would otherwise surface as the
-	// engine's "Object has no member 'x'". Wrap the tree so a typo names the
-	// methods that do exist.
-	if err := r.guardUnknownMembers(root, opts.Root); err != nil {
-		return nil, err
-	}
 
-	// Promise completion would be a silent no-op (no microtask pump runs
-	// between evaluations), so detect it and fail loudly instead of letting
-	// the model believe an action happened.
-	helper, err := r.rt.RunString(`(function(v) { return v instanceof Promise; })`)
-	if err != nil {
-		return nil, err
-	}
-	isPromise, ok := goja.AssertFunction(helper)
-	if !ok {
-		return nil, fmt.Errorf("could not install the promise detector")
-	}
-	r.isPromise = isPromise
-	return r, nil
-}
-
-// installMethod walks a dotted name, creating intermediate objects, and sets
-// the leaf. Flat names keep working unchanged.
-func installMethod(rt *goja.Runtime, root *goja.Object, name string, fn func(goja.FunctionCall) goja.Value) error {
-	parts := strings.Split(name, ".")
-	obj := root
-	for _, part := range parts[:len(parts)-1] {
-		if part == "" {
-			return fmt.Errorf("empty path segment")
-		}
-		existing := obj.Get(part)
-		if existing == nil || goja.IsUndefined(existing) || goja.IsNull(existing) {
-			child := rt.NewObject()
-			if err := obj.Set(part, child); err != nil {
-				return err
+		parts := strings.Split(name, ".")
+		cur := rootMap
+		for _, part := range parts[:len(parts)-1] {
+			if part == "" {
+				return nil, fmt.Errorf("empty path segment in %q", name)
 			}
-			obj = child
-			continue
+			next, ok := cur[part].(map[string]any)
+			if !ok {
+				next = make(map[string]any)
+				cur[part] = next
+			}
+			cur = next
 		}
-		child, ok := existing.(*goja.Object)
-		if !ok {
-			return fmt.Errorf("%q is not an object", part)
-		}
-		obj = child
+		leaf := parts[len(parts)-1]
+		cur[leaf] = moejs.NativeFunc(func(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {
+			return r.callMethod(name, realm, args)
+		})
 	}
-	return obj.Set(parts[len(parts)-1], fn)
+
+	if err := r.rt.SetGlobal(opts.Root, rootMap); err != nil {
+		return nil, err
+	}
+
+	if opts.Root != "console" {
+		_ = r.rt.SetGlobal("console", map[string]any{
+			"log": moejs.NativeFunc(r.print),
+		})
+	}
+
+	if err := r.guardUnknownMembers(opts.Root); err != nil {
+		return nil, err
+	}
+
+	return r, nil
 }
 
 // SetCancel installs the hook polled while a method call is in flight.
@@ -236,26 +225,46 @@ func (r *Runtime) SetCancel(fn func() bool) {
 
 // print collects text output. The completion value is reported separately, so
 // print is for narration and intermediate values, mirroring a REPL.
-func (r *Runtime) print(call goja.FunctionCall) goja.Value {
-	parts := make([]string, 0, len(call.Arguments))
-	for _, arg := range call.Arguments {
-		parts = append(parts, arg.String())
+func (r *Runtime) print(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {
+	parts := make([]string, 0, len(args))
+	for _, arg := range args {
+		val, err := r.rt.ToGo(arg)
+		if err != nil {
+			parts = append(parts, fmt.Sprint(arg))
+			continue
+		}
+		if s, ok := val.(string); ok {
+			parts = append(parts, s)
+		} else if val == nil {
+			parts = append(parts, "null")
+		} else {
+			raw, err := json.Marshal(val)
+			if err == nil {
+				parts = append(parts, string(raw))
+			} else {
+				parts = append(parts, fmt.Sprint(val))
+			}
+		}
 	}
 	r.output = append(r.output, strings.Join(parts, " "))
-	return goja.Undefined()
+	return moejs.Undefined(), nil
 }
 
 // callMethod is every root.* method: one object argument in, one result
 // object out. Method failures throw as JavaScript errors so the model sees the
 // caller's own message and can react, rather than getting a harness abort.
-func (r *Runtime) callMethod(name string, call goja.FunctionCall) goja.Value {
-	args := map[string]any{}
-	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) && !goja.IsNull(call.Arguments[0]) {
-		m, ok := call.Arguments[0].Export().(map[string]any)
-		if !ok {
-			r.throwError(r.opts.Root + "." + name + " takes a single object argument")
+func (r *Runtime) callMethod(name string, realm *moejs.Realm, args []moejs.Value) (moejs.Value, error) {
+	argsMap := map[string]any{}
+	if len(args) > 0 && !args[0].IsUndefined() && !args[0].IsNull() {
+		exported, err := r.rt.ToGo(args[0])
+		if err != nil {
+			return moejs.Undefined(), fmt.Errorf("%s.%s: %w", r.opts.Root, name, err)
 		}
-		args = pruneNulls(m)
+		m, ok := exported.(map[string]any)
+		if !ok {
+			return moejs.Undefined(), fmt.Errorf("%s.%s takes a single object argument", r.opts.Root, name)
+		}
+		argsMap = pruneNulls(m)
 	}
 	ctx := r.evalCtx
 	if ctx == nil {
@@ -263,34 +272,16 @@ func (r *Runtime) callMethod(name string, call goja.FunctionCall) goja.Value {
 	}
 	method, ok := r.method[name]
 	if !ok {
-		r.throwError(r.opts.Root + "." + name + " is not installed")
+		return moejs.Undefined(), fmt.Errorf("%s.%s is not installed", r.opts.Root, name)
 	}
-	result, err := method.Call(ctx, args)
+	result, err := method.Call(ctx, argsMap)
 	if err != nil {
-		r.throwError(err.Error())
+		return moejs.Undefined(), err
 	}
 	return r.resultObject(result)
 }
 
-// throwError raises a JavaScript Error from native code. Panicking with a plain
-// Go string would NOT become a catchable exception: the vm only converts
-// goja.Values, and anything else propagates as a Go panic that Eval could
-// mistake for an interrupt.
-func (r *Runtime) throwError(message string) {
-	ctor, ok := goja.AssertFunction(r.rt.Get("Error"))
-	if !ok {
-		panic(r.rt.ToValue(message))
-	}
-	errObj, err := ctor(goja.Undefined(), r.rt.ToValue(message))
-	if err != nil {
-		panic(r.rt.ToValue(message))
-	}
-	panic(errObj)
-}
-
-// pruneNulls drops null-valued keys. goja exports explicit undefined fields as
-// nil, and callers that fail closed on unknown arguments would otherwise turn
-// an omitted option into a rejection.
+// pruneNulls drops null-valued keys.
 func pruneNulls(args map[string]any) map[string]any {
 	out := make(map[string]any, len(args))
 	for key, value := range args {
@@ -304,14 +295,14 @@ func pruneNulls(args map[string]any) map[string]any {
 
 // resultObject renders a method result for script code: text and image parts
 // plus the typed structured view the next call's arguments come from.
-func (r *Runtime) resultObject(result *Result) goja.Value {
+func (r *Runtime) resultObject(result *Result) (moejs.Value, error) {
 	if result == nil {
 		result = &Result{}
 	}
 	if r.opts.PlainResults && !result.IsError && len(result.Content) == 0 && len(result.StructuredContent) > 0 {
 		var decoded any
 		if json.Unmarshal(result.StructuredContent, &decoded) == nil && decoded != nil {
-			return r.rt.ToValue(decoded)
+			return r.rt.FromGo(decoded)
 		}
 	}
 	content := make([]any, 0, len(result.Content))
@@ -332,20 +323,51 @@ func (r *Runtime) resultObject(result *Result) goja.Value {
 			structured = decoded
 		}
 	}
-	return r.rt.ToValue(map[string]any{
+	return r.rt.FromGo(map[string]any{
 		"content":           content,
 		"structuredContent": structured,
 		"isError":           result.IsError,
 	})
 }
 
-// evalOutcome carries one evaluation's result across the worker boundary. The
-// worker always sends exactly one, so Eval never leaks a goroutine and never
-// confuses one evaluation's outcome with another's.
-type evalOutcome struct {
-	completion goja.Value
-	runErr     error
-	panicked   any
+// wrapTopLevelAwait compiles code directly as a script, or wraps top-level
+// await in an async IIFE if top-level await is encountered.
+func wrapTopLevelAwait(code string) (*moejs.Script, error) {
+	s, err := moejs.CompileScript("eval.js", code)
+	if err == nil {
+		return s, nil
+	}
+	if !strings.Contains(code, "await") {
+		return nil, err
+	}
+	trimmed := strings.TrimSpace(code)
+	if sExpr, errExpr := moejs.CompileScript("eval.js", "(async () => (\n"+trimmed+"\n))()"); errExpr == nil {
+		return sExpr, nil
+	}
+	statements := strings.Split(trimmed, "\n")
+	if len(statements) > 0 {
+		lastIdx := len(statements) - 1
+		for lastIdx >= 0 && strings.TrimSpace(statements[lastIdx]) == "" {
+			lastIdx--
+		}
+		if lastIdx >= 0 {
+			last := strings.TrimSpace(statements[lastIdx])
+			lastWithoutSemi := strings.TrimSuffix(last, ";")
+			if !strings.HasPrefix(last, "return ") && !strings.HasPrefix(last, "const ") && !strings.HasPrefix(last, "let ") && !strings.HasPrefix(last, "var ") {
+				statementsCopy := make([]string, len(statements))
+				copy(statementsCopy, statements)
+				statementsCopy[lastIdx] = "return (" + lastWithoutSemi + ");"
+				wrapped := "(async () => {\n" + strings.Join(statementsCopy, "\n") + "\n})()"
+				if sRet, errRet := moejs.CompileScript("eval.js", wrapped); errRet == nil {
+					return sRet, nil
+				}
+			}
+		}
+	}
+	if sBlock, errBlock := moejs.CompileScript("eval.js", "(async () => {\n"+trimmed+"\n})()"); errBlock == nil {
+		return sBlock, nil
+	}
+	return nil, err
 }
 
 // Eval runs code and converts the outcome to harness content parts. The
@@ -359,8 +381,6 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 		return nil, Errorf("code is %d bytes, over the %d limit", len(code), r.opts.MaxCodeBytes)
 	}
 	if ctx.Err() != nil {
-		// Already cancelled before starting: nothing ran, so the outcome is
-		// known (not unknown) — the action was refused, not interrupted.
 		return nil, Errorf("execution cancelled before it started")
 	}
 	if timeout <= 0 {
@@ -376,44 +396,71 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	r.evalCtx = callCtx
 	defer func() { r.evalCtx = nil }()
 
-	// The script runs on a worker so an abort can interrupt it without any
-	// cross-evaluation signalling: the outcome travels back on a per-eval
-	// channel, so a late event from one evaluation can never be mistaken for
-	// another's.
-	r.rt.ClearInterrupt()
-	resCh := make(chan evalOutcome, 1)
-	go func() {
-		var out evalOutcome
-		defer func() {
-			if p := recover(); p != nil {
-				out.panicked = p
-			}
-			resCh <- out
-		}()
-		out.completion, out.runErr = r.rt.RunString(code)
-	}()
-
-	var out evalOutcome
-	select {
-	case out = <-resCh:
-		// Finished before any abort.
-	case <-callCtx.Done():
-		// Abort while running: interrupt, then drain. The worker always sends
-		// exactly one outcome, so this cannot hang.
-		r.rt.Interrupt("execution stopped")
-		out = <-resCh
+	s, compileErr := wrapTopLevelAwait(code)
+	if compileErr != nil {
+		return nil, Errorf("JavaScript error: %s", jsErrorText(compileErr))
 	}
 
-	if out.panicked != nil {
-		if _, ok := out.panicked.(*goja.InterruptedError); ok {
+	r.rt.ClearInterrupt()
+
+	stop := context.AfterFunc(callCtx, func() {
+		r.loop.Interrupt(context.Cause(callCtx))
+	})
+	defer stop()
+
+	var completion moejs.Value = moejs.Undefined()
+	var completionErr error
+	var panicked any
+
+	runErr := func() (rErr error) {
+		defer func() {
+			if p := recover(); p != nil {
+				panicked = p
+			}
+		}()
+		return r.loop.Run(func(rt *moejs.Runtime) error {
+			val, err := rt.RunScript(s)
+			if err != nil {
+				return err
+			}
+			if _, _, ok := moejs.PromiseResult(val); ok {
+				holdDone := r.loop.Hold()
+				then, err := rt.Get(val, "then")
+				if err != nil {
+					holdDone(nil)
+					return err
+				}
+				onResolve := rt.Function("onResolve", 1, func(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {
+					completion = moejs.Arg(args, 0)
+					holdDone(nil)
+					return moejs.Undefined(), nil
+				})
+				onReject := rt.Function("onReject", 1, func(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {
+					arg := moejs.Arg(args, 0)
+					if exc, ok := r.rt.ToGo(arg); ok == nil && exc != nil {
+						completionErr = fmt.Errorf("%v", exc)
+					} else {
+						completionErr = errors.New("promise rejected")
+					}
+					holdDone(nil)
+					return moejs.Undefined(), nil
+				})
+				_, err = rt.CallFunction(then, val, onResolve, onReject)
+				return err
+			}
+			completion = val
+			return nil
+		})
+	}()
+
+	if panicked != nil {
+		if isInterruptErr(panicked) {
 			r.rt.ClearInterrupt()
 			return nil, Errorf("%s", r.opts.InterruptMessage)
 		}
-		// Anything else is a genuine Go bug, not a stop: re-panic rather than
-		// misreporting it as an interrupted action.
-		panic(out.panicked)
+		panic(panicked)
 	}
-	completion, runErr := out.completion, out.runErr
+
 	if isInterrupt(runErr) {
 		r.rt.ClearInterrupt()
 		return nil, Errorf("%s", r.opts.InterruptMessage)
@@ -421,33 +468,36 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	if runErr != nil {
 		return nil, Errorf("JavaScript error: %s", jsErrorText(runErr))
 	}
-	if isPromise, err := r.isPromise(goja.Undefined(), completion); err == nil && isPromise.ToBoolean() {
-		return nil, Errorf("%s", r.opts.AsyncMessage)
+	if completionErr != nil {
+		return nil, Errorf("JavaScript error: %s", jsErrorText(completionErr))
 	}
 	return r.renderCompletion(completion)
 }
 
-// isInterrupt reports whether a RunString error is an interrupt that arrived as
-// an error return rather than a panic. Only the exact type counts: script
-// throws never produce it, so there is no message sniffing to misfire.
 func isInterrupt(err error) bool {
 	if err == nil {
 		return false
 	}
-	_, ok := err.(*goja.InterruptedError)
-	return ok
+	var ie *moejs.InterruptedError
+	return errors.As(err, &ie)
 }
 
-// jsErrorText renders a script failure with its message, truncated so a long
-// stack cannot flood the context.
-func jsErrorText(err error) string {
-	text := err.Error()
-	if exception, ok := err.(*goja.Exception); ok {
-		if stack := exception.Stack(); len(stack) > 0 {
-			frame := stack[0]
-			text += fmt.Sprintf("\n  at %s (%s)", frame.FuncName(), frame.Position())
-		}
+func isInterruptErr(v any) bool {
+	if v == nil {
+		return false
 	}
+	if err, ok := v.(error); ok {
+		var ie *moejs.InterruptedError
+		return errors.As(err, &ie)
+	}
+	return false
+}
+
+func jsErrorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := err.Error()
 	if len(text) > 2000 {
 		text = text[:2000] + "… [truncated]"
 	}
@@ -457,7 +507,7 @@ func jsErrorText(err error) string {
 // renderCompletion converts print output plus the completion value to harness
 // parts. Image-shaped objects anywhere in the completion become native image
 // parts; everything else becomes text.
-func (r *Runtime) renderCompletion(completion goja.Value) ([]map[string]any, error) {
+func (r *Runtime) renderCompletion(completion moejs.Value) ([]map[string]any, error) {
 	var texts []string
 	texts = append(texts, r.output...)
 	images, notes, err := r.collectImages(completion)
@@ -465,8 +515,8 @@ func (r *Runtime) renderCompletion(completion goja.Value) ([]map[string]any, err
 		return nil, err
 	}
 	texts = append(texts, notes...)
-	if completion != nil && !goja.IsUndefined(completion) {
-		if rendered := stringifyCompletion(completion); rendered != "" {
+	if !completion.IsUndefined() {
+		if rendered := r.stringifyCompletion(completion); rendered != "" {
 			texts = append(texts, rendered)
 		}
 	}
@@ -484,9 +534,9 @@ func (r *Runtime) renderCompletion(completion goja.Value) ([]map[string]any, err
 
 // stringifyCompletion renders the completion value as JSON, which is how the
 // model reads structured observations back.
-func stringifyCompletion(completion goja.Value) string {
-	exported := completion.Export()
-	if exported == nil {
+func (r *Runtime) stringifyCompletion(completion moejs.Value) string {
+	exported, err := r.rt.ToGo(completion)
+	if err != nil || exported == nil {
 		return ""
 	}
 	raw, err := json.Marshal(exported)
@@ -504,11 +554,15 @@ func stringifyCompletion(completion goja.Value) string {
 // converts them to harness parts. Data must be valid base64: a hand-built image
 // object with garbage data fails loudly rather than reaching the provider as a
 // corrupt block.
-func (r *Runtime) collectImages(completion goja.Value) ([]map[string]any, []string, error) {
-	if completion == nil || goja.IsUndefined(completion) {
+func (r *Runtime) collectImages(completion moejs.Value) ([]map[string]any, []string, error) {
+	if completion.IsUndefined() {
 		return nil, nil, nil
 	}
-	found := findImageShapes(completion.Export())
+	exported, err := r.rt.ToGo(completion)
+	if err != nil || exported == nil {
+		return nil, nil, nil
+	}
+	found := findImageShapes(exported)
 	var out []map[string]any
 	var notes []string
 	for i, shape := range found {

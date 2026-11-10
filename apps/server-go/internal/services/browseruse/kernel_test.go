@@ -263,15 +263,16 @@ func TestStatePersistsAndIsolates(t *testing.T) {
 	}
 }
 
-func TestSyncOnly(t *testing.T) {
+func TestAsyncSupported(t *testing.T) {
 	m := NewManager()
 	desktop := newFakeDesktop()
-	// A Promise completion would never settle (no microtask pump), so the
-	// runtime refuses it with the async message.
-	if _, err := eval(t, m, "s1", desktop, `Promise.resolve(1).then(function (x) { return x })`); err == nil {
-		t.Fatal("a Promise completion should fail")
-	} else if !strings.Contains(err.Error(), "async") {
-		t.Fatalf("Promise error should mention async, got: %v", err)
+	raw, err := eval(t, m, "s1", desktop, `Promise.resolve(42).then(function (x) { return x })`)
+	if err != nil {
+		t.Fatalf("Promise completion failed: %v", err)
+	}
+	parts, ok := raw.([]map[string]any)
+	if !ok || len(parts) == 0 || parts[0]["text"] != "42" {
+		t.Fatalf("expected 42, got: %#v", raw)
 	}
 }
 
