@@ -446,6 +446,7 @@ class ChatRepository(
         // rejected prompt (e.g. 409 right after a stop) must not render as a
         // sent message, or it silently vanishes on the next restart.
         pendingRuns[sessionId] = PendingRun(userMessage, prompt, attachments)
+        projectState?.unsettleSession(sessionId)
 
         chats.update(sessionId) {
             it.copy(
@@ -546,6 +547,7 @@ class ChatRepository(
         // and the synced one so other devices stop offering the queued text.
         persistence?.removeSession(sessionId)
         flushDraft(sessionId)
+        projectState?.unsettleSession(sessionId)
 
         val body = RunPromptDto(
             prompt = prompt,

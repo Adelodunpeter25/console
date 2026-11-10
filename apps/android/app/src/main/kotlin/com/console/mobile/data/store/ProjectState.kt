@@ -39,6 +39,13 @@ class ProjectStateHolder(initial: ProjectState = ProjectState()) {
     fun patchSession(id: String, patch: SessionHeader) {
         _state.value = _state.value.copy(sessions = _state.value.sessions.map { if (it.id == id) patch else it })
     }
+    fun unsettleSession(id: String) {
+        _state.value = _state.value.copy(
+            sessions = _state.value.sessions.map {
+                if (it.id == id && it.settled_at != null) it.copy(settled_at = null) else it
+            }
+        )
+    }
     fun updateSessionTitle(id: String, title: String) {
         _state.value = _state.value.copy(
             sessions = _state.value.sessions.map {
