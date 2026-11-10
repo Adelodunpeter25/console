@@ -382,12 +382,15 @@ impl ConsoleDesktopApp {
                             if !self.open_file_contents.contains_key(path) {
                                 self.fetch_file_tab_content(path.clone(), cx);
                             }
-                            let content = self
+                            let Some(content) = self
                                 .open_file_contents
                                 .get(path)
                                 .cloned()
-                                .or_else(|| std::fs::read_to_string(path).ok())
-                                .unwrap_or_else(|| "Loading file content...".to_string());
+                                .or_else(|| std::fs::read_to_string(path).ok()) else {
+                                return console_ui::BlockedFilePanel::new("Loading file…", "The file content is still loading.")
+                                    .icon(console_ui::IconName::File)
+                                    .into_any_element();
+                            };
 
                             let editor_view =
                                 self.get_or_build_editor_view(path, &content, &theme, cx);

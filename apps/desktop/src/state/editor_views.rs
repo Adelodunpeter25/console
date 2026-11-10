@@ -68,6 +68,11 @@ impl ConsoleDesktopApp {
                 }
                 return view.clone();
             }
+            // A refresh must never replace edits that have not been saved. The
+            // next render will retry once the host supplies matching content.
+            if state.read(cx).is_dirty() {
+                return view.clone();
+            }
             state.update(cx, |editor, cx| {
                 editor.set_text(content, cx);
                 let lang = syntax::LanguageRegistry::for_path(std::path::Path::new(path));
@@ -99,7 +104,7 @@ impl ConsoleDesktopApp {
         let state = cx.new(|cx| {
             // Editable mode: typing, caret motion, undo/redo, clipboard. The
             // comment gutter still works alongside editing.
-            let mut s = editor_ui::EditorState::editable(content, lang);
+            let mut s = editor_ui::EditorState::editable(content, lang).with_path(path);
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
