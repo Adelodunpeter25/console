@@ -3,6 +3,25 @@
 //! Replaces the GPUI-rendered context menu on macOS with a real AppKit `NSMenu`
 //! that integrates with standard system features (Look Up, Google Search, Speech,
 //! Services, and clipboard actions).
+//!
+//! DO NOT simplify this back to a single blocking call inside the mouse-down
+//! handler. `NSMenu::popUpContextMenu:withEvent:forView:` spins a nested AppKit
+//! run loop on the main thread, and that loop drains the main dispatch queue,
+//! which re-enters GPUI and polls its own queued tasks — including background
+//! timers such as `schedule_drafts_save`, which call `AsyncApp::update` and so
+//! `AppCell::borrow_mut`. The mouse-down handler runs inside `entity.update`,
+//! which holds that same `RefCell` borrow for its whole body, so the re-entrant
+//! borrow panics; under the release profile's `panic = "abort"` that surfaces as
+//! `EXC_BAD_ACCESS`, not a readable panic. It only reproduces when a task happens
+//! to be pending, so it looks intermittent.
+//!
+//! The call is therefore SPLIT, exactly as `picker.rs` splits its AppKit panel:
+//!   - [`prepare`] is SYNCHRONOUS and cheap. It captures the current `NSEvent`
+//!     and the hosting view while they are still valid, so calling it inside an
+//!     `entity.update` holds no borrow across any modal loop.
+//!   - [`Prepared::show`] is the blocking half, and MUST be called off the UI's
+//!     current stack — from a spawned task, whose first poll runs outside
+//!     `App::update` and so holds no borrow while AppKit's loop runs.
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeContextMenuAction {
@@ -34,25 +53,36 @@ pub enum NativeContextMenuResult {
     NotSupported,
 }
 
+pub use imp::{Prepared, execute_native_action, prepare};
+
 #[cfg(not(target_os = "macos"))]
-pub fn show_native_context_menu(_params: NativeContextMenuParams) -> NativeContextMenuResult {
-    NativeContextMenuResult::NotSupported
+mod imp {
+    use super::{NativeContextMenuAction, NativeContextMenuParams, NativeContextMenuResult};
+
+    /// Opaque stand-in so callers need no `cfg` of their own.
+    pub struct Prepared;
+
+    pub fn prepare(_params: NativeContextMenuParams) -> Option<Prepared> {
+        None
+    }
+
+    impl Prepared {
+        pub fn show(self) -> NativeContextMenuResult {
+            NativeContextMenuResult::NotSupported
+        }
+    }
+
+    pub fn execute_native_action(_action: &NativeContextMenuAction) {}
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn execute_native_action(_action: &NativeContextMenuAction) {}
-
 #[cfg(target_os = "macos")]
-pub use macos::{execute_native_action, show_native_context_menu};
-
-#[cfg(target_os = "macos")]
-mod macos {
+mod imp {
     use std::cell::RefCell;
 
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, Sel};
     use objc2::{AnyThread, ClassType, DefinedClass, MainThreadOnly, define_class, msg_send, sel};
-    use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
+    use objc2_app_kit::{NSApplication, NSEvent, NSMenu, NSMenuItem, NSView};
     use objc2_foundation::{MainThreadMarker, NSObjectProtocol, NSString, NSURL};
 
     use super::{NativeContextMenuAction, NativeContextMenuParams, NativeContextMenuResult};
@@ -101,6 +131,31 @@ mod macos {
         }
     }
 
+    /// The menu presentation, captured while the triggering event is current.
+    ///
+    /// Holding the `NSEvent` and the hosting `NSView` here is what lets [`show`]
+    /// run later, on a stack with no `App` borrow held: AppKit needs both, and
+    /// neither is retrievable once the mouse event has finished dispatching.
+    ///
+    /// [`show`]: Prepared::show
+    pub struct Prepared {
+        event: Retained<NSEvent>,
+        view: Option<Retained<NSView>>,
+        params: NativeContextMenuParams,
+    }
+
+    pub fn prepare(params: NativeContextMenuParams) -> Option<Prepared> {
+        let mtm = MainThreadMarker::new()?;
+        let app = NSApplication::sharedApplication(mtm);
+        let event = app.currentEvent()?;
+        let view = app.keyWindow().and_then(|window| window.contentView());
+        Some(Prepared {
+            event,
+            view,
+            params,
+        })
+    }
+
     fn open_system_url(url_str: &str) {
         let ns_str = NSString::from_str(url_str);
         let url: Option<Retained<NSURL>> =
@@ -115,7 +170,7 @@ mod macos {
         }
     }
 
-    pub fn speak_text(text: &str) {
+    fn speak_text(text: &str) {
         let ns_str = NSString::from_str(text);
         unsafe {
             let synth: *mut AnyObject = msg_send![objc2::class!(NSSpeechSynthesizer), new];
@@ -125,7 +180,7 @@ mod macos {
         }
     }
 
-    pub fn stop_speaking() {
+    fn stop_speaking() {
         unsafe {
             let synth: *mut AnyObject = msg_send![objc2::class!(NSSpeechSynthesizer), new];
             if !synth.is_null() {
@@ -154,176 +209,178 @@ mod macos {
         }
     }
 
-    pub fn show_native_context_menu(params: NativeContextMenuParams) -> NativeContextMenuResult {
-        let Some(mtm) = MainThreadMarker::new() else {
-            return NativeContextMenuResult::NotSupported;
-        };
-
-        let app = NSApplication::sharedApplication(mtm);
-        let Some(event) = app.currentEvent() else {
-            return NativeContextMenuResult::NotSupported;
-        };
-
-        let target = NativeMenuTarget::new();
-
-        let menu: Retained<NSMenu> = unsafe {
-            msg_send![NSMenu::alloc(mtm), initWithTitle: &*NSString::from_str("")]
-        };
-        unsafe {
-            let _: () = msg_send![&*menu, setAllowsContextMenuPlugIns: true];
-        }
-
-        let add_item = |menu: &NSMenu,
-                        title: &str,
-                        key_equiv: &str,
-                        action: Option<NativeContextMenuAction>,
-                        enabled: bool| {
-            let item: Retained<NSMenuItem> = unsafe {
-                msg_send![
-                    NSMenuItem::alloc(mtm),
-                    initWithTitle: &*NSString::from_str(title),
-                    action: sel!(menuItemClicked:),
-                    keyEquivalent: &*NSString::from_str(key_equiv)
-                ]
+    impl Prepared {
+        /// Blocks until the menu closes. Must not be called while the `App`
+        /// borrow is held — see this module's header.
+        pub fn show(self) -> NativeContextMenuResult {
+            let Some(mtm) = MainThreadMarker::new() else {
+                return NativeContextMenuResult::NotSupported;
             };
-            if let Some(action) = action {
-                let tag = target.register_action(action);
+
+            let Prepared {
+                event,
+                view,
+                params,
+            } = self;
+
+            let target = NativeMenuTarget::new();
+
+            let menu: Retained<NSMenu> =
+                unsafe { msg_send![NSMenu::alloc(mtm), initWithTitle: &*NSString::from_str("")] };
+            unsafe {
+                let _: () = msg_send![&*menu, setAllowsContextMenuPlugIns: true];
+            }
+
+            let add_item = |menu: &NSMenu,
+                            title: &str,
+                            key_equiv: &str,
+                            action: Option<NativeContextMenuAction>,
+                            enabled: bool| {
+                let item: Retained<NSMenuItem> = unsafe {
+                    msg_send![
+                        NSMenuItem::alloc(mtm),
+                        initWithTitle: &*NSString::from_str(title),
+                        action: sel!(menuItemClicked:),
+                        keyEquivalent: &*NSString::from_str(key_equiv)
+                    ]
+                };
+                if let Some(action) = action {
+                    let tag = target.register_action(action);
+                    unsafe {
+                        let _: () = msg_send![&*item, setTag: tag];
+                        let _: () = msg_send![&*item, setTarget: Some(&*target)];
+                    }
+                }
                 unsafe {
-                    let _: () = msg_send![&*item, setTag: tag];
-                    let _: () = msg_send![&*item, setTarget: Some(&*target)];
+                    let _: () = msg_send![&*item, setEnabled: enabled];
+                    let _: () = msg_send![menu, addItem: &*item];
+                }
+            };
+
+            let add_separator = |menu: &NSMenu| unsafe {
+                let sep: Retained<NSMenuItem> = msg_send![NSMenuItem::class(), separatorItem];
+                let _: () = msg_send![menu, addItem: &*sep];
+            };
+
+            // 1. Look Up & Search (if text is selected)
+            if let Some(selected) = &params.selected_text {
+                let trimmed = selected.trim();
+                if !trimmed.is_empty() {
+                    let display_term = if trimmed.chars().count() > 20 {
+                        let mut s: String = trimmed.chars().take(17).collect();
+                        s.push_str("...");
+                        s
+                    } else {
+                        trimmed.to_string()
+                    };
+
+                    add_item(
+                        &menu,
+                        &format!("Look Up “{}”", display_term),
+                        "",
+                        Some(NativeContextMenuAction::LookUp(trimmed.to_string())),
+                        true,
+                    );
+                    add_item(
+                        &menu,
+                        "Search with Google",
+                        "",
+                        Some(NativeContextMenuAction::SearchGoogle(trimmed.to_string())),
+                        true,
+                    );
+                    add_separator(&menu);
                 }
             }
+
+            // 2. Clipboard actions
+            add_item(
+                &menu,
+                "Cut",
+                "x",
+                Some(NativeContextMenuAction::Cut),
+                params.can_cut,
+            );
+            add_item(
+                &menu,
+                "Copy",
+                "c",
+                Some(NativeContextMenuAction::Copy),
+                params.can_copy,
+            );
+            add_item(
+                &menu,
+                "Paste",
+                "v",
+                Some(NativeContextMenuAction::Paste),
+                params.can_paste,
+            );
+            add_separator(&menu);
+
+            // 3. Selection
+            add_item(
+                &menu,
+                "Select All",
+                "a",
+                Some(NativeContextMenuAction::SelectAll),
+                params.can_select_all,
+            );
+            add_separator(&menu);
+
+            // 4. Speech submenu
+            let speech_menu: Retained<NSMenu> = unsafe {
+                msg_send![NSMenu::alloc(mtm), initWithTitle: &*NSString::from_str("Speech")]
+            };
+            let speech_text = params
+                .selected_text
+                .as_deref()
+                .unwrap_or(&params.total_text);
+            let can_speak = !speech_text.trim().is_empty();
+
+            add_item(
+                &speech_menu,
+                "Start Speaking",
+                "",
+                Some(NativeContextMenuAction::Speak(speech_text.to_string())),
+                can_speak,
+            );
+            add_item(
+                &speech_menu,
+                "Stop Speaking",
+                "",
+                Some(NativeContextMenuAction::StopSpeaking),
+                true,
+            );
+
+            let speech_item: Retained<NSMenuItem> = unsafe {
+                msg_send![
+                    NSMenuItem::alloc(mtm),
+                    initWithTitle: &*NSString::from_str("Speech"),
+                    action: None::<Sel>,
+                    keyEquivalent: &*NSString::from_str("")
+                ]
+            };
             unsafe {
-                let _: () = msg_send![&*item, setEnabled: enabled];
-                let _: () = msg_send![menu, addItem: &*item];
+                let _: () = msg_send![&*speech_item, setSubmenu: &*speech_menu];
+                let _: () = msg_send![&*menu, addItem: &*speech_item];
             }
-        };
 
-        let add_separator = |menu: &NSMenu| unsafe {
-            let sep: Retained<NSMenuItem> = msg_send![NSMenuItem::class(), separatorItem];
-            let _: () = msg_send![menu, addItem: &*sep];
-        };
+            // Show the menu at the current mouse event location
+            let view_ptr = view.as_deref();
 
-        // 1. Look Up & Search (if text is selected)
-        if let Some(selected) = &params.selected_text {
-            let trimmed = selected.trim();
-            if !trimmed.is_empty() {
-                let display_term = if trimmed.chars().count() > 20 {
-                    let mut s: String = trimmed.chars().take(17).collect();
-                    s.push_str("...");
-                    s
-                } else {
-                    trimmed.to_string()
-                };
-
-                add_item(
-                    &menu,
-                    &format!("Look Up “{}”", display_term),
-                    "",
-                    Some(NativeContextMenuAction::LookUp(trimmed.to_string())),
-                    true,
-                );
-                add_item(
-                    &menu,
-                    "Search with Google",
-                    "",
-                    Some(NativeContextMenuAction::SearchGoogle(trimmed.to_string())),
-                    true,
-                );
-                add_separator(&menu);
+            unsafe {
+                let _: () = msg_send![
+                    NSMenu::class(),
+                    popUpContextMenu: &*menu,
+                    withEvent: &*event,
+                    forView: view_ptr
+                ];
             }
-        }
 
-        // 2. Clipboard actions
-        add_item(
-            &menu,
-            "Cut",
-            "x",
-            Some(NativeContextMenuAction::Cut),
-            params.can_cut,
-        );
-        add_item(
-            &menu,
-            "Copy",
-            "c",
-            Some(NativeContextMenuAction::Copy),
-            params.can_copy,
-        );
-        add_item(
-            &menu,
-            "Paste",
-            "v",
-            Some(NativeContextMenuAction::Paste),
-            params.can_paste,
-        );
-        add_separator(&menu);
-
-        // 3. Selection
-        add_item(
-            &menu,
-            "Select All",
-            "a",
-            Some(NativeContextMenuAction::SelectAll),
-            params.can_select_all,
-        );
-        add_separator(&menu);
-
-        // 4. Speech submenu
-        let speech_menu: Retained<NSMenu> = unsafe {
-            msg_send![NSMenu::alloc(mtm), initWithTitle: &*NSString::from_str("Speech")]
-        };
-        let speech_text = params
-            .selected_text
-            .as_deref()
-            .unwrap_or(&params.total_text);
-        let can_speak = !speech_text.trim().is_empty();
-
-        add_item(
-            &speech_menu,
-            "Start Speaking",
-            "",
-            Some(NativeContextMenuAction::Speak(speech_text.to_string())),
-            can_speak,
-        );
-        add_item(
-            &speech_menu,
-            "Stop Speaking",
-            "",
-            Some(NativeContextMenuAction::StopSpeaking),
-            true,
-        );
-
-        let speech_item: Retained<NSMenuItem> = unsafe {
-            msg_send![
-                NSMenuItem::alloc(mtm),
-                initWithTitle: &*NSString::from_str("Speech"),
-                action: None::<Sel>,
-                keyEquivalent: &*NSString::from_str("")
-            ]
-        };
-        unsafe {
-            let _: () = msg_send![&*speech_item, setSubmenu: &*speech_menu];
-            let _: () = msg_send![&*menu, addItem: &*speech_item];
-        }
-
-        // Show the menu at the current mouse event location
-        let window = app.keyWindow();
-        let view = window.as_ref().and_then(|w| w.contentView());
-        let view_ptr = view.as_deref();
-
-        unsafe {
-            let _: () = msg_send![
-                NSMenu::class(),
-                popUpContextMenu: &*menu,
-                withEvent: &*event,
-                forView: view_ptr
-            ];
-        }
-
-        if let Some(action) = target.selected() {
-            NativeContextMenuResult::Action(action)
-        } else {
-            NativeContextMenuResult::Dismissed
+            if let Some(action) = target.selected() {
+                NativeContextMenuResult::Action(action)
+            } else {
+                NativeContextMenuResult::Dismissed
+            }
         }
     }
 }
