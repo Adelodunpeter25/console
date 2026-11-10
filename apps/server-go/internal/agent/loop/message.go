@@ -86,6 +86,8 @@ type UserMessage struct {
 	// Synthetic marks a server-injected turn (e.g. background work finished)
 	// that the model sees but clients never render.
 	Synthetic bool `json:"synthetic,omitempty"`
+	// ApprovalMode is the mode the turn ran under, kept for display only.
+	ApprovalMode string `json:"approvalMode,omitempty"`
 }
 
 // RenderedAnnotations returns the <browser_annotation> markup for a set of

@@ -36,6 +36,7 @@ type rawRootMessage struct {
 type rawUserMessage struct {
 	Content      string               `json:"content"`
 	Synthetic    bool                 `json:"synthetic"`
+	ApprovalMode string               `json:"approvalMode"`
 	ContextFiles []string             `json:"contextFiles"`
 	Attachments  []rawImageAttachment `json:"attachments"`
 	Annotations  []json.RawMessage    `json:"annotations"`
@@ -232,6 +233,7 @@ func MessageFromSplit(skeleton []byte, parts []msgparts.Part) (any, error) {
 			Role:         RoleUser,
 			Content:      root.User.Content,
 			Synthetic:    root.User.Synthetic,
+			ApprovalMode: root.User.ApprovalMode,
 			ContextFiles: append([]string(nil), root.User.ContextFiles...),
 		}
 		for _, att := range root.User.Attachments {

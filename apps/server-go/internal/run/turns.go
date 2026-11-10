@@ -323,6 +323,7 @@ func (s *Service) runOneTurn(ctx context.Context, sessionID, runID string, dto P
 		ContextFiles: dto.ContextFiles,
 		Annotations:  dto.Annotations,
 		Synthetic:    dto.Synthetic,
+		ApprovalMode: string(mode),
 	}
 	for _, a := range dto.Attachments {
 		user.Attachments = append(user.Attachments, loop.ImageAttachment{Data: a.Data, MimeType: a.MimeType})

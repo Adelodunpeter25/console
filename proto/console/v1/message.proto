@@ -55,6 +55,9 @@ message AgentUserMessage {
   repeated BrowserAnnotation annotations = 4;
   // Server-injected turn (e.g. background work finished); never shown in chat.
   bool synthetic = 5;
+  // Approval mode the turn ran under. Absent on messages stored before the
+  // field existed; clients treat that as unknown, not as a default mode.
+  optional string approval_mode = 6;
 }
 
 message TextPart {
