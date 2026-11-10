@@ -399,7 +399,10 @@ impl RenderOnce for WorkspaceTabBar {
                                             (on_c)(pane_id.clone(), id.clone(), window, cx);
                                         }
                                     })
-                                    .child(app_icon(IconName::X, 12.0, theme.text_ghost))
+                                    // `text_secondary` rather than `text_ghost`:
+                                    // the ghost tone is nearly invisible on the
+                                    // tab strip's canvas in both themes.
+                                    .child(app_icon(IconName::X, 12.0, theme.text_secondary))
                                     .into_any_element()
                             })
                     }))
