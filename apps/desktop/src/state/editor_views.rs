@@ -137,9 +137,11 @@ impl ConsoleDesktopApp {
         let subscription = cx.subscribe(&state, move |app, _state, event: &editor_ui::EditorEvent, cx| {
             match event {
                 editor_ui::EditorEvent::Saved => {
-                    let text = app.viewer_editor_views.get(&file_path)
-                        .map(|(_, _, state, _)| state.read(cx).text())
-                        .unwrap_or_default();
+                    let text = std::fs::read_to_string(&file_path).unwrap_or_else(|_| {
+                        app.viewer_editor_views.get(&file_path)
+                            .map(|(_, _, state, _)| state.read(cx).text())
+                            .unwrap_or_default()
+                    });
                     let mut hasher = DefaultHasher::new();
                     text.hash(&mut hasher);
                     if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
