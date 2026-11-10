@@ -37,6 +37,24 @@ fn converts_user_message() {
 }
 
 #[test]
+fn user_message_carries_its_approval_mode() {
+    let wire: console_proto::AgentMessage =
+        serde_json::from_str(r#"{"user":{"content":"plan it","approvalMode":"plan-mode"}}"#)
+            .expect("decode");
+    match AgentMessage::from_proto(wire).expect("convert") {
+        AgentMessage::User { approval_mode, .. } => {
+            assert_eq!(approval_mode.as_deref(), Some("plan-mode"));
+        }
+        other => panic!("wrong variant: {other:?}"),
+    }
+    // Stored before the server recorded the mode: unknown, not plan.
+    match decode_fixture("user.json") {
+        AgentMessage::User { approval_mode, .. } => assert_eq!(approval_mode, None),
+        other => panic!("wrong variant: {other:?}"),
+    }
+}
+
+#[test]
 fn converts_assistant_message() {
     match decode_fixture("assistant.json") {
         AgentMessage::Assistant { content, .. } => {

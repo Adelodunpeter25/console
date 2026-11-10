@@ -1,6 +1,6 @@
 //! Row assembly and message bubble rendering for the transcript list.
 
-use console_core::{ActivityEvent, AgentMessage, AssistantContentPart};
+use console_core::{ActivityEvent, AgentMessage, ApprovalMode, AssistantContentPart};
 use gpui::{div, prelude::*, px, AnyElement, App, IntoElement, WeakEntity};
 
 use crate::chat::message_bubble::{AssistantMessageBubble, UserMessageBubble};
@@ -65,13 +65,14 @@ pub fn transcript_row(
             annotations,
             context_files,
             created_at,
-            ..
+            approval_mode,
         } => {
             let expand_key = id.clone().unwrap_or_else(|| format!("message-{index}"));
             let user_expanded = view_ref.user_message_expanded(&expand_key);
             let expand_entity = entity.clone();
             let mut bubble = UserMessageBubble::new(content.clone())
                 .created_at(*created_at)
+                .plan_mode(approval_mode.as_deref() == Some(ApprovalMode::PlanMode.value()))
                 .selection(view_ref.selection.clone(), format!("user-{index}"))
                 .expanded(user_expanded)
                 .on_toggle_expand(move |_window, cx| {

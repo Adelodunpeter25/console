@@ -444,6 +444,9 @@ impl ConsoleDesktopApp {
                 });
         }
 
+        let approval_mode = Some(queued_approval_mode.unwrap_or_else(|| {
+            self.pane_approval_mode(&run_pane_id).value().to_string()
+        }));
         let user_msg = AgentMessage::User {
             id: None,
             content: prompt.clone(),
@@ -463,6 +466,7 @@ impl ConsoleDesktopApp {
                 Some(annotations.clone())
             },
             created_at: Some(chrono::Utc::now().timestamp()),
+            approval_mode: approval_mode.clone(),
         };
         self.transcript_for_pane(&run_pane_id).update(cx, |t, cx| {
             t.push_message(user_msg, cx);
@@ -481,9 +485,6 @@ impl ConsoleDesktopApp {
         let provider = queued_provider.or_else(|| {
             selected_model.as_ref().map(|m| m.provider.clone())
         });
-        let approval_mode = Some(queued_approval_mode.unwrap_or_else(|| {
-            self.pane_approval_mode(&run_pane_id).value().to_string()
-        }));
         let thinking_level = queued_thinking.or_else(|| self.pane_thinking_level(&run_pane_id));
         let active_sid = self.active_session_for_pane(&run_pane_id);
         let session_project_id = self.pane_real_project_id(&run_pane_id);
@@ -1126,6 +1127,9 @@ impl ConsoleDesktopApp {
                                 &popped.annotations,
                             ),
                             created_at: Some(chrono::Utc::now().timestamp()),
+                            approval_mode: popped.approval_mode.clone().or_else(|| {
+                                Some(self.pane_approval_mode(run_pane_id).value().to_string())
+                            }),
                         };
                         if pane_shows_run {
                             self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {

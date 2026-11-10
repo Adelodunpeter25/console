@@ -103,10 +103,14 @@ impl ComposerRunState {
 /// Plan mode reads as faint accent stripes laid over a composer card. It sits
 /// first among the card's children, so everything else paints above it.
 pub(crate) fn plan_mode_stripes(theme: Theme) -> Div {
+    plan_mode_stripes_with_opacity(theme, 0.24)
+}
+
+pub(crate) fn plan_mode_stripes_with_opacity(theme: Theme, opacity: f32) -> Div {
     div()
         .absolute()
         .inset_0()
-        .bg(gpui::pattern_slash(theme.accent.opacity(0.24), 1.5, 7.0))
+        .bg(gpui::pattern_slash(theme.accent.opacity(opacity), 1.5, 7.0))
 }
 
 #[derive(IntoElement)]

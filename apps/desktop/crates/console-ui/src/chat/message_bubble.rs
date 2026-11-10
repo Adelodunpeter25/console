@@ -281,6 +281,7 @@ pub struct UserMessageBubble {
     pub annotations: Vec<console_core::BrowserElementAnnotation>,
     pub context_files: Vec<String>,
     pub created_at: Option<i64>,
+    plan_mode: bool,
     selection: Option<TranscriptSelection>,
     selection_row: String,
     on_preview_image: Option<PreviewImageHandler>,
@@ -296,6 +297,7 @@ impl UserMessageBubble {
             annotations: Vec::new(),
             context_files: Vec::new(),
             created_at: None,
+            plan_mode: false,
             selection: None,
             selection_row: "user-message".to_owned(),
             on_preview_image: None,
@@ -332,6 +334,12 @@ impl UserMessageBubble {
 
     pub fn on_preview_image(mut self, handler: PreviewImageHandler) -> Self {
         self.on_preview_image = Some(handler);
+        self
+    }
+
+    /// The prompt was sent in plan mode: the card carries the composer's stripes.
+    pub fn plan_mode(mut self, plan_mode: bool) -> Self {
+        self.plan_mode = plan_mode;
         self
     }
 
@@ -527,6 +535,13 @@ impl RenderOnce for UserMessageBubble {
                                 .border_color(theme.user_bubble_border)
                                 .flex()
                                 .flex_col()
+                                // Fainter than the composer's: these sit under dense text.
+                                .when(self.plan_mode, |el| {
+                                    el.child(
+                                        crate::common::plan_mode_stripes_with_opacity(theme, 0.14)
+                                            .rounded(px(11.0)),
+                                    )
+                                })
                                 .text_size(px(14.0))
                                 .line_height(px(20.0))
                                 .text_color(theme.text)

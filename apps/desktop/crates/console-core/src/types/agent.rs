@@ -163,6 +163,7 @@ impl AgentMessage {
                     )
                 },
                 created_at: msg.created_at,
+                approval_mode: u.approval_mode.clone(),
             }),
             ProtoMessageEvent::Assistant(a) => Some(AgentMessage::Assistant {
                 id: opt_string(a.id.clone()),
@@ -222,6 +223,14 @@ pub enum AgentMessage {
         annotations: Option<Vec<BrowserElementAnnotation>>,
         #[serde(default, rename = "createdAt")]
         created_at: Option<i64>,
+        /// Mode the turn ran under; `None` for messages stored before the
+        /// server recorded it, which must not read as any particular mode.
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "approvalMode"
+        )]
+        approval_mode: Option<String>,
     },
     #[serde(rename = "assistant")]
     Assistant {
