@@ -262,6 +262,38 @@ impl ConsoleDesktopApp {
         self.set_settled(session_id, false, cx);
     }
 
+    /// Toggle the settled mark on the chat the user is looking at: the active
+    /// pane's chat, falling back to the last session picked in the sidebar.
+    /// A settled chat comes back to active; an active one files away.
+    pub(crate) fn toggle_settle_selected_session(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.settle_target_session_id() else {
+            return;
+        };
+        let settled = self
+            .sessions
+            .iter()
+            .find(|session| session.id == session_id)
+            .is_some_and(|session| session.settled_at.is_some());
+        self.set_settled(session_id, !settled, cx);
+    }
+
+    /// The chat a settle shortcut acts on. Drafts are excluded: the sidebar
+    /// offers no settle affordance on them, and settling one would list it
+    /// in the Drafts and the Settled section at once.
+    fn settle_target_session_id(&self) -> Option<String> {
+        let pane_id = self
+            .active_pane_id
+            .clone()
+            .unwrap_or_else(|| "pane-main".to_string());
+        let session_id = self
+            .active_session_for_pane(&pane_id)
+            .or_else(|| self.selected_session_id.clone())?;
+        if self.sidebar_draft_ids.contains(&session_id) {
+            return None;
+        }
+        Some(session_id)
+    }
+
     fn set_settled(&mut self, session_id: String, settled: bool, cx: &mut Context<Self>) {
         let Some(previous) = self
             .sessions

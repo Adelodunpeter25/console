@@ -79,6 +79,10 @@ name = "partition_settled_test"
 path = "tests/sidebar/partition_settled_test.rs"
 
 [[test]]
+name = "settle_tooltip_test"
+path = "tests/sidebar/settle_tooltip_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 

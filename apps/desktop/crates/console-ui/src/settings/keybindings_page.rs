@@ -72,6 +72,13 @@ pub fn keybinding_categories() -> Vec<KeybindingCategory> {
                     context: "Global",
                 },
                 KeybindingEntry {
+                    action_name: "SettleSession",
+                    description: "Settle the selected chat / move it back to active",
+                    macos_keys: &["⇧", "⌘", "S"],
+                    other_keys: &["Ctrl", "Shift", "S"],
+                    context: "Global",
+                },
+                KeybindingEntry {
                     action_name: "NewTerminal",
                     description: "New terminal tab",
                     macos_keys: &["⇧", "⌘", "T"],

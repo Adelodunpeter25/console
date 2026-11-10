@@ -40,6 +40,24 @@ pub fn init_session_rename_keybindings(cx: &mut App) {
     ]);
 }
 
+/// The settle shortcut as it reads on this platform.
+pub const SETTLE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "⇧⌘S"
+} else {
+    "Ctrl+Shift+S"
+};
+
+/// Tooltip for the settle toggle: the action it performs, plus the shortcut
+/// that does the same thing from the keyboard.
+pub fn settle_tooltip_label(settled: bool) -> String {
+    let action = if settled {
+        "Move back to active"
+    } else {
+        "Settle chat"
+    };
+    format!("{action} ({SETTLE_SHORTCUT_LABEL})")
+}
+
 #[derive(IntoElement)]
 pub struct SidebarSessionItem {
     session: SessionHeader,
@@ -156,9 +174,9 @@ impl RenderOnce for SidebarSessionItem {
             self.on_settle.clone()
         };
         let (settle_icon, settle_tooltip) = if settled {
-            (IconName::ArrowUp, "Move back to active")
+            (IconName::ArrowUp, settle_tooltip_label(true))
         } else {
-            (IconName::Check, "Settle chat")
+            (IconName::Check, settle_tooltip_label(false))
         };
         let title = if let Some(rename_input) = rename_input {
             let on_commit = on_commit_rename.clone();

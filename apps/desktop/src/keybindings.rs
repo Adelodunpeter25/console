@@ -19,6 +19,9 @@ actions!(
         CloseTab,
         /// Create a chat session in the active pane.
         NewChat,
+        /// Toggle the settled mark on the chat the user is looking at: file
+        /// it away, or bring a settled chat back to active (cmd-shift-s).
+        SettleSession,
         /// Open a new terminal tab in the active pane (cmd-shift-t).
         NewTerminal,
         /// Open a new browser tab in the active pane (cmd-shift-b).
@@ -104,6 +107,11 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-shift-B", NewBrowser, None),
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-n", NewChat, None),
+        // ⇧⌘S files the chat away. Both letter spellings are bound for the
+        // reason spelled out above: macOS reports an uppercase "S" while
+        // Shift is held.
+        KeyBinding::new("secondary-shift-s", SettleSession, None),
+        KeyBinding::new("secondary-shift-S", SettleSession, None),
         // cmd-o / cmd-p — same as Zed; our File menu owns the key equivalents
         // so AppKit routes them to us instead of the system Open/Print handlers.
         KeyBinding::new("secondary-o", AddProject, None),
@@ -209,6 +217,12 @@ pub fn init_handlers(cx: &mut App) {
                     })
                     .ok();
             });
+        }
+    });
+
+    cx.on_action(|_: &SettleSession, cx| {
+        if let Some((_, app)) = crate::window::get_active_window(cx) {
+            app.update(cx, |this, cx| this.toggle_settle_selected_session(cx));
         }
     });
 

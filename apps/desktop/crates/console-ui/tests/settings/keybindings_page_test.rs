@@ -71,6 +71,27 @@ fn test_filter_matches_shortcut_text() {
 }
 
 #[test]
+fn test_settle_shortcut_is_listed_and_searchable() {
+    let categories = filter_keybinding_categories("");
+    let entry = categories
+        .iter()
+        .flat_map(|c| c.entries.iter())
+        .find(|e| e.action_name == "SettleSession")
+        .expect("SettleSession should be listed in the shortcut catalog");
+    assert_eq!(entry.context, "Global");
+
+    for query in ["cmd+shift+s", "ctrl+shift+s", "settle"] {
+        assert!(
+            filter_keybinding_categories(query)
+                .iter()
+                .flat_map(|c| c.entries.iter())
+                .any(|e| e.action_name == "SettleSession"),
+            "query {query:?} should match SettleSession"
+        );
+    }
+}
+
+#[test]
 fn test_filter_drops_empty_categories() {
     let categories = filter_keybinding_categories("devtools");
     assert_eq!(categories.len(), 1);
