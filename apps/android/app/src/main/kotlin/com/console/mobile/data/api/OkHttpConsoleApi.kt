@@ -23,7 +23,6 @@ import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
 import console.v1.ForwardedPort
-import console.v1.WriteFileRequest
 import com.console.mobile.data.model.McpOAuthCallbackPayload
 import com.console.mobile.data.model.McpSavePayload
 import console.v1.McpServerStatus
@@ -135,7 +134,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     private val deviceActionAdapter by lazy { wireMoshi.adapter(DeviceActionRequest::class.java) }
     private val assistSearchAdapter by lazy { wireMoshi.adapter(AssistFileSearchResponse::class.java) }
     private val fsFileContentAdapter by lazy { wireMoshi.adapter(FsFileContent::class.java) }
-    private val writeFileAdapter by lazy { wireMoshi.adapter(WriteFileRequest::class.java) }
     private val createDirAdapter by lazy { wireMoshi.adapter(CreateDirRequest::class.java) }
     private val pairDeviceAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceRequest::class.java) }
     private val pairDeviceResponseAdapter by lazy { wireMoshi.adapter(console.v1.PairDeviceResponse::class.java) }
@@ -443,13 +441,6 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
 
     override suspend fun readFileRaw(path: String): ByteArray =
         withContext(Dispatchers.IO) { http.getBytes("/api/fs/file/raw", mapOf("path" to path)) }
-
-    override suspend fun writeFile(path: String, content: String) {
-        // Same bytes as the old hand-built object: path, content.
-        val body = writeFileAdapter.toJson(WriteFileRequest(path = path, content = content))
-        val raw = http.post("/api/fs/file", body)
-        http.unwrapOrRaw(raw, JsonElement.serializer(), "write file")
-    }
 
     override suspend fun deleteFile(path: String) {
         val raw = http.delete("/api/fs/file", mapOf("path" to path))

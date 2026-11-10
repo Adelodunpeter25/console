@@ -348,116 +348,11 @@ func (x *FsFileContent) GetContent() string {
 	return ""
 }
 
-type WriteFileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WriteFileRequest) Reset() {
-	*x = WriteFileRequest{}
-	mi := &file_console_v1_fs_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WriteFileRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WriteFileRequest) ProtoMessage() {}
-
-func (x *WriteFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WriteFileRequest.ProtoReflect.Descriptor instead.
-func (*WriteFileRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *WriteFileRequest) GetPath() string {
-	if x != nil {
-		return x.Path
-	}
-	return ""
-}
-
-func (x *WriteFileRequest) GetContent() string {
-	if x != nil {
-		return x.Content
-	}
-	return ""
-}
-
-type FileWriteResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FileWriteResponse) Reset() {
-	*x = FileWriteResponse{}
-	mi := &file_console_v1_fs_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FileWriteResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FileWriteResponse) ProtoMessage() {}
-
-func (x *FileWriteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FileWriteResponse.ProtoReflect.Descriptor instead.
-func (*FileWriteResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *FileWriteResponse) GetPath() string {
-	if x != nil {
-		return x.Path
-	}
-	return ""
-}
-
-func (x *FileWriteResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
 // Atomic, conflict-checked save for the desktop editor (POST /api/fs/save).
-// Distinct from WriteFileRequest above, which stays a plain truncating write
-// for the mobile clients. `content` is the exact text to persist: the editor
-// has already applied the file's own line endings, so the server never
-// rewrites CRLF/LF. `base_etag` is the ETag the buffer was loaded at; when it
-// is set and no longer matches, the save is refused with 409 FILE_CHANGED.
+// `content` is the exact text to persist: the editor has already applied the
+// file's own line endings, so the server never rewrites CRLF/LF. `base_etag`
+// is the ETag the buffer was loaded at; when it is set and no longer matches,
+// the save is refused with 409 FILE_CHANGED.
 type SaveFileRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -469,7 +364,7 @@ type SaveFileRequest struct {
 
 func (x *SaveFileRequest) Reset() {
 	*x = SaveFileRequest{}
-	mi := &file_console_v1_fs_proto_msgTypes[7]
+	mi := &file_console_v1_fs_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -481,7 +376,7 @@ func (x *SaveFileRequest) String() string {
 func (*SaveFileRequest) ProtoMessage() {}
 
 func (x *SaveFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[7]
+	mi := &file_console_v1_fs_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -494,7 +389,7 @@ func (x *SaveFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveFileRequest.ProtoReflect.Descriptor instead.
 func (*SaveFileRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{7}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SaveFileRequest) GetPath() string {
@@ -530,7 +425,7 @@ type SaveFileResponse struct {
 
 func (x *SaveFileResponse) Reset() {
 	*x = SaveFileResponse{}
-	mi := &file_console_v1_fs_proto_msgTypes[8]
+	mi := &file_console_v1_fs_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -542,7 +437,7 @@ func (x *SaveFileResponse) String() string {
 func (*SaveFileResponse) ProtoMessage() {}
 
 func (x *SaveFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[8]
+	mi := &file_console_v1_fs_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -555,7 +450,7 @@ func (x *SaveFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveFileResponse.ProtoReflect.Descriptor instead.
 func (*SaveFileResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{8}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SaveFileResponse) GetPath() string {
@@ -596,7 +491,7 @@ type FileDeleteResponse struct {
 
 func (x *FileDeleteResponse) Reset() {
 	*x = FileDeleteResponse{}
-	mi := &file_console_v1_fs_proto_msgTypes[9]
+	mi := &file_console_v1_fs_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -608,7 +503,7 @@ func (x *FileDeleteResponse) String() string {
 func (*FileDeleteResponse) ProtoMessage() {}
 
 func (x *FileDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[9]
+	mi := &file_console_v1_fs_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -621,7 +516,7 @@ func (x *FileDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDeleteResponse.ProtoReflect.Descriptor instead.
 func (*FileDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{9}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *FileDeleteResponse) GetPath() string {
@@ -647,7 +542,7 @@ type CreateDirRequest struct {
 
 func (x *CreateDirRequest) Reset() {
 	*x = CreateDirRequest{}
-	mi := &file_console_v1_fs_proto_msgTypes[10]
+	mi := &file_console_v1_fs_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -659,7 +554,7 @@ func (x *CreateDirRequest) String() string {
 func (*CreateDirRequest) ProtoMessage() {}
 
 func (x *CreateDirRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[10]
+	mi := &file_console_v1_fs_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -672,7 +567,7 @@ func (x *CreateDirRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDirRequest.ProtoReflect.Descriptor instead.
 func (*CreateDirRequest) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{10}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateDirRequest) GetPath() string {
@@ -692,7 +587,7 @@ type DirCreateResponse struct {
 
 func (x *DirCreateResponse) Reset() {
 	*x = DirCreateResponse{}
-	mi := &file_console_v1_fs_proto_msgTypes[11]
+	mi := &file_console_v1_fs_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -704,7 +599,7 @@ func (x *DirCreateResponse) String() string {
 func (*DirCreateResponse) ProtoMessage() {}
 
 func (x *DirCreateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[11]
+	mi := &file_console_v1_fs_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -717,7 +612,7 @@ func (x *DirCreateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirCreateResponse.ProtoReflect.Descriptor instead.
 func (*DirCreateResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{11}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DirCreateResponse) GetPath() string {
@@ -744,7 +639,7 @@ type DirDeleteResponse struct {
 
 func (x *DirDeleteResponse) Reset() {
 	*x = DirDeleteResponse{}
-	mi := &file_console_v1_fs_proto_msgTypes[12]
+	mi := &file_console_v1_fs_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -756,7 +651,7 @@ func (x *DirDeleteResponse) String() string {
 func (*DirDeleteResponse) ProtoMessage() {}
 
 func (x *DirDeleteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[12]
+	mi := &file_console_v1_fs_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -769,7 +664,7 @@ func (x *DirDeleteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirDeleteResponse.ProtoReflect.Descriptor instead.
 func (*DirDeleteResponse) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{12}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DirDeleteResponse) GetPath() string {
@@ -799,7 +694,7 @@ type FsChangeEvent struct {
 
 func (x *FsChangeEvent) Reset() {
 	*x = FsChangeEvent{}
-	mi := &file_console_v1_fs_proto_msgTypes[13]
+	mi := &file_console_v1_fs_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -811,7 +706,7 @@ func (x *FsChangeEvent) String() string {
 func (*FsChangeEvent) ProtoMessage() {}
 
 func (x *FsChangeEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[13]
+	mi := &file_console_v1_fs_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -824,7 +719,7 @@ func (x *FsChangeEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsChangeEvent.ProtoReflect.Descriptor instead.
 func (*FsChangeEvent) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{13}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *FsChangeEvent) GetType() string {
@@ -858,7 +753,7 @@ type GrepMatchRange struct {
 
 func (x *GrepMatchRange) Reset() {
 	*x = GrepMatchRange{}
-	mi := &file_console_v1_fs_proto_msgTypes[14]
+	mi := &file_console_v1_fs_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -870,7 +765,7 @@ func (x *GrepMatchRange) String() string {
 func (*GrepMatchRange) ProtoMessage() {}
 
 func (x *GrepMatchRange) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[14]
+	mi := &file_console_v1_fs_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -883,7 +778,7 @@ func (x *GrepMatchRange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrepMatchRange.ProtoReflect.Descriptor instead.
 func (*GrepMatchRange) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{14}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GrepMatchRange) GetStart() uint32 {
@@ -912,7 +807,7 @@ type GrepMatch struct {
 
 func (x *GrepMatch) Reset() {
 	*x = GrepMatch{}
-	mi := &file_console_v1_fs_proto_msgTypes[15]
+	mi := &file_console_v1_fs_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -924,7 +819,7 @@ func (x *GrepMatch) String() string {
 func (*GrepMatch) ProtoMessage() {}
 
 func (x *GrepMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[15]
+	mi := &file_console_v1_fs_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -937,7 +832,7 @@ func (x *GrepMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrepMatch.ProtoReflect.Descriptor instead.
 func (*GrepMatch) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{15}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *GrepMatch) GetRelPath() string {
@@ -982,7 +877,7 @@ type GrepResult struct {
 
 func (x *GrepResult) Reset() {
 	*x = GrepResult{}
-	mi := &file_console_v1_fs_proto_msgTypes[16]
+	mi := &file_console_v1_fs_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -994,7 +889,7 @@ func (x *GrepResult) String() string {
 func (*GrepResult) ProtoMessage() {}
 
 func (x *GrepResult) ProtoReflect() protoreflect.Message {
-	mi := &file_console_v1_fs_proto_msgTypes[16]
+	mi := &file_console_v1_fs_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1007,7 +902,7 @@ func (x *GrepResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrepResult.ProtoReflect.Descriptor instead.
 func (*GrepResult) Descriptor() ([]byte, []int) {
-	return file_console_v1_fs_proto_rawDescGZIP(), []int{16}
+	return file_console_v1_fs_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GrepResult) GetMatches() []*GrepMatch {
@@ -1081,13 +976,7 @@ const file_console_v1_fs_proto_rawDesc = "" +
 	"\x05score\x18\x04 \x01(\x01R\x05score\"=\n" +
 	"\rFsFileContent\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"@\n" +
-	"\x10WriteFileRequest\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\tR\acontent\"A\n" +
-	"\x11FileWriteResponse\x12\x12\n" +
-	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"o\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"o\n" +
 	"\x0fSaveFileRequest\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12 \n" +
@@ -1150,31 +1039,29 @@ func file_console_v1_fs_proto_rawDescGZIP() []byte {
 	return file_console_v1_fs_proto_rawDescData
 }
 
-var file_console_v1_fs_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_console_v1_fs_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_console_v1_fs_proto_goTypes = []any{
 	(*FsTreeEntry)(nil),        // 0: console.v1.FsTreeEntry
 	(*FsBrowseResult)(nil),     // 1: console.v1.FsBrowseResult
 	(*FsDirectoryTree)(nil),    // 2: console.v1.FsDirectoryTree
 	(*FileSearchResult)(nil),   // 3: console.v1.FileSearchResult
 	(*FsFileContent)(nil),      // 4: console.v1.FsFileContent
-	(*WriteFileRequest)(nil),   // 5: console.v1.WriteFileRequest
-	(*FileWriteResponse)(nil),  // 6: console.v1.FileWriteResponse
-	(*SaveFileRequest)(nil),    // 7: console.v1.SaveFileRequest
-	(*SaveFileResponse)(nil),   // 8: console.v1.SaveFileResponse
-	(*FileDeleteResponse)(nil), // 9: console.v1.FileDeleteResponse
-	(*CreateDirRequest)(nil),   // 10: console.v1.CreateDirRequest
-	(*DirCreateResponse)(nil),  // 11: console.v1.DirCreateResponse
-	(*DirDeleteResponse)(nil),  // 12: console.v1.DirDeleteResponse
-	(*FsChangeEvent)(nil),      // 13: console.v1.FsChangeEvent
-	(*GrepMatchRange)(nil),     // 14: console.v1.GrepMatchRange
-	(*GrepMatch)(nil),          // 15: console.v1.GrepMatch
-	(*GrepResult)(nil),         // 16: console.v1.GrepResult
+	(*SaveFileRequest)(nil),    // 5: console.v1.SaveFileRequest
+	(*SaveFileResponse)(nil),   // 6: console.v1.SaveFileResponse
+	(*FileDeleteResponse)(nil), // 7: console.v1.FileDeleteResponse
+	(*CreateDirRequest)(nil),   // 8: console.v1.CreateDirRequest
+	(*DirCreateResponse)(nil),  // 9: console.v1.DirCreateResponse
+	(*DirDeleteResponse)(nil),  // 10: console.v1.DirDeleteResponse
+	(*FsChangeEvent)(nil),      // 11: console.v1.FsChangeEvent
+	(*GrepMatchRange)(nil),     // 12: console.v1.GrepMatchRange
+	(*GrepMatch)(nil),          // 13: console.v1.GrepMatch
+	(*GrepResult)(nil),         // 14: console.v1.GrepResult
 }
 var file_console_v1_fs_proto_depIdxs = []int32{
 	0,  // 0: console.v1.FsTreeEntry.children:type_name -> console.v1.FsTreeEntry
 	0,  // 1: console.v1.FsBrowseResult.entries:type_name -> console.v1.FsTreeEntry
-	14, // 2: console.v1.GrepMatch.match_ranges:type_name -> console.v1.GrepMatchRange
-	15, // 3: console.v1.GrepResult.matches:type_name -> console.v1.GrepMatch
+	12, // 2: console.v1.GrepMatch.match_ranges:type_name -> console.v1.GrepMatchRange
+	13, // 3: console.v1.GrepResult.matches:type_name -> console.v1.GrepMatch
 	4,  // [4:4] is the sub-list for method output_type
 	4,  // [4:4] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -1189,16 +1076,16 @@ func file_console_v1_fs_proto_init() {
 	}
 	file_console_v1_fs_proto_msgTypes[0].OneofWrappers = []any{}
 	file_console_v1_fs_proto_msgTypes[1].OneofWrappers = []any{}
-	file_console_v1_fs_proto_msgTypes[7].OneofWrappers = []any{}
-	file_console_v1_fs_proto_msgTypes[13].OneofWrappers = []any{}
-	file_console_v1_fs_proto_msgTypes[16].OneofWrappers = []any{}
+	file_console_v1_fs_proto_msgTypes[5].OneofWrappers = []any{}
+	file_console_v1_fs_proto_msgTypes[11].OneofWrappers = []any{}
+	file_console_v1_fs_proto_msgTypes[14].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_console_v1_fs_proto_rawDesc), len(file_console_v1_fs_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

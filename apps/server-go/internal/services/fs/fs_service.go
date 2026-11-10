@@ -371,19 +371,6 @@ func (s *FsService) GetImageMeta(path string) (ImageMeta, error) {
 	return ImageMeta{MimeType: mimeType, SizeBytes: info.Size(), MtimeMs: info.ModTime().UnixMilli()}, nil
 }
 
-// WriteFileContent creates or overwrites a file (mkdir -p the parent).
-func (s *FsService) WriteFileContent(path, content string) (string, error) {
-	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", err
-		}
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("Wrote %s (%d bytes)", path, len(content)), nil
-}
-
 func (s *FsService) DeleteFile(path string) (bool, error) {
 	if err := os.Remove(path); err != nil {
 		return false, err

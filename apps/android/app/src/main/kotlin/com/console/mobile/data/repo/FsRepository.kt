@@ -53,16 +53,6 @@ class FsRepository(
         api.readFileRaw(path)
     }
 
-    suspend fun writeFile(path: String, content: String) = withContext(Dispatchers.IO) {
-        fsState.markBusy(path)
-        try {
-            api.writeFile(path, content)
-            fsState.invalidateFile(path)
-        } finally {
-            fsState.clearBusy(path)
-        }
-    }
-
     suspend fun deleteFile(path: String) = withContext(Dispatchers.IO) {
         fsState.markBusy(path)
         try {

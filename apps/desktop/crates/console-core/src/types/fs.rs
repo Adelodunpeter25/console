@@ -8,8 +8,8 @@
 
 pub use console_proto::{
     CreateDirRequest, DirCreateResponse, DirDeleteResponse, FileDeleteResponse, FileSearchResult,
-    FileWriteResponse, FsBrowseResult, FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry,
-    GrepMatch, GrepMatchRange, GrepResult, SaveFileRequest, SaveFileResponse, WriteFileRequest,
+    FsBrowseResult, FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry, GrepMatch,
+    GrepMatchRange, GrepResult, SaveFileRequest, SaveFileResponse,
 };
 
 /// Result of a successful `POST /api/fs/save`.

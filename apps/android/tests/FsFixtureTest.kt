@@ -6,13 +6,13 @@ import com.squareup.wire.WireJsonAdapterFactory
 import console.v1.DirCreateResponse
 import console.v1.FileDeleteResponse
 import console.v1.FileSearchResult
-import console.v1.FileWriteResponse
 import console.v1.FsBrowseResult
 import console.v1.FsChangeEvent
 import console.v1.FsDirectoryTree
 import console.v1.FsFileContent
 import console.v1.FsTreeEntry
 import console.v1.GrepResult
+import console.v1.SaveFileResponse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,7 +36,7 @@ class FsFixtureTest {
     private val grepAdapter = moshi.adapter(GrepResult::class.java)
     private val treeAdapter = moshi.adapter(FsDirectoryTree::class.java)
     private val fileContentAdapter = moshi.adapter(FsFileContent::class.java)
-    private val fileWriteAdapter = moshi.adapter(FileWriteResponse::class.java)
+    private val fileSaveAdapter = moshi.adapter(SaveFileResponse::class.java)
     private val fileDeleteAdapter = moshi.adapter(FileDeleteResponse::class.java)
     private val dirCreateAdapter = moshi.adapter(DirCreateResponse::class.java)
     private val watchAdapter = moshi.adapter(FsChangeEvent::class.java)
@@ -89,8 +89,9 @@ class FsFixtureTest {
         assertTrue(tree.tree_formatted.contains("a.go"))
         val content = fileContentAdapter.fromJson(fixture("file_content.json"))!!
         assertEquals("package main\n", content.content)
-        val wrote = fileWriteAdapter.fromJson(fixture("file_write.json"))!!
-        assertTrue(wrote.message.contains("12 bytes"))
+        val saved = fileSaveAdapter.fromJson(fixture("file_save.json"))!!
+        assertEquals("W/\"c-1a2b3c\"", saved.etag)
+        assertEquals(12L, saved.size_bytes)
         assertTrue(fileDeleteAdapter.fromJson(fixture("file_delete.json"))!!.deleted)
         assertTrue(dirCreateAdapter.fromJson(fixture("dir_create.json"))!!.created)
         val watch = watchAdapter.fromJson(fixture("watch.json"))!!

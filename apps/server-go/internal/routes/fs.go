@@ -317,19 +317,6 @@ func RegisterFsRoutes(app *fiber.App, fs *fssvc.FsService, watch *fssvc.FsWatchS
 		return okProto(c, &consolev1.FsFileContent{Path: filePath, Content: result.Content})
 	})
 
-	// POST /api/fs/file
-	h.Post("/file", func(c *fiber.Ctx) error {
-		var body consolev1.WriteFileRequest
-		if err := protoUnmarshal.Unmarshal(c.Body(), &body); err != nil || body.Path == "" {
-			return fail(c, fiber.StatusBadRequest, fmt.Errorf("Field 'path' is required."))
-		}
-		msg, err := fs.WriteFileContent(body.Path, body.Content)
-		if err != nil {
-			return fail(c, fiber.StatusBadRequest, err)
-		}
-		return okProto(c, &consolev1.FileWriteResponse{Path: body.Path, Message: msg})
-	})
-
 	// POST /api/fs/save
 	// Separate from POST /api/fs/file above, which stays a plain truncating
 	// write for the mobile clients. This one is atomic, keeps the target's

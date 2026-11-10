@@ -98,8 +98,8 @@ func TestFsProtoMatchesFixtures(t *testing.T) {
 	checkFsFixture(t, "file_content.json", &consolev1.FsFileContent{
 		Path: "/p/a.go", Content: "package main\n",
 	})
-	checkFsFixture(t, "file_write.json", &consolev1.FileWriteResponse{
-		Path: "/p/a.go", Message: "Wrote /p/a.go (12 bytes)",
+	checkFsFixture(t, "file_save.json", &consolev1.SaveFileResponse{
+		Path: "/p/a.go", Etag: `W/"c-1a2b3c"`, SizeBytes: 12, MtimeMs: 1700000000000,
 	})
 	checkFsFixture(t, "file_delete.json", &consolev1.FileDeleteResponse{
 		Path: "/p/a.go", Deleted: true,
@@ -177,8 +177,8 @@ func TestFsRoutesFiles(t *testing.T) {
 
 	// Write then read back.
 	filePath := filepath.Join(root, "a.go")
-	if code, _ := call("POST", "/api/fs/file", `{"path":"`+filePath+`","content":"package main\n"}`); code != 200 {
-		t.Fatalf("write: %d", code)
+	if code, raw := call("POST", "/api/fs/save", `{"path":"`+filePath+`","content":"package main\n"}`); code != 200 {
+		t.Fatalf("write: %d %s", code, raw)
 	}
 	if code, raw := getFile(filePath); code != 200 {
 		t.Fatalf("read: %d %s", code, raw)
@@ -234,7 +234,7 @@ func TestFsRoutesFiles(t *testing.T) {
 	if code, _ := call("GET", "/api/fs/file", ""); code != 400 {
 		t.Fatalf("missing path must 400: %d", code)
 	}
-	if code, _ := call("POST", "/api/fs/file", `{}`); code != 400 {
+	if code, _ := call("POST", "/api/fs/save", `{}`); code != 400 {
 		t.Fatalf("missing body path must 400: %d", code)
 	}
 }

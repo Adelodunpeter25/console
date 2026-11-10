@@ -1,6 +1,6 @@
 use console_proto::{
-    DirCreateResponse, FileDeleteResponse, FileSearchResult, FileWriteResponse, FsBrowseResult,
-    FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry, GrepResult,
+    DirCreateResponse, FileDeleteResponse, FileSearchResult, FsBrowseResult,
+    FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry, GrepResult, SaveFileResponse,
 };
 use std::path::PathBuf;
 
@@ -63,9 +63,10 @@ fn decodes_golden_small_fixtures() {
     let content: FsFileContent =
         serde_json::from_str(fixture("file_content.json").trim()).expect("content");
     assert_eq!(content.content, "package main\n");
-    let wrote: FileWriteResponse =
-        serde_json::from_str(fixture("file_write.json").trim()).expect("write");
-    assert!(wrote.message.contains("12 bytes"));
+    let saved: SaveFileResponse =
+        serde_json::from_str(fixture("file_save.json").trim()).expect("save");
+    assert_eq!(saved.etag, "W/\"c-1a2b3c\"");
+    assert_eq!(saved.size_bytes, 12);
     let deleted: FileDeleteResponse =
         serde_json::from_str(fixture("file_delete.json").trim()).expect("delete");
     assert!(deleted.deleted);

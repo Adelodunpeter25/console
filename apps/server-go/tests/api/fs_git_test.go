@@ -74,7 +74,10 @@ func TestWriteReadTree(t *testing.T) {
 	root := t.TempDir()
 	fs := fssvc.NewFsService()
 
-	if _, err := fs.WriteFileContent(filepath.Join(root, "nested", "f.txt"), "hello"); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "nested", "f.txt"), []byte("hello"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	tree, err := fs.GetDirectoryTree(root, 3, true)
