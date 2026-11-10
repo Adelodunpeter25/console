@@ -435,6 +435,7 @@ impl BrowserView {
                         inspection.bounds.height,
                     );
                     self.active_inspection = Some(inspection);
+                    self.snapshot_pending = true;
                     self.annotation_screenshot = None;
                     self.annotation_capture_failed = false;
                     self.annotation_focus_pending = true;
@@ -448,12 +449,15 @@ impl BrowserView {
                         );
                         self.start_element_screenshot(bounds, cx);
                     }
+                    self.apply_native_visibility();
                     cx.notify();
                 }
                 InspectorIpcMessage::InspectCancelled => {
                     self.inspecting = false;
                     self.active_inspection = None;
                     self.annotation_screenshot = None;
+                    self.snapshot_pending = false;
+                    self.apply_native_visibility();
                     cx.notify();
                 }
                 InspectorIpcMessage::ScriptResult {
@@ -494,6 +498,7 @@ impl BrowserView {
             self.active_inspection = None;
             self.annotation_screenshot = None;
             self.annotation_focus_pending = false;
+            self.snapshot_pending = false;
         }
         if let Some(host) = &self.host {
             let script = format!(
@@ -546,6 +551,7 @@ impl BrowserView {
         };
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
+        self.snapshot_pending = false;
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
@@ -572,6 +578,7 @@ impl BrowserView {
         self.active_inspection = None;
         self.annotation_screenshot = None;
         self.annotation_focus_pending = false;
+        self.snapshot_pending = false;
         self.annotation_input.update(cx, |input, cx| {
             input.clear(cx);
         });
@@ -603,6 +610,8 @@ impl BrowserView {
                             let _ = view.update(cx, |this, cx| {
                                 if this.active_inspection.is_some() {
                                     this.annotation_capture_failed = true;
+                                    this.snapshot_pending = false;
+                                    this.apply_native_visibility();
                                     cx.notify();
                                 }
                             });
@@ -643,9 +652,24 @@ impl BrowserView {
                         flag
                     });
                 if !still_open {
+                    let _ = cx.update(|cx| {
+                        let _ = view.update(cx, |this, _| {
+                            this.snapshot_pending = false;
+                        });
+                    });
                     break;
                 }
             }
+            let _ = cx.update(|cx| {
+                let _ = view.update(cx, |this, cx| {
+                    if this.snapshot_pending && this.active_inspection.is_some() {
+                        this.annotation_capture_failed = true;
+                        this.snapshot_pending = false;
+                        this.apply_native_visibility();
+                        cx.notify();
+                    }
+                });
+            });
         })
         .detach();
     }
@@ -969,7 +993,11 @@ impl BrowserView {
                 self.snapshot_pending = false;
                 self.snapshot_epoch += 1;
             }
-        } else if occlusion_started && !self.snapshot_pending && self.snapshot.is_none() {
+        } else if occlusion_started
+            && !self.snapshot_pending
+            && self.snapshot.is_none()
+            && self.active_inspection.is_none()
+        {
             self.snapshot_pending = true;
             let epoch = self.snapshot_epoch;
             let slot = crate::browser::host::SnapshotSlot::default();
@@ -990,6 +1018,7 @@ impl BrowserView {
                                     if this.snapshot_epoch == epoch && this.occluded {
                                         this.snapshot = Some(image);
                                         this.snapshot_pending = false;
+                                        this.apply_native_visibility();
                                         cx.notify();
                                     }
                                 });
@@ -999,6 +1028,7 @@ impl BrowserView {
                                 let _ = view.update(cx, |this, cx| {
                                     if this.snapshot_epoch == epoch {
                                         this.snapshot_pending = false;
+                                        this.apply_native_visibility();
                                         cx.notify();
                                     }
                                 });
@@ -1508,7 +1538,7 @@ impl BrowserView {
     }
     fn render_page_area(&self, theme: Theme, cx: &mut Context<Self>) -> Div {
         let host = self.host.clone();
-        let occluded = self.occluded;
+        let show_native = self.should_show();
         let surface_size = self.surface_size.clone();
         let mut area = div()
             .flex_1()
@@ -1524,11 +1554,7 @@ impl BrowserView {
                         )));
                         if let Some(host) = &host {
                             host.sync_bounds(bounds, window.scale_factor());
-                            if !occluded {
-                                host.set_visible(true);
-                            } else {
-                                host.set_visible(false);
-                            }
+                            host.set_visible(show_native);
                         }
                         window.insert_hitbox(bounds, HitboxBehavior::Normal)
                     },
