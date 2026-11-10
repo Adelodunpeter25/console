@@ -128,6 +128,38 @@ func TestCreateThinkingLevel(t *testing.T) {
 	}
 }
 
+func TestCreateInheritsCallingSessionModelAndThinking(t *testing.T) {
+	withCatalog(t)
+	var aborted []string
+	runtime, sessions := newControlRuntime(t, "full-access", &aborted)
+
+	high := "high"
+	_, err := sessions.Create(types.CreateSessionOptions{
+		ID:            "caller",
+		Title:         "Caller",
+		Cwd:           "/tmp",
+		ModelID:       "thinker",
+		Provider:      "claude",
+		ThinkingLevel: &high,
+	})
+	if err != nil {
+		t.Fatalf("create caller: %v", err)
+	}
+
+	out := evalJSON(t, runtime, `console.sessions.create({cwd:"/tmp"})`).(map[string]any)
+	id := out["session"].(map[string]any)["id"].(string)
+	h, err := sessions.Header(id)
+	if err != nil || h == nil {
+		t.Fatalf("created header = %v, err = %v", h, err)
+	}
+	if h.ModelID != "thinker" || h.Provider != "claude" {
+		t.Fatalf("model/provider = %s/%s, want thinker/claude", h.ModelID, h.Provider)
+	}
+	if h.ThinkingLevel == nil || *h.ThinkingLevel != "high" {
+		t.Fatalf("thinking_level = %v, want high", h.ThinkingLevel)
+	}
+}
+
 func TestSetModelAcceptsCatalogModel(t *testing.T) {
 	withCatalog(t)
 	var aborted []string

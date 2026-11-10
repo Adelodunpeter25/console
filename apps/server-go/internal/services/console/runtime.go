@@ -457,6 +457,25 @@ func (r *Runtime) sessionsCreate(ctx context.Context, args map[string]any) (*jsk
 	thinking, _ := args["thinking_level"].(string)
 	projectID, _ := args["project_id"].(string)
 	cwd, _ := args["cwd"].(string)
+
+	var callingHeader *types.SessionHeader
+	if r.sessionID != "" {
+		if h, err := r.sessions.Header(r.sessionID); err == nil && h != nil {
+			callingHeader = h
+		}
+	}
+
+	// When model is omitted, inherit the calling session's model, provider,
+	// and thinking level.
+	if model == "" && callingHeader != nil && callingHeader.ModelID != "" {
+		model = callingHeader.ModelID
+		if provider == "" {
+			provider = callingHeader.Provider
+		}
+		if thinking == "" && callingHeader.ThinkingLevel != nil {
+			thinking = *callingHeader.ThinkingLevel
+		}
+	}
 	if cwd == "" && projectID != "" && r.projects != nil {
 		project, err := r.projects.Get(projectID)
 		if err != nil {
