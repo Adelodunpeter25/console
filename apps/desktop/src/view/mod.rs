@@ -98,12 +98,16 @@ impl Render for ConsoleDesktopApp {
                 move |pane_id: String, tab_id: String, _w: &mut Window, cx: &mut App| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            this.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
+                            this.request_close_tab(&pane_id, &tab_id, cx);
                         });
                     }
                 },
             )
         };
+        // File paths whose buffer has unsaved edits; their tab shows a dot in
+        // place of the close X. Computed each render, and an observer on each
+        // editor state repaints the app when dirtiness changes.
+        let dirty_file_paths = self.dirty_file_paths(cx);
         let on_drop_tab: Rc<
             dyn Fn(String, WorkspaceDrag, WorkspaceDropAction, &mut Window, &mut App) + 'static,
         > = {
@@ -1078,6 +1082,7 @@ impl Render for ConsoleDesktopApp {
                                     on_focus_pane,
                                 )
                                 .with_tab_follow(move |pane_id| tab_follows.get(pane_id).cloned())
+                                .with_dirty_paths(dirty_file_paths.clone())
                                 .with_new_tab({
                                     let entity = entity.clone();
                                     move |_pane_id, _window, cx| {

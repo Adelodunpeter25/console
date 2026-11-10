@@ -133,7 +133,7 @@ impl ConsoleDesktopApp {
         if let Some(tab) = closed_tab {
             self.dispose_closed_tab(&tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.persist_workspaces();
         res
     }
@@ -156,7 +156,7 @@ impl ConsoleDesktopApp {
         for tab in &closed {
             self.dispose_closed_tab(tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.persist_workspaces();
     }
 
@@ -298,7 +298,7 @@ impl ConsoleDesktopApp {
             }
         }
         self.sweep_unreferenced_browser_views(cx);
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.sync_workspace_webviews(cx);
         self.persist_layout();
         self.persist_workspaces();
@@ -337,7 +337,7 @@ impl ConsoleDesktopApp {
                 }
             }
             WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
-                self.evict_file_caches_for_path(path);
+                self.evict_file_caches_for_path(path, cx);
             }
             WorkspaceTabConfig::Browser { browser_id, .. } => {
                 let still_referenced = self
@@ -565,6 +565,47 @@ impl ConsoleDesktopApp {
 
     /// Close a split pane and collapse its parent into the remaining sibling.
     pub fn close_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        // A pane close takes its tabs with it, so it needs the same guard as
+        // closing one dirty file tab.
+        let dirty_paths: Vec<String> = self
+            .workspace_root
+            .leaves()
+            .into_iter()
+            .find(|leaf| leaf.id == pane_id)
+            .map(|leaf| {
+                leaf.tabs
+                    .iter()
+                    .filter_map(|tab| match tab {
+                        WorkspaceTabConfig::File { path, .. } => Some(path.clone()),
+                        _ => None,
+                    })
+                    .filter(|path| {
+                        self.viewer_editor_views
+                            .get(path)
+                            .is_some_and(|(_, _, state, _)| state.read(cx).is_dirty())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !dirty_paths.is_empty() {
+            if let Some(tab_id) = self
+                .workspace_root
+                .leaves()
+                .into_iter()
+                .find(|leaf| leaf.id == pane_id)
+                .and_then(|leaf| {
+                    leaf.tabs.iter().find_map(|tab| match tab {
+                        WorkspaceTabConfig::File { path, .. } if dirty_paths.contains(path) => {
+                            Some(tab.id())
+                        }
+                        _ => None,
+                    })
+                })
+            {
+                self.request_close_tab(pane_id, &tab_id, cx);
+            }
+            return;
+        }
         let removed_tabs: Vec<WorkspaceTabConfig> = self
             .workspace_root
             .leaves()
@@ -578,7 +619,7 @@ impl ConsoleDesktopApp {
         for tab in &removed_tabs {
             self.dispose_closed_tab(tab, cx);
         }
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.workspace_pane_states.remove(pane_id);
         self.todo_items.remove(pane_id);
         if self.active_pane_id.as_deref() == Some(pane_id) {

@@ -139,7 +139,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.sync_workspace_webviews(cx);
         self.persist_workspaces();
 
@@ -447,7 +447,7 @@ impl ConsoleDesktopApp {
         self.preview_tab = Some((new_tab_id, created_at));
         self.active_pane_id = Some(pane_id.to_string());
         self.inspector_selected_path = Some(path.clone());
-        self.trim_file_caches();
+        self.trim_file_caches(cx);
         self.persist_workspaces();
 
         let client = self.client.clone();
@@ -509,7 +509,7 @@ impl ConsoleDesktopApp {
 
     /// Maximum retained file/viewer cache entries per map. Bounds long-session
     /// memory; evicted contents are re-fetched or re-rendered on reopen.
-    pub(crate) fn trim_file_caches(&mut self) {
+    pub(crate) fn trim_file_caches(&mut self, cx: &mut Context<Self>) {
         const MAX_CACHED_FILES: usize = 30;
         let over = self.open_file_contents.len() > MAX_CACHED_FILES
             || self.open_image_contents.len() > MAX_CACHED_FILES
@@ -529,8 +529,18 @@ impl ConsoleDesktopApp {
         self.svg_preview_mode.retain(|path, _| open.contains(path));
         self.open_diff_contents
             .retain(|path, _| open.contains(path));
-        self.viewer_editor_views
-            .retain(|path, _| open.contains(path));
+        self.viewer_editor_views.retain(|path, (_, _, state, _)| {
+            // A dirty buffer is never evicted: dropping it would discard the
+            // user's unsaved edits, and there is no file on disk to recover
+            // them from.
+            open.contains(path) || state.read(cx).is_dirty()
+        });
+        self.viewer_editor_subscriptions
+            .retain(|path, _| self.viewer_editor_views.contains_key(path));
+        self.viewer_file_etags
+            .retain(|path, _| self.viewer_editor_views.contains_key(path));
+        self.dirty_file_paths_cache
+            .retain(|path, _| self.viewer_editor_views.contains_key(path));
         self.viewer_diff_views.retain(|path, _| open.contains(path));
         self.viewer_cached_markdown_views
             .retain(|path, _| open.contains(path));
@@ -587,15 +597,27 @@ impl ConsoleDesktopApp {
     }
 
     /// Drop cached contents + viewer state for one closed file path.
-    pub(crate) fn evict_file_caches_for_path(&mut self, path: &str) {
+    ///
+    /// A dirty editor survives: the whole point of the close confirmation is
+    /// that unsaved edits are never dropped behind the user's back, and this
+    /// is the last place they could be. Its cache entry is reclaimed by
+    /// `trim_file_caches` once the buffer is saved.
+    pub(crate) fn evict_file_caches_for_path(&mut self, path: &str, cx: &mut Context<Self>) {
         self.open_file_contents.remove(path);
         self.open_file_errors.remove(path);
         self.open_image_contents.remove(path);
         self.svg_preview_mode.remove(path);
         self.open_diff_contents.remove(path);
-        self.viewer_editor_views.remove(path);
-        self.viewer_editor_subscriptions.remove(path);
-        self.viewer_file_etags.remove(path);
+        let dirty = self
+            .viewer_editor_views
+            .get(path)
+            .is_some_and(|(_, _, state, _)| state.read(cx).is_dirty());
+        if !dirty {
+            self.viewer_editor_views.remove(path);
+            self.viewer_editor_subscriptions.remove(path);
+            self.viewer_file_etags.remove(path);
+            self.dirty_file_paths_cache.remove(path);
+        }
         self.viewer_diff_views.remove(path);
         self.viewer_cached_markdown_views.remove(path);
         for key in [

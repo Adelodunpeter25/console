@@ -310,7 +310,11 @@ pub struct ConsoleDesktopApp {
             gpui::Entity<editor_ui::EditorView>,
         ),
     >,
-    pub viewer_editor_subscriptions: std::collections::HashMap<String, gpui::Subscription>,
+    pub viewer_editor_subscriptions: std::collections::HashMap<String, Vec<gpui::Subscription>>,
+    /// Last observed dirty flag per open file, so the editor observer only
+    /// repaints the app when the flag actually flips rather than on every
+    /// keystroke.
+    pub(crate) dirty_file_paths_cache: std::collections::HashMap<String, bool>,
     /// The ETag each open file's content was loaded at. Sent as `base_etag`
     /// on save so the server refuses a buffer that went stale behind us.
     /// Kept unchanged while a dirty buffer survives an external content change
@@ -326,6 +330,10 @@ pub struct ConsoleDesktopApp {
     /// Paths with a save queued behind the in-flight one, so a burst of cmd-s
     /// collapses into one follow-up save rather than an unbounded queue.
     pub(crate) file_saves_pending: std::collections::HashSet<String>,
+    /// Paths whose tab is waiting on a save before closing. The close is
+    /// retried from `finish_file_save`, so a dirty tab's X cannot outrun the
+    /// write it asked for.
+    pub(crate) file_closes_awaiting_save: std::collections::HashMap<String, (String, String)>,
     /// Pending 1-based target line to select/scroll to when a file's EditorView is created/rendered.
     pub pending_file_line: std::collections::HashMap<String, u32>,
     /// Comment-gutter selections from editor views. The editor reports through

@@ -174,7 +174,25 @@ impl ConsoleDesktopApp {
                 }
             }
         });
-        self.viewer_editor_subscriptions.insert(path.to_string(), subscription);
+        self.viewer_editor_subscriptions
+            .entry(path.to_string())
+            .or_default()
+            .push(subscription);
+        // Every edit notifies the state, so an observer on it is enough to
+        // repaint the app — which is what keeps the tab's dirty dot current.
+        let observed = state.clone();
+        let observed_path = path.to_string();
+        let observer = cx.observe(&state, move |app, _state, cx| {
+            let dirty = observed.read(cx).is_dirty();
+            if app.dirty_file_paths_cache.get(&observed_path) != Some(&dirty) {
+                app.dirty_file_paths_cache.insert(observed_path.clone(), dirty);
+                cx.notify();
+            }
+        });
+        self.viewer_editor_subscriptions
+            .entry(path.to_string())
+            .or_default()
+            .push(observer);
         view
     }
 

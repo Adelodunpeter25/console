@@ -312,7 +312,8 @@ impl ConsoleDesktopApp {
     }
 
     /// ⌘W — close the active tab, then point the pane at whatever tab became
-    /// active (mirroring the tab bar's close button).
+    /// active (mirroring the tab bar's close button). A dirty file buffer
+    /// prompts save / discard / cancel first.
     pub fn close_tab(&mut self, cx: &mut Context<Self>) {
         let Some(pane_id) = self.active_pane_id.clone() else {
             return;
@@ -320,7 +321,7 @@ impl ConsoleDesktopApp {
         let Some(tab_id) = self.active_tab_id() else {
             return;
         };
-        self.close_tab_and_sync_pane(&pane_id, &tab_id, cx);
+        self.request_close_tab(&pane_id, &tab_id, cx);
     }
 
     /// ⌘K — toggle the command palette. Static command entries are rebuilt here

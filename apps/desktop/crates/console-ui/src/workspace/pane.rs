@@ -43,6 +43,7 @@ pub struct WorkspacePane {
     on_focus_pane: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     tab_follow: Option<TabFollowProvider>,
+    dirty_paths: std::collections::HashSet<String>,
     on_resize_split: Option<
         Rc<
             dyn Fn(
@@ -80,6 +81,7 @@ impl WorkspacePane {
             on_focus_pane,
             on_new_tab: None,
             tab_follow: None,
+            dirty_paths: std::collections::HashSet::new(),
             on_resize_split: None,
         }
     }
@@ -97,6 +99,12 @@ impl WorkspacePane {
         tab_follow: impl Fn(&str) -> Option<TabStripFollow> + 'static,
     ) -> Self {
         self.tab_follow = Some(Rc::new(tab_follow));
+        self
+    }
+
+    /// Supply the dirty file paths for the tab strip's modified dot.
+    pub fn with_dirty_paths(mut self, dirty_paths: std::collections::HashSet<String>) -> Self {
+        self.dirty_paths = dirty_paths;
         self
     }
 
@@ -193,6 +201,7 @@ fn render_leaf(
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     tab_follow: &Option<TabFollowProvider>,
+    dirty_paths: &std::collections::HashSet<String>,
     can_close_pane: bool,
     window: &mut Window,
     cx: &mut App,
@@ -217,6 +226,7 @@ fn render_leaf(
         move |pane_id, window, cx| (on_close_pane)(pane_id, window, cx),
     )
     .with_scroll_follow(follow);
+    bar = bar.with_dirty_paths(dirty_paths.clone());
     if let Some(on_new) = on_new_tab.clone() {
         bar = bar.with_new_tab(move |pane_id, window, cx| (on_new)(pane_id, window, cx));
     }
@@ -316,6 +326,7 @@ fn render_node(
     on_focus_pane: &Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
     on_new_tab: &Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     tab_follow: &Option<TabFollowProvider>,
+    dirty_paths: &std::collections::HashSet<String>,
     on_resize_split: &Option<
         Rc<
             dyn Fn(
@@ -343,6 +354,7 @@ fn render_node(
             on_focus_pane,
             on_new_tab,
             tab_follow,
+            dirty_paths,
             can_close_pane,
             window,
             cx,
@@ -386,6 +398,7 @@ fn render_node(
                             on_focus_pane,
                             on_new_tab,
                             tab_follow,
+                            dirty_paths,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -451,6 +464,7 @@ fn render_node(
                             on_focus_pane,
                             on_new_tab,
                             tab_follow,
+                            dirty_paths,
                             on_resize_split,
                             can_close_pane,
                             window,
@@ -476,6 +490,7 @@ impl RenderOnce for WorkspacePane {
             &self.on_focus_pane,
             &self.on_new_tab,
             &self.tab_follow,
+            &self.dirty_paths,
             &self.on_resize_split,
             can_close_pane,
             window,
