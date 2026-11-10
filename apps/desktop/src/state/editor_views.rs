@@ -104,7 +104,12 @@ impl ConsoleDesktopApp {
         let state = cx.new(|cx| {
             // Editable mode: typing, caret motion, undo/redo, clipboard. The
             // comment gutter still works alongside editing.
-            let mut s = editor_ui::EditorState::editable(content, lang).with_path(path);
+            let mut s = editor_ui::EditorState::editable(content, lang);
+            // A path that was loaded through the client may not exist on this
+            // machine; leave saving to the host until a remote save API exists.
+            if std::path::Path::new(path).is_file() {
+                s.set_path(Some(path.into()));
+            }
             s.set_theme(theme_preset, cx);
             s.set_wrap_enabled(false);
             s.set_font(font_config);
