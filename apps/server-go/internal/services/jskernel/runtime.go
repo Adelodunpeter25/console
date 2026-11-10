@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -336,6 +337,31 @@ func (r *Runtime) resultObject(result *Result) (moejs.Value, error) {
 	})
 }
 
+var topLevelDeclRegex = regexp.MustCompile(`(?m)^\s*(?:(?:var|let|const)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=|(?:\basync\s+)?\bfunction(?:\s*\*)?\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\()`)
+
+func globalExportEpilogue(code string) string {
+	matches := topLevelDeclRegex.FindAllStringSubmatch(code, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	var exports []string
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		name := m[1]
+		if name == "" {
+			name = m[2]
+		}
+		if name != "" && !seen[name] {
+			seen[name] = true
+			exports = append(exports, fmt.Sprintf("try { globalThis.%s = %s; } catch (_) {}", name, name))
+		}
+	}
+	if len(exports) == 0 {
+		return ""
+	}
+	return "\n" + strings.Join(exports, "\n") + "\n"
+}
+
 // wrapTopLevelAwait compiles code directly as a script, or wraps top-level
 // await in an async IIFE if top-level await is encountered.
 func wrapTopLevelAwait(code string) (*moejs.Script, error) {
@@ -350,6 +376,7 @@ func wrapTopLevelAwait(code string) (*moejs.Script, error) {
 	if sExpr, errExpr := moejs.CompileScript("eval.js", "(async () => (\n"+trimmed+"\n))()"); errExpr == nil {
 		return sExpr, nil
 	}
+	epilogue := globalExportEpilogue(trimmed)
 	statements := strings.Split(trimmed, "\n")
 	if len(statements) > 0 {
 		lastIdx := len(statements) - 1
@@ -363,14 +390,14 @@ func wrapTopLevelAwait(code string) (*moejs.Script, error) {
 				statementsCopy := make([]string, len(statements))
 				copy(statementsCopy, statements)
 				statementsCopy[lastIdx] = "return (" + lastWithoutSemi + ");"
-				wrapped := "(async () => {\n" + strings.Join(statementsCopy, "\n") + "\n})()"
+				wrapped := "(async () => {\n" + strings.Join(statementsCopy[:lastIdx], "\n") + epilogue + statementsCopy[lastIdx] + "\n})()"
 				if sRet, errRet := moejs.CompileScript("eval.js", wrapped); errRet == nil {
 					return sRet, nil
 				}
 			}
 		}
 	}
-	if sBlock, errBlock := moejs.CompileScript("eval.js", "(async () => {\n"+trimmed+"\n})()"); errBlock == nil {
+	if sBlock, errBlock := moejs.CompileScript("eval.js", "(async () => {\n"+trimmed+epilogue+"\n})()"); errBlock == nil {
 		return sBlock, nil
 	}
 	return nil, err
@@ -443,10 +470,26 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 				})
 				onReject := rt.Function("onReject", 1, func(realm *moejs.Realm, this moejs.Value, args []moejs.Value) (moejs.Value, error) {
 					arg := moejs.Arg(args, 0)
-					if exc, ok := r.rt.ToGo(arg); ok == nil && exc != nil {
-						completionErr = fmt.Errorf("%v", exc)
-					} else {
-						completionErr = errors.New("promise rejected")
+					if stack, err := rt.Get(arg, "stack"); err == nil && !stack.IsUndefined() {
+						if s, err := rt.ToGo(stack); err == nil && s != nil && s != "" {
+							completionErr = fmt.Errorf("%v", s)
+						}
+					}
+					if completionErr == nil {
+						if msg, err := rt.Get(arg, "message"); err == nil && !msg.IsUndefined() {
+							name, _ := rt.Get(arg, "name")
+							nameStr, _ := rt.ToGo(name)
+							msgStr, _ := rt.ToGo(msg)
+							if nameStr != nil && nameStr != "" {
+								completionErr = fmt.Errorf("%v: %v", nameStr, msgStr)
+							} else {
+								completionErr = fmt.Errorf("%v", msgStr)
+							}
+						} else if exc, ok := r.rt.ToGo(arg); ok == nil && exc != nil {
+							completionErr = fmt.Errorf("%v", exc)
+						} else {
+							completionErr = errors.New("promise rejected")
+						}
 					}
 					holdDone(nil)
 					return moejs.Undefined(), nil

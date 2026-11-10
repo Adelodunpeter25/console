@@ -175,3 +175,37 @@ func TestKernelMemoryLimitExceeded(t *testing.T) {
 		t.Fatalf("expected memory limit error, got: %v", err)
 	}
 }
+
+func TestKernelAsyncVariablePersistence(t *testing.T) {
+	kernel, err := New(Options{Root: "test"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Turn 1: declares variables and uses top-level await
+	turn1 := `
+		var myGreeting = "Hello from turn 1!";
+		const myNum = await Promise.resolve(42);
+		async function getMessage() {
+			return myGreeting + " " + myNum;
+		}
+	`
+	_, err = kernel.Eval(context.Background(), turn1, time.Second)
+	if err != nil {
+		t.Fatalf("turn 1 failed: %v", err)
+	}
+
+	// Turn 2: reads the variables and calls the async function
+	turn2 := `
+		await getMessage();
+	`
+	res, err := kernel.Eval(context.Background(), turn2, time.Second)
+	if err != nil {
+		t.Fatalf("turn 2 failed: %v", err)
+	}
+	parts := res.([]map[string]any)
+	expected := `"Hello from turn 1! 42"`
+	if len(parts) == 0 || parts[0]["text"] != expected {
+		t.Fatalf("expected %s, got %#v", expected, res)
+	}
+}
