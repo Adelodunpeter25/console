@@ -135,6 +135,14 @@ impl FsService {
     }
 
     pub async fn read_file(&self, path: &str) -> Result<FsFileContent> {
+        self.read_file_with_etag(path).await.map(|file| file.content)
+    }
+
+    /// Read a file together with the ETag it was loaded at.
+    ///
+    /// The editor records that ETag as its `base_etag`; `POST /api/fs/save`
+    /// then refuses a save whose buffer no longer matches the file on disk.
+    pub async fn read_file_with_etag(&self, path: &str) -> Result<FsFileWithEtag> {
         let url = format!(
             "{}/api/fs/file?path={}",
             self.transport.url("").await,
@@ -149,48 +157,80 @@ impl FsService {
             .await
             .context("Failed to read file")?;
 
+        let etag = resp
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+
         let body: ApiResponse<FsFileContent> = self
             .transport
             .decode_json(resp)
             .await
             .context("Failed to parse file response")?;
-        if body.success {
+        let content = if body.success {
             body.data
-                .ok_or_else(|| anyhow!("File content data is missing"))
+                .ok_or_else(|| anyhow!("File content data is missing"))?
         } else {
-            Err(anyhow!(
+            return Err(anyhow!(
                 body.error.unwrap_or_else(|| "Failed to read file".into())
-            ))
-        }
+            ));
+        };
+        Ok(FsFileWithEtag { content, etag })
     }
 
-    pub async fn write_file(&self, path: &str, content: &str) -> Result<()> {
-        let url = self.transport.url("/api/fs/file").await;
-        let payload = WriteFileRequest {
+    /// Write `content` to `path` through `POST /api/fs/save`.
+    ///
+    /// The desktop client never writes workspace files on its own disk.
+    /// `base_etag` is the ETag the buffer was loaded at; when it no longer
+    /// matches the file the server writes nothing and this returns
+    /// [`FsSaveError::FileChanged`] carrying the current ETag, so the caller
+    /// can offer a reload rather than clobbering a concurrent edit.
+    pub async fn save_file(
+        &self,
+        path: &str,
+        content: &str,
+        base_etag: Option<&str>,
+    ) -> std::result::Result<FsSaveOutcome, FsSaveError> {
+        let url = self.transport.url("/api/fs/save").await;
+        let payload = SaveFileRequest {
             path: path.to_string(),
             content: content.to_string(),
+            base_etag: base_etag.map(str::to_owned),
         };
 
         let resp = self
             .transport
             .client()
-            .put(&url)
+            .post(&url)
             .headers(self.transport.build_headers().await)
             .json(&payload)
             .send()
             .await
-            .context("Failed to write file")?;
+            .map_err(|err| FsSaveError::Other(format!("Failed to save file: {err}")))?;
 
-        let body: ApiResponse<serde_json::Value> = self
+        if resp.status() == reqwest::StatusCode::CONFLICT {
+            let conflict: SaveConflictEnvelope = self
+                .transport
+                .decode_json(resp)
+                .await
+                .map_err(|err| FsSaveError::Other(format!("Failed to parse conflict: {err}")))?;
+            return Err(FsSaveError::FileChanged {
+                current_etag: conflict.etag,
+            });
+        }
+
+        let body: ApiResponse<FsSaveOutcome> = self
             .transport
             .decode_json(resp)
             .await
-            .context("Failed to parse write response")?;
+            .map_err(|err| FsSaveError::Other(format!("Failed to parse save response: {err}")))?;
         if body.success {
-            Ok(())
+            body.data
+                .ok_or_else(|| FsSaveError::Other("Save response data is missing".into()))
         } else {
-            Err(anyhow!(
-                body.error.unwrap_or_else(|| "Failed to write file".into())
+            Err(FsSaveError::Other(
+                body.error.unwrap_or_else(|| "Failed to save file".into()),
             ))
         }
     }
