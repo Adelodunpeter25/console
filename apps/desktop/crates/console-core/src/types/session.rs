@@ -195,10 +195,9 @@ impl ChangesScope {
 
 /// Filter a full (all-turns) change list down to the given scope.
 ///
-/// `AllTurns` also dedupes to one row per path (keeping the first —
-/// callers pass changes ordered most-recently-updated-first, matching the
-/// server's `ORDER BY updated_at DESC`), since the backend returns raw
-/// per-turn rows rather than a pre-aggregated-by-file view.
+/// `AllTurns` aggregates per-turn rows to one entry per unique path,
+/// summing churn (additions and deletions) across all turns that touched
+/// the file, while keeping the latest turn's metadata.
 pub fn filter_changes_for_scope(
     changes: &[SessionFileChange],
     scope: ChangesScope,
@@ -216,12 +215,25 @@ pub fn filter_changes_for_scope(
         .max();
     match scope {
         ChangesScope::AllTurns => {
-            let mut seen = std::collections::HashSet::new();
-            changes
-                .iter()
-                .filter(|c| seen.insert(c.path.clone()))
-                .cloned()
-                .collect()
+            let mut out: Vec<SessionFileChange> = Vec::new();
+            let mut index_by_path: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
+            for change in changes {
+                if let Some(&idx) = index_by_path.get(&change.path) {
+                    out[idx].additions += change.additions;
+                    out[idx].deletions += change.deletions;
+                    if change.status == "added" && out[idx].status != "deleted" {
+                        out[idx].status = "added".into();
+                    }
+                    if out[idx].diff_text.is_none() && change.diff_text.is_some() {
+                        out[idx].diff_text = change.diff_text.clone();
+                    }
+                } else {
+                    index_by_path.insert(change.path.clone(), out.len());
+                    out.push(change.clone());
+                }
+            }
+            out
         }
         ChangesScope::ThisTurn => changes
             .iter()

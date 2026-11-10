@@ -455,7 +455,7 @@ impl ConsoleDesktopApp {
         let session_change_diff = diff_override.filter(|d| !d.trim().is_empty()).or_else(|| {
             self.inspector_session_changes
                 .iter()
-                .rfind(|c| {
+                .find(|c| {
                     c.path == file_path
                         && c.diff_text
                             .as_deref()
