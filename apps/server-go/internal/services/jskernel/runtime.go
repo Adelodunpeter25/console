@@ -104,7 +104,7 @@ type Options struct {
 	PlainResults bool
 	// AsyncMessage is deprecated and unused. Async code and Promises are supported.
 	AsyncMessage string
-	// MemoryLimit caps JavaScript heap allocation in bytes. 0 means unbounded.
+	// MemoryLimit caps JavaScript heap allocation in bytes. Default is 128 MiB (DefaultMemoryLimit). Negative value means unbounded.
 	MemoryLimit int64
 }
 
@@ -114,6 +114,7 @@ const (
 	DefaultMaxCodeBytes  = 200_000
 	DefaultMaxResultText = 100_000
 	DefaultMaxImages     = 4
+	DefaultMemoryLimit   = 128 * 1024 * 1024 // 128 MiB
 )
 
 func (o Options) withDefaults() Options {
@@ -134,6 +135,11 @@ func (o Options) withDefaults() Options {
 	}
 	if o.InterruptMessage == "" {
 		o.InterruptMessage = "execution stopped; completion is unknown. Inspect fresh state before retrying."
+	}
+	if o.MemoryLimit == 0 {
+		o.MemoryLimit = DefaultMemoryLimit
+	} else if o.MemoryLimit < 0 {
+		o.MemoryLimit = 0 // unbounded
 	}
 	return o
 }
@@ -454,11 +460,20 @@ func (r *Runtime) Eval(ctx context.Context, code string, timeout time.Duration) 
 	}()
 
 	if panicked != nil {
+		if err, ok := panicked.(error); ok && errors.Is(err, moejs.ErrMemoryLimit) {
+			r.rt.ClearInterrupt()
+			return nil, Errorf("JavaScript memory limit exceeded (%d MB limit); inspect fresh state before retrying", r.opts.MemoryLimit/(1024*1024))
+		}
 		if isInterruptErr(panicked) {
 			r.rt.ClearInterrupt()
 			return nil, Errorf("%s", r.opts.InterruptMessage)
 		}
 		panic(panicked)
+	}
+
+	if errors.Is(runErr, moejs.ErrMemoryLimit) {
+		r.rt.ClearInterrupt()
+		return nil, Errorf("JavaScript memory limit exceeded (%d MB limit); inspect fresh state before retrying", r.opts.MemoryLimit/(1024*1024))
 	}
 
 	if isInterrupt(runErr) {

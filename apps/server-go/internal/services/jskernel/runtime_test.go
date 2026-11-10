@@ -154,3 +154,24 @@ func TestKernelTimeoutInterrupt(t *testing.T) {
 		t.Fatalf("expected interrupt message, got: %v", err)
 	}
 }
+
+func TestKernelMemoryLimitExceeded(t *testing.T) {
+	kernel, err := New(Options{Root: "test", MemoryLimit: 1 * 1024 * 1024}, nil) // 1 MiB limit
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code := `
+		var arr = [];
+		while (true) {
+			arr.push(new Array(100000).fill("large_string_allocation"));
+		}
+	`
+	_, err = kernel.Eval(context.Background(), code, 2*time.Second)
+	if err == nil {
+		t.Fatal("expected memory limit error")
+	}
+	if !strings.Contains(err.Error(), "memory limit exceeded") {
+		t.Fatalf("expected memory limit error, got: %v", err)
+	}
+}
