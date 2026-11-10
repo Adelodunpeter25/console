@@ -34,7 +34,7 @@ pub use autocomplete::{
 };
 pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};
 pub use composer_view::{ComposerAnnotation, ComposerComment, ComposerView};
-pub(crate) use composer_view::{plan_mode_stripes, plan_mode_stripes_with_opacity};
+pub(crate) use composer_view::plan_mode_stripes;
 pub use copy_button::{copy_button, copy_button_with_action};
 pub use error_banner::error_banner;
 pub use file_browser::FileBrowser;

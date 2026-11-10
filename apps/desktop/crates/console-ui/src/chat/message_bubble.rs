@@ -535,11 +535,9 @@ impl RenderOnce for UserMessageBubble {
                                 .border_color(theme.user_bubble_border)
                                 .flex()
                                 .flex_col()
-                                // Fainter than the composer's: these sit under dense text.
                                 .when(self.plan_mode, |el| {
                                     el.child(
-                                        crate::common::plan_mode_stripes_with_opacity(theme, 0.22)
-                                            .rounded(px(11.0)),
+                                        crate::common::plan_mode_stripes(theme).rounded(px(11.0)),
                                     )
                                 })
                                 .text_size(px(14.0))
