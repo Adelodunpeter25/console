@@ -35,7 +35,7 @@ import com.console.mobile.ui.theme.NewTheme
 
 /** Right-aligned user message: attachments, mention text, 4-line fold, copy. */
 @Composable
-fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList()) {
+fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> = emptyList(), planMode: Boolean = false) {
     val context = LocalContext.current
     var preview by remember { mutableStateOf<ImagePart?>(null) }
     var expanded by remember(content) { mutableStateOf(false) }
@@ -44,7 +44,9 @@ fun UserBubble(content: String, createdAt: Long?, attachments: List<ImagePart> =
         BoxWithConstraints(modifier = Modifier.align(Alignment.End)) {
             Column(
                 modifier = Modifier.widthIn(min = 64.dp, max = maxWidth * 0.85f).clip(RoundedCornerShape(20.dp))
-                    .background(NewTheme.UserBubble).padding(horizontal = 16.dp, vertical = 12.dp),
+                    .background(NewTheme.UserBubble)
+                    .then(if (planMode) Modifier.planModeStripes() else Modifier)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 if (attachments.isNotEmpty()) {
                     Row(modifier = Modifier.padding(bottom = 6.dp)) {

@@ -68,6 +68,7 @@ fun WireMessage.toUi(): AgentMessage? = when (val event = message) {
         content = event.value.content,
         attachments = event.value.attachments.map { it.toUi() },
         contextFiles = event.value.context_files,
+        approvalMode = event.value.approval_mode,
     )
     is console.v1.AgentMessage.Message.Assistant -> AssistantMessage(
         id = event.value.id.takeIf { it.isNotEmpty() },

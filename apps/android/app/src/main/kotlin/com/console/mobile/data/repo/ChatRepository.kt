@@ -440,6 +440,7 @@ class ChatRepository(
             content = prompt,
             attachments = userMessageAttachments,
             contextFiles = contextFiles,
+            approvalMode = view.approvalMode.takeIf { it.isNotBlank() },
         )
         // The bubble is held back until the server accepts the run POST — a
         // rejected prompt (e.g. 409 right after a stop) must not render as a

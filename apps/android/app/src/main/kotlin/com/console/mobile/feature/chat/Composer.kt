@@ -47,7 +47,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -589,23 +588,7 @@ private fun ComposerInput(
     Box(
         modifier = Modifier.fillMaxWidth().clip(bubbleShape)
             .background(NewTheme.Card)
-            // Plan mode reads at a glance: faint diagonal stripes over the bubble.
-            .then(
-                if (planOn) Modifier.drawBehind {
-                    val step = 11.dp.toPx()
-                    val stroke = 1.2.dp.toPx()
-                    var x = -size.height
-                    while (x < size.width) {
-                        drawLine(
-                            color = NewTheme.Accent.copy(alpha = 0.14f),
-                            start = androidx.compose.ui.geometry.Offset(x, size.height),
-                            end = androidx.compose.ui.geometry.Offset(x + size.height, 0f),
-                            strokeWidth = stroke,
-                        )
-                        x += step
-                    }
-                } else Modifier,
-            )
+            .then(if (planOn) Modifier.planModeStripes() else Modifier)
             .onGloballyPositioned(onCoordinatesChange)
             // The whole pill is the tap target, not just the sliver of text.
             .pointerInput(Unit) { detectTapGestures { onTapBubble() } }

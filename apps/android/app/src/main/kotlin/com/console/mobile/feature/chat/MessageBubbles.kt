@@ -20,7 +20,12 @@ fun MessageBubbleItem(
     onReply: ((String) -> Unit)? = null,
 ) {
     when (item) {
-        is UserMessage -> UserBubble(content = item.content, createdAt = item.createdAt, attachments = item.attachments)
+        is UserMessage -> UserBubble(
+            content = item.content,
+            createdAt = item.createdAt,
+            attachments = item.attachments,
+            planMode = item.approvalMode == com.console.mobile.data.model.ApprovalMode.PlanMode.value,
+        )
         is ToolResultMessage -> {}
         is AssistantMessage -> {
             val hasToolCalls = item.content.any { it is ToolCallPart }

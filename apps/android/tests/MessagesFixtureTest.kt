@@ -37,6 +37,19 @@ class MessagesFixtureTest {
     }
 
     @Test
+    fun userMessageCarriesItsApprovalMode() {
+        val ui = messageAdapter.fromJson(
+            "{\"user\":{\"content\":\"plan it\",\"approvalMode\":\"plan-mode\"}}",
+        )!!.toUi()!!
+        check(ui is com.console.mobile.data.model.UserMessage)
+        assertEquals("plan-mode", ui.approvalMode)
+        // Stored before the server recorded the mode: unknown, not plan.
+        val old = messageAdapter.fromJson(fixture("user.json"))!!.toUi()!!
+        check(old is com.console.mobile.data.model.UserMessage)
+        assertEquals(null, old.approvalMode)
+    }
+
+    @Test
     fun decodesGoldenAssistantFixture() {
         val ui = messageAdapter.fromJson(fixture("assistant.json"))!!.toUi()!!
         check(ui is com.console.mobile.data.model.AssistantMessage)

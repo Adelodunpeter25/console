@@ -46,6 +46,8 @@ data class UserMessage(
     val content: String,
     val attachments: List<ImagePart> = emptyList(),
     val contextFiles: List<String> = emptyList(),
+    /** Mode the turn ran under; null for messages stored before the server recorded it. */
+    val approvalMode: String? = null,
 ) : AgentMessage
 
 @Serializable
