@@ -11,6 +11,7 @@ use gpui::{
 };
 
 use crate::common::{attachment_image, centered_stripe};
+use crate::primitives::tooltip::Tooltip;
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 
@@ -165,6 +166,7 @@ pub fn queued_prompt_row(
                         .flex()
                         .items_center()
                         .justify_center()
+                        .tooltip(Tooltip::text("Edit prompt"))
                         .when_some(edit_handler, |element, handler| {
                             element
                                 .cursor_pointer()
@@ -185,6 +187,7 @@ pub fn queued_prompt_row(
                         .flex()
                         .items_center()
                         .justify_center()
+                        .tooltip(Tooltip::text("Delete prompt"))
                         .when_some(delete_handler, |element, handler| {
                             element
                                 .cursor_pointer()
@@ -209,6 +212,7 @@ pub fn queued_prompt_row(
                         .flex()
                         .items_center()
                         .justify_center()
+                        .tooltip(Tooltip::text("Send now"))
                         .when_some(steer_handler, |element, handler| {
                             element
                                 .cursor_pointer()
