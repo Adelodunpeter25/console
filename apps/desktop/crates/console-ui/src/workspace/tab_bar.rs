@@ -378,7 +378,7 @@ impl RenderOnce for WorkspaceTabBar {
                                         div()
                                             .size(px(8.0))
                                             .rounded_full()
-                                            .bg(theme.text)
+                                            .bg(theme.text_secondary)
                                             .when(!is_active, |dot| dot.opacity(0.7)),
                                     )
                                     .into_any_element()
