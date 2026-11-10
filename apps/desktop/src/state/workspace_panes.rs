@@ -37,7 +37,6 @@ impl ConsoleDesktopApp {
 
         let next_session = self.active_session_for_pane(pane_id);
         let transcript = self.transcript_for_pane(pane_id);
-        let composer = self.composer_for_pane(pane_id);
 
         if next_session == previous_session {
             self.maybe_refresh_inspector(cx);
@@ -48,35 +47,15 @@ impl ConsoleDesktopApp {
         match next_session {
             Some(session_id) => {
                 self.selected_session_id = Some(session_id.clone());
-                let draft = self.get_draft_with_mentions(Some(&session_id));
-                let draft_context_files = self.get_draft_context_files(Some(&session_id));
-                composer.update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                    if let Some((draft, mentions)) = draft {
-                        input.set_content_with_mentions(draft, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_context_files);
-                    cx.notify();
-                });
+                self.sidebar_draft_ids.remove(&session_id);
+                self.restore_draft_for_pane(pane_id, Some(&session_id), cx);
                 // Keep the previous transcript visible until the new load
                 // succeeds. A failed request must not strand the pane empty.
                 self.load_session_messages_for_pane(pane_id.to_string(), session_id, cx);
             }
             None => {
                 self.selected_session_id = None;
-                let draft = self.get_draft_with_mentions(None);
-                let draft_context_files = self.get_draft_context_files(None);
-                composer.update(cx, |input, cx| {
-                    if let Some((draft, mentions)) = draft {
-                        input.set_content_with_mentions(draft, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_context_files);
-                    cx.notify();
-                });
+                self.restore_draft_for_pane(pane_id, None, cx);
                 transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
             }
         }
@@ -438,30 +417,8 @@ impl ConsoleDesktopApp {
                 cx.notify();
                 return;
             }
-            let draft = self.get_draft_with_mentions(Some(sid));
-            let draft_ctx_files = self.get_draft_context_files(Some(sid));
-            let draft_attachments = self
-                .drafts
-                .get(sid)
-                .map(|draft| draft.attachments.clone())
-                .unwrap_or_default();
-            self.set_attachments_for_pane(pane_id, draft_attachments);
-            let draft_annotations = self
-                .drafts
-                .get(sid)
-                .map(|draft| draft.annotations.clone())
-                .unwrap_or_default();
-            self.set_annotations_for_pane(pane_id, draft_annotations);
-            self.composer_for_pane(pane_id).update(cx, |input, cx| {
-                input.set_prompt_history(Vec::new(), cx);
-                if let Some((draft_text, mentions)) = draft {
-                    input.set_content_with_mentions(draft_text, mentions, cx);
-                } else {
-                    input.clear(cx);
-                }
-                input.set_context_files(draft_ctx_files);
-                cx.notify();
-            });
+            self.sidebar_draft_ids.remove(sid);
+            self.restore_draft_for_pane(pane_id, Some(sid), cx);
             // Switching tabs: clear synchronously so the old session's
             // messages never linger while the new session loads. (The
             // close-tab path intentionally keeps the old transcript
@@ -825,19 +782,8 @@ impl ConsoleDesktopApp {
         self.active_pane_id = Some(new_pane_id.clone());
         if let WorkspaceTabConfig::Chat { session_id, .. } = tab {
             self.selected_session_id = Some(session_id.clone());
-            let draft = self.get_draft_with_mentions(Some(&session_id));
-            let draft_ctx_files2 = self.get_draft_context_files(Some(&session_id));
-            self.composer_for_pane(&new_pane_id)
-                .update(cx, |input, cx| {
-                    input.set_prompt_history(Vec::new(), cx);
-                    if let Some((draft_text, mentions)) = draft {
-                        input.set_content_with_mentions(draft_text, mentions, cx);
-                    } else {
-                        input.clear(cx);
-                    }
-                    input.set_context_files(draft_ctx_files2);
-                    cx.notify();
-                });
+            self.sidebar_draft_ids.remove(&session_id);
+            self.restore_draft_for_pane(&new_pane_id, Some(&session_id), cx);
             self.transcript_for_pane(&new_pane_id)
                 .update(cx, |transcript, cx| {
                     transcript.set_messages(Vec::new(), cx);

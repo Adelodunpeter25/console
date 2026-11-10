@@ -291,6 +291,8 @@ impl ConsoleDesktopApp {
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );
+        let active_session = self.active_session_for_pane(pane_id);
+        self.restore_draft_for_pane(pane_id, active_session.as_deref(), cx);
     }
 
     pub(crate) fn transcript_for_pane(&self, pane_id: &str) -> Entity<TranscriptView> {

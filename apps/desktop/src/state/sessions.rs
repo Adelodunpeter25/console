@@ -998,18 +998,8 @@ impl ConsoleDesktopApp {
             return;
         }
 
-        let draft = self.get_draft_with_mentions(Some(&id));
-        let draft_ctx_files = self.get_draft_context_files(Some(&id));
-        self.active_composer_input().update(cx, |input, cx| {
-            input.set_prompt_history(Vec::new(), cx);
-            if let Some((draft_text, mentions)) = draft {
-                input.set_content_with_mentions(draft_text, mentions, cx);
-            } else {
-                input.clear(cx);
-            }
-            input.set_context_files(draft_ctx_files);
-            cx.notify();
-        });
+        self.sidebar_draft_ids.remove(&id);
+        self.restore_draft_for_pane(&active_pane_id, Some(&id), cx);
         self.active_transcript_view().update(cx, |t, cx| {
             t.set_messages(Vec::new(), cx);
         });

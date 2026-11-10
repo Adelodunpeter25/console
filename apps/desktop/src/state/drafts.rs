@@ -117,6 +117,41 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
+    /// Restores the draft (text, mentions, context files, attachments, annotations)
+    /// into the composer of the specified pane.
+    pub fn restore_draft_for_pane(
+        &mut self,
+        pane_id: &str,
+        session_id: Option<&str>,
+        cx: &mut Context<Self>,
+    ) {
+        let draft = self.get_draft_with_mentions(session_id);
+        let draft_ctx_files = self.get_draft_context_files(session_id);
+        let key = session_id.unwrap_or("new_chat");
+        let draft_attachments = self
+            .drafts
+            .get(key)
+            .map(|draft| draft.attachments.clone())
+            .unwrap_or_default();
+        self.set_attachments_for_pane(pane_id, draft_attachments);
+        let draft_annotations = self
+            .drafts
+            .get(key)
+            .map(|draft| draft.annotations.clone())
+            .unwrap_or_default();
+        self.set_annotations_for_pane(pane_id, draft_annotations);
+        self.composer_for_pane(pane_id).update(cx, |input, cx| {
+            input.set_prompt_history(Vec::new(), cx);
+            if let Some((draft_text, mentions)) = draft {
+                input.set_content_with_mentions(draft_text, mentions, cx);
+            } else {
+                input.clear(cx);
+            }
+            input.set_context_files(draft_ctx_files);
+            cx.notify();
+        });
+    }
+
     pub fn save_draft_for_session_with_context(
         &mut self,
         session_id: Option<&str>,

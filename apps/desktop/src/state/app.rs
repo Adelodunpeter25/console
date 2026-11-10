@@ -375,13 +375,52 @@ impl ConsoleDesktopApp {
         let shells_menu = ContextMenuHandle::new(cx);
 
         let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
-        // All persisted drafts (except new_chat) are already confirmed for sidebar display.
+        // Persisted drafts from closed tabs are shown in the sidebar.
+        // Sessions that are currently open in workspace tabs belong in their tab's composer, not the sidebar.
+        let mut open_session_ids = std::collections::HashSet::new();
+        for leaf in initial_root.leaves() {
+            for tab in &leaf.tabs {
+                if let console_core::WorkspaceTabConfig::Chat { session_id, .. } = tab {
+                    open_session_ids.insert(session_id.clone());
+                }
+            }
+        }
         let sidebar_draft_ids: std::collections::HashSet<String> = drafts
             .keys()
-            .filter(|k| k.as_str() != "new_chat" && !drafts[*k].prompt.trim().is_empty())
+            .filter(|k| {
+                k.as_str() != "new_chat"
+                    && !drafts[*k].prompt.trim().is_empty()
+                    && !open_session_ids.contains(*k)
+            })
             .cloned()
             .collect();
-        if let Some(initial_draft) = drafts.get("new_chat") {
+        let initial_main_session = initial_root
+            .leaves()
+            .into_iter()
+            .find(|l| l.id == "pane-main")
+            .and_then(|leaf| {
+                if let Some(session_id) = leaf
+                    .active_tab_id
+                    .as_deref()
+                    .and_then(|tab_id| tab_id.strip_prefix("chat:"))
+                {
+                    return Some(session_id.to_owned());
+                }
+                leaf.tabs
+                    .iter()
+                    .filter_map(|tab| match tab {
+                        console_core::WorkspaceTabConfig::Chat {
+                            session_id,
+                            last_active_at_ms,
+                            ..
+                        } => Some((session_id, last_active_at_ms.unwrap_or(0))),
+                        _ => None,
+                    })
+                    .max_by_key(|(_, ts)| *ts)
+                    .map(|(id, _)| id.clone())
+            });
+        let initial_draft_key = initial_main_session.as_deref().unwrap_or("new_chat");
+        if let Some(initial_draft) = drafts.get(initial_draft_key) {
             if !initial_draft.prompt.trim().is_empty() || !initial_draft.context_files.is_empty() {
                 let mentions = initial_draft
                     .mentions
@@ -882,6 +921,9 @@ impl ConsoleDesktopApp {
                 tab_strip_follow: console_ui::workspace::TabStripFollow::new(),
             },
         );
+
+        let initial_session = app.active_session_for_pane("pane-main");
+        app.restore_draft_for_pane("pane-main", initial_session.as_deref(), cx);
 
         app.bootstrap_backend(target, cx);
 

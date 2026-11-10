@@ -133,12 +133,18 @@ impl ConsoleDesktopApp {
                                     crate::window::WindowLaunchTarget::RestorePersisted
                                 ) {
                                     let mut to_load = Vec::new();
+                                    let mut empty_panes = Vec::new();
                                     for leaf in this.workspace_root.leaves() {
                                         if let Some(session_id) =
                                             this.active_session_for_pane(&leaf.id)
                                         {
                                             to_load.push((leaf.id.clone(), session_id));
+                                        } else {
+                                            empty_panes.push(leaf.id.clone());
                                         }
+                                    }
+                                    for pane_id in empty_panes {
+                                        this.restore_draft_for_pane(&pane_id, None, cx);
                                     }
                                     for (pane_id, session_id) in to_load {
                                         if this.active_pane_id.as_deref() == Some(&pane_id)
@@ -146,6 +152,7 @@ impl ConsoleDesktopApp {
                                         {
                                             this.selected_session_id = Some(session_id.clone());
                                         }
+                                        this.restore_draft_for_pane(&pane_id, Some(&session_id), cx);
                                         this.load_session_messages_for_pane(
                                             pane_id, session_id, cx,
                                         );
