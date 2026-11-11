@@ -59,7 +59,7 @@ pub fn title_label(is_active: bool, theme: Theme) -> Div {
         .text_color(if is_active {
             theme.text
         } else {
-            theme.text_secondary
+            theme.text_tertiary
         })
 }
 

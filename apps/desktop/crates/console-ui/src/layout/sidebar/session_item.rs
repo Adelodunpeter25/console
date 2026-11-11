@@ -1,8 +1,7 @@
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
-    RenderOnce, StatefulInteractiveElement, Styled, Window, actions, div,
-    prelude::FluentBuilder, px,
+    App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
+    StatefulInteractiveElement, Styled, Window, actions, div, prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
@@ -168,6 +167,15 @@ impl RenderOnce for SidebarSessionItem {
             || session.status == "waiting";
         let is_done = session.status == "done" || session.status == "completed";
 
+        // Colour marks status only on the focused row; the rest go monochrome so
+        // the list stays calm and the selected chat stands out.
+        let tint = |colored| {
+            if is_active {
+                colored
+            } else {
+                theme.text_tertiary
+            }
+        };
         let status_id = || ElementId::Name(format!("status-{}", session.id).into());
         let status_indicator = if is_running {
             status_slot()
@@ -176,20 +184,20 @@ impl RenderOnce for SidebarSessionItem {
                 .child(motion::spin_slow(app_icon(
                     IconName::LoaderCircle,
                     15.0,
-                    theme.accent,
+                    tint(theme.accent),
                 )))
                 .into_any_element()
         } else if needs_attention {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
-                .child(app_icon(IconName::Alert, 15.0, theme.warning))
+                .child(app_icon(IconName::Alert, 15.0, tint(theme.warning)))
                 .into_any_element()
         } else if is_done {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Done"))
-                .child(app_icon(IconName::CircleCheck, 15.0, theme.success))
+                .child(app_icon(IconName::CircleCheck, 15.0, tint(theme.success)))
                 .into_any_element()
         } else {
             status_slot().into_any_element()
@@ -235,33 +243,29 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         };
 
-        let row = row_container(
-            ElementId::Name(session.id.clone().into()),
-            is_active,
-            theme,
-        )
-        .on_drag(drag, |drag, _, _, cx| {
-            cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
-        })
-        .group(group_name)
-        // Settled chats read as archived: slightly dimmed everywhere.
-        .when(settled, |s| s.opacity(0.7))
-        .when(!is_renaming, |element| {
-            element.on_click(move |_, w, cx| {
-                (on_click)(w, cx);
+        let row = row_container(ElementId::Name(session.id.clone().into()), is_active, theme)
+            .on_drag(drag, |drag, _, _, cx| {
+                cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
             })
-        })
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap_x(px(6.0))
-                .child(status_indicator)
-                .child(title)
-                .when(self.has_draft, |el| el.child(draft_badge(theme))),
-        );
+            .group(group_name)
+            // Settled chats read as archived: slightly dimmed everywhere.
+            .when(settled, |s| s.opacity(0.7))
+            .when(!is_renaming, |element| {
+                element.on_click(move |_, w, cx| {
+                    (on_click)(w, cx);
+                })
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .items_center()
+                    .gap_x(px(6.0))
+                    .child(status_indicator)
+                    .child(title)
+                    .when(self.has_draft, |el| el.child(draft_badge(theme))),
+            );
 
         if is_renaming {
             let on_commit = on_commit_rename;
