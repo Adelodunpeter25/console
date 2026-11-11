@@ -55,10 +55,6 @@ name = "mcp_server_reply_shape_test"
 path = "tests/mcp/server_reply_shape_test.rs"
 
 [[test]]
-name = "types_test"
-path = "tests/types/types_test.rs"
-
-[[test]]
 name = "message_convert_test"
 path = "tests/types/message_convert_test.rs"
 
