@@ -302,7 +302,9 @@ impl RenderOnce for SidebarSessionItem {
             if let Some(bounds) = probe_bounds.get() {
                 let hover_mgr_card = hover_mgr.clone();
                 let card = div()
-                    .id(ElementId::Name(format!("session-card-{}", session.id).into()))
+                    .id(ElementId::Name(
+                        format!("session-card-{}", session.id).into(),
+                    ))
                     .occlude()
                     .on_hover(move |hovered, _, cx| {
                         on_card_hover(&hover_mgr_card, *hovered, cx);

@@ -53,9 +53,8 @@ pub fn message_id_at(messages: &[AgentMessage], row: usize) -> Option<String> {
 /// older pages are prepended. The id names the message itself.
 pub fn row_for_message_id(messages: &[AgentMessage], id: &str) -> Option<usize> {
     messages.iter().position(|message| match message {
-        AgentMessage::User { id: message_id, .. } | AgentMessage::Assistant { id: message_id, .. } => {
-            message_id.as_deref() == Some(id)
-        }
+        AgentMessage::User { id: message_id, .. }
+        | AgentMessage::Assistant { id: message_id, .. } => message_id.as_deref() == Some(id),
         AgentMessage::ToolResult { .. } => false,
     })
 }
@@ -990,9 +989,7 @@ impl TranscriptView {
             self.list_state.scroll_to_end();
         } else if let Some(anchor) = anchor {
             self.list_state.set_follow_mode(FollowMode::Normal);
-            let row_index = anchor
-                .row_index
-                .min(self.row_count().saturating_sub(1));
+            let row_index = anchor.row_index.min(self.row_count().saturating_sub(1));
             self.list_state.reset(self.row_count());
             self.list_state.scroll_to(ListOffset {
                 item_ix: row_index,

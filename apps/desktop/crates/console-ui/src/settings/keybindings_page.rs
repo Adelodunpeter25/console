@@ -47,99 +47,471 @@ const CATEGORY_ORDER: &[&str] = &[
 /// Human metadata only — descriptions and grouping. Key combos live in the
 /// keymap and are derived at runtime, so they can never drift from this table.
 const ACTION_META: &[ActionMeta] = &[
-    ActionMeta { action: "ToggleCommandPalette", category: "Global & Window", description: "Open command palette" },
-    ActionMeta { action: "ToggleTabPalette", category: "Global & Window", description: "Switch open chat or terminal tab" },
-    ActionMeta { action: "QuickOpenFile", category: "Global & Window", description: "Quick open file" },
-    ActionMeta { action: "AddProject", category: "Global & Window", description: "Open project browser" },
-    ActionMeta { action: "NewWindow", category: "Global & Window", description: "New desktop window" },
-    ActionMeta { action: "NewChat", category: "Global & Window", description: "New chat session" },
-    ActionMeta { action: "SettleSession", category: "Global & Window", description: "Settle the selected chat / move it back to active" },
-    ActionMeta { action: "NewTerminal", category: "Global & Window", description: "New terminal tab" },
-    ActionMeta { action: "NewBrowser", category: "Global & Window", description: "New browser tab" },
-    ActionMeta { action: "CloseTab", category: "Global & Window", description: "Close active tab" },
-    ActionMeta { action: "ToggleLeftSidebar", category: "Global & Window", description: "Toggle left sidebar" },
-    ActionMeta { action: "ToggleRightSidebar", category: "Global & Window", description: "Toggle right sidebar" },
-    ActionMeta { action: "OpenSettings", category: "Global & Window", description: "Open settings window" },
-    ActionMeta { action: "FocusComposer", category: "Global & Window", description: "Focus composer input" },
-    ActionMeta { action: "ToggleModelPicker", category: "Global & Window", description: "Toggle model picker" },
-    ActionMeta { action: "ToggleThinkingPicker", category: "Global & Window", description: "Toggle thinking mode selector" },
-    ActionMeta { action: "FocusModelSearch", category: "Global & Window", description: "Focus open picker search field" },
-    ActionMeta { action: "CycleApprovalMode", category: "Global & Window", description: "Cycle approval mode" },
-    ActionMeta { action: "SwitchSession", category: "Global & Window", description: "Switch session by number" },
-    ActionMeta { action: "SwitchWorkspaceTab", category: "Global & Window", description: "Switch workspace tab by number" },
-    ActionMeta { action: "Quit", category: "Global & Window", description: "Quit the app" },
-    ActionMeta { action: "HideApp", category: "Global & Window", description: "Hide the app" },
-    ActionMeta { action: "HideOthers", category: "Global & Window", description: "Hide other apps" },
-    ActionMeta { action: "Minimize", category: "Global & Window", description: "Minimize window" },
-    ActionMeta { action: "ShowNextTab", category: "Global & Window", description: "Show next tab" },
-    ActionMeta { action: "ShowPreviousTab", category: "Global & Window", description: "Show previous tab" },
-    ActionMeta { action: "NewProject", category: "Global & Window", description: "Open add-project dialog (menu only)" },
-    ActionMeta { action: "CheckForUpdates", category: "Global & Window", description: "Check for updates (menu only)" },
-    ActionMeta { action: "Enter", category: "Chat & Composer", description: "Submit prompt / send" },
-    ActionMeta { action: "Newline", category: "Chat & Composer", description: "Insert newline" },
-    ActionMeta { action: "SubmitSteer", category: "Chat & Composer", description: "Steer the running turn / queue follow-up" },
-    ActionMeta { action: "SelectAll", category: "Chat & Composer", description: "Select all text" },
-    ActionMeta { action: "Copy", category: "Chat & Composer", description: "Copy selection" },
-    ActionMeta { action: "Cut", category: "Chat & Composer", description: "Cut selection" },
-    ActionMeta { action: "Paste", category: "Chat & Composer", description: "Paste" },
-    ActionMeta { action: "Undo", category: "Chat & Composer", description: "Undo edit" },
-    ActionMeta { action: "Redo", category: "Chat & Composer", description: "Redo edit" },
-    ActionMeta { action: "Backspace", category: "Chat & Composer", description: "Delete backwards" },
-    ActionMeta { action: "Delete", category: "Chat & Composer", description: "Delete forwards" },
-    ActionMeta { action: "DeleteToPreviousWord", category: "Chat & Composer", description: "Delete previous word" },
-    ActionMeta { action: "DeleteToNextWord", category: "Chat & Composer", description: "Delete next word" },
-    ActionMeta { action: "DeleteToStart", category: "Chat & Composer", description: "Delete to line start" },
-    ActionMeta { action: "DeleteToEnd", category: "Chat & Composer", description: "Delete to line end" },
-    ActionMeta { action: "Left", category: "Chat & Composer", description: "Move caret left" },
-    ActionMeta { action: "Right", category: "Chat & Composer", description: "Move caret right" },
-    ActionMeta { action: "Up", category: "Chat & Composer", description: "Move caret up" },
-    ActionMeta { action: "Down", category: "Chat & Composer", description: "Move caret down" },
-    ActionMeta { action: "Home", category: "Chat & Composer", description: "Move to line / text start" },
-    ActionMeta { action: "End", category: "Chat & Composer", description: "Move to line / text end" },
-    ActionMeta { action: "SelectLeft", category: "Chat & Composer", description: "Extend selection left" },
-    ActionMeta { action: "SelectRight", category: "Chat & Composer", description: "Extend selection right" },
-    ActionMeta { action: "SelectToStart", category: "Chat & Composer", description: "Select to line / text start" },
-    ActionMeta { action: "SelectToEnd", category: "Chat & Composer", description: "Select to line / text end" },
-    ActionMeta { action: "SelectToPreviousWord", category: "Chat & Composer", description: "Select previous word" },
-    ActionMeta { action: "SelectToNextWord", category: "Chat & Composer", description: "Select next word" },
-    ActionMeta { action: "MoveToPreviousWord", category: "Chat & Composer", description: "Move to previous word" },
-    ActionMeta { action: "MoveToNextWord", category: "Chat & Composer", description: "Move to next word" },
-    ActionMeta { action: "AutocompleteNext", category: "Autocomplete", description: "Next suggestion" },
-    ActionMeta { action: "AutocompletePrevious", category: "Autocomplete", description: "Previous suggestion" },
-    ActionMeta { action: "AutocompleteConfirm", category: "Autocomplete", description: "Confirm autocomplete" },
-    ActionMeta { action: "AutocompleteDismiss", category: "Autocomplete", description: "Dismiss autocomplete" },
-    ActionMeta { action: "FileMentionTrigger", category: "Autocomplete", description: "Trigger file mention (typed)" },
-    ActionMeta { action: "SlashCommandTrigger", category: "Autocomplete", description: "Trigger slash command (typed)" },
-    ActionMeta { action: "ChatRefTrigger", category: "Autocomplete", description: "Reference another chat (typed)" },
-    ActionMeta { action: "Cancel", category: "Panels & Overlays", description: "Cancel / dismiss the focused panel" },
-    ActionMeta { action: "ConfirmMatch", category: "Panels & Overlays", description: "Confirm highlighted result" },
-    ActionMeta { action: "SelectNext", category: "Panels & Overlays", description: "Next result / entry" },
-    ActionMeta { action: "SelectPrev", category: "Panels & Overlays", description: "Previous result / entry" },
-    ActionMeta { action: "SelectNextEntry", category: "Panels & Overlays", description: "Next menu entry" },
-    ActionMeta { action: "SelectPreviousEntry", category: "Panels & Overlays", description: "Previous menu entry" },
-    ActionMeta { action: "SelectNextTab", category: "Panels & Overlays", description: "Next menu tab" },
-    ActionMeta { action: "SelectPreviousTab", category: "Panels & Overlays", description: "Previous menu tab" },
-    ActionMeta { action: "ConfirmEntry", category: "Panels & Overlays", description: "Confirm menu entry" },
-    ActionMeta { action: "DismissMenu", category: "Panels & Overlays", description: "Dismiss open menu / palette" },
-    ActionMeta { action: "CancelSidebarSearch", category: "Panels & Overlays", description: "Cancel sidebar search" },
-    ActionMeta { action: "CommitSessionRename", category: "Panels & Overlays", description: "Commit session rename" },
-    ActionMeta { action: "CancelSessionRename", category: "Panels & Overlays", description: "Cancel session rename" },
-    ActionMeta { action: "FocusBrowserAddress", category: "Browser Surface", description: "Focus address bar" },
-    ActionMeta { action: "BrowserReload", category: "Browser Surface", description: "Reload page" },
-    ActionMeta { action: "BrowserHardReload", category: "Browser Surface", description: "Hard reload (bypass cache)" },
-    ActionMeta { action: "BrowserBack", category: "Browser Surface", description: "Navigate back" },
-    ActionMeta { action: "BrowserForward", category: "Browser Surface", description: "Navigate forward" },
-    ActionMeta { action: "BrowserStop", category: "Browser Surface", description: "Stop loading" },
-    ActionMeta { action: "BrowserDevtools", category: "Browser Surface", description: "Toggle web inspector / devtools" },
-    ActionMeta { action: "BrowserToggleInspect", category: "Browser Surface", description: "Toggle element inspect mode" },
-    ActionMeta { action: "BrowserAddressCancel", category: "Browser Surface", description: "Cancel address edit" },
-    ActionMeta { action: "WebviewCopy", category: "Browser Surface", description: "Copy webview selection" },
-    ActionMeta { action: "WebviewCut", category: "Browser Surface", description: "Cut webview selection" },
-    ActionMeta { action: "WebviewPaste", category: "Browser Surface", description: "Paste into webview" },
-    ActionMeta { action: "WebviewSelectAll", category: "Browser Surface", description: "Select all in webview" },
-    ActionMeta { action: "TerminalTab", category: "Terminal & Code Viewer", description: "Send Tab to terminal (PTY)" },
-    ActionMeta { action: "TerminalShiftTab", category: "Terminal & Code Viewer", description: "Send Shift+Tab to terminal (PTY)" },
-    ActionMeta { action: "CopySelection", category: "Terminal & Code Viewer", description: "Copy selection" },
+    ActionMeta {
+        action: "ToggleCommandPalette",
+        category: "Global & Window",
+        description: "Open command palette",
+    },
+    ActionMeta {
+        action: "ToggleTabPalette",
+        category: "Global & Window",
+        description: "Switch open chat or terminal tab",
+    },
+    ActionMeta {
+        action: "QuickOpenFile",
+        category: "Global & Window",
+        description: "Quick open file",
+    },
+    ActionMeta {
+        action: "AddProject",
+        category: "Global & Window",
+        description: "Open project browser",
+    },
+    ActionMeta {
+        action: "NewWindow",
+        category: "Global & Window",
+        description: "New desktop window",
+    },
+    ActionMeta {
+        action: "NewChat",
+        category: "Global & Window",
+        description: "New chat session",
+    },
+    ActionMeta {
+        action: "SettleSession",
+        category: "Global & Window",
+        description: "Settle the selected chat / move it back to active",
+    },
+    ActionMeta {
+        action: "NewTerminal",
+        category: "Global & Window",
+        description: "New terminal tab",
+    },
+    ActionMeta {
+        action: "NewBrowser",
+        category: "Global & Window",
+        description: "New browser tab",
+    },
+    ActionMeta {
+        action: "CloseTab",
+        category: "Global & Window",
+        description: "Close active tab",
+    },
+    ActionMeta {
+        action: "ToggleLeftSidebar",
+        category: "Global & Window",
+        description: "Toggle left sidebar",
+    },
+    ActionMeta {
+        action: "ToggleRightSidebar",
+        category: "Global & Window",
+        description: "Toggle right sidebar",
+    },
+    ActionMeta {
+        action: "OpenSettings",
+        category: "Global & Window",
+        description: "Open settings window",
+    },
+    ActionMeta {
+        action: "FocusComposer",
+        category: "Global & Window",
+        description: "Focus composer input",
+    },
+    ActionMeta {
+        action: "ToggleModelPicker",
+        category: "Global & Window",
+        description: "Toggle model picker",
+    },
+    ActionMeta {
+        action: "ToggleThinkingPicker",
+        category: "Global & Window",
+        description: "Toggle thinking mode selector",
+    },
+    ActionMeta {
+        action: "FocusModelSearch",
+        category: "Global & Window",
+        description: "Focus open picker search field",
+    },
+    ActionMeta {
+        action: "CycleApprovalMode",
+        category: "Global & Window",
+        description: "Cycle approval mode",
+    },
+    ActionMeta {
+        action: "SwitchSession",
+        category: "Global & Window",
+        description: "Switch session by number",
+    },
+    ActionMeta {
+        action: "SwitchWorkspaceTab",
+        category: "Global & Window",
+        description: "Switch workspace tab by number",
+    },
+    ActionMeta {
+        action: "Quit",
+        category: "Global & Window",
+        description: "Quit the app",
+    },
+    ActionMeta {
+        action: "HideApp",
+        category: "Global & Window",
+        description: "Hide the app",
+    },
+    ActionMeta {
+        action: "HideOthers",
+        category: "Global & Window",
+        description: "Hide other apps",
+    },
+    ActionMeta {
+        action: "Minimize",
+        category: "Global & Window",
+        description: "Minimize window",
+    },
+    ActionMeta {
+        action: "ShowNextTab",
+        category: "Global & Window",
+        description: "Show next tab",
+    },
+    ActionMeta {
+        action: "ShowPreviousTab",
+        category: "Global & Window",
+        description: "Show previous tab",
+    },
+    ActionMeta {
+        action: "NewProject",
+        category: "Global & Window",
+        description: "Open add-project dialog (menu only)",
+    },
+    ActionMeta {
+        action: "CheckForUpdates",
+        category: "Global & Window",
+        description: "Check for updates (menu only)",
+    },
+    ActionMeta {
+        action: "Enter",
+        category: "Chat & Composer",
+        description: "Submit prompt / send",
+    },
+    ActionMeta {
+        action: "Newline",
+        category: "Chat & Composer",
+        description: "Insert newline",
+    },
+    ActionMeta {
+        action: "SubmitSteer",
+        category: "Chat & Composer",
+        description: "Steer the running turn / queue follow-up",
+    },
+    ActionMeta {
+        action: "SelectAll",
+        category: "Chat & Composer",
+        description: "Select all text",
+    },
+    ActionMeta {
+        action: "Copy",
+        category: "Chat & Composer",
+        description: "Copy selection",
+    },
+    ActionMeta {
+        action: "Cut",
+        category: "Chat & Composer",
+        description: "Cut selection",
+    },
+    ActionMeta {
+        action: "Paste",
+        category: "Chat & Composer",
+        description: "Paste",
+    },
+    ActionMeta {
+        action: "Undo",
+        category: "Chat & Composer",
+        description: "Undo edit",
+    },
+    ActionMeta {
+        action: "Redo",
+        category: "Chat & Composer",
+        description: "Redo edit",
+    },
+    ActionMeta {
+        action: "Backspace",
+        category: "Chat & Composer",
+        description: "Delete backwards",
+    },
+    ActionMeta {
+        action: "Delete",
+        category: "Chat & Composer",
+        description: "Delete forwards",
+    },
+    ActionMeta {
+        action: "DeleteToPreviousWord",
+        category: "Chat & Composer",
+        description: "Delete previous word",
+    },
+    ActionMeta {
+        action: "DeleteToNextWord",
+        category: "Chat & Composer",
+        description: "Delete next word",
+    },
+    ActionMeta {
+        action: "DeleteToStart",
+        category: "Chat & Composer",
+        description: "Delete to line start",
+    },
+    ActionMeta {
+        action: "DeleteToEnd",
+        category: "Chat & Composer",
+        description: "Delete to line end",
+    },
+    ActionMeta {
+        action: "Left",
+        category: "Chat & Composer",
+        description: "Move caret left",
+    },
+    ActionMeta {
+        action: "Right",
+        category: "Chat & Composer",
+        description: "Move caret right",
+    },
+    ActionMeta {
+        action: "Up",
+        category: "Chat & Composer",
+        description: "Move caret up",
+    },
+    ActionMeta {
+        action: "Down",
+        category: "Chat & Composer",
+        description: "Move caret down",
+    },
+    ActionMeta {
+        action: "Home",
+        category: "Chat & Composer",
+        description: "Move to line / text start",
+    },
+    ActionMeta {
+        action: "End",
+        category: "Chat & Composer",
+        description: "Move to line / text end",
+    },
+    ActionMeta {
+        action: "SelectLeft",
+        category: "Chat & Composer",
+        description: "Extend selection left",
+    },
+    ActionMeta {
+        action: "SelectRight",
+        category: "Chat & Composer",
+        description: "Extend selection right",
+    },
+    ActionMeta {
+        action: "SelectToStart",
+        category: "Chat & Composer",
+        description: "Select to line / text start",
+    },
+    ActionMeta {
+        action: "SelectToEnd",
+        category: "Chat & Composer",
+        description: "Select to line / text end",
+    },
+    ActionMeta {
+        action: "SelectToPreviousWord",
+        category: "Chat & Composer",
+        description: "Select previous word",
+    },
+    ActionMeta {
+        action: "SelectToNextWord",
+        category: "Chat & Composer",
+        description: "Select next word",
+    },
+    ActionMeta {
+        action: "MoveToPreviousWord",
+        category: "Chat & Composer",
+        description: "Move to previous word",
+    },
+    ActionMeta {
+        action: "MoveToNextWord",
+        category: "Chat & Composer",
+        description: "Move to next word",
+    },
+    ActionMeta {
+        action: "AutocompleteNext",
+        category: "Autocomplete",
+        description: "Next suggestion",
+    },
+    ActionMeta {
+        action: "AutocompletePrevious",
+        category: "Autocomplete",
+        description: "Previous suggestion",
+    },
+    ActionMeta {
+        action: "AutocompleteConfirm",
+        category: "Autocomplete",
+        description: "Confirm autocomplete",
+    },
+    ActionMeta {
+        action: "AutocompleteDismiss",
+        category: "Autocomplete",
+        description: "Dismiss autocomplete",
+    },
+    ActionMeta {
+        action: "FileMentionTrigger",
+        category: "Autocomplete",
+        description: "Trigger file mention (typed)",
+    },
+    ActionMeta {
+        action: "SlashCommandTrigger",
+        category: "Autocomplete",
+        description: "Trigger slash command (typed)",
+    },
+    ActionMeta {
+        action: "ChatRefTrigger",
+        category: "Autocomplete",
+        description: "Reference another chat (typed)",
+    },
+    ActionMeta {
+        action: "Cancel",
+        category: "Panels & Overlays",
+        description: "Cancel / dismiss the focused panel",
+    },
+    ActionMeta {
+        action: "ConfirmMatch",
+        category: "Panels & Overlays",
+        description: "Confirm highlighted result",
+    },
+    ActionMeta {
+        action: "SelectNext",
+        category: "Panels & Overlays",
+        description: "Next result / entry",
+    },
+    ActionMeta {
+        action: "SelectPrev",
+        category: "Panels & Overlays",
+        description: "Previous result / entry",
+    },
+    ActionMeta {
+        action: "SelectNextEntry",
+        category: "Panels & Overlays",
+        description: "Next menu entry",
+    },
+    ActionMeta {
+        action: "SelectPreviousEntry",
+        category: "Panels & Overlays",
+        description: "Previous menu entry",
+    },
+    ActionMeta {
+        action: "SelectNextTab",
+        category: "Panels & Overlays",
+        description: "Next menu tab",
+    },
+    ActionMeta {
+        action: "SelectPreviousTab",
+        category: "Panels & Overlays",
+        description: "Previous menu tab",
+    },
+    ActionMeta {
+        action: "ConfirmEntry",
+        category: "Panels & Overlays",
+        description: "Confirm menu entry",
+    },
+    ActionMeta {
+        action: "DismissMenu",
+        category: "Panels & Overlays",
+        description: "Dismiss open menu / palette",
+    },
+    ActionMeta {
+        action: "CancelSidebarSearch",
+        category: "Panels & Overlays",
+        description: "Cancel sidebar search",
+    },
+    ActionMeta {
+        action: "CommitSessionRename",
+        category: "Panels & Overlays",
+        description: "Commit session rename",
+    },
+    ActionMeta {
+        action: "CancelSessionRename",
+        category: "Panels & Overlays",
+        description: "Cancel session rename",
+    },
+    ActionMeta {
+        action: "FocusBrowserAddress",
+        category: "Browser Surface",
+        description: "Focus address bar",
+    },
+    ActionMeta {
+        action: "BrowserReload",
+        category: "Browser Surface",
+        description: "Reload page",
+    },
+    ActionMeta {
+        action: "BrowserHardReload",
+        category: "Browser Surface",
+        description: "Hard reload (bypass cache)",
+    },
+    ActionMeta {
+        action: "BrowserBack",
+        category: "Browser Surface",
+        description: "Navigate back",
+    },
+    ActionMeta {
+        action: "BrowserForward",
+        category: "Browser Surface",
+        description: "Navigate forward",
+    },
+    ActionMeta {
+        action: "BrowserStop",
+        category: "Browser Surface",
+        description: "Stop loading",
+    },
+    ActionMeta {
+        action: "BrowserDevtools",
+        category: "Browser Surface",
+        description: "Toggle web inspector / devtools",
+    },
+    ActionMeta {
+        action: "BrowserToggleInspect",
+        category: "Browser Surface",
+        description: "Toggle element inspect mode",
+    },
+    ActionMeta {
+        action: "BrowserAddressCancel",
+        category: "Browser Surface",
+        description: "Cancel address edit",
+    },
+    ActionMeta {
+        action: "WebviewCopy",
+        category: "Browser Surface",
+        description: "Copy webview selection",
+    },
+    ActionMeta {
+        action: "WebviewCut",
+        category: "Browser Surface",
+        description: "Cut webview selection",
+    },
+    ActionMeta {
+        action: "WebviewPaste",
+        category: "Browser Surface",
+        description: "Paste into webview",
+    },
+    ActionMeta {
+        action: "WebviewSelectAll",
+        category: "Browser Surface",
+        description: "Select all in webview",
+    },
+    ActionMeta {
+        action: "TerminalTab",
+        category: "Terminal & Code Viewer",
+        description: "Send Tab to terminal (PTY)",
+    },
+    ActionMeta {
+        action: "TerminalShiftTab",
+        category: "Terminal & Code Viewer",
+        description: "Send Shift+Tab to terminal (PTY)",
+    },
+    ActionMeta {
+        action: "CopySelection",
+        category: "Terminal & Code Viewer",
+        description: "Copy selection",
+    },
 ];
 
 /// Friendly label for a key-context predicate string. Longer matches first —
@@ -172,8 +544,20 @@ fn friendly_context(raw: &str) -> String {
 fn key_label(key: &str, mac: bool) -> String {
     match key {
         "escape" => "Esc".to_string(),
-        "backspace" => if mac { "⌫".to_string() } else { "Backspace".to_string() },
-        "delete" => if mac { "⌦".to_string() } else { "Delete".to_string() },
+        "backspace" => {
+            if mac {
+                "⌫".to_string()
+            } else {
+                "Backspace".to_string()
+            }
+        }
+        "delete" => {
+            if mac {
+                "⌦".to_string()
+            } else {
+                "Delete".to_string()
+            }
+        }
         "left" => "←".to_string(),
         "right" => "→".to_string(),
         "up" => "↑".to_string(),
@@ -233,18 +617,21 @@ pub fn shortcuts_from_keymap(cx: &App) -> Vec<ShortcutInfo> {
                 .unwrap_or_default(),
         );
         // Prefer the platform modifier over a cross-platform ctrl duplicate.
-        let uses_platform = keys.iter().any(|key| key.starts_with("⌘") || key.starts_with("Cmd"));
+        let uses_platform = keys
+            .iter()
+            .any(|key| key.starts_with("⌘") || key.starts_with("Cmd"));
         let uses_ctrl = keys.iter().any(|key| key.starts_with("Ctrl"));
         if (mac && uses_ctrl && !uses_platform || !mac && uses_platform)
-            && shortcuts.iter().any(|existing| {
-                existing.action_name == action_name && existing.context == context
-            })
+            && shortcuts
+                .iter()
+                .any(|existing| existing.action_name == action_name && existing.context == context)
         {
             continue;
         }
-        if let Some(existing) = shortcuts.iter_mut().find(|existing| {
-            existing.action_name == action_name && existing.context == context
-        }) {
+        if let Some(existing) = shortcuts
+            .iter_mut()
+            .find(|existing| existing.action_name == action_name && existing.context == context)
+        {
             for key in keys {
                 if !existing.keys.contains(&key) {
                     existing.keys.push(key);
@@ -360,8 +747,11 @@ pub fn keybinding_categories(shortcuts: &[ShortcutInfo]) -> Vec<KeybindingCatego
             entries: Vec::new(),
         })
         .collect();
-    let category_index =
-        |title: &str| CATEGORY_ORDER.iter().position(|candidate| *candidate == title);
+    let category_index = |title: &str| {
+        CATEGORY_ORDER
+            .iter()
+            .position(|candidate| *candidate == title)
+    };
 
     for shortcut in &catalog {
         let (category, description) = match meta_for(&shortcut.action_name) {
@@ -412,7 +802,9 @@ fn key_search_aliases(key: &str) -> String {
         parts.push(letter.clone());
     }
     if has_cmd && has_shift {
-        parts.push(format!("cmd+shift+{letter} shift+cmd+{letter} ctrl+shift+{letter} shift+ctrl+{letter}"));
+        parts.push(format!(
+            "cmd+shift+{letter} shift+cmd+{letter} ctrl+shift+{letter} shift+ctrl+{letter}"
+        ));
     } else if has_cmd && has_alt {
         parts.push(format!("cmd+alt+{letter} alt+cmd+{letter} cmd+opt+{letter} opt+cmd+{letter} ctrl+alt+{letter} alt+ctrl+{letter}"));
     } else if has_cmd {

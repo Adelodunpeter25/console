@@ -1680,7 +1680,10 @@ impl ComposerInput {
 
     /// The mention chip under `position`, and whether the point is on its
     /// leading icon cell (the close button shown on hover).
-    pub(crate) fn mention_chip_at(&self, position: gpui::Point<gpui::Pixels>) -> Option<(usize, bool)> {
+    pub(crate) fn mention_chip_at(
+        &self,
+        position: gpui::Point<gpui::Pixels>,
+    ) -> Option<(usize, bool)> {
         if self.mode != FieldMode::Composer {
             return None;
         }

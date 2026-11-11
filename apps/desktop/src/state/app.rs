@@ -507,12 +507,7 @@ impl ConsoleDesktopApp {
                         let prompt = this.prompt_with_staged_comments(&pane_id, prompt, cx);
                         this.active_pane_id = Some(pane_id.clone());
                         this.selected_session_id = this.active_session_for_pane(&pane_id);
-                        this.submit_steer_for_pane(
-                            pane_id,
-                            prompt,
-                            context_files.clone(),
-                            cx,
-                        );
+                        this.submit_steer_for_pane(pane_id, prompt, context_files.clone(), cx);
                     }
                     ComposerEvent::Edited => {
                         // Save raw text for crash safety; does NOT update sidebar_draft_ids.

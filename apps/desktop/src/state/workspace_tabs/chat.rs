@@ -332,7 +332,10 @@ impl ConsoleDesktopApp {
     /// [`Self::transcript_for_pane`] falls back to the main transcript, which
     /// is right for rendering but wrong for a scroll snapshot: it would
     /// record the main pane's position under a pane that has none.
-    pub(crate) fn transcript_for_pane_checked(&self, pane_id: &str) -> Option<Entity<TranscriptView>> {
+    pub(crate) fn transcript_for_pane_checked(
+        &self,
+        pane_id: &str,
+    ) -> Option<Entity<TranscriptView>> {
         if pane_id == "pane-main" {
             return Some(self.transcript_view.clone());
         }

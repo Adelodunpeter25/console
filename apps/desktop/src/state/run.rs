@@ -388,7 +388,10 @@ impl ConsoleDesktopApp {
         }
         let attachments = (*self.attachments_for_pane(&pane_id)).clone();
         let annotations = (*self.annotations_for_pane(&pane_id)).clone();
-        let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string()) else {
+        let Some(session_id) = self
+            .active_session_for_pane(&pane_id)
+            .map(|s| s.to_string())
+        else {
             return;
         };
         self.steer_composer_prompt(

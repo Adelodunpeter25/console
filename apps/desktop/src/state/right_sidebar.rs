@@ -718,7 +718,11 @@ impl ConsoleDesktopApp {
                                 .filter(|(_, state)| {
                                     state.branch_cwd.as_deref() == Some(watch_cwd.as_str())
                                         && state.branch_loaded
-                                        && state.branches.iter().find(|b| b.current).map(|b| b.name.as_str())
+                                        && state
+                                            .branches
+                                            .iter()
+                                            .find(|b| b.current)
+                                            .map(|b| b.name.as_str())
                                             != Some(status.branch.as_str())
                                 })
                                 .map(|(pane_id, _)| pane_id.clone())

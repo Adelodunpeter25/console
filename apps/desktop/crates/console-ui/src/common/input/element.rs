@@ -581,7 +581,6 @@ impl Element for InputElement {
                         cx.notify();
                     });
                 }
-
             }
         });
         let theme = Theme::current(cx);

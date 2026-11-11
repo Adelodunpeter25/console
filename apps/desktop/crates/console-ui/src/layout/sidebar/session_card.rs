@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use gpui::{
-    AnyElement, App, Entity, IntoElement, ParentElement, Styled, div, px,
-};
+use gpui::{AnyElement, App, Entity, IntoElement, ParentElement, Styled, div, px};
 
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
@@ -63,7 +61,9 @@ pub fn on_row_hover(
                 cx.background_executor().timer(OPEN_DELAY).await;
                 cx.update(|cx| {
                     state.update(cx, |s, cx| {
-                        if s.generation == generation && s.hovered_id.as_deref() == Some(&session_id) {
+                        if s.generation == generation
+                            && s.hovered_id.as_deref() == Some(&session_id)
+                        {
                             s.active_id = Some(session_id);
                             cx.notify();
                         }
@@ -89,11 +89,7 @@ pub fn on_row_hover(
     }
 }
 
-pub fn on_card_hover(
-    state: &Entity<SidebarHoverManager>,
-    hovered: bool,
-    cx: &mut App,
-) {
+pub fn on_card_hover(state: &Entity<SidebarHoverManager>, hovered: bool, cx: &mut App) {
     let generation = state.update(cx, |s, _| {
         s.generation += 1;
         s.card_hovered = hovered;

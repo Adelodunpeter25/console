@@ -7,17 +7,14 @@
 
 use gpui::Context;
 
-use crate::persistence::store::{
-    PersistedTranscriptScroll, PersistedTranscriptScrollState,
-};
+use crate::persistence::store::{PersistedTranscriptScroll, PersistedTranscriptScrollState};
 
 use super::ConsoleDesktopApp;
 
 /// Delay before a snapshot is written to disk. Scroll positions change in
 /// bursts — a fling, a page of older messages — and the state file is
 /// rewritten whole, so the writes are coalesced.
-const TRANSCRIPT_SCROLL_SAVE_DEBOUNCE: std::time::Duration =
-    std::time::Duration::from_millis(500);
+const TRANSCRIPT_SCROLL_SAVE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// How many chats keep a remembered scroll position.
 ///
@@ -100,7 +97,11 @@ impl ConsoleDesktopApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
-        if self.transcript_scroll_positions.remove(session_id).is_some() {
+        if self
+            .transcript_scroll_positions
+            .remove(session_id)
+            .is_some()
+        {
             self.schedule_transcript_scroll_persist(cx);
         }
     }
@@ -112,8 +113,11 @@ impl ConsoleDesktopApp {
     /// ones a returning user is least likely to want back, and their
     /// positions are the cheapest to lose.
     pub(crate) fn prune_transcript_scroll_positions(&mut self, cx: &mut Context<Self>) {
-        let live: std::collections::HashSet<String> =
-            self.sessions.iter().map(|session| session.id.clone()).collect();
+        let live: std::collections::HashSet<String> = self
+            .sessions
+            .iter()
+            .map(|session| session.id.clone())
+            .collect();
         let before = self.transcript_scroll_positions.len();
         self.transcript_scroll_positions
             .retain(|session_id, _| live.contains(session_id));

@@ -15,7 +15,11 @@ fn fixture_shortcuts() -> Vec<ShortcutInfo> {
         ("SettleSession", vec!["⇧⌘S"], ""),
         ("BrowserDevtools", vec!["⇧⌘I"], "Browser"),
         ("WebviewCopy", vec!["⌘C"], "Browser"),
-        ("AutocompleteConfirm", vec!["Tab", "Enter"], "Autocomplete open"),
+        (
+            "AutocompleteConfirm",
+            vec!["Tab", "Enter"],
+            "Autocomplete open",
+        ),
         ("UnknownAction", vec!["⌘?"], ""),
     ]
     .into_iter()
