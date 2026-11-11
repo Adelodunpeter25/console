@@ -98,7 +98,7 @@ impl TranscriptView {
                 .justify_center()
                 .cursor_pointer()
                 .hover(|element| element.bg(theme.overlay_strong))
-                .child(app_icon(icon, 12.0, theme.text_secondary));
+                .child(app_icon(icon, 15.0, theme.text_secondary));
             if both {
                 if is_left {
                     el = el.rounded_tl(px(16.0)).rounded_bl(px(16.0));
