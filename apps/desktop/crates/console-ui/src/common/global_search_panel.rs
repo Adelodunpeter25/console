@@ -484,7 +484,7 @@ impl Render for GlobalSearchPanel {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(theme.backdrop)
             .flex()
             .justify_center()
             .items_start()

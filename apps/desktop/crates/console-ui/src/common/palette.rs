@@ -357,6 +357,7 @@ impl Render for CommandPaletteModal {
             return div().into_any_element();
         }
 
+        let backdrop = Theme::current(cx).backdrop;
         let entries = self.entries.clone();
         let palette_handle = cx.entity().downgrade();
         let command = Command::new(&self.state)
@@ -418,7 +419,7 @@ impl Render for CommandPaletteModal {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(backdrop)
             .flex()
             .justify_center()
             .items_start()

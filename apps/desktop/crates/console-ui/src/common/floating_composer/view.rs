@@ -592,7 +592,7 @@ impl FloatingComposerView {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.70))
+            .bg(theme.backdrop)
             .flex()
             .justify_center()
             // Nudged left of center so it clears the eye-line of the sidebar.

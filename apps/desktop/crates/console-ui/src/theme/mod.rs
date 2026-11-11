@@ -51,6 +51,9 @@ pub struct Theme {
     /// autocomplete list): a step darker than `inset` so the card reads as its
     /// own layer over the sidebar and the chat canvas.
     pub menu: Hsla,
+    /// Dim laid over the window behind a centred overlay (the floating
+    /// composer and the command and search palettes).
+    pub backdrop: Hsla,
     /// Terminal screen surface.
     pub terminal: Hsla,
     pub overlay: Hsla,
@@ -121,6 +124,7 @@ impl Theme {
             composer: rgb(0x0A0A0A).into(),
             inset: rgb(0x151515).into(),
             menu: rgb(0x0E0E0E).into(),
+            backdrop: hsla(0.0, 0.0, 0.0, 0.65),
             terminal: rgb(0x000000).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
@@ -184,6 +188,7 @@ impl Theme {
             composer: rgb(0xFFFFFF).into(),
             inset: rgb(0xE6E6E6).into(),
             menu: rgb(0xE6E6E6).into(),
+            backdrop: hsla(0.0, 0.0, 0.0, 0.65),
             terminal: rgb(0xFFFFFF).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.12, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.12, 0.09),
