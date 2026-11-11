@@ -8,7 +8,7 @@ use gpui::{
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::common::file_mention_chip::{
-    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS,
+    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
 };
 use crate::theme::Theme;
 
@@ -16,11 +16,6 @@ pub(crate) const MENTION_ICON_CELL: Pixels = px(22.0);
 
 /// Sized to the composer's 13.5px text; the shared 11px chip icon reads too small here.
 const COMPOSER_MENTION_ICON_SIZE: f32 = 14.0;
-
-/// Neutral chip look for the composer: dark wash, neutral border.
-fn composer_chip_colors(theme: Theme) -> (gpui::Hsla, gpui::Hsla) {
-    (theme.inset, gpui::transparent_black())
-}
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
     layout
@@ -331,8 +326,8 @@ impl Element for InputElement {
                 } else {
                     &input.mentions
                 },
-                theme.text,
-                composer_chip_colors(theme).0,
+                theme.accent,
+                file_mention_colors(theme).0,
             );
             let mentions_to_layout =
                 if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
@@ -616,7 +611,7 @@ impl Element for InputElement {
                 if mention.range.end <= input.content.len() {
                     let rects =
                         crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
-                    let (mention_bg, mention_border) = composer_chip_colors(theme);
+                    let (mention_bg, mention_border, _) = file_mention_colors(theme);
                     for (idx, rect) in rects.iter().enumerate() {
                         let mut quad_rect = *rect;
                         if idx == 0 {
@@ -630,9 +625,9 @@ impl Element for InputElement {
                                 window.paint_quad(quad(
                                     cell,
                                     px(FILE_MENTION_RADIUS),
-                                    theme.overlay_strong,
-                                    px(0.0),
-                                    gpui::transparent_black(),
+                                    theme.overlay,
+                                    px(1.0),
+                                    mention_border,
                                     BorderStyle::default(),
                                 ));
                             }
