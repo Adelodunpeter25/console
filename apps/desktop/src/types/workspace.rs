@@ -81,6 +81,7 @@ pub(crate) struct WorkspacePaneState {
     /// worktree session differs from its project path). A response for any
     /// other folder is stale and dropped.
     pub(crate) branch_cwd: Option<String>,
+    pub(crate) branch_request_seq: u64,
     pub(crate) branch_pending: bool,
     pub(crate) project_menu: ContextMenuHandle,
     pub(crate) branch_menu: ContextMenuHandle,

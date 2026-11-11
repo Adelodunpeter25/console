@@ -301,6 +301,7 @@ impl ConsoleDesktopApp {
                 branch_loaded: self.branch_loaded,
                 branch_is_git_repository: self.branch_is_git_repository,
                 branch_cwd: None,
+                branch_request_seq: 0,
                 branch_pending: self.branch_pending,
                 project_menu,
                 branch_menu,

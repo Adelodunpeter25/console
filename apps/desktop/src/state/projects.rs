@@ -684,9 +684,16 @@ impl ConsoleDesktopApp {
         cwd: String,
         cx: &mut Context<Self>,
     ) {
+        let mut seq = 0;
         if let Some(state) = self.workspace_pane_states.get_mut(&pane_id) {
-            state.branch_loaded = false;
+            // A same-folder refresh keeps the current list on screen instead
+            // of flashing the loading state.
+            if state.branch_cwd.as_deref() != Some(cwd.as_str()) {
+                state.branch_loaded = false;
+            }
             state.branch_cwd = Some(cwd.clone());
+            state.branch_request_seq += 1;
+            seq = state.branch_request_seq;
         }
         let branch_client = self.client.clone();
         cx.spawn(async move |entity, cx| {
@@ -697,7 +704,9 @@ impl ConsoleDesktopApp {
                         if let Some(state) = this.workspace_pane_states.get_mut(&pane_id) {
                             // The pane may have moved to another folder while
                             // this was in flight; only the latest request wins.
-                            if state.branch_cwd.as_deref() == Some(cwd.as_str()) {
+                            if state.branch_cwd.as_deref() == Some(cwd.as_str())
+                                && state.branch_request_seq == seq
+                            {
                                 state.branch_loaded = true;
                                 if let Ok(branches) = result {
                                     state.branches = Rc::new(branches.branches);

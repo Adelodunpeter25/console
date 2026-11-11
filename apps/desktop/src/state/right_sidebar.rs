@@ -715,7 +715,12 @@ impl ConsoleDesktopApp {
                             let matching_panes: Vec<String> = this
                                 .workspace_pane_states
                                 .iter()
-                                .filter(|(_, state)| state.branch_cwd.as_deref() == Some(watch_cwd.as_str()))
+                                .filter(|(_, state)| {
+                                    state.branch_cwd.as_deref() == Some(watch_cwd.as_str())
+                                        && state.branch_loaded
+                                        && state.branches.iter().find(|b| b.current).map(|b| b.name.as_str())
+                                            != Some(status.branch.as_str())
+                                })
                                 .map(|(pane_id, _)| pane_id.clone())
                                 .collect();
                             for pane_id in matching_panes {
