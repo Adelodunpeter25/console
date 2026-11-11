@@ -21,7 +21,12 @@ license = "MIT OR Apache-2.0"
 # Cargo.lock instead.
 gpui = { version = "0.2.2", git = "https://github.com/zed-industries/zed" }
 gpui_macros = { version = "0.1.0", git = "https://github.com/zed-industries/zed" }
-gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "runtime_shaders"] }
+# NOTE: `runtime_shaders` is deliberately NOT enabled. It makes gpui compile
+# its Metal shader library from source at runtime, on the main thread, while
+# the first window is being created — the single largest cost on the startup
+# path. Without it the shaders are compiled by `xcrun metal` at build time and
+# shipped as a metallib, which is what Zed itself does.
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
 
 # Internal workspace crates
 console-core = { path = "crates/console-core" }

@@ -133,9 +133,12 @@ pub fn get_active_window(
     })
 }
 
-pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
+pub fn compute_new_window_bounds(
+    cx: &mut App,
+    state: Option<persistence::window::PersistedWindowState>,
+) -> WindowBounds {
     let current_bounds = LAST_WINDOW_BOUNDS.with(|b| *b.borrow()).unwrap_or_else(|| {
-        match persistence::window::load_window_bounds(cx) {
+        match persistence::window::window_bounds_from(state, cx) {
             WindowBounds::Windowed(b) | WindowBounds::Maximized(b) => b,
             WindowBounds::Fullscreen(b) => b,
         }
@@ -155,9 +158,12 @@ pub fn compute_new_window_bounds(cx: &mut App) -> WindowBounds {
 }
 
 pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
+    // One read of the state file for the whole window: the frame, the sidebar
+    // layout, the workspace tree and the drafts all come from it.
+    let startup = persistence::load_startup();
     let window_bounds = match &target {
         WindowLaunchTarget::RestorePersisted => {
-            let b = persistence::window::load_window_bounds(cx);
+            let b = persistence::window::window_bounds_from(startup.window, cx);
             let bounds = match b {
                 WindowBounds::Windowed(bounds) | WindowBounds::Maximized(bounds) => bounds,
                 WindowBounds::Fullscreen(bounds) => bounds,
@@ -166,7 +172,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
             b
         }
         WindowLaunchTarget::Fresh { .. } | WindowLaunchTarget::Session(_) => {
-            compute_new_window_bounds(cx)
+            compute_new_window_bounds(cx, startup.window)
         }
     };
 
@@ -180,7 +186,7 @@ pub fn open_workspace_window(cx: &mut App, target: WindowLaunchTarget) {
     let open = move |cx: &mut App| {
         let target_clone = target.clone();
         let result = cx.open_window(options, move |window, cx| {
-            let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, cx));
+            let app_view = cx.new(|cx| ConsoleDesktopApp::new(window, target_clone, startup, cx));
             let handle = window.window_handle();
             register_window(handle, app_view.downgrade());
             let weak_app = app_view.downgrade();

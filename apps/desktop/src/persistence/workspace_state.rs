@@ -1,4 +1,4 @@
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -30,55 +30,14 @@ fn default_right_sidebar_bottom_height() -> f32 {
     180.0
 }
 
-fn workspace_state_file_path() -> PathBuf {
+/// The pre-v2 file that held the sidebar layout. The layout is a section of
+/// `state.json` now; this file is only read while it still exists.
+pub(crate) fn legacy_path() -> PathBuf {
     storage_directory().join("workspace-state.json")
 }
 
-pub fn load_workspace_state() -> WorkspaceStateDocument {
-    let Ok(contents) = fs::read_to_string(workspace_state_file_path()) else {
-        return WorkspaceStateDocument {
-            version: WORKSPACE_STATE_VERSION,
-            sidebar_visible: true,
-            sidebar_width: 260.0,
-            right_sidebar_visible: false,
-            right_sidebar_width: 280.0,
-            right_sidebar_bottom_height: 180.0,
-            ..Default::default()
-        };
-    };
-
-    match serde_json::from_str::<WorkspaceStateDocument>(&contents) {
-        Ok(doc) if doc.version == WORKSPACE_STATE_VERSION => doc,
-        // Old documents with a now-ignored `windows` key fail the version
-        // check only on parse errors; serde skips unknown fields, so legacy
-        // files load fine and the stale descriptors are dropped on next save.
-        _ => WorkspaceStateDocument {
-            version: WORKSPACE_STATE_VERSION,
-            sidebar_visible: true,
-            sidebar_width: 260.0,
-            right_sidebar_visible: false,
-            right_sidebar_width: 280.0,
-            right_sidebar_bottom_height: 180.0,
-            ..Default::default()
-        },
-    }
-}
-
-pub fn save_workspace_state(doc: &WorkspaceStateDocument) {
-    let path = workspace_state_file_path();
-    let directory = path.parent().unwrap_or_else(|| Path::new("."));
-    if let Err(e) = fs::create_dir_all(directory) {
-        log::warn!("Failed to create workspace-state directory: {e}");
-        return;
-    }
-
-    let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
-    let mut to_save = doc.clone();
-    to_save.version = WORKSPACE_STATE_VERSION;
-    // Compact: rewritten on layout/resize actions; see store.rs.
-    if let Ok(bytes) = serde_json::to_vec(&to_save)
-        && fs::write(&tmp, bytes).is_ok()
-    {
-        let _ = fs::rename(tmp, path);
-    }
+pub(crate) fn read_legacy() -> Option<WorkspaceStateDocument> {
+    let contents = fs::read_to_string(legacy_path()).ok()?;
+    let document = serde_json::from_str::<WorkspaceStateDocument>(&contents).ok()?;
+    (document.version == WORKSPACE_STATE_VERSION).then_some(document)
 }

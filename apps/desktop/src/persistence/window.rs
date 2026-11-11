@@ -54,8 +54,8 @@ impl PersistedWindowState {
 /// Invalid or missing state intentionally falls back to the same centered
 /// frame used by a fresh installation. The saved coordinates are retained so
 /// windows on a secondary display can be restored there as well.
-pub fn load_window_bounds(cx: &App) -> WindowBounds {
-    let Some(state) = store::load_window().filter(|state| state.is_valid()) else {
+pub fn window_bounds_from(state: Option<PersistedWindowState>, cx: &App) -> WindowBounds {
+    let Some(state) = state.filter(|state| state.is_valid()) else {
         return WindowBounds::Windowed(Bounds::centered(
             None,
             size(px(DEFAULT_WIDTH), px(DEFAULT_HEIGHT)),
