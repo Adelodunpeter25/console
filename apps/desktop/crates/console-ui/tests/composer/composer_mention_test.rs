@@ -1,42 +1,5 @@
 use console_ui::ComposerMention;
 use console_ui::{AutocompleteKind, detect_trigger};
-use console_ui::{adjust_mentions as real_adjust_mentions, reconcile_mentions as real_reconcile};
-use std::ops::Range;
-
-fn adjust_mentions(
-    mentions: &mut Vec<ComposerMention>,
-    content: &str,
-    edit_range: &Range<usize>,
-    new_text_len: usize,
-) {
-    let old_len = edit_range.len();
-    let delta = (new_text_len as isize) - (old_len as isize);
-    let mut kept = Vec::with_capacity(mentions.len());
-
-    for mut mention in mentions.drain(..) {
-        if edit_range.end <= mention.range.start {
-            let start = ((mention.range.start as isize) + delta).max(0) as usize;
-            let end = ((mention.range.end as isize) + delta).max(0) as usize;
-            mention.range = start..end;
-            kept.push(mention);
-        } else if edit_range.start >= mention.range.end {
-            kept.push(mention);
-        }
-    }
-    *mentions = kept;
-
-    // Reconcile pass
-    mentions.retain(|m| {
-        if m.range.end > content.len() || m.range.start >= m.range.end {
-            return false;
-        }
-        if !content.is_char_boundary(m.range.start) || !content.is_char_boundary(m.range.end) {
-            return false;
-        }
-        content.get(m.range.clone()) == Some(m.path.as_str())
-    });
-    mentions.sort_by_key(|m| m.range.start);
-}
 
 #[test]
 fn test_slash_command_can_start_after_words() {
@@ -77,47 +40,6 @@ fn test_mention_creation_and_separator_outside_range() {
     // Character at index 16 is the trailing space separator, outside the chip
     assert_eq!(&content[mentions[0].range.clone()], "roadmap.md");
     assert_eq!(&content[16..17], " ");
-}
-
-#[test]
-fn test_multiple_mentions_shifting_on_edits() {
-    let mut mentions = vec![
-        ComposerMention {
-            range: 0..6, // "foo.rs"
-            path: "foo.rs".to_string(),
-            label: "foo.rs".to_string(),
-        },
-        ComposerMention {
-            range: 7..13, // "bar.rs"
-            path: "bar.rs".to_string(),
-            label: "bar.rs".to_string(),
-        },
-    ];
-    let mut content = String::from("foo.rs bar.rs ");
-
-    // 1. Insert text before first mention: "Look at " (8 chars)
-    let edit_range = 0..0;
-    let insert = "Look at ";
-    content.insert_str(0, insert);
-    adjust_mentions(&mut mentions, &content, &edit_range, insert.len());
-
-    assert_eq!(content, "Look at foo.rs bar.rs ");
-    assert_eq!(mentions[0].range, 8..14);
-    assert_eq!(mentions[1].range, 15..21);
-    assert_eq!(&content[mentions[0].range.clone()], "foo.rs");
-    assert_eq!(&content[mentions[1].range.clone()], "bar.rs");
-
-    // 2. Insert text between mentions at index 14: " and" (4 chars)
-    let edit_range = 14..14;
-    let insert = " and";
-    content.insert_str(14, insert);
-    adjust_mentions(&mut mentions, &content, &edit_range, insert.len());
-
-    assert_eq!(content, "Look at foo.rs and bar.rs ");
-    assert_eq!(mentions[0].range, 8..14);
-    assert_eq!(mentions[1].range, 19..25);
-    assert_eq!(&content[mentions[0].range.clone()], "foo.rs");
-    assert_eq!(&content[mentions[1].range.clone()], "bar.rs");
 }
 
 #[test]
@@ -162,75 +84,4 @@ fn test_mention_atomic_delete_range_matching() {
 
     // Caret at index 5: does NOT match chip start
     assert!(mentions.iter().find(|m| m.range.start == 5).is_none());
-}
-
-#[test]
-fn test_mention_invalidation_on_interior_edit() {
-    let mut mentions = vec![ComposerMention {
-        range: 0..6, // "foo.rs"
-        path: "foo.rs".to_string(),
-        label: "foo.rs".to_string(),
-    }];
-    let mut content = String::from("foo.rs ");
-
-    // Mutate characters inside the mention (replace "oo" with "xx")
-    let edit_range = 1..3;
-    content.replace_range(edit_range.clone(), "xx");
-    adjust_mentions(&mut mentions, &content, &edit_range, 2);
-
-    assert_eq!(content, "fxx.rs ");
-    assert_eq!(mentions.len(), 0);
-}
-
-/// Regression test for the stale-pill bug: a file chip was inserted, deleted,
-/// and new text typed in its place — the leftover mention record must be gone
-/// after the deletion edit, so the new prompt can neither inherit the pill
-/// color nor be wiped whole by the "delete chip at caret" backspace rule.
-///
-/// These assertions call the REAL `adjust_mentions`/`reconcile_mentions` that
-/// the composer's centralized splice (`ComposerInput::apply_text_splice`) runs
-/// on every edit — typing, backspace, and IME commits included. If a future
-/// edit path skips mention bookkeeping again, the invariant documented here
-/// is what breaks in the UI.
-#[test]
-fn test_deleted_chip_leaves_no_stale_mention_for_typed_text() {
-    // Pill inserted at the caret: content holds "<path> " and the chip is
-    // tracked as start..start + path.len().
-    let path = "/Users/someone/Developer/Projects/console/apps/desktop/src/main.rs";
-    let mut content = format!("{path} ");
-    let mut mentions = vec![ComposerMention {
-        range: 0..path.len(),
-        path: path.to_string(),
-        label: "main.rs".to_string(),
-    }];
-
-    // The user deletes the pill (backspace with the caret at the chip end
-    // selects the whole chip range and replaces it with nothing).
-    let delete_range = 0..path.len();
-    real_adjust_mentions(&mut mentions, &delete_range, 0);
-    content.replace_range(delete_range.clone(), "");
-    real_reconcile(&mut mentions, &content);
-
-    // The chip record must be gone: nothing is left for the renderer to
-    // highlight and nothing for the backspace fast-path to target.
-    assert!(
-        mentions.is_empty(),
-        "deleting a chip must drop its mention record, got {mentions:?}"
-    );
-
-    // Typing the new prompt afterwards must not resurrect or shift anything.
-    let prompt = "proceed just so you know this is my first ios app";
-    for (idx, ch) in prompt.char_indices() {
-        let caret = idx + ch.len_utf8();
-        let edit_range = caret - ch.len_utf8()..caret - ch.len_utf8();
-        real_adjust_mentions(&mut mentions, &edit_range, ch.len_utf8());
-        content.insert(idx, ch);
-        real_reconcile(&mut mentions, &content);
-    }
-
-    assert!(
-        mentions.is_empty(),
-        "typed text must never be covered by a stale chip, got {mentions:?}"
-    );
-    assert_eq!(content, format!("{prompt} "));
 }

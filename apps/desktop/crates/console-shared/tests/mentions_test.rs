@@ -129,3 +129,35 @@ fn chat_ref_range_covers_the_dollar_and_the_token() {
     let refs = parse_chat_refs("use $fix-bug now");
     assert_eq!(refs[0].range, 4..12);
 }
+
+#[test]
+fn deleted_chip_leaves_no_stale_mention_for_typed_text() {
+    let path = "/Users/someone/Developer/Projects/console/apps/desktop/src/main.rs";
+    let mut content = format!("{path} ");
+    let mut mentions = vec![mention(0..path.len(), path, "main.rs")];
+
+    let delete_range = 0..path.len();
+    adjust_mentions(&mut mentions, &delete_range, 0);
+    content.replace_range(delete_range.clone(), "");
+    reconcile_mentions(&mut mentions, &content);
+
+    assert!(
+        mentions.is_empty(),
+        "deleting a chip must drop its mention record, got {mentions:?}"
+    );
+
+    let prompt = "proceed just so you know this is my first ios app";
+    for (idx, ch) in prompt.char_indices() {
+        let caret = idx + ch.len_utf8();
+        let edit_range = caret - ch.len_utf8()..caret - ch.len_utf8();
+        adjust_mentions(&mut mentions, &edit_range, ch.len_utf8());
+        content.insert(idx, ch);
+        reconcile_mentions(&mut mentions, &content);
+    }
+
+    assert!(
+        mentions.is_empty(),
+        "typed text must never be covered by a stale chip, got {mentions:?}"
+    );
+    assert_eq!(content, format!("{prompt} "));
+}
