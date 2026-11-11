@@ -4,6 +4,7 @@ use gpui::{
     Svg, Window, canvas, div, img, point, prelude::*, px, rgb, svg,
 };
 
+pub mod animations;
 pub mod context_menu;
 pub mod file_icons;
 pub mod icons;
@@ -16,6 +17,10 @@ pub mod transparency;
 
 use crate::theme::Theme;
 
+pub use animations::{
+    ANIMATION_FRAME_INTERVAL, DEFAULT_SCROLL_DURATION, ease_in_out_cubic, ease_out_cubic,
+    ease_out_quad, interpolate_list_offset, lerp, lerp_px,
+};
 pub use context_menu::{draft_context_menu, session_context_menu};
 pub use file_icons::{
     base_name, file_icon_for_language, file_icon_for_name, file_icon_for_path, file_type_icon,
