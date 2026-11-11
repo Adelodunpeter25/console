@@ -564,20 +564,24 @@ impl Element for InputElement {
                     input.update(cx, |input, cx| input.on_mouse_move(event, window, cx));
                     return;
                 }
-                let hit = input.read(cx).mention_chip_at(event.position);
-                let hovered = hit.map(|(index, _)| index);
+                let hovered = input
+                    .read(cx)
+                    .mention_chip_at(event.position)
+                    .map(|(index, _)| index);
                 if input.read(cx).hovered_mention != hovered {
                     input.update(cx, |input, cx| {
                         input.hovered_mention = hovered;
                         cx.notify();
                     });
                 }
-                if let Some((_, true)) = hit {
-                    window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
-                }
+
             }
         });
         let theme = Theme::current(cx);
+        // The cursor style may only be set while painting, not from the move handler.
+        if let Some((_, true)) = input.mention_chip_at(window.mouse_position()) {
+            window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
+        }
         let layout = layout_state.text.layout();
         if !input.selected_range.is_empty() {
             let selection_rects =
