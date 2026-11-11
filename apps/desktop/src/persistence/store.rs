@@ -85,33 +85,62 @@ pub struct PersistedOnboardingState {
     pub dismissed: std::collections::HashSet<String>,
 }
 
+/// Where one chat's transcript was left.
+///
+/// The message id names the anchor row, so the position survives a reload
+/// whose rows sit at different indices. A chat whose anchor row has no id
+/// (an optimistic user message, before the server assigned one) keeps only
+/// the tail flag, and lands at the tail when it is restored.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistedTranscriptScroll {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+    #[serde(default)]
+    pub offset_in_row: f32,
+    #[serde(default)]
+    pub at_tail: bool,
+}
+
+/// Every chat's scroll position, keyed by session id.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PersistedTranscriptScrollState {
+    #[serde(default)]
+    pub positions: std::collections::HashMap<String, PersistedTranscriptScroll>,
+}
+
 /// The one document the app keeps on disk.
 ///
 /// The workspace tree and the sidebar layout used to live in `workspace.json`
 /// and `workspace-state.json`; they are sections here now, so a launch reads
 /// this file once instead of three times.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub(crate) struct StorageDocument {
+pub struct StorageDocument {
     #[serde(default)]
-    pub(crate) version: u32,
+    pub version: u32,
     #[serde(default)]
-    pub(crate) window: Option<PersistedWindowState>,
+    pub window: Option<PersistedWindowState>,
     #[serde(default)]
-    pub(crate) layout: Option<PersistedLayoutState>,
+    pub layout: Option<PersistedLayoutState>,
     #[serde(default)]
-    pub(crate) environments: Option<PersistedEnvironmentsState>,
+    pub environments: Option<PersistedEnvironmentsState>,
     #[serde(default)]
-    pub(crate) onboarding: Option<PersistedOnboardingState>,
+    pub onboarding: Option<PersistedOnboardingState>,
     #[serde(default)]
-    pub(crate) workspaces: Option<WorkspacesDocument>,
+    pub workspaces: Option<WorkspacesDocument>,
+    /// Per-chat transcript scroll positions. Optional, so a document written
+    /// before this section existed still parses; the version does not move
+    /// for it, because a bumped version would make the reader drop every
+    /// other section along with it.
+    #[serde(default)]
+    pub transcript_scroll: Option<PersistedTranscriptScrollState>,
     /// Drafts live in `drafts.json`, so a layout or workspace write never
     /// rewrites the images a draft can carry. Read only: this is where
     /// pre-split documents kept them, and it is dropped on the next write.
     #[serde(default, skip_serializing)]
-    pub(crate) drafts: Option<PersistedDraftsState>,
+    pub drafts: Option<PersistedDraftsState>,
 }
 
-pub(crate) fn storage_directory() -> PathBuf {
+pub fn storage_directory() -> PathBuf {
     console_shared::path::storage_directory()
 }
 
@@ -127,7 +156,7 @@ fn drafts_path() -> PathBuf {
 ///
 /// The pre-v2 files are folded in while they still exist, so a launch sees
 /// the same workspace tree and sidebar layout it saw before the merge.
-pub(crate) fn read_document() -> StorageDocument {
+pub fn read_document() -> StorageDocument {
     let mut document = read_state_file();
     fold_legacy_files(&mut document);
     document
@@ -231,7 +260,7 @@ fn update_document(update: impl FnOnce(&mut StorageDocument)) {
 /// rewrites the images a draft can carry. Documents written before the split
 /// kept them in `state.json`, so that is the fallback — and the first read
 /// moves them across, so dropping the old copy cannot lose them.
-pub(crate) fn read_drafts() -> PersistedDraftsState {
+pub fn read_drafts() -> PersistedDraftsState {
     match fs::read_to_string(drafts_path()) {
         Ok(contents) => return serde_json::from_str(&contents).unwrap_or_default(),
         // A drafts file that cannot be read is left alone rather than
@@ -271,6 +300,11 @@ pub fn save_layout(state: PersistedLayoutState) {
 
 pub fn save_workspaces(state: WorkspacesDocument) {
     update_document(|document| document.workspaces = Some(state));
+}
+
+/// Write the per-chat transcript scroll positions.
+pub fn save_transcript_scroll(state: PersistedTranscriptScrollState) {
+    update_document(|document| document.transcript_scroll = Some(state));
 }
 
 pub fn load_environments() -> Option<PersistedEnvironmentsState> {

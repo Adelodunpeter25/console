@@ -31,7 +31,10 @@ impl ConsoleDesktopApp {
             );
         }
 
-        self.save_transcript_scroll_position(cx);
+        // Snapshot the chat this pane is showing, not the one the active pane
+        // happens to show: the tab can be closed in a pane that is not the
+        // active one.
+        self.save_pane_scroll_position(pane_id, cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
         self.clear_project_if_workspace_empty();
@@ -452,6 +455,12 @@ impl ConsoleDesktopApp {
             // visible until its load succeeds; here the tab highlight
             // already moved, so stale content reads as lag.)
             if prev_sid.as_deref() != Some(sid) {
+                // The outgoing chat's position is lost with its transcript,
+                // so it is recorded here — while the anchor is still the one
+                // the user left it at.
+                if let Some(prev_sid) = prev_sid.as_deref() {
+                    self.save_transcript_scroll_position_for_pane(pane_id, prev_sid, cx);
+                }
                 self.transcript_for_pane(pane_id).update(cx, |t, cx| {
                     t.set_messages(Vec::new(), cx);
                     t.clear_session_changes(cx);
@@ -550,6 +559,9 @@ impl ConsoleDesktopApp {
 
     /// Close a split pane and collapse its parent into the remaining sibling.
     pub fn close_workspace_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
+        // The pane's chat loses its transcript with the pane, so its position
+        // is recorded before the pane goes away.
+        self.save_pane_scroll_position(pane_id, cx);
         // A pane close takes its tabs with it, so it needs the same guard as
         // closing one dirty file tab.
         let dirty_paths: Vec<String> = self
@@ -702,9 +714,15 @@ impl ConsoleDesktopApp {
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }
-        self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
+        // The chat leaving the source pane and the chat the target pane is
+        // about to show both lose their transcript in this move, so both
+        // positions are recorded first, while their anchors are still live.
+        if let Some(source_pane_id) = source_pane_id.as_deref() {
+            self.save_pane_scroll_position(source_pane_id, cx);
+        }
+        self.save_pane_scroll_position(&target_pane_id, cx);
         let Some(target_pane_id) = workspace_ops::move_tab_to_pane(
             &mut self.workspace_root,
             source_pane_id.clone().as_deref(),
@@ -772,9 +790,13 @@ impl ConsoleDesktopApp {
         if self.focus_existing_chat_tab_from_drag(&drag, cx) {
             return;
         }
-        self.save_transcript_scroll_position(cx);
         let source_pane_id = drag.source_pane_id.clone();
         let tab = drag.tab.clone();
+        // The chat leaving the source pane loses its transcript in this move,
+        // so its position is recorded first, while the anchor is still live.
+        if let Some(source_pane_id) = source_pane_id.as_deref() {
+            self.save_pane_scroll_position(source_pane_id, cx);
+        }
         let Some(new_pane_id) = workspace_ops::move_tab_to_split(
             &mut self.workspace_root,
             source_pane_id.as_deref(),

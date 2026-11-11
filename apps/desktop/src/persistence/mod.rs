@@ -1,6 +1,6 @@
 pub mod auth;
 pub mod layout;
-pub(crate) mod store;
+pub mod store;
 pub mod window;
 pub mod workspace;
 pub mod workspace_state;
@@ -19,17 +19,20 @@ pub use workspace::{PersistedScriptTabs, PersistedWorkspace, WorkspacesDocument}
 /// servers, the workspace tree and the onboarding flag; the drafts live in
 /// their own file. Reading them together keeps the startup path to one read
 /// of the state file instead of three.
-pub(crate) struct StartupState {
+pub struct StartupState {
     pub window: Option<window::PersistedWindowState>,
     pub layout: PersistedLayoutState,
     pub environments: Option<store::PersistedEnvironmentsState>,
     pub onboarding_seen: bool,
     pub workspaces: WorkspacesDocument,
     pub drafts: std::collections::HashMap<String, store::PersistedDraft>,
+    /// Per-chat transcript scroll positions, so a chat reopens where it was
+    /// left rather than at the top.
+    pub transcript_scroll: Option<store::PersistedTranscriptScrollState>,
 }
 
 /// Read the state the app starts from.
-pub(crate) fn load_startup() -> StartupState {
+pub fn load_startup() -> StartupState {
     let document = store::read_document();
     let drafts = store::read_drafts();
     StartupState {
@@ -42,5 +45,6 @@ pub(crate) fn load_startup() -> StartupState {
             .unwrap_or(false),
         workspaces: document.workspaces.unwrap_or_default(),
         drafts: drafts.drafts,
+        transcript_scroll: document.transcript_scroll,
     }
 }

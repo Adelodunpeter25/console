@@ -35,6 +35,70 @@ pub(crate) struct AssistantPresentation {
     pub(crate) copy_content: SharedString,
 }
 
+/// The id of the message in `row`, when it has one.
+///
+/// Tool results carry no id of their own — they belong to the tool call
+/// above them.
+pub fn message_id_at(messages: &[AgentMessage], row: usize) -> Option<String> {
+    messages.get(row).and_then(|message| match message {
+        AgentMessage::User { id, .. } | AgentMessage::Assistant { id, .. } => id.clone(),
+        AgentMessage::ToolResult { .. } => None,
+    })
+}
+
+/// The row holding the message with `id`, if it is in `messages`.
+///
+/// This is what makes a scroll anchor survive a reload: a row index counts
+/// rows in the window that happens to be loaded, and the window moves as
+/// older pages are prepended. The id names the message itself.
+pub fn row_for_message_id(messages: &[AgentMessage], id: &str) -> Option<usize> {
+    messages.iter().position(|message| match message {
+        AgentMessage::User { id: message_id, .. } | AgentMessage::Assistant { id: message_id, .. } => {
+            message_id.as_deref() == Some(id)
+        }
+        AgentMessage::ToolResult { .. } => false,
+    })
+}
+
+/// Resolve an anchor to a row of `messages`.
+///
+/// A message id that is not loaded cannot be resolved: the fetch window
+/// moved on. The row index is only a fallback for messages that have no id
+/// at all — an optimistic user message, before the server has assigned one.
+pub fn resolve_anchor_row(
+    messages: &[AgentMessage],
+    message_id: Option<&str>,
+    row_index: usize,
+) -> Option<usize> {
+    match message_id {
+        Some(id) => row_for_message_id(messages, id),
+        None => Some(row_index.min(messages.len().saturating_sub(1))),
+    }
+}
+
+/// The row an anchor points at, given the row at the top of the viewport.
+///
+/// Clamped to the last message: while a run streams the list carries a
+/// trailing "Working…" row that is not a message, and an index pointing at
+/// it would point past the end once that row is gone.
+pub fn anchor_row(message_count: usize, top_row: usize) -> usize {
+    top_row.min(message_count.saturating_sub(1))
+}
+
+/// Where a transcript was left, in logical list terms.
+///
+/// `row_index` counts rows of the window that happened to be loaded, so it
+/// shifts when older pages are prepended and points past the end when the
+/// window is shorter than it was. `message_id` names the message itself and
+/// survives both; it is the anchor that is persisted.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TranscriptScrollAnchor {
+    pub row_index: usize,
+    pub offset_in_row: f32,
+    pub at_tail: bool,
+    pub message_id: Option<String>,
+}
+
 pub struct TranscriptView {
     pub messages: Vec<AgentMessage>,
     /// Persistent Markdown state keyed by message index and content-part
@@ -496,7 +560,7 @@ impl TranscriptView {
             return false;
         };
         // Re-applied next frame so variable-height rows above are measured first.
-        self.restore_scroll_anchor(row, 0.0, false, cx);
+        self.restore_scroll_anchor(None, row, 0.0, false, cx);
         cx.notify();
         true
     }
@@ -547,18 +611,18 @@ impl TranscriptView {
 
         // Keep scroll position visually stable by preserving current offset immediately
         let prepended = self.messages.len() - old_len;
-        if let Some((row, offset, at_tail)) = anchor {
-            if at_tail {
+        if let Some(anchor) = anchor {
+            if anchor.at_tail {
                 self.list_state.set_follow_mode(FollowMode::Tail);
                 self.refresh_list();
                 self.list_state.scroll_to_end();
             } else {
-                let new_row = row + prepended;
+                let new_row = anchor.row_index + prepended;
                 self.list_state.set_follow_mode(FollowMode::Normal);
                 self.refresh_list();
                 self.list_state.scroll_to(ListOffset {
                     item_ix: new_row,
-                    offset_in_item: px(offset),
+                    offset_in_item: px(anchor.offset_in_row),
                 });
             }
         } else {
@@ -701,30 +765,52 @@ impl TranscriptView {
     /// Return the logical row currently at the top of the viewport and its
     /// offset within that row. This remains stable when Markdown rows change
     /// height, unlike a total pixel offset from the top of the document.
-    pub fn scroll_anchor(&self) -> Option<(usize, f32, bool)> {
+    ///
+    /// The row index is clamped to the last message: while a run streams the
+    /// list carries a trailing "Working…" row that is not a message, and an
+    /// index pointing at it would point past the end once that row is gone.
+    pub fn scroll_anchor(&self) -> Option<TranscriptScrollAnchor> {
         if self.messages.is_empty() {
             return None;
         }
         let top = self.list_state.logical_scroll_top();
-        Some((
-            top.item_ix,
-            f32::from(top.offset_in_item),
-            self.list_state.is_following_tail(),
-        ))
+        let row_index = anchor_row(self.messages.len(), top.item_ix);
+        Some(TranscriptScrollAnchor {
+            row_index,
+            offset_in_row: f32::from(top.offset_in_item),
+            at_tail: self.list_state.is_following_tail(),
+            message_id: message_id_at(&self.messages, row_index),
+        })
+    }
+
+    /// The row holding the message with `id`, if it is loaded.
+    pub fn row_for_message_id(&self, id: &str) -> Option<usize> {
+        row_for_message_id(&self.messages, id)
     }
 
     /// Restore a logical row anchor after a session's message list is installed.
     /// GPUI can then resolve the anchor again as visible rows are measured.
+    ///
+    /// The message id names the anchor row, so the position survives a
+    /// reloaded page whose rows sit at different indices. A message that is
+    /// no longer loaded — it fell outside the fetched window — cannot be
+    /// restored to, and the tail is the honest fallback: clamping to a row
+    /// index would land on an unrelated message.
     pub fn restore_scroll_anchor(
         &mut self,
+        message_id: Option<&str>,
         row_index: usize,
         offset_in_row: f32,
         at_tail: bool,
         cx: &mut Context<Self>,
     ) {
+        let (row, at_tail) = match self.resolve_anchor_row(message_id, row_index) {
+            Some(row) => (row, at_tail),
+            None => (0, true),
+        };
         self.scroll_restore_generation = self.scroll_restore_generation.wrapping_add(1);
         let generation = self.scroll_restore_generation;
-        self.apply_scroll_anchor(row_index, offset_in_row, at_tail);
+        self.apply_scroll_anchor(row, offset_in_row, at_tail);
 
         let entity = cx.entity().downgrade();
         cx.spawn(async move |_, cx| {
@@ -735,13 +821,23 @@ impl TranscriptView {
                 if let Some(entity) = entity.upgrade() {
                     entity.update(cx, |this, _| {
                         if this.scroll_restore_generation == generation {
-                            this.apply_scroll_anchor(row_index, offset_in_row, at_tail);
+                            this.apply_scroll_anchor(row, offset_in_row, at_tail);
                         }
                     });
                 }
             });
         })
         .detach();
+    }
+
+    /// Resolve an anchor to a row of the currently loaded messages.
+    ///
+    /// A message id that is not loaded cannot be resolved: the fetch window
+    /// moved on. The row index is only a fallback for messages that have no
+    /// id at all — an optimistic user message, before the server has
+    /// assigned one.
+    fn resolve_anchor_row(&self, message_id: Option<&str>, row_index: usize) -> Option<usize> {
+        resolve_anchor_row(&self.messages, message_id, row_index)
     }
 
     fn apply_scroll_anchor(&self, row_index: usize, offset_in_row: f32, at_tail: bool) {
@@ -875,18 +971,20 @@ impl TranscriptView {
         // Keep following tail if the user was already at the tail or this is a
         // freshly loaded session; otherwise restore their previous scroll anchor
         // so settling never teleports an inspecting user back down or up.
-        let was_at_tail = anchor.map(|(_, _, at_tail)| at_tail).unwrap_or(true);
+        let was_at_tail = anchor.as_ref().map(|anchor| anchor.at_tail).unwrap_or(true);
         if was_at_tail {
             self.list_state.set_follow_mode(FollowMode::Tail);
             self.list_state.reset(self.row_count());
             self.list_state.scroll_to_end();
-        } else if let Some((row, offset, _)) = anchor {
+        } else if let Some(anchor) = anchor {
             self.list_state.set_follow_mode(FollowMode::Normal);
-            let row_index = row.min(self.row_count().saturating_sub(1));
+            let row_index = anchor
+                .row_index
+                .min(self.row_count().saturating_sub(1));
             self.list_state.reset(self.row_count());
             self.list_state.scroll_to(ListOffset {
                 item_ix: row_index,
-                offset_in_item: px(offset),
+                offset_in_item: px(anchor.offset_in_row),
             });
         } else {
             self.list_state.set_follow_mode(FollowMode::Tail);
@@ -931,16 +1029,16 @@ impl TranscriptView {
 
         // Reset the list with the new row count, then restore the anchor.
         self.list_state.reset(self.row_count());
-        let _ = anchor.map(|(row_index, offset_in_row, at_tail)| {
-            if at_tail {
+        let _ = anchor.map(|anchor| {
+            if anchor.at_tail {
                 self.list_state.set_follow_mode(FollowMode::Tail);
                 self.list_state.scroll_to_end();
             } else {
                 self.list_state.set_follow_mode(FollowMode::Normal);
-                let new_row_index = row_index.saturating_add(prepend_count);
+                let new_row_index = anchor.row_index.saturating_add(prepend_count);
                 self.list_state.scroll_to(ListOffset {
                     item_ix: new_row_index,
-                    offset_in_item: px(offset_in_row),
+                    offset_in_item: px(anchor.offset_in_row),
                 });
                 // Re-apply on the next frame so variable-height Markdown
                 // rows are measured before the offset resolves.
@@ -948,7 +1046,7 @@ impl TranscriptView {
                 let generation = self.scroll_restore_generation;
                 let entity = cx.entity().downgrade();
                 let row = new_row_index;
-                let off = offset_in_row;
+                let off = anchor.offset_in_row;
                 cx.spawn(async move |_, cx| {
                     cx.background_executor()
                         .timer(Duration::from_millis(16))

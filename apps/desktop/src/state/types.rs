@@ -159,6 +159,8 @@ pub struct ConsoleDesktopApp {
         String,
         crate::state::transcript_scroll::TranscriptScrollPosition,
     >,
+    /// True while a debounced write of the scroll positions is queued.
+    pub(crate) transcript_scroll_save_pending: std::cell::Cell<bool>,
     pub(crate) transcript_pagination:
         std::collections::HashMap<String, crate::state::pagination::SessionPaginationState>,
     pub(crate) pagination_in_flight: std::collections::HashSet<String>,

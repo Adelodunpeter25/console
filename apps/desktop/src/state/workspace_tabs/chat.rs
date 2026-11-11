@@ -303,6 +303,20 @@ impl ConsoleDesktopApp {
         }
     }
 
+    /// The transcript of a pane that exists, or `None`.
+    ///
+    /// [`Self::transcript_for_pane`] falls back to the main transcript, which
+    /// is right for rendering but wrong for a scroll snapshot: it would
+    /// record the main pane's position under a pane that has none.
+    pub(crate) fn transcript_for_pane_checked(&self, pane_id: &str) -> Option<Entity<TranscriptView>> {
+        if pane_id == "pane-main" {
+            return Some(self.transcript_view.clone());
+        }
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.transcript_view.clone())
+    }
+
     pub(crate) fn composer_for_pane(&self, pane_id: &str) -> Entity<ComposerInput> {
         if pane_id == "pane-main" {
             self.composer_input.clone()

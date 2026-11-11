@@ -631,7 +631,10 @@ impl ConsoleDesktopApp {
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.save_transcript_scroll_position(cx);
+                                        // The new chat replaces this pane's
+                                        // transcript, so the chat it was
+                                        // showing keeps its position.
+                                        this.save_pane_scroll_position(&run_pane_id, cx);
                                         this.apply_session_header_for_pane(&run_pane_id, &new_session, cx);
                                         if this.active_pane_id.as_deref() == Some(run_pane_id.as_str()) {
                                             this.selected_session_id = Some(sid.clone());

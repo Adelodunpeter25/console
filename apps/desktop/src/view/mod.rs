@@ -899,8 +899,10 @@ impl Render for ConsoleDesktopApp {
                                     let del_id = id.clone();
                                     if let Some(app) = entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.save_transcript_scroll_position(cx);
                                             Rc::make_mut(&mut this.sessions).retain(|s| s.id != id);
+                                            // The chat is gone, so its remembered
+                                            // position is too.
+                                            this.forget_transcript_scroll_position(&id, cx);
                                             this.close_matching_workspace_tabs(
                                                 |t| t.id() == format!("chat:{}", id),
                                                 cx,

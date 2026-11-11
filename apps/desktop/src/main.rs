@@ -16,7 +16,6 @@ mod keybindings;
 mod log_filter;
 mod menubar;
 mod new_project_dialog;
-mod persistence;
 mod picker;
 mod recording;
 mod settings;
@@ -28,6 +27,10 @@ mod view;
 mod window;
 
 use assets::{Assets, register_core_fonts};
+
+// The persisted state format lives in the library so it can be tested
+// without a window; `crate::persistence::…` keeps resolving to it.
+use console_app::persistence;
 
 use console_ui::init_input_keybindings;
 use gpui::App;

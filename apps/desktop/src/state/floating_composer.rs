@@ -679,7 +679,6 @@ impl ConsoleDesktopApp {
                 app.update(cx, |this, cx| match result {
                     Ok(new_session) => {
                         this.floating_composer.hide();
-                        this.save_transcript_scroll_position(cx);
                         this.apply_session_header_for_pane(&pane_id, &new_session, cx);
                         this.clear_error_for_pane(&pane_id, cx);
                         if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
@@ -688,6 +687,9 @@ impl ConsoleDesktopApp {
                         Rc::make_mut(&mut this.sessions).insert(0, new_session.clone());
                         this.switch_workspace_for_session(&new_session.id, &pane_id, cx);
                         let target_pane = this.active_pane_id.clone().unwrap_or(pane_id);
+                        // The new chat replaces this pane's transcript, so the
+                        // chat it was showing keeps its position.
+                        this.save_pane_scroll_position(&target_pane, cx);
                         this.open_chat_tab_in_pane(
                             &target_pane,
                             new_session.id.clone(),

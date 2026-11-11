@@ -32,11 +32,11 @@ fn default_right_sidebar_bottom_height() -> f32 {
 
 /// The pre-v2 file that held the sidebar layout. The layout is a section of
 /// `state.json` now; this file is only read while it still exists.
-pub(crate) fn legacy_path() -> PathBuf {
+pub fn legacy_path() -> PathBuf {
     storage_directory().join("workspace-state.json")
 }
 
-pub(crate) fn read_legacy() -> Option<WorkspaceStateDocument> {
+pub fn read_legacy() -> Option<WorkspaceStateDocument> {
     let contents = fs::read_to_string(legacy_path()).ok()?;
     let document = serde_json::from_str::<WorkspaceStateDocument>(&contents).ok()?;
     (document.version == WORKSPACE_STATE_VERSION).then_some(document)

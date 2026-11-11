@@ -49,11 +49,11 @@ pub struct WorkspacesDocument {
 
 /// The pre-v2 file that held the workspace tree. The tree is a section of
 /// `state.json` now; this file is only read while it still exists.
-pub(crate) fn legacy_path() -> PathBuf {
+pub fn legacy_path() -> PathBuf {
     storage_directory().join("workspace.json")
 }
 
-pub(crate) fn read_legacy() -> Option<WorkspacesDocument> {
+pub fn read_legacy() -> Option<WorkspacesDocument> {
     let contents = fs::read_to_string(legacy_path()).ok()?;
     let document = serde_json::from_str::<WorkspacesDocument>(&contents).ok()?;
     (document.version == WORKSPACES_VERSION).then_some(document)

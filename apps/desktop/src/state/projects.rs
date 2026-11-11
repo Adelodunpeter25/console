@@ -596,7 +596,9 @@ impl ConsoleDesktopApp {
                         }
                         match result {
                             Ok(new_session) => {
-                                this.save_transcript_scroll_position(cx);
+                                // The new chat replaces this pane's transcript,
+                                // so the chat it was showing keeps its position.
+                                this.save_pane_scroll_position(&pane_id, cx);
                                 this.apply_session_header_for_pane(&pane_id, &new_session, cx);
                                 this.clear_error_for_pane(&pane_id, cx);
                                 if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {
