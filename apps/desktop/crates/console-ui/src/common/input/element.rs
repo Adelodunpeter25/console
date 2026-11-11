@@ -8,11 +8,14 @@ use gpui::{
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::common::file_mention_chip::{
-    FILE_MENTION_ICON_SIZE, FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS,
+    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS,
 };
 use crate::theme::Theme;
 
 pub(crate) const MENTION_ICON_CELL: Pixels = px(22.0);
+
+/// Sized to the composer's 13.5px text; the shared 11px chip icon reads too small here.
+const COMPOSER_MENTION_ICON_SIZE: f32 = 14.0;
 
 /// Neutral chip look for the composer: dark wash, neutral border.
 fn composer_chip_colors(theme: Theme) -> (gpui::Hsla, gpui::Hsla) {
@@ -389,12 +392,16 @@ impl Element for InputElement {
                 .child(if hovered {
                     crate::primitives::app_icon(
                         crate::primitives::IconName::Close,
-                        FILE_MENTION_ICON_SIZE,
+                        COMPOSER_MENTION_ICON_SIZE,
                         theme.text,
                     )
                     .into_any_element()
                 } else {
-                    crate::common::file_mention_chip::mention_icon(&mention.path, theme)
+                    crate::common::file_mention_chip::mention_icon(
+                        &mention.path,
+                        COMPOSER_MENTION_ICON_SIZE,
+                        theme,
+                    )
                 })
                 .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);
@@ -509,7 +516,7 @@ impl Element for InputElement {
             self.input
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
-        let icon_size = px(11.0);
+        let icon_size = px(COMPOSER_MENTION_ICON_SIZE);
         let extra_left = MENTION_ICON_CELL;
 
         for mention_icon in &mut layout_state.mention_icons {

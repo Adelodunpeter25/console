@@ -65,30 +65,30 @@ pub fn file_mention_chip(path: &str, label: impl Into<String>, theme: Theme) -> 
 
 /// The icon a mention chip paints: a file-type icon for files, one generic
 /// icon for skills.
-pub(crate) fn mention_icon(path: &str, theme: Theme) -> gpui::AnyElement {
+pub(crate) fn mention_icon(path: &str, size: f32, theme: Theme) -> gpui::AnyElement {
     if path.starts_with(console_shared::composer::mentions::CHAT_PATH_PREFIX) {
         crate::primitives::app_icon(
             crate::primitives::IconName::ChatRoundLine,
-            FILE_MENTION_ICON_SIZE,
+            size,
             theme.accent,
         )
         .into_any_element()
     } else if path.starts_with(console_shared::composer::mentions::SKILL_PATH_PREFIX) {
         crate::primitives::app_icon(
             crate::primitives::IconName::Sparkle,
-            FILE_MENTION_ICON_SIZE,
+            size,
             theme.accent,
         )
         .into_any_element()
     } else if path.ends_with('/') || path.ends_with('\\') || std::path::Path::new(path).is_dir() {
         crate::primitives::app_icon(
             crate::primitives::IconName::Folder,
-            FILE_MENTION_ICON_SIZE,
+            size,
             theme.accent,
         )
         .into_any_element()
     } else {
-        crate::primitives::file_type_icon(path, FILE_MENTION_ICON_SIZE).into_any_element()
+        crate::primitives::file_type_icon(path, size).into_any_element()
     }
 }
 
@@ -285,7 +285,7 @@ impl Element for InlineFileMentionText {
         for m in prepared_mentions {
             let mut icon = div()
                 .absolute()
-                .child(mention_icon(&m.path, theme))
+                .child(mention_icon(&m.path, FILE_MENTION_ICON_SIZE, theme))
                 .into_any_element();
             let layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(layout_id);
