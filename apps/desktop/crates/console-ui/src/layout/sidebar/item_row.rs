@@ -8,7 +8,7 @@ use gpui::{
 
 use crate::theme::Theme;
 
-const ROW_HEIGHT: f32 = 34.0;
+const ROW_HEIGHT: f32 = 36.0;
 const ROW_PADDING_X: f32 = 6.0;
 const ROW_RADIUS: f32 = 6.0;
 const ROW_GAP: f32 = 6.0;
