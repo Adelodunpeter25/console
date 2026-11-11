@@ -1730,11 +1730,6 @@ impl ComposerInput {
         cx.notify();
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn offset_from_utf16(&self, offset: usize) -> usize {
-        boundaries::offset_from_utf16(&self.content, offset)
-    }
-
     pub(crate) fn offset_to_utf16(&self, offset: usize) -> usize {
         boundaries::offset_to_utf16(&self.content, offset)
     }

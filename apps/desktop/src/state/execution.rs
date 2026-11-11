@@ -250,16 +250,6 @@ impl ConsoleDesktopApp {
             .unwrap_or_default()
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn queued_prompt_for_session(
-        &self,
-        session_id: &str,
-    ) -> Option<console_core::QueuedPrompt> {
-        self.queued_prompts
-            .get(session_id)
-            .and_then(|v| v.first().cloned())
-    }
-
     /// Make the local cards match the server's queue. Cards this device just
     /// queued and the server has not confirmed yet (local ids, no matching
     /// prompt in `remote`) stay at the end so they do not blink out.

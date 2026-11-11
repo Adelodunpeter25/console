@@ -70,13 +70,13 @@ struct SnapshotShape {
 fn decodes_golden_context_frame() {
     #[derive(serde::Deserialize)]
     struct Raw {
-        #[allow(dead_code)]
         #[serde(rename = "type")]
         kind: String,
         context: SnapshotShape,
     }
     let frame: Raw =
         serde_json::from_str(fixture("context_update.json").trim()).expect("decode context");
+    assert_eq!(frame.kind, "contextUpdate");
     assert_eq!(
         frame.context,
         SnapshotShape {

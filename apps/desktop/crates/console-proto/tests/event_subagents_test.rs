@@ -17,7 +17,6 @@ fn fixture(name: &str) -> String {
 fn decodes_golden_todo_update_frame() {
     #[derive(serde::Deserialize)]
     struct Frame {
-        #[allow(dead_code)]
         #[serde(rename = "type")]
         kind: String,
         items: Vec<TodoItem>,
@@ -25,6 +24,7 @@ fn decodes_golden_todo_update_frame() {
     }
     let frame: Frame =
         serde_json::from_str(fixture("todo_update.json").trim()).expect("decode todoUpdate");
+    assert_eq!(frame.kind, "todoUpdate");
     assert_eq!(frame.items.len(), 1);
     assert_eq!(frame.items[0].id, 1);
     assert_eq!(frame.items[0].content, "a");

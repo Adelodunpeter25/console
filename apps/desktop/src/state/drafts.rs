@@ -1,7 +1,6 @@
 use console_core::{ProjectInfoExt, SessionHeaderExt};
 use console_ui::{ComposerMention, DraftSummary};
 use gpui::Context;
-use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::persistence;
@@ -13,15 +12,6 @@ use crate::state::app::ConsoleDesktopApp;
 const DRAFTS_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 impl ConsoleDesktopApp {
-    #[allow(dead_code)]
-    pub fn draft_session_ids(&self) -> HashSet<String> {
-        self.drafts
-            .iter()
-            .filter(|(k, v)| k.as_str() != "new_chat" && !v.prompt.trim().is_empty())
-            .map(|(k, _)| k.clone())
-            .collect()
-    }
-
     pub fn draft_summaries(&self) -> Vec<DraftSummary> {
         let mut summaries = Vec::new();
         for (key, draft) in &self.drafts {

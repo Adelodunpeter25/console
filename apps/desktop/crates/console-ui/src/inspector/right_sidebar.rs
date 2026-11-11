@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange};
+use console_core::types::{ChangesScope, SessionFileChange};
 use gpui::{
     AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
@@ -99,7 +99,6 @@ pub struct RightSidebar {
     active_tab: InspectorTab,
     search_query: String,
     tree: Rc<Vec<FileTreeNode>>,
-    working_changes: Rc<Vec<GitFileEntry>>,
     git_badges: Rc<HashMap<String, GitBadge>>,
     session_changes: Rc<Vec<SessionFileChange>>,
     changes_scope: ChangesScope,
@@ -129,7 +128,6 @@ impl RightSidebar {
         active_tab: InspectorTab,
         search_query: String,
         tree: Rc<Vec<FileTreeNode>>,
-        working_changes: Rc<Vec<GitFileEntry>>,
         session_changes: Rc<Vec<SessionFileChange>>,
         changes_scope: ChangesScope,
         changes_scope_menu: ContextMenuHandle,
@@ -152,7 +150,6 @@ impl RightSidebar {
             active_tab,
             search_query,
             tree,
-            working_changes,
             git_badges: Rc::new(HashMap::new()),
             session_changes,
             changes_scope,
@@ -441,7 +438,6 @@ impl RenderOnce for RightSidebar {
                         )
                         .into_any_element(),
                         InspectorTab::Primary(PrimaryTab::Changes) => ChangesListView::new(
-                            self.working_changes,
                             self.session_changes,
                             self.changes_scope,
                             self.changes_scope_menu,

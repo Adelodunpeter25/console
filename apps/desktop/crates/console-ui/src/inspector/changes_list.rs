@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use console_core::types::{ChangesScope, GitFileEntry, SessionFileChange};
+use console_core::types::{ChangesScope, SessionFileChange};
 use gpui::{
     App, InteractiveElement, IntoElement, ParentElement, RenderOnce, StatefulInteractiveElement,
     Styled, Window, div, prelude::FluentBuilder, px,
@@ -19,8 +19,6 @@ use crate::utils::short_parent_dir;
 
 #[derive(IntoElement)]
 pub struct ChangesListView {
-    #[allow(dead_code)]
-    working_changes: Rc<Vec<GitFileEntry>>,
     session_changes: Rc<Vec<SessionFileChange>>,
     scope: ChangesScope,
     scope_menu: ContextMenuHandle,
@@ -33,7 +31,6 @@ pub struct ChangesListView {
 impl ChangesListView {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        working_changes: Rc<Vec<GitFileEntry>>,
         session_changes: Rc<Vec<SessionFileChange>>,
         scope: ChangesScope,
         scope_menu: ContextMenuHandle,
@@ -43,7 +40,6 @@ impl ChangesListView {
         on_view_all: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     ) -> Self {
         Self {
-            working_changes,
             session_changes,
             scope,
             scope_menu,

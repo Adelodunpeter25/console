@@ -1525,7 +1525,6 @@ impl Render for ConsoleDesktopApp {
                                 self.inspector_active_tab,
                                 self.inspector_search_query.clone(),
                                 self.inspector_tree.clone(),
-                                self.inspector_working_changes.clone(),
                                 self.inspector_session_changes.clone(),
                                 self.inspector_changes_scope,
                                 self.inspector_changes_scope_menu.clone(),

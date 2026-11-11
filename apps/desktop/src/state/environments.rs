@@ -346,6 +346,7 @@ impl ConsoleDesktopApp {
                         this.branches = std::rc::Rc::new(Vec::new());
                         this.branch_loaded = false;
                         this.transcript_scroll_positions.clear();
+                        this.clear_transcript_pagination();
 
                         // Close all tabs and collapse splits back to clean main pane
                         this.workspace_root = console_core::WorkspaceNode::leaf("pane-main");

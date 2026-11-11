@@ -369,13 +369,9 @@ pub extern "system" fn Java_com_console_mobile_SharedNative_fileCallDiffs(
     })
 }
 
-/// `SharedNative.mentionRanges(text)` is deliberately absent: the two clients
-/// model mentions differently (desktop reconciles chip ranges, Android scans
-/// raw text), so there is nothing to share yet. See the plan, §3.0.
-#[allow(dead_code)]
-fn _mentions_are_not_shared() {
-    let _ = composer::mentions::mentions_from_context_files;
-}
+// Note: `SharedNative.mentionRanges(text)` is deliberately absent: the two clients
+// model mentions differently (desktop reconciles chip ranges, Android scans
+// raw text), so there is nothing to share yet. See the plan, §3.0.
 
 // ── iroh tunnels ──────────────────────────────────────────────────────────
 

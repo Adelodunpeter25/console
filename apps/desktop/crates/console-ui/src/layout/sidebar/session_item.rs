@@ -1,4 +1,4 @@
-use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
+use console_core::{ProjectInfo, SessionHeader, SessionHeaderExt};
 use gpui::{
     App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, actions, div, prelude::FluentBuilder, px,
@@ -61,10 +61,6 @@ pub fn settle_tooltip_label(settled: bool) -> String {
 #[derive(IntoElement)]
 pub struct SidebarSessionItem {
     session: SessionHeader,
-    /// The project this session belongs to, when the app knows it. Falls back
-    /// to the session's working-directory name in the UI.
-    #[allow(dead_code)]
-    project_name: Option<String>,
     is_active: bool,
     loading_state: Option<SidebarLoadingState>,
     has_draft: bool,
@@ -85,7 +81,6 @@ impl SidebarSessionItem {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         session: SessionHeader,
-        project_name: Option<String>,
         is_active: bool,
         loading_state: Option<SidebarLoadingState>,
         has_draft: bool,
@@ -103,7 +98,6 @@ impl SidebarSessionItem {
     ) -> Self {
         Self {
             session,
-            project_name,
             is_active,
             loading_state,
             has_draft,
@@ -319,15 +313,11 @@ pub fn render_sidebar_session_item(
 ) -> gpui::AnyElement {
     let is_active = selected_id == Some(session.id.as_str());
     let loading_state = sidebar::session_loading_state(&session, running_started_at, is_waiting);
-    let project_name = projects
-        .iter()
-        .find(|project| project.matches_session(&session))
-        .map(|project| project.name.clone());
+    let _ = projects;
     let session_id = session.id.clone();
     let is_renaming = renaming_session_id == Some(session_id.as_str());
     SidebarSessionItem::new(
         session,
-        project_name,
         is_active,
         loading_state,
         has_draft,

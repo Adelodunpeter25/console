@@ -32,20 +32,6 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    #[allow(dead_code)]
-    pub fn set_right_sidebar_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
-        if self.right_sidebar_visible == visible {
-            return;
-        }
-        self.right_sidebar_visible = visible;
-        self.sync_inspector_webviews(cx);
-        self.sync_workspace_webviews(cx);
-        self.persist_layout();
-        self.sync_inspector_watchers(cx);
-        self.maybe_refresh_inspector(cx);
-        cx.notify();
-    }
-
     pub fn begin_right_sidebar_resize(&mut self, start_x: f32) {
         self.right_sidebar_resize_start = Some((start_x, self.right_sidebar_width));
     }
@@ -459,12 +445,6 @@ impl ConsoleDesktopApp {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn set_inspector_search_query(&mut self, query: String, cx: &mut Context<Self>) {
-        self.inspector_search_query = query;
-        cx.notify();
-    }
-
     pub fn ensure_right_sidebar_terminal(
         &mut self,
         window: &mut gpui::Window,
@@ -546,23 +526,6 @@ impl ConsoleDesktopApp {
             window,
             cx,
         );
-    }
-
-    #[allow(dead_code)]
-    pub fn session_subagents(
-        &self,
-        session_id: &str,
-    ) -> Rc<Vec<console_core::types::SubagentInfo>> {
-        self.session_subagents
-            .get(session_id)
-            .cloned()
-            .unwrap_or_else(|| Rc::new(Vec::new()))
-    }
-
-    #[allow(dead_code)]
-    pub fn select_inspector_file(&mut self, path: String, cx: &mut Context<Self>) {
-        self.inspector_selected_path = Some(path);
-        cx.notify();
     }
 
     /// Refresh the inspector (fs tree, git changes, session changes,
