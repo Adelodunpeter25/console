@@ -72,7 +72,7 @@ where
             MenuItem::new("Open in New Window", move |window, cx| {
                 on_open_in_new_window(window, cx)
             })
-            .icon(IconName::WindowRestore.path()),
+            .icon(IconName::OpenInWindow.path()),
             MenuItem::Separator,
             MenuItem::new(pin_label, move |window, cx| on_toggle_pin(window, cx))
                 .icon(IconName::Pin.path()),
