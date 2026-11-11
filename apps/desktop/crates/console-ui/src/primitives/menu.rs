@@ -964,7 +964,13 @@ impl RenderOnce for MenuCard {
             .border_1()
             .border_color(theme.border_strong)
             .bg(if context_style {
-                theme.inset
+                // Darker than `inset` in dark mode so the card reads as its own
+                // surface against the sidebar and the black chat canvas.
+                if theme.is_dark {
+                    gpui::rgb(0x0E0E0E).into()
+                } else {
+                    theme.inset
+                }
             } else {
                 theme.raised
             })
@@ -1098,11 +1104,11 @@ fn row(
         .id(index)
         .mx(px(4.0))
         .px(px(if context_style { 12.0 } else { 8.0 }))
-        .min_h(px(if context_style { 28.0 } else { 26.0 }))
+        .min_h(px(if context_style { 20.0 } else { 26.0 }))
         .rounded(px(if context_style { 7.0 } else { 6.0 }))
         .flex()
         .items_center()
-        .gap(px(if context_style { 6.0 } else { 8.0 }))
+        .gap(px(8.0))
         .text_size(px(if context_style { 13.0 } else { 11.5 }))
         .line_height(px(15.0))
         .when(highlighted, |element| element.bg(highlight))
