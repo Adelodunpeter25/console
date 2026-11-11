@@ -693,9 +693,9 @@ impl ComposerInput {
                 .next_back()
                 .is_some_and(|c| c.is_whitespace());
         let prefix = if start == 0 || prev_is_whitespace {
-            "     "
+            "        "
         } else {
-            "      "
+            "         "
         };
         // The pill's wash overhangs the label on the right, so one trailing
         // space leaves no visible gap before the next word; two do.

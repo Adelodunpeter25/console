@@ -8,11 +8,16 @@ use gpui::{
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::common::file_mention_chip::{
-    FILE_MENTION_ICON_SIZE, FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
+    FILE_MENTION_ICON_SIZE, FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS,
 };
 use crate::theme::Theme;
 
-pub(crate) const MENTION_ICON_CELL: Pixels = px(14.0);
+pub(crate) const MENTION_ICON_CELL: Pixels = px(26.0);
+
+/// Neutral chip look for the composer: dark wash, neutral border.
+fn composer_chip_colors(theme: Theme) -> (gpui::Hsla, gpui::Hsla) {
+    (theme.inset, theme.border_strong)
+}
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
     layout
@@ -323,8 +328,8 @@ impl Element for InputElement {
                 } else {
                     &input.mentions
                 },
-                theme.accent,
-                file_mention_colors(theme).0,
+                theme.text,
+                composer_chip_colors(theme).0,
             );
             let mentions_to_layout =
                 if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
@@ -505,14 +510,14 @@ impl Element for InputElement {
                 .update(cx, |input, _| input.caret_reconciled = Some(follow_state));
         }
         let icon_size = px(11.0);
-        let extra_left = px(14.0);
+        let extra_left = MENTION_ICON_CELL;
 
         for mention_icon in &mut layout_state.mention_icons {
             let layout = layout_state.text.layout();
             let rects = crate::markdown::render::range_rects(layout, &mention_icon.range, 3.0, 1.0);
             if let Some(first_rect) = rects.first() {
                 let icon_origin = point(
-                    first_rect.origin.x - extra_left + px(2.0),
+                    first_rect.origin.x - extra_left + (extra_left - icon_size) / 2.0,
                     first_rect.origin.y
                         + (first_rect.size.height - icon_size) / 2.0
                         + px(FILE_MENTION_ICON_Y_NUDGE),
@@ -598,13 +603,13 @@ impl Element for InputElement {
             }
         }
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
-            let extra_left = px(14.0);
+            let extra_left = MENTION_ICON_CELL;
 
             for (mention_idx, mention) in input.mentions.iter().enumerate() {
                 if mention.range.end <= input.content.len() {
                     let rects =
                         crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
-                    let (mention_bg, mention_border, _) = file_mention_colors(theme);
+                    let (mention_bg, mention_border) = composer_chip_colors(theme);
                     for (idx, rect) in rects.iter().enumerate() {
                         let mut quad_rect = *rect;
                         if idx == 0 {
@@ -618,7 +623,7 @@ impl Element for InputElement {
                                 window.paint_quad(quad(
                                     cell,
                                     px(FILE_MENTION_RADIUS),
-                                    theme.overlay,
+                                    theme.overlay_strong,
                                     px(1.0),
                                     mention_border,
                                     BorderStyle::default(),
