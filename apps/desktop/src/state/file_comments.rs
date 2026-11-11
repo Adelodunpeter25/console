@@ -85,7 +85,7 @@ impl ConsoleDesktopApp {
     }
 
     /// Project-relative path shown in prompts, as the agent expects.
-    fn comment_display_path(&self, pane_id: &str, path: &str) -> String {
+    pub(crate) fn comment_display_path(&self, pane_id: &str, path: &str) -> String {
         self.selected_project_for_pane(pane_id)
             .map(|project| project.path.clone())
             .and_then(|root| {

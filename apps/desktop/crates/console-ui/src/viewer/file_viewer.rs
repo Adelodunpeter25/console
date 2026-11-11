@@ -9,6 +9,8 @@ use gpui::{
     AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce,
     ScrollWheelEvent, Styled, Window, canvas, div, px,
 };
+use crate::primitives::file_type_icon;
+use crate::theme::Theme;
 use std::rc::Rc;
 
 /// Room kept free under a file/diff viewer so its last lines can scroll up
@@ -65,6 +67,7 @@ impl FileCommentOverlay {
 pub struct FileViewer {
     view: Entity<editor_ui::EditorView>,
     comments: Vec<FileCommentOverlay>,
+    path: Option<String>,
 }
 
 impl FileViewer {
@@ -72,7 +75,14 @@ impl FileViewer {
         Self {
             view,
             comments: Vec::new(),
+            path: None,
         }
+    }
+
+    /// Shows this (already display-ready) path in a header row above the code.
+    pub fn path(mut self, path: impl Into<String>) -> Self {
+        self.path = Some(path.into());
+        self
     }
 
     pub fn comments(mut self, comments: Vec<FileCommentOverlay>) -> Self {
@@ -83,7 +93,11 @@ impl FileViewer {
 
 impl RenderOnce for FileViewer {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let Self { view, comments } = self;
+        let Self {
+            view,
+            comments,
+            path,
+        } = self;
         let anchors = {
             let editor = view.read(cx);
             comments
@@ -138,9 +152,11 @@ impl RenderOnce for FileViewer {
                 )
             });
 
-        div()
+        let body = div()
             .relative()
-            .size_full()
+            .flex_1()
+            .min_h_0()
+            .w_full()
             .overflow_hidden()
             .bg(gpui::rgb(0x000000))
             .child(
@@ -152,6 +168,50 @@ impl RenderOnce for FileViewer {
                     .bottom(px(FLOATING_COMPOSER_INSET))
                     .child(view),
             )
-            .children(overlays)
+            .children(overlays);
+
+        let header = path.map(|path| {
+            let theme = Theme::current(cx);
+            let (dir, name) = match path.rfind('/') {
+                Some(i) => (path[..=i].to_string(), path[i + 1..].to_string()),
+                None => (String::new(), path.clone()),
+            };
+            div()
+                .flex_none()
+                .w_full()
+                .px(px(12.0))
+                .py(px(8.0))
+                .bg(gpui::rgb(0x000000))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .max_w_full()
+                        .px(px(10.0))
+                        .py(px(4.0))
+                        .rounded(px(8.0))
+                        .border_1()
+                        .border_color(theme.border)
+                        .child(file_type_icon(&path, 16.0))
+                        .child(
+                            div()
+                                .flex()
+                                .min_w_0()
+                                .overflow_hidden()
+                                .text_size(px(13.0))
+                                .whitespace_nowrap()
+                                .child(div().text_color(theme.text_tertiary).child(dir))
+                                .child(div().flex_none().text_color(theme.text).child(name)),
+                        ),
+                )
+        });
+
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .children(header)
+            .child(body)
     }
 }

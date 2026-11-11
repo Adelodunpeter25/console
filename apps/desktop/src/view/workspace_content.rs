@@ -391,7 +391,8 @@ impl ConsoleDesktopApp {
 
                             let editor_view =
                                 self.get_or_build_editor_view(path, &content, &theme, cx);
-                            let file_viewer = console_ui::FileViewer::new(editor_view);
+                            let file_viewer = console_ui::FileViewer::new(editor_view)
+                                .path(self.comment_display_path(pane_id, path));
 
                             let toggle_path = path.clone();
                             let entity = cx.entity().downgrade();
@@ -478,7 +479,9 @@ impl ConsoleDesktopApp {
 
                     let editor_view = self.get_or_build_editor_view(path, &content, &theme, cx);
                     let comment_cards = self.file_comment_cards(pane_id, path, window, cx);
-                    let viewer = console_ui::FileViewer::new(editor_view).comments(comment_cards);
+                    let viewer = console_ui::FileViewer::new(editor_view)
+                        .path(self.comment_display_path(pane_id, path))
+                        .comments(comment_cards);
                     let composer = self.pane_composer_view(pane_id, true, true, window, cx);
                     let collapse = self.composer_collapse_on_scroll(pane_id, cx);
                     return div()
