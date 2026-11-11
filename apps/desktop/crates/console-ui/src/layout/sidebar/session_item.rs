@@ -282,7 +282,7 @@ impl RenderOnce for SidebarSessionItem {
 
         let settle_button = div()
             .id(ElementId::Name(format!("settle-{}", session.id).into()))
-            .p(px(3.0))
+            .p(px(4.0))
             .rounded(px(4.0))
             .cursor_default()
             .invisible()
@@ -300,7 +300,7 @@ impl RenderOnce for SidebarSessionItem {
             .relative()
             .w_full()
             .min_w_0()
-            .h(px(30.0))
+            .h(px(34.0))
             .px(px(8.0))
             .rounded(px(6.0))
             .cursor_default()
