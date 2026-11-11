@@ -408,12 +408,11 @@ impl RenderOnce for SidebarView {
         let has_pinned = !pinned_positions.is_empty();
         let pinned_collapsed = self.pinned_collapsed;
 
-        // The sticky header row above the list. Pinned wins the top spot;
-        // with drafts it is Drafts; otherwise the first section header is
-        // pinned. The sort toggle and add-project button sit on its right
-        // edge.
+        // The sticky header row above the list. When active search query is
+        // non-empty, the single Search Results header replaces all section headers.
+        let is_searching = self.search_active && !self.search_query.trim().is_empty();
         let sort_toggle = sort_mode_toggle(theme, sort_mode, on_toggle_sort_mode.clone());
-        let pinned_header = if self.search_active {
+        let pinned_header = if is_searching {
             search_results_group_header(theme, "Search Results").into_any_element()
         } else if has_pinned {
             div()
@@ -609,11 +608,12 @@ impl RenderOnce for SidebarView {
             }
         };
 
-        // Scrollable rows: when search is active, shows matching sessions directly
-        // under the Search Results header, preserving the current sort mode's
-        // relative ordering. Otherwise shows pinned, drafts, and date/project sections.
+        // Scrollable rows: when search is active with a non-empty query, shows
+        // matching sessions directly under the Search Results header, preserving
+        // the current sort mode's relative ordering. When query is empty (or search
+        // is inactive), shows the normal pinned, drafts, and date/project sections.
         let mut list_rows = Vec::new();
-        if self.search_active {
+        if is_searching {
             let mut ordered_positions: Vec<usize> = Vec::new();
             ordered_positions.extend(pinned_positions.iter().copied());
             match sort_mode {
@@ -640,17 +640,13 @@ impl RenderOnce for SidebarView {
             let matching_positions: Vec<usize> = ordered_positions
                 .into_iter()
                 .filter(|&idx| {
-                    if query_lower.is_empty() {
-                        true
-                    } else {
-                        let session = &sessions[idx];
-                        session.display_title().to_lowercase().contains(&query_lower)
-                            || session.title.to_lowercase().contains(&query_lower)
-                    }
+                    let session = &sessions[idx];
+                    session.display_title().to_lowercase().contains(&query_lower)
+                        || session.title.to_lowercase().contains(&query_lower)
                 })
                 .collect();
 
-            if matching_positions.is_empty() && !query_lower.is_empty() {
+            if matching_positions.is_empty() {
                 list_rows.push(SidebarRow::EmptySearch);
             } else {
                 list_rows.extend(matching_positions.into_iter().map(SidebarRow::Session));
@@ -947,6 +943,7 @@ impl RenderOnce for SidebarView {
                     .child(if self.search_active {
                         let on_cancel = self.on_clear_search.clone();
                         let on_clear = self.on_clear_search.clone();
+                        let on_outside = self.on_clear_search.clone();
                         div()
                             .id("sidebar-search-active")
                             .key_context(SIDEBAR_SEARCH_PARENT_CONTEXT)
@@ -959,6 +956,11 @@ impl RenderOnce for SidebarView {
                             .items_center()
                             .gap(px(10.0))
                             .text_size(px(13.0))
+                            .when_some(on_outside, |el, on_outside| {
+                                el.on_mouse_down_out(move |_, window, cx| {
+                                    (on_outside)(window, cx);
+                                })
+                            })
                             .when_some(on_cancel, |el, on_cancel| {
                                 el.on_action(move |_: &CancelSidebarSearch, window, cx| {
                                     (on_cancel)(window, cx);

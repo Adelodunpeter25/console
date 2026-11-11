@@ -1034,6 +1034,14 @@ impl ConsoleDesktopApp {
     }
 
     pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
+        if self.sidebar_search_active {
+            self.sidebar_search_active = false;
+            self.sidebar_search_query.clear();
+            self.sidebar_search_task = None;
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.clear(cx);
+            });
+        }
         super::macos_notifications::clear_for_session(&id);
         let active_pane_id = self
             .active_pane_id
@@ -1091,7 +1099,9 @@ impl ConsoleDesktopApp {
             let session = &self.sessions[index];
             session.pinned_at.is_some() && !draft_ids.contains(&session.id)
         };
-        if self.sidebar_search_active {
+        let is_searching =
+            self.sidebar_search_active && !self.sidebar_search_query.trim().is_empty();
+        if is_searching {
             let query_lower = self.sidebar_search_query.trim().to_lowercase();
             let matches_query = |s: &SessionHeader| {
                 query_lower.is_empty()
