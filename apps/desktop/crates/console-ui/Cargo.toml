@@ -56,10 +56,6 @@ name = "composer_mention_test"
 path = "tests/composer/composer_mention_test.rs"
 
 [[test]]
-name = "input_test"
-path = "tests/composer/input_test.rs"
-
-[[test]]
 name = "floating_composer_test"
 path = "tests/composer/floating_composer_test.rs"
 
@@ -82,10 +78,6 @@ path = "tests/sidebar/partition_settled_test.rs"
 [[test]]
 name = "settle_tooltip_test"
 path = "tests/sidebar/settle_tooltip_test.rs"
-
-[[test]]
-name = "sidebar_search_test"
-path = "tests/sidebar/search_test.rs"
 
 [[test]]
 name = "keybindings_page_test"

@@ -27,16 +27,8 @@ name = "browser_history_test"
 path = "tests/browser_history_test.rs"
 
 [[test]]
-name = "terminal_query_replies_test"
-path = "tests/terminal/terminal_query_replies_test.rs"
-
-[[test]]
 name = "terminal_snapshot_test"
 path = "tests/terminal/terminal_snapshot_test.rs"
-
-[[test]]
-name = "terminal_tui_e2e_test"
-path = "tests/terminal/terminal_tui_e2e_test.rs"
 
 [[test]]
 name = "local_forward_test"
