@@ -188,11 +188,7 @@ impl RenderOnce for FileViewer {
                         .items_center()
                         .gap(px(8.0))
                         .max_w_full()
-                        .px(px(10.0))
                         .py(px(4.0))
-                        .rounded(px(8.0))
-                        .border_1()
-                        .border_color(theme.border)
                         .child(file_type_icon(&path, 16.0))
                         .child(
                             div()
