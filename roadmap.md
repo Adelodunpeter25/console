@@ -9,6 +9,12 @@ High-level direction only — implementation details live in `docs/`.
 - [x] Session search — fuzzy match on titles/ids when resolving `$` references
 - [x] Scope control — only conversations from the same project are referenceable by default
 
+## Navigation
+
+- [x] Sidebar session search — inline search in the desktop sidebar; matches titles across all projects, including settled chats, through the server (`GET /api/sessions?query=`)
+- [ ] Search chat contents — extend sidebar search beyond titles to message text
+- [ ] Command palette chat listing — open any session from ⌘K or ⌘T
+
 ## Agent capabilities
 
 - [x] Browser use — agent controls a built-in browser on desktop (navigate, click, type, screenshot)
