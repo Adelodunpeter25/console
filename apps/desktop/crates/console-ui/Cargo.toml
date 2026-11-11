@@ -156,5 +156,9 @@ name = "chat_ref_autocomplete_test"
 path = "tests/composer/chat_ref_autocomplete_test.rs"
 
 [[test]]
+name = "autocomplete_placement_test"
+path = "tests/composer/autocomplete_placement_test.rs"
+
+[[test]]
 name = "hidden_prefix_test"
 path = "tests/composer/hidden_prefix_test.rs"

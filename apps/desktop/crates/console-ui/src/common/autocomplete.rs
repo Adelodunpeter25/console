@@ -322,6 +322,17 @@ pub fn filter_items(
     }
 }
 
+/// Which side of its anchor the popup unfolds toward.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AutocompletePlacement {
+    /// Above the anchor's top edge: for a composer docked at the bottom of the
+    /// window, where there is no room underneath.
+    #[default]
+    Above,
+    /// Under the anchor's bottom edge, overlapping whatever sits below it.
+    Below,
+}
+
 /// The popup view. Selection state and backend fetching remain in the desktop
 /// app so the component can be reused by every pane without hidden session
 /// coupling.
@@ -333,6 +344,7 @@ pub struct AutocompleteView {
     highlighted: usize,
     loading: bool,
     anchor_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    placement: AutocompletePlacement,
     on_select: Rc<dyn Fn(AutocompleteItem, &mut Window, &mut App) + 'static>,
 }
 
@@ -343,8 +355,20 @@ impl AutocompleteView {
             highlighted,
             loading,
             anchor_bounds: Rc::new(Cell::new(None)),
+            placement: AutocompletePlacement::default(),
             on_select: Rc::new(|_, _, _| {}),
         }
+    }
+
+    /// Open under the anchor instead of above it. The anchor is then the text
+    /// field itself, so the list unfolds right below what is being typed.
+    pub fn below(mut self) -> Self {
+        self.placement = AutocompletePlacement::Below;
+        self
+    }
+
+    pub fn placement(&self) -> AutocompletePlacement {
+        self.placement
     }
 
     pub fn anchor_cell(&self) -> Rc<Cell<Option<Bounds<Pixels>>>> {
@@ -410,13 +434,23 @@ impl AutocompleteView {
 }
 
 impl RenderOnce for AutocompleteView {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let Some(anchor_bounds) = self.anchor_bounds.get() else {
             return div().into_any_element();
         };
         let on_select = self.on_select;
         let highlighted = self.highlighted;
+        let below = self.placement == AutocompletePlacement::Below;
+        // Above the anchor the list is a compact strip; below it can use the
+        // room down to the window edge (about eleven rows when there is space).
+        let max_height = if below {
+            let room =
+                f32::from(window.viewport_size().height) - f32::from(anchor_bounds.bottom()) - 24.0;
+            px(room.clamp(120.0, 340.0))
+        } else {
+            px(220.0)
+        };
 
         let mut popup = div()
             .id("composer-autocomplete")
@@ -428,7 +462,7 @@ impl RenderOnce for AutocompleteView {
             // clicks "just closed" the popup instead of selecting the item.
             .occlude()
             .w(anchor_bounds.size.width)
-            .max_h(px(220.0))
+            .max_h(max_height)
             .rounded(px(10.0))
             .border_1()
             .border_color(theme.border_strong)
@@ -559,13 +593,21 @@ impl RenderOnce for AutocompleteView {
             });
         }
 
+        let (position, anchor) = if below {
+            (
+                point(anchor_bounds.origin.x, anchor_bounds.bottom() + px(6.0)),
+                Anchor::TopLeft,
+            )
+        } else {
+            (
+                point(anchor_bounds.origin.x, anchor_bounds.origin.y - px(6.0)),
+                Anchor::BottomLeft,
+            )
+        };
         deferred(
             anchored()
-                .position(point(
-                    anchor_bounds.origin.x,
-                    anchor_bounds.origin.y - px(6.0),
-                ))
-                .anchor(Anchor::BottomLeft)
+                .position(position)
+                .anchor(anchor)
                 .snap_to_window_with_margin(px(8.0))
                 .child(popup),
         )

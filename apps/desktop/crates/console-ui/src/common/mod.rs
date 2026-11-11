@@ -28,8 +28,8 @@ pub mod workspace_footer;
 pub use attachment::attachment_image;
 pub use autocomplete::{
     AUTOCOMPLETE_CONTEXT, AutocompleteConfirm, AutocompleteContentKey, AutocompleteDismiss,
-    AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePrevious,
-    AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
+    AutocompleteItem, AutocompleteKind, AutocompleteNext, AutocompletePlacement,
+    AutocompletePrevious, AutocompleteTrigger, AutocompleteView, detect_trigger, filter_items,
     init as init_autocomplete_keybindings, slugify_chat_title,
 };
 pub use composer_pills::{ShellEntry, ShellsPill, SubagentsPill, TasksPill, composer_pills};

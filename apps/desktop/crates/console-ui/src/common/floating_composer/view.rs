@@ -597,9 +597,10 @@ impl FloatingComposerView {
             .justify_center()
             // Nudged left of center so it clears the eye-line of the sidebar.
             .pr(px(64.0))
-            .items_center()
-            // Above true center reads better under the popup.
-            .pb(px(160.0))
+            // Aligned to the top so the suggestion list has the whole window
+            // below it to unfold into.
+            .items_start()
+            .pt(px(72.0))
             .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                 on_dismiss(window, cx);
             })
@@ -658,13 +659,6 @@ impl FloatingComposerView {
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))
-                            .relative()
-                            // The suggestion popup is anchored to the caret via
-                            // a bounds probe, so it needs this element to be
-                            // the positioning parent.
-                            .when_some(autocomplete_anchor, |el, anchor_bounds| {
-                                el.child(AutocompleteView::bounds_probe(anchor_bounds))
-                            })
                             .when(autocomplete_open, |el| {
                                 el.key_context(crate::common::AUTOCOMPLETE_CONTEXT)
                                     .on_action(move |_: &AutocompleteNext, window, cx| {
@@ -684,7 +678,17 @@ impl FloatingComposerView {
                                         cx.stop_propagation();
                                     })
                             })
-                            .child(input.clone()),
+                            // The suggestion popup opens under the text field
+                            // itself, so the probe measures the field rather
+                            // than this padded row.
+                            .child(
+                                div()
+                                    .relative()
+                                    .when_some(autocomplete_anchor, |el, anchor_bounds| {
+                                        el.child(AutocompleteView::bounds_probe(anchor_bounds))
+                                    })
+                                    .child(input.clone()),
+                            ),
                     )
                     // suggestion popup
                     .when_some(autocomplete, |el, popup| el.child(popup))
