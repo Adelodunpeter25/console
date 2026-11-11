@@ -1,4 +1,4 @@
-use console_core::{ProjectInfo, SessionHeader, SessionHeaderExt};
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
     App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, actions, div, prelude::FluentBuilder, px,
@@ -6,6 +6,7 @@ use gpui::{
 use std::rc::Rc;
 
 use super::item_row::{draft_badge, row_container, status_slot, title_label};
+use super::session_card::SessionHoverCard;
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
 use crate::primitives::motion;
@@ -66,6 +67,7 @@ pub struct SidebarSessionItem {
     has_draft: bool,
     is_renaming: bool,
     rename_input: Option<Entity<ComposerInput>>,
+    project_name: String,
     on_click: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_open_in_new_window: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_rename: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
@@ -86,6 +88,7 @@ impl SidebarSessionItem {
         has_draft: bool,
         is_renaming: bool,
         rename_input: Option<Entity<ComposerInput>>,
+        project_name: String,
         on_click: impl Fn(&mut Window, &mut App) + 'static,
         on_open_in_new_window: impl Fn(&mut Window, &mut App) + 'static,
         on_rename: impl Fn(&mut Window, &mut App) + 'static,
@@ -103,6 +106,7 @@ impl SidebarSessionItem {
             has_draft,
             is_renaming,
             rename_input,
+            project_name,
             on_click: Rc::new(on_click),
             on_open_in_new_window: Rc::new(on_open_in_new_window),
             on_rename: Rc::new(on_rename),
@@ -239,9 +243,24 @@ impl RenderOnce for SidebarSessionItem {
             // Settled chats read as archived: slightly dimmed everywhere.
             .when(settled, |s| s.opacity(0.7))
             .when(!is_renaming, |element| {
-                element.on_click(move |_, w, cx| {
-                    (on_click)(w, cx);
-                })
+                let hover_title = display_title.clone();
+                let hover_created = session.created_at;
+                let hover_updated = session.updated_at;
+                let hover_project = self.project_name.clone();
+
+                element
+                    .tooltip(move |window, cx| {
+                        SessionHoverCard::new(
+                            hover_title.clone(),
+                            hover_created,
+                            hover_updated,
+                            hover_project.clone(),
+                        )
+                        .build(window, cx)
+                    })
+                    .on_click(move |_, w, cx| {
+                        (on_click)(w, cx);
+                    })
             })
             .child(
                 div()
@@ -307,7 +326,18 @@ pub fn render_sidebar_session_item(
 ) -> gpui::AnyElement {
     let is_active = selected_id == Some(session.id.as_str());
     let loading_state = sidebar::session_loading_state(&session, running_started_at, is_waiting);
-    let _ = projects;
+    let project_name = projects
+        .iter()
+        .find(|project| project.matches_session(&session))
+        .map(|project| project.name.clone())
+        .unwrap_or_else(|| {
+            std::path::Path::new(&session.cwd)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or("General")
+                .to_string()
+        });
     let session_id = session.id.clone();
     let is_renaming = renaming_session_id == Some(session_id.as_str());
     SidebarSessionItem::new(
@@ -317,6 +347,7 @@ pub fn render_sidebar_session_item(
         has_draft,
         is_renaming,
         is_renaming.then_some(rename_input).flatten(),
+        project_name,
         {
             let session_id = session_id.clone();
             let on_select = on_select.clone();
