@@ -112,7 +112,7 @@ impl Metrics {
     };
 }
 
-pub const SANS_FAMILY: &str = "Geist";
+pub const SANS_FAMILY: &str = ".SystemUIFont";
 /// The bundled mono face. "SF Mono" only exists on machines that installed it
 /// with Xcode or Terminal, and silently falls back to the sans face when it
 /// does not — which reads as proportional code.
