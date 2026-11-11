@@ -696,7 +696,9 @@ impl ComposerInput {
         } else {
             "      "
         };
-        let insert_text = format!("{prefix}{label} ");
+        // The pill's wash overhangs the label on the right, so one trailing
+        // space leaves no visible gap before the next word; two do.
+        let insert_text = format!("{prefix}{label}  ");
         let lead = prefix.len();
         let mention_len = label.len();
         self.replace_range(range, &insert_text, cx);
