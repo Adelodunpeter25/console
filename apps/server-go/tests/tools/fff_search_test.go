@@ -4,6 +4,8 @@
 package tests
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/fff"
@@ -110,4 +112,49 @@ func TestManagerGetOrCreateDisabled(t *testing.T) {
 		t.Fatal("expected error from a disabled manager")
 	}
 	m.CloseAll() // must not panic
+}
+
+func TestFffIndexesGitignoredFilesWithV3(t *testing.T) {
+	if !fff.Available() {
+		t.Skip("fff native library not available in test environment")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".env*\nignored.txt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET=1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "ignored.txt"), []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "node_modules", "pkg", "index.js"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	inst, err := fff.Create(dir)
+	if err != nil {
+		t.Fatalf("fff.Create: %v", err)
+	}
+	defer inst.Destroy()
+
+	items, err := inst.Search(".env", 20)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	foundEnv := false
+	for _, it := range items {
+		if it.RelPath == ".env" {
+			foundEnv = true
+		}
+		if it.RelPath == "node_modules/pkg/index.js" {
+			t.Errorf("node_modules should still be ignored by extra_ignore")
+		}
+	}
+	if !foundEnv {
+		t.Errorf("expected .env to be indexed and found by fff; got items: %+v", items)
+	}
 }

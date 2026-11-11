@@ -406,7 +406,7 @@ func (s *FsService) searchDirs(resolved, query string, maxDirs int) []types.File
 			return nil
 		}
 		name := d.Name()
-		if utils.IsPathIgnored(name) || utils.IsHiddenName(name) {
+		if utils.IsPathIgnored(name) {
 			return filepath.SkipDir
 		}
 		rel, err := filepath.Rel(resolved, path)
@@ -493,32 +493,34 @@ func (s *FsService) SearchFiles(root, query string, limit int, includeDirs bool)
 				return nil
 			}
 			if d.IsDir() {
-				if path != resolved && (utils.IsPathIgnored(d.Name()) || utils.IsHiddenName(d.Name())) {
+				if path != resolved && utils.IsPathIgnored(d.Name()) {
 					return filepath.SkipDir
 				}
 				return nil
 			}
-			if utils.IsPathIgnored(d.Name()) || utils.IsHiddenName(d.Name()) {
+			if utils.IsPathIgnored(d.Name()) {
 				return nil
 			}
 			if q != "" {
 				// Separator-insensitive comparison so fallback still matches
 				// camel/underscore queries like "ptymanager" -> pty_manager.go.
 				lq, lp := strings.ToLower(q), strings.ToLower(path[len(resolved)+1:])
-				lq = strings.Map(func(r rune) rune {
-					if r == '_' || r == '-' || r == '/' || r == '.' {
-						return -1
-					}
-					return r
-				}, lq)
-				lp = strings.Map(func(r rune) rune {
-					if r == '_' || r == '-' || r == '/' || r == '.' {
-						return -1
-					}
-					return r
-				}, lp)
 				if !strings.Contains(lp, lq) {
-					return nil
+					lqClean := strings.Map(func(r rune) rune {
+						if r == '_' || r == '-' || r == '/' || r == '.' {
+							return -1
+						}
+						return r
+					}, lq)
+					lpClean := strings.Map(func(r rune) rune {
+						if r == '_' || r == '-' || r == '/' || r == '.' {
+							return -1
+						}
+						return r
+					}, lp)
+					if !strings.Contains(lpClean, lqClean) {
+						return nil
+					}
 				}
 			}
 			if addItem(path) {

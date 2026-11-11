@@ -14,7 +14,7 @@ package fff
 #include <stdint.h>
 #include <stdbool.h>
 
-#define FFF_CREATE_OPTIONS_VERSION 2
+#define FFF_CREATE_OPTIONS_VERSION 3
 
 typedef struct FffResult {
 	bool success;
@@ -40,6 +40,9 @@ typedef struct FffCreateOptions {
 	bool enable_fs_root_scanning;
 	bool enable_home_dir_scanning;
 	bool follow_symlinks;
+	const char *extra_ignore;
+	bool disable_git;
+	bool disable_ignore_files;
 } FffCreateOptions;
 
 typedef struct FffFileItem {
@@ -231,6 +234,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/utils"
 )
 
 var (
@@ -581,6 +586,11 @@ func Create(basePath string) (*Instance, error) {
 	}
 	cBase := C.CString(basePath)
 	defer C.free(unsafe.Pointer(cBase))
+
+	extraRules := strings.Join(utils.IgnoredPaths, "\n")
+	cExtra := C.CString(extraRules)
+	defer C.free(unsafe.Pointer(cExtra))
+
 	opts := C.FffCreateOptions{
 		version:                 C.FFF_CREATE_OPTIONS_VERSION,
 		base_path:               cBase,
@@ -588,6 +598,9 @@ func Create(basePath string) (*Instance, error) {
 		enable_content_indexing: true,
 		watch:                   true,
 		ai_mode:                 true,
+		extra_ignore:            cExtra,
+		disable_git:             true,
+		disable_ignore_files:    false,
 	}
 	res := C.go_create(&opts)
 	if res == nil {

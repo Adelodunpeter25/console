@@ -138,3 +138,72 @@ func TestAssistSearchRouteEmitsProto(t *testing.T) {
 		t.Error("expected AGENTS.md in a broad scan")
 	}
 }
+
+// TestAssistSearchSurfacesGitignoredFiles verifies that gitignored files (like .env)
+// and dotfiles are returned by file search, while build artifact directories remain excluded.
+func TestAssistSearchSurfacesGitignoredFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".env*\nsecret.txt\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET=1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "secret.txt"), []byte("classified"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", "pkg"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "node_modules", "pkg", "index.js"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := fiber.New()
+	var sessions *services.SessionService
+	routes.RegisterAssistRoutes(app, sessions, fssvc.NewFsService(), services.NewSkillsService())
+
+	service := fssvc.NewFsService()
+	items, err := service.SearchFiles(dir, "env", 50, false)
+	if err != nil {
+		t.Fatalf("SearchFiles: %v", err)
+	}
+	t.Logf("Direct SearchFiles returned %d items: %+v", len(items), items)
+
+	req := httptest.NewRequest("GET", "/api/assist/search?q=env&root="+dir, nil)
+	t.Logf("Request URL: %s", req.URL.String())
+	resp, err := app.Test(req, 10000)
+	if err != nil {
+		t.Fatalf("GET search: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var envelope struct {
+		Success bool            `json:"success"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !envelope.Success || len(envelope.Data) == 0 {
+		t.Fatal("search envelope missing data")
+	}
+	var searchResp consolev1.AssistFileSearchResponse
+	if err := protojson.Unmarshal(envelope.Data, &searchResp); err != nil {
+		t.Fatalf("protojson unmarshal: %v", err)
+	}
+	foundEnv := false
+	for _, it := range searchResp.Items {
+		if it.RelativePath == ".env" {
+			foundEnv = true
+		}
+		if strings.Contains(it.RelativePath, "node_modules") {
+			t.Errorf("node_modules path %q should not be returned", it.RelativePath)
+		}
+	}
+	if !foundEnv {
+		t.Errorf("expected .env to be surfaced in search results; got items: %+v", searchResp.Items)
+	}
+}
