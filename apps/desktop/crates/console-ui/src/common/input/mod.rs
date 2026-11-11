@@ -36,8 +36,8 @@ const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const CURSOR_BLINK_PAUSE: Duration = Duration::from_millis(300);
 
 /// Tallest a composer-mode field grows before its text scrolls under an
-/// overlay scrollbar instead of growing the card: eight prompt lines.
-pub(crate) const COMPOSER_MAX_HEIGHT: Pixels = px(176.);
+/// overlay scrollbar instead of growing the card: six prompt lines.
+pub(crate) const COMPOSER_MAX_HEIGHT: Pixels = px(132.);
 
 pub(crate) struct BlinkCursor {
     pub(crate) visible: bool,
