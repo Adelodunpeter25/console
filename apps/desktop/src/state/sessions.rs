@@ -33,6 +33,10 @@ impl ConsoleDesktopApp {
                                     .iter()
                                     .any(|s| !known_at_request.contains(&s.id));
                                 this.sessions = Rc::new(sessions);
+                                // Chats that no longer exist cannot be
+                                // restored to, so their remembered positions
+                                // are dropped.
+                                this.prune_transcript_scroll_positions();
                                 // A worktree whose chats are all gone loses its
                                 // workspace too — unless the response may predate
                                 // a chat just created (it would look dead).
@@ -205,6 +209,13 @@ impl ConsoleDesktopApp {
             cx.notify();
         } else {
             self.clear_sidebar_search(window, cx);
+        }
+    }
+
+    pub fn open_first_search_result(&mut self, cx: &mut Context<Self>) {
+        let ids = self.visible_session_ids();
+        if let Some(first_id) = ids.into_iter().next() {
+            self.select_and_open_session(first_id, cx);
         }
     }
 
@@ -1067,7 +1078,11 @@ impl ConsoleDesktopApp {
             .active_session_for_pane(&active_pane_id)
             .map(|s| s.to_string());
 
-        self.save_transcript_scroll_position(cx);
+        // The chat this pane is showing keeps its position: the new one
+        // replaces its transcript.
+        if let Some(prev_sid) = prev_sid.as_deref() {
+            self.save_transcript_scroll_position_for_pane(&active_pane_id, prev_sid, cx);
+        }
 
         let target_session = self.sessions.iter().find(|s| s.id == id).cloned();
         let is_different_project = self.switch_workspace_for_session(&id, &active_pane_id, cx);
@@ -1320,7 +1335,7 @@ impl ConsoleDesktopApp {
         // the first paint stale and updating it a moment later.
         self.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
         let client = self.client.clone();
-        let saved_position = self.transcript_scroll_positions.get(&session_id).copied();
+        let saved_position = self.transcript_scroll_positions.get(&session_id).cloned();
         cx.spawn(async move |entity, cx| {
             match client
                 .sessions
@@ -1407,6 +1422,7 @@ impl ConsoleDesktopApp {
                                     }
                                     if let Some(position) = saved_position {
                                         t.restore_scroll_anchor(
+                                            position.message_id.as_deref(),
                                             position.row_index,
                                             position.offset_in_row,
                                             position.at_tail,

@@ -884,6 +884,11 @@ impl RenderOnce for SidebarView {
         })
         .size_full();
 
+        let on_outside = self
+            .on_close_search
+            .clone()
+            .or_else(|| self.on_clear_search.clone());
+
         div()
             .id("console-sidebar")
             .w(px(width))
@@ -895,6 +900,13 @@ impl RenderOnce for SidebarView {
             .border_color(theme.sidebar_border)
             .flex()
             .flex_col()
+            .when(self.search_active, |el| {
+                el.when_some(on_outside, |el, on_outside| {
+                    el.on_mouse_down_out(move |_, window, cx| {
+                        (on_outside)(window, cx);
+                    })
+                })
+            })
             // Action Rows (New Chat & Search) — the unified window title bar
             // owns the sidebar toggle now, so the sidebar starts here.
             .child(
@@ -945,10 +957,6 @@ impl RenderOnce for SidebarView {
                     .child(if self.search_active {
                         let on_cancel = self.on_clear_search.clone();
                         let on_clear = self.on_clear_search.clone();
-                        let on_outside = self
-                            .on_close_search
-                            .clone()
-                            .or_else(|| self.on_clear_search.clone());
                         let has_query = !self.search_query.trim().is_empty();
                         let clear_tooltip = if has_query {
                             "Clear search"
@@ -966,11 +974,6 @@ impl RenderOnce for SidebarView {
                             .items_center()
                             .gap(px(10.0))
                             .text_size(px(13.0))
-                            .when_some(on_outside, |el, on_outside| {
-                                el.on_mouse_down_out(move |_, window, cx| {
-                                    (on_outside)(window, cx);
-                                })
-                            })
                             .when_some(on_cancel, |el, on_cancel| {
                                 el.on_action(move |_: &CancelSidebarSearch, window, cx| {
                                     (on_cancel)(window, cx);

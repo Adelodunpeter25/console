@@ -427,8 +427,12 @@ impl ConsoleDesktopApp {
 
         // Flush unsaved drafts when the app quits: the 500ms debounced save
         // can be cut short by an exit, losing the last edit (e.g. a
-        // just-cited quote).
-        let drafts_quit_subscription = cx.on_app_quit(|this, _| {
+        // just-cited quote). The scroll positions are flushed for the same
+        // reason: the debounced write may not have run, and the chat still on
+        // screen has moved since its last snapshot.
+        let drafts_quit_subscription = cx.on_app_quit(|this, cx| {
+            this.snapshot_visible_pane_scrolls(cx);
+            this.persist_transcript_scroll();
             let drafts = this.drafts.clone();
             async move {
                 crate::persistence::store::save_drafts(drafts);
@@ -594,6 +598,9 @@ impl ConsoleDesktopApp {
                         let q = this.sidebar_search_input.read(cx).content().to_string();
                         this.on_sidebar_search_query_changed(q, cx);
                     }
+                    ComposerEvent::Submit(..) => {
+                        this.open_first_search_result(cx);
+                    }
                     _ => {}
                 },
             ),
@@ -655,6 +662,7 @@ impl ConsoleDesktopApp {
             workspace_pane_states: std::collections::HashMap::new(),
             autocomplete_states: std::collections::HashMap::new(),
             transcript_scroll_positions: std::collections::HashMap::new(),
+            transcript_scroll_save_pending: std::cell::Cell::new(false),
             transcript_pagination: std::collections::HashMap::new(),
             pagination_in_flight: std::collections::HashSet::new(),
             composer_input,
@@ -864,6 +872,9 @@ impl ConsoleDesktopApp {
         // init, which is where the panel is first considered. Loading it
         // afterwards would open the panel once on every launch.
         app.onboarding_seen = startup.onboarding_seen;
+        // Remembered transcript scroll positions, so a chat reopens where it
+        // was left rather than at the top.
+        app.seed_transcript_scroll_positions(startup.transcript_scroll.as_ref());
         app.init_environments(startup.environments.clone(), inherited_environment_id, cx);
 
         // Windows is a thin client: with no server configured there is nothing
