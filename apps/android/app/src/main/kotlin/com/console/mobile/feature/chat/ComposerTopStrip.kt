@@ -88,7 +88,10 @@ fun ComposerTopStrip(sessionId: String, running: Boolean, projectLocked: Boolean
         }
         if (isRepo == true && currentBranch != null) {
             item {
-                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch) { branchSheet = true }
+                PickerChip(icon = TablerIcons.Outline.GitBranch, label = currentBranch) {
+                    reloadTick++
+                    branchSheet = true
+                }
             }
         }
     }

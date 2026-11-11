@@ -323,6 +323,20 @@ impl ConsoleDesktopApp {
             let entity = entity.clone();
             move |open, _window, cx| {
                 if open && let Some(app) = entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let session_cwd = this
+                            .active_session_for_pane("pane-main")
+                            .and_then(|sid| this.sessions.iter().find(|s| s.id == sid))
+                            .map(|s| s.cwd.clone())
+                            .filter(|cwd| !cwd.is_empty());
+                        let target_cwd = session_cwd.or_else(|| {
+                            this.selected_project_for_pane("pane-main")
+                                .map(|project| project.path.clone())
+                        });
+                        if let Some(cwd) = target_cwd {
+                            this.reload_branches_for_pane("pane-main".to_string(), cwd, cx);
+                        }
+                    });
                     cx.defer(move |cx| {
                         if let Some(window) = cx.active_window() {
                             let _ = window.update(cx, |_, window, cx| {

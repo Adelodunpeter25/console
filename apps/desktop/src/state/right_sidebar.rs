@@ -704,13 +704,24 @@ impl ConsoleDesktopApp {
                 }
             };
             while let Some(Ok(status)) = stream.next().await {
+                let watch_cwd = watch_cwd.clone();
                 cx.update(|cx| {
                     if let Some(app) = entity.upgrade() {
                         app.update(cx, |this, cx| {
                             if this.right_sidebar_visible {
                                 this.set_inspector_working_changes(status.files);
-                                cx.notify();
                             }
+                            // Keep branches in sync across all panes whose cwd matches this repository.
+                            let matching_panes: Vec<String> = this
+                                .workspace_pane_states
+                                .iter()
+                                .filter(|(_, state)| state.branch_cwd.as_deref() == Some(watch_cwd.as_str()))
+                                .map(|(pane_id, _)| pane_id.clone())
+                                .collect();
+                            for pane_id in matching_panes {
+                                this.reload_branches_for_pane(pane_id, watch_cwd.clone(), cx);
+                            }
+                            cx.notify();
                         });
                     }
                 });

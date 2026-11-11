@@ -94,7 +94,29 @@ impl ConsoleDesktopApp {
                 }
             })
         };
-        let branch_menu = ContextMenuHandle::new(cx);
+        let branch_pane_id = pane_id.to_string();
+        let branch_menu = ContextMenuHandle::new(cx).on_toggle({
+            let entity = entity.clone();
+            move |open, _window, cx| {
+                if open && let Some(app) = entity.upgrade() {
+                    let pane_id = branch_pane_id.clone();
+                    app.update(cx, |this, cx| {
+                        let session_cwd = this
+                            .active_session_for_pane(&pane_id)
+                            .and_then(|sid| this.sessions.iter().find(|s| s.id == sid))
+                            .map(|s| s.cwd.clone())
+                            .filter(|cwd| !cwd.is_empty());
+                        let target_cwd = session_cwd.or_else(|| {
+                            this.selected_project_for_pane(&pane_id)
+                                .map(|project| project.path.clone())
+                        });
+                        if let Some(cwd) = target_cwd {
+                            this.reload_branches_for_pane(pane_id, cwd, cx);
+                        }
+                    });
+                }
+            }
+        });
         let thinking_menu = ContextMenuHandle::new(cx);
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
