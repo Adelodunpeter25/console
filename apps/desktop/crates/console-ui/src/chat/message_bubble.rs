@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use super::change_chips::{
-    OpenChangeHandler, ToggleChangesHandler, TurnChanges, turn_change_chips,
+    LoadDiffHandler, OpenChangeHandler, ToggleChangesHandler, TurnChanges, turn_change_chips,
 };
 use super::markdown_helpers::assistant_ctx;
 pub(crate) use super::markdown_helpers::render_selectable_markdown;
@@ -644,6 +644,7 @@ pub struct AssistantMessageBubble {
     link_handler: Option<LinkHandler>,
     file_changes: Option<Rc<TurnChanges>>,
     on_open_change: Option<OpenChangeHandler>,
+    load_diff: Option<LoadDiffHandler>,
     changes_expanded: bool,
     on_toggle_changes: Option<ToggleChangesHandler>,
 }
@@ -667,6 +668,7 @@ impl AssistantMessageBubble {
             link_handler: None,
             file_changes: None,
             on_open_change: None,
+            load_diff: None,
             changes_expanded: false,
             on_toggle_changes: None,
         }
@@ -689,6 +691,11 @@ impl AssistantMessageBubble {
 
     pub fn on_open_change(mut self, handler: Option<OpenChangeHandler>) -> Self {
         self.on_open_change = handler;
+        self
+    }
+
+    pub fn load_diff(mut self, handler: Option<LoadDiffHandler>) -> Self {
+        self.load_diff = handler;
         self
     }
 
@@ -792,6 +799,7 @@ impl RenderOnce for AssistantMessageBubble {
         let link_handler = self.link_handler.clone();
         let file_changes = self.file_changes;
         let on_open_change = self.on_open_change;
+        let load_diff = self.load_diff;
         let fork_action = self
             .fork_message_id
             .zip(self.on_fork)
@@ -803,6 +811,7 @@ impl RenderOnce for AssistantMessageBubble {
                 self.changes_expanded,
                 on_open_change,
                 self.on_toggle_changes.clone(),
+                load_diff,
                 &theme,
                 window,
                 cx,

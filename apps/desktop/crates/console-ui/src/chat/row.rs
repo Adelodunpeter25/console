@@ -182,6 +182,7 @@ pub fn transcript_row(
                 .unwrap_or_default();
             let changes_expanded = view_ref.expanded_turn_changes.borrow().contains(&turn_id);
             let on_open_change = view_ref.on_open_change.clone();
+            let load_diff = view_ref.load_diff.clone();
             let on_fork = view_ref.on_fork.clone();
             let toggle_entity = entity.clone();
             AssistantMessageBubble::new(presentation.content_parts)
@@ -194,6 +195,7 @@ pub fn transcript_row(
                     }
                 })
                 .on_open_change(on_open_change)
+                .load_diff(load_diff)
                 .fork_message_id(id.clone())
                 .on_fork(on_fork)
                 .copy_content(presentation.copy_content)

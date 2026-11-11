@@ -12,7 +12,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use super::change_chips::TurnChange;
+use super::change_chips::{LoadDiffHandler, TurnChange};
 use console_core::utils::file_kind::{FileKind, file_kind_for_path};
 use gpui::{
     App, Bounds, Div, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
@@ -52,6 +52,10 @@ struct PopoverHover {
     /// the diff's true line count. Kept so its scroll position survives
     /// re-renders.
     diff: Option<(EditorDiff, usize)>,
+    /// Lazily fetched diff text: `None` until requested, `Some(None)` when
+    /// the fetch came back empty or failed.
+    fetched: Option<Option<String>>,
+    fetching: bool,
 }
 
 impl PopoverHover {
@@ -63,21 +67,41 @@ impl PopoverHover {
             generation: 0,
             bounds: Rc::new(Cell::new(None)),
             diff: None,
+            fetched: None,
+            fetching: false,
         }
     }
 }
 
-/// What a card shows. Borrows the diff text from the chip's data, so
-/// deciding whether a chip has a popover copies nothing.
-enum Body<'a> {
-    Diff(&'a str),
+/// What a card shows.
+enum Body {
+    Diff,
     Note(String),
+    Loading,
 }
 
-fn body_for(change: &TurnChange) -> Option<Body<'_>> {
-    if let Some(text) = change.diff_text.as_deref().filter(|t| !t.trim().is_empty()) {
-        return Some(Body::Diff(text));
+/// `None` means the chip gets no popover at all.
+fn body_for(
+    change: &TurnChange,
+    fetched: Option<&Option<String>>,
+    can_fetch: bool,
+) -> Option<Body> {
+    let has_text = |t: &str| !t.trim().is_empty();
+    if change.diff_text.as_deref().is_some_and(has_text) {
+        return Some(Body::Diff);
     }
+    match fetched {
+        Some(Some(text)) if has_text(text) => return Some(Body::Diff),
+        Some(_) => return binary_note(change),
+        None => {}
+    }
+    if let Some(note) = binary_note(change) {
+        return Some(note);
+    }
+    can_fetch.then_some(Body::Loading)
+}
+
+fn binary_note(change: &TurnChange) -> Option<Body> {
     match file_kind_for_path(&change.path) {
         FileKind::RasterImage | FileKind::Blocked => {
             let what = match change.status.as_str() {
@@ -128,22 +152,42 @@ pub fn with_diff_popover(
     chip: Stateful<Div>,
     key: &str,
     change: &TurnChange,
+    load_diff: Option<LoadDiffHandler>,
     theme: &Theme,
     window: &mut Window,
     cx: &mut App,
 ) -> Stateful<Div> {
-    let Some(body) = body_for(change) else {
-        return chip;
-    };
     let state = window.use_keyed_state(
         ElementId::Name(format!("turn-change-hover-{key}").into()),
         cx,
         |_, _| PopoverHover::new(),
     );
-    let (open, bounds) = {
+    let (open, bounds, fetched, fetching) = {
         let s = state.read(cx);
-        (s.open, s.bounds.clone())
+        (s.open, s.bounds.clone(), s.fetched.clone(), s.fetching)
     };
+    let Some(body) = body_for(change, fetched.as_ref(), load_diff.is_some()) else {
+        return chip;
+    };
+
+    if open && matches!(body, Body::Loading) && !fetching {
+        if let Some(load_diff) = load_diff {
+            state.update(cx, |s, _| s.fetching = true);
+            let task = load_diff(&change.path, change.turn_index, cx);
+            let state = state.clone();
+            cx.spawn(async move |cx| {
+                let text = task.await;
+                cx.update(|cx| {
+                    state.update(cx, |s, cx| {
+                        s.fetched = Some(text);
+                        s.fetching = false;
+                        cx.notify();
+                    });
+                });
+            })
+            .detach();
+        }
+    }
 
     let chip_state = state.clone();
     let probe_bounds = bounds.clone();
@@ -177,13 +221,19 @@ pub fn with_diff_popover(
         .shadow_md()
         .on_hover(move |hovered, _, cx| set_hover(&card_state, None, Some(*hovered), cx))
         .child(match body {
-            Body::Diff(text) => {
+            Body::Diff => {
                 let existing = state.read(cx).diff.clone();
                 let (diff, total_lines) = match existing {
                     Some(built) => built,
                     None => {
+                        let text = change
+                            .diff_text
+                            .clone()
+                            .filter(|t| !t.trim().is_empty())
+                            .or_else(|| state.read(cx).fetched.clone().flatten())
+                            .unwrap_or_default();
                         let built = build_editor_diff_capped(
-                            text,
+                            &text,
                             &change.path,
                             theme,
                             PREVIEW_MAX_LINES,
@@ -225,6 +275,13 @@ pub fn with_diff_popover(
                     })
                     .into_any_element()
             }
+            Body::Loading => div()
+                .px(px(8.0))
+                .py(px(6.0))
+                .text_size(px(12.0))
+                .text_color(theme.text_tertiary)
+                .child("Loading diff…")
+                .into_any_element(),
             Body::Note(note) => div()
                 .px(px(8.0))
                 .py(px(6.0))

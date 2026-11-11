@@ -28,10 +28,15 @@ pub(crate) fn wire_open_change_for_pane(
     entity: WeakEntity<ConsoleDesktopApp>,
     pane_id: String,
 ) {
-    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+    let load_entity = entity.clone();
+    let load_pane_id = pane_id.clone();
+    transcript.set_load_diff(move |path, turn_index, cx| {
+        load_change_diff(&load_entity, &load_pane_id, path, turn_index, cx)
+    });
+    transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
-                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+                this.open_diff_tab_with_text(&pane_id, path, Some(turn_index), diff_text, cx);
             });
         }
     });
@@ -41,17 +46,50 @@ pub(crate) fn wire_open_change_for_active_pane(
     transcript: &mut TranscriptView,
     entity: WeakEntity<ConsoleDesktopApp>,
 ) {
-    transcript.set_on_open_change(move |path, diff_text, _window, cx| {
+    let load_entity = entity.clone();
+    transcript.set_load_diff(move |path, turn_index, cx| {
+        let pane_id = load_entity
+            .upgrade()
+            .and_then(|app| app.read(cx).active_pane_id.clone())
+            .unwrap_or_else(|| "pane-main".to_string());
+        load_change_diff(&load_entity, &pane_id, path, turn_index, cx)
+    });
+    transcript.set_on_open_change(move |path, turn_index, diff_text, _window, cx| {
         if let Some(app) = entity.upgrade() {
             app.update(cx, |this, cx| {
                 let pane_id = this
                     .active_pane_id
                     .clone()
                     .unwrap_or_else(|| "pane-main".to_string());
-                this.open_diff_tab_with_text(&pane_id, path, diff_text, cx);
+                this.open_diff_tab_with_text(&pane_id, path, Some(turn_index), diff_text, cx);
             });
         }
     });
+}
+
+/// Fetch one changed file's diff for the pane's session; `None` when the
+/// pane has no session or the request fails.
+fn load_change_diff(
+    entity: &WeakEntity<ConsoleDesktopApp>,
+    pane_id: &str,
+    path: &str,
+    turn_index: u32,
+    cx: &mut gpui::App,
+) -> gpui::Task<Option<String>> {
+    let target = entity.upgrade().and_then(|app| {
+        let app = app.read(cx);
+        app.active_session_for_pane(pane_id)
+            .map(|session_id| (app.client.clone(), session_id))
+    });
+    let path = path.to_string();
+    cx.spawn(async move |_cx| {
+        let (client, session_id) = target?;
+        client
+            .sessions
+            .get_change_diff(&session_id, &path, u64::from(turn_index))
+            .await
+            .ok()
+    })
 }
 
 /// Fork the pane's session through the clicked assistant message.

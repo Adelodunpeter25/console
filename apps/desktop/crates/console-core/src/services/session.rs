@@ -200,12 +200,35 @@ impl SessionService {
         id: &str,
         turn_index: Option<u64>,
     ) -> Result<Vec<SessionFileChange>> {
+        self.fetch_changes(id, turn_index, true).await
+    }
+
+    /// Same as `get_changes` but rows carry no `diff_text`; fetch a file's
+    /// diff on demand with `get_change_diff`.
+    pub async fn get_changes_without_diff(&self, id: &str) -> Result<Vec<SessionFileChange>> {
+        self.fetch_changes(id, None, false).await
+    }
+
+    async fn fetch_changes(
+        &self,
+        id: &str,
+        turn_index: Option<u64>,
+        include_diff: bool,
+    ) -> Result<Vec<SessionFileChange>> {
         let mut url = self
             .transport
             .url(&format!("/api/sessions/{}/changes", id))
             .await;
+        let mut params = Vec::new();
         if let Some(turn) = turn_index {
-            url.push_str(&format!("?turnIndex={}", turn));
+            params.push(format!("turnIndex={}", turn));
+        }
+        if !include_diff {
+            params.push("includeDiff=false".to_string());
+        }
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
         }
         let resp = self
             .transport

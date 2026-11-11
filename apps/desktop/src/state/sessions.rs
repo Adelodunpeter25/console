@@ -1322,24 +1322,26 @@ impl ConsoleDesktopApp {
         cx: &mut Context<Self>,
     ) {
         self.pull_draft(session_id.clone(), cx);
-        // Start the changes request with the initial session request so the
-        // transcript and its turn metadata arrive together instead of making
-        // the first paint stale and updating it a moment later.
-        self.refresh_turn_changes_for_pane(&pane_id, &session_id, cx);
         let client = self.client.clone();
         let saved_position = self.transcript_scroll_positions.get(&session_id).cloned();
         cx.spawn(async move |entity, cx| {
-            match client
-                .sessions
-                .get(
+            // Fetched together and applied in one update, so the transcript
+            // is measured once with its change chips instead of re-measuring
+            // the last row when the changes land later.
+            let (detail, changes) = futures::join!(
+                client.sessions.get(
                     &session_id,
                     Some(console_core::SessionPageOptions {
                         limit: Some(50),
                         before: None,
                     }),
-                )
-                .await
-            {
+                ),
+                client.sessions.get_changes_without_diff(&session_id),
+            );
+            let changes = changes
+                .map_err(|err| log::warn!("Failed to fetch turn changes: {}", err))
+                .ok();
+            match detail {
                 Ok(detail) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -1368,7 +1370,15 @@ impl ConsoleDesktopApp {
                                     );
                                 });
                                 let app_entity_for_older = entity.clone();
+                                if this.active_inspector_target().0.as_deref()
+                                    == Some(session_id.as_str())
+                                {
+                                    this.fetch_inspector_session_changes(cx);
+                                }
                                 transcript.update(cx, |t, cx| {
+                                    if let Some(changes) = changes {
+                                        t.set_session_changes(Rc::new(changes), cx);
+                                    }
                                     t.set_messages(detail.messages, cx);
                                     t.set_pagination(detail.has_more, detail.next_cursor);
                                     // Wire Load older handler for this pane/session

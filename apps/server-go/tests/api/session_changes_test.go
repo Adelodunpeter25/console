@@ -18,6 +18,7 @@ import (
 	consolev1 "github.com/Adelodunpeter25/console/apps/server-go/internal/gen/console/v1"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/routes"
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/run"
+	"github.com/Adelodunpeter25/console/apps/server-go/internal/types"
 	"github.com/Adelodunpeter25/console/apps/server-go/tests/helpers"
 )
 
@@ -103,5 +104,45 @@ func TestSessionChangesRoutes(t *testing.T) {
 	reviewed.Header.Set("Content-Type", "application/json")
 	if resp, err := app.Test(reviewed, 10000); err != nil || resp.StatusCode != 400 {
 		t.Fatalf("missing path must 400: %v", resp)
+	}
+}
+
+func TestSessionChangesIncludeDiffFlag(t *testing.T) {
+	sessions := helpers.NewRunSessions(t)
+	header := helpers.CreateRunSession(t, sessions)
+	diff := "--- a\n+++ b\n"
+	if err := sessions.RecordFileChange(header.ID, types.SessionFileChange{
+		Path: "a.go", Status: "modified", Additions: 1, DiffText: &diff,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	routes.RegisterSessionRoutes(app, sessions, run.NewService(sessions))
+
+	fetch := func(query string) []map[string]any {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest("GET", "/api/sessions/"+header.ID+"/changes"+query, nil), 10000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		var envelope struct {
+			Data []map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil || len(envelope.Data) != 1 {
+			t.Fatalf("changes: %s", raw)
+		}
+		return envelope.Data
+	}
+
+	if _, ok := fetch("")[0]["diffText"]; !ok {
+		t.Fatal("default response must include diffText")
+	}
+	light := fetch("?includeDiff=false")[0]
+	if _, ok := light["diffText"]; ok {
+		t.Fatal("includeDiff=false must omit diffText")
+	}
+	if light["path"] != "a.go" {
+		t.Fatalf("row lost: %v", light)
 	}
 }

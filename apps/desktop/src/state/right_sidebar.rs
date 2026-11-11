@@ -875,9 +875,9 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Fetch a session's recorded file changes and hand them to the pane's
-    /// transcript so each turn can show its changed-file chips. Also keeps
-    /// the inspector's list fresh when the session is the inspected one.
+    /// Fetch a session's recorded file changes (without diff text; chips load
+    /// a diff on demand) and hand them to the pane's transcript so each turn
+    /// can show its changed-file chips.
     pub fn refresh_turn_changes_for_pane(
         &mut self,
         pane_id: &str,
@@ -888,7 +888,7 @@ impl ConsoleDesktopApp {
         let pane_id = pane_id.to_string();
         let session_id = session_id.to_string();
         cx.spawn(async move |entity, cx| {
-            match client.sessions.get_changes(&session_id, None).await {
+            match client.sessions.get_changes_without_diff(&session_id).await {
                 Ok(changes) => {
                     cx.update(|cx| {
                         if let Some(app) = entity.upgrade() {
@@ -902,7 +902,7 @@ impl ConsoleDesktopApp {
                                 if this.active_inspector_target().0.as_deref()
                                     == Some(session_id.as_str())
                                 {
-                                    this.inspector_session_changes = changes.clone();
+                                    this.fetch_inspector_session_changes(cx);
                                 }
                                 this.transcript_for_pane(&pane_id)
                                     .update(cx, |t, cx| t.set_session_changes(changes, cx));

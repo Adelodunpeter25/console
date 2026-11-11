@@ -396,7 +396,7 @@ impl ConsoleDesktopApp {
     }
 
     pub fn open_diff_tab_in_pane(&mut self, pane_id: &str, path: String, cx: &mut Context<Self>) {
-        self.open_diff_tab_with_text(pane_id, path, None, cx);
+        self.open_diff_tab_with_text(pane_id, path, None, None, cx);
     }
 
     /// Open a diff tab, optionally with a known diff body (a turn's recorded
@@ -405,6 +405,7 @@ impl ConsoleDesktopApp {
         &mut self,
         pane_id: &str,
         path: String,
+        turn_index: Option<u32>,
         diff_override: Option<String>,
         cx: &mut Context<Self>,
     ) {
@@ -478,9 +479,19 @@ impl ConsoleDesktopApp {
                 self.selected_project_for_pane(pane_id)
                     .map(|project| project.path.clone())
             });
+        let change_session = turn_index.zip(self.active_session_for_pane(pane_id));
 
         cx.spawn(async move |entity, cx| {
             let mut diff_raw = session_change_diff.unwrap_or_default();
+            if diff_raw.trim().is_empty()
+                && let Some((turn_index, session_id)) = change_session
+                && let Ok(text) = client
+                    .sessions
+                    .get_change_diff(&session_id, &file_path, u64::from(turn_index))
+                    .await
+            {
+                diff_raw = text;
+            }
             if diff_raw.trim().is_empty()
                 && let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await
             {

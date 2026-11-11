@@ -544,6 +544,7 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 	})
 
 	// GET /api/sessions/:id/changes — session file changes with optional turn filter.
+	// includeDiff=false omits each row's diff text; fetch it from /changes/diff.
 	h.Get("/:id/changes", func(c *fiber.Ctx) error {
 		sessionID := c.Params("id")
 		turnIndex := -1 // -1 means all turns
@@ -554,7 +555,13 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, err.Error())
 		}
-		data, err := marshalProtoList(sessionFileChangesToProto(changes))
+		rows := sessionFileChangesToProto(changes)
+		if c.Query("includeDiff") == "false" {
+			for _, row := range rows {
+				row.DiffText = nil
+			}
+		}
+		data, err := marshalProtoList(rows)
 		if err != nil {
 			return sessionError(c, fiber.StatusInternalServerError, "encode failed")
 		}

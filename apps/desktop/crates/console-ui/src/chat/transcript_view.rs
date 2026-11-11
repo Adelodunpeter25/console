@@ -166,9 +166,12 @@ pub struct TranscriptView {
     /// The raw session change list the grouped map was built from, kept for
     /// the whole-session totals in the pinned summary pill.
     session_changes: Rc<Vec<SessionFileChange>>,
-    /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
+    /// Opens the diff of one changed file of one turn:
+    /// `(path, turn_index, diff_text)`.
     pub(crate) on_open_change:
-        Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
+        Option<Rc<dyn Fn(String, u32, Option<String>, &mut Window, &mut App) + 'static>>,
+    /// Fetches a changed file's diff when its chip row came without diffs.
+    pub(crate) load_diff: Option<crate::chat::change_chips::LoadDiffHandler>,
     /// Forks the session through one assistant message: `(message_id)`.
     pub(crate) on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     /// Window-space bounds of this transcript's container, recorded by a
@@ -230,6 +233,7 @@ impl TranscriptView {
             turn_changes: HashMap::new(),
             session_changes: Rc::new(Vec::new()),
             on_open_change: None,
+            load_diff: None,
             on_fork: None,
             cite_origin: Rc::new(RefCell::new(None)),
             expanded_turn_changes: Rc::new(RefCell::new(HashSet::new())),
@@ -281,9 +285,17 @@ impl TranscriptView {
     /// Wire clicks on a turn's changed-file chip (the app opens the diff tab).
     pub fn set_on_open_change(
         &mut self,
-        handler: impl Fn(String, Option<String>, &mut Window, &mut App) + 'static,
+        handler: impl Fn(String, u32, Option<String>, &mut Window, &mut App) + 'static,
     ) {
         self.on_open_change = Some(Rc::new(handler));
+    }
+
+    /// Wire lazy diff loading for the chip hover preview.
+    pub fn set_load_diff(
+        &mut self,
+        handler: impl Fn(&str, u32, &mut App) -> gpui::Task<Option<String>> + 'static,
+    ) {
+        self.load_diff = Some(Rc::new(handler));
     }
 
     /// Wire assistant-message fork clicks (the app forks the session through

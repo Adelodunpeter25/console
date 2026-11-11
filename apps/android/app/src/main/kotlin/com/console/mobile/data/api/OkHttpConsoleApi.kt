@@ -283,7 +283,8 @@ class OkHttpConsoleApi(private val http: HttpTransport) : ConsoleApi {
     }
 
     override suspend fun getChanges(id: String): List<SessionFileChange> {
-        val raw = http.get("/api/sessions/${enc(id)}/changes")
+        // Rows come without diff text; the diff sheet fetches it on demand.
+        val raw = http.get("/api/sessions/${enc(id)}/changes", mapOf("includeDiff" to "false"))
         val element = http.unwrap(raw, JsonElement.serializer(), "get session changes")
         val array = element as? JsonArray ?: throw ApiException("Failed to get session changes")
         return array.map { item ->
