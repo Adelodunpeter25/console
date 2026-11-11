@@ -14,6 +14,12 @@ pub struct PersistedLayoutState {
     pub right_sidebar_width: f32,
     #[serde(default = "default_right_sidebar_bottom_height")]
     pub right_sidebar_bottom_height: f32,
+    /// Whether the right sidebar's bottom split is collapsed.
+    #[serde(default)]
+    pub right_sidebar_bottom_collapsed: bool,
+    /// The project whose workspace is selected, or `None` for the default one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_workspace_id: Option<String>,
     /// Indices into `SessionDateGroup::ALL` of collapsed sidebar groups.
     #[serde(default)]
     pub collapsed_groups: Vec<usize>,
@@ -83,6 +89,8 @@ impl Default for PersistedLayoutState {
             right_sidebar_visible: default_right_sidebar_visible(),
             right_sidebar_width: default_right_sidebar_width(),
             right_sidebar_bottom_height: default_right_sidebar_bottom_height(),
+            right_sidebar_bottom_collapsed: false,
+            active_workspace_id: None,
             collapsed_groups: Vec::new(),
             sidebar_sort_mode: String::new(),
             collapsed_projects: Vec::new(),

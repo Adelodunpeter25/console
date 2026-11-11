@@ -4,7 +4,6 @@
 //! domain handlers live in sibling modules (`projects`, `attachments`,
 //! `errors`, `sessions`, `layout`, `run`) as additional `impl` blocks.
 
-use crate::persistence;
 use crate::types::WorkspacePaneState;
 use console_core::{AgentMessage, ApprovalMode, ConsoleClient, WorkspaceNode};
 use console_ui::common::input::PromptHistoryEntry;
@@ -58,13 +57,14 @@ pub(crate) const RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT: f32 = 450.0;
 pub use super::types::{ConsoleDesktopApp, ImageFileState};
 
 impl ConsoleDesktopApp {
-    pub fn new(
+    pub(crate) fn new(
         window: &mut Window,
         target: crate::window::WindowLaunchTarget,
+        startup: crate::persistence::StartupState,
         cx: &mut Context<Self>,
     ) -> Self {
         let client = ConsoleClient::new(None);
-        let ws_doc = persistence::load_workspaces();
+        let ws_doc = startup.workspaces.clone();
         let mut project_workspace_roots = std::collections::HashMap::new();
         let mut project_active_panes = std::collections::HashMap::new();
         let mut persisted_bottom_terminals = std::collections::HashMap::new();
@@ -93,11 +93,9 @@ impl ConsoleDesktopApp {
                 }
             }
         }
-        let ws_state = persistence::load_workspace_state();
-        // One read of state.json split in memory: window, layout, drafts and
-        // environments previously re-read + re-parsed the same file each.
-        let store_doc = persistence::read_document();
-        let layout = store_doc.layout.clone().unwrap_or_default();
+        // The window frame, the sidebar layout, the workspace tree, the
+        // servers and the drafts all come from one read of the state file.
+        let layout = startup.layout.clone();
 
         let (
             sidebar_visible,
@@ -111,41 +109,24 @@ impl ConsoleDesktopApp {
             initial_saved_window_state,
         ) = match &target {
             crate::window::WindowLaunchTarget::RestorePersisted => {
-                let sb_visible = ws_state.sidebar_visible;
-                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
-                {
-                    ws_state
-                        .sidebar_width
-                        .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
-                } else if layout.sidebar_width.is_finite() {
+                let sb_visible = layout.sidebar_visible;
+                let sb_width = if layout.sidebar_width.is_finite() && layout.sidebar_width > 0.0 {
                     layout
                         .sidebar_width
                         .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = ws_state.right_sidebar_visible;
-                let rsb_width = if ws_state.right_sidebar_width.is_finite()
-                    && ws_state.right_sidebar_width > 0.0
-                {
-                    ws_state
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else if layout.right_sidebar_width.is_finite() {
-                    layout
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else {
-                    RIGHT_SIDEBAR_DEFAULT_WIDTH
-                };
-                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
-                    && ws_state.right_sidebar_bottom_height > 0.0
-                {
-                    ws_state.right_sidebar_bottom_height.clamp(
-                        RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
-                        RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
-                    )
-                } else if layout.right_sidebar_bottom_height.is_finite()
+                let rsb_visible = layout.right_sidebar_visible;
+                let rsb_width =
+                    if layout.right_sidebar_width.is_finite() && layout.right_sidebar_width > 0.0 {
+                        layout
+                            .right_sidebar_width
+                            .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                    } else {
+                        RIGHT_SIDEBAR_DEFAULT_WIDTH
+                    };
+                let rsb_bottom_height = if layout.right_sidebar_bottom_height.is_finite()
                     && layout.right_sidebar_bottom_height > 0.0
                 {
                     layout.right_sidebar_bottom_height.clamp(
@@ -155,8 +136,8 @@ impl ConsoleDesktopApp {
                 } else {
                     RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
                 };
-                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
-                let proj_id = ws_state.active_workspace_id.as_ref().and_then(|wid| {
+                let rsb_bottom_collapsed = layout.right_sidebar_bottom_collapsed;
+                let proj_id = layout.active_workspace_id.as_ref().and_then(|wid| {
                     if wid == "__default__" {
                         None
                     } else {
@@ -177,41 +158,39 @@ impl ConsoleDesktopApp {
                     rsb_bottom_collapsed,
                     proj_id,
                     root,
-                    store_doc.window,
+                    startup.window,
                 )
             }
             crate::window::WindowLaunchTarget::Fresh { .. }
             | crate::window::WindowLaunchTarget::Session(_) => {
-                let sb_visible = ws_state.sidebar_visible;
-                let sb_width = if ws_state.sidebar_width.is_finite() && ws_state.sidebar_width > 0.0
-                {
-                    ws_state
+                let sb_visible = layout.sidebar_visible;
+                let sb_width = if layout.sidebar_width.is_finite() && layout.sidebar_width > 0.0 {
+                    layout
                         .sidebar_width
                         .clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
                 } else {
                     SIDEBAR_DEFAULT_WIDTH
                 };
-                let rsb_visible = ws_state.right_sidebar_visible;
-                let rsb_width = if ws_state.right_sidebar_width.is_finite()
-                    && ws_state.right_sidebar_width > 0.0
+                let rsb_visible = layout.right_sidebar_visible;
+                let rsb_width =
+                    if layout.right_sidebar_width.is_finite() && layout.right_sidebar_width > 0.0 {
+                        layout
+                            .right_sidebar_width
+                            .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
+                    } else {
+                        RIGHT_SIDEBAR_DEFAULT_WIDTH
+                    };
+                let rsb_bottom_height = if layout.right_sidebar_bottom_height.is_finite()
+                    && layout.right_sidebar_bottom_height > 0.0
                 {
-                    ws_state
-                        .right_sidebar_width
-                        .clamp(RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH)
-                } else {
-                    RIGHT_SIDEBAR_DEFAULT_WIDTH
-                };
-                let rsb_bottom_height = if ws_state.right_sidebar_bottom_height.is_finite()
-                    && ws_state.right_sidebar_bottom_height > 0.0
-                {
-                    ws_state.right_sidebar_bottom_height.clamp(
+                    layout.right_sidebar_bottom_height.clamp(
                         RIGHT_SIDEBAR_BOTTOM_MIN_HEIGHT,
                         RIGHT_SIDEBAR_BOTTOM_MAX_HEIGHT,
                     )
                 } else {
                     RIGHT_SIDEBAR_BOTTOM_DEFAULT_HEIGHT
                 };
-                let rsb_bottom_collapsed = ws_state.right_sidebar_bottom_collapsed;
+                let rsb_bottom_collapsed = layout.right_sidebar_bottom_collapsed;
                 (
                     sb_visible,
                     sb_width,
@@ -370,7 +349,7 @@ impl ConsoleDesktopApp {
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
 
-        let drafts = store_doc.drafts.map(|s| s.drafts).unwrap_or_default();
+        let drafts = startup.drafts;
         // Persisted drafts from closed tabs are shown in the sidebar.
         // Sessions that are currently open in workspace tabs belong in their tab's composer, not the sidebar.
         let mut open_session_ids = std::collections::HashSet::new();
@@ -864,8 +843,8 @@ impl ConsoleDesktopApp {
         // Restore the "the panel has been seen" bit *before* environments
         // init, which is where the panel is first considered. Loading it
         // afterwards would open the panel once on every launch.
-        app.onboarding_seen = crate::persistence::onboarding_seen();
-        app.init_environments(store_doc.environments.clone(), inherited_environment_id, cx);
+        app.onboarding_seen = startup.onboarding_seen;
+        app.init_environments(startup.environments.clone(), inherited_environment_id, cx);
 
         // Windows is a thin client: with no server configured there is nothing
         // to show, so go straight to the add-server form instead of a dead
