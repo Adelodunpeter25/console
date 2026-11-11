@@ -54,14 +54,15 @@ impl Render for ConsoleDesktopApp {
         let workspace_root = self.workspace_root.clone();
         let active_pane = self.active_pane_id.clone();
         let sessions = self.sessions.clone();
-        // Shared "New Chat" action: used by the sidebar's New Task row, the
-        // empty state's New Chat button, and the palette. The logic lives on
-        // the entity (`create_new_chat`) so the ⌘N shortcut shares it.
+        // Shared "New Chat" action for the empty state's New Chat button. Opens
+        // the floating composer, like ⌘N and the sidebar's New Task row, so the
+        // project is picked in the card rather than inherited from the pane
+        // (which is empty after the last tab closes).
         let on_new_chat: Rc<dyn Fn(&mut Window, &mut App) + 'static> = {
             let entity = entity.clone();
-            Rc::new(move |_w, cx| {
+            Rc::new(move |window, cx| {
                 if let Some(app) = entity.upgrade() {
-                    app.update(cx, |this, cx| this.create_new_chat(cx));
+                    app.update(cx, |this, cx| this.open_floating_composer(window, cx));
                 }
             })
         };
@@ -1080,10 +1081,10 @@ impl Render for ConsoleDesktopApp {
                                 .with_dirty_paths(dirty_file_paths.clone())
                                 .with_new_tab({
                                     let entity = entity.clone();
-                                    move |_pane_id, _window, cx| {
+                                    move |_pane_id, window, cx| {
                                         if let Some(app) = entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.create_new_chat(cx);
+                                                this.open_floating_composer(window, cx);
                                             });
                                         }
                                     }

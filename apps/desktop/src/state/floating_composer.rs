@@ -2,9 +2,10 @@
 //!
 //! ⌘N opens the card with a snapshot of the current model / thinking defaults;
 //! submitting it creates the session the user described and opens it in the
-//! active pane, exactly like the old direct `create_new_chat` did — the only
-//! difference is that project, branch and model are chosen in the card rather
-//! than inherited from whichever pane happened to be focused.
+//! active pane. Project, branch and model are chosen in the card rather than
+//! inherited from whichever pane happened to be focused. Every New Chat entry
+//! point — ⌘N, the sidebar, the empty state, the palette and the tab bar's `+` —
+//! opens it.
 //!
 //! The card's state lives on `ConsoleDesktopApp` (see
 //! `console_ui::common::FloatingComposerState`) and its element is built in the
@@ -563,8 +564,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    /// Create the session the launcher described, then run its prompt. Mirrors
-    /// `create_new_chat`'s post-create bookkeeping.
+    /// Create the session the launcher described, then run its prompt.
     fn create_session_from_floating(
         &mut self,
         submit: FloatingSubmit,

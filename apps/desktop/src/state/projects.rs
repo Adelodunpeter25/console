@@ -548,8 +548,7 @@ impl ConsoleDesktopApp {
     /// new session row, no duplicate sidebar entry. Once a chat has
     /// messages its cwd is locked, so that case falls back to spawning a
     /// brand-new session rooted in a fresh worktree (server auto-derives
-    /// the branch name) and opens it in this pane, mirroring
-    /// `create_new_chat`.
+    /// the branch name) and opens it in this pane.
     pub fn new_worktree_for_pane(&mut self, pane_id: String, cx: &mut Context<Self>) {
         if !self.session_has_messages(&pane_id)
             && let Some(session_id) = self.active_session_for_pane(&pane_id)
