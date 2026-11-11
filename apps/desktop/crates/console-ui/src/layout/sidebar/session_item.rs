@@ -280,25 +280,40 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         };
 
+        // Overlaid so the idle row gives the title the full width. The wrapper
+        // fades from transparent into the row colour so a truncated title
+        // dissolves under the button instead of ending at a hard box edge.
         let settle_button = div()
-            .id(ElementId::Name(format!("settle-{}", session.id).into()))
-            // Overlaid so the idle row gives the title the full width; the
-            // opaque background keeps a truncated title from showing through.
             .absolute()
-            .right(px(4.0))
-            .p(px(4.0))
-            .rounded(px(4.0))
-            .cursor_default()
-            .bg(theme.sidebar_item_background)
+            .top_0()
+            .bottom_0()
+            .right_0()
+            .pl(px(18.0))
+            .pr(px(4.0))
+            .flex()
+            .items_center()
+            .rounded_r(px(6.0))
+            .bg(gpui::linear_gradient(
+                90.0,
+                gpui::linear_color_stop(theme.sidebar_item_background.opacity(0.0), 0.0),
+                gpui::linear_color_stop(theme.sidebar_item_background, 0.45),
+            ))
             .invisible()
             .group_hover(group_name.clone(), |el| el.visible())
-            .hover(|s| s.bg(theme.overlay))
-            .tooltip(Tooltip::text(settle_tooltip))
-            .on_click(move |_, w, cx| {
-                cx.stop_propagation();
-                (toggle_settle_action)(w, cx);
-            })
-            .child(app_icon(settle_icon, 13.0, theme.text_secondary));
+            .child(
+                div()
+                    .id(ElementId::Name(format!("settle-{}", session.id).into()))
+                    .p(px(4.0))
+                    .rounded(px(5.0))
+                    .cursor_default()
+                    .hover(|s| s.bg(theme.overlay))
+                    .tooltip(Tooltip::text(settle_tooltip))
+                    .on_click(move |_, w, cx| {
+                        cx.stop_propagation();
+                        (toggle_settle_action)(w, cx);
+                    })
+                    .child(app_icon(settle_icon, 14.0, theme.text)),
+            );
 
         let row = div()
             .id(ElementId::Name(session.id.clone().into()))
