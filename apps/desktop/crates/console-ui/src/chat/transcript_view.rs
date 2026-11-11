@@ -6,7 +6,7 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
-    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, list,
+    ListState, Render, ScrollStrategy, SharedString, Task, UniformListScrollHandle, Window, div, list,
     prelude::*, px,
 };
 use std::cell::RefCell;
@@ -98,6 +98,13 @@ pub struct TranscriptScrollAnchor {
     pub message_id: Option<String>,
 }
 
+/// Target destination for animated transcript scrolling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollTarget {
+    Prompt(usize),
+    Bottom,
+}
+
 pub struct TranscriptView {
     pub messages: Vec<AgentMessage>,
     /// Persistent Markdown state keyed by message index and content-part
@@ -131,6 +138,8 @@ pub struct TranscriptView {
     pub(crate) streaming_started_at: Option<i64>,
     /// Invalidates deferred scroll restores from older chat switches.
     scroll_restore_generation: u64,
+    /// In-flight smooth scroll animation task.
+    scroll_animation_task: Option<Task<()>>,
     /// Disclosure state for grouped tool-call activity. This belongs to the
     /// transcript entity so virtualization does not reset it when rows remount.
     pub(crate) tool_calls_state: Rc<RefCell<ToolCallsState>>,
@@ -215,6 +224,7 @@ impl TranscriptView {
             is_streaming: false,
             streaming_started_at: None,
             scroll_restore_generation: 0,
+            scroll_animation_task: None,
             tool_calls_state: Rc::new(RefCell::new(ToolCallsState::default())),
             thinking_expanded: Rc::new(RefCell::new(HashSet::new())),
             session_cwd: None,
@@ -570,9 +580,7 @@ impl TranscriptView {
         else {
             return false;
         };
-        // Re-applied next frame so variable-height rows above are measured first.
-        self.restore_scroll_anchor(None, row, 0.0, false, cx);
-        cx.notify();
+        self.animate_scroll_to_target(ScrollTarget::Prompt(row), cx);
         true
     }
 
@@ -865,11 +873,98 @@ impl TranscriptView {
         });
     }
 
+    /// Smoothly animate scrolling toward the given target (a prompt row or the tail).
+    pub fn animate_scroll_to_target(&mut self, target: ScrollTarget, cx: &mut Context<Self>) {
+        if cx.reduce_motion() {
+            match target {
+                ScrollTarget::Bottom => {
+                    self.list_state.set_follow_mode(FollowMode::Tail);
+                    self.list_state.scroll_to_end();
+                }
+                ScrollTarget::Prompt(row) => {
+                    self.restore_scroll_anchor(None, row, 0.0, false, cx);
+                }
+            }
+            cx.notify();
+            return;
+        }
+
+        let start_offset = self.list_state.logical_scroll_top();
+        let target_item_ix = match target {
+            ScrollTarget::Bottom => self.messages.len(),
+            ScrollTarget::Prompt(row) => row,
+        };
+
+        if start_offset.item_ix == target_item_ix && start_offset.offset_in_item == px(0.0) {
+            match target {
+                ScrollTarget::Bottom => {
+                    self.list_state.set_follow_mode(FollowMode::Tail);
+                    self.list_state.scroll_to_end();
+                }
+                ScrollTarget::Prompt(row) => {
+                    self.restore_scroll_anchor(None, row, 0.0, false, cx);
+                }
+            }
+            cx.notify();
+            return;
+        }
+
+        self.list_state.set_follow_mode(FollowMode::Normal);
+        let duration = crate::primitives::DEFAULT_SCROLL_DURATION;
+        let start_time = std::time::Instant::now();
+        let entity = cx.entity().downgrade();
+
+        self.scroll_animation_task = Some(cx.spawn(async move |_, cx| {
+            let duration_secs = duration.as_secs_f32();
+            loop {
+                cx.background_executor()
+                    .timer(crate::primitives::ANIMATION_FRAME_INTERVAL)
+                    .await;
+                let elapsed = start_time.elapsed().as_secs_f32();
+                let progress = (elapsed / duration_secs).min(1.0);
+                let current_offset = crate::primitives::interpolate_list_offset(
+                    start_offset,
+                    target_item_ix,
+                    px(0.0),
+                    progress,
+                );
+
+                let is_done = progress >= 1.0;
+                let should_continue = cx.update(|cx| {
+                    if let Some(entity) = entity.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            this.list_state.scroll_to(current_offset);
+                            cx.notify();
+                            if is_done {
+                                this.scroll_animation_task = None;
+                                match target {
+                                    ScrollTarget::Bottom => {
+                                        this.list_state.set_follow_mode(FollowMode::Tail);
+                                        this.list_state.scroll_to_end();
+                                    }
+                                    ScrollTarget::Prompt(row) => {
+                                        this.restore_scroll_anchor(None, row, 0.0, false, cx);
+                                    }
+                                }
+                                cx.notify();
+                            }
+                        });
+                        !is_done
+                    } else {
+                        false
+                    }
+                });
+
+                if !should_continue {
+                    break;
+                }
+            }
+        }));
+    }
+
     /// Jump to the newest message and resume following the run.
     pub(crate) fn scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
-        self.list_state.set_follow_mode(FollowMode::Tail);
-        self.list_state.scroll_to_end();
-        cx.notify();
+        self.animate_scroll_to_target(ScrollTarget::Bottom, cx);
     }
 
     /// The currently selected transcript text, if the user has a selection.
