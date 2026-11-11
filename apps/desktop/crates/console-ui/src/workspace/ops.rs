@@ -122,6 +122,12 @@ pub fn close_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) -> Optio
     leaf.active_tab_id.clone()
 }
 
+/// True when no pane in the workspace holds a tab: the empty state, however
+/// many (empty) panes the layout is split into.
+pub fn is_workspace_empty(root: &WorkspaceNode) -> bool {
+    root.leaves().iter().all(|leaf| leaf.tabs.is_empty())
+}
+
 /// Remove a pane and collapse its parent split into the remaining sibling.
 /// The final pane is never removed, so the workspace always has a host for a
 /// new chat.

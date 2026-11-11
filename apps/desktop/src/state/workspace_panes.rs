@@ -34,6 +34,7 @@ impl ConsoleDesktopApp {
         self.save_transcript_scroll_position(cx);
         self.close_workspace_tab(pane_id, tab_id, cx);
         self.active_pane_id = Some(pane_id.to_string());
+        self.clear_project_if_workspace_empty();
 
         let next_session = self.active_session_for_pane(pane_id);
         let transcript = self.transcript_for_pane(pane_id);
@@ -56,13 +57,44 @@ impl ConsoleDesktopApp {
             None => {
                 self.selected_session_id = None;
                 self.restore_draft_for_pane(pane_id, None, cx);
-                transcript.update(cx, |t, cx| t.set_messages(Vec::new(), cx));
+                transcript.update(cx, |t, cx| {
+                    t.set_messages(Vec::new(), cx);
+                    t.clear_session_changes(cx);
+                });
             }
         }
 
         self.maybe_refresh_inspector(cx);
         self.sync_workspace_webviews(cx);
         cx.notify();
+    }
+
+    /// Once the last tab in every pane is closed the workspace is back to its
+    /// empty state, so no project stays selected: otherwise New Terminal, New
+    /// Chat and the pickers keep acting on a project the user has left behind.
+    /// Clears the global selection and every pane's own, which would otherwise
+    /// win over the global one.
+    fn clear_project_if_workspace_empty(&mut self) {
+        if !workspace_ops::is_workspace_empty(&self.workspace_root) {
+            return;
+        }
+        let had_selection = self.selected_project_id.is_some()
+            || self
+                .workspace_pane_states
+                .values()
+                .any(|state| state.selected_project_id.is_some());
+        if !had_selection {
+            return;
+        }
+        self.selected_project_id = None;
+        for state in self.workspace_pane_states.values_mut() {
+            state.selected_project_id = None;
+            Rc::make_mut(&mut state.branches).clear();
+            state.branch_loaded = true;
+            state.branch_is_git_repository = false;
+        }
+        self.persist_layout();
+        self.persist_workspaces();
     }
 
     /// Close every chat tab for a session (e.g. when it is settled), wherever
@@ -419,6 +451,7 @@ impl ConsoleDesktopApp {
             if prev_sid.as_deref() != Some(sid) {
                 self.transcript_for_pane(pane_id).update(cx, |t, cx| {
                     t.set_messages(Vec::new(), cx);
+                    t.clear_session_changes(cx);
                 });
             }
             self.load_session_messages_for_pane(pane_id.to_string(), sid.to_string(), cx);
