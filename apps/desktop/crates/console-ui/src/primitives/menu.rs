@@ -964,13 +964,7 @@ impl RenderOnce for MenuCard {
             .border_1()
             .border_color(theme.border_strong)
             .bg(if context_style {
-                // Darker than `inset` in dark mode so the card reads as its own
-                // surface against the sidebar and the black chat canvas.
-                if theme.is_dark {
-                    gpui::rgb(0x0E0E0E).into()
-                } else {
-                    theme.inset
-                }
+                theme.menu
             } else {
                 theme.raised
             })

@@ -432,7 +432,7 @@ impl RenderOnce for AutocompleteView {
             .rounded(px(10.0))
             .border_1()
             .border_color(theme.border_strong)
-            .bg(theme.raised)
+            .bg(theme.menu)
             .shadow_xl()
             .overflow_y_scroll()
             .on_scroll_wheel(|_, _, cx| cx.stop_propagation())

@@ -47,6 +47,10 @@ pub struct Theme {
     pub raised: Hsla,
     pub composer: Hsla,
     pub inset: Hsla,
+    /// Surface of floating menus and popups (context menus, dropdowns, the
+    /// autocomplete list): a step darker than `inset` so the card reads as its
+    /// own layer over the sidebar and the chat canvas.
+    pub menu: Hsla,
     /// Terminal screen surface.
     pub terminal: Hsla,
     pub overlay: Hsla,
@@ -116,6 +120,7 @@ impl Theme {
             raised: rgb(0x232323).into(),
             composer: rgb(0x0A0A0A).into(),
             inset: rgb(0x151515).into(),
+            menu: rgb(0x0E0E0E).into(),
             terminal: rgb(0x000000).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
@@ -178,6 +183,7 @@ impl Theme {
             raised: rgb(0xECECEC).into(),
             composer: rgb(0xFFFFFF).into(),
             inset: rgb(0xE6E6E6).into(),
+            menu: rgb(0xE6E6E6).into(),
             terminal: rgb(0xFFFFFF).into(),
             overlay: hsla(220.0 / 360.0, 0.10, 0.12, 0.05),
             overlay_strong: hsla(220.0 / 360.0, 0.10, 0.12, 0.09),
