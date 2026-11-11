@@ -36,7 +36,7 @@ impl ConsoleDesktopApp {
                                 // Chats that no longer exist cannot be
                                 // restored to, so their remembered positions
                                 // are dropped.
-                                this.prune_transcript_scroll_positions();
+                                this.prune_transcript_scroll_positions(cx);
                                 // A worktree whose chats are all gone loses its
                                 // workspace too — unless the response may predate
                                 // a chat just created (it would look dead).
@@ -1061,14 +1061,6 @@ impl ConsoleDesktopApp {
     }
 
     pub fn select_and_open_session(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.sidebar_search_active {
-            self.sidebar_search_active = false;
-            self.sidebar_search_query.clear();
-            self.sidebar_search_task = None;
-            self.sidebar_search_input.update(cx, |input, cx| {
-                input.clear(cx);
-            });
-        }
         super::macos_notifications::clear_for_session(&id);
         let active_pane_id = self
             .active_pane_id
