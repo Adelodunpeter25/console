@@ -587,16 +587,17 @@ impl Render for TerminalView {
                 .on_mouse_move(
                     cx.listener(move |this, event: &MouseMoveEvent, _window, cx| {
                         if this.scrollbar_dragging
-                            && let Some(bounds) = this.scrollbar_bounds {
-                                let height = f32::from(bounds.size.height);
-                                if height > 0.0 {
-                                    let frac = (f32::from(event.position.y)
-                                        - f32::from(bounds.origin.y))
-                                        / height;
-                                    this.scroll_to_frac(frac);
-                                    cx.notify();
-                                }
+                            && let Some(bounds) = this.scrollbar_bounds
+                        {
+                            let height = f32::from(bounds.size.height);
+                            if height > 0.0 {
+                                let frac = (f32::from(event.position.y)
+                                    - f32::from(bounds.origin.y))
+                                    / height;
+                                this.scroll_to_frac(frac);
+                                cx.notify();
                             }
+                        }
                     }),
                 )
                 .on_mouse_up(
@@ -693,11 +694,11 @@ impl Render for TerminalView {
                     if is_paste {
                         if let Some(clipboard) = cx.read_from_clipboard()
                             && let Some(h) = &handle_for_key
-                                && let Some(input) =
-                                    paste_input_for_clipboard(&clipboard, bracketed_paste)
-                                {
-                                    h.send_input(input);
-                                }
+                            && let Some(input) =
+                                paste_input_for_clipboard(&clipboard, bracketed_paste)
+                        {
+                            h.send_input(input);
+                        }
                         view_for_key.update(cx, |view, cx| {
                             view.scroll_to_bottom();
                             cx.notify();
@@ -870,21 +871,21 @@ impl Render for TerminalView {
                                         }
                                         // Nothing word-like under the cursor — fall
                                         // through to a fresh single-click selection.
-                                    } else if count == 3
-                                        && this.select_line_at_row(pos.row) {
-                                            cx.notify();
-                                            return;
-                                        }
+                                    } else if count == 3 && this.select_line_at_row(pos.row) {
+                                        cx.notify();
+                                        return;
+                                    }
 
                                     // Cmd+Click (Ctrl+Click elsewhere) on a URL opens
                                     // it in the default browser instead of selecting.
                                     if (event.modifiers.platform || event.modifiers.control)
-                                        && let Some(url) = this.link_target_at(pos) {
-                                            this.clear_selection();
-                                            cx.notify();
-                                            cx.open_url(&url);
-                                            return;
-                                        }
+                                        && let Some(url) = this.link_target_at(pos)
+                                    {
+                                        this.clear_selection();
+                                        cx.notify();
+                                        cx.open_url(&url);
+                                        return;
+                                    }
 
                                     this.selection_anchor = Some(pos);
                                     this.selection_head = Some(pos);

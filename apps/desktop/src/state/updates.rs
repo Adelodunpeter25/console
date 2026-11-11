@@ -14,8 +14,13 @@ pub fn installed_build() -> Option<u64> {
 
 impl ConsoleDesktopApp {
     pub fn check_for_update(&mut self, cx: &mut Context<Self>) {
-        let Some(installed) = installed_build() else { return };
-        if matches!(self.update_status, UpdateStatus::Checking | UpdateStatus::Downloading(_)) {
+        let Some(installed) = installed_build() else {
+            return;
+        };
+        if matches!(
+            self.update_status,
+            UpdateStatus::Checking | UpdateStatus::Downloading(_)
+        ) {
             return;
         }
         self.update_status = UpdateStatus::Checking;
@@ -27,7 +32,9 @@ impl ConsoleDesktopApp {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
                         this.update_status = match result {
-                            Ok(Some(manifest)) => UpdateStatus::Available { build: manifest.build },
+                            Ok(Some(manifest)) => UpdateStatus::Available {
+                                build: manifest.build,
+                            },
                             Ok(None) => UpdateStatus::UpToDate,
                             Err(error) => UpdateStatus::Failed(format!("{error:#}")),
                         };

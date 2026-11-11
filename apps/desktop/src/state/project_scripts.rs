@@ -285,10 +285,11 @@ impl ConsoleDesktopApp {
                     changed = true;
                 }
                 if let Some(active_id) = &term_state.active_script_log
-                    && !valid_ids.contains(active_id.as_str()) {
-                        term_state.active_script_log = term_state.script_logs.first().cloned();
-                        changed = true;
-                    }
+                    && !valid_ids.contains(active_id.as_str())
+                {
+                    term_state.active_script_log = term_state.script_logs.first().cloned();
+                    changed = true;
+                }
             }
 
             if let Some(persisted) = self.persisted_script_tabs.get_mut(cwd) {
@@ -300,10 +301,11 @@ impl ConsoleDesktopApp {
                     changed = true;
                 }
                 if let Some(active_id) = &persisted.active_script_id
-                    && !valid_ids.contains(active_id.as_str()) {
-                        persisted.active_script_id = persisted.open_script_ids.first().cloned();
-                        changed = true;
-                    }
+                    && !valid_ids.contains(active_id.as_str())
+                {
+                    persisted.active_script_id = persisted.open_script_ids.first().cloned();
+                    changed = true;
+                }
             }
         }
 

@@ -50,40 +50,40 @@ impl ConsoleDesktopApp {
         // launch and a save is a full store read + rewrite.
         let mut mutated = false;
         if let Some(state) = persisted
-            && !state.environments.is_empty() {
-                let mut fixed_legacy_url = false;
-                self.environments = state
-                    .environments
-                    .into_iter()
-                    .map(|e| {
-                        // Fix legacy mock 4040 port or placeholder from initial test to true default local url
-                        let url = match e.url.as_str() {
-                            "http://127.0.0.1:4040" | "http://localhost:4040" => match &def {
-                                Some(def) => {
-                                    fixed_legacy_url = true;
-                                    def.url.clone()
-                                }
-                                None => e.url,
-                            },
-                            _ => e.url,
-                        };
-                        Environment {
-                            id: e.id,
-                            name: e.name,
-                            url,
-                        }
-                    })
-                    .collect();
-                let persisted_active_id = state.active_id;
-                self.active_env_id = inherited_environment_id
-                    .filter(|id| self.environments.iter().any(|e| &e.id == id))
-                    .or_else(|| {
-                        persisted_active_id
-                            .filter(|id| self.environments.iter().any(|e| &e.id == id))
-                    })
-                    .or_else(|| self.environments.first().map(|e| e.id.clone()));
-                mutated = fixed_legacy_url;
-            }
+            && !state.environments.is_empty()
+        {
+            let mut fixed_legacy_url = false;
+            self.environments = state
+                .environments
+                .into_iter()
+                .map(|e| {
+                    // Fix legacy mock 4040 port or placeholder from initial test to true default local url
+                    let url = match e.url.as_str() {
+                        "http://127.0.0.1:4040" | "http://localhost:4040" => match &def {
+                            Some(def) => {
+                                fixed_legacy_url = true;
+                                def.url.clone()
+                            }
+                            None => e.url,
+                        },
+                        _ => e.url,
+                    };
+                    Environment {
+                        id: e.id,
+                        name: e.name,
+                        url,
+                    }
+                })
+                .collect();
+            let persisted_active_id = state.active_id;
+            self.active_env_id = inherited_environment_id
+                .filter(|id| self.environments.iter().any(|e| &e.id == id))
+                .or_else(|| {
+                    persisted_active_id.filter(|id| self.environments.iter().any(|e| &e.id == id))
+                })
+                .or_else(|| self.environments.first().map(|e| e.id.clone()));
+            mutated = fixed_legacy_url;
+        }
         if self.environments.is_empty() {
             if let Some(def) = def {
                 self.active_env_id = Some(def.id.clone());

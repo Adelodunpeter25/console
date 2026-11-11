@@ -117,9 +117,10 @@ pub fn get_active_window(
         // 1. Ask GPUI's platform layer which window is currently focused.
         if let Some(active_handle) = cx.active_window()
             && let Some((_, app)) = list.iter().find(|(h, _)| *h == active_handle)
-                && let Some(upgraded) = app.upgrade() {
-                    return Some((active_handle, upgraded));
-                }
+            && let Some(upgraded) = app.upgrade()
+        {
+            return Some((active_handle, upgraded));
+        }
 
         // 2. Fallback to the most recent known window in our list.
         for (handle, app) in list.iter().rev() {

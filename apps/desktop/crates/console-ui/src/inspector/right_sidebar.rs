@@ -457,24 +457,22 @@ impl RenderOnce for RightSidebar {
                         // stale persisted entries are dropped on load.
                         InspectorTab::Auxiliary(AuxiliaryTab::Subagents)
                         | InspectorTab::Auxiliary(AuxiliaryTab::Shells) => div().into_any_element(),
-                        InspectorTab::Auxiliary(AuxiliaryTab::Browser) => {
-                            div()
-                                .size_full()
-                                .min_h_0()
-                                .flex()
-                                .flex_col()
-                                .child(self.browser_view.unwrap_or_else(|| {
-                                    div()
-                                        .size_full()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .text_color(theme.text_tertiary)
-                                        .child("No browser open in this workspace")
-                                        .into_any_element()
-                                }))
-                                .into_any_element()
-                        }
+                        InspectorTab::Auxiliary(AuxiliaryTab::Browser) => div()
+                            .size_full()
+                            .min_h_0()
+                            .flex()
+                            .flex_col()
+                            .child(self.browser_view.unwrap_or_else(|| {
+                                div()
+                                    .size_full()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_color(theme.text_tertiary)
+                                    .child("No browser open in this workspace")
+                                    .into_any_element()
+                            }))
+                            .into_any_element(),
                         InspectorTab::Auxiliary(AuxiliaryTab::Devices) => {
                             if let Some(device) = self.device_view {
                                 device

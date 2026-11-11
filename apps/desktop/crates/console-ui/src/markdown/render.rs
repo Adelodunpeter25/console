@@ -395,17 +395,16 @@ pub fn flatten_sized(
                 links.last(),
                 Some((range, last)) if range.end == start && last == url
             );
-            if !continues
-                && let Some(kind) = link_icon_kind(url) {
-                    text.push_str(ICON_GAP);
-                    gap = ICON_GAP.len();
-                    icons.push(IconSlot {
-                        range: start..start + gap,
-                        kind,
-                        tint: palette.tertiary,
-                        wants_title,
-                    });
-                }
+            if !continues && let Some(kind) = link_icon_kind(url) {
+                text.push_str(ICON_GAP);
+                gap = ICON_GAP.len();
+                icons.push(IconSlot {
+                    range: start..start + gap,
+                    kind,
+                    tint: palette.tertiary,
+                    wants_title,
+                });
+            }
         }
         let gap_start = start;
         start = text.len();
@@ -969,9 +968,10 @@ fn icon_overlay(icons: Vec<IconSlot>, layout: TextLayout) -> impl IntoElement {
                 if slot.wants_title {
                     // Keeps frames coming until the title lands (or fails).
                     if let IconKind::Favicon(url) = &slot.kind
-                        && page_title_state(url) == TitleState::Loading {
-                            window.request_animation_frame();
-                        }
+                        && page_title_state(url) == TitleState::Loading
+                    {
+                        window.request_animation_frame();
+                    }
                 }
                 // A formula is painted at its own size from the gap's left edge;
                 // an icon is a small square nudged in from it.

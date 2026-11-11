@@ -102,9 +102,10 @@ impl RenderOnce for MarkdownViewer {
                 move |event: &KeyDownEvent, _, cx| {
                     if (event.keystroke.modifiers.platform || event.keystroke.modifiers.control)
                         && event.keystroke.key == "c"
-                        && let Some(text) = selection.selection.borrow().selected_text() {
-                            cx.write_to_clipboard(ClipboardItem::new_string(text));
-                        }
+                        && let Some(text) = selection.selection.borrow().selected_text()
+                    {
+                        cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    }
                 }
             })
             .child(render::frame_reset(selection))

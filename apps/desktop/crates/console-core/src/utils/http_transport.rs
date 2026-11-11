@@ -84,9 +84,10 @@ impl HttpTransport {
         let mut headers = HeaderMap::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
         if let Some(token) = self.auth_token.read().await.as_ref()
-            && let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", token)) {
-                headers.insert(AUTHORIZATION, val);
-            }
+            && let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", token))
+        {
+            headers.insert(AUTHORIZATION, val);
+        }
         headers
     }
 
@@ -100,11 +101,12 @@ impl HttpTransport {
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
         let mut request = url.into_client_request()?;
         if let Some(token) = self.auth_token.read().await.as_ref()
-            && !token.is_empty() {
-                let value = HeaderValue::from_str(&format!("Bearer {}", token))
-                    .context("invalid auth token for websocket handshake")?;
-                request.headers_mut().insert(AUTHORIZATION, value);
-            }
+            && !token.is_empty()
+        {
+            let value = HeaderValue::from_str(&format!("Bearer {}", token))
+                .context("invalid auth token for websocket handshake")?;
+            request.headers_mut().insert(AUTHORIZATION, value);
+        }
         Ok(request)
     }
 

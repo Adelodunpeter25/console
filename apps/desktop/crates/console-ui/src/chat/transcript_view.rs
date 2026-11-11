@@ -6,8 +6,8 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
-    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div,
-    list, prelude::*, px,
+    ListState, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window, div, list,
+    prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -89,7 +89,8 @@ pub struct TranscriptView {
     on_load_older: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     /// Opens the image preview modal with the decoded image when the user
     /// clicks an image inside a message bubble.
-    pub(crate) on_preview_image: Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_preview_image:
+        Option<Rc<dyn Fn(Arc<gpui::Image>, &mut Window, &mut App) + 'static>>,
     on_view_subagent: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_file_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     on_open_url_raw: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
@@ -102,7 +103,8 @@ pub struct TranscriptView {
     /// the whole-session totals in the pinned summary pill.
     session_changes: Rc<Vec<SessionFileChange>>,
     /// Opens the diff of one changed file of one turn: `(path, diff_text)`.
-    pub(crate) on_open_change: Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
+    pub(crate) on_open_change:
+        Option<Rc<dyn Fn(String, Option<String>, &mut Window, &mut App) + 'static>>,
     /// Forks the session through one assistant message: `(message_id)`.
     pub(crate) on_fork: Option<Rc<dyn Fn(String, &mut Window, &mut App) + 'static>>,
     /// Window-space bounds of this transcript's container, recorded by a
@@ -172,7 +174,12 @@ impl TranscriptView {
     }
 
     /// Expand or collapse one turn's changed-file row and re-measure it.
-    pub(crate) fn toggle_turn_changes(&mut self, row: usize, turn_id: String, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_turn_changes(
+        &mut self,
+        row: usize,
+        turn_id: String,
+        cx: &mut Context<Self>,
+    ) {
         {
             let mut expanded = self.expanded_turn_changes.borrow_mut();
             if !expanded.remove(&turn_id) {
@@ -191,7 +198,12 @@ impl TranscriptView {
     }
 
     /// Expand or collapse one user message's folded text and re-measure it.
-    pub(crate) fn toggle_user_message_expanded(&mut self, key: String, row: usize, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_user_message_expanded(
+        &mut self,
+        key: String,
+        row: usize,
+        cx: &mut Context<Self>,
+    ) {
         {
             let mut expanded = self.expanded_user_messages.borrow_mut();
             if !expanded.remove(&key) {
@@ -391,7 +403,11 @@ impl TranscriptView {
         self.on_jump_to_prompt = Some(Rc::new(handler));
     }
 
-    pub fn set_prompts(&mut self, prompts: Vec<console_core::SessionPrompt>, cx: &mut Context<Self>) {
+    pub fn set_prompts(
+        &mut self,
+        prompts: Vec<console_core::SessionPrompt>,
+        cx: &mut Context<Self>,
+    ) {
         // Open at the newest prompts, which are the ones most likely wanted.
         if let Some(last) = prompts.len().checked_sub(1) {
             self.prompts_scroll
@@ -439,10 +455,11 @@ impl TranscriptView {
         self.clear_selection(window);
         if let Some(text) = text
             && let Some(quote) = crate::markdown::selection::format_cite_quote(&text)
-                && let Some(cite) = self.selection.cite_handler() {
-                    cite(quote, window, cx);
-                    return true;
-                }
+            && let Some(cite) = self.selection.cite_handler()
+        {
+            cite(quote, window, cx);
+            return true;
+        }
         false
     }
 
@@ -561,12 +578,15 @@ impl TranscriptView {
     /// When the newest user prompt was sent, in unix seconds. A run attached
     /// after a restart has no live start time; this is the closest persisted one.
     pub fn latest_user_prompt_at(&self) -> Option<i64> {
-        self.messages.iter().rev().find_map(|message| match message {
-            AgentMessage::User { created_at, .. } => {
-                created_at.and_then(crate::utils::time::normalize_unix_timestamp)
-            }
-            _ => None,
-        })
+        self.messages
+            .iter()
+            .rev()
+            .find_map(|message| match message {
+                AgentMessage::User { created_at, .. } => {
+                    created_at.and_then(crate::utils::time::normalize_unix_timestamp)
+                }
+                _ => None,
+            })
     }
 
     /// The image attachments carried by the user message with this id.
@@ -750,7 +770,9 @@ impl TranscriptView {
         self.selection.selection.borrow().selected_text()
     }
 
-    pub(crate) fn jump_callback(&self) -> Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>> {
+    pub(crate) fn jump_callback(
+        &self,
+    ) -> Option<Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>> {
         self.on_jump_to_prompt.clone()
     }
 
@@ -1228,9 +1250,10 @@ impl TranscriptView {
     ) -> Option<(Vec<ActivityEvent>, Option<i64>, u64, bool)> {
         let version = self.tool_activity_cache_version.get();
         if let Some((cached_version, cached)) = self.tool_activity_cache.borrow().get(&user_index)
-            && *cached_version == version {
-                return cached.clone();
-            }
+            && *cached_version == version
+        {
+            return cached.clone();
+        }
         let computed = self.compute_tool_activity_for_user(user_index);
         self.tool_activity_cache
             .borrow_mut()
@@ -1494,16 +1517,17 @@ impl Render for TranscriptView {
                     let no_mods = !event.keystroke.modifiers.control
                         && !event.keystroke.modifiers.alt
                         && !event.keystroke.modifiers.platform;
-                    if (key == "r" || key == "R") && no_mods
-                        && this.trigger_cite(window, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                    if (key == "c" || key == "C") && (no_mods || event.keystroke.modifiers.platform)
-                        && this.trigger_copy(window, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
+                    if (key == "r" || key == "R") && no_mods && this.trigger_cite(window, cx) {
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if (key == "c" || key == "C")
+                        && (no_mods || event.keystroke.modifiers.platform)
+                        && this.trigger_copy(window, cx)
+                    {
+                        cx.stop_propagation();
+                        return;
+                    }
                     if key == "escape" {
                         this.clear_selection(window);
                         cx.stop_propagation();
@@ -1514,7 +1538,9 @@ impl Render for TranscriptView {
             .size_full()
             .bg(theme.chat_canvas)
             .child(render::frame_reset(selection.clone()))
-            .child(crate::chat::cite_overlay::cite_origin_probe(cite_origin.clone()))
+            .child(crate::chat::cite_overlay::cite_origin_probe(
+                cite_origin.clone(),
+            ))
             .child(if self.messages.is_empty() && !is_streaming {
                 crate::chat::row::empty_state(theme).into_any_element()
             } else {
@@ -1536,7 +1562,10 @@ impl Render for TranscriptView {
                     .child(scrollbar::vertical(&self.list_state, &self.scrollbar_state))
                     .into_any_element()
             })
-            .child(crate::chat::cite_overlay::selection_input(selection.clone(), cite_origin.clone()))
+            .child(crate::chat::cite_overlay::selection_input(
+                selection.clone(),
+                cite_origin.clone(),
+            ))
             .child(self.render_scroll_controls(theme, cx));
         if let (Some(line), true) = (cite_line, cite_available)
             && let Some(container) = *cite_origin.borrow()

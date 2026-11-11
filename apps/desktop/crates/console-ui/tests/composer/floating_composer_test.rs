@@ -19,7 +19,10 @@ fn pending(id: usize, lines: usize, text: &str) -> PendingPaste {
 #[test]
 fn uploaded_paste_swaps_placeholder_for_server_path() {
     let files = vec!["src/main.rs".to_string(), "pending-paste:1".to_string()];
-    let resolved = vec![(pending(1, 30, "raw"), Some("/p/pastes/s/pasted-1.txt".into()))];
+    let resolved = vec![(
+        pending(1, 30, "raw"),
+        Some("/p/pastes/s/pasted-1.txt".into()),
+    )];
     let (prompt, files) =
         resolve_pending_pastes("see main.rs and pasted 30 lines please", &files, &resolved);
     assert_eq!(prompt, "see main.rs and pasted 30 lines please");
@@ -31,7 +34,10 @@ fn failed_paste_goes_inline_and_keeps_later_pastes_aligned() {
     let files = vec!["pending-paste:1".to_string(), "pending-paste:2".to_string()];
     let resolved = vec![
         (pending(1, 30, "RAW ONE"), None),
-        (pending(2, 30, "RAW TWO"), Some("/p/pastes/s/pasted-2.txt".into())),
+        (
+            pending(2, 30, "RAW TWO"),
+            Some("/p/pastes/s/pasted-2.txt".into()),
+        ),
     ];
     let (prompt, files) =
         resolve_pending_pastes("pasted 30 lines then pasted 30 lines", &files, &resolved);
@@ -133,8 +139,7 @@ fn project_menu_section_renders_no_project_row() {
         updated_at: 0,
     }]);
 
-    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> =
-        Rc::new(|_, _, _| {});
+    let on_select: Rc<dyn Fn(String, &mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _, _| {});
     let on_new: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
     let on_none: Rc<dyn Fn(&mut gpui::Window, &mut gpui::App)> = Rc::new(|_, _| {});
 
@@ -155,9 +160,15 @@ fn project_menu_section_renders_no_project_row() {
         _ => false,
     });
 
-    assert!(no_project_item.is_some(), "No project item should be present");
+    assert!(
+        no_project_item.is_some(),
+        "No project item should be present"
+    );
     if let Some(MenuItem::Entry { selected, .. }) = no_project_item {
-        assert!(*selected, "No project should be marked selected when none_selected is true");
+        assert!(
+            *selected,
+            "No project should be marked selected when none_selected is true"
+        );
     }
 }
 

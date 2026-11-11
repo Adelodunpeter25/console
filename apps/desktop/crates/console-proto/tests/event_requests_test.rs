@@ -55,9 +55,8 @@ fn decodes_golden_error_frame() {
 
 #[test]
 fn ignores_unknown_fields() {
-    let req: AskQuestionRequest = serde_json::from_str(
-        r#"{"requestId":"r","question":"q","futureField":1}"#,
-    )
-    .expect("unknown fields must be ignored");
+    let req: AskQuestionRequest =
+        serde_json::from_str(r#"{"requestId":"r","question":"q","futureField":1}"#)
+            .expect("unknown fields must be ignored");
     assert_eq!(req.request_id, "r");
 }

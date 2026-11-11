@@ -231,7 +231,10 @@ impl ConsoleDesktopApp {
         let session_id = session_id.to_string();
         let prompt_id = prompt_id.to_string();
         cx.spawn(async move |_, _| {
-            let _ = client.runs.delete_queued_prompt(&session_id, &prompt_id).await;
+            let _ = client
+                .runs
+                .delete_queued_prompt(&session_id, &prompt_id)
+                .await;
         })
         .detach();
     }
@@ -326,7 +329,10 @@ impl ConsoleDesktopApp {
         cx.spawn(async move |_, cx| {
             // The server still holds this card; take it out first, or it would
             // run again after the steered prompt.
-            let _ = client.runs.delete_queued_prompt(&session_id, &queued_id).await;
+            let _ = client
+                .runs
+                .delete_queued_prompt(&session_id, &queued_id)
+                .await;
             let requeue = dto.clone();
             if let Err(err) = client.runs.steer(&session_id, dto).await {
                 let _ = client.runs.queue_prompt(&session_id, requeue).await;
@@ -441,18 +447,14 @@ impl ConsoleDesktopApp {
             }
             self.composer_for_pane(&run_pane_id)
                 .update(cx, |input, cx| {
-                    input.record_prompt_history(
-                        prompt.clone(),
-                        context_files.clone(),
-                        None,
-                        cx,
-                    );
+                    input.record_prompt_history(prompt.clone(), context_files.clone(), None, cx);
                 });
         }
 
-        let approval_mode = Some(queued_approval_mode.unwrap_or_else(|| {
-            self.pane_approval_mode(&run_pane_id).value().to_string()
-        }));
+        let approval_mode = Some(
+            queued_approval_mode
+                .unwrap_or_else(|| self.pane_approval_mode(&run_pane_id).value().to_string()),
+        );
         let user_msg = AgentMessage::User {
             id: None,
             content: prompt.clone(),
@@ -483,14 +485,10 @@ impl ConsoleDesktopApp {
         // ones, so a card the user queued with a different model still runs
         // the way it was queued.
         let selected_model = self.pane_selected_model(&run_pane_id);
-        let model_id = queued_model_id.or_else(|| {
-            selected_model
-                .as_ref()
-                .map(|m| m.model_id.clone())
-        });
-        let provider = queued_provider.or_else(|| {
-            selected_model.as_ref().map(|m| m.provider.clone())
-        });
+        let model_id =
+            queued_model_id.or_else(|| selected_model.as_ref().map(|m| m.model_id.clone()));
+        let provider =
+            queued_provider.or_else(|| selected_model.as_ref().map(|m| m.provider.clone()));
         let thinking_level = queued_thinking.or_else(|| self.pane_thinking_level(&run_pane_id));
         let active_sid = self.active_session_for_pane(&run_pane_id);
         let session_project_id = self.pane_real_project_id(&run_pane_id);
@@ -849,11 +847,12 @@ impl ConsoleDesktopApp {
                 if let Some(turn) = turn
                     .as_ref()
                     .map(console_core::AssistantMessage::from_proto_assistant)
-                    && pane_shows_run {
-                        self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
-                            t.finalize_assistant_message(turn, cx);
-                        });
-                    }
+                    && pane_shows_run
+                {
+                    self.transcript_for_pane(run_pane_id).update(cx, |t, cx| {
+                        t.finalize_assistant_message(turn, cx);
+                    });
+                }
             }
             AgentSessionEvent::AskQuestion { request } => {
                 self.set_pending_question_for_session(
@@ -1228,7 +1227,9 @@ impl ConsoleDesktopApp {
         // run attached after a restart does not restart from zero.
         let now = if self.active_session_for_pane(&pane_id).as_deref() == Some(session_id.as_str())
         {
-            self.transcript_for_pane(&pane_id).read(cx).latest_user_prompt_at()
+            self.transcript_for_pane(&pane_id)
+                .read(cx)
+                .latest_user_prompt_at()
         } else {
             None
         }

@@ -1,6 +1,4 @@
-use gpui::{
-    App, ElementId, IntoElement, ParentElement, StatefulInteractiveElement, Window,
-};
+use gpui::{App, ElementId, IntoElement, ParentElement, StatefulInteractiveElement, Window};
 use std::rc::Rc;
 
 use super::item_row::{row_container, status_slot, title_label};

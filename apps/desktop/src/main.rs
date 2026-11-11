@@ -50,13 +50,14 @@ fn log_panics_to_file() {
         );
         eprint!("{text}");
         if let Some(dir) = panic_log_dir()
-            && std::fs::create_dir_all(&dir).is_ok() {
-                let _ = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(dir.join("panic.log"))
-                    .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
-            }
+            && std::fs::create_dir_all(&dir).is_ok()
+        {
+            let _ = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(dir.join("panic.log"))
+                .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()));
+        }
     }));
 }
 

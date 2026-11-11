@@ -620,20 +620,21 @@ impl ConsoleDesktopApp {
 
         cx.spawn(async move |entity, cx| {
             if let Some((branch, cwd)) = checkout.as_ref()
-                && let Err(error) = client.git.checkout_branch(Some(cwd), branch).await {
-                    // Keep the card open with the prompt intact; nothing was
-                    // created, and the project folder stays on its branch.
-                    let message = format!("Unable to switch to {branch}: {error}");
-                    cx.update(|cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.floating_composer.set_error(Some(message));
-                                cx.notify();
-                            });
-                        }
-                    });
-                    return;
-                }
+                && let Err(error) = client.git.checkout_branch(Some(cwd), branch).await
+            {
+                // Keep the card open with the prompt intact; nothing was
+                // created, and the project folder stays on its branch.
+                let message = format!("Unable to switch to {branch}: {error}");
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.floating_composer.set_error(Some(message));
+                            cx.notify();
+                        });
+                    }
+                });
+                return;
+            }
             let result = client
                 .sessions
                 .create(CreateSessionDto {

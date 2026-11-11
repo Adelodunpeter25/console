@@ -83,17 +83,17 @@ impl BrowserHistory {
     }
 
     /// Record a title-only change for a URL already in the store.
-pub fn set_title(&mut self, url: &str, title: &str) {
-    let trimmed = title.trim();
-    if trimmed.is_empty() {
-        return;
+    pub fn set_title(&mut self, url: &str, title: &str) {
+        let trimmed = title.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if let Some(index) = self.index_of(url) {
+            self.entries[index].title = trimmed.to_string();
+        }
     }
-    if let Some(index) = self.index_of(url) {
-        self.entries[index].title = trimmed.to_string();
-    }
-}
 
-/// Top matches for an omnibox query: URL or title contains the query,
+    /// Top matches for an omnibox query: URL or title contains the query,
     /// unique by normalized URL, most visited first.
     pub fn suggest(&self, query: &str, limit: usize) -> Vec<BrowserHistoryEntry> {
         let query = query.trim().to_lowercase();
@@ -129,7 +129,8 @@ pub fn set_title(&mut self, url: &str, title: &str) {
     }
 
     fn sort_and_cap(&mut self) {
-        self.entries.sort_by_key(|b| std::cmp::Reverse(b.visit_count));
+        self.entries
+            .sort_by_key(|b| std::cmp::Reverse(b.visit_count));
         if self.entries.len() > MAX_ENTRIES {
             self.entries.truncate(MAX_ENTRIES);
         }

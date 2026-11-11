@@ -92,9 +92,17 @@ impl Tunnel {
     pub async fn over(endpoint: Endpoint, addr: EndpointAddr) -> Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let local = listener.local_addr()?;
-        let shared = Arc::new(Shared { endpoint, addr, conn: Mutex::new(None) });
+        let shared = Arc::new(Shared {
+            endpoint,
+            addr,
+            conn: Mutex::new(None),
+        });
         let task = tokio::spawn(accept_loop(listener, shared.clone()));
-        Ok(Self { addr: local, task, shared })
+        Ok(Self {
+            addr: local,
+            task,
+            shared,
+        })
     }
 
     /// The loopback address to use as the base URL host.

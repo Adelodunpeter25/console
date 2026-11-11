@@ -161,7 +161,10 @@ fn a_relay_path_prefix_is_kept() {
         "https://relay.example.workers.dev/peter-dev/console/pair#v=1&server=s&code=c",
     )
     .expect("valid pairing URL");
-    assert_eq!(parsed.base_url, "https://relay.example.workers.dev/peter-dev");
+    assert_eq!(
+        parsed.base_url,
+        "https://relay.example.workers.dev/peter-dev"
+    );
 
     let (address, code) = split_pairing_line(
         "https://relay.example.workers.dev/peter-dev/console/pair#v=1&server=s&code=abc",
@@ -172,8 +175,9 @@ fn a_relay_path_prefix_is_kept() {
 
 #[test]
 fn a_prefix_with_a_trailing_slash_is_tidied() {
-    let parsed = parse_pairing_url("https://r.example/peter-dev//console/pair/#v=1&server=s&code=c")
-        .expect("valid pairing URL");
+    let parsed =
+        parse_pairing_url("https://r.example/peter-dev//console/pair/#v=1&server=s&code=c")
+            .expect("valid pairing URL");
     assert_eq!(parsed.base_url, "https://r.example/peter-dev");
 }
 
@@ -200,7 +204,10 @@ fn parses_an_iroh_pairing_url() {
 fn rejects_an_iroh_pairing_url_without_a_node_id() {
     for bad in [
         "console-iroh://example.com/console/pair#v=1&server=s&code=c".to_string(),
-        format!("console-iroh://{}/console/pair#v=1&server=s&code=c", "AB12".repeat(16)),
+        format!(
+            "console-iroh://{}/console/pair#v=1&server=s&code=c",
+            "AB12".repeat(16)
+        ),
         "console-iroh:///console/pair#v=1&server=s&code=c".to_string(),
     ] {
         assert!(parse_pairing_url(&bad).is_err(), "{bad}");
@@ -211,8 +218,14 @@ fn rejects_an_iroh_pairing_url_without_a_node_id() {
 fn finds_the_node_id_of_an_iroh_address() {
     use console_shared::pairing::iroh_node_id;
     let node = "ab12".repeat(16);
-    assert_eq!(iroh_node_id(&format!("console-iroh://{node}")), Some(node.as_str()));
-    assert_eq!(iroh_node_id(&format!("console-iroh://{node}/console/pair#v=1")), Some(node.as_str()));
+    assert_eq!(
+        iroh_node_id(&format!("console-iroh://{node}")),
+        Some(node.as_str())
+    );
+    assert_eq!(
+        iroh_node_id(&format!("console-iroh://{node}/console/pair#v=1")),
+        Some(node.as_str())
+    );
     assert_eq!(iroh_node_id("http://host:3000"), None);
     assert_eq!(iroh_node_id("console-iroh://example.com"), None);
 }

@@ -262,13 +262,15 @@ fn resolve_used_percent(limit: &UsageLimit) -> f64 {
         return (fraction * 100.0).clamp(0.0, 100.0);
     }
     if let (Some(used), Some(limit_val)) = (amount.used, amount.limit)
-        && limit_val > 0.0 {
-            return (used * 100.0 / limit_val).clamp(0.0, 100.0);
-        }
+        && limit_val > 0.0
+    {
+        return (used * 100.0 / limit_val).clamp(0.0, 100.0);
+    }
     if amount.unit == "percent"
-        && let Some(used) = amount.used {
-            return used.clamp(0.0, 100.0);
-        }
+        && let Some(used) = amount.used
+    {
+        return used.clamp(0.0, 100.0);
+    }
     if let Some(remaining_frac) = amount.remaining_fraction {
         return ((1.0 - remaining_frac) * 100.0).clamp(0.0, 100.0);
     }

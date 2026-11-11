@@ -44,7 +44,9 @@ impl DraftService {
         if body.success {
             Ok(body.data.and_then(|data| data.draft))
         } else {
-            Err(anyhow!(body.error.unwrap_or_else(|| "Failed to load draft".into())))
+            Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to load draft".into())
+            ))
         }
     }
 
@@ -53,7 +55,10 @@ impl DraftService {
     pub async fn put(&self, draft: &ChatDraft) -> Result<PutDraftResponse> {
         let url = self
             .transport
-            .url(&format!("/api/drafts/{}", encode_segment(&draft.session_id)))
+            .url(&format!(
+                "/api/drafts/{}",
+                encode_segment(&draft.session_id)
+            ))
             .await;
         let response = self
             .transport
@@ -71,7 +76,9 @@ impl DraftService {
             .context("Failed to parse draft save response")?;
         match (body.success, body.data) {
             (true, Some(data)) => Ok(data),
-            (_, _) => Err(anyhow!(body.error.unwrap_or_else(|| "Failed to save draft".into()))),
+            (_, _) => Err(anyhow!(
+                body.error.unwrap_or_else(|| "Failed to save draft".into())
+            )),
         }
     }
 }

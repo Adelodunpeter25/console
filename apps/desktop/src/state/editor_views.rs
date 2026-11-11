@@ -141,39 +141,42 @@ impl ConsoleDesktopApp {
         self.viewer_editor_views
             .insert(path.to_string(), (len, hash, state.clone(), view.clone()));
         let file_path = path.to_string();
-        let subscription = cx.subscribe(&state, move |app, _state, event: &editor_ui::EditorEvent, cx| {
-            match event {
-                // `mark_saved` emits this after the API write lands, so the
-                // cache is refreshed from the editor's own text. The text is
-                // `\n`-normalized, so apply the document's line ending to get
-                // the bytes the file actually holds; hashing the normalized
-                // form instead would make every CRLF file look changed on the
-                // next render.
-                editor_ui::EditorEvent::Saved => {
-                    let (text, line_ending) = app
-                        .viewer_editor_views
-                        .get(&file_path)
-                        .map(|(_, _, state, _)| {
-                            let state = state.read(cx);
-                            (state.text(), state.line_ending())
-                        })
-                        .unwrap_or_default();
-                    let saved = line_ending.apply(&text).into_owned();
-                    let mut hasher = DefaultHasher::new();
-                    saved.hash(&mut hasher);
-                    if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
-                        entry.0 = saved.len();
-                        entry.1 = hasher.finish();
+        let subscription = cx.subscribe(
+            &state,
+            move |app, _state, event: &editor_ui::EditorEvent, cx| {
+                match event {
+                    // `mark_saved` emits this after the API write lands, so the
+                    // cache is refreshed from the editor's own text. The text is
+                    // `\n`-normalized, so apply the document's line ending to get
+                    // the bytes the file actually holds; hashing the normalized
+                    // form instead would make every CRLF file look changed on the
+                    // next render.
+                    editor_ui::EditorEvent::Saved => {
+                        let (text, line_ending) = app
+                            .viewer_editor_views
+                            .get(&file_path)
+                            .map(|(_, _, state, _)| {
+                                let state = state.read(cx);
+                                (state.text(), state.line_ending())
+                            })
+                            .unwrap_or_default();
+                        let saved = line_ending.apply(&text).into_owned();
+                        let mut hasher = DefaultHasher::new();
+                        saved.hash(&mut hasher);
+                        if let Some(entry) = app.viewer_editor_views.get_mut(&file_path) {
+                            entry.0 = saved.len();
+                            entry.1 = hasher.finish();
+                        }
+                        app.open_file_contents.insert(file_path.clone(), saved);
                     }
-                    app.open_file_contents.insert(file_path.clone(), saved);
+                    // Only the package's own on-disk writer emits this; API saves
+                    // report through the host task instead.
+                    editor_ui::EditorEvent::SaveFailed(message) => {
+                        log::error!("Failed to save {}: {}", file_path, message);
+                    }
                 }
-                // Only the package's own on-disk writer emits this; API saves
-                // report through the host task instead.
-                editor_ui::EditorEvent::SaveFailed(message) => {
-                    log::error!("Failed to save {}: {}", file_path, message);
-                }
-            }
-        });
+            },
+        );
         self.viewer_editor_subscriptions
             .entry(path.to_string())
             .or_default()
@@ -185,7 +188,8 @@ impl ConsoleDesktopApp {
         let observer = cx.observe(&state, move |app, _state, cx| {
             let dirty = observed.read(cx).is_dirty();
             if app.dirty_file_paths_cache.get(&observed_path) != Some(&dirty) {
-                app.dirty_file_paths_cache.insert(observed_path.clone(), dirty);
+                app.dirty_file_paths_cache
+                    .insert(observed_path.clone(), dirty);
                 cx.notify();
             }
         });
@@ -346,9 +350,11 @@ impl ConsoleDesktopApp {
         let len = content.len();
 
         if let Some((cached_len, cached_hash, view)) = self.viewer_cached_markdown_views.get(path)
-            && *cached_len == len && *cached_hash == hash {
-                return view.clone();
-            }
+            && *cached_len == len
+            && *cached_hash == hash
+        {
+            return view.clone();
+        }
 
         let mut view = console_ui::MarkdownView::new();
         view.set_text(content, false);

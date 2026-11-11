@@ -95,7 +95,11 @@ impl RenderOnce for TitleBar {
         let on_toggle_right = self.on_toggle_right_sidebar;
         let title = self.title;
         let sidebar_width = self.sidebar_width;
-        let leading_inset = if window.is_fullscreen() { 8.0 } else { LEADING_INSET };
+        let leading_inset = if window.is_fullscreen() {
+            8.0
+        } else {
+            LEADING_INSET
+        };
 
         div()
             .id("window-titlebar")

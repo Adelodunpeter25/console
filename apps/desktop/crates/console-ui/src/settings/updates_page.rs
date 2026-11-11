@@ -14,7 +14,9 @@ pub enum UpdateStatus {
     Idle,
     Checking,
     UpToDate,
-    Available { build: u64 },
+    Available {
+        build: u64,
+    },
     Downloading(f32),
     Failed(String),
 }
@@ -39,17 +41,26 @@ impl RenderOnce for UpdatesPage {
             UpdateStatus::Idle => installed.clone(),
             UpdateStatus::Checking => "Checking for updates…".to_string(),
             UpdateStatus::UpToDate => format!("You're on the latest version. {installed}."),
-            UpdateStatus::Available { build } => format!("Build {build} is available. {installed}."),
+            UpdateStatus::Available { build } => {
+                format!("Build {build} is available. {installed}.")
+            }
             UpdateStatus::Downloading(progress) => {
                 format!("Downloading update… {}%", (progress * 100.0) as u32)
             }
             UpdateStatus::Failed(message) => message.clone(),
         };
         let failed = matches!(self.status, UpdateStatus::Failed(_));
-        let busy = matches!(self.status, UpdateStatus::Checking | UpdateStatus::Downloading(_));
+        let busy = matches!(
+            self.status,
+            UpdateStatus::Checking | UpdateStatus::Downloading(_)
+        );
         let available = matches!(self.status, UpdateStatus::Available { .. });
         let disabled = busy || self.installed_build.is_none();
-        let on_click = if available { self.on_install } else { self.on_check };
+        let on_click = if available {
+            self.on_install
+        } else {
+            self.on_check
+        };
 
         div()
             .flex()
@@ -82,7 +93,11 @@ impl RenderOnce for UpdatesPage {
                     .border_color(theme.border)
                     .bg(theme.surface)
                     .text_size(px(12.5))
-                    .text_color(if failed { theme.danger } else { theme.text_secondary })
+                    .text_color(if failed {
+                        theme.danger
+                    } else {
+                        theme.text_secondary
+                    })
                     .child(summary),
             )
             .child(
@@ -99,7 +114,11 @@ impl RenderOnce for UpdatesPage {
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme.on_inverse)
                         .when(!disabled, |el| el.hover(|s| s.opacity(0.9)))
-                        .child(if available { "Install and restart" } else { "Check for updates" })
+                        .child(if available {
+                            "Install and restart"
+                        } else {
+                            "Check for updates"
+                        })
                         .on_click(move |_event, window, cx| {
                             if !disabled {
                                 (on_click)(window, cx);

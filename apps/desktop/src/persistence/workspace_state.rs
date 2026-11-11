@@ -77,7 +77,8 @@ pub fn save_workspace_state(doc: &WorkspaceStateDocument) {
     to_save.version = WORKSPACE_STATE_VERSION;
     // Compact: rewritten on layout/resize actions; see store.rs.
     if let Ok(bytes) = serde_json::to_vec(&to_save)
-        && fs::write(&tmp, bytes).is_ok() {
-            let _ = fs::rename(tmp, path);
-        }
+        && fs::write(&tmp, bytes).is_ok()
+    {
+        let _ = fs::rename(tmp, path);
+    }
 }

@@ -1,6 +1,6 @@
 use console_proto::{
-    DirCreateResponse, FileDeleteResponse, FileSearchResult, FsBrowseResult,
-    FsChangeEvent, FsDirectoryTree, FsFileContent, FsTreeEntry, GrepResult, SaveFileResponse,
+    DirCreateResponse, FileDeleteResponse, FileSearchResult, FsBrowseResult, FsChangeEvent,
+    FsDirectoryTree, FsFileContent, FsTreeEntry, GrepResult, SaveFileResponse,
 };
 use std::path::PathBuf;
 

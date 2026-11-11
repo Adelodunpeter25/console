@@ -135,7 +135,9 @@ impl FsService {
     }
 
     pub async fn read_file(&self, path: &str) -> Result<FsFileContent> {
-        self.read_file_with_etag(path).await.map(|file| file.content)
+        self.read_file_with_etag(path)
+            .await
+            .map(|file| file.content)
     }
 
     /// Read a file together with the ETag it was loaded at.
@@ -210,21 +212,19 @@ impl FsService {
             .map_err(|err| FsSaveError::Other(format!("Failed to save file: {err}")))?;
 
         if resp.status() == reqwest::StatusCode::CONFLICT {
-            let conflict: SaveConflictEnvelope = self
-                .transport
-                .decode_json(resp)
-                .await
-                .map_err(|err| FsSaveError::Other(format!("Failed to parse conflict: {err}")))?;
+            let conflict: SaveConflictEnvelope =
+                self.transport.decode_json(resp).await.map_err(|err| {
+                    FsSaveError::Other(format!("Failed to parse conflict: {err}"))
+                })?;
             return Err(FsSaveError::FileChanged {
                 current_etag: conflict.etag,
             });
         }
 
-        let body: ApiResponse<FsSaveOutcome> = self
-            .transport
-            .decode_json(resp)
-            .await
-            .map_err(|err| FsSaveError::Other(format!("Failed to parse save response: {err}")))?;
+        let body: ApiResponse<FsSaveOutcome> =
+            self.transport.decode_json(resp).await.map_err(|err| {
+                FsSaveError::Other(format!("Failed to parse save response: {err}"))
+            })?;
         if body.success {
             body.data
                 .ok_or_else(|| FsSaveError::Other("Save response data is missing".into()))

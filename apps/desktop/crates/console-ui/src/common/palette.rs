@@ -398,18 +398,19 @@ impl Render for CommandPaletteModal {
             .on_confirm(move |index, window, cx| {
                 let entry = entries.get(index.row).cloned();
                 if let Some(palette) = palette_handle.upgrade()
-                    && let Some(entry) = entry {
-                        if entry.keep_open {
-                            // Navigation row: hand the id to the browse hook
-                            // and keep the palette up.
-                            if let Some(callback) = palette.read(cx).browse_callback.clone() {
-                                callback(entry.id.as_ref(), window, cx);
-                            }
-                        } else {
-                            palette.update(cx, |palette, cx| palette.hide(cx));
-                            (entry.handler)(window, cx);
+                    && let Some(entry) = entry
+                {
+                    if entry.keep_open {
+                        // Navigation row: hand the id to the browse hook
+                        // and keep the palette up.
+                        if let Some(callback) = palette.read(cx).browse_callback.clone() {
+                            callback(entry.id.as_ref(), window, cx);
                         }
+                    } else {
+                        palette.update(cx, |palette, cx| palette.hide(cx));
+                        (entry.handler)(window, cx);
                     }
+                }
             });
 
         // Modal overlay: dimmed backdrop, palette centered near the top like ⌘K menus.

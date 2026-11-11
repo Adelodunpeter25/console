@@ -6,8 +6,8 @@
 //! lets the cards ride scrolling without being inserted into the list.
 
 use gpui::{
-    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce, ScrollWheelEvent,
-    Styled, Window, canvas, div, px,
+    AnyElement, App, DispatchPhase, Entity, IntoElement, ParentElement, RenderOnce,
+    ScrollWheelEvent, Styled, Window, canvas, div, px,
 };
 use std::rc::Rc;
 
@@ -106,8 +106,9 @@ impl RenderOnce for FileViewer {
             .zip(anchors)
             .filter_map(|(comment, anchor)| {
                 let anchor = anchor?;
-                let raw_top =
-                    anchor.top_padding + anchor.line_height * anchor.row_after as f32 + anchor.scroll_y;
+                let raw_top = anchor.top_padding
+                    + anchor.line_height * anchor.row_after as f32
+                    + anchor.scroll_y;
                 // Cards ride scrolling: once the range they hang under has
                 // scrolled out of view (above, or below the fold) the card is
                 // dropped instead of being pinned to the viewport edge.
@@ -121,8 +122,8 @@ impl RenderOnce for FileViewer {
                     return None;
                 }
                 let top = if anchor.viewport_height > px(0.0) {
-                    let max_top = (anchor.viewport_height - px(FILE_COMMENT_CARD_ESTIMATE))
-                        .max(px(0.0));
+                    let max_top =
+                        (anchor.viewport_height - px(FILE_COMMENT_CARD_ESTIMATE)).max(px(0.0));
                     raw_top.min(max_top)
                 } else {
                     raw_top

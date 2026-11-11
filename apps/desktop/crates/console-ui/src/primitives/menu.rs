@@ -220,13 +220,13 @@ struct MenuState {
 /// Cross-frame state for one context menu. The owner keeps one per menu site.
 #[derive(Clone)]
 pub struct ContextMenuHandle {
-state: Rc<RefCell<MenuState>>,
-/// Stable focus identity shared by dropdown and keyboard context triggers.
-trigger_focus: FocusHandle,
-focus: FocusHandle,
-/// Scroll state of the menu's row list, shared across frames so keyboard
-/// navigation can keep the highlighted row in view.
-scroll: ScrollHandle,
+    state: Rc<RefCell<MenuState>>,
+    /// Stable focus identity shared by dropdown and keyboard context triggers.
+    trigger_focus: FocusHandle,
+    focus: FocusHandle,
+    /// Scroll state of the menu's row list, shared across frames so keyboard
+    /// navigation can keep the highlighted row in view.
+    scroll: ScrollHandle,
     /// The trigger's bounds as of the last frame, so a dropdown can align under
     /// it. Recorded by a zero-cost canvas inside the trigger.
     trigger_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,

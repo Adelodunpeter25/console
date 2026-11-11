@@ -164,8 +164,8 @@ impl ConsoleDesktopApp {
                 // workspace files off its own disk.
                 let client = self.client.clone();
                 let file_path = path;
-                cx.spawn(
-                    async move |entity, cx| match client.fs.read_file_with_etag(&file_path).await {
+                cx.spawn(async move |entity, cx| {
+                    match client.fs.read_file_with_etag(&file_path).await {
                         Ok(file) => {
                             cx.update(|cx| {
                                 if let Some(app) = entity.upgrade() {
@@ -182,10 +182,11 @@ impl ConsoleDesktopApp {
                                             let dirty = this
                                                 .viewer_editor_views
                                                 .get(&file_path)
-                                                .is_some_and(|(_, _, state, _)| state.read(cx).is_dirty());
+                                                .is_some_and(|(_, _, state, _)| {
+                                                    state.read(cx).is_dirty()
+                                                });
                                             if !dirty {
-                                                this.viewer_file_etags
-                                                    .insert(file_path, etag);
+                                                this.viewer_file_etags.insert(file_path, etag);
                                             }
                                         }
                                         cx.notify();
@@ -205,8 +206,8 @@ impl ConsoleDesktopApp {
                                 }
                             });
                         }
-                    },
-                )
+                    }
+                })
                 .detach();
             }
             console_core::FileKind::RasterImage | console_core::FileKind::Svg => {
@@ -481,9 +482,10 @@ impl ConsoleDesktopApp {
         cx.spawn(async move |entity, cx| {
             let mut diff_raw = session_change_diff.unwrap_or_default();
             if diff_raw.trim().is_empty()
-                && let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await {
-                    diff_raw = resp.diff;
-                }
+                && let Ok(resp) = client.git.get_diff(cwd.as_deref(), Some(&file_path)).await
+            {
+                diff_raw = resp.diff;
+            }
 
             let diff_result = if !diff_raw.trim().is_empty() {
                 console_core::utils::diff::parse_unified_diff(&diff_raw)

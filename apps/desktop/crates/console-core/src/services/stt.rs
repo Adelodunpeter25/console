@@ -34,10 +34,9 @@ impl SttService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to fetch speech-to-text status".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to fetch speech-to-text status".into()
+            })))
         }
     }
 
@@ -74,10 +73,9 @@ impl SttService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to save speech-to-text config".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to save speech-to-text config".into()
+            })))
         }
     }
 
@@ -104,10 +102,9 @@ impl SttService {
         if body.success {
             Ok(body.data.unwrap_or_default())
         } else {
-            Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Failed to remove speech-to-text config".into())
-            ))
+            Err(anyhow!(body.error.unwrap_or_else(|| {
+                "Failed to remove speech-to-text config".into()
+            })))
         }
     }
 
@@ -140,8 +137,7 @@ impl SttService {
             Ok(body.data.unwrap_or_default())
         } else {
             Err(anyhow!(
-                body.error
-                    .unwrap_or_else(|| "Transcription failed".into())
+                body.error.unwrap_or_else(|| "Transcription failed".into())
             ))
         }
     }

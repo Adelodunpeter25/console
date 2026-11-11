@@ -23,10 +23,7 @@ fn call_with_icon(icon: &str) -> ToolCall {
 
 #[test]
 fn test_server_icon_keys_map_to_glyphs() {
-    assert_eq!(
-        activity_icon("search"),
-        IconName::Search.path()
-    );
+    assert_eq!(activity_icon("search"), IconName::Search.path());
     assert_eq!(activity_icon("file"), IconName::File.path());
     assert_eq!(activity_icon("folder"), IconName::Folder.path());
     assert_eq!(activity_icon("terminal"), IconName::Terminal.path());
@@ -37,14 +34,10 @@ fn test_server_icon_keys_map_to_glyphs() {
 #[test]
 fn test_every_entry_of_console_tool_icon_table() {
     for key in [
-        "sparkle", "terminal", "pencil", "file", "folder", "search", "globe",
-        "chart", "list", "memory", "package",
+        "sparkle", "terminal", "pencil", "file", "folder", "search", "globe", "chart", "list",
+        "memory", "package",
     ] {
         // Every mapped key must produce something other than the wrench.
-        assert_ne!(
-            activity_icon(key),
-            IconName::Wrench.path(),
-            "{key}"
-        );
+        assert_ne!(activity_icon(key), IconName::Wrench.path(), "{key}");
     }
 }

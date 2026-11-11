@@ -395,9 +395,10 @@ pub fn session_checkout_path<'a>(
     project_path: Option<&str>,
 ) -> Option<&'a str> {
     if let Some(path) = session.worktree.as_ref().map(|w| w.path.as_str())
-        && !path.is_empty() {
-            return Some(trim_path(path));
-        }
+        && !path.is_empty()
+    {
+        return Some(trim_path(path));
+    }
     let cwd = trim_path(session.cwd.as_str());
     let project_path = trim_path(project_path?);
     (!cwd.is_empty() && cwd != project_path).then_some(cwd)

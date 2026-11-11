@@ -295,7 +295,9 @@ impl RenderOnce for SidebarView {
         let is_pinned = |index: usize| sessions[index].pinned_at.is_some();
         let pinned_positions: Vec<usize> = (0..sessions.len())
             .filter(|&idx| {
-                is_pinned(idx) && !draft_sessions.contains(&sessions[idx].id) && active.contains(&idx)
+                is_pinned(idx)
+                    && !draft_sessions.contains(&sessions[idx].id)
+                    && active.contains(&idx)
             })
             .collect();
         let grouped: Vec<(SessionDateGroup, Vec<usize>)> =
@@ -578,9 +580,10 @@ impl RenderOnce for SidebarView {
             } else {
                 let mut sections_iter = sections.into_iter();
                 if let Some((group, positions)) = sections_iter.next()
-                    && !collapsed_groups.contains(&group) {
-                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                    }
+                    && !collapsed_groups.contains(&group)
+                {
+                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                }
                 for (group, positions) in sections_iter {
                     let collapsed = collapsed_groups.contains(&group);
                     list_rows.push(SidebarRow::GroupHeader { group, collapsed });
@@ -602,12 +605,11 @@ impl RenderOnce for SidebarView {
                     }
                 }
             }
-        } else if has_drafts
-            && !self.drafts_collapsed {
-                for i in 0..draft_summaries.len() {
-                    list_rows.push(SidebarRow::Draft(i));
-                }
+        } else if has_drafts && !self.drafts_collapsed {
+            for i in 0..draft_summaries.len() {
+                list_rows.push(SidebarRow::Draft(i));
             }
+        }
         match sort_mode {
             SidebarSortMode::Date => {
                 push_section_rows(&mut list_rows, grouped, render_all_headers);
@@ -632,9 +634,10 @@ impl RenderOnce for SidebarView {
                 } else {
                     let mut sections_iter = sections.into_iter();
                     if let Some((key, _name, positions)) = sections_iter.next()
-                        && !collapsed_projects.contains(&key) {
-                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                        }
+                        && !collapsed_projects.contains(&key)
+                    {
+                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                    }
                     for (key, name, positions) in sections_iter {
                         let collapsed = collapsed_projects.contains(&key);
                         list_rows.push(SidebarRow::ProjectHeader {

@@ -152,7 +152,11 @@ impl ConsoleDesktopApp {
                                         {
                                             this.selected_session_id = Some(session_id.clone());
                                         }
-                                        this.restore_draft_for_pane(&pane_id, Some(&session_id), cx);
+                                        this.restore_draft_for_pane(
+                                            &pane_id,
+                                            Some(&session_id),
+                                            cx,
+                                        );
                                         this.load_session_messages_for_pane(
                                             pane_id, session_id, cx,
                                         );
@@ -230,9 +234,10 @@ impl ConsoleDesktopApp {
                                     }
                                     if let Some(state) =
                                         this.workspace_pane_states.get_mut("pane-main")
-                                        && state.selected_model.is_none() {
-                                            state.selected_model = first_model;
-                                        }
+                                        && state.selected_model.is_none()
+                                    {
+                                        state.selected_model = first_model;
+                                    }
                                     cx.notify();
                                 });
                             }
@@ -308,10 +313,10 @@ impl ConsoleDesktopApp {
                                     .clone()
                                     .unwrap_or_else(|| "pane-main".into());
                                 if let Some(state) = this.workspace_pane_states.get_mut(&active_id)
-                                    && state.selected_project_id.is_none() {
-                                        state.selected_project_id =
-                                            this.selected_project_id.clone();
-                                    }
+                                    && state.selected_project_id.is_none()
+                                {
+                                    state.selected_project_id = this.selected_project_id.clone();
+                                }
                                 let path = this
                                     .selected_project_for_pane(&active_id)
                                     .map(|project| project.path.clone());

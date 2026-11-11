@@ -45,7 +45,16 @@ async fn requests_reach_the_server_by_node_id() {
     let mut set = tokio::task::JoinSet::new();
     for i in 0..5 {
         let (c, url) = (client.clone(), tunnel.base_url());
-        set.spawn(async move { c.post(url).body(format!("n{i}")).send().await.unwrap().text().await.unwrap() });
+        set.spawn(async move {
+            c.post(url)
+                .body(format!("n{i}"))
+                .send()
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+        });
     }
     let mut got = Vec::new();
     while let Some(r) = set.join_next().await {
@@ -71,7 +80,9 @@ fn rejects_a_bad_node_id() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn latency_through_the_tunnel() {
-    let Ok(bin) = std::env::var("IROHECHO") else { return };
+    let Ok(bin) = std::env::var("IROHECHO") else {
+        return;
+    };
     let (mut child, node_id) = start_echo(&bin);
     let tunnel = Tunnel::connect(&node_id).await.expect("connect");
     let client = reqwest::Client::new();
@@ -80,7 +91,15 @@ async fn latency_through_the_tunnel() {
     let mut times = Vec::new();
     for _ in 0..200 {
         let t = std::time::Instant::now();
-        client.post(&url).body("x").send().await.unwrap().text().await.unwrap();
+        client
+            .post(&url)
+            .body("x")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
         times.push(t.elapsed());
     }
     times.sort();

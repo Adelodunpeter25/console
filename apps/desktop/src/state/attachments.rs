@@ -222,13 +222,14 @@ impl ConsoleDesktopApp {
     /// so removal must hit the same pane.
     pub fn remove_attachment(&mut self, pane_id: &str, index: usize, cx: &mut Context<Self>) {
         if let Some(staged) = self.attachments.get_mut(pane_id)
-            && index < staged.len() {
-                Rc::make_mut(staged).remove(index);
-                if staged.is_empty() {
-                    self.attachments.remove(pane_id);
-                }
-                cx.notify();
+            && index < staged.len()
+        {
+            Rc::make_mut(staged).remove(index);
+            if staged.is_empty() {
+                self.attachments.remove(pane_id);
             }
+            cx.notify();
+        }
     }
 
     /// Open the image preview modal for a staged attachment.
@@ -238,10 +239,11 @@ impl ConsoleDesktopApp {
             .get(pane_id)
             .and_then(|v| v.get(index))
             .cloned()
-            && let Some(image) = attachment_image(&attachment) {
-                self.zoomed_image = Some(image);
-                cx.notify();
-            }
+            && let Some(image) = attachment_image(&attachment)
+        {
+            self.zoomed_image = Some(image);
+            cx.notify();
+        }
     }
 
     /// Open the image preview modal for a decoded message image.
@@ -260,12 +262,7 @@ impl ConsoleDesktopApp {
     /// inline behavior — the collapse is a UX improvement, not a dependency.
     /// `pane_id` is the paste event's pane, captured so async results land
     /// where the paste happened even if focus moves during the upload.
-    pub fn stage_large_paste(
-        &mut self,
-        pane_id: &str,
-        text: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn stage_large_paste(&mut self, pane_id: &str, text: String, cx: &mut Context<Self>) {
         let Some(session_id) = self.active_session_for_pane(pane_id) else {
             self.paste_text_inline(pane_id, text, cx);
             return;
@@ -302,7 +299,10 @@ impl ConsoleDesktopApp {
                     input.insert_paste_mention(
                         0..0,
                         &result.path,
-                        format!("pasted {} lines", console_ui::input::thousands(result.lines)),
+                        format!(
+                            "pasted {} lines",
+                            console_ui::input::thousands(result.lines)
+                        ),
                         cx,
                     );
                 });
@@ -325,4 +325,3 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 }
-

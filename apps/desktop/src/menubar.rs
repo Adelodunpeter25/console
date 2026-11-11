@@ -20,8 +20,8 @@ use console_ui::theme::Theme;
 
 use crate::app_menu::Quit;
 use crate::keybindings::{
-    AddProject, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow, OpenSettings, CheckForUpdates,
-    QuickOpenFile,
+    AddProject, CheckForUpdates, NewBrowser, NewChat, NewProject, NewTerminal, NewWindow,
+    OpenSettings, QuickOpenFile,
 };
 
 /// One dropdown entry: label, right-aligned shortcut hint, and the action to

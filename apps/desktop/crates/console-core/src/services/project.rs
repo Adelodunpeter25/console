@@ -252,7 +252,11 @@ impl ProjectService {
     /// its default location), registers it, and creates the session. The
     /// caller opens the session and prompts through the normal run flow.
     /// Not-connected fails with [`GithubNotConnected`] like clone does.
-    pub async fn create_session_from_repo(&self, url: &str, name: Option<&str>) -> Result<RepoTask> {
+    pub async fn create_session_from_repo(
+        &self,
+        url: &str,
+        name: Option<&str>,
+    ) -> Result<RepoTask> {
         let body = repo_task_body(url, name);
         let endpoint = self.transport.url("/api/sessions/from-repo").await;
         let resp = self
@@ -272,7 +276,8 @@ impl ProjectService {
             .await
             .context("Failed to parse repository task response")?;
         if body.success {
-            body.data.ok_or_else(|| anyhow!("Repository task data is missing"))
+            body.data
+                .ok_or_else(|| anyhow!("Repository task data is missing"))
         } else {
             Err(bootstrap_error(status, body.error))
         }

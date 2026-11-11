@@ -1,5 +1,7 @@
 use console_core::SessionHeader;
-use console_ui::layout::sidebar_loading::{SidebarLoadingState, is_generic_title, title_is_pending};
+use console_ui::layout::sidebar_loading::{
+    SidebarLoadingState, is_generic_title, title_is_pending,
+};
 
 fn header(title: &str, message_count: u64) -> SessionHeader {
     // Only title + message_count feed the predicate; the rest are defaults.

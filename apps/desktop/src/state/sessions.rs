@@ -169,11 +169,7 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
-    pub(crate) fn toggle_pin_session(
-        &mut self,
-        session_id: String,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn toggle_pin_session(&mut self, session_id: String, cx: &mut Context<Self>) {
         let Some(current) = self
             .sessions
             .iter()
@@ -371,45 +367,46 @@ impl ConsoleDesktopApp {
 
         // Optimistically sync provider changes to open chat tabs, local session state, and usage meter
         if let Some(ref prov) = payload.provider
-            && !prov.is_empty() {
+            && !prov.is_empty()
+        {
+            console_ui::workspace::ops::sync_chat_provider(
+                &mut self.workspace_root,
+                |tab| {
+                    matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
+                            if sid == &session_id)
+                },
+                prov.clone(),
+            );
+            for root in self.project_workspace_roots.values_mut() {
                 console_ui::workspace::ops::sync_chat_provider(
-                    &mut self.workspace_root,
+                    root,
                     |tab| {
                         matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
-                            if sid == &session_id)
+                                if sid == &session_id)
                     },
                     prov.clone(),
                 );
-                for root in self.project_workspace_roots.values_mut() {
-                    console_ui::workspace::ops::sync_chat_provider(
-                        root,
-                        |tab| {
-                            matches!(tab, console_core::WorkspaceTabConfig::Chat { session_id: sid, .. }
-                                if sid == &session_id)
-                        },
-                        prov.clone(),
-                    );
-                }
-                if let Some(session) = Rc::make_mut(&mut self.sessions)
-                    .iter_mut()
-                    .find(|session| session.id == session_id)
-                {
-                    session.provider = prov.clone();
-                    if let Some(ref mid) = payload.model_id {
-                        session.model_id = mid.clone();
-                    }
-                    if payload.thinking_level.is_some() {
-                        session.thinking_level = payload
-                            .thinking_level
-                            .as_ref()
-                            .map(|t| t.as_str().to_string());
-                    }
-                }
-                self.persist_workspaces();
-                self.maybe_fetch_usage(&session_id, cx);
-                self.fetch_context_usage(&session_id, cx);
-                cx.notify();
             }
+            if let Some(session) = Rc::make_mut(&mut self.sessions)
+                .iter_mut()
+                .find(|session| session.id == session_id)
+            {
+                session.provider = prov.clone();
+                if let Some(ref mid) = payload.model_id {
+                    session.model_id = mid.clone();
+                }
+                if payload.thinking_level.is_some() {
+                    session.thinking_level = payload
+                        .thinking_level
+                        .as_ref()
+                        .map(|t| t.as_str().to_string());
+                }
+            }
+            self.persist_workspaces();
+            self.maybe_fetch_usage(&session_id, cx);
+            self.fetch_context_usage(&session_id, cx);
+            cx.notify();
+        }
 
         let client = self.client.clone();
         let entity = cx.entity().downgrade();
@@ -743,9 +740,10 @@ impl ConsoleDesktopApp {
         }
         let target_session = self.sessions.iter().find(|s| s.id == session_id)?;
         if let Some(pid) = &target_session.project_id
-            && let Some(p) = self.projects.iter().find(|p| &p.id == pid) {
-                return Some(p.clone());
-            }
+            && let Some(p) = self.projects.iter().find(|p| &p.id == pid)
+        {
+            return Some(p.clone());
+        }
         self.projects
             .iter()
             .find(|p| !target_session.cwd.is_empty() && p.path == target_session.cwd)
@@ -1231,7 +1229,10 @@ impl ConsoleDesktopApp {
                                     t.set_on_request_prompts(move |_window, cx| {
                                         if let Some(app) = app_for_prompts.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.load_prompts_for_pane(pane_for_prompts.clone(), cx);
+                                                this.load_prompts_for_pane(
+                                                    pane_for_prompts.clone(),
+                                                    cx,
+                                                );
                                             });
                                         }
                                     });
@@ -1326,8 +1327,10 @@ impl ConsoleDesktopApp {
                                 let queue_pane_id = pane_id.clone();
                                 let queue_session_id = session_id.clone();
                                 cx.spawn(async move |entity, cx| {
-                                    if let Ok(q) =
-                                        queue_client.runs.get_queued_prompts(&queue_session_id).await
+                                    if let Ok(q) = queue_client
+                                        .runs
+                                        .get_queued_prompts(&queue_session_id)
+                                        .await
                                     {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {

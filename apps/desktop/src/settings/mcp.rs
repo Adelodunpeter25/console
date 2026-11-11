@@ -700,29 +700,26 @@ fn serve_mcp_callback_once(
         for line in request.lines() {
             if line.starts_with("GET ") {
                 if let Some(path_and_query) = line.split_whitespace().nth(1)
-                    && let Some(query) = path_and_query.split('?').nth(1) {
-                        for part in query.split('&') {
-                            let mut kv = part.splitn(2, '=');
-                            match (kv.next(), kv.next()) {
-                                (Some("code"), Some(v)) => {
-                                    code = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                (Some("state"), Some(v)) => {
-                                    state = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                (Some("error"), Some(v)) => {
-                                    err_msg = Some(
-                                        urlencoding::decode(v).unwrap_or_default().into_owned(),
-                                    )
-                                }
-                                _ => {}
+                    && let Some(query) = path_and_query.split('?').nth(1)
+                {
+                    for part in query.split('&') {
+                        let mut kv = part.splitn(2, '=');
+                        match (kv.next(), kv.next()) {
+                            (Some("code"), Some(v)) => {
+                                code = Some(urlencoding::decode(v).unwrap_or_default().into_owned())
                             }
+                            (Some("state"), Some(v)) => {
+                                state =
+                                    Some(urlencoding::decode(v).unwrap_or_default().into_owned())
+                            }
+                            (Some("error"), Some(v)) => {
+                                err_msg =
+                                    Some(urlencoding::decode(v).unwrap_or_default().into_owned())
+                            }
+                            _ => {}
                         }
                     }
+                }
                 break;
             }
         }
@@ -740,9 +737,10 @@ fn serve_mcp_callback_once(
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
         if let Some(s) = state
-            && (code.is_some() || err_msg.is_some()) {
-                return Some((s, code, err_msg));
-            }
+            && (code.is_some() || err_msg.is_some())
+        {
+            return Some((s, code, err_msg));
+        }
     }
     None
 }

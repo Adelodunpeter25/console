@@ -67,12 +67,22 @@ impl ConsoleDesktopApp {
                                         let _ = cx.update(|cx| {
                                             if let Some(app) = entity.upgrade() {
                                                 app.update(cx, |this, cx| {
-                                                    if this.sessions.iter().any(|s| s.id == session_id) {
+                                                    if this
+                                                        .sessions
+                                                        .iter()
+                                                        .any(|s| s.id == session_id)
+                                                    {
                                                         std::rc::Rc::make_mut(&mut this.sessions)
                                                             .retain(|s| s.id != session_id);
-                                                        this.close_session_chat_tabs(&session_id, cx);
+                                                        this.close_session_chat_tabs(
+                                                            &session_id,
+                                                            cx,
+                                                        );
                                                     }
-                                                    this.close_session_browser_tabs(&session_id, cx);
+                                                    this.close_session_browser_tabs(
+                                                        &session_id,
+                                                        cx,
+                                                    );
                                                 });
                                             }
                                         });

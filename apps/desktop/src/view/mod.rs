@@ -575,8 +575,7 @@ impl Render for ConsoleDesktopApp {
                                 let transcript = this.active_transcript_view();
                                 transcript.update(cx, |trans, cx| trans.trigger_cite(window, cx))
                             });
-                            if handled {
-                            }
+                            if handled {}
                         }
                     } else if (event.keystroke.key == "c" || event.keystroke.key == "C")
                         && (!event.keystroke.modifiers.control && !event.keystroke.modifiers.alt)
@@ -586,8 +585,7 @@ impl Render for ConsoleDesktopApp {
                                 let transcript = this.active_transcript_view();
                                 transcript.update(cx, |trans, cx| trans.trigger_copy(window, cx))
                             });
-                            if handled {
-                            }
+                            if handled {}
                         }
                     } else if event.keystroke.modifiers.platform
                         && event.keystroke.modifiers.shift

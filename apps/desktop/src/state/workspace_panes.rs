@@ -273,13 +273,14 @@ impl ConsoleDesktopApp {
         // Any pane still pointing at a dead workspace goes back to its project.
         for state in self.workspace_pane_states.values_mut() {
             if let Some(key) = state.selected_project_id.clone()
-                && dead.contains(&key) {
-                    state.selected_project_id =
-                        Some(console_core::project_id_of_workspace_key(&key).to_owned());
-                    Rc::make_mut(&mut state.branches).clear();
-                    state.branch_loaded = false;
-                    state.branch_cwd = None;
-                }
+                && dead.contains(&key)
+            {
+                state.selected_project_id =
+                    Some(console_core::project_id_of_workspace_key(&key).to_owned());
+                Rc::make_mut(&mut state.branches).clear();
+                state.branch_loaded = false;
+                state.branch_cwd = None;
+            }
         }
 
         // Kill terminals only the discarded workspaces used.
@@ -301,9 +302,10 @@ impl ConsoleDesktopApp {
         for root in &removed_roots {
             for terminal_id in terminal_ids(root) {
                 if !still_used.contains(&terminal_id)
-                    && let Some(view) = self.terminals.remove(&terminal_id) {
-                        view.update(cx, |terminal, _| terminal.kill());
-                    }
+                    && let Some(view) = self.terminals.remove(&terminal_id)
+                {
+                    view.update(cx, |terminal, _| terminal.kill());
+                }
             }
         }
         self.sweep_unreferenced_browser_views(cx);
@@ -339,10 +341,9 @@ impl ConsoleDesktopApp {
                             } if open_id == terminal_id
                         )
                     });
-                if !still_referenced
-                    && let Some(view) = self.terminals.remove(terminal_id) {
-                        view.update(cx, |terminal, _| terminal.kill());
-                    }
+                if !still_referenced && let Some(view) = self.terminals.remove(terminal_id) {
+                    view.update(cx, |terminal, _| terminal.kill());
+                }
             }
             WorkspaceTabConfig::File { path, .. } | WorkspaceTabConfig::Diff { path, .. } => {
                 self.evict_file_caches_for_path(path, cx);
@@ -362,10 +363,9 @@ impl ConsoleDesktopApp {
                             } if open_id == browser_id
                         )
                     });
-                if !still_referenced
-                    && let Some(view) = self.browser_views.remove(browser_id) {
-                        view.update(cx, |browser, cx| browser.close(cx));
-                    }
+                if !still_referenced && let Some(view) = self.browser_views.remove(browser_id) {
+                    view.update(cx, |browser, cx| browser.close(cx));
+                }
             }
             WorkspaceTabConfig::Chat { .. } => {}
             WorkspaceTabConfig::Settings { .. } => {}
@@ -392,9 +392,10 @@ impl ConsoleDesktopApp {
         // ⌘⇧P palette can sort open tabs by recent activity. Skipped when the
         // tab is unknown (e.g. id collision or stale persisted state).
         if let Some(leaf) = self.workspace_root.leaf_mut(pane_id)
-            && let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == tab_id) {
-                tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
-            }
+            && let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == tab_id)
+        {
+            tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
+        }
         self.active_pane_id = Some(pane_id.to_string());
         self.persist_workspaces();
     }
@@ -409,10 +410,11 @@ impl ConsoleDesktopApp {
         // instead of being shown in this one.
         if let Some(sid) = tab_id.strip_prefix("chat:")
             && let Some(target) = self.target_workspace_for_session(sid)
-                && self.selected_project_id.as_deref() != Some(target.as_str()) {
-                    self.select_and_open_session(sid.to_string(), cx);
-                    return;
-                }
+            && self.selected_project_id.as_deref() != Some(target.as_str())
+        {
+            self.select_and_open_session(sid.to_string(), cx);
+            return;
+        }
         let prev_sid = self.active_session_for_pane(pane_id).map(|s| s.to_string());
         self.select_workspace_tab(pane_id, tab_id);
         self.sync_workspace_webviews(cx);
@@ -426,9 +428,10 @@ impl ConsoleDesktopApp {
                 .find(|s| s.id == sid)
                 .and_then(|session| self.workspace_key_for_header(session));
             if let Some(key) = key
-                && let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                    state.selected_project_id = Some(key);
-                }
+                && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
+            {
+                state.selected_project_id = Some(key);
+            }
             let transcript_has_messages =
                 self.transcript_for_pane(pane_id).read(cx).message_count() > 0;
             let already_loaded = self
@@ -537,9 +540,10 @@ impl ConsoleDesktopApp {
             .and_then(|session_id| self.sessions.iter().find(|s| s.id == session_id))
             .and_then(|session| self.workspace_key_for_header(session));
         if let Some(key) = key
-            && let Some(state) = self.workspace_pane_states.get_mut(pane_id) {
-                state.selected_project_id = Some(key);
-            }
+            && let Some(state) = self.workspace_pane_states.get_mut(pane_id)
+        {
+            state.selected_project_id = Some(key);
+        }
         self.maybe_refresh_inspector(cx);
         cx.notify();
     }
@@ -711,25 +715,26 @@ impl ConsoleDesktopApp {
         };
 
         if source_pane_id.as_deref() != Some(target_pane_id.as_str())
-            && let Some(source_pane_id) = source_pane_id {
-                if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
-                    let source_transcript = self.transcript_for_pane(&source_pane_id);
-                    source_transcript.update(cx, |transcript, cx| {
+            && let Some(source_pane_id) = source_pane_id
+        {
+            if let Some(source_session_id) = self.active_session_for_pane(&source_pane_id) {
+                let source_transcript = self.transcript_for_pane(&source_pane_id);
+                source_transcript.update(cx, |transcript, cx| {
+                    transcript.set_messages(Vec::new(), cx);
+                });
+                self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
+            } else if self
+                .workspace_root
+                .leaves()
+                .iter()
+                .any(|leaf| leaf.id == source_pane_id)
+            {
+                self.transcript_for_pane(&source_pane_id)
+                    .update(cx, |transcript, cx| {
                         transcript.set_messages(Vec::new(), cx);
                     });
-                    self.load_session_messages_for_pane(source_pane_id, source_session_id, cx);
-                } else if self
-                    .workspace_root
-                    .leaves()
-                    .iter()
-                    .any(|leaf| leaf.id == source_pane_id)
-                {
-                    self.transcript_for_pane(&source_pane_id)
-                        .update(cx, |transcript, cx| {
-                            transcript.set_messages(Vec::new(), cx);
-                        });
-                }
             }
+        }
 
         self.active_pane_id = Some(target_pane_id.clone());
         self.ensure_workspace_pane_state(&target_pane_id, window, cx);

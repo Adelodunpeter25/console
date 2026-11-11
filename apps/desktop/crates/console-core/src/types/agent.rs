@@ -15,8 +15,8 @@ pub use console_proto::{
     AskQuestionRequest as ProtoAskQuestionRequest, AssistantContentPart as ProtoContentPart,
     BrowserActionRequest as ProtoBrowserActionRequest, BrowserAnnotation as ProtoBrowserAnnotation,
     BrowserAnnotationRect as ProtoBrowserAnnotationRect, ErrorPayload as ProtoErrorPayload,
-    ImageAttachment as ProtoImageAttachment,
-    ToolCall as ProtoToolCall, ToolResult as ProtoToolResult,
+    ImageAttachment as ProtoImageAttachment, ToolCall as ProtoToolCall,
+    ToolResult as ProtoToolResult,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,7 +155,11 @@ impl AgentMessage {
                                 }),
                                 role: a.role.clone(),
                                 accessible_name: a.accessible_name.clone(),
-                                computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                                computed_styles: a
+                                    .computed_styles
+                                    .iter()
+                                    .map(|(k, v)| (k.clone(), v.clone()))
+                                    .collect(),
                                 user_comment: a.user_comment.clone(),
                                 screenshot_base64: a.screenshot_base64.clone(),
                             })
@@ -597,7 +601,11 @@ pub fn queued_annotations_to_proto(
             }),
             role: a.role,
             accessible_name: a.accessible_name,
-            computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            computed_styles: a
+                .computed_styles
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
             user_comment: a.user_comment,
             screenshot_base64: a.screenshot_base64,
         })
@@ -630,7 +638,11 @@ pub fn queued_annotations_from_proto(
                     }),
                     role: a.role.clone(),
                     accessible_name: a.accessible_name.clone(),
-                    computed_styles: a.computed_styles.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+                    computed_styles: a
+                        .computed_styles
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
                     user_comment: a.user_comment.clone(),
                     screenshot_base64: a.screenshot_base64.clone(),
                 })

@@ -44,7 +44,8 @@ fn test_chat_chip_prefix_run_is_painted_in_pill_background() {
     assert!(runs.len() >= 3, "unexpected runs: {runs:?}");
     assert_eq!(runs[1].len, 1, "prefix run must be exactly one char");
     assert_eq!(
-        runs[1].color, gpui::transparent_black(),
+        runs[1].color,
+        gpui::transparent_black(),
         "the $ must be transparent, got {:?}",
         runs[1].color
     );

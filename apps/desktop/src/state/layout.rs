@@ -35,9 +35,10 @@ fn strip_diff_tabs(mut root: console_core::WorkspaceNode) -> console_core::Works
             )
         });
         if let Some(active) = &leaf.active_tab_id
-            && (active.starts_with("diff:") || active.starts_with("changesReview:")) {
-                leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
-            }
+            && (active.starts_with("diff:") || active.starts_with("changesReview:"))
+        {
+            leaf.active_tab_id = leaf.tabs.last().map(|t| t.id());
+        }
     }
     root
 }

@@ -501,8 +501,7 @@ impl FloatingComposerView {
         // The prompt is read at click time rather than captured here, so the
         // button reflects the live input even though this struct is built
         // per frame.
-        let can_submit =
-            !submitting && !self.input.read(cx).content().trim().is_empty();
+        let can_submit = !submitting && !self.input.read(cx).content().trim().is_empty();
         let on_submit = self.on_submit.clone();
         // Captured so the click reads the live text instead of a per-frame copy.
         let submit_input = self.input.clone();

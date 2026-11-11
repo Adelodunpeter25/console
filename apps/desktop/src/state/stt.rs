@@ -51,11 +51,17 @@ impl ConsoleDesktopApp {
     /// so a partial update cannot preserve it. The pair is written into the
     /// request body and never retained — the caller drops it as soon as
     /// this returns. On success the cached status replaces it.
-    pub fn save_stt_config(&mut self, account_id: String, api_token: String, cx: &mut Context<Self>) {
+    pub fn save_stt_config(
+        &mut self,
+        account_id: String,
+        api_token: String,
+        cx: &mut Context<Self>,
+    ) {
         let account_id = account_id.trim().to_string();
         let api_token = api_token.trim().to_string();
         if account_id.is_empty() || api_token.is_empty() {
-            self.stt_error = Some("A Cloudflare account ID and API token are both required.".to_string());
+            self.stt_error =
+                Some("A Cloudflare account ID and API token are both required.".to_string());
             cx.notify();
             return;
         }
@@ -186,7 +192,9 @@ impl ConsoleDesktopApp {
     fn tick_speech_recording(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |entity, cx| {
             loop {
-                cx.background_executor().timer(Duration::from_millis(250)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(250))
+                    .await;
                 let keep_going = cx
                     .update(|cx| {
                         entity.upgrade().map(|this| {
@@ -266,8 +274,7 @@ impl ConsoleDesktopApp {
                                     Some("I couldn't hear anything — try again.".to_string());
                             }
                             (Err(error), _) => {
-                                this.stt_mic_error =
-                                    Some(format!("Transcription failed: {error}"));
+                                this.stt_mic_error = Some(format!("Transcription failed: {error}"));
                             }
                         }
                         cx.notify();

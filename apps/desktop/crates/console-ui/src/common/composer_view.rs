@@ -3,13 +3,14 @@ use std::rc::Rc;
 use console_core::{ApprovalMode, ImageAttachment, SelectedModel, ThinkingLevel};
 use gpui::{
     App, Div, ElementId, Entity, ExternalPaths, FontWeight, InteractiveElement, IntoElement,
-    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, img, prelude::FluentBuilder, px,
+    ParentElement, RenderOnce, StatefulInteractiveElement, Styled, Window, div, img,
+    prelude::FluentBuilder, px,
 };
 
 use crate::common::{
-    AutocompleteConfirm, AutocompleteDismiss,
-    AutocompleteNext, AutocompletePrevious, AutocompleteView, ModelDropdownMenu, ThinkingStepper,
-    attachment_image, file_mention_chip, format_model_name, provider_svg_path,
+    AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
+    AutocompleteView, ModelDropdownMenu, ThinkingStepper, attachment_image, file_mention_chip,
+    format_model_name, provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::tooltip::Tooltip;
