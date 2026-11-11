@@ -248,11 +248,9 @@ impl RenderOnce for SidebarSessionItem {
                 .min_w_0()
                 .truncate()
                 .text_size(px(13.0))
-                .font_weight(if is_active {
-                    FontWeight::SEMIBOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
+                // One weight for both states: a heavier selected weight is wider,
+                // so the title would reflow and look larger on selection.
+                .font_weight(FontWeight::MEDIUM)
                 .when(title_pending, |s| {
                     s.italic().text_color(theme.text_tertiary)
                 })
