@@ -592,7 +592,7 @@ impl FloatingComposerView {
         div()
             .absolute()
             .inset_0()
-            .bg(gpui::black().opacity(0.35))
+            .bg(gpui::black().opacity(0.55))
             .flex()
             .justify_center()
             // Nudged left of center so it clears the eye-line of the sidebar.
@@ -614,7 +614,7 @@ impl FloatingComposerView {
                             on_cancel(window, cx)
                         },
                     )
-                    .w(px(560.0))
+                    .w(px(680.0))
                     .rounded(px(13.0))
                     .bg(theme.composer)
                     .border_1()
@@ -655,7 +655,7 @@ impl FloatingComposerView {
                     .child(
                         div()
                             .w_full()
-                            .min_h(px(72.0))
+                            .min_h(px(88.0))
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))
