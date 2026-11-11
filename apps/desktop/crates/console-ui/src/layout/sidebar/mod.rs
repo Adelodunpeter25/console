@@ -1,5 +1,6 @@
 pub mod draft_item;
 pub mod group_header;
+mod item_row;
 pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};

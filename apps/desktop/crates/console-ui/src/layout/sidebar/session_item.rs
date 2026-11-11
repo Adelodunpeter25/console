@@ -1,11 +1,12 @@
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
-    App, AppContext, ElementId, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, StatefulInteractiveElement, Styled, Window, actions, div,
     prelude::FluentBuilder, px,
 };
 use std::rc::Rc;
 
+use super::item_row::{draft_badge, row_container, status_slot, title_label};
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
 use crate::primitives::motion;
@@ -167,14 +168,10 @@ impl RenderOnce for SidebarSessionItem {
             || session.status == "waiting";
         let is_done = session.status == "done" || session.status == "completed";
 
+        let status_id = || ElementId::Name(format!("status-{}", session.id).into());
         let status_indicator = if is_running {
-            div()
-                .id(ElementId::Name(format!("status-{}", session.id).into()))
-                .size(px(16.0))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
+            status_slot()
+                .id(status_id())
                 .tooltip(Tooltip::text("Running"))
                 .child(motion::spin_slow(app_icon(
                     IconName::LoaderCircle,
@@ -183,32 +180,19 @@ impl RenderOnce for SidebarSessionItem {
                 )))
                 .into_any_element()
         } else if needs_attention {
-            div()
-                .id(ElementId::Name(format!("status-{}", session.id).into()))
-                .size(px(16.0))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
+            status_slot()
+                .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
                 .child(app_icon(IconName::Alert, 12.0, theme.warning))
                 .into_any_element()
         } else if is_done {
-            div()
-                .id(ElementId::Name(format!("status-{}", session.id).into()))
-                .size(px(16.0))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
+            status_slot()
+                .id(status_id())
                 .tooltip(Tooltip::text("Done"))
                 .child(app_icon(IconName::CircleCheck, 12.0, theme.success))
                 .into_any_element()
         } else {
-            div()
-                .size(px(16.0))
-                .flex_none()
-                .into_any_element()
+            status_slot().into_any_element()
         };
 
         let title = if let Some(rename_input) = rename_input {
@@ -243,81 +227,41 @@ impl RenderOnce for SidebarSessionItem {
                 .child(rename_input)
                 .into_any_element()
         } else {
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(13.5))
-                // One weight for both states: a heavier selected weight is wider,
-                // so the title would reflow and look larger on selection.
-                .font_weight(FontWeight::MEDIUM)
+            title_label(is_active, theme)
                 .when(title_pending, |s| {
                     s.italic().text_color(theme.text_tertiary)
-                })
-                .when(!title_pending, |s| {
-                    s.text_color(if is_active {
-                        theme.text
-                    } else {
-                        theme.text_secondary
-                    })
                 })
                 .child(display_title.clone())
                 .into_any_element()
         };
 
-        let row = div()
-            .id(ElementId::Name(session.id.clone().into()))
-            .relative()
-            .w_full()
-            .min_w_0()
-            .h(px(34.0))
-            .px(px(6.0))
-            .rounded(px(6.0))
-            .cursor_default()
-            .on_drag(drag, |drag, _, _, cx| {
-                cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
+        let row = row_container(
+            ElementId::Name(session.id.clone().into()),
+            is_active,
+            theme,
+        )
+        .on_drag(drag, |drag, _, _, cx| {
+            cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
+        })
+        .group(group_name)
+        // Settled chats read as archived: slightly dimmed everywhere.
+        .when(settled, |s| s.opacity(0.7))
+        .when(!is_renaming, |element| {
+            element.on_click(move |_, w, cx| {
+                (on_click)(w, cx);
             })
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_x(px(6.0))
-            .group(group_name)
-            .when(is_active, |s| s.bg(theme.sidebar_item_background))
-            .when(!is_active, |s| {
-                s.hover(|h| h.bg(theme.sidebar_item_background))
-            })
-            // Settled chats read as archived: slightly dimmed everywhere.
-            .when(settled, |s| s.opacity(0.7))
-            .when(!is_renaming, |element| {
-                element.on_click(move |_, w, cx| {
-                    (on_click)(w, cx);
-                })
-            })
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap_x(px(6.0))
-                    .child(status_indicator)
-                    .child(title)
-                    .when(self.has_draft, |el| {
-                        el.child(
-                            div()
-                                .flex_none()
-                                .px(px(4.0))
-                                .py(px(0.5))
-                                .rounded(px(3.0))
-                                .bg(theme.accent.opacity(0.15))
-                                .text_color(theme.accent)
-                                .text_size(px(13.5))
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .child("Draft"),
-                        )
-                    }),
-            )
-            ;
+        })
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap_x(px(6.0))
+                .child(status_indicator)
+                .child(title)
+                .when(self.has_draft, |el| el.child(draft_badge(theme))),
+        );
 
         if is_renaming {
             let on_commit = on_commit_rename;

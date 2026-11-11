@@ -1,9 +1,9 @@
 use gpui::{
-    App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, Window, div, prelude::FluentBuilder, px,
+    App, ElementId, IntoElement, ParentElement, StatefulInteractiveElement, Window,
 };
 use std::rc::Rc;
 
+use super::item_row::{row_container, status_slot, title_label};
 use crate::primitives::draft_context_menu;
 use crate::theme::Theme;
 
@@ -45,46 +45,20 @@ pub fn render_sidebar_draft_item(
         .unwrap_or_else(|| "new_chat".to_string());
     let on_delete = on_delete_draft.clone();
 
-    // Same single-row anatomy as `SidebarSessionItem`: the empty leading slot
-    // keeps draft titles aligned with the status icons on session rows.
-    let row = div()
-        .id(ElementId::Name(
+    let row = row_container(
+        ElementId::Name(
             format!(
                 "draft-row-{}",
                 draft.session_id.as_deref().unwrap_or("new-chat")
             )
             .into(),
-        ))
-        .w_full()
-        .min_w_0()
-        .h(px(34.0))
-        .px(px(6.0))
-        .rounded(px(6.0))
-        .cursor_default()
-        .when(is_active, |s| s.bg(theme.sidebar_item_background))
-        .when(!is_active, |s| {
-            s.hover(|h| h.bg(theme.sidebar_item_background))
-        })
-        .on_click(move |_, window, cx| on_click(window, cx))
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_x(px(6.0))
-        .child(div().size(px(16.0)).flex_none())
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_size(px(13.5))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if is_active {
-                    theme.text
-                } else {
-                    theme.text_secondary
-                })
-                .child(draft.title.clone()),
-        );
+        ),
+        is_active,
+        theme,
+    )
+    .on_click(move |_, window, cx| on_click(window, cx))
+    .child(status_slot())
+    .child(title_label(is_active, theme).child(draft.title.clone()));
 
     draft_context_menu(row, move |window, cx| {
         on_delete(delete_key.clone(), window, cx);
