@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.console.mobile.AppContainer
 import com.console.mobile.data.model.ApprovalMode
@@ -113,8 +114,8 @@ fun ModelChip(sessionId: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Brain icon-only button, colored per level like desktop's stepper. Tap opens
- * a level picker sheet instead of cycling. Hidden when the model declares no
+ * Thinking-level chip showing the active level's label. Tap opens
+ * a level picker sheet. Hidden when the model declares no
  * levels. Disabled during a run, where a change would only apply to the next turn.
  */
 @Composable
@@ -140,14 +141,14 @@ fun ThinkingChip(sessionId: String, running: Boolean, modifier: Modifier = Modif
             .clip(RoundedCornerShape(NewTheme.ChipRadius))
             .background(NewTheme.Raised)
             .clickable(enabled = !running, onClick = { sheet = true })
-            .padding(horizontal = 9.dp, vertical = 7.dp),
+            .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            TablerIcons.Outline.Brain,
-            contentDescription = "Thinking level: $current",
-            tint = Color(com.console.mobile.core.chat.thinkingLevelColorHex(current)),
-            modifier = Modifier.size(14.dp),
+        androidx.compose.material3.Text(
+            current.replaceFirstChar { it.uppercase() },
+            color = NewTheme.TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
         )
     }
 

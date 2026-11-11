@@ -95,6 +95,7 @@ impl ConsoleDesktopApp {
             })
         };
         let branch_menu = ContextMenuHandle::new(cx);
+        let thinking_menu = ContextMenuHandle::new(cx);
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
         let shells_menu = ContextMenuHandle::new(cx);
@@ -267,6 +268,7 @@ impl ConsoleDesktopApp {
                 approval_mode: self.approval_mode,
                 thinking_level: self.thinking_level,
                 model_menu,
+                thinking_menu,
                 usage_menu,
                 tasks_menu,
                 subagents_menu,
@@ -462,6 +464,13 @@ impl ConsoleDesktopApp {
             .unwrap_or_else(|| self.model_menu.clone())
     }
 
+    pub(crate) fn pane_thinking_menu(&self, pane_id: &str) -> ContextMenuHandle {
+        self.workspace_pane_states
+            .get(pane_id)
+            .map(|state| state.thinking_menu.clone())
+            .unwrap_or_else(|| self.thinking_menu.clone())
+    }
+
     /// The model picker search field for a pane. Always present: the main pane
     /// and every additional pane each own a `ComposerInput` entity so the query
     /// and focus survive the dropdown's per-frame rebuild.
@@ -639,22 +648,14 @@ impl ConsoleDesktopApp {
         }
     }
 
-    /// Step to the next supported thinking level for the pane's active model.
-    pub fn cycle_thinking_level_for_pane(&mut self, pane_id: &str, cx: &mut Context<Self>) {
-        let supported = self.supported_thinking_levels_for_pane(pane_id);
-        if supported.is_empty() {
-            return;
-        }
-
-        let current = self.pane_thinking_level(pane_id).unwrap_or(supported[0]);
-
-        let current_index = supported
-            .iter()
-            .position(|&lvl| lvl == current)
-            .unwrap_or(0);
-
-        let next_level = supported[(current_index + 1) % supported.len()];
-        self.set_pane_thinking_level(pane_id, Some(next_level));
+    /// Set a specific thinking level for the pane's active model.
+    pub fn choose_thinking_level_for_pane(
+        &mut self,
+        pane_id: &str,
+        level: ThinkingLevel,
+        cx: &mut Context<Self>,
+    ) {
+        self.set_pane_thinking_level(pane_id, Some(level));
 
         self.update_session_settings_for_pane(
             pane_id.to_string(),
@@ -665,7 +666,7 @@ impl ConsoleDesktopApp {
                 model_id: None,
                 provider: None,
                 approval_mode: None,
-                thinking_level: Some(next_level),
+                thinking_level: Some(level),
                 pinned: None,
             },
             cx,

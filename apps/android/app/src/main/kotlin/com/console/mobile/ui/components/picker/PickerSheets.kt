@@ -393,7 +393,7 @@ fun ThinkingLevelPickerSheet(
                         Icon(
                             TablerIcons.Outline.Brain,
                             contentDescription = null,
-                            tint = Color(thinkingLevelColorHex(level)),
+                            tint = NewTheme.TextSecondary,
                             modifier = Modifier.size(18.dp),
                         )
                     },

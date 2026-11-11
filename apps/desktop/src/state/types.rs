@@ -125,6 +125,7 @@ pub struct ConsoleDesktopApp {
     pub approval_mode: ApprovalMode,
     pub thinking_level: Option<ThinkingLevel>,
     pub model_menu: ContextMenuHandle,
+    pub thinking_menu: ContextMenuHandle,
     pub usage_menu: ContextMenuHandle,
     /// Anchors the floating task list to this pane's tasks pill.
     pub tasks_menu: ContextMenuHandle,

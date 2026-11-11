@@ -68,6 +68,7 @@ pub(crate) struct WorkspacePaneState {
     pub(crate) approval_mode: ApprovalMode,
     pub(crate) thinking_level: Option<ThinkingLevel>,
     pub(crate) model_menu: ContextMenuHandle,
+    pub(crate) thinking_menu: ContextMenuHandle,
     pub(crate) usage_menu: ContextMenuHandle,
     pub(crate) tasks_menu: ContextMenuHandle,
     pub(crate) subagents_menu: ContextMenuHandle,

@@ -1055,6 +1055,7 @@ impl ConsoleDesktopApp {
         let pane_thinking_level = self.pane_thinking_level(pane_id);
         let pane_supported_thinking_levels = self.supported_thinking_levels_for_pane(pane_id);
         let pane_model_menu = self.pane_model_menu(pane_id);
+        let pane_thinking_menu = self.pane_thinking_menu(pane_id);
         let pane_model_search = self.pane_model_search(pane_id);
         let pane_model_search_query = pane_model_search.read(cx).content().to_owned();
         let pane_session_id = self.active_session_for_pane(pane_id);
@@ -1273,13 +1274,15 @@ impl ConsoleDesktopApp {
         .approval_mode(pane_approval_mode)
         .thinking_level(pane_thinking_level)
         .supported_thinking_levels(pane_supported_thinking_levels)
-        .on_cycle_thinking({
+        .thinking_menu(pane_thinking_menu)
+        .on_choose_thinking({
             let entity = entity.clone();
             let pane_id = pane_id.to_string();
-            move |_window, cx| {
+            move |level, window, cx| {
                 if let Some(app) = entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.cycle_thinking_level_for_pane(&pane_id, cx);
+                        this.pane_thinking_menu(&pane_id).close(window, cx);
+                        this.choose_thinking_level_for_pane(&pane_id, level, cx);
                     });
                 }
             }

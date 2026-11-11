@@ -9,12 +9,14 @@ use gpui::{
 
 use crate::common::{
     AutocompleteConfirm, AutocompleteDismiss, AutocompleteNext, AutocompletePrevious,
-    AutocompleteView, ModelDropdownMenu, ThinkingStepper, attachment_image, file_mention_chip,
+    AutocompleteView, ModelDropdownMenu, attachment_image, file_mention_chip,
     format_model_name, provider_svg_path,
 };
 use crate::input::ComposerInput;
 use crate::primitives::tooltip::Tooltip;
-use crate::primitives::{ContextMenuHandle, IconName, MenuAlign, MenuChip, app_icon, popover};
+use crate::primitives::{
+    app_icon, dropdown_menu, ContextMenuHandle, IconName, MenuAlign, MenuChip, MenuItem, popover,
+};
 use crate::theme::Theme;
 
 /// A staged file comment shown as a chip above the composer's text field.
@@ -139,12 +141,13 @@ pub struct ComposerView {
     /// shown next to the button.
     pub mic_error: Option<String>,
     model_menu: Option<(ModelDropdownMenu, ContextMenuHandle)>,
+    thinking_menu: Option<ContextMenuHandle>,
     autocomplete: Option<AutocompleteView>,
     on_send: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_queue: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_abort: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
     on_pick_image: Rc<dyn Fn(&mut Window, &mut App) + 'static>,
-    on_cycle_thinking: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    on_choose_thinking: Option<Rc<dyn Fn(ThinkingLevel, &mut Window, &mut App) + 'static>>,
     on_mic_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     on_remove_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
     on_preview_attachment: Rc<dyn Fn(usize, &mut Window, &mut App) + 'static>,
@@ -182,12 +185,13 @@ impl ComposerView {
             mic_elapsed_secs: 0,
             mic_error: None,
             model_menu: None,
+            thinking_menu: None,
             autocomplete: None,
             on_queue: on_send.clone(),
             on_send,
             on_abort: Rc::new(on_abort),
             on_pick_image: Rc::new(on_pick_image),
-            on_cycle_thinking: None,
+            on_choose_thinking: None,
             on_mic_click: None,
             on_remove_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
             on_preview_attachment: Rc::new(|_: usize, _: &mut Window, _: &mut App| {}),
@@ -244,8 +248,16 @@ impl ComposerView {
         self
     }
 
-    pub fn on_cycle_thinking(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
-        self.on_cycle_thinking = Some(Rc::new(handler));
+    pub fn thinking_menu(mut self, handle: ContextMenuHandle) -> Self {
+        self.thinking_menu = Some(handle);
+        self
+    }
+
+    pub fn on_choose_thinking(
+        mut self,
+        handler: impl Fn(ThinkingLevel, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_choose_thinking = Some(Rc::new(handler));
         self
     }
 
@@ -623,15 +635,48 @@ impl RenderOnce for ComposerView {
         let plan_mode = self.approval_mode == ApprovalMode::PlanMode;
 
         let thinking_control = if !self.supported_thinking_levels.is_empty() {
-            let on_cycle = self
-                .on_cycle_thinking
-                .clone()
-                .unwrap_or_else(|| Rc::new(|_, _| {}));
-            Some(ThinkingStepper::new(
-                self.thinking_level,
-                self.supported_thinking_levels.clone(),
-                move |window, cx| (on_cycle)(window, cx),
-            ))
+            let level = self
+                .thinking_level
+                .unwrap_or(self.supported_thinking_levels[0]);
+            let thinking_is_open = self
+                .thinking_menu
+                .as_ref()
+                .map(|h| h.is_open())
+                .unwrap_or(false);
+            let trigger = MenuChip::new("thinking-level-chip")
+                .height(px(24.0))
+                .outlined()
+                .background(theme.composer)
+                .selected(thinking_is_open)
+                .label(level.label());
+            let on_choose_thinking = self.on_choose_thinking.clone();
+            let levels = self.supported_thinking_levels.clone();
+            let control = if let Some(handle) = self.thinking_menu.clone() {
+                dropdown_menu(
+                    trigger,
+                    "thinking-level-menu",
+                    &handle,
+                    MenuAlign::AboveLeft,
+                    move |_| {
+                        levels
+                            .iter()
+                            .map(|candidate| {
+                                let on_choose_thinking = on_choose_thinking.clone();
+                                let value = *candidate;
+                                MenuItem::new(value.label(), move |window, cx| {
+                                    if let Some(ref cb) = on_choose_thinking {
+                                        cb(value, window, cx);
+                                    }
+                                })
+                                .selected(value == level)
+                            })
+                            .collect()
+                    },
+                )
+            } else {
+                trigger.into_any_element()
+            };
+            Some(control)
         } else {
             None
         };

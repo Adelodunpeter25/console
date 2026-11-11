@@ -342,6 +342,7 @@ impl ConsoleDesktopApp {
                 }
             }
         });
+        let thinking_menu = ContextMenuHandle::new(cx);
 
         let tasks_menu = ContextMenuHandle::new(cx);
         let subagents_menu = ContextMenuHandle::new(cx);
@@ -618,6 +619,7 @@ impl ConsoleDesktopApp {
             approval_mode: ApprovalMode::default(),
             thinking_level: None,
             model_menu,
+            thinking_menu: thinking_menu.clone(),
             usage_menu,
             tasks_menu,
             subagents_menu,
@@ -875,6 +877,7 @@ impl ConsoleDesktopApp {
                 approval_mode: app.approval_mode,
                 thinking_level: app.thinking_level,
                 model_menu: app.model_menu.clone(),
+                thinking_menu: app.thinking_menu.clone(),
                 usage_menu: app.usage_menu.clone(),
                 tasks_menu: app.tasks_menu.clone(),
                 subagents_menu: app.subagents_menu.clone(),
