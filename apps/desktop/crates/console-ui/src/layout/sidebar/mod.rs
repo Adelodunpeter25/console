@@ -955,11 +955,10 @@ impl RenderOnce for SidebarView {
                             .px(px(6.0))
                             .rounded(px(7.0))
                             .bg(theme.sidebar_item_background)
-                            .border_1()
-                            .border_color(theme.accent)
                             .flex()
                             .items_center()
-                            .gap(px(6.0))
+                            .gap(px(10.0))
+                            .text_size(px(13.0))
                             .when_some(on_cancel, |el, on_cancel| {
                                 el.on_action(move |_: &CancelSidebarSearch, window, cx| {
                                     (on_cancel)(window, cx);
@@ -968,17 +967,18 @@ impl RenderOnce for SidebarView {
                             })
                             .child(
                                 div()
-                                    .size(px(16.0))
+                                    .size(px(20.0))
                                     .flex_none()
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(app_icon(IconName::Search, 14.0, theme.text_secondary)),
+                                    .child(app_icon(IconName::Search, 16.0, theme.text_secondary)),
                             )
                             .child(
                                 div()
                                     .flex_1()
                                     .min_w_0()
+                                    .text_size(px(13.0))
                                     .children(self.search_input.clone()),
                             )
                             .child(
