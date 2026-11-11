@@ -1,12 +1,17 @@
-use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
-use gpui::{
-    App, AppContext, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, RenderOnce,
-    StatefulInteractiveElement, Styled, Window, actions, div, prelude::FluentBuilder, px,
-};
+use std::cell::Cell;
 use std::rc::Rc;
 
+use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
+use gpui::{
+    App, AppContext, Bounds, ElementId, Entity, InteractiveElement, IntoElement, ParentElement,
+    Pixels, Point, RenderOnce, StatefulInteractiveElement, Styled, Window, actions, anchored,
+    canvas, deferred, div, prelude::FluentBuilder, px,
+};
+
 use super::item_row::{draft_badge, row_container, status_slot, title_label};
-use super::session_card::{SessionHoverCard, current_hover_delay, touch_hover};
+use super::session_card::{
+    SidebarHoverManager, on_card_hover, on_row_hover, render_session_card_content,
+};
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
 use crate::primitives::motion;
@@ -235,7 +240,35 @@ impl RenderOnce for SidebarSessionItem {
                 .into_any_element()
         };
 
-        let row = row_container(ElementId::Name(session.id.clone().into()), is_active, theme)
+        let hover_mgr = window.use_keyed_state(
+            ElementId::Name("sidebar-session-hover-mgr".into()),
+            cx,
+            |_, _| SidebarHoverManager::new(),
+        );
+        let is_card_active = hover_mgr.read(cx).active_id.as_deref() == Some(&session.id);
+
+        let probe_bounds = window
+            .use_keyed_state(
+                ElementId::Name(format!("sidebar-row-probe-{}", session.id).into()),
+                cx,
+                |_, _| Rc::new(Cell::new(None::<Bounds<Pixels>>)),
+            )
+            .read(cx)
+            .clone();
+
+        let mut row = row_container(ElementId::Name(session.id.clone().into()), is_active, theme)
+            .relative()
+            .child(
+                canvas(
+                    {
+                        let probe_bounds = probe_bounds.clone();
+                        move |probe: Bounds<Pixels>, _, _| probe_bounds.set(Some(probe))
+                    },
+                    |_, _, _, _| (),
+                )
+                .absolute()
+                .inset_0(),
+            )
             .on_drag(drag, |drag, _, _, cx| {
                 cx.new(|_| WorkspaceDragPreview::new(drag.tab.title()))
             })
@@ -243,27 +276,11 @@ impl RenderOnce for SidebarSessionItem {
             // Settled chats read as archived: slightly dimmed everywhere.
             .when(settled, |s| s.opacity(0.7))
             .when(!is_renaming, |element| {
-                let hover_title = display_title.clone();
-                let hover_created = session.created_at;
-                let hover_updated = session.updated_at;
-                let hover_project = self.project_name.clone();
-                let delay = current_hover_delay();
-
+                let session_id = session.id.clone();
+                let hover_mgr = hover_mgr.clone();
                 element
-                    .hoverable_tooltip(move |window, cx| {
-                        SessionHoverCard::new(
-                            hover_title.clone(),
-                            hover_created,
-                            hover_updated,
-                            hover_project.clone(),
-                        )
-                        .build(window, cx)
-                    })
-                    .tooltip_show_delay(delay)
-                    .on_hover(|hovered, _, _| {
-                        if *hovered {
-                            touch_hover();
-                        }
+                    .on_hover(move |hovered, _, cx| {
+                        on_row_hover(&hover_mgr, &session_id, *hovered, cx);
                     })
                     .on_click(move |_, w, cx| {
                         (on_click)(w, cx);
@@ -280,6 +297,35 @@ impl RenderOnce for SidebarSessionItem {
                     .child(title)
                     .when(self.has_draft, |el| el.child(draft_badge(theme))),
             );
+
+        if is_card_active && !is_renaming {
+            if let Some(bounds) = probe_bounds.get() {
+                let hover_mgr_card = hover_mgr.clone();
+                let card = div()
+                    .id(ElementId::Name(format!("session-card-{}", session.id).into()))
+                    .occlude()
+                    .on_hover(move |hovered, _, cx| {
+                        on_card_hover(&hover_mgr_card, *hovered, cx);
+                    })
+                    .child(render_session_card_content(
+                        &display_title,
+                        session.created_at,
+                        session.updated_at,
+                        &self.project_name,
+                        &theme,
+                    ));
+
+                row = row.child(
+                    deferred(
+                        anchored()
+                            .position(Point::new(bounds.right() + px(6.0), bounds.top()))
+                            .snap_to_window_with_margin(px(8.0))
+                            .child(card),
+                    )
+                    .with_priority(100),
+                );
+            }
+        }
 
         if is_renaming {
             let on_commit = on_commit_rename;

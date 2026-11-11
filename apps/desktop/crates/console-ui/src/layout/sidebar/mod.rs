@@ -9,7 +9,9 @@ pub use group_header::{
     drafts_group_header, group_header, pinned_group_header, project_header,
     search_results_group_header, settled_group_header, sort_mode_toggle,
 };
-pub use session_card::SessionHoverCard;
+pub use session_card::{
+    SidebarHoverManager, on_card_hover, on_row_hover, render_session_card_content,
+};
 pub use session_item::{
     CancelSessionRename, CommitSessionRename, SidebarSessionItem, init_session_rename_keybindings,
     render_sidebar_session_item,
