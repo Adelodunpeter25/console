@@ -8,9 +8,11 @@ use gpui::{
 use super::text_runs::{SearchPaint, input_text_runs};
 use super::{ComposerInput, FieldMode};
 use crate::common::file_mention_chip::{
-    FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
+    FILE_MENTION_ICON_SIZE, FILE_MENTION_ICON_Y_NUDGE, FILE_MENTION_RADIUS, file_mention_colors,
 };
 use crate::theme::Theme;
+
+pub(crate) const MENTION_ICON_CELL: Pixels = px(14.0);
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
     layout
@@ -371,14 +373,24 @@ impl Element for InputElement {
         let mut mention_icons = Vec::new();
         let mut child_layout_ids = vec![text_layout_id];
         let theme = Theme::current(cx);
+        let hovered_mention = self.input.read(cx).hovered_mention;
+        let mut mention_index = 0;
 
         for mention in mentions_to_layout {
+            let hovered = hovered_mention == Some(mention_index);
+            mention_index += 1;
             let mut icon = gpui::div()
                 .absolute()
-                .child(crate::common::file_mention_chip::mention_icon(
-                    &mention.path,
-                    theme,
-                ))
+                .child(if hovered {
+                    crate::primitives::app_icon(
+                        crate::primitives::IconName::Close,
+                        FILE_MENTION_ICON_SIZE,
+                        theme.text,
+                    )
+                    .into_any_element()
+                } else {
+                    crate::common::file_mention_chip::mention_icon(&mention.path, theme)
+                })
                 .into_any_element();
             let icon_layout_id = icon.request_layout(window, cx);
             child_layout_ids.push(icon_layout_id);
@@ -545,8 +557,23 @@ impl Element for InputElement {
         window.on_mouse_event({
             let input = self.input.clone();
             move |event: &MouseMoveEvent, phase, window, cx| {
-                if phase == DispatchPhase::Bubble && input.read(cx).is_selecting {
+                if phase != DispatchPhase::Bubble {
+                    return;
+                }
+                if input.read(cx).is_selecting {
                     input.update(cx, |input, cx| input.on_mouse_move(event, window, cx));
+                    return;
+                }
+                let hit = input.read(cx).mention_chip_at(event.position);
+                let hovered = hit.map(|(index, _)| index);
+                if input.read(cx).hovered_mention != hovered {
+                    input.update(cx, |input, cx| {
+                        input.hovered_mention = hovered;
+                        cx.notify();
+                    });
+                }
+                if let Some((_, true)) = hit {
+                    window.set_window_cursor_style(gpui::CursorStyle::PointingHand);
                 }
             }
         });
@@ -569,7 +596,7 @@ impl Element for InputElement {
         if input.mode == FieldMode::Composer && !input.mentions.is_empty() {
             let extra_left = px(14.0);
 
-            for mention in &input.mentions {
+            for (mention_idx, mention) in input.mentions.iter().enumerate() {
                 if mention.range.end <= input.content.len() {
                     let rects =
                         crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
@@ -579,6 +606,20 @@ impl Element for InputElement {
                         if idx == 0 {
                             quad_rect.origin.x -= extra_left;
                             quad_rect.size.width += extra_left;
+                            if input.hovered_mention == Some(mention_idx) {
+                                let cell = Bounds::new(
+                                    quad_rect.origin,
+                                    size(MENTION_ICON_CELL, quad_rect.size.height),
+                                );
+                                window.paint_quad(quad(
+                                    cell,
+                                    px(FILE_MENTION_RADIUS),
+                                    theme.overlay,
+                                    px(1.0),
+                                    mention_border,
+                                    BorderStyle::default(),
+                                ));
+                            }
                         }
                         window.paint_quad(quad(
                             quad_rect,

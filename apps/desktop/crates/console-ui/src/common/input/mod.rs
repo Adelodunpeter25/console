@@ -309,6 +309,7 @@ pub struct ComposerInput {
     /// enough to reproduce native textarea movement or paint its caret.
     pub(crate) vertical_navigation: Option<VerticalNavigation>,
     pub(crate) is_selecting: bool,
+    pub(crate) hovered_mention: Option<usize>,
     pub(crate) selected_word_range: Option<Range<usize>>,
     pub(crate) history: EditHistory,
     pub(crate) prompt_history: PromptHistory,
@@ -369,6 +370,7 @@ impl ComposerInput {
             last_layout: None,
             vertical_navigation: None,
             is_selecting: false,
+            hovered_mention: None,
             selected_word_range: None,
             history: EditHistory::default(),
             prompt_history: PromptHistory::default(),
@@ -1529,6 +1531,14 @@ impl ComposerInput {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if event.click_count == 1
+            && let Some((index, true)) = self.mention_chip_at(event.position)
+            && let Some(mention) = self.mentions.get(index).cloned()
+        {
+            self.hovered_mention = None;
+            self.remove_mention_atom(mention, cx);
+            return;
+        }
         self.vertical_navigation = None;
         self.is_selecting = true;
         self.selected_word_range = None;
@@ -1655,6 +1665,37 @@ impl ComposerInput {
                 execute_native_action(action);
             }
         }
+    }
+
+    /// The mention chip under `position`, and whether the point is on its
+    /// leading icon cell (the close button shown on hover).
+    pub(crate) fn mention_chip_at(&self, position: gpui::Point<gpui::Pixels>) -> Option<(usize, bool)> {
+        if self.mode != FieldMode::Composer {
+            return None;
+        }
+        let layout = self.last_layout.as_ref()?;
+        for (index, mention) in self.mentions.iter().enumerate() {
+            if mention.range.end > self.content.len() {
+                continue;
+            }
+            let rects = crate::markdown::render::range_rects(layout, &mention.range, 3.0, 1.0);
+            for (i, rect) in rects.iter().enumerate() {
+                let mut rect = *rect;
+                let mut cell = None;
+                if i == 0 {
+                    rect.origin.x -= element::MENTION_ICON_CELL;
+                    rect.size.width += element::MENTION_ICON_CELL;
+                    cell = Some(gpui::Bounds::new(
+                        rect.origin,
+                        gpui::size(element::MENTION_ICON_CELL, rect.size.height),
+                    ));
+                }
+                if rect.contains(&position) {
+                    return Some((index, cell.is_some_and(|c| c.contains(&position))));
+                }
+            }
+        }
+        None
     }
 
     fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
