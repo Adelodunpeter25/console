@@ -247,7 +247,7 @@ impl RenderOnce for SidebarSessionItem {
                 .flex_1()
                 .min_w_0()
                 .truncate()
-                .text_size(px(13.0))
+                .text_size(px(13.5))
                 // One weight for both states: a heavier selected weight is wider,
                 // so the title would reflow and look larger on selection.
                 .font_weight(FontWeight::MEDIUM)
@@ -311,7 +311,7 @@ impl RenderOnce for SidebarSessionItem {
                                 .rounded(px(3.0))
                                 .bg(theme.accent.opacity(0.15))
                                 .text_color(theme.accent)
-                                .text_size(px(10.0))
+                                .text_size(px(13.5))
                                 .font_weight(gpui::FontWeight::MEDIUM)
                                 .child("Draft"),
                         )
