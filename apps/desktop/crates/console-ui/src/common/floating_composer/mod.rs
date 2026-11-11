@@ -263,8 +263,8 @@ impl FloatingComposerState {
             let mut input = ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
                 .placeholder("Describe a task…");
-            // Ten prompt lines at the field's 22px line height.
-            input.set_composer_max_height(px(220.0));
+            // Seven prompt lines at the field's 22px line height.
+            input.set_composer_max_height(px(154.0));
             input
         });
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
