@@ -692,7 +692,7 @@ where
             id: id.clone(),
             handle: handle.clone(),
             items: items.clone(),
-            context_style: false,
+            context_style: true,
         }
         .into_any_element()
     })
