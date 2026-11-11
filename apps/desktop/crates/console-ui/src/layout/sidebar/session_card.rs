@@ -1,6 +1,6 @@
 use gpui::{
-    AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString,
-    Styled, Window, div, px,
+    AnyView, App, AppContext, Context, InteractiveElement, IntoElement, ParentElement, Render,
+    SharedString, Styled, Window, div, px,
 };
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
@@ -89,9 +89,17 @@ impl Render for SessionHoverCard {
 
         let subtitle = format!("Created {created_ago}, {updated_str}");
 
-        div().pt(px(4.0)).pl(px(4.0)).child(
-            div()
-                .w(px(280.0))
+        div()
+            .pt(px(4.0))
+            .pl(px(4.0))
+            .on_hover(|hovered, _, _| {
+                if *hovered {
+                    touch_hover();
+                }
+            })
+            .child(
+                div()
+                    .w(px(280.0))
                 .p(px(12.0))
                 .rounded(px(8.0))
                 .border_1()

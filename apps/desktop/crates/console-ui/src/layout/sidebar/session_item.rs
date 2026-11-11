@@ -250,7 +250,7 @@ impl RenderOnce for SidebarSessionItem {
                 let delay = current_hover_delay();
 
                 element
-                    .tooltip(move |window, cx| {
+                    .hoverable_tooltip(move |window, cx| {
                         SessionHoverCard::new(
                             hover_title.clone(),
                             hover_created,
