@@ -19,7 +19,7 @@ impl ConsoleDesktopApp {
             .selected_project_for_pane(&pane_id)
             .map(|project| project.path.clone())
         else {
-            self.set_error("Select a project before opening a terminal.", cx);
+            self.set_project_required_error("Select a project before opening a terminal.", cx);
             return;
         };
         self.open_terminal_tab_in_pane(&pane_id, cwd, window, cx);
