@@ -109,6 +109,11 @@ impl TranscriptView {
             return;
         }
 
+        if target == ScrollTarget::Bottom {
+            self.animate_scroll_to_bottom(cx);
+            return;
+        }
+
         let start_offset = self.list_state.logical_scroll_top();
         let target_item_ix = match target {
             ScrollTarget::Bottom => self.messages.len(),
@@ -176,6 +181,71 @@ impl TranscriptView {
                 });
 
                 if !should_continue {
+                    break;
+                }
+            }
+        }));
+    }
+
+    /// Glide to the tail in pixel space. Interpolating item indices instead
+    /// jumps between rows of different heights, so this drives the list by
+    /// pixel deltas and re-reads the (still being measured) end every frame.
+    fn animate_scroll_to_bottom(&mut self, cx: &mut Context<Self>) {
+        let list = self.list_state.clone();
+        list.set_follow_mode(FollowMode::Normal);
+
+        let current = -f32::from(list.scroll_px_offset_for_scrollbar().y);
+        let end = f32::from(list.max_offset_for_scrollbar().y);
+        if end - current < 1.0 {
+            list.set_follow_mode(FollowMode::Tail);
+            cx.notify();
+            return;
+        }
+
+        // Long distances start one screen short of the end so the glide stays
+        // readable instead of racing across the whole history.
+        let viewport = f32::from(list.viewport_bounds().size.height);
+        let max_travel = (viewport * 1.5).max(400.0);
+        let start = if end - current > max_travel {
+            list.scroll_by(px(end - max_travel - current));
+            end - max_travel
+        } else {
+            current
+        };
+
+        let duration_secs = crate::primitives::DEFAULT_SCROLL_DURATION.as_secs_f32();
+        let start_time = std::time::Instant::now();
+        let entity = cx.entity().downgrade();
+
+        self.scroll_animation_task = Some(cx.spawn(async move |_, cx| {
+            let mut position = start;
+            loop {
+                cx.background_executor()
+                    .timer(crate::primitives::ANIMATION_FRAME_INTERVAL)
+                    .await;
+                let progress = (start_time.elapsed().as_secs_f32() / duration_secs).min(1.0);
+                let eased = crate::primitives::ease_out_cubic(progress);
+                let is_done = progress >= 1.0;
+
+                let keep_going = cx.update(|cx| {
+                    let Some(entity) = entity.upgrade() else {
+                        return false;
+                    };
+                    entity.update(cx, |this, cx| {
+                        if is_done {
+                            this.scroll_animation_task = None;
+                            this.list_state.set_follow_mode(FollowMode::Tail);
+                        } else {
+                            let end = f32::from(this.list_state.max_offset_for_scrollbar().y);
+                            let wanted = start + (end - start) * eased;
+                            this.list_state.scroll_by(px(wanted - position));
+                            position = wanted;
+                        }
+                        cx.notify();
+                    });
+                    !is_done
+                });
+                if !keep_going {
                     break;
                 }
             }
