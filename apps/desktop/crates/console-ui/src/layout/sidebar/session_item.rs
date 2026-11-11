@@ -197,7 +197,7 @@ impl RenderOnce for SidebarSessionItem {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Done"))
-                .child(app_icon(IconName::CircleCheck, 15.0, tint(theme.success)))
+                .child(app_icon(IconName::Done, 15.0, tint(theme.success)))
                 .into_any_element()
         } else {
             status_slot().into_any_element()
