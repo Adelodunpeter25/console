@@ -16,7 +16,7 @@ pub(crate) const MENTION_ICON_CELL: Pixels = px(22.0);
 
 /// Neutral chip look for the composer: dark wash, neutral border.
 fn composer_chip_colors(theme: Theme) -> (gpui::Hsla, gpui::Hsla) {
-    (theme.inset, theme.border)
+    (theme.inset, gpui::transparent_black())
 }
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
