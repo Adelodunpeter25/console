@@ -1104,7 +1104,7 @@ fn row(
         .id(index)
         .mx(px(4.0))
         .px(px(if context_style { 12.0 } else { 8.0 }))
-        .min_h(px(if context_style { 20.0 } else { 26.0 }))
+        .min_h(px(if context_style { 32.0 } else { 26.0 }))
         .rounded(px(if context_style { 7.0 } else { 6.0 }))
         .flex()
         .items_center()
