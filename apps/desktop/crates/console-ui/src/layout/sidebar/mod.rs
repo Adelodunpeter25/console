@@ -158,6 +158,7 @@ pub struct SidebarView {
     pub search_input: Option<Entity<ComposerInput>>,
     pub on_start_search: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
     pub on_clear_search: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    pub on_close_search: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 impl SidebarView {
@@ -254,6 +255,7 @@ impl SidebarView {
             search_input: None,
             on_start_search: None,
             on_clear_search: None,
+            on_close_search: None,
         }
     }
 
@@ -264,12 +266,14 @@ impl SidebarView {
         input: Option<Entity<ComposerInput>>,
         on_start: impl Fn(&mut Window, &mut App) + 'static,
         on_clear: impl Fn(&mut Window, &mut App) + 'static,
+        on_close: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         self.search_active = active;
         self.search_query = query;
         self.search_input = input;
         self.on_start_search = Some(Rc::new(on_start));
         self.on_clear_search = Some(Rc::new(on_clear));
+        self.on_close_search = Some(Rc::new(on_close));
         self
     }
 }
@@ -943,7 +947,13 @@ impl RenderOnce for SidebarView {
                     .child(if self.search_active {
                         let on_cancel = self.on_clear_search.clone();
                         let on_clear = self.on_clear_search.clone();
-                        let on_outside = self.on_clear_search.clone();
+                        let on_outside = self.on_close_search.clone().or_else(|| self.on_clear_search.clone());
+                        let has_query = !self.search_query.trim().is_empty();
+                        let clear_tooltip = if has_query {
+                            "Clear search"
+                        } else {
+                            "Close search (Esc)"
+                        };
                         div()
                             .id("sidebar-search-active")
                             .key_context(SIDEBAR_SEARCH_PARENT_CONTEXT)
@@ -1000,7 +1010,7 @@ impl RenderOnce for SidebarView {
                                             (on_clear)(window, cx);
                                         })
                                     })
-                                    .tooltip(Tooltip::text("Clear search (Esc)"))
+                                    .tooltip(Tooltip::text(clear_tooltip))
                                     .child(app_icon(IconName::X, 12.0, theme.text_tertiary)),
                             )
                     } else {

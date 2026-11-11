@@ -192,6 +192,22 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
+    pub fn reset_or_close_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let has_text = !self.sidebar_search_input.read(cx).content().is_empty();
+        if has_text {
+            self.sidebar_search_query.clear();
+            self.sidebar_search_task = None;
+            self.sidebar_search_input.update(cx, |input, cx| {
+                input.clear(cx);
+            });
+            let focus = self.sidebar_search_input.read(cx).focus();
+            window.focus(&focus, cx);
+            cx.notify();
+        } else {
+            self.clear_sidebar_search(window, cx);
+        }
+    }
+
     pub fn on_sidebar_search_query_changed(&mut self, query: String, cx: &mut Context<Self>) {
         self.sidebar_search_query = query.clone();
         self.sidebar_list_state.scroll_to_reveal_item(0);

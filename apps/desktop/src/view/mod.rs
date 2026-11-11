@@ -1066,6 +1066,16 @@ impl Render for ConsoleDesktopApp {
                             move |window, cx| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
+                                        this.reset_or_close_sidebar_search(window, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
                                         this.clear_sidebar_search(window, cx);
                                     });
                                 }
