@@ -75,7 +75,11 @@ impl TranscriptView {
     /// moved on. The row index is only a fallback for messages that have no
     /// id at all — an optimistic user message, before the server has
     /// assigned one.
-    pub(super) fn resolve_anchor_row(&self, message_id: Option<&str>, row_index: usize) -> Option<usize> {
+    pub(super) fn resolve_anchor_row(
+        &self,
+        message_id: Option<&str>,
+        row_index: usize,
+    ) -> Option<usize> {
         resolve_anchor_row(&self.messages, message_id, row_index)
     }
 

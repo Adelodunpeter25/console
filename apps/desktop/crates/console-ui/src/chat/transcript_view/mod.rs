@@ -6,8 +6,8 @@ use console_core::{
 };
 use gpui::{
     App, Context, FocusHandle, FollowMode, IntoElement, KeyDownEvent, ListAlignment, ListOffset,
-    ListState, Render, ScrollStrategy, SharedString, Task, UniformListScrollHandle, Window, div, list,
-    prelude::*, px,
+    ListState, Render, ScrollStrategy, SharedString, Task, UniformListScrollHandle, Window, div,
+    list, prelude::*, px,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
