@@ -241,7 +241,8 @@ pub fn any_agent_running(cx: &App) -> bool {
 }
 
 /// Show a native confirmation dialog warning that an agent is running; runs
-/// `on_confirm` if the user picks the destructive option.
+/// `on_confirm` if the user confirms. The agent server is a separate process,
+/// so closing only disconnects this client; the run keeps going.
 pub fn confirm_then(
     window: &mut Window,
     cx: &mut App,
@@ -261,8 +262,8 @@ pub fn confirm_then(
                 window.prompt(
                     PromptLevel::Warning,
                     &message,
-                    Some("An agent is still running. Closing will stop its work."),
-                    &["Close Anyway", "Cancel"],
+                    Some("An agent is still running. It will keep working in the background."),
+                    &["Close", "Cancel"],
                     cx,
                 )
             });
