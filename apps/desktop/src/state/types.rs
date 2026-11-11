@@ -86,6 +86,10 @@ pub struct ConsoleDesktopApp {
     /// Session currently being renamed inline in the sidebar.
     pub(crate) session_rename_id: Option<String>,
     pub(crate) session_rename_input: Entity<ComposerInput>,
+    pub sidebar_search_active: bool,
+    pub sidebar_search_query: String,
+    pub(crate) sidebar_search_input: Entity<ComposerInput>,
+    pub(crate) sidebar_search_task: Option<gpui::Task<()>>,
     /// The workspace pane tree (tabs, splits). Starts as a single leaf.
     pub workspace_root: WorkspaceNode,
     /// Cached workspace pane trees per project (keyed by Some(project_id) or None for no-project chats).

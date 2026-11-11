@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Adelodunpeter25/console/apps/server-go/internal/db"
@@ -159,6 +160,7 @@ func worktreeCol(w *types.SessionWorktree, pick func(*types.SessionWorktree) str
 type ListFilter struct {
 	Cwd         string
 	ProjectID   string
+	Query       string
 	OnlyDeleted bool
 	// IncludeDeleted drops the deleted filter entirely, listing live and
 	// trashed sessions together. Ignored when OnlyDeleted is set.
@@ -173,35 +175,43 @@ const sessionListOrder = `ORDER BY pinned_at IS NULL, pinned_at DESC, updated_at
 
 // ListFiltered lists sessions: limit 100, pinned first (most recently
 // pinned), then newest first. Cwd takes precedence over projectId, deleted
-// filter flips the condition.
+// filter flips the condition, and Query filters title with case-insensitive LIKE.
 func (s *Service) ListFiltered(f ListFilter) ([]types.SessionHeader, error) {
 	const limit = 100
-	deletedCondition := "deleted_at IS NULL"
+	whereClauses := []string{"1=1"}
+	var args []any
+
 	switch {
 	case f.OnlyDeleted:
-		deletedCondition = "deleted_at IS NOT NULL"
+		whereClauses = append(whereClauses, "deleted_at IS NOT NULL")
 	case f.IncludeDeleted:
-		deletedCondition = ""
-	}
-	if deletedCondition != "" {
-		deletedCondition = " AND " + deletedCondition
-	}
-	var rows *sql.Rows
-	var err error
-	switch {
-	case f.Cwd != "":
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE cwd = ?`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.Cwd, limit)
-	case f.ProjectID != "":
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE project_id = ?`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, f.ProjectID, limit)
+		// no deleted_at filter
 	default:
-		rows, err = s.manager.Global().Query(`
-			SELECT `+sessionColumns+`
-			FROM sessions WHERE 1=1`+deletedCondition+` `+sessionListOrder+` LIMIT ?`, limit)
+		whereClauses = append(whereClauses, "deleted_at IS NULL")
 	}
+
+	if f.Cwd != "" {
+		whereClauses = append(whereClauses, "cwd = ?")
+		args = append(args, f.Cwd)
+	} else if f.ProjectID != "" {
+		whereClauses = append(whereClauses, "project_id = ?")
+		args = append(args, f.ProjectID)
+	}
+
+	if q := strings.TrimSpace(f.Query); q != "" {
+		whereClauses = append(whereClauses, "LOWER(title) LIKE LOWER(?)")
+		args = append(args, "%"+q+"%")
+	}
+
+	args = append(args, limit)
+	query := fmt.Sprintf(`
+		SELECT %s
+		FROM sessions WHERE %s %s LIMIT ?`,
+		sessionColumns,
+		strings.Join(whereClauses, " AND "),
+		sessionListOrder,
+	)
+	rows, err := s.manager.Global().Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

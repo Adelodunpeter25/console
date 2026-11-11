@@ -5,13 +5,32 @@ pub mod session_item;
 
 pub use draft_item::{DraftSummary, render_sidebar_draft_item};
 pub use group_header::{
-    drafts_group_header, group_header, pinned_group_header, project_header, settled_group_header,
-    sort_mode_toggle,
+    drafts_group_header, group_header, pinned_group_header, project_header,
+    search_results_group_header, settled_group_header, sort_mode_toggle,
 };
 pub use session_item::{
     CancelSessionRename, CommitSessionRename, SidebarSessionItem, init_session_rename_keybindings,
     render_sidebar_session_item,
 };
+
+gpui::actions!(
+    console_sidebar_search,
+    [CancelSidebarSearch]
+);
+
+pub const SIDEBAR_SEARCH_PARENT_CONTEXT: &str = "ConsoleSidebarSearch";
+pub const SIDEBAR_SEARCH_FIELD_CONTEXT: &str = "ConsoleSidebarSearch > ComposerInput";
+
+pub fn init_sidebar_search_keybindings(cx: &mut App) {
+    use gpui::KeyBinding;
+    cx.bind_keys([
+        KeyBinding::new(
+            "escape",
+            CancelSidebarSearch,
+            Some(SIDEBAR_SEARCH_FIELD_CONTEXT),
+        ),
+    ]);
+}
 
 use console_core::{ProjectInfo, ProjectInfoExt, SessionHeader, SessionHeaderExt};
 use gpui::{
@@ -57,6 +76,7 @@ enum SidebarRow {
     DraftsHeader,
     /// Settled section header — always the last section of the list.
     SettledHeader,
+    EmptySearch,
     GroupHeader {
         group: SessionDateGroup,
         collapsed: bool,
@@ -133,6 +153,11 @@ pub struct SidebarView {
     pub environments: Vec<EnvironmentRow>,
     pub server_menu: ContextMenuHandle,
     on_switch_environment: Rc<dyn Fn(String, &mut Window, &mut App) + 'static>,
+    pub search_active: bool,
+    pub search_query: String,
+    pub search_input: Option<Entity<ComposerInput>>,
+    pub on_start_search: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
+    pub on_clear_search: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 impl SidebarView {
@@ -224,7 +249,28 @@ impl SidebarView {
             environments,
             server_menu,
             on_switch_environment: Rc::new(on_switch_environment),
+            search_active: false,
+            search_query: String::new(),
+            search_input: None,
+            on_start_search: None,
+            on_clear_search: None,
         }
+    }
+
+    pub fn search(
+        mut self,
+        active: bool,
+        query: String,
+        input: Option<Entity<ComposerInput>>,
+        on_start: impl Fn(&mut Window, &mut App) + 'static,
+        on_clear: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.search_active = active;
+        self.search_query = query;
+        self.search_input = input;
+        self.on_start_search = Some(Rc::new(on_start));
+        self.on_clear_search = Some(Rc::new(on_clear));
+        self
     }
 }
 
@@ -367,7 +413,9 @@ impl RenderOnce for SidebarView {
         // pinned. The sort toggle and add-project button sit on its right
         // edge.
         let sort_toggle = sort_mode_toggle(theme, sort_mode, on_toggle_sort_mode.clone());
-        let pinned_header = if has_pinned {
+        let pinned_header = if self.search_active {
+            search_results_group_header(theme, "Search Results").into_any_element()
+        } else if has_pinned {
             div()
                 .flex()
                 .items_center()
@@ -561,103 +609,123 @@ impl RenderOnce for SidebarView {
             }
         };
 
-        // Scrollable rows: pinned sessions directly under the sticky Pinned
-        // header, then drafts (with their own header when pinned took the
-        // sticky row), then the date/project sections.
+        // Scrollable rows: when search is active, shows matching sessions directly
+        // under the Search Results header. Otherwise shows pinned, drafts,
+        // and date/project sections.
         let mut list_rows = Vec::new();
-        let render_all_headers = has_drafts || has_pinned;
-        let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
-                                 sections: Vec<(SessionDateGroup, Vec<usize>)>,
-                                 render_all: bool| {
-            if render_all {
-                for (group, positions) in sections {
-                    let collapsed = collapsed_groups.contains(&group);
-                    list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                    if !collapsed {
-                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                    }
-                }
+        if self.search_active {
+            let query_lower = self.search_query.trim().to_lowercase();
+            let matching_positions: Vec<usize> = if query_lower.is_empty() {
+                (0..sessions.len()).collect()
             } else {
-                let mut sections_iter = sections.into_iter();
-                if let Some((group, positions)) = sections_iter.next()
-                    && !collapsed_groups.contains(&group)
-                {
-                    list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                }
-                for (group, positions) in sections_iter {
-                    let collapsed = collapsed_groups.contains(&group);
-                    list_rows.push(SidebarRow::GroupHeader { group, collapsed });
-                    if !collapsed {
-                        list_rows.extend(positions.into_iter().map(SidebarRow::Session));
-                    }
-                }
+                (0..sessions.len())
+                    .filter(|&idx| {
+                        let session = &sessions[idx];
+                        session.display_title().to_lowercase().contains(&query_lower)
+                            || session.title.to_lowercase().contains(&query_lower)
+                    })
+                    .collect()
+            };
+            if matching_positions.is_empty() && !query_lower.is_empty() {
+                list_rows.push(SidebarRow::EmptySearch);
+            } else {
+                list_rows.extend(matching_positions.into_iter().map(SidebarRow::Session));
             }
-        };
-        if has_pinned {
-            if !pinned_collapsed {
-                list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
-            }
-            if has_drafts {
-                list_rows.push(SidebarRow::DraftsHeader);
-                if !self.drafts_collapsed {
-                    for i in 0..draft_summaries.len() {
-                        list_rows.push(SidebarRow::Draft(i));
-                    }
-                }
-            }
-        } else if has_drafts && !self.drafts_collapsed {
-            for i in 0..draft_summaries.len() {
-                list_rows.push(SidebarRow::Draft(i));
-            }
-        }
-        match sort_mode {
-            SidebarSortMode::Date => {
-                push_section_rows(&mut list_rows, grouped, render_all_headers);
-            }
-            SidebarSortMode::Project => {
-                let sections: Vec<(String, String, Vec<usize>)> = project_sections
-                    .into_iter()
-                    .map(|(key, name, positions)| (collapse_key(&key), name, positions))
-                    .collect();
-                if render_all_headers {
-                    for (key, name, positions) in sections {
-                        let collapsed = collapsed_projects.contains(&key);
-                        list_rows.push(SidebarRow::ProjectHeader {
-                            name,
-                            key,
-                            collapsed,
-                        });
+        } else {
+            let render_all_headers = has_drafts || has_pinned;
+            let push_section_rows = |list_rows: &mut Vec<SidebarRow>,
+                                     sections: Vec<(SessionDateGroup, Vec<usize>)>,
+                                     render_all: bool| {
+                if render_all {
+                    for (group, positions) in sections {
+                        let collapsed = collapsed_groups.contains(&group);
+                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
                         if !collapsed {
                             list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                         }
                     }
                 } else {
                     let mut sections_iter = sections.into_iter();
-                    if let Some((key, _name, positions)) = sections_iter.next()
-                        && !collapsed_projects.contains(&key)
+                    if let Some((group, positions)) = sections_iter.next()
+                        && !collapsed_groups.contains(&group)
                     {
                         list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                     }
-                    for (key, name, positions) in sections_iter {
-                        let collapsed = collapsed_projects.contains(&key);
-                        list_rows.push(SidebarRow::ProjectHeader {
-                            name,
-                            key,
-                            collapsed,
-                        });
+                    for (group, positions) in sections_iter {
+                        let collapsed = collapsed_groups.contains(&group);
+                        list_rows.push(SidebarRow::GroupHeader { group, collapsed });
                         if !collapsed {
                             list_rows.extend(positions.into_iter().map(SidebarRow::Session));
                         }
                     }
                 }
+            };
+            if has_pinned {
+                if !pinned_collapsed {
+                    list_rows.extend(pinned_positions.iter().copied().map(SidebarRow::Session));
+                }
+                if has_drafts {
+                    list_rows.push(SidebarRow::DraftsHeader);
+                    if !self.drafts_collapsed {
+                        for i in 0..draft_summaries.len() {
+                            list_rows.push(SidebarRow::Draft(i));
+                        }
+                    }
+                }
+            } else if has_drafts && !self.drafts_collapsed {
+                for i in 0..draft_summaries.len() {
+                    list_rows.push(SidebarRow::Draft(i));
+                }
             }
-        }
-        // Settled chats always come last, in their own collapsed-by-default
-        // section, most recently settled first.
-        if has_settled {
-            list_rows.push(SidebarRow::SettledHeader);
-            if !self.settled_collapsed {
-                list_rows.extend(settled_positions.iter().copied().map(SidebarRow::Session));
+            match sort_mode {
+                SidebarSortMode::Date => {
+                    push_section_rows(&mut list_rows, grouped, render_all_headers);
+                }
+                SidebarSortMode::Project => {
+                    let sections: Vec<(String, String, Vec<usize>)> = project_sections
+                        .into_iter()
+                        .map(|(key, name, positions)| (collapse_key(&key), name, positions))
+                        .collect();
+                    if render_all_headers {
+                        for (key, name, positions) in sections {
+                            let collapsed = collapsed_projects.contains(&key);
+                            list_rows.push(SidebarRow::ProjectHeader {
+                                name,
+                                key,
+                                collapsed,
+                            });
+                            if !collapsed {
+                                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                            }
+                        }
+                    } else {
+                        let mut sections_iter = sections.into_iter();
+                        if let Some((key, _name, positions)) = sections_iter.next()
+                            && !collapsed_projects.contains(&key)
+                        {
+                            list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                        }
+                        for (key, name, positions) in sections_iter {
+                            let collapsed = collapsed_projects.contains(&key);
+                            list_rows.push(SidebarRow::ProjectHeader {
+                                name,
+                                key,
+                                collapsed,
+                            });
+                            if !collapsed {
+                                list_rows.extend(positions.into_iter().map(SidebarRow::Session));
+                            }
+                        }
+                    }
+                }
+            }
+            // Settled chats always come last, in their own collapsed-by-default
+            // section, most recently settled first.
+            if has_settled {
+                list_rows.push(SidebarRow::SettledHeader);
+                if !self.settled_collapsed {
+                    list_rows.extend(settled_positions.iter().copied().map(SidebarRow::Session));
+                }
             }
         }
         let list_rows = Rc::new(list_rows);
@@ -782,6 +850,13 @@ impl RenderOnce for SidebarView {
                     list_on_toggle_project.clone(),
                 )
                 .into_any_element(),
+                SidebarRow::EmptySearch => div()
+                    .px(px(10.0))
+                    .py(px(12.0))
+                    .text_size(px(12.5))
+                    .text_color(theme.text_tertiary)
+                    .child("No matching sessions")
+                    .into_any_element(),
             };
             div().w_full().pb(px(2.0)).child(row).into_any_element()
         })
@@ -845,7 +920,65 @@ impl RenderOnce for SidebarView {
                             ),
                     )
                     // Search Row
-                    .child(
+                    .child(if self.search_active {
+                        let on_cancel = self.on_clear_search.clone();
+                        let on_clear = self.on_clear_search.clone();
+                        div()
+                            .id("sidebar-search-active")
+                            .key_context(SIDEBAR_SEARCH_PARENT_CONTEXT)
+                            .w_full()
+                            .h(px(32.0))
+                            .px(px(6.0))
+                            .rounded(px(7.0))
+                            .bg(theme.sidebar_item_background)
+                            .border_1()
+                            .border_color(theme.accent)
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .when_some(on_cancel, |el, on_cancel| {
+                                el.on_action(move |_: &CancelSidebarSearch, window, cx| {
+                                    (on_cancel)(window, cx);
+                                    cx.stop_propagation();
+                                })
+                            })
+                            .child(
+                                div()
+                                    .size(px(16.0))
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(app_icon(IconName::Search, 14.0, theme.text_secondary)),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .children(self.search_input.clone()),
+                            )
+                            .child(
+                                div()
+                                    .id("btn-clear-search")
+                                    .size(px(18.0))
+                                    .flex_none()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(4.0))
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(theme.overlay))
+                                    .active(|s| s.bg(theme.overlay_strong))
+                                    .when_some(on_clear, |el, on_clear| {
+                                        el.on_click(move |_, window, cx| {
+                                            (on_clear)(window, cx);
+                                        })
+                                    })
+                                    .tooltip(Tooltip::text("Clear search (Esc)"))
+                                    .child(app_icon(IconName::X, 12.0, theme.text_tertiary)),
+                            )
+                    } else {
+                        let on_start = self.on_start_search.clone().unwrap_or(on_search);
                         div()
                             .id("btn-search")
                             .tab_index(0)
@@ -855,12 +988,11 @@ impl RenderOnce for SidebarView {
                             .rounded(px(7.0))
                             .flex()
                             .items_center()
-                            .justify_between()
                             .cursor_default()
                             .hover(|s| s.bg(theme.sidebar_item_background))
                             .active(|s| s.bg(theme.overlay_strong))
                             .on_click(move |_, window, cx| {
-                                (on_search)(window, cx);
+                                (on_start)(window, cx);
                             })
                             .child(
                                 div()
@@ -889,17 +1021,7 @@ impl RenderOnce for SidebarView {
                                             .child("Search"),
                                     ),
                             )
-                            .child(
-                                div()
-                                    .px(px(4.0))
-                                    .py(px(1.0))
-                                    .rounded(px(3.0))
-                                    .bg(theme.raised)
-                                    .text_size(px(9.5))
-                                    .text_color(theme.text_ghost)
-                                    .child("⌘K"),
-                            ),
-                    ),
+                    }),
             )
             // Pinned header row: the first group's header (Today) with the
             // add-project button, kept OUTSIDE the scroll container so it

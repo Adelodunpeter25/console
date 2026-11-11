@@ -18,17 +18,33 @@ impl SessionService {
         cwd: Option<&str>,
         project_id: Option<&str>,
     ) -> Result<Vec<SessionHeader>> {
+        self.list_filtered(cwd, project_id, None).await
+    }
+
+    pub async fn search_by_title(&self, query: &str) -> Result<Vec<SessionHeader>> {
+        self.list_filtered(None, None, Some(query)).await
+    }
+
+    pub async fn list_filtered(
+        &self,
+        cwd: Option<&str>,
+        project_id: Option<&str>,
+        query: Option<&str>,
+    ) -> Result<Vec<SessionHeader>> {
         let mut url = self.transport.url("/api/sessions").await;
-        let mut query = Vec::new();
+        let mut params = Vec::new();
         if let Some(c) = cwd {
-            query.push(format!("cwd={}", urlencoding::encode(c)));
+            params.push(format!("cwd={}", urlencoding::encode(c)));
         }
         if let Some(p) = project_id {
-            query.push(format!("projectId={}", urlencoding::encode(p)));
+            params.push(format!("projectId={}", urlencoding::encode(p)));
         }
-        if !query.is_empty() {
+        if let Some(q) = query {
+            params.push(format!("query={}", urlencoding::encode(q)));
+        }
+        if !params.is_empty() {
             url.push('?');
-            url.push_str(&query.join("&"));
+            url.push_str(&params.join("&"));
         }
 
         let resp = self

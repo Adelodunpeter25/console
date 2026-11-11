@@ -148,6 +148,7 @@ fn main() {
         console_ui::init_autocomplete_keybindings(cx);
         console_ui::init_floating_composer_keybindings(cx);
         console_ui::init_session_rename_keybindings(cx);
+        console_ui::init_sidebar_search_keybindings(cx);
         console_ui::init_code_viewer_keybindings(cx);
         console_ui::terminal::init_terminal_keybindings(cx);
         console_ui::init_browser_keybindings(cx);

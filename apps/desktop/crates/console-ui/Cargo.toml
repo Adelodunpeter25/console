@@ -84,6 +84,10 @@ name = "settle_tooltip_test"
 path = "tests/sidebar/settle_tooltip_test.rs"
 
 [[test]]
+name = "sidebar_search_test"
+path = "tests/sidebar/search_test.rs"
+
+[[test]]
 name = "keybindings_page_test"
 path = "tests/settings/keybindings_page_test.rs"
 

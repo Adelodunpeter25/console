@@ -229,6 +229,11 @@ impl ConsoleDesktopApp {
                 .search_field()
                 .placeholder("Rename session")
         });
+        let sidebar_search_input = cx.new(|cx| {
+            ComposerInput::new(window, cx)
+                .search_field()
+                .placeholder("Search sessions...")
+        });
         // Search field inside the model picker popover. Cleared each time the
         // popover opens and focused a couple of frames later, once the deferred
         // popover subtree has joined the dispatch tree.
@@ -582,6 +587,20 @@ impl ConsoleDesktopApp {
                     _ => {}
                 },
             ),
+            cx.subscribe(
+                &sidebar_search_input,
+                |this, _input, event: &ComposerEvent, cx| match event {
+                    ComposerEvent::Edited => {
+                        let q = this
+                            .sidebar_search_input
+                            .read(cx)
+                            .content()
+                            .to_string();
+                        this.on_sidebar_search_query_changed(q, cx);
+                    }
+                    _ => {}
+                },
+            ),
         ];
 
         let client_for_palettes = client.clone();
@@ -600,6 +619,10 @@ impl ConsoleDesktopApp {
             selected_session_id: None,
             session_rename_id: None,
             session_rename_input,
+            sidebar_search_active: false,
+            sidebar_search_query: String::new(),
+            sidebar_search_input,
+            sidebar_search_task: None,
             workspace_root: initial_root,
             project_workspace_roots,
             project_active_panes,

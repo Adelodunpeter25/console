@@ -169,6 +169,76 @@ impl ConsoleDesktopApp {
         .detach();
     }
 
+    pub fn start_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_search_active = true;
+        self.sidebar_search_query.clear();
+        self.sidebar_search_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+        let focus = self.sidebar_search_input.read(cx).focus();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub fn clear_sidebar_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_search_active = false;
+        self.sidebar_search_query.clear();
+        self.sidebar_search_task = None;
+        self.sidebar_search_input.update(cx, |input, cx| {
+            input.clear(cx);
+        });
+        let focus = self.active_composer_input().read(cx).focus();
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub fn on_sidebar_search_query_changed(&mut self, query: String, cx: &mut Context<Self>) {
+        self.sidebar_search_query = query.clone();
+        self.sidebar_list_state.scroll_to_reveal_item(0);
+        let client = self.client.clone();
+        let trimmed = query.trim().to_string();
+        if trimmed.is_empty() {
+            self.sidebar_search_task = None;
+            cx.notify();
+            return;
+        }
+        self.sidebar_search_task = Some(cx.spawn(async move |entity, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(150))
+                .await;
+            if let Ok(results) = client.sessions.search_by_title(&trimmed).await {
+                cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if this.sidebar_search_query.trim() == trimmed {
+                                this.merge_sidebar_search_results(results, cx);
+                            }
+                        });
+                    }
+                });
+            }
+        }));
+        cx.notify();
+    }
+
+    pub fn merge_sidebar_search_results(
+        &mut self,
+        server_sessions: Vec<SessionHeader>,
+        cx: &mut Context<Self>,
+    ) {
+        let existing_ids: HashSet<String> = self.sessions.iter().map(|s| s.id.clone()).collect();
+        let new_sessions: Vec<SessionHeader> = server_sessions
+            .into_iter()
+            .filter(|s| !existing_ids.contains(&s.id))
+            .collect();
+        if !new_sessions.is_empty() {
+            let mut all = (*self.sessions).clone();
+            all.extend(new_sessions);
+            self.sessions = Rc::new(all);
+        }
+        cx.notify();
+    }
+
     pub(crate) fn toggle_pin_session(&mut self, session_id: String, cx: &mut Context<Self>) {
         let Some(current) = self
             .sessions
@@ -1004,6 +1074,19 @@ impl ConsoleDesktopApp {
     /// render: sessions with confirmed drafts live in Drafts (excluded here)
     /// and collapsed date groups are skipped.
     pub fn visible_session_ids(&self) -> Vec<String> {
+        if self.sidebar_search_active {
+            let query_lower = self.sidebar_search_query.trim().to_lowercase();
+            return self
+                .sessions
+                .iter()
+                .filter(|s| {
+                    query_lower.is_empty()
+                        || s.display_title().to_lowercase().contains(&query_lower)
+                        || s.title.to_lowercase().contains(&query_lower)
+                })
+                .map(|s| s.id.clone())
+                .collect();
+        }
         let draft_ids: HashSet<String> = self
             .draft_summaries()
             .into_iter()

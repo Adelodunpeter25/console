@@ -271,6 +271,7 @@ impl ConsoleDesktopApp {
 
     /// Open (never toggle) the command palette — used by the sidebar search
     /// button. Builds the same static entries as ⌘K.
+    #[allow(dead_code)]
     pub fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.command_palette.read(cx).is_open(cx) {
             return;

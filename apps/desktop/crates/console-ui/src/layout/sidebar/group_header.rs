@@ -225,3 +225,28 @@ pub fn settled_group_header(
         on_toggle,
     )
 }
+
+/// Section header for the search results list, using the same height and
+/// typography as the other sidebar section headers.
+pub fn search_results_group_header(
+    theme: Theme,
+    label: impl Into<SharedString>,
+) -> impl IntoElement {
+    div()
+        .h(px(28.0))
+        .flex()
+        .items_center()
+        .justify_between()
+        .child(
+            div()
+                .h(px(22.0))
+                .flex()
+                .items_center()
+                .gap(px(4.0))
+                .text_size(px(14.5))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.text)
+                .child(label.into()),
+        )
+}
+

@@ -125,12 +125,17 @@ func RegisterSessionRoutes(app *fiber.App, sessions *services.SessionService, ru
 		return c.JSON(fiber.Map{"success": true, "data": json.RawMessage(raw)})
 	}
 
-	// GET /api/sessions — list, optionally filtered by cwd/projectId, with
+	// GET /api/sessions — list, optionally filtered by cwd/projectId/query, with
 	// onlyDeleted=true selecting the trash view.
 	h.Get("/", func(c *fiber.Ctx) error {
+		query := c.Query("query")
+		if query == "" {
+			query = c.Query("q")
+		}
 		list, err := sessions.ListFiltered(session.ListFilter{
 			Cwd:         c.Query("cwd"),
 			ProjectID:   c.Query("projectId"),
+			Query:       query,
 			OnlyDeleted: c.Query("onlyDeleted") == "true",
 		})
 		if err != nil {

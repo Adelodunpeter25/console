@@ -748,12 +748,11 @@ impl Render for ConsoleDesktopApp {
                             }
                         },
                         {
-                            // Sidebar search button opens the command palette.
                             let entity = entity.clone();
                             move |window: &mut Window, cx: &mut App| {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        this.open_command_palette(window, cx);
+                                        this.start_sidebar_search(window, cx);
                                     });
                                 }
                             }
@@ -1043,6 +1042,31 @@ impl Render for ConsoleDesktopApp {
                                 if let Some(app) = entity.upgrade() {
                                     app.update(cx, |this, cx| {
                                         this.activate_environment(env_id, cx);
+                                    });
+                                }
+                            }
+                        },
+                    )
+                    .search(
+                        self.sidebar_search_active,
+                        self.sidebar_search_query.clone(),
+                        Some(self.sidebar_search_input.clone()),
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.start_sidebar_search(window, cx);
+                                    });
+                                }
+                            }
+                        },
+                        {
+                            let entity = entity.clone();
+                            move |window, cx| {
+                                if let Some(app) = entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.clear_sidebar_search(window, cx);
                                     });
                                 }
                             }
