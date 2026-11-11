@@ -353,8 +353,8 @@ impl ConsoleDesktopApp {
     }
 
     /// Cmd/Ctrl+Enter, and the queued card's "steer / send now". While a
-    /// turn is running it steers or queues (spec §5.1: SubmitSteer falls
-    /// back to queue when no staged prompt exists). When the session is
+    /// turn is running it steers — the staged queued prompt if one exists,
+    /// otherwise the freshly typed composer text. When the session is
     /// idle there is nothing to pivot, so it sends instead — either the
     /// staged prompt or the composer text as a fresh run.
     pub fn submit_steer_for_pane(
@@ -388,7 +388,84 @@ impl ConsoleDesktopApp {
         }
         let attachments = (*self.attachments_for_pane(&pane_id)).clone();
         let annotations = (*self.annotations_for_pane(&pane_id)).clone();
-        self.queue_prompt_for_pane(pane_id, prompt, attachments, annotations, context_files, cx);
+        let Some(session_id) = self.active_session_for_pane(&pane_id).map(|s| s.to_string()) else {
+            return;
+        };
+        self.steer_composer_prompt(
+            pane_id,
+            session_id,
+            prompt,
+            attachments,
+            annotations,
+            context_files,
+            cx,
+        );
+    }
+
+    /// Steer freshly typed composer text into the running turn. If the run
+    /// settles before the steer lands, queue the prompt instead so it is
+    /// not silently lost.
+    fn steer_composer_prompt(
+        &mut self,
+        pane_id: String,
+        session_id: String,
+        prompt: String,
+        attachments: Vec<ImageAttachment>,
+        annotations: Vec<console_core::BrowserElementAnnotation>,
+        context_files: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let dto = RunPromptDto {
+            prompt: prompt.clone(),
+            context_files: if context_files.is_empty() {
+                None
+            } else {
+                Some(context_files.clone())
+            },
+            model_id: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.model_id.clone()),
+            provider: self
+                .pane_selected_model(&pane_id)
+                .as_ref()
+                .map(|m| m.provider.clone()),
+            approval_mode: Some(self.pane_approval_mode(&pane_id).value().to_string()),
+            thinking_level: self.pane_thinking_level(&pane_id),
+            attachments: if attachments.is_empty() {
+                None
+            } else {
+                Some(attachments.clone())
+            },
+            annotations: if annotations.is_empty() {
+                None
+            } else {
+                Some(annotations.clone())
+            },
+        };
+        let client = self.client.clone();
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_, cx| {
+            if let Err(err) = client.runs.steer(&session_id, dto).await {
+                let msg = format!("Unable to steer run: {err}");
+                let _ = cx.update(|cx| {
+                    if let Some(app) = entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.queue_prompt_for_pane(
+                                pane_id.clone(),
+                                prompt.clone(),
+                                attachments.clone(),
+                                annotations.clone(),
+                                context_files.clone(),
+                                cx,
+                            );
+                            this.set_error_for_session(&session_id, msg, cx);
+                        });
+                    }
+                });
+            }
+        })
+        .detach();
     }
 
     /// Composer submit (Enter): a normal turn. See `start_prompt_run` for
