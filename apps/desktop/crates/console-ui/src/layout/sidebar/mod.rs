@@ -959,7 +959,7 @@ impl RenderOnce for SidebarView {
                                 (on_open_settings)(window, cx);
                             })
                             .tooltip(Tooltip::text("Settings"))
-                            .child(app_icon(IconName::Settings, 14.0, theme.text_tertiary))
+                            .child(app_icon(IconName::Settings, 15.0, theme.text_tertiary))
                     })
                     .child({
                         let server_chip = div()
@@ -975,7 +975,7 @@ impl RenderOnce for SidebarView {
                             .hover(|s| s.bg(theme.overlay))
                             .active(|s| s.bg(theme.overlay_strong))
                             .tooltip(Tooltip::text("Servers"))
-                            .child(app_icon(IconName::Server, 14.0, theme.text_tertiary));
+                            .child(app_icon(IconName::Server, 15.0, theme.text_tertiary));
 
                         let on_open_server_settings = on_open_server_settings.clone();
                         dropdown_menu(

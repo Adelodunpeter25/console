@@ -175,7 +175,7 @@ impl RenderOnce for SidebarSessionItem {
                 .tooltip(Tooltip::text("Running"))
                 .child(motion::spin_slow(app_icon(
                     IconName::LoaderCircle,
-                    12.0,
+                    15.0,
                     theme.accent,
                 )))
                 .into_any_element()
@@ -183,13 +183,13 @@ impl RenderOnce for SidebarSessionItem {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
-                .child(app_icon(IconName::Alert, 12.0, theme.warning))
+                .child(app_icon(IconName::Alert, 15.0, theme.warning))
                 .into_any_element()
         } else if is_done {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Done"))
-                .child(app_icon(IconName::CircleCheck, 12.0, theme.success))
+                .child(app_icon(IconName::CircleCheck, 15.0, theme.success))
                 .into_any_element()
         } else {
             status_slot().into_any_element()
