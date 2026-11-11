@@ -87,6 +87,18 @@ impl Tunnel {
         Ok(tunnel)
     }
 
+    /// Dial in the background so the first request reuses the live connection
+    /// instead of paying the relay wait. Fire-and-forget: a failed warm-up is
+    /// only logged, and the dial simply happens again on the first request.
+    pub fn warm_up(&self) {
+        let shared = self.shared.clone();
+        tokio::spawn(async move {
+            if let Err(err) = shared.open().await {
+                log::debug!("iroh warm-up dial failed: {err:#}");
+            }
+        });
+    }
+
     /// Like [`Tunnel::new`] with an endpoint and address the caller built
     /// (tests use direct addresses and no relay).
     pub async fn over(endpoint: Endpoint, addr: EndpointAddr) -> Result<Self> {

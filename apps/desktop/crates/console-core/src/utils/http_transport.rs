@@ -36,15 +36,23 @@ impl HttpTransport {
     /// Point the transport at a server. A `console-iroh://<node-id>` address
     /// is reached through a local tunnel: the base URL becomes the tunnel's
     /// loopback port, so HTTP and WebSocket callers need no changes. The
-    /// tunnel is made without touching the network and iroh is dialled on the
-    /// first request, so switching servers never waits on a connection. If the
-    /// tunnel cannot be built the iroh address is kept, and requests fail
-    /// with a clear connection error rather than reaching a stale server.
+    /// tunnel is made without touching the network, and a background dial
+    /// starts immediately so the connection is usually live by the first
+    /// request. If the tunnel cannot be built the iroh address is kept, and
+    /// requests fail with a clear connection error rather than reaching a
+    /// stale server.
     pub async fn set_base_url(&self, url: impl Into<String>) {
         let url = url.into();
         let resolved = match console_shared::pairing::iroh_node_id(&url) {
             Some(node_id) => match self.tunnel_for(node_id).await {
-                Ok(tunnel) => tunnel.base_url(),
+                Ok(tunnel) => {
+                    // Start dialling now so the relay wait overlaps with app
+                    // startup instead of stalling the first request (e.g. the
+                    // sidebar session list). The dial result is cached and
+                    // concurrent first requests wait on the same dial.
+                    tunnel.warm_up();
+                    tunnel.base_url()
+                }
                 Err(err) => {
                     log::warn!("iroh tunnel to {node_id} failed: {err:#}");
                     url
