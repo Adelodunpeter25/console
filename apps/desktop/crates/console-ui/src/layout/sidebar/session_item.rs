@@ -282,9 +282,14 @@ impl RenderOnce for SidebarSessionItem {
 
         let settle_button = div()
             .id(ElementId::Name(format!("settle-{}", session.id).into()))
+            // Overlaid so the idle row gives the title the full width; the
+            // opaque background keeps a truncated title from showing through.
+            .absolute()
+            .right(px(4.0))
             .p(px(4.0))
             .rounded(px(4.0))
             .cursor_default()
+            .bg(theme.sidebar_item_background)
             .invisible()
             .group_hover(group_name.clone(), |el| el.visible())
             .hover(|s| s.bg(theme.overlay))
@@ -301,7 +306,7 @@ impl RenderOnce for SidebarSessionItem {
             .w_full()
             .min_w_0()
             .h(px(34.0))
-            .px(px(8.0))
+            .px(px(6.0))
             .rounded(px(6.0))
             .cursor_default()
             .on_drag(drag, |drag, _, _, cx| {
@@ -310,7 +315,6 @@ impl RenderOnce for SidebarSessionItem {
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
             .gap_x(px(6.0))
             .group(group_name)
             .when(is_active, |s| s.bg(theme.sidebar_item_background))
