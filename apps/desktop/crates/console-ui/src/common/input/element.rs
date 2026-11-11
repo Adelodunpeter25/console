@@ -12,11 +12,11 @@ use crate::common::file_mention_chip::{
 };
 use crate::theme::Theme;
 
-pub(crate) const MENTION_ICON_CELL: Pixels = px(26.0);
+pub(crate) const MENTION_ICON_CELL: Pixels = px(22.0);
 
 /// Neutral chip look for the composer: dark wash, neutral border.
 fn composer_chip_colors(theme: Theme) -> (gpui::Hsla, gpui::Hsla) {
-    (theme.inset, theme.border_strong)
+    (theme.inset, theme.border)
 }
 
 pub(crate) fn visual_row_count(layout: &TextLayout) -> usize {
@@ -624,8 +624,8 @@ impl Element for InputElement {
                                     cell,
                                     px(FILE_MENTION_RADIUS),
                                     theme.overlay_strong,
-                                    px(1.0),
-                                    mention_border,
+                                    px(0.0),
+                                    gpui::transparent_black(),
                                     BorderStyle::default(),
                                 ));
                             }
