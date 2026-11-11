@@ -655,7 +655,7 @@ impl FloatingComposerView {
                     .child(
                         div()
                             .w_full()
-                            .min_h(px(88.0))
+                            .min_h(px(92.0))
                             .px(px(14.0))
                             .pt(px(10.0))
                             .pb(px(6.0))

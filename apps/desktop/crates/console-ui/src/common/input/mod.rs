@@ -258,6 +258,10 @@ pub struct ComposerInput {
     /// the pasted text entirely. Only chat composers turn it on.
     pub(crate) large_paste_chip: bool,
     pub(crate) read_only: bool,
+    /// Tallest this composer-mode field grows before its text scrolls under an
+    /// overlay scrollbar. Defaults to [`COMPOSER_MAX_HEIGHT`]; a surface may
+    /// lower it (the floating composer caps its prompt at ten lines).
+    pub(crate) composer_max_height: Pixels,
     /// A composer whose message can be carried entirely by staged comments
     /// (or another out-of-band payload) may submit with an empty text field.
     pub(crate) allow_empty_submit: bool,
@@ -350,6 +354,7 @@ impl ComposerInput {
             mode: FieldMode::Composer,
             large_paste_chip: false,
             read_only: false,
+            composer_max_height: COMPOSER_MAX_HEIGHT,
             select_all_on_focus_click: false,
             focus_click_select_all: false,
             allow_empty_submit: false,
@@ -543,6 +548,12 @@ impl ComposerInput {
     /// Toggle empty submission after construction without rebuilding the field.
     pub fn set_allow_empty_submit(&mut self, allow: bool) {
         self.allow_empty_submit = allow;
+    }
+
+    /// Cap how tall the composer-mode field grows, in pixels. The floating
+    /// composer sets this to ten prompt lines; other surfaces keep the default.
+    pub fn set_composer_max_height(&mut self, height: Pixels) {
+        self.composer_max_height = height;
     }
 
     /// Flip read-only after construction. A file editor starts locked because
@@ -1858,7 +1869,7 @@ impl Render for ComposerInput {
             .when(self.mode == FieldMode::Composer, |field| {
                 field
                     .min_h(px(24.0))
-                    .max_h(COMPOSER_MAX_HEIGHT)
+                    .max_h(self.composer_max_height)
                     .overflow_y_scroll()
                     .track_scroll(&scroll_handle)
                     .px(padding_x)

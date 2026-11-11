@@ -28,7 +28,7 @@ use console_core::{
     ApprovalMode, GitBranchInfo, GithubRepo, ImageAttachment, Model, ProjectInfo,
     ProviderCatalogEntry, SelectedModel, ThinkingLevel,
 };
-use gpui::{App, AppContext, Entity, KeyBinding, Window};
+use gpui::{App, AppContext, Entity, KeyBinding, Window, px};
 
 use crate::common::{AutocompleteContentKey, AutocompleteView, PickerTab};
 use crate::input::{ComposerInput, ComposerMention};
@@ -260,9 +260,12 @@ impl FloatingComposerState {
         on_project_menu_open: impl Fn(&mut Window, &mut App) + 'static,
     ) -> Self {
         let input = cx.new(|cx| {
-            ComposerInput::new(window, cx)
+            let mut input = ComposerInput::new(window, cx)
                 .enable_large_paste_chip()
-                .placeholder("Describe a task…")
+                .placeholder("Describe a task…");
+            // Ten prompt lines at the field's 22px line height.
+            input.set_composer_max_height(px(220.0));
+            input
         });
         let model_search = cx.new(|cx| ComposerInput::new(window, cx).search_field());
 
