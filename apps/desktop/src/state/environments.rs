@@ -3,6 +3,7 @@ use crate::persistence::store::{
     PersistedEnvironment, PersistedEnvironmentsState, save_environment_list_preserving_active,
     save_environments,
 };
+use console_core::ModelFavorite;
 use console_ui::settings::{EnvironmentRow, ProbeState};
 use gpui::Context;
 use serde::{Deserialize, Serialize};
@@ -370,6 +371,56 @@ impl ConsoleDesktopApp {
                         this.usage_loading = false;
                         this.usage_last_fetched = None;
 
+                        // Server-scoped caches the old backend owned. Favourites
+                        // are per server, so they clear here and refetch below;
+                        // the rest are refetched lazily on their next surface
+                        // open, but must not survive the switch.
+                        this.favorites = std::rc::Rc::new(std::collections::HashSet::new());
+                        this.models_by_provider =
+                            std::rc::Rc::new(std::collections::HashMap::new());
+                        this.loading_models.clear();
+                        this.provider_credentials.clear();
+                        this.provider_credential_error = None;
+                        this.github_status = None;
+                        this.github_error = None;
+                        this.integrations = Vec::new();
+                        this.integrations_error = None;
+                        this.forwarded_ports_by_project.clear();
+                        this.project_scripts_by_project.clear();
+                        this.active_project_shortcuts.clear();
+                        // Dropping the map drops the stream tasks, which stop
+                        // their SSE loops when the entities go away.
+                        this.project_script_streams.clear();
+                        this.right_sidebar_terminals_by_cwd.clear();
+
+                        // Session-keyed run state from the old server: the
+                        // sessions are gone, so keeping these only risks a
+                        // stale id colliding with a new one.
+                        this.pending_questions.clear();
+                        this.question_selected.clear();
+                        this.agent_notices.clear();
+                        this.session_errors.clear();
+                        this.session_run_tokens.clear();
+                        this.pagination_in_flight.clear();
+                        this.session_subagents.clear();
+                        this.session_background_work.clear();
+                        this.sidebar_session_browsers.clear();
+
+                        // Old server's file and review payloads must never be
+                        // shown as the new server's.
+                        this.open_file_contents.clear();
+                        this.open_file_errors.clear();
+                        this.open_image_contents.clear();
+                        this.open_diff_contents.clear();
+                        this.changes_review_data.clear();
+                        this.changes_review_collapsed.clear();
+                        this.inspector_tree = std::rc::Rc::new(Vec::new());
+                        this.inspector_working_changes = std::rc::Rc::new(Vec::new());
+                        this.inspector_git_badges =
+                            std::rc::Rc::new(std::collections::HashMap::new());
+                        this.inspector_selected_path = None;
+                        this.inspector_session_changes = std::rc::Rc::new(Vec::new());
+
                         // Reload data from new server
                         this.load_sessions(cx);
                         this.load_providers(cx);
@@ -382,6 +433,41 @@ impl ConsoleDesktopApp {
                         this.refresh_stt_status(cx);
                         this.fetch_usage(cx);
                         this.init_port_stream(cx);
+                        // Favourites are stored per server; refetch from the
+                        // one just activated (same shape as bootstrap step 3).
+                        let favorites_client = client.clone();
+                        let favorites_entity = entity.clone();
+                        cx.spawn(async move |_, cx| {
+                            match favorites_client.model_favorites.list().await {
+                                Ok(model_favorites) => {
+                                    let _ = cx.update(|cx| {
+                                        if let Some(app) = favorites_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                this.favorites = std::rc::Rc::new(
+                                                    model_favorites
+                                                        .into_iter()
+                                                        .map(|favorite: ModelFavorite| {
+                                                            format!(
+                                                                "{}:{}",
+                                                                favorite.provider,
+                                                                favorite.model_id
+                                                            )
+                                                        })
+                                                        .collect(),
+                                                );
+                                                cx.notify();
+                                            });
+                                        }
+                                    });
+                                }
+                                Err(error) => {
+                                    log::warn!(
+                                        "model favorites after environment switch: {error:#}"
+                                    );
+                                }
+                            }
+                        })
+                        .detach();
                         // Point the device viewer at the new backend origin so
                         // stream/screenshot URLs follow the active server.
                         if let Some(ref device) = this.device_view {
