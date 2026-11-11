@@ -1,6 +1,6 @@
 // Bearer-token (device credential) coverage:
 // issuer round-trip, tamper/expiry/revocation failures, secret persistence,
-// the mint route, and the shared bearer-or-query middleware.
+// and the shared bearer-or-query middleware.
 package tests
 
 import (
@@ -155,26 +155,6 @@ func TestTokenSecretPersistsAcrossIssuers(t *testing.T) {
 // still exists — it signs the device tokens the pairing flow hands out —
 // and is covered above.
 //
-// What replaced the route's coverage is the device-token middleware, which
-// is exercised in device_auth_test.go. The query-string credential path
-// that the route also accepted is gone from ordinary HTTP entirely.
-func tokenRouteApp() (*fiber.App, *auth.TokenIssuer) {
-	issuer := tokenTestIssuer()
-	app := fiber.New()
-	return app, issuer
-}
-
-// The freely-mintable token route is gone for good: there is no path that
-// turns a caller-supplied device id into a credential.
-func TestTokenMintRouteIsGone(t *testing.T) {
-	app, _ := tokenRouteApp()
-
-	code, out := do(t, app, "POST", "/api/auth/token", `{"deviceId":"phone-1"}`)
-	if code == http.StatusOK {
-		t.Fatalf("the mint route must not exist: %d %v", code, out)
-	}
-}
-
 // doTokenRequest sends a request with an optional Authorization header and
 // returns status + decoded body.
 func doTokenRequest(t *testing.T, app *fiber.App, method, target, authHeader string) (int, map[string]any) {
