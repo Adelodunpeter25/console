@@ -76,7 +76,13 @@ impl ConsoleDesktopApp {
         &self,
         session_id: Option<&str>,
     ) -> Option<(String, Vec<ComposerMention>)> {
-        let key = session_id.unwrap_or("new_chat");
+        self.get_draft_with_mentions_for_key(session_id.unwrap_or("new_chat"))
+    }
+
+    pub(crate) fn get_draft_with_mentions_for_key(
+        &self,
+        key: &str,
+    ) -> Option<(String, Vec<ComposerMention>)> {
         self.drafts.get(key).map(|draft| {
             (
                 draft.prompt.clone(),
@@ -100,7 +106,10 @@ impl ConsoleDesktopApp {
     }
 
     pub fn get_draft_context_files(&self, session_id: Option<&str>) -> Vec<String> {
-        let key = session_id.unwrap_or("new_chat");
+        self.get_draft_context_files_for_key(session_id.unwrap_or("new_chat"))
+    }
+
+    pub(crate) fn get_draft_context_files_for_key(&self, key: &str) -> Vec<String> {
         self.drafts
             .get(key)
             .map(|draft| draft.context_files.clone())
@@ -152,7 +161,29 @@ impl ConsoleDesktopApp {
         annotations: &[console_core::BrowserElementAnnotation],
         cx: &mut Context<Self>,
     ) {
-        let key = session_id.unwrap_or("new_chat").to_string();
+        let key = session_id.unwrap_or("new_chat");
+        self.save_draft_for_key(
+            key,
+            text,
+            mentions,
+            context_files,
+            attachments,
+            annotations,
+            cx,
+        );
+    }
+
+    pub(crate) fn save_draft_for_key(
+        &mut self,
+        key: &str,
+        text: &str,
+        mentions: &[ComposerMention],
+        context_files: &[String],
+        attachments: &[console_core::ImageAttachment],
+        annotations: &[console_core::BrowserElementAnnotation],
+        cx: &mut Context<Self>,
+    ) {
+        let key = key.to_string();
         if text.trim().is_empty()
             && context_files.is_empty()
             && attachments.is_empty()

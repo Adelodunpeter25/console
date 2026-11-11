@@ -76,6 +76,7 @@ impl ConsoleDesktopApp {
             approval_mode: self.pane_approval_mode(&pane_id),
         };
         self.floating_composer.show(snapshot, window, cx);
+        self.restore_floating_stash(cx);
 
         // Mirror the docked picker's popover-open handler: fetch the live
         // model list rather than opening on the static catalog. The docked
@@ -99,8 +100,46 @@ impl ConsoleDesktopApp {
 
     /// Close the card. Wired to the card's Escape binding.
     pub fn close_floating_composer(&mut self, cx: &mut Context<Self>) {
+        self.stash_floating_prompt(cx);
         self.floating_composer.hide();
         cx.notify();
+    }
+
+    /// Keep an unsent prompt (text, mentions, images) under the card's own
+    /// draft key so reopening restores it. The key is never listed in the
+    /// sidebar and is never synced.
+    fn stash_floating_prompt(&mut self, cx: &mut Context<Self>) {
+        let input = self.floating_composer.input.read(cx);
+        let text = input.content().to_string();
+        let mentions = input.mentions().to_vec();
+        let context_files = input.context_files().to_vec();
+        let attachments = (*self.attachments_for_pane(FLOATING_KEY)).clone();
+        self.save_draft_for_key(
+            FLOATING_KEY,
+            &text,
+            &mentions,
+            &context_files,
+            &attachments,
+            &[],
+            cx,
+        );
+    }
+
+    fn restore_floating_stash(&mut self, cx: &mut Context<Self>) {
+        let Some((text, mentions)) = self.get_draft_with_mentions_for_key(FLOATING_KEY) else {
+            return;
+        };
+        let context_files = self.get_draft_context_files_for_key(FLOATING_KEY);
+        let attachments = self
+            .drafts
+            .get(FLOATING_KEY)
+            .map(|draft| draft.attachments.clone())
+            .unwrap_or_default();
+        self.set_attachments_for_pane(FLOATING_KEY, attachments);
+        self.floating_composer.input.update(cx, |input, cx| {
+            input.set_content_with_mentions(text, mentions, cx);
+            input.set_context_files(context_files);
+        });
     }
 
     /// Rebuild the card's derived state each frame: the @-file / slash-command
@@ -679,6 +718,9 @@ impl ConsoleDesktopApp {
                 app.update(cx, |this, cx| match result {
                     Ok(new_session) => {
                         this.floating_composer.hide();
+                        if this.drafts.remove(FLOATING_KEY).is_some() {
+                            this.schedule_drafts_save(cx);
+                        }
                         this.apply_session_header_for_pane(&pane_id, &new_session, cx);
                         this.clear_error_for_pane(&pane_id, cx);
                         if this.active_pane_id.as_deref() == Some(pane_id.as_str()) {

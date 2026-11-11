@@ -382,6 +382,7 @@ impl ConsoleDesktopApp {
             .keys()
             .filter(|k| {
                 k.as_str() != "new_chat"
+                    && k.as_str() != crate::state::floating_composer::FLOATING_KEY
                     && !drafts[*k].prompt.trim().is_empty()
                     && !open_session_ids.contains(*k)
             })
