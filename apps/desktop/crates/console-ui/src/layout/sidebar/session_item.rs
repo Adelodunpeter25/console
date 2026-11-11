@@ -6,7 +6,7 @@ use gpui::{
 use std::rc::Rc;
 
 use super::item_row::{draft_badge, row_container, status_slot, title_label};
-use super::session_card::SessionHoverCard;
+use super::session_card::{SessionHoverCard, current_hover_delay, touch_hover};
 use crate::input::ComposerInput;
 use crate::layout::sidebar_loading::{self as sidebar, SidebarLoadingState};
 use crate::primitives::motion;
@@ -247,6 +247,7 @@ impl RenderOnce for SidebarSessionItem {
                 let hover_created = session.created_at;
                 let hover_updated = session.updated_at;
                 let hover_project = self.project_name.clone();
+                let delay = current_hover_delay();
 
                 element
                     .tooltip(move |window, cx| {
@@ -257,6 +258,12 @@ impl RenderOnce for SidebarSessionItem {
                             hover_project.clone(),
                         )
                         .build(window, cx)
+                    })
+                    .tooltip_show_delay(delay)
+                    .on_hover(|hovered, _, _| {
+                        if *hovered {
+                            touch_hover();
+                        }
                     })
                     .on_click(move |_, w, cx| {
                         (on_click)(w, cx);

@@ -1,11 +1,35 @@
 use gpui::{
     AnyView, App, AppContext, Context, IntoElement, ParentElement, Render, SharedString,
-    Styled, Window, div, px,
+    Styled, Window, div, px, rgb,
 };
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::Duration;
 
 use crate::primitives::{IconName, app_icon};
 use crate::theme::Theme;
 use crate::utils::format_time_ago;
+
+static LAST_HOVER_TS: AtomicI64 = AtomicI64::new(0);
+
+/// Initial delay before the first hover popup opens.
+const INITIAL_DELAY: Duration = Duration::from_millis(180);
+/// Grace period: moving to another chat within this window opens instantly.
+const GRACE_PERIOD_MS: i64 = 450;
+
+pub fn current_hover_delay() -> Duration {
+    let now = chrono::Utc::now().timestamp_millis();
+    let last = LAST_HOVER_TS.load(Ordering::Relaxed);
+    if last > 0 && (now - last) < GRACE_PERIOD_MS {
+        Duration::from_millis(0)
+    } else {
+        INITIAL_DELAY
+    }
+}
+
+pub fn touch_hover() {
+    let now = chrono::Utc::now().timestamp_millis();
+    LAST_HOVER_TS.store(now, Ordering::Relaxed);
+}
 
 /// Hover details card for a sidebar session item.
 pub struct SessionHoverCard {
@@ -22,6 +46,7 @@ impl SessionHoverCard {
         updated_at: i64,
         project_name: impl Into<SharedString>,
     ) -> Self {
+        touch_hover();
         Self {
             title: title.into(),
             created_at,
@@ -38,6 +63,8 @@ impl SessionHoverCard {
 impl Render for SessionHoverCard {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::current(cx);
+        touch_hover();
+
         let created_ago = if self.created_at > 0 {
             let rel = format_time_ago(self.created_at);
             if rel == "just now" {
@@ -69,7 +96,8 @@ impl Render for SessionHoverCard {
                 .rounded(px(8.0))
                 .border_1()
                 .border_color(theme.border_strong)
-                .bg(theme.raised)
+                // Dark background matching the menu surface
+                .bg(rgb(0x0C0C0C))
                 .shadow_lg()
                 .flex()
                 .flex_col()
