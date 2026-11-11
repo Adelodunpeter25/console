@@ -610,22 +610,46 @@ impl RenderOnce for SidebarView {
         };
 
         // Scrollable rows: when search is active, shows matching sessions directly
-        // under the Search Results header. Otherwise shows pinned, drafts,
-        // and date/project sections.
+        // under the Search Results header, preserving the current sort mode's
+        // relative ordering. Otherwise shows pinned, drafts, and date/project sections.
         let mut list_rows = Vec::new();
         if self.search_active {
+            let mut ordered_positions: Vec<usize> = Vec::new();
+            ordered_positions.extend(pinned_positions.iter().copied());
+            match sort_mode {
+                SidebarSortMode::Date => {
+                    for (_, positions) in &grouped {
+                        ordered_positions.extend(positions.iter().copied());
+                    }
+                }
+                SidebarSortMode::Project => {
+                    for (_, _, positions) in &project_sections {
+                        ordered_positions.extend(positions.iter().copied());
+                    }
+                }
+            }
+            ordered_positions.extend(settled_positions.iter().copied());
+            let in_ordered: HashSet<usize> = ordered_positions.iter().copied().collect();
+            for idx in 0..sessions.len() {
+                if !in_ordered.contains(&idx) {
+                    ordered_positions.push(idx);
+                }
+            }
+
             let query_lower = self.search_query.trim().to_lowercase();
-            let matching_positions: Vec<usize> = if query_lower.is_empty() {
-                (0..sessions.len()).collect()
-            } else {
-                (0..sessions.len())
-                    .filter(|&idx| {
+            let matching_positions: Vec<usize> = ordered_positions
+                .into_iter()
+                .filter(|&idx| {
+                    if query_lower.is_empty() {
+                        true
+                    } else {
                         let session = &sessions[idx];
                         session.display_title().to_lowercase().contains(&query_lower)
                             || session.title.to_lowercase().contains(&query_lower)
-                    })
-                    .collect()
-            };
+                    }
+                })
+                .collect();
+
             if matching_positions.is_empty() && !query_lower.is_empty() {
                 list_rows.push(SidebarRow::EmptySearch);
             } else {

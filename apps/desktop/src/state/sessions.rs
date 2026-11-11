@@ -1074,19 +1074,6 @@ impl ConsoleDesktopApp {
     /// render: sessions with confirmed drafts live in Drafts (excluded here)
     /// and collapsed date groups are skipped.
     pub fn visible_session_ids(&self) -> Vec<String> {
-        if self.sidebar_search_active {
-            let query_lower = self.sidebar_search_query.trim().to_lowercase();
-            return self
-                .sessions
-                .iter()
-                .filter(|s| {
-                    query_lower.is_empty()
-                        || s.display_title().to_lowercase().contains(&query_lower)
-                        || s.title.to_lowercase().contains(&query_lower)
-                })
-                .map(|s| s.id.clone())
-                .collect();
-        }
         let draft_ids: HashSet<String> = self
             .draft_summaries()
             .into_iter()
@@ -1104,6 +1091,63 @@ impl ConsoleDesktopApp {
             let session = &self.sessions[index];
             session.pinned_at.is_some() && !draft_ids.contains(&session.id)
         };
+        if self.sidebar_search_active {
+            let query_lower = self.sidebar_search_query.trim().to_lowercase();
+            let matches_query = |s: &SessionHeader| {
+                query_lower.is_empty()
+                    || s.display_title().to_lowercase().contains(&query_lower)
+                    || s.title.to_lowercase().contains(&query_lower)
+            };
+            let mut ids = Vec::new();
+            for (index, session) in self.sessions.iter().enumerate() {
+                if is_live_pinned(index) && matches_query(session) {
+                    ids.push(session.id.clone());
+                }
+            }
+            match self.sidebar_sort_mode {
+                SidebarSortMode::Date => {
+                    let grouped = group_indices_by_date(self.sessions.len(), timestamp);
+                    for (_, positions) in grouped {
+                        for idx in positions {
+                            let session = &self.sessions[idx];
+                            if !is_live_pinned(idx) && matches_query(session) {
+                                ids.push(session.id.clone());
+                            }
+                        }
+                    }
+                }
+                SidebarSortMode::Project => {
+                    let grouped = group_indices_by_project(
+                        self.sessions.len(),
+                        |index| {
+                            let session = &self.sessions[index];
+                            self.projects
+                                .iter()
+                                .find(|project| project.matches_session(session))
+                                .map(|project| project.id.clone())
+                        },
+                        timestamp,
+                    );
+                    for (_, positions) in grouped {
+                        for idx in positions {
+                            let session = &self.sessions[idx];
+                            if !is_live_pinned(idx) && matches_query(session) {
+                                ids.push(session.id.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            for session in self.sessions.iter() {
+                if session.settled_at.is_some()
+                    && matches_query(session)
+                    && !ids.contains(&session.id)
+                {
+                    ids.push(session.id.clone());
+                }
+            }
+            return ids;
+        }
         let mut ids = Vec::new();
         if !self.pinned_collapsed {
             for (index, session) in self.sessions.iter().enumerate() {

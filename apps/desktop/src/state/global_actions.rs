@@ -269,22 +269,6 @@ impl ConsoleDesktopApp {
         cx.notify();
     }
 
-    /// Open (never toggle) the command palette — used by the sidebar search
-    /// button. Builds the same static entries as ⌘K.
-    #[allow(dead_code)]
-    pub fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.command_palette.read(cx).is_open(cx) {
-            return;
-        }
-        let entity = cx.entity().downgrade();
-        let environments = self.environments.clone();
-        self.command_palette.update(cx, |palette, cx| {
-            palette.set_entries(command_palette_entries(entity, &environments), cx);
-            palette.show(window, cx);
-        });
-        cx.notify();
-    }
-
     /// ⌘⇧P — toggle the open-tab palette. Browser tabs appear first, then
     /// terminals, then chat tabs sorted by recency.
     pub fn toggle_tab_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
