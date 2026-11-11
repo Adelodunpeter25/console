@@ -397,3 +397,54 @@ fn test_workspace_is_empty_only_when_every_pane_is_empty() {
     ops::close_tab(&mut root, &right, "chat:session-1");
     assert!(ops::is_workspace_empty(&root));
 }
+
+#[test]
+fn test_close_tab_prefers_most_recently_active_tab() {
+    let mut root = WorkspaceNode::leaf("pane-main");
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-1".into(),
+            title: "Chat 1".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(100),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-2".into(),
+            title: "Chat 2".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(500),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::Chat {
+            session_id: "chat-3".into(),
+            title: "Chat 3".into(),
+            provider: None,
+            project_id: None,
+            last_active_at_ms: Some(200),
+        },
+    );
+    ops::open_tab(
+        &mut root,
+        "pane-main",
+        WorkspaceTabConfig::File {
+            path: "/a/file.rs".into(),
+            title: "file.rs".into(),
+            project_id: None,
+            last_active_at_ms: Some(1000),
+        },
+    );
+
+    let next = ops::close_tab(&mut root, "pane-main", "file:/a/file.rs");
+    assert_eq!(next, Some("chat:chat-2".to_string()));
+}

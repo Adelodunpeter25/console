@@ -119,7 +119,7 @@ impl ConsoleDesktopApp {
             path: path.clone(),
             title,
             project_id: self.pane_project_id(pane_id),
-            last_active_at_ms: None,
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
         let new_tab_id = workspace_ops::replace_or_open_tab(
@@ -428,7 +428,7 @@ impl ConsoleDesktopApp {
             path: path.clone(),
             title,
             project_id: self.pane_project_id(pane_id),
-            last_active_at_ms: None,
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
 
         let new_tab_id = workspace_ops::replace_or_open_tab(

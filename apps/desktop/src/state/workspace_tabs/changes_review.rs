@@ -28,7 +28,7 @@ impl ConsoleDesktopApp {
             scope,
             title,
             project_id: self.pane_project_id(&pane_id),
-            last_active_at_ms: None,
+            last_active_at_ms: Some(chrono::Utc::now().timestamp_millis()),
         };
         let tab_id = tab.id();
 

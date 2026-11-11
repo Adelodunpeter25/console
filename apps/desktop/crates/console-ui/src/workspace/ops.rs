@@ -31,7 +31,11 @@ pub fn active_leaf<'a>(
 pub fn open_tab(root: &mut WorkspaceNode, pane_id: &str, tab: console_core::WorkspaceTabConfig) {
     let leaf = active_leaf(root, Some(pane_id));
     let tab_id = tab.id();
-    if !leaf.tabs.iter().any(|t| t.id() == tab_id) {
+    if let Some(existing) = leaf.tabs.iter_mut().find(|t| t.id() == tab_id) {
+        if let Some(ts) = tab.last_active_at_ms() {
+            existing.set_last_active_at_ms(Some(ts));
+        }
+    } else {
         leaf.tabs.push(tab);
     }
     leaf.active_tab_id = Some(tab_id);
@@ -79,7 +83,11 @@ pub fn replace_or_open_tab(
         }
     }
 
-    if !leaf.tabs.iter().any(|t| t.id() == new_tab_id) {
+    if let Some(existing) = leaf.tabs.iter_mut().find(|t| t.id() == new_tab_id) {
+        if let Some(ts) = new_tab.last_active_at_ms() {
+            existing.set_last_active_at_ms(Some(ts));
+        }
+    } else {
         leaf.tabs.push(new_tab);
     }
     leaf.active_tab_id = Some(new_tab_id.clone());
@@ -106,19 +114,28 @@ pub fn move_tab_to_pane(
     Some(target_pane_id.to_string())
 }
 
-/// Close a tab in a pane, activating the neighbor (left-first, like the
-/// desktop app). Returns the id of the tab that became active, if any.
+/// Close a tab in a pane, activating the most recently active remaining tab,
+/// or falling back to the left neighbor. Returns the id of the tab that became active, if any.
 pub fn close_tab(root: &mut WorkspaceNode, pane_id: &str, tab_id: &str) -> Option<String> {
     let leaf = root.leaf_mut(pane_id)?;
     let closed_index = leaf.tabs.iter().position(|t| t.id() == tab_id)?;
     leaf.tabs.remove(closed_index);
 
     if leaf.active_tab_id.as_deref() == Some(tab_id) {
-        let fallback = leaf
+        let fallback_by_position = leaf
             .tabs
             .get(closed_index.saturating_sub(1))
-            .or_else(|| leaf.tabs.first());
-        leaf.active_tab_id = fallback.map(|tab| tab.id());
+            .or_else(|| leaf.tabs.first())
+            .map(|tab| tab.id());
+
+        let mru = leaf
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.last_active_at_ms().map(|ts| (ts, tab.id())))
+            .max_by_key(|(ts, _)| *ts)
+            .map(|(_, id)| id);
+
+        leaf.active_tab_id = mru.or(fallback_by_position);
     }
     leaf.active_tab_id.clone()
 }

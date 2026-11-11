@@ -139,6 +139,12 @@ impl ConsoleDesktopApp {
     ) -> Option<String> {
         let closed_tab = workspace_ops::find_tab(&self.workspace_root, tab_id);
         let res = workspace_ops::close_tab(&mut self.workspace_root, pane_id, tab_id);
+        if let Some(new_active_id) = &res
+            && let Some(leaf) = self.workspace_root.leaf_mut(pane_id)
+            && let Some(tab) = leaf.tabs.iter_mut().find(|tab| tab.id() == *new_active_id)
+        {
+            tab.set_last_active_at_ms(Some(chrono::Utc::now().timestamp_millis()));
+        }
         // Evict from stashed workspace caches too, or a closed tab outlives
         // its close in memory while disk already dropped it.
         for root in self.project_workspace_roots.values_mut() {
