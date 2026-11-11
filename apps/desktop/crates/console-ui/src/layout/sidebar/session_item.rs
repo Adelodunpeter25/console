@@ -161,15 +161,9 @@ impl RenderOnce for SidebarSessionItem {
             || session.status == "waiting";
         let is_done = session.status == "done" || session.status == "completed";
 
-        // Colour marks status only on the focused row; the rest go monochrome so
-        // the list stays calm and the selected chat stands out.
-        let tint = |colored| {
-            if is_active {
-                colored
-            } else {
-                theme.text_tertiary
-            }
-        };
+        // Status colour is information, not decoration: a chat that needs
+        // attention stays orange whether or not it is the selected one, so
+        // the state is readable at a glance in a long list.
         let status_id = || ElementId::Name(format!("status-{}", session.id).into());
         let status_indicator = if is_running {
             status_slot()
@@ -178,20 +172,20 @@ impl RenderOnce for SidebarSessionItem {
                 .child(motion::spin_slow(app_icon(
                     IconName::LoaderCircle,
                     15.0,
-                    tint(theme.accent),
+                    theme.accent,
                 )))
                 .into_any_element()
         } else if needs_attention {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Needs attention"))
-                .child(app_icon(IconName::Alert, 15.0, tint(theme.warning)))
+                .child(app_icon(IconName::Alert, 15.0, theme.warning))
                 .into_any_element()
         } else if is_done {
             status_slot()
                 .id(status_id())
                 .tooltip(Tooltip::text("Done"))
-                .child(app_icon(IconName::Done, 15.0, tint(theme.success)))
+                .child(app_icon(IconName::Done, 15.0, theme.success))
                 .into_any_element()
         } else {
             status_slot().into_any_element()
