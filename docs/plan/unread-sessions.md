@@ -4,7 +4,7 @@ Status: **plan only, nothing built.** The dot icon exists as `apps/desktop/asset
 
 Decisions already made (these replace the old open questions):
 
-1. **Needs attention keeps the alert icon, and it means one thing: the agent is asking you a question.** It no longer covers "finished and you have not looked" (that is the dot) and no longer covers errors (see "Reword needs attention in the backend").
+1. **Needs attention keeps the alert icon and means "the chat needs you": the agent is asking a question, or its run ended in an error.** It does not cover "finished and you have not looked" (that is the dot). Errored chats stay under needs attention (see "Needs attention in the backend").
 2. **The Dock badge switches to counting unread chats**, read from the server so it survives restarts and agrees with the sidebar.
 3. **"Mark as unread" is in scope**, in the right-click menu.
 
@@ -54,7 +54,7 @@ The status slot on the left of a row (16px wide, already reserved) shows one ico
 | State | Icon | Colour |
 | :--- | :--- | :--- |
 | Running | spinner | accent while focused, grey otherwise |
-| Needs attention (the agent asked a question and is waiting) | alert | warning while focused, grey otherwise |
+| Needs attention (a pending question, or a run that ended in an error and has not been opened) | alert | warning while focused, grey otherwise |
 | **Unread (finished, not yet seen)** | **`unread.svg`, the dot** | **accent** |
 | Finished and seen | nothing (empty slot) | n/a |
 
@@ -66,23 +66,31 @@ The dot follows the server's `unread` flag and nothing else; the sidebar does no
 
 The dot is the same `unread.svg` file everywhere (desktop and Android draw it from the same asset).
 
-## Reword needs attention in the backend
+## Needs attention in the backend
 
-The status and the banner called `needs_attention` currently mean two different things, which is why they cannot be trusted to mean "the agent is asking me something":
+`needs_attention` already means two things in the code, and you want both to keep meaning it:
 
-| Raised by | Where | What the user sees today |
+| Raised by | Where | Banner (macOS notification) |
 | :--- | :--- | :--- |
-| The agent asks a question and waits | `run/service.go` (`decisions.Notify` sets `needs_attention`, flips back when answered) | status `needs_attention`, banner "Needs Attention" |
-| **A run ends with an error** | `run/turns.go` (`runErr != nil` sets `needs_attention`); `IsAttentionKind` treats `EventError` as attention | status `needs_attention`, banner titled "Agent Error" (kind still `needs_attention`) |
+| The agent asks a question and waits | `run/service.go`: `decisions.Notify` sets `needs_attention`, flips back to `working` when answered | title "Needs Attention", body is the question |
+| A run ends with an error | `run/turns.go`: `runErr != nil` sets `needs_attention`; `IsAttentionKind` includes `EventError` | title "Agent Error", body is the error text |
 
-Changes:
+So the **status and the kinds stay as they are**: no new status, no new banner kind, nothing renamed on the wire. The sidebar alert, the Dock badge and both banners keep working for questions and errors alike.
 
-1. **`needs_attention` is only for a pending question.** Stop setting it when a run ends with an error. The status write at the end of an errored run becomes `done` (the run did end), and the chat becomes unread like any finished chat. Aborts already settle `done`.
-2. **Errors get their own banner kind, `error`,** instead of borrowing `needs_attention`. The title stays "Agent Error". Desktop only special-cases `resumed` and `session_deleted` and shows any other kind as a banner, and Android's notification repository does not switch on kind, so a new kind is safe on both. `IsAttentionKind` is split so questions raise `needs_attention` and errors raise `error`.
-3. **Keep the wire value `needs_attention`** for the status and the question banner's kind. Renaming it would touch the server, the Rust status helpers, the Kotlin `SessionStatus` enum, `status_color`, and every fixture for no visible gain. Only the wording a person reads changes: the question banner title becomes "Needs Your Answer" (the body is already the question text).
-4. **Tests and fixtures that mention the old wording** must move with it: `crates/console-proto/tests/notification_test.rs`, `server-go/tests/api/notifications_test.go`, `android/tests/NotificationFixtureTest.kt`, and the notification fixtures under `proto/testdata`.
+**Banner wording.** The question banner's title becomes **"Needs Your Attention"** (it is "Needs Attention" now). It is one string in `run/notify.go`, plus the three tests that assert it: `console-proto/tests/notification_test.rs`, `server-go/tests/api/notifications_test.go` and `android/tests/NotificationFixtureTest.kt`, and the notification fixtures under `proto/testdata`. The error banner keeps "Agent Error". These are macOS (and Android) system notifications, not anything drawn inside the app.
 
-The one open design call this creates is what an errored chat shows. Plan: the dot, same as any finished chat, and the error is in the transcript when you open it. The alternative is a dedicated `error` status with its own icon, which is clearer but adds a fifth status to three clients (Kotlin `SessionStatus`, Rust `status_color`, the sidebar, and tests). Recommendation: start with the dot.
+### The bug this plan has to fix first
+
+An errored chat does **not** stay in needs attention today. When a run ends in an error the server writes `needs_attention`, but the next session-list read (`routes/sessions.go`, the list route and the detail route) sees "no active run" and rewrites any `working` or `needs_attention` chat to `done`. That settle-on-read exists to repair a crashed or aborted run that was left "working" forever. It also wipes a legitimate error within seconds, so the alert flashes and then the chat turns plain `done`.
+
+Fix, with the rule that falls out of it:
+
+- **Needs attention = a pending question, or an errored run that has not been opened yet.** It clears when the user opens the chat (the read call) or sends a new message (status goes `working`).
+- **Settle-on-read keeps flipping `working` to `done`** (the crash repair it was written for) but **no longer flips an unread `needs_attention`.** It only flips `needs_attention` once the chat has been read (`last_read_at` is not older than `last_activity_at`).
+- **The read route settles it.** `POST /api/sessions/:id/read` also turns a lingering `needs_attention` into `done` when no run is active, so opening an errored chat clears the alert immediately and does not wait for the next list poll.
+- **Side effect worth knowing:** a server crash while a question was pending leaves `needs_attention` set with no run behind it. Under this rule it stays until the user opens that chat, then clears. That is acceptable: the chat is worth a look anyway.
+
+Sidebar precedence is **running, then needs attention, then unread, then nothing.** An errored chat you have not opened shows the alert, not the dot, and after you open it the slot goes empty.
 
 ## Server
 
@@ -101,8 +109,8 @@ The one open design call this creates is what an errored chat shows. Plan: the d
 2. **Report reads.** When a chat becomes the active chat in a pane, or a run finishes while its pane is focused and the window is active, call the new read route. Reuse the exact "is the user looking at this session" test the notification code already has (`decide_notification` with `is_window_active` and the active pane's session in `state/notifications.rs`), so the dot and the banner suppression stay in agreement.
 3. **Stay in sync.** Handle the new `read_state` event in the existing notification stream handler, and take `unread` from the header on every list refresh and poll.
 4. **Mark as unread.** Add "Mark as unread" to the session context menu (`primitives/context_menu/session_context_menu.rs`), above Pin, calling the new `unread` route. Hidden for running and settled chats.
-5. **Dock badge counts unread chats (decided).** Replace the in-memory `OUTSTANDING` set in `macos_notifications.rs` with a count computed from the session headers: sessions that are `unread` **or** `needs_attention` (a pending question still deserves a badge). Because it comes from the server, it survives a restart and matches the sidebar. Keep clearing a chat's delivered banner when it is opened. Two details:
-   - The headers refresh every 30 seconds today, which is too slow for a badge. On any banner event (`needs_attention`, `done`, `error`) and on `read_state`, trigger one debounced session-list refresh so the dot and badge update immediately.
+5. **Dock badge counts unread chats (decided).** Replace the in-memory `OUTSTANDING` set in `macos_notifications.rs` with a count computed from the session headers: sessions that are `unread` **or** `needs_attention` (a pending question or an unopened error still deserves a badge). Because it comes from the server, it survives a restart and matches the sidebar. Keep clearing a chat's delivered banner when it is opened. Two details:
+   - The headers refresh every 30 seconds today, which is too slow for a badge. On any banner event (`needs_attention` or `done`) and on `read_state`, trigger one debounced session-list refresh so the dot and badge update immediately.
    - The badge is macOS only; the other platforms keep their no-op stubs.
 
 ## Android
@@ -120,12 +128,11 @@ The header gains `unread` through the shared proto, and the same `read` route is
 
 ## Open questions
 
-1. **What an errored chat shows:** the dot (plan above) or a dedicated error status and icon.
-2. **Question banner title:** "Needs Your Answer" is a suggestion; any wording works since only the title string changes.
+None blocking. Decided: errored chats stay under needs attention, the banner title is "Needs Your Attention", the Dock badge counts unread chats, and "Mark as unread" is in.
 
 ## Tests
 
-- **Server:** a run finishing sets `last_activity_at`; `unread` is true until `/read`; `/read` and `/unread` do not change `updated_at`; `/unread` makes a read chat unread and is refused for running and settled chats; settled and running chats report not unread; the migration leaves old rows not unread; a run that ends in an error settles `done` (not `needs_attention`) and raises an `error` banner; only a pending question sets `needs_attention`.
+- **Server:** a run finishing sets `last_activity_at`; `unread` is true until `/read`; `/read` and `/unread` do not change `updated_at`; `/unread` makes a read chat unread and is refused for running and settled chats; settled and running chats report not unread; the migration leaves old rows not unread; a run that ends in an error sets `needs_attention` and it **survives a session-list read** (the bug above); it clears on `/read` and on a new message; a read `needs_attention` with no active run still settles to `done`; a stale `working` chat with no run still settles to `done`.
 - **Proto:** `header_unread.json` fixture decoded by the Rust and Kotlin fixture tests.
 - **Desktop:** a pure function for the status-slot choice (running, attention, unread, none) so the ordering above is covered by a plain test, and a pure function for the badge count (unread or needs_attention, settled excluded).
 
