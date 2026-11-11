@@ -17,7 +17,8 @@ use crate::primitives::{IconName, app_icon};
 use crate::theme::{TITLEBAR_HEIGHT, Theme};
 
 /// Leading space in the title bar: reserved for the macOS traffic lights,
-/// normal padding when the window keeps its native system titlebar.
+/// normal padding when the window keeps its native system titlebar. Fullscreen
+/// hides the traffic lights, so it uses the normal padding instead.
 const LEADING_INSET: f32 = if cfg!(target_os = "macos") { 72.0 } else { 8.0 };
 
 /// The action in the title bar's leading slot.
@@ -88,12 +89,13 @@ impl TitleBar {
 }
 
 impl RenderOnce for TitleBar {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = Theme::current(cx);
         let on_toggle = self.on_toggle_sidebar;
         let on_toggle_right = self.on_toggle_right_sidebar;
         let title = self.title;
         let sidebar_width = self.sidebar_width;
+        let leading_inset = if window.is_fullscreen() { 8.0 } else { LEADING_INSET };
 
         div()
             .id("window-titlebar")
@@ -116,7 +118,7 @@ impl RenderOnce for TitleBar {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .pl(px(LEADING_INSET))
+                    .pl(px(leading_inset))
                     .child(match self.leading {
                         LeadingAction::SidebarToggle => div()
                             .id("titlebar-sidebar-toggle")
